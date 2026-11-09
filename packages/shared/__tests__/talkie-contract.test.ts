@@ -10,6 +10,8 @@ import {
   TALKIE_MAX_CHUNK_BYTES,
   TALKIE_MAX_DURATION_MS,
   TALKIE_DELIVERIES,
+  TALKIE_SEAL_KEY_ID_CHARS,
+  TALKIE_SEALED_CODEC,
   TALKIE_JOIN_WINDOW_MS,
   TALKIE_PUSH_TYPES,
   talkieChunkPayloadSchema,
@@ -76,5 +78,38 @@ describe('le contrat du talkie', () => {
     expect(TALKIE_FALLBACK_VOICE_MESSAGE).toBe(
       'L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui.',
     );
+  });
+
+  it('#13949 — une voix scellée a son PROPRE encodage, hors de ceux que les clients déployés jouent', () => {
+    expect(TALKIE_SEALED_CODEC).toBe('sealed-aac-adts');
+    expect(TALKIE_CODECS).not.toContain(TALKIE_SEALED_CODEC);
+  });
+
+  it('#13949 — une voix scellée ne porte que l’identifiant de sa clé : la clé voyage par le relais des signaux E2EE, par appareil', () => {
+    const base = { toUserId: 'b'.repeat(24), codec: TALKIE_SEALED_CODEC };
+    const keyId = 'A'.repeat(TALKIE_SEAL_KEY_ID_CHARS.min);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyId } }).success).toBe(true);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyId: 'AbC-_123' } }).success).toBe(false);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyId: `${keyId.slice(1)}+` } }).success).toBe(false);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyId: 'a'.repeat(TALKIE_SEAL_KEY_ID_CHARS.max + 1) } }).success).toBe(false);
+    expect(talkieStartPayloadSchema.safeParse({ ...base, sealed: { keyEnvelope: 'a'.repeat(2_400) } }).success).toBe(false);
+  });
+
+  it('#13949 — le sceau et l’encodage scellé vont ENSEMBLE : l’un sans l’autre est illisible', () => {
+    const keyId = 'A'.repeat(TALKIE_SEAL_KEY_ID_CHARS.min);
+    expect(talkieStartPayloadSchema.safeParse({ toUserId: 'b'.repeat(24), codec: 'aac-adts', sealed: { keyId } }).success).toBe(false);
+    expect(talkieStartPayloadSchema.safeParse({ toUserId: 'b'.repeat(24), codec: TALKIE_SEALED_CODEC }).success).toBe(false);
+  });
+
+  it('#13949 — rien d’autre que l’identifiant ne repart à côté du sceau', () => {
+    const keyId = 'k'.repeat(TALKIE_SEAL_KEY_ID_CHARS.min);
+    const parsed = talkieStartPayloadSchema.parse({ toUserId: 'b'.repeat(24), codec: TALKIE_SEALED_CODEC, sealed: { keyId, key: 'clair', keyEnvelope: 'x' } });
+    expect(parsed.sealed).toEqual({ keyId });
+  });
+
+  it('#13949 — le dernier fragment se déclare sur le fil : la fin n’est pas dictée par le serveur', () => {
+    const talkieId = 'a'.repeat(24);
+    expect(talkieChunkPayloadSchema.parse({ talkieId, seq: 3, last: true, data: new Uint8Array(4) }).last).toBe(true);
+    expect(talkieChunkPayloadSchema.safeParse({ talkieId, seq: 3, last: 'oui', data: new Uint8Array(4) }).success).toBe(false);
   });
 });

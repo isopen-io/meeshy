@@ -22,6 +22,16 @@
  * contrôle tout entière. Un fragment hors bornes est IGNORÉ ; dépasser la durée,
  * le total ou le nombre ferme la prise de parole (`limit`).
  *
+ * ## Une voix scellée (#13949)
+ *
+ * Une voix scellée n'ouvre QUE si la passerelle l'accepte (`sealedVoiceAccepted`, éteint par défaut) :
+ * tant qu'aucun client ne déchiffre, elle est refusée comme illisible, avant tout jugement. Acceptée, un
+ * fragment scellé est relayé comme tout fragment, c'est-à-dire comme des octets que le relais ne lit pas
+ * (ni transcription, ni normalisation, ni forme exigée). L'identifiant de clé de l'ouverture repart tel
+ * quel dans `talkie:incoming`, sous l'encodage scellé (la clé, elle, voyage par le relais des signaux
+ * E2EE), et le rejugement garde le sceau : une paire chiffrée ne coupe pas une voix scellée. Le dernier
+ * fragment déclaré (`last`) repart déclaré.
+ *
  * ## Ce qui change pendant qu'on parle
  *
  * La prise de parole est REJUGÉE en arrière-plan, au plus toutes les
@@ -60,6 +70,7 @@ import {
   TALKIE_MAX_CHUNKS,
   TALKIE_MAX_DURATION_MS,
   TALKIE_MAX_TOTAL_BYTES,
+  TALKIE_SEALED_CODEC,
   talkieChunkPayloadSchema,
   talkieEndPayloadSchema,
   talkieJoinPayloadSchema,
@@ -68,6 +79,8 @@ import {
   type TalkieCodec,
   type TalkieDelivery,
   type TalkieEndedEventData,
+  type TalkieSeal,
+  type TalkieWireCodec,
   type TalkieEndReason,
   type TalkieIncomingEventData,
   type TalkieStartAck,
@@ -99,7 +112,9 @@ type Session = {
   readonly fromUserId: string;
   readonly toUserId: string;
   readonly socketId: string;
-  readonly codec: TalkieCodec;
+  readonly codec: TalkieWireCodec;
+  /** Voix scellée (#13949) : l'identifiant de clé, relayé sans être lu ; son absence ⇒ voix en clair. */
+  readonly sealed: TalkieSeal | undefined;
   readonly startedAt: number;
   readonly delivery: TalkieDelivery;
   /** Les fragments gardés et les sockets qui ont rejoint : une voix réveillée seulement. */
@@ -116,7 +131,13 @@ type Session = {
 
 export type TalkieRelayDeps = {
   readonly io: ServerEmitIO | undefined;
-  readonly judge: (fromUserId: string, toUserId: string) => Promise<TalkieVerdict>;
+  /** `sealed` : la voix est scellée sur l'appareil (#13949) — seule elle passe dans une paire chiffrée. */
+  readonly judge: (fromUserId: string, toUserId: string, sealed: boolean) => Promise<TalkieVerdict>;
+  /**
+   * La passerelle accepte-t-elle une voix scellée (#13949) ? Absent ⇒ NON (fail-closed) : tant qu'aucun client
+   * déployé ne refuse une voix de paire chiffrée qui n'est pas scellée ET déchiffrable, aucune n'ouvre.
+   */
+  readonly sealedVoiceAccepted?: () => boolean;
   /** Le débit d'ouverture : `null` quand le compteur est injoignable (fail-closed). */
   readonly withinStartRate: (userId: string) => Promise<boolean | null>;
   /** L'instant de la DERNIÈRE coupure de la paire orientée, ou `null` ; LÈVE quand le cache partagé est injoignable. */
@@ -185,13 +206,14 @@ export class TalkieRelay {
   async start(socketId: string, fromUserId: string, raw: unknown): Promise<TalkieStartAck> {
     const parsed = talkieStartPayloadSchema.safeParse(raw);
     if (!parsed.success) return INVALID;
+    if (parsed.data.sealed !== undefined && this.deps.sealedVoiceAccepted?.() !== true) return INVALID;
     const toUserId = parsed.data.toUserId.toLowerCase();
     const cutFrom = this.deps.now();
 
     this.opening.set(socketId, (this.opening.get(socketId) ?? 0) + 1);
     let admitted: TalkieVerdict;
     try {
-      const verdict = await this.admit(fromUserId, toUserId, cutFrom);
+      const verdict = await this.admit(fromUserId, toUserId, cutFrom, parsed.data.sealed !== undefined);
       if ('success' in verdict) return verdict;
       if (this.lostWhileOpening.has(socketId)) return refusal(TALKIE_UNAVAILABLE);
       admitted = verdict;
@@ -210,12 +232,16 @@ export class TalkieRelay {
     const startedAt = this.deps.now();
     const waking: TalkieWaking | null = admitted.ok === true && admitted.delivery === 'waking' ? (admitted as TalkieWaking) : null;
     if (waking && !this.mayHoldAnotherVoice(fromUserId)) return this.withFallbackConversation(WAKING_FULL, fromUserId, toUserId);
+    // Une voix scellée ne se met pas en tampon pour un réveil (#13949) : le push de suivi et sa lecture HTTP déclarent
+    // de l'AAC, qu'elle n'est pas. Elle se replie en message vocal, qui suit le chemin vocal E2EE du client.
+    if (waking && parsed.data.sealed !== undefined) return this.withFallbackConversation(WAKING_FULL, fromUserId, toUserId);
     const session: Session = {
       talkieId: randomBytes(12).toString('hex'),
       fromUserId,
       toUserId,
       socketId,
       codec: parsed.data.codec,
+      sealed: parsed.data.sealed,
       startedAt,
       delivery: waking ? 'waking' : 'live',
       waiting: waking ? { buffer: [], listeners: new Set(), joined: false, ended: null, expiry: null } : null,
@@ -275,13 +301,13 @@ export class TalkieRelay {
   }
 
   /** Le verdict de la porte quand elle admet ; sinon l'accusé de refus. Le débit, la porte, puis la coupure posée PENDANT le jugement. */
-  private async admit(fromUserId: string, toUserId: string, cutFrom: number): Promise<TalkieStartAck | TalkieVerdict> {
+  private async admit(fromUserId: string, toUserId: string, cutFrom: number, sealed: boolean): Promise<TalkieStartAck | TalkieVerdict> {
     try {
       const rate = await this.deps.withinStartRate(fromUserId);
       if (rate === null) return refusal(TALKIE_UNAVAILABLE);
       if (!rate) return RATE_LIMITED;
 
-      const verdict = await this.deps.judge(fromUserId, toUserId);
+      const verdict = await this.deps.judge(fromUserId, toUserId, sealed);
       if (verdict.ok === false) return this.withFallbackConversation(refusal(verdict), fromUserId, toUserId);
 
       const cut = await this.deps.cutAt(fromUserId, toUserId);
@@ -336,6 +362,7 @@ export class TalkieRelay {
       seq: parsed.data.seq,
       data,
       ...(parsed.data.capturedAt === undefined ? {} : { capturedAt: parsed.data.capturedAt }),
+      ...(parsed.data.last === true ? { last: true as const } : {}),
       relayedAt: receivedAt,
     };
     if (!session.waiting) {
@@ -374,6 +401,7 @@ export class TalkieRelay {
   async audioFor(talkieId: string, userId: string): Promise<TalkieAudio> {
     const admitted = await this.admitListener(talkieId, userId);
     if (admitted === 'unknown' || admitted === 'refused') return { ok: false, reason: admitted };
+    if (admitted.codec === TALKIE_SEALED_CODEC) return { ok: false, reason: 'refused' };
     const buffer = (admitted.waiting as Waiting).buffer;
     const data = new Uint8Array(buffer.reduce((total, event) => total + event.data.byteLength, 0));
     buffer.reduce((offset, event) => {
@@ -396,7 +424,7 @@ export class TalkieRelay {
     try {
       const [cut, verdict] = await Promise.all([
         this.deps.cutAt(session.fromUserId, session.toUserId),
-        this.deps.judge(session.fromUserId, session.toUserId),
+        this.deps.judge(session.fromUserId, session.toUserId, session.sealed !== undefined),
       ]);
       if ((cut !== null && cut >= session.cutFrom) || verdict.ok === false) return 'refused';
     } catch (error) {
@@ -412,7 +440,7 @@ export class TalkieRelay {
     session.rejudging = true;
     session.judgedAt = now;
     this.deps
-      .judge(session.fromUserId, session.toUserId)
+      .judge(session.fromUserId, session.toUserId, session.sealed !== undefined)
       .then(
         (verdict) => {
           if (verdict.ok === false) this.close(session.talkieId, 'cut', 'recipient');
@@ -547,6 +575,7 @@ function incomingOf(session: Session): TalkieIncomingEventData {
     codec: session.codec,
     startedAt: new Date(session.startedAt).toISOString(),
     maxDurationMs: TALKIE_MAX_DURATION_MS,
+    ...(session.sealed ? { sealed: session.sealed } : {}),
   };
 }
 

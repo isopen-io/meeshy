@@ -60,6 +60,7 @@
 - [L'amnistie de type-check est SCINDÉE, pas levée (2026-08-23, cycle 105 bis)](decisions/l-amnistie-de-type-check-est-scindee-pas-levee-2026-08-23-cycle-105-bis.md)
 - [Visibilité de la présence : soi / ami accepté / ADMIN+ — le partage d'une conversation ou d'une communauté ne donne rien (2026-08-25)](decisions/visibilite-de-la-presence-soi-ami-accepte-admin-le-partage-d-une-conversation.md)
 - [La présence d'un Ami est binaire, celle d'un Proche est détaillée (2026-10-31, #13928)](decisions/2026-10-31-la-presence-d-un-ami-est-binaire-celle-d-un-proche-est-detaillee.md)
+- [Le talkie scellé traverse le serveur sans être lu (2026-11-09, #13949)](decisions/2026-11-09-le-talkie-scelle-traverse-le-serveur-sans-etre-lu.md)
 - [Le Bring sonne sous une préférence de réception, pas sous un consentement (2026-11-02, #13936, #14407)](decisions/2026-11-02-le-bring-sonne-sous-une-preference-de-reception-pas-sous-un-consentement.md)
 - [Deux comptes de l'équipe (MODERATOR, ADMIN, BIGBOSS) ont entre eux les outils de cercle au niveau Sang, sans lien ; consentement, blocage, `NOBODY` et bouclier des mineurs restent ; les audiences de contenu restent au lien réel ; le client lit `accessLevel`, jamais un rôle (2026-11-07, #16623)](decisions/2026-11-07-deux-comptes-de-l-equipe-ont-entre-eux-les-outils-de-cercle-16623.md)
 - [Le retour d'un contact s'annonce, une fois toutes les 3 heures — l'unique exception à la visibilité de la présence (2026-09-27, #8285)](decisions/2026-09-27-le-retour-d-un-contact-s-annonce-une-fois-toutes-les-3-heures.md)

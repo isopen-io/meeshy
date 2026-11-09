@@ -13,9 +13,24 @@ export const TALKIE_MAX_CHUNK_BYTES = 16_384;
 export const TALKIE_MAX_TOTAL_BYTES = 512_000;
 /** Plafond du NOMBRE de fragments d'une prise de parole : 30 s par fragments de 100 ms au plus court. */
 export const TALKIE_MAX_CHUNKS = 300;
+/**
+ * Une voix SCELLÉE (#13949) ne porte, à l'ouverture, que l'IDENTIFIANT de la clé de sa prise de parole
+ * (base64url, au moins 16 octets aléatoires). La clé elle-même voyage par le relais des signaux E2EE
+ * (`e2ee-signals.ts`) : une enveloppe libsignal par appareil, Sesame compris. Le serveur ne lit ni l'un ni l'autre.
+ */
+export const TALKIE_SEAL_KEY_ID_CHARS = { min: 22, max: 64 } as const;
 /** Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première). */
 export const TALKIE_CODECS = ['aac-adts'] as const;
 export type TalkieCodec = (typeof TALKIE_CODECS)[number];
+/**
+ * L'encodage d'une voix SCELLÉE (#13949) : de l'AAC ADTS chiffré fragment par fragment sur l'appareil. Il vit HORS de
+ * {@link TALKIE_CODECS} À DESSEIN : les clients déployés n'ouvrent qu'un encodage de cette liste (web
+ * `decodeTalkieIncoming`, iOS et Android `isPlayable`), donc aucun ne joue comme du son une charge qu'il ne déchiffre pas.
+ */
+export const TALKIE_SEALED_CODEC = 'sealed-aac-adts' as const;
+export type TalkieSealedCodec = typeof TALKIE_SEALED_CODEC;
+/** Ce que `talkie:start` et `talkie:incoming` peuvent porter : la voix en clair, ou la voix scellée. */
+export type TalkieWireCodec = TalkieCodec | TalkieSealedCodec;
 
 /**
  * `live` : le destinataire a une socket, la voix sort chez lui en direct.

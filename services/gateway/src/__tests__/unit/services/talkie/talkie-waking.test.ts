@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
-import { TALKIE_JOIN_WINDOW_MS, TALKIE_MAX_DURATION_MS } from '@meeshy/shared/types/talkie';
+import { TALKIE_JOIN_WINDOW_MS, TALKIE_MAX_DURATION_MS, TALKIE_SEALED_CODEC } from '@meeshy/shared/types/talkie';
 import { TalkieRelay, TALKIE_WAKING_PROCESS_MAX_BYTES, type TalkieRelayDeps } from '../../../../services/talkie/talkieRelay';
 import type { TalkieVerdict } from '../../../../services/talkie/talkieGate';
 
@@ -441,5 +441,19 @@ describe('#17142 (audit) — ce qui borne le rattrapage et la copie', () => {
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ type: { in: ['direct', 'group'] }, NOT: expect.objectContaining({ AND: expect.any(Array) }) }),
     }));
+  });
+});
+
+describe('#13949 — une voix scellée ne se met jamais en tampon pour un réveil', () => {
+  it('verdict waking et voix scellée : le repli vocal, aucun réveil, aucune session gardée', async () => {
+    const judge = jest.fn(async (_f: string, _t: string, _sealed: boolean): Promise<TalkieVerdict> => WAKING);
+    const t = relayWith({ judge, sealedVoiceAccepted: () => true });
+    const ack = await t.relay.start(SENDER_SOCKET, FROM, { toUserId: TO, codec: TALKIE_SEALED_CODEC, sealed: { keyId: 'q7Hk2-_xVb9LmN0pRsT4uW' } });
+
+    expect(judge).toHaveBeenCalledWith(FROM, TO, true);
+    expect(ack).toMatchObject({ success: false, code: 'TALKIE_FALLBACK_VOICE' });
+    expect(t.wake).not.toHaveBeenCalled();
+    expect(t.relay.openCount).toBe(0);
+    expect(t.relay.bufferedBytes).toBe(0);
   });
 });

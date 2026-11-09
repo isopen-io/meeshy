@@ -246,3 +246,31 @@ describe('#17142 — talkie:join et le réveil', () => {
     expect(join).toHaveBeenCalledWith('remote-sock', TO, { talkieId: 'b'.repeat(24) });
   });
 });
+
+describe('#13949 — la voix scellée reste ÉTEINTE tant qu’aucun client ne la déchiffre', () => {
+  const sealedStart = { toUserId: TO, codec: 'sealed-aac-adts', sealed: { keyId: 'q7Hk2-_xVb9LmN0pRsT4uW' } };
+  afterEach(() => { delete process.env.TALKIE_SEALED_VOICE_ENABLED; });
+
+  it.each([undefined, '', 'false', '1', 'TRUE'])('TALKIE_SEALED_VOICE_ENABLED=%p : une voix scellée est refusée sans être jugée', async (value) => {
+    if (value !== undefined) process.env.TALKIE_SEALED_VOICE_ENABLED = value;
+    const { io, emissions } = fakeIo();
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, depsFor(io, { [FROM]: { isAnonymous: false } }));
+
+    expect(await socket.start(sealedStart)).toMatchObject({ success: false, code: 'TALKIE_INVALID' });
+    expect(judgeTalkie).not.toHaveBeenCalled();
+    expect(emissions).toEqual([]);
+  });
+
+  it('allumé explicitement (« true »), la voix scellée est jugée par la porte', async () => {
+    process.env.TALKIE_SEALED_VOICE_ENABLED = 'true';
+    const { io } = fakeIo();
+    const deps = depsFor(io, { [FROM]: { isAnonymous: false } });
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, deps);
+
+    expect(await socket.start(sealedStart)).toMatchObject({ success: true });
+    expect(judgeTalkie).toHaveBeenCalledTimes(1);
+    deps.relay.dispose();
+  });
+});
