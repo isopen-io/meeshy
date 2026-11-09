@@ -53,6 +53,16 @@ final class ComposerLookStripFilterTests: XCTestCase {
         XCTAssertEqual(ComposerLookStripFilterRule.kind(of: .frame(.montage(.classic(.noir)))), .frame)
     }
 
+    func test_mood_effectsCarryTheirAmbiance_smoothingAndFiltersCarryNone() {
+        XCTAssertEqual(ComposerLookStripFilterRule.mood(of: .effect(.toad)), .jovial)
+        XCTAssertEqual(ComposerLookStripFilterRule.mood(of: .effect(.angel)), .feerique)
+        XCTAssertEqual(ComposerLookStripFilterRule.mood(of: .effect(.demon)), .morbide)
+        XCTAssertEqual(ComposerLookStripFilterRule.mood(of: .effect(.volcano)), .fantastique)
+        XCTAssertNil(ComposerLookStripFilterRule.mood(of: .effect(.smoothing)), "lisser ne change pas l'ambiance")
+        XCTAssertNil(ComposerLookStripFilterRule.mood(of: .filter(.film)))
+        XCTAssertNil(ComposerLookStripFilterRule.mood(of: .untouched))
+    }
+
     // MARK: - Les puces de type
 
     func test_items_typeChip_keepsOnlyThatKind_withItsOwnNoneFirst() {
