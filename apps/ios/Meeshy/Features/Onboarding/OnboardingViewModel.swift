@@ -56,6 +56,10 @@ final class OnboardingViewModel: ObservableObject {
     @Published private(set) var ageDatePicked = false
     @Published private(set) var ageState: OnboardingAgeState = .idle
 
+    /// La carte « Montre-toi » (#17236) : avatar et bannière, envoyés par le
+    /// chemin de l'écran Profil.
+    let profile: OnboardingProfileModel
+
     private(set) var storyDefaultVisibility: OnboardingStoryVisibility = .friends
     private(set) var globalConversationId: String?
     /// L'upload de story que la carte 3 suit : celui qu'elle a vu naître à la
@@ -121,7 +125,9 @@ final class OnboardingViewModel: ObservableObject {
         contacts: any ContactSyncProviding = ContactSyncService.shared,
         directory: any ContactDirectoryServiceProviding = ContactDirectoryService.shared,
         birthDates: any BirthDateServiceProviding = BirthDateService.shared,
-        signOut: (@MainActor () async -> Void)? = nil
+        signOut: (@MainActor () async -> Void)? = nil,
+        profileImages: any ProfileImageUploading = ProfileImageUploader(),
+        currentUser: (() -> MeeshyUser?)? = nil
     ) {
         self.service = service
         self.messages = messages
@@ -130,7 +136,8 @@ final class OnboardingViewModel: ObservableObject {
         self.progress = progress
         self.permission = permission ?? SystemOnboardingNotificationPermission()
         self.pickTemplate = pickTemplate ?? { Int.random(in: 0..<$0) }
-        self.applyUser = applyUser ?? { AuthManager.shared.currentUser = $0 }
+        let apply = applyUser ?? { AuthManager.shared.currentUser = $0 }
+        self.applyUser = apply
         self.settled = settled
         self.auth = auth
         self.pause = pause ?? { _ = await cancellableSleep(for: $0) }
@@ -138,6 +145,11 @@ final class OnboardingViewModel: ObservableObject {
         self.directory = directory
         self.birthDates = birthDates
         self.signOut = signOut ?? { await AuthManager.shared.logout() }
+        self.profile = OnboardingProfileModel(
+            uploader: profileImages,
+            currentUser: currentUser,
+            applyUser: apply
+        )
     }
 
     // MARK: - Lecture
@@ -157,6 +169,12 @@ final class OnboardingViewModel: ObservableObject {
     /// Le prénom affiché (anneau de story) — celui du profil lu au démarrage.
     var userDisplayName: String {
         user.map { $0.displayName ?? $0.username } ?? ""
+    }
+
+    /// Le pseudo affiché sous le nom dans l'aperçu « Montre-toi » (#17236).
+    var userHandle: String? {
+        guard let username = user?.username, !username.isEmpty else { return nil }
+        return username
     }
 
     /// L'adresse à laquelle le lien de vérification part — celle du compte.
@@ -270,7 +288,8 @@ final class OnboardingViewModel: ObservableObject {
         contactsPhase = OnboardingContacts.initialPhase(for: contactsStatus)
         queue = OnboardingFlow.pendingGestureSteps(
             for: state,
-            contactsOfferable: OnboardingContacts.isOfferable(contactsStatus)
+            contactsOfferable: OnboardingContacts.isOfferable(contactsStatus),
+            profileComplete: Self.hasProfileImages(user)
         )
         producedSomething = OnboardingFlow.alreadyProduced(state)
         let notificationsUnseen = !state.seenSteps.contains(.notifications)
@@ -303,6 +322,13 @@ final class OnboardingViewModel: ObservableObject {
         greetingDraft = composedGreeting
     }
 
+    /// Avatar ET bannière déjà posés : la carte « Montre-toi » n'a rien à
+    /// proposer, même face à une passerelle qui ne la pré-coche pas.
+    private static func hasProfileImages(_ user: MeeshyUser?) -> Bool {
+        guard let user else { return false }
+        return !(user.avatar ?? "").isEmpty && !(user.banner ?? "").isEmpty
+    }
+
     private static func initialPrimaryLanguage(for user: MeeshyUser) -> String {
         if let configured = user.systemLanguage, !configured.isEmpty { return configured }
         return Locale.current.language.languageCode?.identifier ?? "fr"
@@ -320,6 +346,16 @@ final class OnboardingViewModel: ObservableObject {
         guard case .step(let step) = card else { return }
         await showNext()
         await record(step, .skipped)
+    }
+
+    /// « Continuer » de la carte « Montre-toi » (#17236) : `done` dès qu'une
+    /// image est posée ou en vol, `skipped` sinon. Un refus de la passerelle
+    /// (ancienne, qui ne connaît pas l'étape) n'arrête rien.
+    func continueFromProfile() async {
+        guard card == .step(.profile) else { return }
+        let outcome: OnboardingStepOutcome = profile.hasChosenImage ? .done : .skipped
+        await showNext()
+        await record(.profile, outcome)
     }
 
     /// « Passer tout » : visible dès la première carte, ferme sans condition.

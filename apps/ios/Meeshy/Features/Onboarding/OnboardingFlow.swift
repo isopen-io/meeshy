@@ -88,8 +88,10 @@ enum OnboardingFlow {
     /// partie : elle n'est proposée qu'APRÈS, et seulement si un geste a produit
     /// de quoi être notifié (leçon du carrousel #5218). L'âge (#9929) précède
     /// Global : un 13-17 ans y lit sans écrire, la carte du salut n'a donc pas
-    /// lieu d'être après sa déclaration.
-    static let gestureSteps: [OnboardingStepId] = [.languages, .age, .email, .global, .story, .friends]
+    /// lieu d'être après sa déclaration. « Montre-toi » (#17236) suit l'adresse
+    /// et précède Global : un visage et une bannière posés AVANT le premier
+    /// salut accompagnent déjà ce salut.
+    static let gestureSteps: [OnboardingStepId] = [.languages, .age, .email, .profile, .global, .story, .friends]
 
     /// Les étapes qui PEUVENT appeler une réponse — celles qui justifient de
     /// proposer les notifications.
@@ -97,8 +99,13 @@ enum OnboardingFlow {
 
     /// `contactsOfferable` : la proposition « retrouver tes amis » (#8105) peut
     /// aboutir — elle suffit alors à faire naître la carte 4, même sans profil
-    /// suggéré.
-    static func pendingGestureSteps(for state: APIOnboardingState, contactsOfferable: Bool = false) -> [OnboardingStepId] {
+    /// suggéré. `profileComplete` : le compte porte déjà avatar ET bannière —
+    /// la carte « Montre-toi » n'a rien à proposer.
+    static func pendingGestureSteps(
+        for state: APIOnboardingState,
+        contactsOfferable: Bool = false,
+        profileComplete: Bool = false
+    ) -> [OnboardingStepId] {
         let settled = Set(state.seenSteps).union(state.prefilledSteps)
         return gestureSteps.filter { step in
             guard !settled.contains(step) else { return false }
@@ -111,6 +118,9 @@ enum OnboardingFlow {
             // Proposée au seul compte DÉCLARÉ non vérifié : une passerelle qui
             // ne le dit pas (`nil`) ne fait naître aucune carte.
             case .email: return state.emailVerified == false
+            // Proposée tant qu'elle n'est ni vue ni pré-cochée : une passerelle
+            // qui ne la connaît pas refusera l'écriture, sans rien bloquer.
+            case .profile: return !profileComplete
             case .languages, .story, .notifications: return true
             }
         }

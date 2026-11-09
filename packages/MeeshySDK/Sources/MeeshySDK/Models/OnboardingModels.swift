@@ -24,10 +24,15 @@ import Foundation
 /// sinon. `age` (#9929) est FACULTATIVE et ne naît que si la passerelle la
 /// connaît (`APIOnboardingState.servesAgeStep`) : un binaire plus ancien
 /// l'écarte au décodage (règle 1), sans rien perdre du reste du parcours.
+/// `profile` (#17236) — « Montre-toi », avatar et bannière — est FACULTATIVE ;
+/// la passerelle ne la sert qu'au client qui déclare `onboarding-profile` et la
+/// pré-coche quand le compte a déjà les deux images. L'ordre des cas est celui
+/// de l'AFFICHAGE, pas celui du tableau serveur.
 public enum OnboardingStepId: String, CaseIterable, Codable, Sendable, Hashable {
     case languages
     case age
     case email
+    case profile
     case global
     case story
     case friends

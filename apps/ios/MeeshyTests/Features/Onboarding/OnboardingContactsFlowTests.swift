@@ -30,7 +30,7 @@ final class OnboardingContactsFlowTests: XCTestCase {
             eligible: true,
             completedAt: nil,
             seenSteps: [.languages, .global, .story],
-            prefilledSteps: [],
+            prefilledSteps: [.profile],
             globalConversationId: nil,
             protectedRegime: false,
             storyDefaultVisibility: .public,
