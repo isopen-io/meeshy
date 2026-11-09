@@ -274,6 +274,7 @@ extension StoryViewModel {
 /// monde, delta comme fetch complet.
 struct StoryTrayPager {
     let storyService: StoryServiceProviding
+    let presence: ServedPresenceReconciling = PresenceManager.live
 
     /// Résultat d'une passe de tray, pages recollées.
     struct DrainedStoryPages {
@@ -282,6 +283,16 @@ struct StoryTrayPager {
         /// Le serveur a plafonné ses tombstones : des disparitions manquent, et
         /// elles n'ont AUCUN curseur de reprise.
         let tombstonesTruncated: Bool
+        /// La carte de présence relevée au DÉPART de la passe (#14023), et la carte elle-même.
+        let presenceMark: [String: UserPresence]
+        let presence: ServedPresenceReconciling
+
+        /// Les groupes de la passe, rendus tels quels après que leur présence servie a remplacé ce que la carte n'a
+        /// appris d'aucune source vivante pendant la lecture (`ServedPresenceReconciling`).
+        func reconciled(_ groups: [StoryGroup]) -> [StoryGroup] {
+            presence.reconcile(withServed: groups, readFrom: presenceMark)
+            return groups
+        }
     }
 
     enum StoryTrayPageError: Error {
@@ -291,6 +302,7 @@ struct StoryTrayPager {
     }
 
     func drain(updatedSince: Date?) async throws -> DrainedStoryPages {
+        let presenceMark = presence.presenceMap
         var posts: [APIPost] = []
         var deletedStoryIds = Set<String>()
         var tombstonesTruncated = false
@@ -319,7 +331,9 @@ struct StoryTrayPager {
                 return DrainedStoryPages(
                     posts: posts,
                     deletedStoryIds: deletedStoryIds,
-                    tombstonesTruncated: tombstonesTruncated
+                    tombstonesTruncated: tombstonesTruncated,
+                    presenceMark: presenceMark,
+                    presence: presence
                 )
             }
             cursor = next
@@ -331,7 +345,9 @@ struct StoryTrayPager {
         return DrainedStoryPages(
             posts: posts,
             deletedStoryIds: deletedStoryIds,
-            tombstonesTruncated: tombstonesTruncated
+            tombstonesTruncated: tombstonesTruncated,
+            presenceMark: presenceMark,
+            presence: presence
         )
     }
 }

@@ -23,7 +23,7 @@ public enum PresenceState: String, Equatable, Sendable {
 
 // MARK: - User Presence
 
-public struct UserPresence: Codable, Sendable {
+public struct UserPresence: Codable, Sendable, Equatable {
     public let isOnline: Bool
     public let lastActiveAt: Date?
 

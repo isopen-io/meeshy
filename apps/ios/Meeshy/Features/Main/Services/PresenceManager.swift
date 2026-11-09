@@ -33,6 +33,14 @@ final class PresenceRefreshSignal: ObservableObject {
 
 // MARK: - Presence Manager
 
+/// Ce qu'une relecture SERVIE demande à la carte de présence (#14023) : la relever au départ de la lecture, puis lui
+/// remettre ce que le serveur a servi. Injecté dans `StoryTrayPager`, pour que la passe du plateau ne nomme aucun singleton.
+@MainActor
+protocol ServedPresenceReconciling: AnyObject {
+    var presenceMap: [String: UserPresence] { get }
+    func reconcile(withServed groups: [StoryGroup], readFrom readMark: [String: UserPresence])
+}
+
 @MainActor
 final class PresenceManager: ObservableObject {
     static let shared = PresenceManager()
@@ -362,25 +370,31 @@ final class PresenceManager: ObservableObject {
         return presenceMap[userId] ?? fallback
     }
 
-    /// La relecture SERVIE fait foi sur ce que le serveur a cessé de servir (#14023). Une amitié
-    /// rompue ou un cercle descendu sous Ami (#13928) ne s'annonce par AUCUN événement (gestes
-    /// silencieux, RG-07) : l'entrée vivante survivrait jusqu'au prochain `user:status` et la carte
-    /// d'identité comme l'export préféreraient ce point à la charge servie. Une charge qui ne sert
-    /// aucune présence (`nil`, ou masque hors-ligne) purge donc l'entrée de cette personne ; une
-    /// charge qui en sert une la laisse, la carte vivante restant plus fraîche.
-    func reconcile(withServed groups: [StoryGroup]) {
-        let unserved = groups
-            .filter { ($0.authorPresence?.state ?? .offline) == .offline }
-            .map(\.id)
-            .filter { presenceMap[$0] != nil }
-        guard !unserved.isEmpty else { return }
-        unserved.forEach { presenceMap.removeValue(forKey: $0) }
+    /// La relecture SERVIE fait foi sur ce que la carte n'a appris d'aucune source vivante pendant la lecture (#14023).
+    /// Une amitié rompue ou un cercle descendu sous Ami (#13928) ne s'annonce par AUCUN événement (gestes silencieux,
+    /// RG-07) : sans elle, l'entrée vivante survivrait jusqu'au prochain `user:status` et la carte d'identité comme
+    /// l'export la préféreraient à la charge servie. La présence servie remplace donc l'entrée de son auteur — masque
+    /// compris —, à deux conditions : la charge en sert une (`nil` vient d'une annonce en direct ou d'un serveur
+    /// antérieur, qui ne disent rien de la présence), et l'entrée n'a pas changé depuis `readMark`, la carte relevée au
+    /// DÉPART de la lecture (un `user:status` reçu pendant la lecture est plus frais que la charge). La relecture ne sème
+    /// aucune entrée : la charge servie reste le repli de qui n'en a pas.
+    func reconcile(withServed groups: [StoryGroup], readFrom readMark: [String: UserPresence]) {
+        let served = groups.reduce(into: [String: UserPresence]()) { map, group in
+            guard let presence = group.authorPresence,
+                  let live = presenceMap[group.id],
+                  live == readMark[group.id],
+                  live != presence else { return }
+            map[group.id] = presence
+        }
+        guard !served.isEmpty else { return }
+        presenceMap.merge(served) { _, servedEntry in servedEntry }
     }
 
-    /// `reconcile(withServed:)` en passant : rend les groupes tels quels, pour se poser sur la ligne qui les produit.
-    func reconciled(_ groups: [StoryGroup]) -> [StoryGroup] {
-        reconcile(withServed: groups)
-        return groups
+    /// Le lecteur vient de descendre ce lien sous Ami (#14023) : le serveur ne lui servira plus cette présence, et
+    /// aucun événement ne le dira. L'entrée part tout de suite ; la charge servie redevient le repli.
+    func forget(_ userId: String) {
+        guard presenceMap[userId] != nil else { return }
+        presenceMap.removeValue(forKey: userId)
     }
 
     /// Pastille tri-state pour les listes : présence temps réel du manager si
@@ -514,6 +528,11 @@ final class PresenceManager: ObservableObject {
             (presence.lastActiveAt ?? .distantPast) >= cutoff
         }
     }
+}
+
+extension PresenceManager: ServedPresenceReconciling {
+    /// Le câblage de production d'un `ServedPresenceReconciling`.
+    static var live: ServedPresenceReconciling { shared }
 }
 
 // MARK: - Logger Extension

@@ -228,7 +228,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 if drained.tombstonesTruncated {
                     Logger.messages.error("[StoryVM] Server truncated its story tombstones — escalating to a full tray fetch")
                 } else {
-                    let deltaGroups = PresenceManager.shared.reconciled(drained.posts.toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id))
+                    let deltaGroups = drained.reconciled(drained.posts.toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id))
                     if !deltaGroups.isEmpty {
                         insertOrMergeStoryGroups(deltaGroups, replacingExisting: true)
                     }
@@ -264,7 +264,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // juste après grave la troncature.
             let drained = try await trayPager.drain(updatedSince: nil)
 
-            var groups = PresenceManager.shared.reconciled(trayAnnouncements.joining(since: announcedMark, drained.posts).toStoryGroups())
+            var groups = drained.reconciled(trayAnnouncements.joining(since: announcedMark, drained.posts).toStoryGroups())
 
             // Garde l'état « vu » local que l'API n'a pas encore synchronisé, sauf
             // édition de CONTENU postérieure à la vue (reset d'engagement serveur) —

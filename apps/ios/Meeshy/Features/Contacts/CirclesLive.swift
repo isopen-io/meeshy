@@ -44,6 +44,7 @@ extension ProfileCircleViewModel {
             networkMonitor: NetworkMonitor.shared,
             forgetFriendship: { userId in
                 FriendshipCache.shared.didRemoveFriend(userId)
+                PresenceManager.shared.forget(userId)
                 await FriendshipCache.shared.invalidatePersistedFriendCaches()
             }
         )
