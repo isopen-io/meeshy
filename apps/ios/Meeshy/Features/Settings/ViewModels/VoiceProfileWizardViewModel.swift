@@ -18,10 +18,16 @@ final class VoiceProfileWizardViewModel: ObservableObject {
     @Published var totalToUpload = 0
     @Published var error: String?
     @Published var ageVerified = false
-    @Published var birthDate: Date
+    /// Le sélecteur s'ouvre sur `latestAdmittedBirthDate`, mais rien ne part tant que l'utilisateur
+    /// n'a pas tourné la roue : une déclaration d'âge dont la réponse par défaut est « admis » n'en
+    /// est pas une, et la date est gravée une seule fois côté serveur (#17309).
+    @Published var birthDate: Date {
+        didSet { hasChosenBirthDate = true }
+    }
+    @Published private(set) var hasChosenBirthDate = false
 
     /// La date de naissance la plus récente admise au clonage vocal (#17309) : la date maximale
-    /// du sélecteur, et sa valeur d'ouverture — jamais la date du jour (#10561).
+    /// du sélecteur, et sa position d'ouverture — jamais la date du jour (#10561).
     let latestAdmittedBirthDate: Date
     private let calendar: Calendar
     private let service: VoiceProfileServiceProviding
@@ -66,6 +72,7 @@ final class VoiceProfileWizardViewModel: ObservableObject {
     /// puis passe à l'enregistrement. Appelé depuis le bouton « Confirmer » de
     /// l'étape de vérification d'âge.
     func grantConsent() async {
+        guard hasChosenBirthDate else { return }
         isLoading = true
         defer { isLoading = false }
         error = nil

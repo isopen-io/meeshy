@@ -243,7 +243,8 @@ struct VoiceProfileWizardView: View {
                         .fill(accent)
                 )
             }
-            .disabled(viewModel.isLoading)
+            .disabled(viewModel.isLoading || !viewModel.hasChosenBirthDate)
+            .opacity(viewModel.hasChosenBirthDate ? 1 : 0.5)
             .padding(.horizontal, MeeshySpacing.xl)
 
             if let error = viewModel.error {
