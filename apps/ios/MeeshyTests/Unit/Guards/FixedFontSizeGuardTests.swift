@@ -78,8 +78,16 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// tête. Quand le site et sa tête tiennent sur une seule ligne, la partie
     /// gauche de la ligne suffit.
     static func frozenSites(in source: String) -> [Site] {
+        sites(in: source, marker: #"\.font\(\s*\.system\(\s*size:"#)
+    }
+
+    static func fixedGlyphSites(in source: String) -> [Site] {
+        sites(in: source, marker: #"\.font\(\s*MeeshyFont\.fixedGlyph\("#)
+    }
+
+    static func sites(in source: String, marker pattern: String) -> [Site] {
         let lines = DeclarationBodyScanner.mask(source).components(separatedBy: "\n")
-        guard let marker = try? NSRegularExpression(pattern: #"\.font\(\s*\.system\(\s*size:"#)
+        guard let marker = try? NSRegularExpression(pattern: pattern)
         else { return [] }
 
         return lines.enumerated().compactMap { index, line -> Site? in
@@ -722,6 +730,75 @@ final class FixedFontSizeGuardTests: XCTestCase {
         Text(x).font(.system(size: 11))
         """
         XCTAssertEqual(Self.frozenSites(in: commented).count, 1)
+    }
+
+    // MARK: - Règle 7 — le périmètre hors Features/Main ne fige que ses textes encadrés
+
+    private static let perimeterCeiling = 4
+
+    private static let mainPrefix = "Features/Main/"
+
+    func test_lePerimetreHorsMainNeFigeQueSesTextesEncadres() throws {
+        let sites = try allSites().filter { !$0.0.hasPrefix(Self.mainPrefix) }
+        XCTAssertLessThanOrEqual(
+            sites.count, Self.perimeterCeiling,
+            "tailles figées hors Features/Main : seuls les quatre textes en cadre fixe (pavé, "
+            + "cercle d'upload) restent. Un glyphe figé par un cadre se déclare par "
+            + "`MeeshyFont.fixedGlyph(…)`, un glyphe en ligne suit Dynamic Type :\n  "
+            + sites.map { "\($0.0):\($0.1.line)" }.sorted().joined(separator: "\n  ")
+        )
+    }
+
+    // MARK: - Règle 8 — un glyphe figé par doctrine ne décore jamais du texte
+
+    func test_unGlypheFigeDeclareNeDecoreJamaisDuTexte() throws {
+        let wrong = try sources().flatMap { url in
+            Self.fixedGlyphSites(in: text(of: url))
+                .filter { $0.receiver != .glyph }
+                .map { "\(relativePath(url)):\($0.line)" }
+        }
+        XCTAssertEqual(wrong, [],
+                       "`MeeshyFont.fixedGlyph` est réservée à une Image : un texte figé se justifie par son cadre, pas par cette API")
+
+        let onText = """
+        Text("x")
+            .font(MeeshyFont.fixedGlyph(12))
+        """
+        XCTAssertEqual(Self.fixedGlyphSites(in: onText).map(\.receiver), [.text])
+        let onImage = """
+        Image(systemName: "x")
+            .font(MeeshyFont.fixedGlyph(12))
+        """
+        XCTAssertEqual(Self.fixedGlyphSites(in: onImage).map(\.receiver), [.glyph])
+    }
+
+    func test_laPoliceDeGlypheFigeRendLaTailleAuPointPres() {
+        XCTAssertEqual(MeeshyFont.fixedGlyph(24, weight: .medium), Font.system(size: 24, weight: .medium))
+        XCTAssertEqual(MeeshyFont.fixedGlyph(30, weight: .regular, design: .rounded),
+                       Font.system(size: 30, weight: .regular, design: .rounded))
+    }
+
+    // MARK: - Règle 9 — un glyphe en ligne à côté d'un texte qui scale suit Dynamic Type
+
+    private static let inlineGlyphSites: [EmojiSite] = [
+        EmojiSite(file: "Features/Profile/Views/ParticipantProfileSheet.swift",
+                  head: #"Image(systemName: "theatermasks.fill")"#,
+                  marker: "MeeshyFont.relative(MeeshyIconSize.xxl"),
+        EmojiSite(file: "Features/Profile/Views/UserStatsView.swift",
+                  head: #"Image(systemName: "exclamationmark.circle.fill")"#,
+                  marker: "MeeshyFont.relative(MeeshyIconSize.md"),
+        EmojiSite(file: "Features/Stories/Views/MyStoryActionBar.swift",
+                  head: "Image(systemName: glyph.systemImage)",
+                  marker: ".meeshyScaledFont(MeeshyIconSize.sm")
+    ]
+
+    func test_unGlypheEnLigneDuResteSuitDynamicType() {
+        let unmarked = Self.inlineGlyphSites.filter { site in
+            let url = appRoot.appendingPathComponent(site.file)
+            return !Self.headIsFollowedByMarker(site, in: text(of: url))
+        }
+        XCTAssertTrue(unmarked.isEmpty,
+                      "un glyphe en ligne près d'un texte qui scale ne se fige pas : \(unmarked.map(\.file))")
     }
 
     // MARK: - Règle 6 — un emoji seul porte la police emoji du design system
