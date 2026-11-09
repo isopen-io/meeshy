@@ -16,7 +16,7 @@ import WebRTC
 /// - la porte tient la vue FAIBLEMENT : retenue par la piste jusqu'au retrait
 ///   différé, elle ne fait pas survivre une `UIView` (dont la libération doit
 ///   rester sur le fil principal).
-nonisolated final class CallVideoRendererGate: NSObject, Sendable {
+nonisolated final class CallVideoRendererGate: NSObject, RTCVideoRenderer, Sendable {
     private struct Link {
         weak var view: (any RTCVideoRenderer)?
         var track: RTCVideoTrack?
@@ -61,16 +61,17 @@ nonisolated final class CallVideoRendererGate: NSObject, Sendable {
     }
 
     // MARK: - RTCVideoRenderer
-}
 
-extension CallVideoRendererGate: RTCVideoRenderer {
     // Les images arrivent du fil de décodage : la vue est appelée SOUS le
     // verrou, pour qu'aucune image en vol ne la touche après `close()`.
-    nonisolated func setSize(_ size: CGSize) {
+    // La conformité est déclarée sur la classe `nonisolated` (comme
+    // `CallFrameTap`) : posée dans une extension, l'isolation par défaut du
+    // module la rendait `@MainActor`, inutilisable depuis `CallEngineQueue`.
+    func setSize(_ size: CGSize) {
         link.withLockUnchecked { $0.view?.setSize(size) }
     }
 
-    nonisolated func renderFrame(_ frame: RTCVideoFrame?) {
+    func renderFrame(_ frame: RTCVideoFrame?) {
         link.withLockUnchecked { $0.view?.renderFrame(frame) }
     }
 }
