@@ -427,6 +427,21 @@ final class StoryViewModelTests: StoryViewModelTestCase {
         XCTAssertNotNil(merged?.updatedAt, "updatedAt must survive the merge — it advances the next delta cursor")
     }
 
+    func test_deltaRefresh_servedWithoutPresence_purgesTheLiveEntryOfAnAuthorTheServerNoLongerShows() async {
+        PresenceManager.shared.presenceMap["u-ex"] = UserPresence(isOnline: true, lastActiveAt: Date())
+        defer { PresenceManager.shared.presenceMap.removeValue(forKey: "u-ex") }
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
+        {"id":"s-ex","type":"STORY","content":"x","createdAt":"\(Self.iso(-1800))",
+         "updatedAt":"\(Self.iso(-1800))","expiresAt":"\(Self.iso(72000))",
+         "author":{"id":"u-ex","username":"ex","isOnline":false}}
+        """))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date(timeIntervalSince1970: 5_000))
+
+        XCTAssertNil(PresenceManager.shared.presenceMap["u-ex"],
+                     "la relecture servie purge la présence vivante que le serveur ne sert plus")
+    }
+
     func test_deltaRefresh_insertsBrandNewStoryGroup() async {
         sut.storyGroups = [makeStoryGroup(userId: "u-old", stories: [makeStoryItem(id: "s-old")])]
         mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """

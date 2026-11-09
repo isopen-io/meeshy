@@ -153,6 +153,51 @@ final class PresenceManagerSeedTests: XCTestCase {
         XCTAssertEqual(sut.presenceMap["dup"]?.isOnline, true, "le dernier relevé d'un même utilisateur l'emporte")
     }
 
+    // MARK: - #14023 — une présence que le serveur ne sert plus quitte la carte vivante
+
+    func test_reconcileServed_afterRupture_purgesTheLiveEntry_andTheIdentityCardShowsNoDot() {
+        sut.presenceMap["ex"] = UserPresence(isOnline: true, lastActiveAt: Date())
+        let served = servedGroup("ex", presence: UserPresence(isOnline: false, lastActiveAt: nil))
+
+        sut.reconcile(withServed: [served])
+
+        XCTAssertNil(sut.presenceMap["ex"], "l'entrée vivante d'un lien rompu est purgée")
+        XCTAssertEqual(StoryExportAuthor.served(from: served).presence, PresenceState.offline,
+                       "l'export n'affiche aucun point")
+        XCTAssertEqual(sut.servedPresence(for: "ex", fallback: served.authorPresence)?.state, PresenceState.offline,
+                       "la carte d'identité de la visionneuse n'affiche aucun point")
+    }
+
+    func test_reconcileServed_withoutAnyServedPresence_purgesTheLiveEntry() {
+        sut.presenceMap["ex"] = UserPresence(isOnline: true, lastActiveAt: Date())
+
+        sut.reconcile(withServed: [servedGroup("ex", presence: nil)])
+
+        XCTAssertNil(sut.presenceMap["ex"])
+    }
+
+    func test_reconcileServed_whenTheServerStillServesPresence_keepsTheFresherLiveEntry() {
+        let live = UserPresence(isOnline: true, lastActiveAt: Date())
+        sut.presenceMap["friend"] = live
+
+        sut.reconcile(withServed: [servedGroup("friend", presence: UserPresence(isOnline: true, lastActiveAt: nil))])
+
+        XCTAssertEqual(sut.presenceMap["friend"]?.isOnline, true)
+        XCTAssertEqual(sut.presenceState(for: "friend"), PresenceState.online)
+    }
+
+    func test_reconcileServed_leavesPeopleTheGroupsDoNotNameUntouched() {
+        sut.presenceMap["bystander"] = UserPresence(isOnline: true, lastActiveAt: Date())
+
+        sut.reconcile(withServed: [servedGroup("ex", presence: nil)])
+
+        XCTAssertEqual(sut.presenceState(for: "bystander"), PresenceState.online)
+    }
+
+    private func servedGroup(_ userId: String, presence: UserPresence?) -> StoryGroup {
+        StoryGroup(id: userId, username: userId, avatarColor: "FF2E63", stories: [], authorPresence: presence)
+    }
+
     private func masked(_ userId: String) -> UserStatusEvent {
         UserStatusEvent(userId: userId, username: userId, isOnline: false, lastActiveAt: nil)
     }
