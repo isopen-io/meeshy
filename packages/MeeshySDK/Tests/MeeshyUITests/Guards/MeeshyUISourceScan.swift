@@ -119,18 +119,27 @@ enum MeeshyUISourceScan {
         let labelPrefix = Array("label:".utf8)
         let hasTrailingBrace = following < bytes.count && bytes[following] == 123
         var labelOpen: Int?
-        if bytes[head] == 40 {
-            if hasTrailingBrace { labelOpen = following } else { labelOpen = labelClosureInside(bytes, from: head, to: firstClose) }
-        } else if following + labelPrefix.count < bytes.count,
-                  bytes[following..<following + labelPrefix.count].elementsEqual(labelPrefix) {
-            let brace = skipSpaces(bytes, from: following + labelPrefix.count)
-            if brace < bytes.count, bytes[brace] == 123 { labelOpen = brace }
+        if bytes[head] == 40, hasTrailingBrace, let actionClose = closing(bytes, openAt: following) {
+            labelOpen = labeledClosure(bytes, after: actionClose) ?? following
+        } else if bytes[head] == 40 {
+            labelOpen = labelClosureInside(bytes, from: head, to: firstClose)
+        } else {
+            labelOpen = labeledClosure(bytes, after: firstClose)
         }
         guard let open = labelOpen, let close = closing(bytes, openAt: open) else { return nil }
         return ButtonSite(
             line: lineNumber(of: start, in: bytes),
             label: String(decoding: bytes[open...close], as: UTF8.self),
             chain: modifierChain(bytes, after: close + 1))
+    }
+
+    private static func labeledClosure(_ bytes: [UInt8], after close: Int) -> Int? {
+        let marker = Array("label:".utf8)
+        let following = skipSpaces(bytes, from: close + 1)
+        guard following + marker.count < bytes.count,
+              bytes[following..<following + marker.count].elementsEqual(marker) else { return nil }
+        let brace = skipSpaces(bytes, from: following + marker.count)
+        return brace < bytes.count && bytes[brace] == 123 ? brace : nil
     }
 
     private static func labelClosureInside(_ bytes: [UInt8], from: Int, to: Int) -> Int? {
@@ -152,6 +161,20 @@ enum MeeshyUISourceScan {
         return !site.label.contains("accessibilityLabel") && !site.chain.contains("accessibilityLabel")
     }
 
+    static func namesAnActionInBuilder(_ window: String) -> Bool {
+        let bytes = Array(window.utf8)
+        let marker = Array(".accessibilityActions".utf8)
+        var index = 0
+        while index + marker.count < bytes.count {
+            defer { index += 1 }
+            guard bytes[index..<index + marker.count].elementsEqual(marker) else { continue }
+            let brace = skipSpaces(bytes, from: index + marker.count)
+            guard brace < bytes.count, bytes[brace] == 123, let close = closing(bytes, openAt: brace) else { continue }
+            if String(decoding: bytes[brace...close], as: UTF8.self).contains("Button(") { return true }
+        }
+        return false
+    }
+
     static func ungatedTapGestures(in text: String) -> [Int] {
         let lines = text.components(separatedBy: "\n")
         return lines.indices.filter { index in
@@ -160,6 +183,7 @@ enum MeeshyUISourceScan {
             let window = lines[index...upper].joined(separator: "\n")
             if window.contains("CycleButtonAccessibility(") || window.contains("clipBarAccessibility(") { return false }
             if window.contains("accessibilityAction(named:") || window.contains("accessibilityHidden(true)") { return false }
+            if namesAnActionInBuilder(window) { return false }
             let isButton = window.contains(".accessibilityAddTraits(") && window.contains("isButton")
             return !(isButton && window.contains(".accessibilityAction"))
         }.map { $0 + 1 }
