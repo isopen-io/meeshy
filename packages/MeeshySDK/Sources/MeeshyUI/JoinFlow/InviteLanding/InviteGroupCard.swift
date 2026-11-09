@@ -67,12 +67,12 @@ struct InviteGroupCard: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .heavy, design: .rounded))
-                    .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(verbatim: "\(InviteLandingCopy.conversationType(conversation.type)) · \(InviteLandingCopy.createdOn(conversation.createdAt))")
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
             }
             .padding(.bottom, MeeshySpacing.xs)
             .accessibilityElement(children: .combine)
@@ -89,7 +89,7 @@ struct InviteGroupCard: View {
                 CachedAsyncImage(url: conversation.avatar, targetSize: CGSize(width: Self.logoSide, height: Self.logoSide), showsStatusOverlays: false) {
                     Text(MeeshyAvatar.makeInitials(from: title))
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .heavy, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                 }
                 .scaledToFill()
             )
@@ -110,7 +110,7 @@ struct InviteGroupCard: View {
         if let text = conversation.description?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(0.8))
+                .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(0.8))
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -122,11 +122,11 @@ struct InviteGroupCard: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "link")
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+                .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
                 .accessibilityHidden(true)
             Text(verbatim: address.displayString)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, design: .monospaced))
-                .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900)
+                .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo900)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .environment(\.layoutDirection, .leftToRight)
@@ -171,7 +171,7 @@ struct InviteGroupCard: View {
                 .minimumScaleFactor(0.8)
         }
         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-        .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo700)
+        .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo700)
         .frame(maxWidth: .infinity, minHeight: 46)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)

@@ -53,7 +53,7 @@ struct InviteSectionTitle: View {
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
             .scriptSafeTracking(1.1)
             .textCase(.uppercase)
-            .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+            .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
             .accessibilityAddTraits(.isHeader)
     }
 }
