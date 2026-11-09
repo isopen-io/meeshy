@@ -73,8 +73,12 @@ nonisolated enum ComposerSceneCaptureGesture {
 
 // MARK: - La capture RAPIDE sur une scène vide (#8653, #8711)
 
-/// **Un toucher ARME le viseur, un second toucher prend la photo ; un appui
-/// long ouvre ET filme** (directives porteur 2026-09-29).
+/// **Un appui long sur la scène vide ouvre ET filme** (directives porteur
+/// 2026-09-29). **Le toucher n'arme plus rien** (#17269, porteur :
+/// « la notion de toucher la scène pour armer la caméra doit être annulée et
+/// armer la caméra à l'ouverture du composeur ») : la caméra s'arme à
+/// l'ouverture (`ComposerOpeningPlan`), et le récit qui suit est celui des
+/// lots précédents, gardé pour mémoire.
 ///
 /// > « Lors de la prise de photo dans la scène, il faut prendre la photo en
 /// > deux temps. Le premier tap arme et affiche avec les contrôleurs (flash,
@@ -96,12 +100,6 @@ nonisolated enum ComposerSceneCaptureGesture {
 /// longtemps puis de lâcher vite. Chaque geste porte désormais UNE intention,
 /// et l'indication grise de la scène vide les nomme.
 nonisolated enum ComposerSceneQuickCapture {
-
-    enum Tap: Equatable, Sendable {
-        /// **Le premier toucher ARME** : le viseur s'ouvre avec ses
-        /// contrôleurs — flash, optique, sortie — et RIEN n'est pris (#8711).
-        case arm
-    }
 
     enum Release: Equatable, Sendable {
         case closeTake
@@ -147,13 +145,10 @@ nonisolated enum ComposerSceneQuickCapture {
             && !ComposerSceneCamera.modes(for: format).isEmpty
     }
 
-    static func tap(format: ComposerFormat) -> Tap? {
-        ComposerSceneCamera.modes(for: format).isEmpty ? nil : .arm
-    }
-
     static func hint(format: ComposerFormat) -> Hint? {
-        guard tap(format: format) != nil else { return nil }
-        return ComposerSceneCamera.modes(for: format).contains(.photo) ? .photoOrVideo : .videoOnly
+        let modes = ComposerSceneCamera.modes(for: format)
+        guard !modes.isEmpty else { return nil }
+        return modes.contains(.photo) ? .photoOrVideo : .videoOnly
     }
 
     /// Au-delà, la caméra ne viendra pas (simulateur, matériel occupé) : le

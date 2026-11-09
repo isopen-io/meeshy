@@ -25,28 +25,14 @@ extension MeeshyComposerHost {
         sceneCapture.beginHold()
     }
 
-    /// **Un toucher sur une scène VIDE ARME le viseur — il ne prend rien** (#8711) : le SECOND
-    /// toucher prend la photo. Rend `true` quand il a pris le geste.
-    func handleSceneQuickTap() -> Bool {
-        guard sceneServesCapture, ComposerSceneQuickCapture.offers(
-            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
-            format: selectedFormat,
-            stage: sceneCameraStage,
-            toolIsOpen: sceneToolOwnsScreen,
-            mediaIsEntering: sceneIntake?.isPreparing == true, writesText: writesText),
-              ComposerSceneQuickCapture.tap(format: selectedFormat) != nil else { return false }
-        HapticFeedback.light()
-        armSceneCamera()
-        return true
-    }
-
     /// **Toucher la scène pendant qu'on écrit termine l'écriture** (#15674), comme la coche.
     func endSceneWriting() {
         editsPostContent = false
         editsSceneDescription = false
     }
 
-    /// Le toucher d'une scène vide armerait-il le viseur ? Sans l'armer (#13839, L5).
+    /// L'appui long d'une scène vide filmerait-il ? Le toucher n'arme plus rien (#17269) :
+    /// seule l'indication grise le demande.
     var sceneQuickCaptureIsOffered: Bool {
         sceneServesCapture && ComposerSceneQuickCapture.offers(
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
@@ -54,7 +40,6 @@ extension MeeshyComposerHost {
             stage: sceneCameraStage,
             toolIsOpen: sceneToolOwnsScreen,
             mediaIsEntering: sceneIntake?.isPreparing == true, writesText: writesText)
-            && ComposerSceneQuickCapture.tap(format: selectedFormat) != nil
     }
 
     /// **L'appui long sur la photothèque PROPOSE ses sources** (#10357,
@@ -144,6 +129,7 @@ extension MeeshyComposerHost {
             retractMedia(objectIds: [ancien])
         }
         sceneCapture.finishCapture()
+        showsOpeningLibrary = false
         HapticFeedback.success()
         ComposerSceneHistoryHold.around {
             if sceneIntakeAllowsAnother, let cadrage = await ComposerTakeAspect.sceneFit(of: result) { applySceneFitMode(cadrage) }

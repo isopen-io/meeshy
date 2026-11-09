@@ -184,8 +184,10 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
     func test_catalogue_laSceneVideParleAuRegistreDuComposer() throws {
         let catalogue = try Self.catalogue()
         let ligne = try XCTUnwrap(catalogue["composer.scene.empty.line"])
-        XCTAssertTrue(ligne["fr"]?.hasPrefix("Touchez") == true, "le composer vouvoie en français")
-        XCTAssertTrue(ligne["de"]?.hasPrefix("Tippe") == true, "et tutoie en allemand, comme son catalogue")
+        XCTAssertTrue(ligne["fr"]?.hasPrefix("Maintenez") == true, "le composer vouvoie en français")
+        XCTAssertTrue(ligne["de"]?.hasPrefix("Halte") == true, "et tutoie en allemand, comme son catalogue")
+        XCTAssertFalse(ligne["fr"]?.contains("Touchez") == true,
+                       "le toucher n'arme plus la caméra : la ligne parle de l'appui long (#17269)")
     }
 
     // MARK: - La scène vide : UNE ligne (#13899, inventaire B13 du composer « scène d'abord »)

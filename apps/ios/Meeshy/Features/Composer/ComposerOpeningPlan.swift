@@ -1,7 +1,7 @@
 import Foundation
 
-/// **Ce que le composer fait en s'ouvrant, réglable** (#17269, retour porteur du
-/// 2026-11-09) : « armer la caméra à l'ouverture du composeur pendant
+/// **Ce que le composer fait en s'ouvrant, réglable** (#17269, retour porteur) :
+/// « armer la caméra à l'ouverture du composeur pendant
 /// l'ouverture des images à sélectionner […] Ces deux fonctions doivent être
 /// paramétrables […] par défaut True et True ».
 ///
@@ -27,10 +27,18 @@ nonisolated struct ComposerOpeningPreferences: Equatable, Sendable {
 /// à mi-hauteur devant** (#17269). On ne touche plus la scène pour armer : la
 /// caméra l'est déjà, et l'appui long sur la scène filme.
 nonisolated struct ComposerOpeningPlan: Equatable, Sendable {
-    let armsCamera: Bool
-    let opensLibrary: Bool
+    /// **Comment la photothèque d'ouverture se présente** : à mi-hauteur, la
+    /// caméra visible derrière, dès que le système sait le faire (iOS 17, le
+    /// sélecteur en ligne) ; avant, en plein écran.
+    nonisolated enum Library: Equatable, Sendable {
+        case halfHeight
+        case fullScreen
+    }
 
-    static let nothing = ComposerOpeningPlan(armsCamera: false, opensLibrary: false)
+    let armsCamera: Bool
+    let library: Library?
+
+    static let nothing = ComposerOpeningPlan(armsCamera: false, library: nil)
 
     /// La caméra s'arme sur une composition vierge, ouverte pour CRÉER, dans un
     /// format qui a un viseur et une scène qui en sert un. La photothèque suit la
@@ -39,13 +47,16 @@ nonisolated struct ComposerOpeningPlan: Equatable, Sendable {
                         compositionIsEmpty: Bool,
                         format: ComposerFormat,
                         sceneServesCapture: Bool,
-                        preferences: ComposerOpeningPreferences) -> ComposerOpeningPlan {
+                        preferences: ComposerOpeningPreferences,
+                        systemMajorVersion: Int = ProcessInfo.processInfo.operatingSystemVersion.majorVersion)
+    -> ComposerOpeningPlan {
+        guard ComposerScenePicking.opensOnPicker(origin: origin, compositionIsEmpty: compositionIsEmpty) else {
+            return .nothing
+        }
         let filme = sceneServesCapture && ComposerSceneCamera.initialMode(for: format) != nil
-        return ComposerOpeningPlan(
-            armsCamera: preferences.armsCamera && filme
-                && ComposerScenePicking.opensOnPicker(origin: origin, compositionIsEmpty: compositionIsEmpty),
-            opensLibrary: preferences.opensLibrary
-                && ComposerScenePicking.opensOnPicker(origin: origin, compositionIsEmpty: compositionIsEmpty))
+        let presentation: Library = systemMajorVersion >= 17 ? .halfHeight : .fullScreen
+        return ComposerOpeningPlan(armsCamera: preferences.armsCamera && filme,
+                                   library: preferences.opensLibrary ? presentation : nil)
     }
 
     /// **Choisir dans la photothèque d'ouverture rend la scène** : la caméra armée
@@ -56,11 +67,5 @@ nonisolated struct ComposerOpeningPlan: Equatable, Sendable {
                                            pendingSegments: Int,
                                            editing: Bool) -> Bool {
         openingPick && stage == .armed && pendingSegments == 0 && !editing
-    }
-
-    /// La photothèque d'ouverture se présente à mi-hauteur, la caméra visible
-    /// derrière, dès que le système sait le faire (iOS 17) ; avant, en plein écran.
-    static func presentsLibraryAtHalfHeight(systemMajorVersion: Int) -> Bool {
-        systemMajorVersion >= 17
     }
 }

@@ -147,7 +147,7 @@ enum ComposerSceneCameraCopy {
     /// dès le premier objet posé.
     static var emptySceneLine: String {
         String(localized: "composer.scene.empty.line",
-               defaultValue: "Touchez la scène pour la caméra", bundle: .main)
+               defaultValue: "Maintenez la scène pour filmer", bundle: .main)
     }
 
     /// Ce que VoiceOver lit de la scène vide : la même ligne.

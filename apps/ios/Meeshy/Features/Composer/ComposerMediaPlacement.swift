@@ -52,7 +52,7 @@ nonisolated enum ComposerScenePicking {
     }
 
     /// **La photothèque s'ouvre TOUT DE SUITE** à la création d'un post, d'un
-    /// réel ou d'une story (#17269, porteur 2026-11-09, qui revient sur #13839) :
+    /// réel ou d'une story (#17269, qui revient sur #13839) :
     /// elle s'ouvre à mi-hauteur, la caméra armée visible derrière, et ne couvre
     /// donc plus la scène qu'on venait demander. Jamais la porte qui reprend un
     /// contenu (brouillon, édition, republication, partage, média d'une

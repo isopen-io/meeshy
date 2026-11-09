@@ -8,8 +8,8 @@ nonisolated struct ComposerCaptureBarSpan: Equatable, Sendable {
     let live: Bool
 }
 
-/// **Ce que la capture MONTRE pendant qu'on filme** (#17268, retour porteur du
-/// 2026-11-09 : « je n'ai pas vu les segments apparaître en haut ni le cercle
+/// **Ce que la capture MONTRE pendant qu'on filme** (#17268, retour porteur :
+/// « je n'ai pas vu les segments apparaître en haut ni le cercle
 /// sur l'anneau pendant la capture par appui long sur la scène ou par-dessus »).
 ///
 /// Deux défauts, une règle :
@@ -44,7 +44,8 @@ nonisolated enum ComposerCaptureProgressDisplay {
     static func spans(segments: [TimeInterval], live: TimeInterval, capturing: Bool,
                       budget: TimeInterval?) -> [ComposerCaptureBarSpan] {
         guard let budget, budget > 0 else { return [] }
-        let durees = segments.map { (duree: $0, live: false) } + (capturing ? [(duree: live, live: true)] : [])
+        let clos: [(duree: TimeInterval, live: Bool)] = segments.map { (duree: $0, live: false) }
+        let durees = clos + (capturing ? [(duree: live, live: true)] : [])
         return durees.reduce(into: [ComposerCaptureBarSpan]()) { parts, part in
             let debut = parts.last.map { $0.start + $0.length } ?? 0
             let longueur = min(max(0, part.duree) / budget, max(0, 1 - debut))

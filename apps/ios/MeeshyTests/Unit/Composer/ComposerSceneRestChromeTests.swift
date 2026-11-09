@@ -459,15 +459,14 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     }
 
     func test_concealment_unSecondToucher_rendLeChrome() {
-        for issue: ComposerSceneEmptyTap.Outcome in [.nothing, .deselect, .armViewfinder, .endWriting] {
+        for issue: ComposerSceneEmptyTap.Outcome in [.nothing, .deselect, .closeEffect, .endWriting] {
             XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: true, emptyTap: issue, sceneHasContent: true),
                            .reveal, "\(issue)")
         }
     }
 
-    func test_concealment_uneSceneVierge_armeToujoursLaCamera() {
-        XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: false, emptyTap: .armViewfinder,
-                                                     sceneHasContent: false), .passThrough)
+    /// Une scène vierge n'a rien à masquer : le toucher la traverse (#17269 : il n'arme plus rien).
+    func test_concealment_uneSceneVierge_laisseLeToucherPasser() {
         XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: false, emptyTap: .nothing,
                                                      sceneHasContent: false), .passThrough)
     }
