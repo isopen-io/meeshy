@@ -187,4 +187,60 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
     private static func isFixedGlyph(file: String, receiver: String) -> Bool {
         fixedGlyphs.contains { $0.file == file && receiver.contains($0.receiver) }
     }
+
+    private static let fixedFontCeiling = 261
+
+    func test_scaledPointSize_atDefaultDynamicType_returnsTheExactBaseSize() {
+        for size in [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 28, 34] as [CGFloat] {
+            XCTAssertEqual(MeeshyFont.scaledPointSize(size, at: .large), size, accuracy: 0.01)
+        }
+    }
+
+    func test_scaledPointSize_growsWithAccessibilitySizes_andShrinksAtXSmall() {
+        XCTAssertGreaterThan(MeeshyFont.scaledPointSize(14, at: .accessibility3), 14)
+        XCTAssertLessThan(MeeshyFont.scaledPointSize(14, at: .xSmall), 14)
+        let sizes = DynamicTypeSize.allCases.map { MeeshyFont.scaledPointSize(14, at: $0) }
+        XCTAssertEqual(sizes, sizes.sorted())
+    }
+
+    func test_dynamicTypeSize_mapsEveryCaseToItsContentSizeCategory() {
+        let expected: [DynamicTypeSize: UIContentSizeCategory] = [
+            .xSmall: .extraSmall, .small: .small, .medium: .medium, .large: .large,
+            .xLarge: .extraLarge, .xxLarge: .extraExtraLarge, .xxxLarge: .extraExtraExtraLarge,
+            .accessibility1: .accessibilityMedium, .accessibility2: .accessibilityLarge,
+            .accessibility3: .accessibilityExtraLarge, .accessibility4: .accessibilityExtraExtraLarge,
+            .accessibility5: .accessibilityExtraExtraExtraLarge
+        ]
+        XCTAssertEqual(expected.count, DynamicTypeSize.allCases.count)
+        for (size, category) in expected {
+            XCTAssertEqual(MeeshyFont.contentSizeCategory(size), category)
+        }
+    }
+
+    func test_meeshyUI_fixedFontCount_staysUnderCeiling() throws {
+        let regex = try NSRegularExpression(pattern: #"\.font\(\.system\(size:"#)
+        let total = try MeeshyUISourceScan.allSources().reduce(0) { sum, source in
+            sum + regex.numberOfMatches(in: source.text, range: NSRange(source.text.startIndex..., in: source.text))
+        }
+        XCTAssertLessThanOrEqual(total, Self.fixedFontCeiling, "Police figée : \(total) sites, plafond \(Self.fixedFontCeiling)")
+    }
+
+    func test_meeshyUI_textFixedFont_staysWithinPerFileCeilings() throws {
+        var offenders: [String] = []
+        for source in try MeeshyUISourceScan.allSources() {
+            let lines = source.text.components(separatedBy: "\n")
+            let count = lines.indices.reduce(0) { sum, index in
+                sum + Self.fontSites(in: lines[index]).filter { site in
+                    let receiver = Self.receiver(lines: lines, index: index, prefix: site.prefix)
+                    return Self.textReceiverPrefixes.contains { receiver.hasPrefix($0) }
+                }.count
+            }
+            if count > (Self.textCeilings[source.path] ?? 0) {
+                offenders.append("\(source.path) : \(count)")
+            }
+        }
+        XCTAssertEqual(offenders, [], "Texte en police figée : utiliser MeeshyFont.relative ou meeshyScaledFont")
+    }
+
+    private static let textCeilings: [String: Int] = [:]
 }

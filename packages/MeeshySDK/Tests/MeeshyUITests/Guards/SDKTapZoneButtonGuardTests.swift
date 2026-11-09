@@ -219,4 +219,33 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         XCTAssertFalse(text.contains("opacity"))
         XCTAssertFalse(text.contains("scaleEffect"))
     }
+
+    func test_aucunBoutonAIconeSeuleDuSDKNEstMuet() throws {
+        let offenders = try MeeshyUISourceScan.allSources().flatMap { source in
+            MeeshyUISourceScan.buttons(in: source.text)
+                .filter(MeeshyUISourceScan.isIconOnlyAndMute)
+                .map { "\(source.path):\($0.line)" }
+        }
+        XCTAssertEqual(offenders, [], "Bouton à icône seule sans libellé VoiceOver")
+    }
+
+    func test_leScannerDIconeSeuleReconnaitLesFormes() {
+        let bare = MeeshyUISourceScan.buttons(in: "Button { go() } label: { Image(systemName: \"xmark\") }")
+        let named = MeeshyUISourceScan.buttons(in: "Button { go() } label: { Image(systemName: \"xmark\") }\n.accessibilityLabel(\"x\")")
+        let inner = MeeshyUISourceScan.buttons(in: "Button(action: go) { Image(systemName: \"xmark\").accessibilityLabel(\"x\") }")
+        let withText = MeeshyUISourceScan.buttons(in: "Button(action: go) { HStack { Image(systemName: \"xmark\"); Text(\"x\") } }")
+        let roleBare = MeeshyUISourceScan.buttons(in: "Button(role: .destructive) { go() } label: { Image(systemName: \"trash\") }")
+        XCTAssertEqual(bare.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 1)
+        XCTAssertEqual(named.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        XCTAssertEqual(inner.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        XCTAssertEqual(withText.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 0)
+        XCTAssertEqual(roleBare.filter(MeeshyUISourceScan.isIconOnlyAndMute).count, 1)
+    }
+
+    func test_toutOnTapGestureDuSDKEstExposeAVoiceOver() throws {
+        let offenders = try MeeshyUISourceScan.allSources().flatMap { source in
+            MeeshyUISourceScan.ungatedTapGestures(in: source.text).map { "\(source.path):\($0)" }
+        }
+        XCTAssertEqual(offenders, [], ".onTapGesture ni bouton ni action nommée pour VoiceOver")
+    }
 }
