@@ -92,8 +92,8 @@ internal struct _InlineOverlayControls: View {
 
     // MARK: - Top Bar (agrandir à gauche · PiP + AirPlay + vitesse + son à droite)
     //
-    // **Agrandir au bord GAUCHE, le son au bord DROIT** (#9575, directive
-    // porteur 2026-10-07). Le groupe centré du 2026-08-10 posait les deux
+    // **Agrandir au bord GAUCHE, le son au bord DROIT** (#9575).
+    // Le groupe centré du 2026-08-10 posait les deux
     // contrôles les plus touchés au milieu de l'image ; chacun a maintenant son
     // coin, et les autres (PiP, AirPlay, vitesse) restent groupés à droite,
     // AVANT le son. La répartition est la fonction pure `topBarLayout` ; ce
@@ -339,7 +339,7 @@ internal struct _InlineOverlayControls: View {
                         // `SharedAVPlayerManager`). Même correction que la barre
                         // du couloir — jusqu'ici seule la pastille bougeait,
                         // au-dessus d'une image figée. Directive « gestes
-                        // progressifs et annulables » (2026-08-30).
+                        // progressifs et annulables ».
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
                         seekValue = fraction
                         manager.seek(to: fraction * manager.duration, precise: false)
@@ -381,8 +381,8 @@ internal struct _FullscreenOverlayControls: View {
     var isInAlbum = false
 
     /// **De haut en bas : barre haute, scène, progression sur toute la largeur
-    /// de l'écran, ligne d'informations** (#9577, directive porteur
-    /// 2026-10-07). Le son, AirPlay et (...) ont quitté la ligne de la barre
+    /// de l'écran, ligne d'informations** (#9577).
+    /// Le son, AirPlay et (...) ont quitté la ligne de la barre
     /// pour une colonne à droite ; le bouton central n'est plus ici — il vit
     /// dans le renderer, sous sa propre règle d'effacement.
     var body: some View {

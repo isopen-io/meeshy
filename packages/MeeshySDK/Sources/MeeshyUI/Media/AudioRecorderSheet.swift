@@ -188,7 +188,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     // MARK: - Recording time label
 
     /// Temps écoulé, sans « / plafond » : l'enregistrement n'a plus de limite
-    /// de durée (directive produit 2026-07-26).
+    /// de durée.
     private var recordingTimeLabel: String {
         MediaFormat.duration(recorder.duration)
     }
@@ -360,7 +360,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
 /// cadre « Enregistrement ». Enregistrer, importer un fichier et emprunter à la
 /// bibliothèque sont trois SOURCES au même rang : les deux dernières rangées
 /// sous le titre de la première se lisaient comme deux options de la capture,
-/// ce qu'elles ne sont pas (directive porteur du 2026-09-01).
+/// ce qu'elles ne sont pas.
 public struct AudioRecorderSourceChips: View {
     public var onImportAudioFile: (() -> Void)?
     public var onOpenSoundLibrary: (() -> Void)?
