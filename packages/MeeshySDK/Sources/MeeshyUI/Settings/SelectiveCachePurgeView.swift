@@ -26,6 +26,7 @@ public final class CachePurgeViewModel: ObservableObject {
     private let service: CachePurgeService
     private let refreshSubject = PassthroughSubject<Void, Never>()
     private var cancellables = Set<AnyCancellable>()
+    private let measureLane = OrderedEventLane()
 
     public init(service: CachePurgeService = .shared) {
         self.service = service
@@ -38,10 +39,7 @@ public final class CachePurgeViewModel: ObservableObject {
         // base, ce n'est pas gratuit.
         refreshSubject
             .debounce(for: .milliseconds(120), scheduler: DispatchQueue.main)
-            .sink { [weak self] in
-                guard let self else { return }
-                Task { await self.measure() }
-            }
+            .relay(through: measureLane) { [weak self] _ in await self?.measure() }
             .store(in: &cancellables)
     }
 
