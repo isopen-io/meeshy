@@ -24,7 +24,6 @@ internal fun ConversationRow(
         isArchived = prefs?.isArchived == true,
         hasUnread = conversation.unreadCount > 0,
         canToggleArchive = capabilities.canToggleArchive,
-        obsolete = capabilities.obsolete,
     )
     ConversationSwipeActions(swipe = swipe, actions = actions) {
         ConversationRowContainer(model = model, actions = actions)
