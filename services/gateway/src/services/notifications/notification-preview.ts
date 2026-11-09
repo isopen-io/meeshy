@@ -59,21 +59,49 @@ export type MessageBannerSource = MessagePrismSource & {
   readonly effectFlags: number | null;
   readonly liveness: MessageLiveness;
   /**
-   * #17080 — l'enveloppe que la bannière de ce message a le droit de
-   * transporter (`deviceEnvelopeForPush`), ou `null`.
+   * #17080 — ce que la décision d'enveloppe demande du MESSAGE.
    *
-   * Elle est RÉSOLUE par la relecture, pas transportée brute : la décision
-   * demande le régime de la conversation, que la même lecture ramène par la
-   * RELATION, et la protection du message, que la garde relit chez elle. C'est
-   * ce qui la met ICI plutôt que chez chaque appelant — seul l'éventail
-   * d'ENVOI tient le message en mémoire, et le chemin d'ÉDITION, qui appelle le
-   * lot de mentions sans composer aucune charge push, ne la câblerait pas.
+   * RAW, et c'est mesuré : la décision demande aussi le régime de la
+   * CONVERSATION, et les deux créateurs qui consomment cette source le lisent
+   * DÉJÀ dans le même `Promise.all` (`select: { title, type, encryptionMode }`).
+   * Le résoudre ici aurait exigé la relation `conversation` sur cette lecture —
+   * un aller-retour de plus sur le connecteur MongoDB, pour une valeur en main
+   * deux lignes plus loin, et une relation REQUISE dont l'absence du document
+   * fait lever le moteur, donc perdre traductions, horloge ET verdict de vie.
    *
-   * Même raison que l'horloge et le verdict de vie, deux champs au-dessus :
-   * elle ne compose AUCUNE chaîne, donc « qui compose ce corps ? » ne la trouve
-   * jamais (cycle 126).
+   * La DÉCISION reste un site unique : `NotificationService.deviceEnvelopeFor`,
+   * seul endroit qui compose ce bloc avec les deux drapeaux portés plus haut
+   * (`effectFlags`, `ephemeralDuration`) avant d'appeler la règle.
+   *
+   * Même raison que l'horloge et le verdict de vie, deux champs au-dessus : rien
+   * de tout cela ne compose une chaîne, donc « qui compose ce corps ? » ne les
+   * trouve jamais (cycle 126).
    */
-  readonly deviceEnvelope: string | null;
+  readonly cipher: MessageCipherSource;
+};
+
+/**
+ * Les colonnes d'un message que la décision d'enveloppe relit — cf.
+ * {@link MessageBannerSource.cipher}. Les deux autres entrées de
+ * `messageProtection` (`effectFlags`, `ephemeralDuration`) vivent déjà sur la
+ * source pour l'horloge de la bulle : elles ne sont pas redites ici, et c'est le
+ * résolveur qui les réunit.
+ */
+export type MessageCipherSource = {
+  readonly encryptedContent: string | null;
+  readonly encryptionMode: string | null;
+  readonly isViewOnce: boolean;
+  readonly isBlurred: boolean;
+  readonly expiresAt: Date | null;
+};
+
+/** Aucun chiffré, aucune protection déclarée — la réponse d'une relecture qui n'a rien lu. */
+export const EMPTY_CIPHER_SOURCE: MessageCipherSource = {
+  encryptedContent: null,
+  encryptionMode: null,
+  isViewOnce: false,
+  isBlurred: false,
+  expiresAt: null,
 };
 
 /**
@@ -115,7 +143,7 @@ export const UNKNOWN_BANNER_SOURCE: MessageBannerSource = {
   ephemeralDuration: null,
   effectFlags: null,
   liveness: 'unknown',
-  deviceEnvelope: null,
+  cipher: EMPTY_CIPHER_SOURCE,
 };
 
 /**

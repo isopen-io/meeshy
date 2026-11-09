@@ -83,10 +83,17 @@ export function deviceEnvelopeForPush(
 /**
  * Le SECOND verrou : cette clé de protection laisse-t-elle passer un chiffré ?
  *
- * `protectedPreview` est l'unique producteur de `notificationLocKey` dans tout
- * le dépôt, donc sa valeur est une DÉCLARATION, jamais un indice. Une clé de
- * cycle de vie retient l'enveloppe ; celle du CHIFFREMENT la laisse passer —
- * c'est précisément elle que la NSE est censée remplacer.
+ * Les quatre clés de protection ont un site de DÉFINITION unique
+ * (`notification-preview.ts`), et tout producteur les en importe — y compris le
+ * masque fail-closed du chemin d'édition, qui écrivait son littéral à la main.
+ * La valeur est donc une DÉCLARATION, jamais un indice. Une clé de cycle de vie
+ * retient l'enveloppe ; celle du CHIFFREMENT la laisse passer — c'est
+ * précisément elle que la NSE est censée remplacer.
+ *
+ * Dire « `protectedPreview` est l'unique PRODUCTEUR » serait faux, et l'était
+ * déjà quand ce lot l'a écrit : `messageMentions.ts` en compose un second. Ce
+ * qui tient la garde n'est pas le nombre de producteurs, c'est que tous
+ * nomment la même constante — le cliquet du lot le vérifie.
  *
  * Aucune clé ⇒ aucune protection déclarée ⇒ rien à retenir. Et une clé INCONNUE
  * retient : une porte de confidentialité échoue en montrant moins.

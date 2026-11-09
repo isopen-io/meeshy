@@ -80,6 +80,7 @@ import {
   type NotificationAttachmentSummary,
   type NotificationActorProfile,
   EMPTY_PRISM_SOURCE,
+  EMPTY_CIPHER_SOURCE,
   UNKNOWN_BANNER_SOURCE,
   MESSAGE_CONTENT_BASIS,
   truncateMessage,
@@ -323,16 +324,20 @@ export class NotificationService {
           deletedAt: true,
           expiresAt: true,
           // #17080 — de quoi décider de l'enveloppe de l'appareil, dans la
-          // lecture qui se faisait déjà : son chiffré, son régime, les deux
-          // drapeaux de protection que les colonnes portent, et le régime de la
-          // CONVERSATION par la relation — un message hérité, ou écrit par un
-          // chemin qui n'a pas posé `encryptionMode`, ne doit ni rouvrir ni
-          // fermer l'écran verrouillé sur la foi de sa seule ligne (#12518).
+          // lecture qui se faisait déjà : son chiffré, son régime, et les deux
+          // drapeaux de protection que les colonnes portent.
+          //
+          // Le régime de la CONVERSATION n'est PAS pris ici, et c'est un choix
+          // mesuré : les deux créateurs qui consomment cette source le lisent
+          // déjà dans le même `Promise.all`. Le prendre par la relation
+          // `conversation` coûterait un aller-retour de plus pour une valeur en
+          // main deux lignes plus loin — et cette relation est REQUISE, donc
+          // l'absence du document ferait LEVER le moteur sur une lecture qui
+          // réussissait, emportant traductions, horloge et verdict de vie.
           encryptedContent: true,
           encryptionMode: true,
           isViewOnce: true,
-          isBlurred: true,
-          conversation: { select: { encryptionMode: true } } },
+          isBlurred: true },
       });
       return {
         translations: this.pushableTranslations(message?.translations),
@@ -342,12 +347,19 @@ export class NotificationService {
         ephemeralDuration: message?.ephemeralDuration ?? null,
         effectFlags: message?.effectFlags ?? null,
         liveness: this.messageLiveness(message, messageId),
-        // La DÉCISION, jamais la matière brute : c'est elle qui est une règle,
-        // et deux consommateurs qui la rejoueraient depuis les colonnes
-        // divergeraient au premier cycle qui en touche une.
-        deviceEnvelope: message
-          ? deviceEnvelopeForPush(message, message.conversation?.encryptionMode) ?? null
-          : null,
+        // La matière, pas la décision — cf. `MessageBannerSource.cipher`. La
+        // décision reste un site UNIQUE : `deviceEnvelopeFor`, le seul à réunir
+        // ce bloc, les deux drapeaux portés plus haut, et le régime que
+        // l'appelant tient déjà.
+        cipher: message
+          ? {
+              encryptedContent: message.encryptedContent ?? null,
+              encryptionMode: message.encryptionMode ?? null,
+              isViewOnce: message.isViewOnce === true,
+              isBlurred: message.isBlurred === true,
+              expiresAt: message.expiresAt instanceof Date ? message.expiresAt : null,
+            }
+          : EMPTY_CIPHER_SOURCE,
       };
     } catch (error) {
       notificationLogger.error('Relecture du Prisme en échec — bannière servie sans traduction', {
@@ -356,6 +368,34 @@ export class NotificationService {
       });
       return UNKNOWN_BANNER_SOURCE;
     }
+  }
+
+  /**
+   * **L'enveloppe que la bannière de ce message a le droit de transporter** —
+   * le site UNIQUE qui compose la question, pour les deux éventails qui
+   * dérivent leur chiffré d'une relecture (#17080).
+   *
+   * Il réunit les trois sources que la décision demande et qu'aucune lecture ne
+   * tient ensemble : les colonnes de chiffrement et de protection du MESSAGE
+   * (`source.cipher`), les deux drapeaux que la source porte déjà pour
+   * l'horloge de la bulle, et le régime de la CONVERSATION — que l'appelant lit
+   * dans le même `Promise.all`, donc sans un aller-retour de plus.
+   *
+   * La RÈGLE, elle, vit dans `deviceEnvelopePush.ts` et relit la protection
+   * chez elle : ce résolveur ne décide rien, il assemble.
+   */
+  private deviceEnvelopeFor(
+    source: MessageBannerSource,
+    conversationMode: string | null | undefined
+  ): string | undefined {
+    return deviceEnvelopeForPush(
+      {
+        ...source.cipher,
+        effectFlags: source.effectFlags,
+        ephemeralDuration: source.ephemeralDuration,
+      },
+      conversationMode
+    );
   }
 
   /**
@@ -1774,7 +1814,7 @@ export class NotificationService {
         // charge push, et « une garde de confidentialité se relit CHEZ ELLE,
         // pas dans ses paramètres » vaut dans les deux sens — un paramètre dont
         // l'absence retire une feature est un demi-correctif.
-        encryptedContent: prismSource.deviceEnvelope ?? undefined,
+        encryptedContent: this.deviceEnvelopeFor(prismSource, conversation?.encryptionMode),
         // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
         // premier est redondant avec la base `protected-placeholder` que
         // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son
@@ -2463,7 +2503,7 @@ export class NotificationService {
         // charge push, et « une garde de confidentialité se relit CHEZ ELLE,
         // pas dans ses paramètres » vaut dans les deux sens — un paramètre dont
         // l'absence retire une feature est un demi-correctif.
-        encryptedContent: prismSource.deviceEnvelope ?? undefined,
+        encryptedContent: this.deviceEnvelopeFor(prismSource, conversation?.encryptionMode),
         // Cycle 126 — le verrou de protection et l'horloge de la bulle. Le
         // premier est redondant avec la base `protected-placeholder` que
         // l'éventail pose déjà, et c'est voulu : `protectedPreview` est son

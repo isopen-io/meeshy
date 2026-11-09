@@ -55,6 +55,16 @@ const FOURTH_USER_ID = '507f1f77bcf86cd799439045';
 
 const SERVER_CLOCK = new Date('2026-11-08T10:00:00Z');
 
+/**
+ * Une échéance ÉPHÉMÈRE, donc dans le futur — relative à `now`, jamais un
+ * littéral : « un littéral de date sous une fenêtre n'est pas une constante,
+ * c'est une échéance » (`tasks/lessons/`). Un littéral passé ferait répondre à
+ * ces témoins une AUTRE question que la leur : `messageLiveness` rendrait
+ * `gone` et le créateur n'enverrait rien du tout, si bien que l'assertion
+ * passerait sans que le verrou de protection ait été exercé.
+ */
+const ephemeralDeadline = (): Date => new Date(Date.now() + 3_600_000);
+
 /** Le chiffré de l'appareil : la seule chose que la NSE sache déchiffrer. */
 const ENVELOPE = 'YmFzZTY0LWRldmljZS1lbnZlbG9wZQ==';
 
@@ -186,7 +196,7 @@ describe('éventail — la protection de CYCLE DE VIE retient l\'enveloppe (#171
   const lifecycleProtections: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
     ['à vue unique', { isViewOnce: true }],
     ['flouté', { isBlurred: true }],
-    ['éphémère (échéance)', { expiresAt: new Date('2026-11-08T11:00:00Z') }],
+    ['éphémère (échéance)', { expiresAt: ephemeralDeadline() }],
     ['éphémère (durée déclarée)', { ephemeralDuration: 30 }],
   ];
 
@@ -219,7 +229,10 @@ describe('éventail — la protection de CYCLE DE VIE retient l\'enveloppe (#171
 
 // ── Service — la charge remise à APNs ──────────────────────────────────────
 
-function makeServicePrisma(messageOverrides: Record<string, unknown> = {}) {
+function makeServicePrisma(
+  messageOverrides: Record<string, unknown> = {},
+  conversationMode: string | null = 'e2ee'
+) {
   return {
     message: {
       findUnique: jest.fn<any>().mockResolvedValue({
@@ -236,7 +249,6 @@ function makeServicePrisma(messageOverrides: Record<string, unknown> = {}) {
         effectFlags: 0,
         encryptedContent: ENVELOPE,
         encryptionMode: null,
-        conversation: { encryptionMode: 'e2ee' },
         ...messageOverrides,
       }),
     },
@@ -265,7 +277,7 @@ function makeServicePrisma(messageOverrides: Record<string, unknown> = {}) {
         title: 'Salon',
         type: 'group',
         avatar: null,
-        encryptionMode: 'e2ee',
+        encryptionMode: conversationMode,
       }),
     },
     userPreferences: { findUnique: jest.fn<any>().mockResolvedValue(null) },
@@ -273,8 +285,11 @@ function makeServicePrisma(messageOverrides: Record<string, unknown> = {}) {
   } as any;
 }
 
-function makeService(messageOverrides: Record<string, unknown> = {}) {
-  const prisma = makeServicePrisma(messageOverrides);
+function makeService(
+  messageOverrides: Record<string, unknown> = {},
+  conversationMode: string | null = 'e2ee'
+) {
+  const prisma = makeServicePrisma(messageOverrides, conversationMode);
   const sendToUser = jest.fn<any>().mockResolvedValue(undefined);
   const service = new NotificationService(prisma);
   service.setSocketIO({
@@ -327,10 +342,14 @@ describe.each(derivingRunners)('%s — le chiffré part sur le fil (#17080)', (_
     expect(servedPushData(sendToUser)?.encryptedContent).toBe(ENVELOPE);
   });
 
-  it('elle vient de la relecture que ce créateur faisait DÉJÀ — aucune requête de plus', async () => {
-    // La garde est gratuite : quatre colonnes sur une lecture existante, dont le
-    // mode de la conversation par la RELATION. C'est ce qui la met ICI plutôt
-    // que chez chaque appelant — l'édition en a un qui ne la câblerait pas.
+  it('elle vient des DEUX lectures que ce créateur faisait déjà — aucune requête de plus', async () => {
+    // Quatre colonnes sur la relecture du message, et le régime de la
+    // conversation sur la lecture de conversation du MÊME `Promise.all`.
+    //
+    // L'absence de relation `conversation` sur la relecture est ASSERTÉE, pas
+    // subie : la prendre là coûterait un aller-retour de plus pour une valeur
+    // en main deux lignes plus loin, et cette relation est REQUISE — l'absence
+    // du document ferait lever le moteur sur une lecture qui réussissait.
     const { service, prisma } = makeService();
 
     await run(service, { notificationLocKey: 'notification.encrypted_message' });
@@ -339,7 +358,12 @@ describe.each(derivingRunners)('%s — le chiffré part sur le fil (#17080)', (_
     const select = prisma.message.findUnique.mock.calls[0][0].select;
     expect(select.encryptedContent).toBe(true);
     expect(select.encryptionMode).toBe(true);
-    expect(select.conversation.select.encryptionMode).toBe(true);
+    expect(select.isViewOnce).toBe(true);
+    expect(select.isBlurred).toBe(true);
+    expect(select).not.toHaveProperty('conversation');
+
+    expect(prisma.conversation.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.conversation.findUnique.mock.calls[0][0].select.encryptionMode).toBe(true);
   });
 
   it('aucun appelant n\'a à la câbler — elle n\'est pas un paramètre', async () => {
@@ -371,6 +395,64 @@ describe.each(derivingRunners)('%s — le chiffré part sur le fil (#17080)', (_
     await run(service, {});
 
     expect(servedPushData(sendToUser)?.encryptedContent).toBe('');
+  });
+});
+
+describe.each(derivingRunners)('%s — le PREMIER verrou, sur le chemin qui le DÉRIVE (#17177)', (_name, run) => {
+  /**
+   * Ces deux chemins dérivent leur enveloppe de la relecture partagée, donc
+   * c'est `deviceEnvelopeFor` + `deviceEnvelopeForPush` qui les garde — et
+   * l'audit adversarial du lot a MESURÉ que rien ne le vérifiait : remplacer la
+   * résolution par la matière brute (`encryptedContent` servi tel quel) laissait
+   * 3 063 témoins sur 3 063 VERTS. Les témoins de protection d'alors ne
+   * lisaient que le lot `regular`, et le harnais fixait `isViewOnce: false`,
+   * `isBlurred: false`, `expiresAt: null` — **le verrou ne pouvait pas rougir.**
+   *
+   * Un double PARTIEL qui gèle le verdict, exactement la forme que ce lot
+   * prétendait chercher. Les témoins ci-dessous sont montés sur un harnais
+   * PARAMÉTRÉ par le régime et par la protection.
+   */
+  it.each(['server', 'hybrid'])(
+    'une conversation %s ne pousse PAS le chiffré AU REPOS',
+    async (mode) => {
+      // #13114 — en `server`/`hybrid`, `encryptedContent` est le chiffré au
+      // repos, sous la clé que SEULE la passerelle détient : aucun lecteur ne
+      // saurait l'ouvrir, et il n'a rien à faire chez Apple ou Google.
+      const { service, sendToUser } = makeService({}, mode);
+
+      await run(service, {});
+
+      expect(servedPushData(sendToUser)?.encryptedContent).toBe('');
+    }
+  );
+
+  it.each([
+    ['à vue unique', { isViewOnce: true }],
+    ['flouté', { isBlurred: true }],
+    ['éphémère (échéance)', { expiresAt: ephemeralDeadline() }],
+    ['éphémère (durée déclarée)', { ephemeralDuration: 30 }],
+  ])(
+    'un message %s d\'une conversation e2ee ne pousse AUCUNE enveloppe, SANS clé de protection',
+    async (_label, overrides) => {
+      // Le cas du chemin d'ÉDITION, et il n'est pas théorique :
+      // `notifyNewlyMentioned` appelle le lot de mentions SANS transmettre
+      // `notificationLocKey`, donc le SECOND verrou y est inerte
+      // (`envelopeSurvivesProtectionLock(undefined)` rend `true`). Sur ce
+      // chemin, le premier verrou est le SEUL — c'est le témoin qui le dit.
+      const { service, sendToUser } = makeService(overrides);
+
+      await run(service, {});
+
+      expect(servedPushData(sendToUser)?.encryptedContent).toBe('');
+    }
+  );
+
+  it('un message e2ee ORDINAIRE la pousse — le verrou ne mord pas au cas nominal', async () => {
+    const { service, sendToUser } = makeService();
+
+    await run(service, {});
+
+    expect(servedPushData(sendToUser)?.encryptedContent).toBe(ENVELOPE);
   });
 });
 

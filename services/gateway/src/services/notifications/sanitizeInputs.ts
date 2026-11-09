@@ -48,7 +48,17 @@ export type SanitizedNotificationInputs = {
 
 /**
  * Nettoie ce qu'une notification PERSISTE et TRANSPORTE : son texte, l'identité
- * de son acteur, ses métadonnées, son contexte.
+ * de son acteur, ses métadonnées — et RETIENT du contexte le chiffré que la
+ * protection déclarée n'autorise pas.
+ *
+ * La nuance n'est pas rhétorique : le `context` ne passe PAS par `sanitizeJSON`,
+ * là où `metadata` y passe. Ses champs de texte (`conversationTitle`,
+ * `firstAttachmentFilename`, `contentDetail`) atteignent la ligne persistée et
+ * le fil sans assainissement, et c'est antérieur à ce lot. Écrire que ce bloc
+ * « nettoie le contexte » arrêterait le prochain relecteur qui cherche où il
+ * l'est — c'est le défaut que les deux paragraphes du dessus racontent, dans sa
+ * forme la plus discrète : une phrase vraie de ce qu'on vient d'ajouter et
+ * fausse de ce qu'elle a l'air de couvrir.
  *
  * L'avatar passe par `sanitizeURLOrPath`, qui distingue « chemin d'API
  * relatif » (gardé) de « protocole refusé » (abandonné) — cf. #7157.

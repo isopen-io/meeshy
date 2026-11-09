@@ -2,7 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import { participationEstVivante } from '../../routes/conversations/utils/access-control';
 import { MAX_MENTIONS_PER_MESSAGE } from '../../validation/mention-list.js';
-import { protectedPreview } from '../notifications/notification-preview';
+import { protectedPreview, BLURRED_MESSAGE_LOC_KEY } from '../notifications/notification-preview';
 import { editReadership, blockedEditKeys } from '../../socketio/editedAudience';
 import { pendingRequestUserIds } from './pendingMessageRequests';
 
@@ -10,7 +10,7 @@ import { pendingRequestUserIds } from './pendingMessageRequests';
  * Le masque servi quand la relecture des drapeaux ne conclut pas — message
  * introuvable ou lecture en échec. Fail-CLOSED : cf. `loadMessageProtection`.
  */
-const PROTECTION_ON_UNKNOWN = { preview: '🔒 💬', locKey: 'notification.hidden_message' } as const;
+const PROTECTION_ON_UNKNOWN = { preview: '🔒 💬', locKey: BLURRED_MESSAGE_LOC_KEY } as const;
 
 /**
  * Le message tel que la résolution de mentions le lit. Structural et minimal :
