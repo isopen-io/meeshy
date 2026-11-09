@@ -198,18 +198,19 @@ final class TalkieVoicePlayer: TalkieSink {
     }
 }
 
-/// Ce que le décodeur AAC → PCM sait faire : `AVAudioConverter`, ou une doublure qui en reproduit un comportement.
 /// L'entrée que le décodeur réclame. Elle n'est pas `AVAudioConverterInputBlock` : sous Xcode 26 ce type est
 /// `@Sendable`, et le décodeur d'une prise de parole lui fait capturer un curseur mutable.
 typealias TalkieAacInputBlock = (AVAudioPacketCount, UnsafeMutablePointer<AVAudioConverterInputStatus>) -> AVAudioBuffer?
 
+/// Ce que le décodeur AAC → PCM sait faire : `AVAudioConverter`, ou une doublure qui en reproduit un comportement.
 nonisolated protocol TalkieAacDecoding: AnyObject {
     func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: @escaping TalkieAacInputBlock) -> AVAudioConverterOutputStatus
 }
 
 /// `AVAudioConverter` derrière le protocole : la signature importée de `convert(to:error:withInputFrom:)` change de
 /// forme d'un SDK à l'autre (bloc `@escaping @Sendable` sous Xcode 26, non sous Xcode 27), une conformance directe ne
-/// compile donc que sous l'un des deux.
+/// compile donc que sous l'un des deux. L'entrée passe au SDK sous `Locked`, qui la rend acceptable là où il exige un
+/// bloc `@Sendable` ; le convertisseur l'appelle de façon synchrone pendant `convert`.
 nonisolated final class TalkieSystemAacDecoder: TalkieAacDecoding {
     private let converter: AVAudioConverter
 
@@ -219,20 +220,8 @@ nonisolated final class TalkieSystemAacDecoder: TalkieAacDecoding {
     }
 
     func convert(to buffer: AVAudioBuffer, error: NSErrorPointer, withInputFrom block: @escaping TalkieAacInputBlock) -> AVAudioConverterOutputStatus {
-        let relay = TalkieAacInputRelay(block)
-        return converter.convert(to: buffer, error: error) { relay.next($0, $1) }
-    }
-}
-
-/// L'entrée relayée au convertisseur système, qui l'appelle de façon synchrone pendant `convert` : le relais la
-/// rend acceptable là où le SDK exige un bloc `@Sendable`.
-nonisolated private final class TalkieAacInputRelay: @unchecked Sendable {
-    private let input: TalkieAacInputBlock
-
-    init(_ input: @escaping TalkieAacInputBlock) { self.input = input }
-
-    func next(_ count: AVAudioPacketCount, _ status: UnsafeMutablePointer<AVAudioConverterInputStatus>) -> AVAudioBuffer? {
-        input(count, status)
+        let input = Locked(uncheckedState: block)
+        return converter.convert(to: buffer, error: error) { count, status in input.mutateUnchecked { $0(count, status) } }
     }
 }
 
