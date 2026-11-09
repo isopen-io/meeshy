@@ -117,7 +117,7 @@ struct VoiceProfileWizardView: View {
                 Spacer().frame(height: 20)
 
                 Image(systemName: "waveform.circle.fill")
-                    .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
+                    .font(MeeshyFont.fixedGlyph(64)) // icône héros décorative — figée (≥40pt)
                     .foregroundStyle(
                         LinearGradient(
                             colors: [accent, accent.opacity(MeeshyOpacity.heavy)],
@@ -205,7 +205,7 @@ struct VoiceProfileWizardView: View {
             Spacer()
 
             Image(systemName: "person.badge.shield.checkmark.fill")
-                .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
+                .font(MeeshyFont.fixedGlyph(64)) // icône héros décorative — figée (≥40pt)
                 .foregroundColor(accent)
                 .accessibilityHidden(true)
 
@@ -344,7 +344,7 @@ struct VoiceProfileWizardView: View {
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 72)) // icône héros décorative — figée (≥40pt)
+                .font(MeeshyFont.fixedGlyph(72)) // icône héros décorative — figée (≥40pt)
                 .foregroundColor(MeeshyColors.success)
                 .accessibilityHidden(true)
 

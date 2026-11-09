@@ -21,7 +21,8 @@ struct BookmarksView: View {
     private var back: PanelBackAction {
         PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
     }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var routerCommands
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
@@ -72,7 +73,7 @@ struct BookmarksView: View {
         .background(theme.backgroundGradient.ignoresSafeArea())
         .task { await viewModel.loadBookmarks() }
         .onDisappear { Task { await impressions.flushNow() } }
-        .modifier(StoryReaderCover(
+        .relayingMeeshyRouter(meeshyRouter) { content, router in content.modifier(StoryReaderCover(
             request: Binding(
                 get: { storyAuthorUserId.map { StoryViewerRequest(id: $0, startAtFirstUnviewed: true, singleGroup: true) } },
                 set: { storyAuthorUserId = $0?.id }
@@ -85,7 +86,7 @@ struct BookmarksView: View {
             onReply: { replyContext in
                 router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
             }
-        ))
+        )) }
         .modifier(QuoteComposerCover(quoted: $quotedPost, host: quoteHost))
         .sheet(item: $shareableLink) { link in
             ShareSheet(activityItems: link.activityItems)
@@ -211,7 +212,7 @@ struct BookmarksView: View {
                 from: .bookmarks
             )
         } else {
-            router.openPostDetail(post, from: .bookmarks)
+            routerCommands.openPostDetail(post, from: .bookmarks)
         }
     }
 

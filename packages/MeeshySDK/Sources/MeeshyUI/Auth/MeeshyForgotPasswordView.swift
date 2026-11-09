@@ -215,7 +215,7 @@ public struct MeeshyForgotPasswordView: View {
     private var emailSentContent: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "envelope.badge.fill")
-                .font(.system(size: MeeshyIconSize.hero))
+                .meeshyScaledFont(MeeshyIconSize.hero)
                 .foregroundStyle(MeeshyColors.brandPrimary)
                 .accessibilityHidden(true)
 

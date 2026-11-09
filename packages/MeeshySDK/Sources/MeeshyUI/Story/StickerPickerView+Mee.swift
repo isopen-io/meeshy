@@ -35,7 +35,7 @@ extension StickerPickerView {
             case .title(let intent):
                 sectionHeader(symbole: StickerSheetTab.meeAndMeo.symbolName, titre: intent.title) {
                     Text(intent.hint)
-                        .font(.system(size: 12, design: .rounded))
+                        .font(MeeshyFont.relative(12, design: .rounded))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

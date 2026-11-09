@@ -473,9 +473,11 @@ public struct MeeshyAvatar: View {
                     }
                 }
                 .accessibilityLabel(accessibilityName)
+                .accessibilityActions { presenceAction }
         } else {
             loaded
                 .accessibilityLabel(accessibilityName)
+                .accessibilityActions { presenceAction }
         }
     }
 
@@ -623,6 +625,13 @@ public struct MeeshyAvatar: View {
     }
 
     @ViewBuilder
+    private var presenceAction: some View {
+        if let onOnlineTap {
+            Button(String(localized: "avatar.presence.details.a11y", bundle: .module)) { onOnlineTap() }
+        }
+    }
+
+    @ViewBuilder
     private func onlineDot(for presence: AvatarPresenceDot, diameter: CGFloat) -> some View {
         // Couleur via le mapping central AvatarPresenceDot.color (PresenceStyle) :
         // primaire « ici », vert online/recent, orange away, gris idle.
@@ -634,6 +643,7 @@ public struct MeeshyAvatar: View {
                 HapticFeedback.light()
                 onOnlineTap?()
             }
+            .accessibilityHidden(true)
 
         // Pulse actif uniquement quand en ligne ET story ring visible ET enablePulse
         if enablePulse && presence.pulses && effectiveStoryState != .none {

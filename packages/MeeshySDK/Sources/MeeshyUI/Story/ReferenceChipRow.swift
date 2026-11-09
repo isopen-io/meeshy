@@ -32,13 +32,13 @@ public struct ReferenceChipRow: View, Equatable {
             Button(action: onTap) {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "person.2.fill")
-                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                        .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                     Text(label)
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     HStack(spacing: MeeshySpacing.xs) {
                         ForEach(references, id: \.username) { reference in
                             Image(systemName: reference.display.symbolName)
-                                .font(.system(size: MeeshyIconSize.xxs))
+                                .meeshyScaledFont(MeeshyIconSize.xxs)
                                 .foregroundStyle(reference.display == .silent ? Color.secondary : accentColor)
                         }
                     }

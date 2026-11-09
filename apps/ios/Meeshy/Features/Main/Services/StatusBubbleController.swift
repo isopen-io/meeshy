@@ -221,6 +221,9 @@ private struct MoodReplyConfirmationOverlay: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { onCancel() }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel(String(localized: "common.cancel", bundle: .main))
+                .accessibilityAction { onCancel() }
 
             VStack(spacing: MeeshySpacing.mdPlus) {
                 Text(String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main))

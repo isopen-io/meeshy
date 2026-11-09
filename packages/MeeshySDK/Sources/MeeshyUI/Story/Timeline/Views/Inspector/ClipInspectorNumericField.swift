@@ -16,7 +16,7 @@ struct ClipInspectorNumericField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title.uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             HStack(spacing: MeeshySpacing.xxs) {
@@ -35,7 +35,7 @@ struct ClipInspectorNumericField: View {
                 }
                 if !unit.isEmpty {
                     Text(unit)
-                        .font(.system(size: MeeshyFont.microSize))
+                        .meeshyScaledFont(MeeshyFont.microSize)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -44,22 +44,23 @@ struct ClipInspectorNumericField: View {
             .background(RoundedRectangle(cornerRadius: 7)
                 .fill(MeeshyColors.indigo500.opacity(0.10)))
             HStack(spacing: MeeshySpacing.xs) {
-                stepButton(systemName: "minus.circle.fill") { onStep(-ClipInspector.timeStep) }
+                stepButton(systemName: "minus.circle.fill", label: String(localized: "story.timeline.step.decrease.a11y", bundle: .module)) { onStep(-ClipInspector.timeStep) }
                 Spacer(minLength: 0)
-                stepButton(systemName: "plus.circle.fill") { onStep(ClipInspector.timeStep) }
+                stepButton(systemName: "plus.circle.fill", label: String(localized: "story.timeline.step.increase.a11y", bundle: .module)) { onStep(ClipInspector.timeStep) }
             }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(title) \(value)\(unit)")
     }
 
-    private func stepButton(systemName: String, action: @escaping () -> Void) -> some View {
+    private func stepButton(systemName: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.title3)
                 .foregroundStyle(MeeshyColors.indigo400)
                 .contentShape(Rectangle().inset(by: -8))
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 }

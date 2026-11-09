@@ -36,9 +36,10 @@ public struct TagInputView: View {
                 removeTag(tag)
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 9, weight: .bold))
+                    .meeshyScaledFont(9, weight: .bold)
                     .foregroundStyle(theme.textMuted)
             }
+            .accessibilityLabel(String(format: String(localized: "tag.remove", bundle: .module), tag))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)

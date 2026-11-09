@@ -187,4 +187,150 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
     private static func isFixedGlyph(file: String, receiver: String) -> Bool {
         fixedGlyphs.contains { $0.file == file && receiver.contains($0.receiver) }
     }
+
+    private static let fixedFontCeiling = 252
+
+    func test_scaledPointSize_atDefaultDynamicType_returnsTheExactBaseSize() {
+        for size in [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 28, 34] as [CGFloat] {
+            XCTAssertEqual(MeeshyFont.scaledPointSize(size, at: .large), size, accuracy: 0.01)
+        }
+    }
+
+    func test_scaledPointSize_growsWithAccessibilitySizes_andShrinksAtXSmall() {
+        XCTAssertGreaterThan(MeeshyFont.scaledPointSize(14, at: .accessibility3), 14)
+        XCTAssertLessThan(MeeshyFont.scaledPointSize(14, at: .xSmall), 14)
+        let sizes = DynamicTypeSize.allCases.map { MeeshyFont.scaledPointSize(14, at: $0) }
+        XCTAssertEqual(sizes, sizes.sorted())
+    }
+
+    func test_dynamicTypeSize_mapsEveryCaseToItsContentSizeCategory() {
+        let expected: [DynamicTypeSize: UIContentSizeCategory] = [
+            .xSmall: .extraSmall, .small: .small, .medium: .medium, .large: .large,
+            .xLarge: .extraLarge, .xxLarge: .extraExtraLarge, .xxxLarge: .extraExtraExtraLarge,
+            .accessibility1: .accessibilityMedium, .accessibility2: .accessibilityLarge,
+            .accessibility3: .accessibilityExtraLarge, .accessibility4: .accessibilityExtraExtraLarge,
+            .accessibility5: .accessibilityExtraExtraExtraLarge
+        ]
+        XCTAssertEqual(expected.count, DynamicTypeSize.allCases.count)
+        for (size, category) in expected {
+            XCTAssertEqual(MeeshyFont.contentSizeCategory(size), category)
+        }
+    }
+
+    func test_meeshyUI_fixedFontCount_staysUnderCeiling() throws {
+        let regex = try NSRegularExpression(pattern: #"\.font\(\.system\(size:"#)
+        let total = try MeeshyUISourceScan.allSources().reduce(0) { sum, source in
+            sum + regex.numberOfMatches(in: source.text, range: NSRange(source.text.startIndex..., in: source.text))
+        }
+        XCTAssertLessThanOrEqual(total, Self.fixedFontCeiling, "Police figée : \(total) sites, plafond \(Self.fixedFontCeiling)")
+    }
+
+    func test_meeshyUI_textFixedFont_staysWithinPerFileCeilings() throws {
+        var offenders: [String] = []
+        for source in try MeeshyUISourceScan.allSources() {
+            let lines = source.text.components(separatedBy: "\n")
+            let count = lines.indices.reduce(0) { sum, index in
+                sum + Self.fontSites(in: lines[index]).filter { site in
+                    let receiver = Self.receiver(lines: lines, index: index, prefix: site.prefix)
+                    return Self.textReceiverPrefixes.contains { receiver.hasPrefix($0) }
+                }.count
+            }
+            if count > (Self.textCeilings[source.path] ?? 0) {
+                offenders.append("\(source.path) : \(count)")
+            }
+        }
+        XCTAssertEqual(offenders, [], "Texte en police figée : utiliser MeeshyFont.relative ou meeshyScaledFont")
+    }
+
+    private static let textCeilings: [String: Int] = [
+        "Community/CommunityCreateScreen.swift": 1,
+        "Community/CommunityEmojiMark.swift": 1,
+        "Community/CommunitySettingsScreen.swift": 1,
+        "Game/GameBadgeView.swift": 1,
+        "Game/GameLeagueBricks.swift": 1,
+        "Game/GameMedalView.swift": 2,
+        "Game/GameReferralBannerView.swift": 2,
+        "Game/LevelRingView.swift": 1,
+        "Game/MeeshCoinFaces.swift": 2,
+        "Game/RankBlasonView.swift": 1,
+        "Game/TrophyView.swift": 1,
+        "Media/AudioPlayerChips.swift": 2,
+        "Media/MediaTranscriptionView.swift": 1,
+        "Media/MeeshyVideoPlayer+InlineRenderer.swift": 2,
+        "Navigation/CollapsibleHeader.swift": 2,
+        "Primitives/AvatarInitialsFace.swift": 1,
+        "Primitives/CachedAsyncImage.swift": 1,
+        "Primitives/EmojiReactionPicker.swift": 6,
+        "Primitives/LanguagePickerSheet.swift": 2,
+        "Primitives/ProfileCompletionRing.swift": 1,
+        "Primitives/UserIdentityBar.swift": 1,
+        "Profile/UserProfileSheet.swift": 1,
+        "Story/SlideMiniPreview.swift": 3,
+        "Story/StickerPickerView+Emoji.swift": 1,
+        "Story/StickerPickerView+Packs.swift": 1,
+        "Story/StickerPickerView+Vertical.swift": 1,
+        "Story/StickerSheetTabBar.swift": 1,
+        "Story/StoryCanvasGuides.swift": 2,
+        "Story/StoryFilterGridView.swift": 1,
+        "Story/TextEditToolOptionsGrid.swift": 1,
+        "Story/Timeline/Views/Overlay/RulerView.swift": 1,
+        "Story/Timeline/Views/Overlay/SnapGuideView.swift": 1
+    ]
+
+    private static let featuresMainFixedFontCeiling = 88
+
+    private struct MainSite {
+        let file: String
+        let receiver: String
+        let scaled: String
+    }
+
+    private static let featuresMainMigratedSites: [MainSite] = [
+        MainSite(file: "Components/MemberManagementSection.swift", receiver: "Image(systemName: \"person.slash\")", scaled: ".meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)"),
+        MainSite(file: "Components/MessageDetail/MessageDetailChrome.swift", receiver: "Image(systemName: icon)", scaled: ".meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)"),
+        MainSite(file: "Components/MessageDetail/MessageReactionsDetailView.swift", receiver: "Image(systemName: \"face.smiling\")", scaled: ".meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)"),
+        MainSite(file: "Components/MessageDetail/MessageTranscriptionDetailView.swift", receiver: "Image(systemName: \"text.word.spacing\")", scaled: ".meeshyScaledFont(MeeshyIconSize.xxxl, weight: .light)"),
+        MainSite(file: "Views/ConversationMediaGalleryView+Pages.swift", receiver: "Image(systemName: \"photo\")", scaled: ".meeshyScaledFont(MeeshyIconSize.hero)"),
+        MainSite(file: "Components/ConversationLockSheet.swift", receiver: "Image(systemName: iconName)", scaled: ".meeshyScaledFont(44)")
+    ]
+
+    private static let featuresMainFixedSentinels: [FixedGlyph] = [
+        FixedGlyph(file: "Components/ConversationLockSheet.swift", receiver: "Text(\"\\(digit)\")", marker: ".font(.system(size: 26"),
+        FixedGlyph(file: "Components/MemberManagementSection.swift", receiver: "Image(", marker: ".font(.system(size: 13, weight: .semibold))")
+    ]
+
+    private static func mainSources() throws -> [MeeshyUISourceScan.Source] {
+        try MeeshyUISourceScan.sources(under: MeeshyUISourceScan.appFeaturesMainRoot)
+    }
+
+    func test_featuresMain_fixedFont_staysUnderCeiling() throws {
+        let regex = try NSRegularExpression(pattern: #"\.font\(\.system\(size:"#)
+        let sources = try Self.mainSources()
+        XCTAssertGreaterThan(sources.count, 900)
+        let total = sources.reduce(0) { sum, source in
+            sum + regex.numberOfMatches(in: source.text, range: NSRange(source.text.startIndex..., in: source.text))
+        }
+        XCTAssertLessThanOrEqual(total, Self.featuresMainFixedFontCeiling, "Police figée dans Features/Main : \(total) sites")
+    }
+
+    func test_featuresMain_migratedSites_scaleWithDynamicType() throws {
+        let sources = try Self.mainSources()
+        for site in Self.featuresMainMigratedSites {
+            let text = try XCTUnwrap(sources.first { $0.path == site.file }?.text, "\(site.file) introuvable")
+            let tails = Self.ranges(of: site.receiver, in: text).map { String(text[$0.upperBound...].prefix(160)) }
+            XCTAssertFalse(tails.isEmpty, "\(site.file) : \(site.receiver) introuvable")
+            XCTAssertTrue(tails.contains { $0.contains(site.scaled) }, "\(site.file) : \(site.receiver) ne suit plus Dynamic Type")
+            XCTAssertFalse(
+                tails.contains { $0.prefix(80).contains(".font(.system(size:") },
+                "\(site.file) : \(site.receiver) a retrouvé une police figée")
+        }
+    }
+
+    func test_featuresMain_fixedGlyphsStayFixed() throws {
+        let sources = try Self.mainSources()
+        for glyph in Self.featuresMainFixedSentinels {
+            let text = try XCTUnwrap(sources.first { $0.path == glyph.file }?.text, "\(glyph.file) introuvable")
+            XCTAssertTrue(text.contains(glyph.marker), "\(glyph.file) : le marqueur figé \(glyph.marker) a disparu")
+        }
+    }
 }

@@ -188,7 +188,7 @@ internal struct _InlineOverlayControls: View {
                 HapticFeedback.light()
             } label: {
                 Text(manager.playbackSpeed.label)
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .bold, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xs)
@@ -254,6 +254,7 @@ internal struct _InlineOverlayControls: View {
                 .adaptiveGlass(in: Circle(), interactive: true)
                 .meeshyTapTarget()
         }
+        .accessibilityLabel(seconds < 0 ? String(localized: "media.video.seek.backward", bundle: .module) : String(localized: "media.video.seek.forward", bundle: .module))
     }
 
     private var playPauseButton: some View {
@@ -291,11 +292,11 @@ internal struct _InlineOverlayControls: View {
             if controls.contains(.duration) {
                 HStack {
                     Text(MediaFormat.duration(isSeeking ? seekValue * manager.duration : manager.currentTime))
-                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
                         .foregroundColor(.white.opacity(0.8))
                     Spacer()
                     Text(MediaFormat.duration(manager.duration))
-                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
                         .foregroundColor(.white.opacity(0.8))
                 }
                 .padding(.horizontal, MeeshySpacing.xxs)
@@ -452,7 +453,7 @@ internal struct _FullscreenOverlayControls: View {
             }
             if let fileName, !fileName.isEmpty {
                 Text(fileName)
-                    .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
+                    .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
                     .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)

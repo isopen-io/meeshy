@@ -176,6 +176,8 @@ struct MessageMoreSheet: View {
                 .frame(width: 30, height: 30)
                 .adaptiveGlass(in: Circle())
                 .contentShape(Circle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 30))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
@@ -445,6 +447,8 @@ struct MessageMoreSheet: View {
                         .frame(width: 28, height: 28)
                         .adaptiveGlass(in: Circle())
                         .contentShape(Circle())
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: 28))
                 }
                 .buttonStyle(.plain)
                 // Bouton icône seule qui replie le contenu d'exploration inline —

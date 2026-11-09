@@ -1,6 +1,7 @@
 import SwiftUI
 import XCTest
 import MeeshyUI
+@testable import Meeshy
 
 /// **Une doctrine tenue à la main est tenue jusqu'au jour où elle ne l'est plus.**
 ///
@@ -78,8 +79,16 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// tête. Quand le site et sa tête tiennent sur une seule ligne, la partie
     /// gauche de la ligne suffit.
     static func frozenSites(in source: String) -> [Site] {
+        sites(in: source, marker: #"\.font\(\s*\.system\(\s*size:"#)
+    }
+
+    static func fixedGlyphSites(in source: String) -> [Site] {
+        sites(in: source, marker: #"\.font\(\s*MeeshyFont\.fixedGlyph\("#)
+    }
+
+    static func sites(in source: String, marker pattern: String) -> [Site] {
         let lines = DeclarationBodyScanner.mask(source).components(separatedBy: "\n")
-        guard let marker = try? NSRegularExpression(pattern: #"\.font\(\s*\.system\(\s*size:"#)
+        guard let marker = try? NSRegularExpression(pattern: pattern)
         else { return [] }
 
         return lines.enumerated().compactMap { index, line -> Site? in
@@ -128,15 +137,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/InviteFriendsSheet.swift",
         "Features/Main/Components/LocationPickerView.swift",
         "Features/Main/Components/MemberManagementSection.swift",
-        // RELOCALISATION pure : `MessageEditsDetailView.emptyStateView` (son
-        // seul site figé, un glyphe 28pt dans un cadre fixe) a fusionné avec sa
-        // jumelle de `MessageViewsDetailView` dans `MessageDetailChrome.swift`
-        // (dédoublonnage audit L3-17). La POPULATION ne bouge pas — ni
-        // `totalCeiling` ni `textCeiling` — seul le NOM change ; le fichier
-        // d'origine n'en porte plus aucun et sort de la liste.
-        "Features/Main/Components/MessageDetail/MessageDetailChrome.swift",
-        "Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",
-        "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
         "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
@@ -146,60 +146,14 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/MessageOverlayPreviewVideoPlayer.swift",
         "Features/Main/Components/NearbyDiscoverabilityControl.swift",
         "Features/Main/Components/StatusBubbleOverlay.swift",
-        // **Les parties du découpage héritent de la dette de leur type — et les
-        // fichiers-tête en SORTENT.** `UniversalComposerBar.swift` et
-        // `ConversationView+Composer.swift` n'ont plus une seule taille figée :
-        // elles ont MIGRÉ dans les extensions ci-dessous. Le plafond de
-        // population ne bouge donc pas — rien n'a disparu, tout a changé de
-        // fichier. C'est le cas que la règle « les RETIRER + baisser le
-        // plafond » ne distingue pas : elle suppose une disparition.
-        //
-        // `UniversalComposerBar` et `ConversationView` ont été découpées pour
-        // rentrer dans le budget de taille ; les tailles figées qu'elles
-        // portaient ont suivi dans leurs extensions. Sans ces trois noms, le
-        // cliquet lit des fichiers NEUFS qui « introduisent » des tailles
-        // figées — alors que rien n'a été introduit, tout a été DÉPLACÉ.
-        //
-        // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
-        // nomme des FICHIERS se périme au premier découpage.
-        "Features/Composer/ComposerMoodSurface.swift",
-        // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
-        // ont suivi `+Surfaces` et `+Intake`. La POPULATION ne bouge pas, donc
-        // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
-        // Le fichier principal n'en porte plus aucun : il sort de la liste et
-        // n'y revient jamais.
-        // **Le `⋯` a quitté `+Intake` le 2026-09-03** (#4996) : le fichier
-        // franchissait le plafond de 1 200 lignes, et la responsabilité du
-        // menu est partie dans `MeeshyComposerHost+Overflow.swift`. La seule
-        // taille figée du fichier a suivi — un DÉPLACEMENT, donc les deux
-        // plafonds ci-dessous ne bougent pas. `+Intake` n'en porte plus
-        // aucune et sort de la liste, comme la règle 4 l'exige.
-        // #14056 — `+Overflow` a perdu à son tour sa dernière taille figée :
-        // le `⋯` de la scène est servi par `ComposerMoreMenuPolicy` (#13839),
-        // et le fichier sort de la liste (règle 4).
-        "Features/Profile/Views/AchievementBadgeView.swift",
-        "Features/Settings/Views/ActiveSessionsView.swift",
-        "Features/Links/Views/AffiliateView.swift",
         "Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",
         // #13132 — RELOCALISATION pure : le conteneur de glissé des bulles a quitté `MessageListView.swift` avec ses deux glyphes.
         "Features/Main/Views/BubbleSwipeContainer.swift",
-        // #8276 — `CallView.swift` découpé : ses glyphes figés ont suivi leurs
-        // surfaces (tous dans un cercle ou un cadre fixe — doctrine 82i/86i).
-        // #8394 : la pilule remplace la barre ; le glyphe de ses boutons est
-        // dimensionné par le diamètre de leur cercle (`CallDeviceControls`).
-        "Features/Call/Views/CallDeviceControls.swift",
-        "Features/Call/Views/CallView+Controls.swift",
-        "Features/Call/Views/CallView+Header.swift",
-        // #12568 : `CallView+SelfView` et `CallView+States` sortent — leurs
-        // initiales figées sous la photo laissent la place à `CachedAvatarImage`.
-        "Features/Settings/Views/ChangePasswordView.swift",
-        "Features/Links/Views/CommunityLinkDetailView.swift",
         // RELOCALISATION pure : le bandeau « en réponse à » quitte
         // `FeedCommentsSheet.swift` avec son glyphe de croix en CADRE FIXE 24×24
         // (doctrine 82i). La POPULATION ne bouge pas ; le fichier d'origine en
         // garde un (la croix de l'en-tête) et reste dans la liste.
         "Features/Main/Views/CommentSheetBanners.swift",
-        "Features/Links/Views/CommunityLinksView.swift",
         "Features/Main/Views/ConversationAnimatedBackground.swift",
         "Features/Main/Views/ConversationBackgroundComponents.swift",
         "Features/Main/Views/ConversationHelperViews.swift",
@@ -239,8 +193,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/ComposerAttachmentZone.swift",
         "Features/Main/Views/ConversationView+ComposerBanners.swift",
         "Features/Main/Views/ConversationView+MessageRow.swift",
-        "Features/Settings/Views/DataExportView.swift",
-        "Features/Settings/Views/DeleteAccountView.swift",
         "Features/Main/Views/FeedCommentsSheet.swift",
         // #6040 — RELOCALISATION pure, même forme qu'au #4084 et au #4102 : la
         // FEUILLE de composition quitte `FeedView+Attachments.swift` (1 391
@@ -274,14 +226,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/FeedPostCardCarousel.swift",
         "Features/Main/Views/FeedView.swift",
         "Features/Main/Views/GlobalSearchView.swift",
-        "Features/Call/Views/IncomingCallView.swift",
-        "Features/Auth/Views/MagicLinkView.swift",
-        "Features/Stories/Views/MyStoriesView.swift",
-        "Features/Stories/Views/MyStoryActionBar.swift",
-        "Features/Stories/Views/MyStoryCard.swift",
-        // #5218 — le carrousel de cinq pages est parti avec son unique site
-        // figé (le glyphe de 80 pt de chaque page). `WelcomeView` n'en a pas.
-        "Features/Profile/Views/ParticipantProfileSheet.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
         // #7625 — RELOCALISATION pure : la couche audio d'un réel (glyphe héros de
         // 220 pt et bouton de 84 pt, cadres fixes plein écran) quitte l'hôte hors
@@ -296,39 +240,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // posé sur le glyphe de l'atome à la MÊME taille figée. `ReelsPlayerView.swift`
         // sort de la liste (règle 4) : sa croix monte `FullscreenTopBar`.
         "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
-        "Features/Links/Views/ShareLinksView.swift",
-        "Features/Stories/Views/StoryExportShareSheet.swift",
-        "Features/Stories/Views/StoryLanguageQuickBar.swift",
         "Features/Stories/Views/StoryTrayView.swift",
-        "Features/Stories/Views/StoryViewerContainer.swift",
-        // #8878 — `StoryViewerView+ActionButton.swift` sort de la liste (règle 4) :
-        // `StoryActionButton` monte `FullscreenActionButton` (MeeshyUI), qui porte
-        // SES glyphe et libellé figés dans sa cellule de 56.
-        // 2026-09-02 — RELOCALISATION pure, même forme qu'au #4084 : le SEUL site
-        // figé de `StoryViewerView+Canvas.swift` (la croix 22×22 de la bannière
-        // « Réponse à ») vit dans `StoryComposerBarView`, qui a quitté le canvas
-        // pour son propre fichier (dette de taille). La population ne bouge pas
-        // — ni `totalCeiling` ni `textCeiling` — seul le NOM change ; le canvas
-        // n'en porte plus aucun, il sort de la liste et n'y revient jamais.
-        "Features/Stories/Views/StoryViewerView+CanvasComposerBar.swift",
-        // #12568 : `StoryCommentRowView` sort — son monogramme de 13 pt laisse la
-        // place à `CachedAvatarImage`, photo sinon initiales.
-        // Cohésion de `StoryViewerView` — RELOCALISATION pure, même forme : la liste des
-        // commentaires de story (`StoryCommentsOverlayView`) a QUITTÉ
-        // `StoryViewerView+Content.swift` pour son propre fichier et emporte son site
-        // figé — le glyphe héros de l'état vide, masqué de VoiceOver. L'hôte n'en garde
-        // plus aucun et sort de la liste ; la POPULATION ne bouge pas.
-        "Features/Stories/Views/StoryCommentsOverlayView.swift",
-        // #8878 — `StoryViewerView+Header.swift` sort de la liste (règle 4) : la
-        // croix et le menu ⋯ montent `FullscreenCloseButton` / `FullscreenMoreMenu`
-        // (MeeshyUI), qui portent leur glyphe figé dans leur disque.
-        "Features/Settings/Views/SupportView.swift",
-        "Features/Links/Views/TrackingLinksView.swift",
-        "Features/Profile/Views/UserStatsView.swift",
-        "Features/Settings/Views/VoiceProfileWizardView.swift",
         "Features/Main/Views/WebRTCVideoView.swift",
-        "Features/Stories/Notifications/StoryExpiredContent.swift",
-        "Features/Stories/Notifications/StoryNotificationOfflineContent.swift",
     ]
 
     /// Sites figés dont le receveur porte du TEXTE. **Ne doit que DESCENDRE.**
@@ -466,7 +379,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // (règle 4).
     // 171 → 160 (#15628) : les onze glyphes figés de la feuille du fil et de sa
     // rangée de pièces quittent le dépôt avec elles ; aucun texte.
-    private static let totalCeiling = 160
+    // 160 → 92 (#17297, GMAIN #17296) : le reste de l'app déclare ses glyphes
+    // figés par `MeeshyFont.fixedGlyph` (−62), six glyphes de `Features/Main`
+    // passent par `meeshyScaledFont` (−6) ; il ne fige plus que des textes encadrés.
+    private static let totalCeiling = 92
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
@@ -687,8 +603,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // partis avec elle ; #10947 — 139 : ceux des deux anciens sélecteurs de
         // partage aussi ; #15628 — 125 : ceux de la feuille du fil. La borne
         // garde un classifieur VIVANT, pas un compte.
-        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 110,
-                             "les glyphes sont la population majoritaire (207 au 264i, 139 au #10947, 125 au #15628)")
+        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 60,
+                             "les glyphes sont la population majoritaire (207 au 264i, 125 au #15628, 78 au #17297)")
         XCTAssertGreaterThan(sites.filter { $0.receiver == .text }.count, 15,
                              "le texte figé existe (36 au 264i, 20 au #14620) — un 0 ici signerait un classifieur mort")
     }
@@ -722,6 +638,75 @@ final class FixedFontSizeGuardTests: XCTestCase {
         Text(x).font(.system(size: 11))
         """
         XCTAssertEqual(Self.frozenSites(in: commented).count, 1)
+    }
+
+    // MARK: - Règle 7 — le périmètre hors Features/Main ne fige que ses textes encadrés
+
+    private static let perimeterCeiling = 4
+
+    private static let mainPrefix = "Features/Main/"
+
+    func test_lePerimetreHorsMainNeFigeQueSesTextesEncadres() throws {
+        let sites = try allSites().filter { !$0.0.hasPrefix(Self.mainPrefix) }
+        XCTAssertLessThanOrEqual(
+            sites.count, Self.perimeterCeiling,
+            "tailles figées hors Features/Main : seuls les quatre textes en cadre fixe (pavé, "
+            + "cercle d'upload) restent. Un glyphe figé par un cadre se déclare par "
+            + "`MeeshyFont.fixedGlyph(…)`, un glyphe en ligne suit Dynamic Type :\n  "
+            + sites.map { "\($0.0):\($0.1.line)" }.sorted().joined(separator: "\n  ")
+        )
+    }
+
+    // MARK: - Règle 8 — un glyphe figé par doctrine ne décore jamais du texte
+
+    func test_unGlypheFigeDeclareNeDecoreJamaisDuTexte() throws {
+        let wrong = try sources().flatMap { url in
+            Self.fixedGlyphSites(in: text(of: url))
+                .filter { $0.receiver != .glyph }
+                .map { "\(relativePath(url)):\($0.line)" }
+        }
+        XCTAssertEqual(wrong, [],
+                       "`MeeshyFont.fixedGlyph` est réservée à une Image : un texte figé se justifie par son cadre, pas par cette API")
+
+        let onText = """
+        Text("x")
+            .font(MeeshyFont.fixedGlyph(12))
+        """
+        XCTAssertEqual(Self.fixedGlyphSites(in: onText).map(\.receiver), [.text])
+        let onImage = """
+        Image(systemName: "x")
+            .font(MeeshyFont.fixedGlyph(12))
+        """
+        XCTAssertEqual(Self.fixedGlyphSites(in: onImage).map(\.receiver), [.glyph])
+    }
+
+    func test_laPoliceDeGlypheFigeRendLaTailleAuPointPres() {
+        XCTAssertEqual(MeeshyFont.fixedGlyph(24, weight: .medium), Font.system(size: 24, weight: .medium))
+        XCTAssertEqual(MeeshyFont.fixedGlyph(30, weight: .regular, design: .rounded),
+                       Font.system(size: 30, weight: .regular, design: .rounded))
+    }
+
+    // MARK: - Règle 9 — un glyphe en ligne à côté d'un texte qui scale suit Dynamic Type
+
+    private static let inlineGlyphSites: [EmojiSite] = [
+        EmojiSite(file: "Features/Profile/Views/ParticipantProfileSheet.swift",
+                  head: #"Image(systemName: "theatermasks.fill")"#,
+                  marker: "MeeshyFont.relative(MeeshyIconSize.xxl"),
+        EmojiSite(file: "Features/Profile/Views/UserStatsView.swift",
+                  head: #"Image(systemName: "exclamationmark.circle.fill")"#,
+                  marker: "MeeshyFont.relative(MeeshyIconSize.md"),
+        EmojiSite(file: "Features/Stories/Views/MyStoryActionBar.swift",
+                  head: "Image(systemName: glyph.systemImage)",
+                  marker: ".meeshyScaledFont(MeeshyIconSize.sm")
+    ]
+
+    func test_unGlypheEnLigneDuResteSuitDynamicType() {
+        let unmarked = Self.inlineGlyphSites.filter { site in
+            let url = appRoot.appendingPathComponent(site.file)
+            return !Self.headIsFollowedByMarker(site, in: text(of: url))
+        }
+        XCTAssertTrue(unmarked.isEmpty,
+                      "un glyphe en ligne près d'un texte qui scale ne se fige pas : \(unmarked.map(\.file))")
     }
 
     // MARK: - Règle 6 — un emoji seul porte la police emoji du design system

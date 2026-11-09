@@ -587,6 +587,10 @@ struct AudioMediaView: View, Equatable {
                     onReplyTap?(ref.messageId)
                 }
             }
+            .accessibilityAction(named: Text(String(localized: "a11y.main.quotedReply.open", bundle: .main))) {
+                guard ref.opensQuotedTarget else { return }
+                if replyIsStory { onStoryReplyTap?(ref.messageId) } else { onReplyTap?(ref.messageId) }
+            }
         }
     }
 

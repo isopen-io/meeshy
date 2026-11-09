@@ -219,7 +219,6 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // main à la vue la plus profonde.
                 .modifier(NativeMessageEditMenu(isEnabled: !isSelectionModeActive,
                                                 actions: editMenuActions))
-
             // **Capteur de sélection.** Par-dessus TOUT — fonctionne
             // quel que soit ce que fait la bulle en dessous (traduction,
             // carrousel média…). Un tap qui aurait ouvert une action dans la
@@ -234,6 +233,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                     .accessibilityLabel(Text(
                         String(localized: "conversation.selection.toggleMessage", defaultValue: "Message", bundle: .main)
                     ))
+                    .accessibilityAction { onToggleSelection?() }
             }
         }
         // Toujours coin haut-GAUCHE, centré dans `selectionShift` par

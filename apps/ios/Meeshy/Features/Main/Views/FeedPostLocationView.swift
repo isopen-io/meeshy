@@ -99,6 +99,7 @@ struct FeedPostLocationMapCard: View {
                 defaultValue: "Ouvre le lieu sur la carte",
                 bundle: .main
             ))
+            .accessibilityAction { onOpen() }
             .task(id: colorScheme) {
                 thumbnail = await thumbnailProvider.thumbnail(
                     coordinate: place.clLocationCoordinate,

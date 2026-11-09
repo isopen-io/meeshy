@@ -241,7 +241,7 @@ struct ChangePasswordView: View {
             // Héros décoratif ≥40pt : diamètre fixe, exclu du Dynamic Type (doctrine 84i/87i).
             // Le sens est porté par le texte ci-dessous → masqué de VoiceOver.
             Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: MeeshyIconSize.hero))
+                .font(MeeshyFont.fixedGlyph(MeeshyIconSize.hero))
                 .foregroundStyle(MeeshyColors.success)
                 .accessibilityHidden(true)
 

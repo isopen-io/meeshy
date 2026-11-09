@@ -133,7 +133,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                 Text(recorder.isRecording
                      ? recordingTimeLabel
                      : String(localized: "story.voiceRecorder.holdToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
                     .foregroundColor(recorder.isRecording ? MeeshyColors.brandPrimary : secondaryTextColor)
 
                 if showsLanguageStrip {
@@ -145,21 +145,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                 // Controls always at the bottom
                 HStack(spacing: MeeshySpacing.xxxl) {
                     if recorder.isRecording {
-                        // Cancel
-                        Button {
-                            recorder.cancelRecording()
-                            stopPhaseTimer()
-                            HapticFeedback.light()
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(controlFill)
-                                    .frame(width: 50, height: 50)
-                                Image(systemName: "xmark")
-                                    .font(.system(size: MeeshyIconSize.lg, weight: .medium))
-                                    .foregroundColor(controlIcon)
-                            }
-                        }
+                        cancelButton
                     }
 
                     recordButton
@@ -258,6 +244,24 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     }
 
     // MARK: - Record Button
+
+    private var cancelButton: some View {
+        Button {
+            recorder.cancelRecording()
+            stopPhaseTimer()
+            HapticFeedback.light()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(controlFill)
+                    .frame(width: 50, height: 50)
+                Image(systemName: "xmark")
+                    .font(.system(size: MeeshyIconSize.lg, weight: .medium))
+                    .foregroundColor(controlIcon)
+            }
+        }
+        .accessibilityLabel(String(localized: "common.cancel", bundle: .module))
+    }
 
     private var recordButton: some View {
         Button {

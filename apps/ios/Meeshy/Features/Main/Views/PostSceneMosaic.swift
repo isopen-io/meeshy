@@ -484,7 +484,7 @@ struct PostSceneMosaic: View {
         .onTapGesture { onTapScene?(tuile.sceneIndex) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(libelle(tuile, bouge: bouge))
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(.isButton).accessibilityAction { onTapScene?(tuile.sceneIndex) }
     }
 
     /// **Le player d'une tuile — nommé pour être LU** (#5593).

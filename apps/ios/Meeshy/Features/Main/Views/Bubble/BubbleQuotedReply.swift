@@ -429,6 +429,8 @@ struct BubbleQuotedReply: View, Equatable {
                     .contentShape(Rectangle())
                     .onTapGesture(perform: mediaGateTap)
                     .accessibilityLabel(QuotedZoneAccessibility.mediaActionLabel(for: reply))
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { mediaGateTap() }
             } else {
                 mediaFaceSurface(face)
             }

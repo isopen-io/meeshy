@@ -73,8 +73,7 @@ struct ConversationLockSheet: View {
     private var headerSection: some View {
         VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: iconName)
-                // doctrine 84i — glyphe hero décoratif ≥40pt (le titre porte le sens)
-                .font(.system(size: 44))
+                .meeshyScaledFont(44)
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.error, MeeshyColors.indigo600],

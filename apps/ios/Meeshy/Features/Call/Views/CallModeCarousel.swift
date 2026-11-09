@@ -459,6 +459,7 @@ private struct CallModeCarouselItem<Content: View>: View {
                 including: listens ? .all : .subviews
             )
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onGesture(.tap) }
     }
 }
 

@@ -248,6 +248,7 @@ struct ReelFeedCard: View, Equatable {
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
             .onTapGesture { onTapMedia() }
+            .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { onTapMedia() }
         }
         .aspectRatio(reelCardAspectRatio(mediaWidth: media?.width, mediaHeight: media?.height), contentMode: .fit)
         .reportReelFrame(id: post.id, kind: kind)

@@ -55,6 +55,7 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
                         Image(systemName: "person.badge.plus")
                             .foregroundColor(MeeshyColors.indigo500)
                     }
+                    .accessibilityLabel(String(localized: "community.detail.action.invite", bundle: .module))
                 }
             }
         }
@@ -155,7 +156,7 @@ struct MemberRow: View {
 
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: member.communityRole.icon)
-                        .font(.system(size: MeeshyIconSize.xxs))
+                        .meeshyScaledFont(MeeshyIconSize.xxs)
                     Text(member.communityRole.displayName)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
@@ -188,6 +189,8 @@ struct MemberRow: View {
                         .foregroundColor(theme.textMuted)
                         .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .contentShape(Circle())
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.compact))
                 }
             }
         }

@@ -27,9 +27,10 @@ extension ConversationListHeaderOverlay {
                             .foregroundStyle(MeeshyColors.indigo500)
                             .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                             .adaptiveGlass(in: Circle(), interactive: true)
+                            .meeshyTapTarget()
+                            .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.large))
                     }
                     .accessibilityLabel(String(localized: "conversation.list.create_share_link", defaultValue: "Créer un lien de partage", bundle: .main))
-
                     Button {
                         onNewConversation?()
                     } label: {
@@ -38,11 +39,12 @@ extension ConversationListHeaderOverlay {
                             .foregroundStyle(MeeshyColors.indigo500)
                             .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                             .adaptiveGlass(in: Circle(), interactive: true)
+                            .meeshyTapTarget()
+                            .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.large))
                     }
                     .accessibilityLabel(String(localized: "conversation.list.new_conversation", defaultValue: "Nouvelle conversation", bundle: .main))
                 }
             }
-
             if let onNotificationsTap {
                 // Le compteur d'alertes non lues (pastille rouge) portait
                 // l'information par la seule couleur/badge — muet pour
@@ -60,7 +62,6 @@ extension ConversationListHeaderOverlay {
                         Image(systemName: "bell.fill")
                             .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                             .foregroundStyle(MeeshyColors.indigo500)
-
                         if iPadNotificationCount > 0 {
                             Text(NotificationBadge.displayed(iPadNotificationCount))
                                 .font(.system(size: 9, weight: NotificationBadge.fontWeight))
@@ -78,7 +79,6 @@ extension ConversationListHeaderOverlay {
                 .accessibilityLabel(String(localized: "conversation.list.notifications", defaultValue: "Notifications", bundle: .main))
                 .accessibilityValue(unreadA11yValue)
             }
-
             if let onSettingsTap {
                 Button {
                     HapticFeedback.light()
