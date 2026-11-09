@@ -20,6 +20,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 jest.mock('../../../../services/posts/communityVisibility', () => ({
   getCommunityCoMemberIds: jest.fn<any>().mockResolvedValue([]),
+  getReadableCommunityIds: jest.fn<any>().mockResolvedValue([]),
 }));
 
 jest.mock('../../../../services/ZmqSingleton', () => ({

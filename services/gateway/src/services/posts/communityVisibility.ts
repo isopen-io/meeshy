@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import type { CacheStore } from '../CacheStore';
 
 const COMMUNITY_COMEMBERS_CACHE_TTL = 300; // 5 min — miroir des listes amis/contacts
@@ -148,6 +149,60 @@ export async function isActiveCommunityMember(
   communityId: string,
 ): Promise<boolean> {
   try {
+    const membership = await prisma.communityMember.findFirst({
+      where: { userId, communityId, isActive: true },
+      select: { id: true },
+    });
+    return membership !== null;
+  } catch {
+    return false;
+  }
+}
+
+export type CommunityReadPrisma = Pick<PrismaClient, 'community' | 'communityMember'>;
+
+/**
+ * Les communautés dont `userId` peut lire les publications `COMMUNITY` qui y sont
+ * posées (#16892) : vivantes, et dont il est membre actif ou créateur — la loi du
+ * détail et du fil de la communauté (`communityFeedAccess`). Sans cache : quitter ou
+ * être retiré d'une communauté ferme ses publications à la requête suivante.
+ * Panne ⇒ `[]` (aucune publication rattachée n'est servie).
+ */
+export async function getReadableCommunityIds(prisma: CommunityReadPrisma, userId: string): Promise<string[]> {
+  try {
+    const [memberships, created] = await Promise.all([
+      prisma.communityMember.findMany({
+        where: { userId, isActive: true, community: { isActive: true } },
+        select: { communityId: true },
+      }),
+      prisma.community.findMany({
+        where: { createdBy: userId, isActive: true },
+        select: { id: true },
+      }),
+    ]);
+    return [...new Set([...memberships.map((m) => m.communityId), ...created.map((c) => c.id)])];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Forme unitaire de {@link getReadableCommunityIds} : `userId` lit-il les
+ * publications `COMMUNITY` posées dans `communityId` ? Panne ⇒ non.
+ */
+export async function isCommunityReadableBy(
+  prisma: CommunityReadPrisma,
+  communityId: string,
+  userId: string,
+): Promise<boolean> {
+  if (!isValidObjectId(communityId)) return false;
+  try {
+    const community = await prisma.community.findFirst({
+      where: { id: communityId, isActive: true },
+      select: { createdBy: true },
+    });
+    if (community === null) return false;
+    if (community.createdBy === userId) return true;
     const membership = await prisma.communityMember.findFirst({
       where: { userId, communityId, isActive: true },
       select: { id: true },
