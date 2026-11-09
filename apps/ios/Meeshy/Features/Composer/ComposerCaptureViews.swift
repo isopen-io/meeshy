@@ -599,6 +599,7 @@ struct ComposerCaptureChrome: View {
             ComposerCaptureCountdown(timer: session.selfTimer)
         }
         .onDisappear { session.selfTimer.cancel() }
+        .modifier(ComposerCaptureAnnouncer(camera: session.camera, stage: session.stage))
     }
 
     @ViewBuilder private var focusRing: some View {
