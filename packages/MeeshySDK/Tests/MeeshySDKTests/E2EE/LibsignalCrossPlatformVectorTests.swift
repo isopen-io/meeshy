@@ -200,6 +200,24 @@ final class LibsignalCrossPlatformVectorTests: XCTestCase {
         }
     }
 
+    /// Sur un SignalMessage, le premier octet est couvert par le MAC : son bit bas
+    /// basculé est refusé par le MAC (0x10 l'est avant, à la lecture de la version).
+    func test_aSignalMessageWithTheLowBitOfItsFirstByteFlipped_isRefusedByItsMac() throws {
+        for vectors in try allVectorSets() {
+            let reply = vectors.persistedSessions.aliceOpensReply
+            let third = vectors.persistedSessions.bobOpensThird
+            let alice = try device(vectors.alice, persisting: reply.session, with: vectors.bob.party)
+            let bob = try device(vectors.bob.party, persisting: third.session, with: vectors.alice)
+            var replyBody = try bytes(reply.message.body)
+            var thirdBody = try bytes(third.message.body)
+            replyBody[replyBody.startIndex] ^= 0x01
+            thirdBody[thirdBody.startIndex] ^= 0x01
+
+            XCTAssertThrowsError(try alice.cipher.decrypt(E2EECiphertext(type: reply.message.type, body: replyBody), from: address(vectors.bob.party)), vectors.libsignal)
+            XCTAssertThrowsError(try bob.cipher.decrypt(E2EECiphertext(type: third.message.type, body: thirdBody), from: address(vectors.alice)), vectors.libsignal)
+        }
+    }
+
     func test_eachPayloadAlteredByOneByte_atTheVersionTheMiddleOrTheEnd_isRefused() throws {
         for vectors in try allVectorSets() {
             for byte in TamperedByte.allCases {

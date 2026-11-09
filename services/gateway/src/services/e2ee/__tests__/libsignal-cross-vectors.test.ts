@@ -38,6 +38,7 @@ type Report = {
   fresh: string[];
   aliceOpensReply: string;
   bobOpensThird: string;
+  whisperVersionLowBitRefused: Record<'aliceOpensReply' | 'bobOpensThird', boolean>;
   tamperedRefused: Record<TamperedByte, Record<'preKeyMessage' | 'aliceOpensReply' | 'bobOpensThird', boolean>>;
 };
 
@@ -83,6 +84,10 @@ describe('libsignal — les vecteurs croisés partagés avec iOS et Android (#17
 
     it.each(['version', 'middle', 'last'] as const)('chaque charge altérée d’un octet (%s) est refusée', (byte) => {
       expect(report.tamperedRefused[byte]).toEqual({ preKeyMessage: true, aliceOpensReply: true, bobOpensThird: true });
+    });
+
+    it('un SignalMessage au bit bas du premier octet basculé est refusé par son MAC', () => {
+      expect(report.whisperVersionLowBitRefused).toEqual({ aliceOpensReply: true, bobOpensThird: true });
     });
   });
 });

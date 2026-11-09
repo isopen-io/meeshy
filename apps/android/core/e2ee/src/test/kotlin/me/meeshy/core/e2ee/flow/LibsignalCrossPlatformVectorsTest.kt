@@ -162,6 +162,24 @@ class LibsignalCrossPlatformVectorsTest {
         }
     }
 
+    /** Sur un SignalMessage, le premier octet est couvert par le MAC : son bit bas basculé est refusé par le MAC. */
+    @Test
+    fun `a SignalMessage with the low bit of its first byte flipped is refused by its MAC`() {
+        allSets.forEach { set ->
+            val alice = set.obj("alice")
+            val bob = set.obj("bob")
+            val aliceDevice = persisted(alice, bob, set.reply().text("session"))
+            val bobDevice = persisted(bob, alice, set.third().text("session"))
+            val lowBit = { message: JsonObject ->
+                val body = message.bytes("body").copyOf().also { it[0] = (it[0].toInt() xor 0x01).toByte() }
+                E2eeCiphertext(message.number("type"), body)
+            }
+
+            assertThrows(Exception::class.java) { aliceDevice.open(lowBit(set.reply().obj("message")), address(bob)) }
+            assertThrows(Exception::class.java) { bobDevice.open(lowBit(set.third().obj("message")), address(alice)) }
+        }
+    }
+
     @Test
     fun `each payload altered by one byte at the version, the middle or the end is refused`() {
         allSets.flatMap { set -> TamperedByte.entries.map { set to it } }.forEach { (set, byte) ->

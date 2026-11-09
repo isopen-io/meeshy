@@ -107,6 +107,17 @@ const report = {
       ]),
     ),
   ),
+  // Sur un SignalMessage, le premier octet est couvert par le MAC : basculer son
+  // bit bas (0x44 → 0x45) est refusé par le MAC, alors que 0x10 l'est dès la
+  // lecture de la version, avant tout MAC.
+  whisperVersionLowBitRefused: {
+    aliceOpensReply: await refused(() => open(
+      withSession(vectors.alice, vectors.bob, aliceOpensReply.session), vectors.alice, vectors.bob, flipByte(aliceOpensReply.message, { at: () => 0, mask: 0x01 }),
+    )),
+    bobOpensThird: await refused(() => open(
+      withSession(vectors.bob, vectors.alice, bobOpensThird.session), vectors.bob, vectors.alice, flipByte(bobOpensThird.message, { at: () => 0, mask: 0x01 }),
+    )),
+  },
 };
 
 process.stdout.write(JSON.stringify(report));
