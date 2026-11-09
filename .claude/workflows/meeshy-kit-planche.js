@@ -107,6 +107,7 @@ Titre du lot : ${l.titre}
 Contrat : ${l.contrat}
 Vues de la planche : ${(l.vues || []).join(' ') || '(transverse)'} — captures de référence : docs/product/composer-vue-finale/vues/<vue>.png
 Règles qui ne se discutent pas :
+- AUCUNE RÉGRESSION DE FEATURE : quand le code et la planche divergent, la planche garde son épure ET chaque feature du code en plus est conservée, posée là où elle s'intègre le plus sobrement, sans doublon de ce que la planche rend déjà autrement ; retirer un comportement sans équivalent est un écart bloquant ;
 - composant AGNOSTIQUE (paramètres opaques, aucun type du composer ni des appels, aucun singleton nommé Meeshy) ; l'orchestration reste côté app ;
 - EXTRAIRE avant de créer : le jumeau le plus complet devient le composant ; ne supprime un jumeau que si ton lot est une intégration ;
 - le verre passe par K01 et par lui seul : Liquid Glass du système sur iOS 26+ (interactif sur ce qui se touche, verres voisins fondus dans un
