@@ -86,22 +86,24 @@ struct ConversationComposeCovers: ViewModifier {
 
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @Environment(\.meeshyConversationList) private var conversationListViewModel
 
     func body(content: Content) -> some View {
         content
-            .conversationCover(item: $composerState.composeMediaTarget) { cible in
-                MediaComposerDoor(
-                    // L'INTENTION naît dans la porte, pas ici : un second site
-                    // qui la construirait serait un second contrat à tenir
-                    // d'accord, et ce lot a DEUX déclencheurs pour une seule
-                    // présentation. L'hôte ne remet que la cible.
-                    target: cible,
-                    storyViewModel: storyViewModel,
-                    preview: MediaComposerPreviewHosts(router: router, conversationList: conversationListViewModel, statusViewModel: statusViewModel),
-                    onDismiss: { composerState.composeMediaTarget = nil }
-                )
+            .relayingMeeshyRouter(meeshyRouter) { content, router in
+                content.conversationCover(item: $composerState.composeMediaTarget) { cible in
+                    MediaComposerDoor(
+                        // L'INTENTION naît dans la porte, pas ici : un second site
+                        // qui la construirait serait un second contrat à tenir
+                        // d'accord, et ce lot a DEUX déclencheurs pour une seule
+                        // présentation. L'hôte ne remet que la cible.
+                        target: cible,
+                        storyViewModel: storyViewModel,
+                        preview: MediaComposerPreviewHosts(router: router, conversationList: conversationListViewModel, statusViewModel: statusViewModel),
+                        onDismiss: { composerState.composeMediaTarget = nil }
+                    )
+                }
             }
             .conversationCover(item: $composerState.previewMedia) { media in
                 switch media.type {

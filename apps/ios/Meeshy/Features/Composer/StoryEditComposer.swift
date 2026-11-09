@@ -89,7 +89,7 @@ struct StoryEditComposer: View {
     /// de socle.
     @State private var previewAssets: StoryPreviewAssets?
 
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
@@ -183,12 +183,14 @@ struct StoryEditComposer: View {
             ) else { return }
             session.composer.adoptDeclaredReferences(served)
         }
-        .modifier(StoryPreviewReaderCover(
-            assets: $previewAssets,
-            storyViewModel: viewModel,
-            statusViewModel: statusViewModel,
-            router: router,
-            conversationList: conversationListViewModel
-        ))
+        .relayingMeeshyRouter(meeshyRouter) { content, router in
+            content.modifier(StoryPreviewReaderCover(
+                assets: $previewAssets,
+                storyViewModel: viewModel,
+                statusViewModel: statusViewModel,
+                router: router,
+                conversationList: conversationListViewModel
+            ))
+        }
     }
 }
