@@ -235,7 +235,9 @@ final class LongPressPreviewGuardTests: XCTestCase {
     /// verrou (revue adversariale #11213).
     func test_fallback_tapOnTheCard_opensTheConversationThroughTheLock() throws {
         let normalized = normalizedCode(try source(Self.overlayPath))
-        XCTAssertTrue(normalized.contains(".contentShape(Rectangle()) .onTapGesture { dismissContextMenu() openConversation(conversation) }"))
+        XCTAssertTrue(normalized.contains(".contentShape(Rectangle()) .onTapGesture { handlePeekTouch(.card, on: conversation) }"))
+        XCTAssertTrue(normalized.contains("dismissContextMenu(); if touch.effect == .dismissAndOpen { openConversation(conversation) }"),
+                      "le toucher de la carte (#17316) ouvre par la porte du verrou")
     }
 
     /// Le geste « Rechercher » passe la porte du verrou, en gardant la recherche

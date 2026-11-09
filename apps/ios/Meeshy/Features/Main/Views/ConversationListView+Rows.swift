@@ -510,6 +510,9 @@ private struct RowPressBounceModifier: ViewModifier {
     /// retour discret quasi sans rebond (damping 0.85) : le rebond appartient
     /// au long-press/preview, PAS au swipe des lignes.
     @State private var triggered = false
+    /// La loi de l'appui (#17316) : un appui qui a montré l'aperçu n'ouvre
+    /// jamais la conversation, même quand son tap part au relâchement.
+    @State private var press = ConversationRowPress()
     @State private var frameBox = RowFrameBox()
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
@@ -559,6 +562,7 @@ private struct RowPressBounceModifier: ViewModifier {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture {
+                            guard press.handle(.tapped) == .openConversation else { return }
                             HapticFeedback.light()
                             onTap()
                         }
@@ -574,6 +578,7 @@ private struct RowPressBounceModifier: ViewModifier {
                             perform: {},
                             onPressingChanged: { pressing in
                                 if pressing { triggered = false }
+                                _ = press.handle(pressing ? .began : .released)
                                 isPressing = pressing
                             }
                         )
@@ -583,6 +588,7 @@ private struct RowPressBounceModifier: ViewModifier {
                         .simultaneousGesture(
                             LongPressGesture(minimumDuration: 0.4)
                                 .onEnded { _ in
+                                    guard press.handle(.longPressRecognized) == .showPeek else { return }
                                     triggered = true
                                     HapticFeedback.medium()
                                     onTrigger(frameBox.rect)

@@ -608,6 +608,7 @@ struct ConversationListView: View {
                     withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
                 }
             }
+            .modifier(BlurredUnderLongPressPeek(presence: .shared))
             .overlay { conversationContextMenuOverlay }
             .modifier(ConversationListModalPresentations(
                 sheetTargets: $sheetTargets,

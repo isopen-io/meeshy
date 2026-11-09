@@ -275,8 +275,8 @@ extension ConversationListView {
                     // Le voile commun de l'appui long (#11222) : il s'EFFACE
                     // pendant le morph drag, la liste réapparaît sous la carte
                     // devenue chip draggable.
-                    LongPressVeil(visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0,
-                                  onDismiss: { dismissContextMenu() })
+                    LongPressVeil(visibility: contextMenuAppeared ? Double(1 - dragMorphProgress) : 0, weight: ConversationPeekVeil.weight,
+                                  onDismiss: { handlePeekTouch(.veil, on: conversation) })
                     // L'aperçu d'appui long (#17242) : grande carte, menu
                     // COMPACT qu'on tire vers le haut. La progression vit dans
                     // `ConversationLongPressPeek` : le geste ne ré-évalue pas
@@ -328,11 +328,8 @@ extension ConversationListView {
         .scrollDisabled(true)
         // Toucher la carte ouvre la conversation, par la porte du verrou.
         .contentShape(Rectangle())
-        .onTapGesture {
-            dismissContextMenu()
-            openConversation(conversation)
-        }
-        .accessibilityAction(named: Text(String(localized: "conversation.preview.openFull", bundle: .main))) { dismissContextMenu(); openConversation(conversation) }
+        .onTapGesture { handlePeekTouch(.card, on: conversation) }
+        .accessibilityAction(named: Text(String(localized: "conversation.preview.openFull", bundle: .main))) { handlePeekTouch(.card, on: conversation) }
         // Frame de repos de la carte (mesurée overlay invisible, hors
         // transformation) — point d'arrivée de l'émergence.
         .background(
@@ -353,6 +350,7 @@ extension ConversationListView {
         .blur(radius: ConversationPreviewEntranceMotion.blurRadius(previewScale: previewScale, reduceMotion: reduceMotion))
     }
 
+    func handlePeekTouch(_ touch: ConversationPeekTouch, on conversation: Conversation) { dismissContextMenu(); if touch.effect == .dismissAndOpen { openConversation(conversation) } }
     /// Le contenu du menu : le MÊME catalogue et les MÊMES gestes que le menu
     /// natif de l'iPad sous iOS 26.
     func peekMenu(for conversation: Conversation) -> ConversationContextMenuView {
