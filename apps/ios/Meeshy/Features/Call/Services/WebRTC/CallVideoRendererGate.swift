@@ -63,7 +63,7 @@ nonisolated final class CallVideoRendererGate: NSObject, Sendable {
     // MARK: - RTCVideoRenderer
 }
 
-extension CallVideoRendererGate: RTCVideoRenderer {
+nonisolated extension CallVideoRendererGate: RTCVideoRenderer {
     // Les images arrivent du fil de décodage : la vue est appelée SOUS le
     // verrou, pour qu'aucune image en vol ne la touche après `close()`.
     nonisolated func setSize(_ size: CGSize) {
