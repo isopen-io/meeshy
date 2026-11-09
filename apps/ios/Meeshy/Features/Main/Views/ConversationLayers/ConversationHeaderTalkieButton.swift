@@ -5,7 +5,7 @@ import MeeshyUI
 /// L'appel et, dans un direct, le talkie à sa gauche (#17093) : proposé dès Proche (`TalkieOfferModel`), jamais dans
 /// un direct chiffré ni dans un aperçu. Le doigt posé enfonce et vibre ; la voix qui part, ou celle du pair qui arrive,
 /// étend le talkie sur toute la barre d'en-tête, son onde suivant le niveau en direct (#17310) ; un `TALKIE_NOT_ALLOWED`
-/// le retire, comme sur la fiche.
+/// le retire, comme sur la fiche. Le (i) du talkie ne vit que sur la fiche profil.
 struct ConversationHeaderCallCluster: View {
     let entry: HeaderCallEntry?
     let conversationId: String
@@ -69,7 +69,8 @@ struct ConversationHeaderTalkieButton: View {
     private var live: TalkieHeaderLive {
         let peerSpeaking = center.active.contains { $0.fromUserId == userId }
         let voice = TalkieHeaderVoice.resolve(look: look, peerSpeaking: peerSpeaking)
-        return TalkieHeaderLive(voice: voice, accent: accent, secondary: secondary)
+        let delivery = TalkieHeaderDelivery.resolve(voice: voice, phase: sender.phase, waking: sender.waking)
+        return TalkieHeaderLive(voice: voice, delivery: delivery, accent: accent, secondary: secondary)
     }
 
     /// Une pile, jamais un `Group` : vide tant que le talkie n'est pas proposé, elle existe quand même, et c'est elle
@@ -87,13 +88,6 @@ struct ConversationHeaderTalkieButton: View {
                     .accessibilityHint(ProfileTalkieWording.holdHint)
                     .accessibilityAddTraits([.isButton, .updatesFrequently])
                     .accessibilityIdentifier("conversation.header.talkie")
-                // Le (i) s'efface sans libérer sa place : le bouton tenu ne bouge pas sous le doigt (#17310).
-                let showsInfo = live.chrome.showsInfo
-                TalkieInfoButton(tint: accent)
-                    .opacity(showsInfo ? 1 : 0)
-                    .allowsHitTesting(showsInfo)
-                    .accessibilityHidden(!showsInfo)
-                    .transition(.opacity)
             }
         }
         .preference(key: TalkieHeaderLiveKey.self, value: live)

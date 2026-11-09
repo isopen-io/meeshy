@@ -1,9 +1,9 @@
-Meeshy 1.1.3 – alles entsteht direkt in der Szene
+Meeshy 1.1.7 – schneller startklar, jeden Tag angenehmer.
 
-• Sticker: ein einziges Fenster, in deinen Chats genauso wie in deinen Storys, Posts und Reels; Mee und Meo werden lebendig, und ein Shop installiert oder entfernt ein Paket mit einem Tipp
-• Editor: Tippe auf das Text-Werkzeug, um deine Szene zu erstellen, und bearbeite Text, Bilder, Sticker und Hintergrund direkt darin; mit zwei Fingern vergrößerst du deinen Text, ohne dass seine Zeilen umbrechen
-• Fotos und Videos bearbeitest du vor dem Senden direkt in der Szene: Bild zuschneiden (Original, 1:1, 4:5, 9:16), Video kürzen, und die Kamera öffnet sich im Vollbild
-• Schlankere Eingabeleiste: Mediathek und Kamera mit einem Tipp, und Symbole in den Farben deines Effekts
-• Anrufe: Sieh, wann dein Gegenüber Kamera oder Mikrofon ausschaltet, setze einen unterbrochenen Anruf fort, statt ihn zu verlieren, und ein Gruppenanruf geht weiter, wenn jemand geht; im Video ein natürlicher Teint und einstellbare Hautglättung
-• Ein Meeshy-Link, der ohne Konto geöffnet wird, zeigt den Beitrag und wer ihn mit dir geteilt hat; ein Reel ohne Text zeigt seine Bildunterschrift, und beim Bearbeiten behält ein Beitrag seinen Typ
-• Fehlerbehebungen und noch flüssigere Bedienung
+• Unterhaltungsvorschau: Langes Drücken zeigt eine Unterhaltung, ohne sie zu öffnen, und ihr Menü lässt sich nach oben ziehen; kurzes Tippen öffnet sie.
+• Zeig dich: Schon bei der Anmeldung Foto und Banner hinzufügen, bearbeitet mit demselben Editor wie die Kamera.
+• Kamera: Selbstauslöser 3 s und 10 s, Horizontlinie, Lautstärketasten und Camera Control zum Auslösen und Zoomen, stabilisiertes Video.
+• Anrufe: Vor dem Annehmen Mikrofon und Kamera wählen und sehen, was die andere Person sieht, oder ohne Video annehmen.
+• Bedienungshilfen: Jede Taste spricht mit VoiceOver, Texte folgen der gewählten Größe, und jedes Steuerelement ist leicht zu treffen.
+
+Dazu Fehlerbehebungen und mehr Flüssigkeit überall.
