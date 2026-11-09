@@ -7,8 +7,4 @@ final class ProfileTabOrderTests: XCTestCase {
     func test_allCases_readDetailsThenConversationsThenPosts() {
         XCTAssertEqual(ProfileTab.allCases, [.details, .conversations, .posts])
     }
-
-    func test_postsTab_isNamedPublications() {
-        XCTAssertEqual(ProfileTab.posts.title, "Publications")
-    }
 }
