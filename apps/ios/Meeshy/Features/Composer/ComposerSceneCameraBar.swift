@@ -49,6 +49,9 @@ struct ComposerSceneCameraBar: View {
     /// La durée maximale d'une prise pour le format (A9) ; `nil` ⇒ la bande
     /// proportionnelle des segments, sans cases.
     var recordingBudget: TimeInterval?
+    /// **Le doigt tient déjà** (#17268) : la barre paraît dès la tenue, avant
+    /// que la session écrive.
+    var holding = false
     var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
     var onFlashIntensity: (Double) -> Void = { _ in }
     /// Une bascule d'objectif est en cours, ou la prise précédente se
@@ -105,9 +108,22 @@ struct ComposerSceneCameraBar: View {
         capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode) && sliderTimer.visible
     }
 
-    /// La barre en cases (A9) : dès qu'une vidéo se prend, sous un maximum connu.
+    /// La prise est-elle à l'écran ? Dès la tenue (#17268).
+    private var capturing: Bool {
+        ComposerCaptureProgressDisplay.isCapturing(stage: stage, holding: holding)
+    }
+
+    /// La barre du maximum (A9) : dès que la prise commence, sous un maximum connu.
     private var showsBudgetBar: Bool {
-        !editing && recordingBudget != nil && (stage == .recording || !segments.isEmpty)
+        ComposerCaptureProgressDisplay.showsBudgetBar(editing: editing, budget: recordingBudget,
+                                                      capturing: capturing, segmentCount: segments.count)
+    }
+
+    /// Une capsule par segment, à sa part du maximum, puis la prise en cours (#17268).
+    private var budgetSpans: [ComposerCaptureBarSpan] {
+        ComposerCaptureProgressDisplay.spans(segments: segments.map(\.duration),
+                                             live: ComposerCaptureProgressDisplay.liveDuration(liveDuration, stage: stage),
+                                             capturing: capturing, budget: recordingBudget)
     }
 
     var body: some View {
@@ -444,26 +460,35 @@ struct ComposerSceneCameraBar: View {
         .accessibilityHidden(true)
     }
 
-    /// **La barre en cases** (A9) : le maximum du format découpé en cases
-    /// égales, remplies par la prise — segments clos et prise en cours.
+    /// **La barre du maximum** (A9, #17268) : le maximum du format en cases
+    /// égales, et par-dessus UNE capsule par segment déjà pris, placée à sa part
+    /// du maximum ; la prise en cours, en rouge, grandit au bout. Un segment se
+    /// LIT, là où un remplissage continu ne disait que la durée.
     private var budgetBar: some View {
-        HStack(spacing: MeeshySpacing.xs) {
-            ForEach(Array(ComposerCaptureRecordingBudget.slotFills(elapsed: elapsed, budget: recordingBudget)
-                .enumerated()), id: \.offset) { _, remplissage in
-                GeometryReader { case_ in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.3))
-                        Capsule().fill(Color.white)
-                            .frame(width: case_.size.width * remplissage)
-                    }
+        ZStack(alignment: .leading) {
+            HStack(spacing: MeeshySpacing.xs) {
+                ForEach(0..<ComposerCaptureRecordingBudget.slots, id: \.self) { _ in
+                    Capsule().fill(Color.white.opacity(0.3))
+                }
+            }
+            GeometryReader { piste in
+                ForEach(Array(budgetSpans.enumerated()), id: \.offset) { _, part in
+                    Capsule()
+                        .fill(part.live ? MeeshyColors.error : Color.white)
+                        .frame(width: max(Self.minimumSpanWidth, piste.size.width * part.length - Self.spanGap),
+                               height: piste.size.height)
+                        .offset(x: piste.size.width * part.start)
                 }
             }
         }
         .frame(height: 4)
         .padding(.bottom, MeeshySpacing.sm)
-        .animation(reduceMotion ? nil : .linear(duration: 0.2), value: elapsed)
+        .animation(reduceMotion ? nil : .linear(duration: 0.2), value: budgetSpans)
         .accessibilityHidden(true)
     }
+
+    private static let minimumSpanWidth: CGFloat = 4
+    private static let spanGap: CGFloat = 2
 
     private var elapsed: TimeInterval {
         ComposerCaptureSegments.elapsed(segments: segments, live: liveDuration, recording: stage == .recording)
