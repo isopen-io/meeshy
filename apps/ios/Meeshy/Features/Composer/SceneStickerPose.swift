@@ -124,11 +124,27 @@ enum SceneStickerPose {
         guard let still = MeeStickerCatalog.stillImage(mee) else {
             return viewModel.addSticker(emoji: mee.emoji, scale: StorySticker.posedScale)?.id
         }
-        // Les octets animés partent tels quels dans la story publiée : un PNG
-        // animé, que les trois clients lisent — jamais le `.lottie` (#10639).
-        let film = MeeStickerCatalog.animatedImageData(for: mee)
-        return viewModel.addSticker(image: still, provider: meeProvider,
-                                    scale: StorySticker.posedScale, animatedData: film)?.id
+        guard let id = viewModel.addSticker(image: still, provider: meeProvider,
+                                            scale: StorySticker.posedScale)?.id else { return nil }
+        if mee.animated { attachFilm(of: mee, to: id, on: viewModel) }
+        return id
+    }
+
+    /// **Le film d'un Mee rejoint son sticker APRÈS le toucher** (#17040).
+    /// Les octets animés partent tels quels dans la story publiée : un PNG
+    /// animé, que les trois clients lisent — jamais le `.lottie` (#10639).
+    /// Le rasteriser dans le toucher tenait le fil principal jusqu'à 1,09 s
+    /// sur iPhone ; la scène montre la première image le temps qu'il arrive,
+    /// et un film arrivé après le retrait de son sticker est ignoré.
+    @discardableResult
+    static func attachFilm(of mee: MeeSticker, to id: String,
+                           on viewModel: StoryComposerViewModel) -> Task<Void, Never> {
+        Task { [weak viewModel] in
+            guard let film = await MeeStickerCatalog.animatedImageData(for: mee),
+                  !Task.isCancelled else { return }
+            guard let viewModel else { return }
+            LateStickerAnimation.attach(film, to: id, on: viewModel)
+        }
     }
 }
 
