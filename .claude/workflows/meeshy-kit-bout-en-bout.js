@@ -61,7 +61,8 @@ const boucle = async (titre, extra, max) => {
     livres.forEach((x) => vus.add(`${x.cle}:${x.plateforme}`))
     const restants = lots.filter((x) => !PROGRES.includes(x.statut) && x.statut !== 'deja_tenu')
     log(`${titre} ${n} : ${livres.length} livré(s) ${livres.map((x) => `${x.cle}:${x.plateforme}`).join(' ')} ; ${restants.length} rouge(s) ou bloqué(s) ${restants.map((x) => `${x.cle}:${x.plateforme}=${x.statut}`).join(' ')}`)
-    if (!r || r.arret) { seches = SECHE; break }
+    if (!r) throw new Error(`${titre} ${n} : le tour du kit a échoué, le chantier s'arrête avant le rapprochement`)
+    if (r.arret) { seches = SECHE; break }
     seches = livres.length ? 0 : seches + 1
     if (!lots.length) break
   }

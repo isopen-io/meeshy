@@ -145,6 +145,7 @@ ${GATES[plateforme]}
 const S = (properties, required) => ({ type: 'object', properties, required: required || Object.keys(properties) })
 const TXT = { type: 'string' }
 const LISTE = { type: 'array', items: TXT }
+const DECISIONS = { type: 'array', items: S({ question: TXT, choix: TXT, alternatives: LISTE, issue: { type: 'integer' } }, ['question', 'choix']) }
 const ETAT = S({
   chantier: { type: 'integer' }, milestone: { type: 'integer' },
   lots: { type: 'array', items: S({
@@ -160,7 +161,6 @@ const ETAT = S({
 const FICHE = S({ decisions: DECISIONS, fiche_markdown: TXT, nom_ios: TXT, nom_android: TXT, nom_web: TXT, jumeaux_ios: LISTE, jumeaux_android: LISTE, jumeaux_web: LISTE, questions_porteur: LISTE, modele_conseille: { type: 'string', enum: ['haiku', 'sonnet', 'opus'] } },
   ['fiche_markdown', 'nom_ios', 'nom_android', 'nom_web', 'jumeaux_ios', 'jumeaux_android', 'jumeaux_web', 'questions_porteur', 'modele_conseille'])
 const ISSUE = S({ issue: { type: 'integer' } })
-const DECISIONS = { type: 'array', items: S({ question: TXT, choix: TXT, alternatives: LISTE, issue: { type: 'integer' } }, ['question', 'choix']) }
 const FAIT = S({ statut: { type: 'string', enum: ['pousse', 'cede', 'bloque', 'deja_tenu'] }, sha: TXT, fichiers: LISTE, suites: LISTE, resume: TXT, escalade: TXT, decisions: DECISIONS }, ['statut', 'resume'])
 const REVUE = S({ conforme: { type: 'boolean' }, ecarts_corriges: LISTE, ecarts_restants: LISTE, sha: TXT, decisions: DECISIONS }, ['conforme', 'ecarts_corriges', 'ecarts_restants'])
 const PREUVE = S({ vert: { type: 'boolean' }, pr: { type: 'integer' }, sha: TXT, rouges: LISTE, cause_hors_lot: { type: 'boolean' }, images: LISTE }, ['vert', 'rouges'])
