@@ -234,7 +234,17 @@ describe('PresenceVisibilityService — l\'équipe (#16623)', () => {
     expect(sansDate).toEqual({ showOnline: true, showLastSeenTimestamp: false });
   });
 
-  it.each(['USER', 'AUDIT', 'ANALYST', 'SUPERADMIN', null])('face à la cible %s, un MODERATOR ne lit rien', async (role) => {
+  it.each(['ANALYST', 'AUDIT'])('un MODERATOR lit la présence détaillée d\'un collègue %s sans lien', async (role) => {
+    const v = await entre(role).service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);
+    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+  });
+
+  it('un ANALYST lit la présence détaillée d\'un collègue sans lien', async () => {
+    const v = await entre('MODERATOR').service.resolveForTarget({ userId: VIEWER, role: 'ANALYST' }, target);
+    expect(v).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+  });
+
+  it.each(['USER', 'AGENT', 'SUPERADMIN', null])('face à la cible %s, un MODERATOR ne lit rien', async (role) => {
     const v = await entre(role).service.resolveForTarget({ userId: VIEWER, role: 'MODERATOR' }, target);
     expect(v).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
