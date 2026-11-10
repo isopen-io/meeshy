@@ -25,9 +25,9 @@ data class CallDuoStageLayout(val isMyImageFullScreen: Boolean, val showsSelfTil
 }
 
 /**
- * The duo counterpart of iOS `isMyImageFullScreen` + `showsMyImageTile` (`CallView+CameraRail.swift`). The stage
- * and the pill read the SAME layout: the tile and the top rail carry my camera's controls, so the « (…) » drops
- * them ([CallCameraRail.menuRows]) — never two buttons for the same action.
+ * The duo counterpart of iOS `isMyImageFullScreen` + `showsMyImageTile` (`CallView+CameraRail.swift`). The layout says
+ * where the ZOOM of my camera lives ([CallCameraRail.placement]); the controls of my camera are the « My image » rail of
+ * the « (…) » whatever the layout (#17327).
  */
 object CallDuoStageLaw {
     fun layout(inputs: CallDuoStageInputs): CallDuoStageLayout = with(inputs) {

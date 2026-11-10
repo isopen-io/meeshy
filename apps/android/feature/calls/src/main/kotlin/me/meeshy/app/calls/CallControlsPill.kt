@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
+import me.meeshy.sdk.model.call.CallControlsDisposition
 import me.meeshy.sdk.model.call.CallPillRowContent
 import me.meeshy.sdk.model.call.CallScreenLayer
 import me.meeshy.sdk.model.call.CallScreenPanel
@@ -44,15 +45,16 @@ private val ROWS_MAX_HEIGHT = 340.dp
 
 /**
  * The pill at the bottom of the call, the same in audio, video and group: (…) · Mic · Output · End.
- * The (…) stacks above the base row one row per family ("My image", "The call"); a panel drawn in
- * the pill REPLACES the rows, never stacks with them. It is ONE glass block that grows with what
- * it holds, and each button inside is its own glass disc (#17323). Pure projection: the layer, the rows and
- * every callback come from the caller.
+ * On a group the (…) stacks above the base row one row per family ("My image", "The call"); on a duo it brings out two
+ * rails on the edges instead and the pill does not grow (#17327, [CallControlsDisposition]). A panel drawn in the pill
+ * REPLACES the rows, never stacks with them. It is ONE glass block that grows with what it holds, and each button
+ * inside is its own glass disc (#17323). Pure projection: the layer, the rows and every callback come from the caller.
  */
 @Composable
 internal fun CallControlsPill(
     state: CallUiState,
     layer: CallScreenLayer,
+    disposition: CallControlsDisposition,
     rows: List<CallPillRowContent>,
     items: Map<CallAction, CallPillItem>,
     outputIcon: ImageVector,
@@ -67,7 +69,7 @@ internal fun CallControlsPill(
     panelContent: @Composable (CallScreenPanel) -> Unit = {},
 ) {
     val reduceMotion = rememberCallReduceMotion()
-    val expanded = layer.isExpanded
+    val expanded = disposition.unfoldsPill(layer)
     val unfoldScale = if (reduceMotion) EnterTransition.None else
         scaleIn(initialScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
     CallControlsGlass(modifier = modifier.widthIn(max = 440.dp).fillMaxWidth()) {
@@ -107,7 +109,7 @@ internal fun CallControlsPill(
                 CallPillHairline()
             }
         }
-        BaseRow(state, expanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
+        BaseRow(state, captioned = expanded, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
     }
 }
 
@@ -115,6 +117,7 @@ internal fun CallControlsPill(
 private fun BaseRow(
     state: CallUiState,
     captioned: Boolean,
+    menuOpen: Boolean,
     outputIcon: ImageVector,
     onToggleMenu: () -> Unit,
     onToggleMute: () -> Unit,
@@ -125,11 +128,11 @@ private fun BaseRow(
         verticalAlignment = Alignment.Top,
         modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.smPlus),
     ) {
-        val expandedLabel = stringResource(if (captioned) R.string.call_control_expanded else R.string.call_control_collapsed)
+        val expandedLabel = stringResource(if (menuOpen) R.string.call_control_expanded else R.string.call_control_collapsed)
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center) {
             CallPillButton(
                 icon = Icons.Filled.MoreHoriz,
-                kind = if (captioned) CallPillKind.Active else CallPillKind.Normal,
+                kind = if (menuOpen) CallPillKind.Active else CallPillKind.Normal,
                 label = stringResource(R.string.call_control_more),
                 hint = stringResource(R.string.call_control_more_hint),
                 caption = if (captioned) stringResource(R.string.call_control_more_caption) else null,

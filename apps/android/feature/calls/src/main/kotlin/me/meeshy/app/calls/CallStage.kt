@@ -53,9 +53,10 @@ private val CAMERA_RAIL_TOP = 56.dp
  * vignette flotte par-dessus ; toucher la vignette permute les deux ([onSwap]). Avant la connexion, mon aperçu
  * tient tout le fond. Le flux d'un pair qui escalade l'audio en vidéo s'affiche même caméra locale coupée.
  *
- * [layout] — mon image en plein écran ou dans la vignette — est décidé par l'écran (`CallDuoStageLaw`) : la pilule
- * lit le même pour ne pas répéter les commandes que la vignette ou le rail du haut portent. La vignette porte le liseré
- * de qui elle montre ([selfUserId], ou [peerUserId] après permutation — loi 4).
+ * [layout] — mon image en plein écran ou dans la vignette — est décidé par l'écran (`CallDuoStageLaw`) : il dit où vit le
+ * ZOOM de ma caméra (les pastilles en haut au centre, ou le bouton dans la vignette). Les commandes de ma caméra n'ont plus
+ * de place ici (#17327) : ce sont le rail « Mon image » du (…). La vignette porte le liseré de qui elle montre
+ * ([selfUserId], ou [peerUserId] après permutation — loi 4).
  */
 @Composable
 internal fun CallDuoVideoStage(
@@ -70,7 +71,6 @@ internal fun CallDuoVideoStage(
     layout: CallDuoStageLayout,
     modifier: Modifier = Modifier,
     onSwap: () -> Unit = {},
-    selfEffects: CallSelfEffects? = null,
     selfTileMemory: CallSelfTileMemory = CallSelfTileMemories.shared,
     onSceneTap: (() -> Unit)? = null,
     selfCamera: CallSelfCameraActions? = null,
@@ -128,9 +128,8 @@ internal fun CallDuoVideoStage(
             if (pinchZoom != null) {
                 CallZoomIndicator(pinchZoom, Modifier.align(Alignment.BottomCenter).padding(bottom = ZOOM_INDICATOR_BOTTOM))
             }
-            // iOS `CallCameraRail.placement` : mon image en plein écran, les commandes de ma caméra montent en haut au
-            // centre ; dans la vignette, elles l'entourent et le zoom s'y loge. Jamais deux fois le même bouton.
-            val pickCamera = selfCamera?.let { if (rememberHasSelectableCameras(it.zoom)) rememberCameraPickerOpener() else null }
+            // iOS `zoomLensRail` : mon image en plein écran, les pastilles de zoom montent en haut au centre ; dans la
+            // vignette, le bouton de zoom s'y loge. Les commandes de ma caméra sont le rail « Mon image » du (…).
             if (featuresLocal && selfCamera != null) {
                 AnimatedVisibility(
                     visible = controlsVisible,
@@ -138,7 +137,7 @@ internal fun CallDuoVideoStage(
                     exit = fadeOut(tween(CallChromeVisibility.FADE_DURATION_MILLIS.toInt())),
                     modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding().padding(top = CAMERA_RAIL_TOP),
                 ) {
-                    CallMyImageTopRail(selfCamera, state.isCameraOn, onPickCamera = pickCamera, effects = selfEffects)
+                    CallZoomLensCapsule(selfCamera.zoom, state.isCameraOn)
                 }
             }
             if (state.isPeerMuted && !featuresLocal) {
@@ -148,8 +147,6 @@ internal fun CallDuoVideoStage(
                 )
             }
             if (layout.showsSelfTile) {
-                val cameraCount = if (featuresLocal) 0 else rememberSelfCameraControlCount(selfCamera, state.isCameraOn)
-                val effectsCount = if (featuresLocal) 0 else selfEffects?.items?.size ?: 0
                 val showsMyImage = !featuresLocal && state.isCameraOn && localTrack != null && !state.isVideoAutoPaused
                 CallSelfTile(
                     callKey = callKey,
@@ -157,16 +154,8 @@ internal fun CallDuoVideoStage(
                     paused = state.isVideoAutoPaused && state.isCameraOn,
                     reduceMotion = reduceMotion,
                     onSwap = onSwap,
-                    effectsCount = effectsCount,
-                    cameraCount = cameraCount,
                     controlsVisible = controlsVisible,
                     rimHex = CallTileRim.duoSelfTile(selfUserId, peerUserId, showsPeer = featuresLocal),
-                    effectsControls = { selfEffects?.let { CallSelfEffectsRow(it) } },
-                    cameraControls = {
-                        selfCamera?.let {
-                            CallSelfTileControlsRow(it, state.isCameraOn, onPickCamera = pickCamera, isPaused = state.isVideoAutoPaused)
-                        }
-                    },
                     modifier = Modifier.fillMaxSize(),
                     overlay = {
                         if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)

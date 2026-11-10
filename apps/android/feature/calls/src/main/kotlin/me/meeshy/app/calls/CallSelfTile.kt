@@ -48,11 +48,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
-import me.meeshy.sdk.model.call.CallCameraFoldedTap
-import me.meeshy.sdk.model.call.CallCameraRail
 import me.meeshy.sdk.model.call.CallSafeInsets
-import me.meeshy.sdk.model.call.CallSelfTileControlsLaw
-import me.meeshy.sdk.model.call.CallSelfTileCorner
 import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
@@ -75,10 +71,9 @@ private val TileShadow = 8.dp
  * appel ; un toucher permute les deux vidéos. Pour TalkBack elle est ajustable (petite, moyenne,
  * grande) et dit son état de survie quand [paused].
  *
- * Ses commandes l'ENTOURENT (iOS `CallSelfTileControlsPlacement`) : [effectsControls] ([effectsCount] boutons,
- * « Effets · Écran ») au-dessus, [cameraControls] ([cameraCount] boutons, « Retourner · Caméra ») en dessous ; elles
- * la suivent au glissé et s'effacent avec le chrome. Au repos, la vignette leur laisse la place sous l'en-tête et
- * au-dessus de la pilule.
+ * Elle ne porte AUCUNE commande autour d'elle (#17327) : Caméra, Retourner, Effets et Écran sont le rail « Mon image » du
+ * (…) ([CallActionRails]), si bien qu'au repos elle ne réserve plus la place d'une rangée sous l'en-tête ni au-dessus de la
+ * pilule.
  *
  * [content] est le flux qu'elle montre ; [overlay] se pose par-dessus, au coin (micro coupé du pair
  * après une permutation). [rimHex] est la couleur de qui elle montre (loi 4, [CallTileRim]) : son liseré la porte,
@@ -92,12 +87,8 @@ internal fun CallSelfTile(
     reduceMotion: Boolean,
     onSwap: () -> Unit,
     modifier: Modifier = Modifier,
-    effectsCount: Int = 0,
-    cameraCount: Int = 0,
     controlsVisible: Boolean = true,
     rimHex: String? = null,
-    effectsControls: @Composable () -> Unit = {},
-    cameraControls: @Composable () -> Unit = {},
     overlay: @Composable BoxScope.() -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -111,15 +102,11 @@ internal fun CallSelfTile(
         var pinch by remember { mutableFloatStateOf(1f) }
         var drag by remember { mutableStateOf(Offset.Zero) }
         var snapJob by remember { mutableStateOf<Job?>(null) }
-        var unfolded by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
         val haptics = LocalHapticFeedback.current
 
         val size = CallSelfTileLaw.tileSize(container, insets, CallSelfTileLaw.resting(scale, controlsVisible), pinch)
-        val rowBounds = CallSelfTileControlsLaw.bounds(container, insets)
-        fun restingCenter(at: CallSelfTileCorner): CallTilePoint =
-            CallSelfTileControlsLaw.restingCenter(CallSelfTileLaw.center(at, container, size, insets), size, rowBounds)
-        val center = restingCenter(corner)
+        val center = CallSelfTileLaw.center(corner, container, size, insets)
 
         fun settle(target: CallSelfTileScale) {
             val previous = scale
@@ -140,7 +127,7 @@ internal fun CallSelfTile(
         fun dropAt(point: CallTilePoint) {
             val next = CallSelfTileLaw.nearestCorner(point, container, size, insets)
             val from = absolutePx(center, container, rtl, density) + drag
-            val to = absolutePx(restingCenter(next), container, rtl, density)
+            val to = absolutePx(CallSelfTileLaw.center(next, container, size, insets), container, rtl, density)
             corner = next
             val start = from - to
             if (reduceMotion) {
@@ -216,28 +203,6 @@ internal fun CallSelfTile(
         ) {
             content()
             overlay()
-        }
-
-        val hasControls = effectsCount + cameraCount > 0
-        val folded = hasControls && CallCameraRail.foldsRows(size.widthDp)
-        val rows = CallSelfTileControlsLaw.rows(center, size, rowBounds, effectsCount, cameraCount)
-        if (!folded) {
-            rows.effects?.let { CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible, effectsControls) }
-            rows.camera?.let { CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible, cameraControls) }
-        } else {
-            if (unfolded) CallCameraRailScrim(onDismiss = { unfolded = CallCameraRail.foldedMenu(true, CallCameraFoldedTap.Elsewhere) })
-            val foldFrame = CallSelfTileControlsLaw.rows(center, size, rowBounds, effectsCount = 0, cameraCount = 1).camera
-            foldFrame?.let {
-                CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible) {
-                    CallCameraFoldButton(unfolded, onTap = { unfolded = CallCameraRail.foldedMenu(unfolded, CallCameraFoldedTap.Button) })
-                }
-            }
-            if (unfolded) {
-                rows.effects?.let { CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible, effectsControls) }
-                rows.camera?.let {
-                    CallCameraRailRowSlot(it.copy(yDp = it.yDp + CallSelfTileControlsLaw.ROW_SPAN_DP), container, rtl, drag, controlsVisible, cameraControls)
-                }
-            }
         }
     }
 }
