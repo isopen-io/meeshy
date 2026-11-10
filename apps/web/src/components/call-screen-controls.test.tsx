@@ -30,6 +30,10 @@ beforeAll(async () => {
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await import('./call-control-actions');
+  await import('./call-rails');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  /* Les rails du duo sont un chunk à part (`call-rails.tsx`) : le cadre arrivé, un second rendu amorce le contenu d'un rail. */
+  renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await new Promise((resolve) => setTimeout(resolve, 0));
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;

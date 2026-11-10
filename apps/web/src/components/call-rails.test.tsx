@@ -66,6 +66,9 @@ beforeAll(async () => {
   await import('./call-control-actions');
   await import('./call-rails');
   await new Promise((resolve) => setTimeout(resolve, 0));
+  /* Le cadre des rails arrivé, un second rendu amorce le contenu d'un rail, qu'il charge à son tour. */
+  renderToStaticMarkup(<CallScreen call={call({ cameraOn: false, members: { 'u-peer': member({ cameraOn: false }) } })} canShare initiallyExpanded />);
+  await new Promise((resolve) => setTimeout(resolve, 0));
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
