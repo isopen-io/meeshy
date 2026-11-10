@@ -26,7 +26,7 @@ Il ne fait pas :
 | Appui en verre dessiné | `MeeshyGlassPressStyle: ButtonStyle` | la source d'interaction du contrôle | `:active` et `[data-pressed]` |
 
 - Un seul emplacement : le contenu. `tone` absent ⇒ celui de l'hôte. `isPressed` / `pressed` fige l'état pour le catalogue.
-- La matière `MeeshyGlassMaterial { liquid, drawn, opaque }` se déduit et ne se passe jamais : iOS 26+ ⇒ `liquid` ; iOS 16 à 25, Android et web ⇒ `drawn` ; « réduire la transparence » ⇒ `opaque`. Seule exception, #17334 : `\.meeshyGlassForcesDrawn` sous `#if DEBUG`, posé par le catalogue ou par `-MeeshyForceDrawnGlass`.
+- La matière `MeeshyGlassMaterial { liquid, drawn, opaque }` se déduit et ne se passe jamais : iOS 26+ ⇒ `liquid` ; iOS 16 à 25, Android et web ⇒ `drawn` ; « réduire la transparence » ⇒ `opaque` là où le verre est dessiné (sur iOS 26+, le système givre lui-même son Liquid Glass, qui l'emporte toujours — la règle d'`adaptiveGlass`). Seule exception, #17334 : `\.meeshyGlassForcesDrawn` sous `#if DEBUG`, posé par le catalogue ou par `-MeeshyForceDrawnGlass`.
 - Web : la matière reste dans `styles/glass.css` (classes `.glass-tone-*`, `.glass-dense`, `.glass-touch`) ; le composant ne pose que des classes, jamais un fond. `glass-card` et `glass-accent` deviennent des valeurs de `tint` du ton `theme`.
 
 ## 3. États
@@ -131,7 +131,9 @@ Les questions au porteur sont listées à part ; aucune n'est tranchée ici. Lec
 
 ## 10. Lecture iOS (lot K01-ios)
 - Fichiers : `Kit/MeeshyGlassTone.swift` (ton, densité, loi), `Kit/MeeshyGlassRecipe.swift` (matière, recette en valeurs), `Kit/MeeshyGlassSurface.swift` (`.meeshyGlass`, `.meeshyGlassTone`, environnement), `Kit/MeeshyGlassDrawn.swift` (le dessin), `Kit/MeeshyGlassGroup.swift` (groupe et `MeeshyGlassPressStyle`), `Kit/MeeshyGlassDebug.swift` (forçage de #17334, sous `#if DEBUG`).
-- `adaptiveLiquidGlass` est un renvoi : `.meeshyGlass(in:, tone: .theme, tint:, isInteractive:)`. Son rendu de repos est celui d'avant ; sous « réduire la transparence » il devient plein (fond secondaire du système), ce que le contrat demande.
+- `adaptiveLiquidGlass` est un renvoi : `.meeshyGlass(in:, tone: .theme, tint:, isInteractive:)`. Son rendu de repos est celui d'avant ; sur iOS 26+ il reste le `glassEffect` du système même sous « réduire la transparence » (le système le givre) ; dessous, sous « réduire la transparence », il devient plein (fond secondaire du système), ce que le contrat demande.
+- Jamais de verre sur du verre : un verre dessiné pose `meeshyGlassIsNested` sur son contenu ; une surface du kit (ton autre que `theme`) posée dedans ne porte alors ni flou, ni fond, ni reflet, ni liseré, ni ombre, et garde sa teinte et sa réponse au toucher. Le contenu reçoit aussi un appui remis à faux : l'appui de l'hôte ne descend pas dans ses voisins.
+- Survol au pointeur (iPad) : reflet à 1,5 fois, sans échelle, en verre dessiné interactif seulement. Changement de ton : fondu du fond seul, 200 ms (`toneFadeDuration`), coupé par `meeshyAnimation` sous « réduire les animations ».
 - Le sombre du verre iOS est `MeeshyColors.mediaBackdrop` (noir), jeton existant ; la question 4 reste au porteur.
 - La recette porte `blurRadius` et `saturation` pour la parité ; iOS rend le flou par le matériau `.ultraThinMaterial`.
 - L'appui dessiné se lit dans l'environnement `meeshyGlassIsPressed`, posé par `MeeshyGlassPressStyle` sur le contenu du bouton ; la surface s'applique donc DANS le libellé du bouton, ou reçoit `isPressed`.

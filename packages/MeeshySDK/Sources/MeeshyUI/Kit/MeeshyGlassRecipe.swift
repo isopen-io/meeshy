@@ -1,8 +1,12 @@
 import Foundation
 
 /// La matière d'un verre. Elle se déduit de l'appareil et ne se passe jamais :
-/// `MeeshyGlassMaterial.resolve` est interne, et le seul forçage est celui de
+/// `MeeshyGlassMaterial.resolve` est interne, et les seuls forçages sont ceux de
 /// debug (`MeeshyGlassDebug`).
+///
+/// Liquid Glass l'emporte toujours quand il existe : sous « réduire la
+/// transparence », iOS 26 givre lui-même son verre (comme `adaptiveGlass` le
+/// laisse faire), et seul le verre DESSINÉ cède la place au fond plein.
 public nonisolated enum MeeshyGlassMaterial: Sendable, Equatable {
     /// Le Liquid Glass du système (iOS 26+).
     case liquid
@@ -11,9 +15,15 @@ public nonisolated enum MeeshyGlassMaterial: Sendable, Equatable {
     /// Le fond plein de « réduire la transparence » : ni flou ni reflet.
     case opaque
 
-    static func resolve(isLiquidAvailable: Bool, reduceTransparency: Bool, forcesDrawn: Bool) -> MeeshyGlassMaterial {
-        if reduceTransparency { return .opaque }
-        return isLiquidAvailable && !forcesDrawn ? .liquid : .drawn
+    static func resolve(
+        isLiquidAvailable: Bool,
+        reduceTransparency: Bool,
+        forcesDrawn: Bool,
+        forcesOpaque: Bool = false
+    ) -> MeeshyGlassMaterial {
+        if forcesOpaque { return .opaque }
+        if isLiquidAvailable && !forcesDrawn { return .liquid }
+        return reduceTransparency ? .opaque : .drawn
     }
 }
 
@@ -48,6 +58,15 @@ public nonisolated struct MeeshyGlassRecipe: Equatable, Sendable {
 
     public var blursBackdrop: Bool { blurRadius > 0 }
 
+    /// Le fondu de la teinte quand le ton change (immédiat sous « réduire les
+    /// animations », que `meeshyAnimation` applique).
+    public static let toneFadeDuration = GlassMeasure.toneFadeDuration
+
+    /// `isNested` : la surface est posée DANS un verre dessiné du kit. Elle ne
+    /// porte alors aucune seconde matière (ni flou, ni fond, ni reflet, ni
+    /// liseré, ni ombre) et garde sa réponse au toucher. Le ton `theme`, renvoi
+    /// des sites existants, n'est pas concerné. `isHovered` : pointeur au-dessus
+    /// (iPad), reflet intermédiaire sans échelle.
     public static func resolve(
         tone: MeeshyGlassTone,
         density: MeeshyGlassDensity,
@@ -56,11 +75,17 @@ public nonisolated struct MeeshyGlassRecipe: Equatable, Sendable {
         isPressed: Bool,
         material: MeeshyGlassMaterial,
         reduceMotion: Bool,
-        isDark: Bool = false
+        isDark: Bool = false,
+        isNested: Bool = false,
+        isHovered: Bool = false
     ) -> MeeshyGlassRecipe {
-        let rest = restRecipe(tone: tone, density: density, isTinted: isTinted, material: material, isDark: isDark)
-        guard isInteractive, isPressed else { return rest }
-        return rest.pressed(reduceMotion: reduceMotion)
+        let rest = restRecipe(
+            tone: tone, density: density, isTinted: isTinted, material: material,
+            isDark: isDark, isNested: isNested
+        )
+        guard isInteractive else { return rest }
+        if isPressed { return rest.pressed(reduceMotion: reduceMotion) }
+        return isHovered ? rest.hovered() : rest
     }
 }
 
@@ -82,6 +107,8 @@ private nonisolated enum GlassMeasure {
     static let shadowY = 10.0
     static let pressScale = 1.04
     static let pressSheenFactor = 2.0
+    static let hoverSheenFactor = 1.5
+    static let toneFadeDuration = 0.2
 }
 
 private nonisolated extension MeeshyGlassRecipe {
@@ -91,9 +118,13 @@ private nonisolated extension MeeshyGlassRecipe {
         density: MeeshyGlassDensity,
         isTinted: Bool,
         material: MeeshyGlassMaterial,
-        isDark: Bool
+        isDark: Bool,
+        isNested: Bool
     ) -> MeeshyGlassRecipe {
         let legacy = LiquidGlassFallbackRecipe.resolve(isDark: isDark, isTinted: isTinted)
+        if isNested, material != .liquid, tone != .theme {
+            return nested(material: material, tintWash: legacy.tintWash)
+        }
         switch material {
         case .liquid: return systemOwned
         case .opaque: return opaque(tone: tone, tintWash: legacy.tintWash)
@@ -145,6 +176,31 @@ private nonisolated extension MeeshyGlassRecipe {
             blurRadius: 0, saturation: 1, tintWash: tintWash, sheen: 0, topLight: 0,
             rimLit: GlassMeasure.opaqueRim, rimShade: GlassMeasure.opaqueRim, rimTail: GlassMeasure.opaqueRim,
             shadowOpacity: 0, shadowRadius: 0, shadowY: 0, scale: 1
+        )
+    }
+
+    /// Une surface posée dans un verre dessiné : la matière est celle de
+    /// l'hôte, seule la teinte (état enclenché) et la réponse au toucher restent.
+    static func nested(material: MeeshyGlassMaterial, tintWash: Double) -> MeeshyGlassRecipe {
+        MeeshyGlassRecipe(
+            material: material, fill: .clear, fillOpacity: 0, blurRadius: 0, saturation: 1,
+            tintWash: tintWash, sheen: 0, topLight: 0, rimLit: 0, rimShade: 0, rimTail: 0,
+            shadowOpacity: 0, shadowRadius: 0, shadowY: 0, scale: 1
+        )
+    }
+
+    /// Le survol au pointeur : le reflet s'éclaire à mi-chemin de l'appui, sans
+    /// échelle. Rien en opaque ni sous le verre du système.
+    func hovered() -> MeeshyGlassRecipe {
+        guard material == .drawn else { return self }
+        return MeeshyGlassRecipe(
+            material: material, fill: fill, fillOpacity: fillOpacity,
+            blurRadius: blurRadius, saturation: saturation, tintWash: tintWash,
+            sheen: min(1, sheen * GlassMeasure.hoverSheenFactor),
+            topLight: min(1, topLight * GlassMeasure.hoverSheenFactor),
+            rimLit: rimLit, rimShade: rimShade, rimTail: rimTail,
+            shadowOpacity: shadowOpacity, shadowRadius: shadowRadius, shadowY: shadowY,
+            scale: 1
         )
     }
 

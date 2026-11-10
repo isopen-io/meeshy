@@ -52,10 +52,17 @@ struct MeeshyGlassToneTests {
         #expect(MeeshyGlassMaterial.resolve(isLiquidAvailable: false, reduceTransparency: false, forcesDrawn: false) == .drawn)
     }
 
-    @Test("réduire la transparence ⇒ opaque, sur toute version")
-    func material_reduceTransparencyIsOpaque() {
-        #expect(MeeshyGlassMaterial.resolve(isLiquidAvailable: true, reduceTransparency: true, forcesDrawn: false) == .opaque)
+    @Test("réduire la transparence ⇒ opaque pour le verre dessiné ; iOS 26 givre lui-même son Liquid Glass")
+    func material_reduceTransparency_opaqueOnlyWhereDrawn() {
         #expect(MeeshyGlassMaterial.resolve(isLiquidAvailable: false, reduceTransparency: true, forcesDrawn: false) == .opaque)
+        #expect(MeeshyGlassMaterial.resolve(isLiquidAvailable: true, reduceTransparency: true, forcesDrawn: true) == .opaque)
+        #expect(MeeshyGlassMaterial.resolve(isLiquidAvailable: true, reduceTransparency: true, forcesDrawn: false) == .liquid)
+    }
+
+    @Test("le forçage opaque du catalogue l'emporte sur toute matière")
+    func material_forcedOpaque() {
+        #expect(MeeshyGlassMaterial.resolve(isLiquidAvailable: true, reduceTransparency: false, forcesDrawn: false, forcesOpaque: true) == .opaque)
+        #expect(MeeshyGlassMaterial.resolve(isLiquidAvailable: false, reduceTransparency: false, forcesDrawn: false, forcesOpaque: true) == .opaque)
     }
 
     @Test("le forçage du verre dessiné ne passe que par l'environnement de debug")
@@ -125,6 +132,46 @@ struct MeeshyGlassToneTests {
         #expect(rest.fillOpacity == 1)
         #expect(pressed.sheen == 0 && pressed.topLight == 0)
         #expect(pressed.scale == 1.04)
+    }
+
+    @Test("survol au pointeur : reflet intermédiaire, sans échelle, en verre dessiné seulement")
+    func recipe_hover_intermediateSheenWithoutScale() {
+        let rest = Self.recipe(tone: .deep, interactive: true)
+        let hovered = Self.recipe(tone: .deep, interactive: true, hovered: true)
+        let pressed = Self.recipe(tone: .deep, interactive: true, pressed: true)
+        #expect(hovered.scale == 1)
+        #expect(hovered.topLight > rest.topLight)
+        #expect(hovered.topLight < pressed.topLight)
+        #expect(Self.recipe(tone: .deep, interactive: false, hovered: true) == Self.recipe(tone: .deep))
+        #expect(Self.recipe(tone: .deep, interactive: true, material: .opaque, hovered: true)
+            == Self.recipe(tone: .deep, interactive: true, material: .opaque))
+    }
+
+    @Test("le ton change par un fondu de 200 ms")
+    func toneFade_is200ms() throws {
+        let milliseconds = try #require(try Self.vector("recipe")["toneFadeMs"] as? Double)
+        #expect(MeeshyGlassRecipe.toneFadeDuration == milliseconds / 1000)
+    }
+
+    // MARK: - Jamais de verre sur du verre
+
+    @Test("posée dans un verre dessiné : aucune seconde matière, la réponse au toucher gardée",
+          arguments: [MeeshyGlassTone.plain, .deep, .onLight])
+    func recipe_nested_hasNoSecondMaterial(tone: MeeshyGlassTone) {
+        for material in [MeeshyGlassMaterial.drawn, .opaque] {
+            let rest = Self.recipe(tone: tone, interactive: true, material: material, nested: true)
+            let pressed = Self.recipe(tone: tone, interactive: true, pressed: true, material: material, nested: true)
+            #expect(!rest.blursBackdrop)
+            #expect(rest.fillOpacity == 0 && rest.sheen == 0 && rest.topLight == 0)
+            #expect(rest.rimLit == 0 && rest.shadowOpacity == 0)
+            #expect(pressed.scale == 1.04)
+        }
+    }
+
+    @Test("le ton theme des sites existants et le Liquid Glass ne changent pas une fois imbriqués")
+    func recipe_nested_leavesThemeAndLiquidUntouched() {
+        #expect(Self.recipe(tone: .theme, nested: true) == Self.recipe(tone: .theme))
+        #expect(Self.recipe(tone: .deep, material: .liquid, nested: true) == Self.recipe(tone: .deep, material: .liquid))
     }
 
     @Test("un seul flou par surface, jamais en verre opaque ni liquid")
@@ -220,6 +267,8 @@ struct MeeshyGlassToneTests {
         #expect(pressed.scale == recipe["pressScale"] as? Double)
         let rest = Self.recipe(tone: .deep, interactive: true, pressed: false)
         #expect(pressed.topLight == rest.topLight * (recipe["pressSheenFactor"] as? Double ?? 0))
+        let hovered = Self.recipe(tone: .deep, interactive: true, hovered: true)
+        #expect(hovered.topLight == rest.topLight * (recipe["hoverSheenFactor"] as? Double ?? 0))
     }
 }
 
@@ -233,11 +282,14 @@ private extension MeeshyGlassToneTests {
         interactive: Bool = false,
         pressed: Bool = false,
         material: MeeshyGlassMaterial = .drawn,
-        reduceMotion: Bool = false
+        reduceMotion: Bool = false,
+        nested: Bool = false,
+        hovered: Bool = false
     ) -> MeeshyGlassRecipe {
         MeeshyGlassRecipe.resolve(
             tone: tone, density: density, isTinted: false, isInteractive: interactive,
-            isPressed: pressed, material: material, reduceMotion: reduceMotion
+            isPressed: pressed, material: material, reduceMotion: reduceMotion,
+            isNested: nested, isHovered: hovered
         )
     }
 

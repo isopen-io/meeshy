@@ -18,15 +18,19 @@ extension MeeshyKitCatalog {
 
     @MainActor @ViewBuilder
     static func contentK01(state: MeeshyKitCatalogState, isPressed: Bool) -> some View {
-        MeeshyGlassToneSample(stateID: state.id, isPressed: isPressed)
+        MeeshyGlassToneSample(stateID: state.id, isTouchable: state.isTouchable, isPressed: isPressed)
     }
 }
 
 /// L'échantillon d'un état : une pilule de verre portant un glyphe et l'`id` de
-/// l'état, à l'encre blanche du chrome sur média (ou du thème pour `theme`).
+/// l'état, à l'encre blanche du chrome sur média ; `theme` se pose sur le fond
+/// de l'app, à l'encre du thème, en clair comme en sombre.
 private struct MeeshyGlassToneSample: View {
     let stateID: String
+    let isTouchable: Bool
     let isPressed: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         sample
@@ -36,11 +40,16 @@ private struct MeeshyGlassToneSample: View {
     @ViewBuilder
     private var sample: some View {
         if stateID == "theme" {
-            pill(ink: MeeshyColors.textPrimary(isDark: false), tone: .theme, density: .regular, tint: nil)
-                .environment(\.colorScheme, .light)
+            pill(ink: MeeshyColors.textPrimary(isDark: isDark), tone: .theme, density: .regular, tint: nil)
+                .padding(MeeshySpacing.sm)
+                .background(MeeshyColors.backgroundPrimary(isDark: isDark))
         } else {
             pill(ink: MeeshyColors.onMedia, tone: tone, density: density, tint: stateID == "teinte" ? MeeshyColors.brandPrimary : nil)
         }
+    }
+
+    private var isDark: Bool {
+        colorScheme == .dark
     }
 
     private var tone: MeeshyGlassTone {
@@ -58,6 +67,7 @@ private struct MeeshyGlassToneSample: View {
     private func pill(ink: Color, tone: MeeshyGlassTone, density: MeeshyGlassDensity, tint: Color?) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "sparkles")
+                .accessibilityHidden(true)
             Text(stateID)
                 .font(.footnote)
         }
@@ -72,10 +82,6 @@ private struct MeeshyGlassToneSample: View {
             isInteractive: isTouchable,
             isPressed: isTouchable && isPressed ? true : nil
         )
-    }
-
-    private var isTouchable: Bool {
-        stateID != "deep-dense" && stateID != "opaque"
     }
 }
 #endif

@@ -45,6 +45,10 @@ private struct MeeshyGlassIsPressedKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+private struct MeeshyGlassIsNestedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 public extension EnvironmentValues {
     var meeshyGlassTone: MeeshyGlassTone {
         get { self[MeeshyGlassToneKey.self] }
@@ -55,6 +59,12 @@ public extension EnvironmentValues {
     var meeshyGlassIsPressed: Bool {
         get { self[MeeshyGlassIsPressedKey.self] }
         set { self[MeeshyGlassIsPressedKey.self] = newValue }
+    }
+
+    /// Posé par un verre dessiné sur son contenu : jamais de verre sur du verre.
+    var meeshyGlassIsNested: Bool {
+        get { self[MeeshyGlassIsNestedKey.self] }
+        set { self[MeeshyGlassIsNestedKey.self] = newValue }
     }
 }
 
@@ -68,6 +78,7 @@ private struct MeeshyGlassModifier<S: Shape>: ViewModifier {
 
     @Environment(\.meeshyGlassTone) private var hostTone
     @Environment(\.meeshyGlassIsPressed) private var styledPressed
+    @Environment(\.meeshyGlassIsNested) private var isNested
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -76,17 +87,33 @@ private struct MeeshyGlassModifier<S: Shape>: ViewModifier {
     @Environment(\.meeshyGlassForcesDrawn) private var forcesDrawn
     @Environment(\.meeshyGlassForcesOpaque) private var forcesOpaque
     #endif
+    @State private var isHovered = false
 
+    /// Dessous iOS 26, le contenu reçoit `meeshyGlassIsNested` (une surface du
+    /// kit posée dedans ne porte pas de seconde matière) et un appui remis à
+    /// faux (l'appui de l'hôte ne descend pas dans ses voisins). Seuls
+    /// `scaleEffect` et la recette du fond s'animent, jamais la mise en page.
     func body(content: Content) -> some View {
         let recipe = self.recipe
         if #available(iOS 26.0, *), recipe.material == .liquid {
             content.glassEffect(makeMeeshyGlass(tint: tint, interactive: isInteractive), in: shape)
         } else {
             content
-                .background(MeeshyDrawnGlass(shape: shape, recipe: recipe, tint: tint))
+                .environment(\.meeshyGlassIsPressed, false)
+                .environment(\.meeshyGlassIsNested, true)
+                .background(
+                    MeeshyDrawnGlass(shape: shape, recipe: recipe, tint: tint)
+                        .meeshyAnimation(MeeshyAnimation.springFast, value: isHovered)
+                        .meeshyAnimation(.easeInOut(duration: MeeshyGlassRecipe.toneFadeDuration), value: resolvedTone)
+                )
                 .scaleEffect(recipe.scale)
                 .meeshyAnimation(MeeshyAnimation.springFast, value: isPressedNow)
+                .onHover { hovering in isHovered = isInteractive && hovering }
         }
+    }
+
+    private var resolvedTone: MeeshyGlassTone {
+        tone ?? hostTone
     }
 
     private var isPressedNow: Bool {
@@ -95,30 +122,33 @@ private struct MeeshyGlassModifier<S: Shape>: ViewModifier {
 
     private var recipe: MeeshyGlassRecipe {
         MeeshyGlassRecipe.resolve(
-            tone: tone ?? hostTone,
+            tone: resolvedTone,
             density: density,
             isTinted: tint != nil,
             isInteractive: isInteractive,
             isPressed: isPressedNow,
             material: material,
             reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userReduceMotion),
-            isDark: colorScheme == .dark
+            isDark: colorScheme == .dark,
+            isNested: isNested,
+            isHovered: isHovered
         )
     }
 
     private var material: MeeshyGlassMaterial {
         MeeshyGlassMaterial.resolve(
             isLiquidAvailable: Platform.isIOS26OrLater,
-            reduceTransparency: reducesTransparency,
-            forcesDrawn: forcesDrawnInDebug
+            reduceTransparency: reduceTransparency,
+            forcesDrawn: forcesDrawnInDebug,
+            forcesOpaque: forcesOpaqueInDebug
         )
     }
 
-    private var reducesTransparency: Bool {
+    private var forcesOpaqueInDebug: Bool {
         #if DEBUG
-        return reduceTransparency || forcesOpaque
+        return forcesOpaque
         #else
-        return reduceTransparency
+        return false
         #endif
     }
 

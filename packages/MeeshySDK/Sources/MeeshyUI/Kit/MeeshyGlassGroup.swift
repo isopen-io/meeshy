@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Regroupe des surfaces de verre voisines. Sur iOS 26+, elles fusionnent dans
 /// un même conteneur du système ; dessous, le contenu reste tel quel — une
-/// matière par surface, jamais de verre posé sur du verre.
+/// matière par surface, et une surface posée DANS un verre dessiné n'en porte
+/// pas de seconde (`meeshyGlassIsNested`).
 public struct MeeshyGlassGroup<Content: View>: View {
     private let spacing: CGFloat
     private let content: Content

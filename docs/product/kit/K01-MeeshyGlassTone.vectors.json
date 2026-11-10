@@ -28,6 +28,8 @@
     "saturation": 1.8,
     "pressScale": 1.04,
     "pressSheenFactor": 2,
+    "hoverSheenFactor": 1.5,
+    "toneFadeMs": 200,
     "topLight": 0.38,
     "shadowOpacity": 0.28,
     "shadowOffsetY": 10,
