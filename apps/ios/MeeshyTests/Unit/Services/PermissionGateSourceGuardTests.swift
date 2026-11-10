@@ -275,14 +275,15 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// `didFailWithError` silencieux, et l'utilisateur attendait un recentrage
     /// qui n'arriverait jamais.
     func test_locationPicker_doesNotRequestLocationWhenUnauthorized() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
+        let viewSrc = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
         let fn = try body(from: "func requestPermission() {", to: "func updateSelectedLocation", in: src)
 
         XCTAssertTrue(fn.contains("case .authorizedWhenInUse, .authorizedAlways:"),
                       "Le relevé ne doit partir que sur un statut autorisé.")
         XCTAssertTrue(fn.contains("manager.requestWhenInUseAuthorization()"),
                       "Le statut indéterminé doit déclencher la demande.")
-        XCTAssertTrue(src.contains("locationDeniedBanner"),
+        XCTAssertTrue(viewSrc.contains("locationDeniedBanner"),
                       "Un refus doit être expliqué dans l'UI, pas seulement journalisé.")
     }
 
@@ -292,7 +293,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// ce chemin est exercé à chaque fermeture. Même signature que le crash
     /// `ScrollOffsetRelay`.
     func test_locationPickerModel_isTypeLevelNonisolated() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
 
         XCTAssertTrue(src.contains("nonisolated final class LocationPickerModel"),
                       "Le `nonisolated` doit vivre sur le TYPE : c'est la seule annotation qui désisole la deinit.")
@@ -309,7 +310,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// recevoir avant que SwiftUI ait installé le `@StateObject` publie une
     /// modification en plein cycle de rendu.
     func test_locationPickerModel_doesNotWireCoreLocationFromInit() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
         let initBody = try body(from: "override init() {", to: "func requestPermission()", in: src)
         XCTAssertFalse(initBody.contains("manager.delegate = self"),
                        "Assigner le delegate depuis init() declenche un callback d'autorisation avant que le @StateObject soit installe.")
@@ -324,7 +325,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// `kCLErrorLocationUnknown`, laissant l'UI attendre un relevé qui
     /// n'arrivera pas.
     func test_locationPicker_guardsAgainstConcurrentFixRequests() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
         XCTAssertTrue(src.contains("isAwaitingFix"),
                       "Deux requestLocation() concurrents font annuler la premiere par CoreLocation, qui repond kCLErrorLocationUnknown.")
         let fail = try body(from: "func locationManager(_ manager: CLLocationManager, didFailWithError",
@@ -337,7 +338,8 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// éventuel re-crash diagnosticable au lieu d'imposer une seconde correction
     /// à l'aveugle.
     func test_locationPicker_leavesBreadcrumbsOnEveryAuthorizationStep() throws {
-        let src = try source("Meeshy/Features/Main/Components/LocationPickerView.swift")
+        let src = try source("Meeshy/Features/Main/Components/LocationPickerModel.swift")
+            + (try source("Meeshy/Features/Main/Components/LocationPickerBottomCard.swift"))
         for step in ["breadcrumb.request", "breadcrumb.authorization", "breadcrumb.fix",
                      "breadcrumb.failure", "breadcrumb.selection"] {
             XCTAssertTrue(src.contains(step),

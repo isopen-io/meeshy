@@ -3075,6 +3075,10 @@
 		AEA1AD5CF2D68A3F2B84FC82 /* CallDetailSheetAccentColorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18C20E527D21550B4923F3BA /* CallDetailSheetAccentColorTests.swift */; };
 		AEAE12FCFB5F855DB6BA5C3D /* CallLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9776950F1670772D58BAEB4D /* CallLiveActivity.swift */; };
 		AEB0C8DE6D395F7E235B55B3 /* MessageListStickyDayMemoGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6CF263640DAA4DEEBA0AAC6 /* MessageListStickyDayMemoGuardTests.swift */; };
+		04C6BE452D8D1CF42BADE097 /* LocationPickerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DA32102194955C8D60B59D4 /* LocationPickerModel.swift */; };
+		DBD5F95347E9610A8AA47230 /* LocationPickerPlanning.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117433919A3A4761E1A591B /* LocationPickerPlanning.swift */; };
+		7B44EF1EAE312BC7684F0A0E /* LocationPickerBottomCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4642BA6B555C978B10796C9 /* LocationPickerBottomCard.swift */; };
+		8E9EF7C164BB1B68AA81AFF1 /* LocationPickerView+StoryComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A6182779AE93FA7181A4946 /* LocationPickerView+StoryComposer.swift */; };
 		AECA301543A2B07B6002375F /* NotificationPayloadHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF0F5E7D57E8288CBF09ABBE /* NotificationPayloadHelpers.swift */; };
 		AEDA7FCD6F2255BEF4456B3B /* ComposerAudioChipInspectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901BF8D8DD43298B1423CD34 /* ComposerAudioChipInspectorTests.swift */; };
 		AEE73715D9FC477A25AA332F /* MediaChromeSchemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A290E5FB7A94CCB7CD726ABF /* MediaChromeSchemeTests.swift */; };
@@ -5056,6 +5060,10 @@
 		17E3CA2A2409F5B38C2ECEBD /* MessageCardExportTray+Imagine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageCardExportTray+Imagine.swift"; sourceTree = "<group>"; };
 		17E40D73DB21AE81623076A7 /* ConversationView+ComposerDock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView+ComposerDock.swift"; sourceTree = "<group>"; };
 		17E4C046D0E1B99A5E2D1133 /* FocalBetaPreviewNavigationSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalBetaPreviewNavigationSourceGuardTests.swift; sourceTree = "<group>"; };
+		4DA32102194955C8D60B59D4 /* LocationPickerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocationPickerModel.swift"; sourceTree = "<group>"; };
+		A117433919A3A4761E1A591B /* LocationPickerPlanning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocationPickerPlanning.swift"; sourceTree = "<group>"; };
+		B4642BA6B555C978B10796C9 /* LocationPickerBottomCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocationPickerBottomCard.swift"; sourceTree = "<group>"; };
+		0A6182779AE93FA7181A4946 /* LocationPickerView+StoryComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocationPickerView+StoryComposer.swift"; sourceTree = "<group>"; };
 		17EC2DD8BDA6BA83E09D4A58 /* FloatingCallPillViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingCallPillViewTests.swift; sourceTree = "<group>"; };
 		1807D1BD4B9F95C416A7DCB7 /* CallCameraZoomGesture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCameraZoomGesture.swift; sourceTree = "<group>"; };
 		18132B88663B03FFC32EB261 /* MessageDaySeparator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDaySeparator.swift; sourceTree = "<group>"; };
@@ -10253,6 +10261,10 @@
 				D700F86BC4299880C4FDFCF7 /* MentionContactsStore.swift */,
 				A3F5E89483BD1324E2415C48 /* MentionParticipants.swift */,
 				1AA379A82980EE240D0844EB /* MentionSuggestionPanel.swift */,
+				4DA32102194955C8D60B59D4 /* LocationPickerModel.swift */,
+				A117433919A3A4761E1A591B /* LocationPickerPlanning.swift */,
+				B4642BA6B555C978B10796C9 /* LocationPickerBottomCard.swift */,
+				0A6182779AE93FA7181A4946 /* LocationPickerView+StoryComposer.swift */,
 				8BBF3392D5B55ED9E17E68A8 /* MessageActionResolver.swift */,
 				4FAA98EB7472C715B5F5FB46 /* MessageActionsMenu.swift */,
 				56F509BDAD34F0929192ADF8 /* MessageActionVocabulary.swift */,
@@ -16940,6 +16952,10 @@
 				443994561805F975DC89E31F /* MediaCompressor.swift in Sources */,
 				4B5F575523C99C462E5552EA /* MediaConsumptionProgressBar.swift in Sources */,
 				BBEF2A74610703FAFF5AFD24 /* MediaConsumptionSeeder.swift in Sources */,
+				04C6BE452D8D1CF42BADE097 /* LocationPickerModel.swift in Sources */,
+				DBD5F95347E9610A8AA47230 /* LocationPickerPlanning.swift in Sources */,
+				7B44EF1EAE312BC7684F0A0E /* LocationPickerBottomCard.swift in Sources */,
+				8E9EF7C164BB1B68AA81AFF1 /* LocationPickerView+StoryComposer.swift in Sources */,
 				0B67BFDC1B421C874FB97CB3 /* MediaDownloadSettingsView.swift in Sources */,
 				955D3EF60A7319F239D0CDBD /* MediaGroupUploader.swift in Sources */,
 				86EB3A8FD861F2548EFF99A0 /* MediaKindLabel.swift in Sources */,
