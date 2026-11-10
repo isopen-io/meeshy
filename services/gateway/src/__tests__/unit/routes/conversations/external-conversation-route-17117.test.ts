@@ -14,6 +14,7 @@ import {
   EXTERNAL_CONVERSATION_ERROR_CODES,
   EXTERNAL_CONVERSATION_OPENINGS_PER_HOUR,
 } from '@meeshy/shared/types/external-conversation';
+import { EXTERNAL_INTEROP_NOTICE_VERSION } from '@meeshy/shared/types/external-interop-compliance';
 import { registerExternalConversationRoute } from '../../../../routes/conversations/external';
 
 const ALICE = '507f1f77bcf86cd799439a01';
@@ -51,11 +52,30 @@ const createReply = () => {
   return reply;
 };
 
-type PrismaWorld = { phoneVerifiedAt: Date | null; role: string; existing: boolean; kept: number; failWith?: Error; creates: number };
+type PrismaWorld = {
+  phoneVerifiedAt: Date | null;
+  role: string;
+  existing: boolean;
+  kept: number;
+  failWith?: Error;
+  creates: number;
+  consentVersion?: string | null;
+};
 
 const prismaFor = (world: PrismaWorld) => ({
   user: {
-    findUnique: jest.fn(async () => ({ id: ALICE, phoneVerifiedAt: world.phoneVerifiedAt, displayName: 'Alice', username: 'alice', role: world.role })),
+    findUnique: jest.fn(async () => {
+      const consentVersion = world.consentVersion === undefined ? EXTERNAL_INTEROP_NOTICE_VERSION : world.consentVersion;
+      return {
+        id: ALICE,
+        phoneVerifiedAt: world.phoneVerifiedAt,
+        displayName: 'Alice',
+        username: 'alice',
+        role: world.role,
+        whatsappInteropConsentAt: consentVersion ? new Date('2026-11-09T00:00:00Z') : null,
+        whatsappInteropNoticeVersion: consentVersion,
+      };
+    }),
   },
   externalConversationPeer: {
     findUnique: jest.fn(async () => {
@@ -141,6 +161,17 @@ describe('POST /conversations/external', () => {
 
     expect(res.status).toBe(403);
     expect(res.body).toMatchObject({ success: false, code: EXTERNAL_CONVERSATION_ERROR_CODES.PHONE_UNVERIFIED });
+    expect(res.world.creates).toBe(0);
+  });
+
+  it.each([
+    ['sans consentement enregistré', null],
+    ['un consentement donné sous une information périmée', '2026-01-01'],
+  ])('%s : 403 EXTERNAL_CONVERSATION_CONSENT_REQUIRED, rien créé (#17120)', async (_label, consentVersion) => {
+    const res = await post({ world: { consentVersion } });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toMatchObject({ success: false, code: EXTERNAL_CONVERSATION_ERROR_CODES.CONSENT_REQUIRED });
     expect(res.world.creates).toBe(0);
   });
 

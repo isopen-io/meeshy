@@ -404,6 +404,16 @@ model User {
   /// La version de la notice sous laquelle il a été donné (`CONSENT_POLICY_VERSION`).
   publicLeagueConsentVersion String?
 
+  /// Le consentement à l'interopérabilité WhatsApp (#17120, chantier #17007) —
+  /// daté par le SERVEUR (`PUT /conversations/external/consent`), donné sous la
+  /// version de l'information sur ce qui part chez Meta
+  /// (`EXTERNAL_INTEROP_NOTICE_VERSION`). Sans lui, ou sous une autre version,
+  /// aucune conversation externe ne s'ouvre. Le retirer efface les adresses
+  /// d'amis que le compte gardait. `null`/absent = pas de consentement.
+  whatsappInteropConsentAt     DateTime?
+  /// La version de l'information sous laquelle il a été donné.
+  whatsappInteropNoticeVersion String?
+
   // ============================================
   // E2EE / SIGNAL PROTOCOL ENCRYPTION FIELDS
   // ============================================
@@ -867,8 +877,12 @@ model ExternalConversationPeer {
   /// L'utilisateur Meeshy qui a ouvert la conversation, seul à pouvoir y écrire.
   openedByUserId String       @db.ObjectId
   createdAt      DateTime     @default(now())
-  /// L'échéance de conservation du numéro : l'index TTL efface la ligne à cet instant.
+  /// L'échéance de conservation du numéro : l'index TTL efface la ligne à cet instant,
+  /// et la tâche `external-peer-retention-sweep` en est le filet (#17120).
   purgeAfter     DateTime
+  /// #17120 — le pair BLOQUÉ par l'ouvreur (signalement d'un contenu reçu) : le relais
+  /// ne lui remet plus rien de ce pair. `null`/absent = non bloqué.
+  blockedAt      DateTime?
 
   /// Une conversation par (utilisateur, réseau, numéro) : rouvrir rend la même.
   @@unique([openedByUserId, network, handle])

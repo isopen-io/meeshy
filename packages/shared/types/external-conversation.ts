@@ -43,16 +43,26 @@ export const EXTERNAL_CONVERSATION_ERROR_CODES = {
    * second membre écrirait sous l'identité téléphonique de l'ouvreur.
    */
   SINGLE_MEMBER: 'EXTERNAL_CONVERSATION_SINGLE_MEMBER',
+  /**
+   * #17120 — aucun consentement enregistré sous la version EN VIGUEUR de
+   * l'information sur ce qui part chez Meta : le client la montre, recueille le
+   * consentement (`PUT /conversations/external/consent`), puis rouvre.
+   */
+  CONSENT_REQUIRED: 'EXTERNAL_CONVERSATION_CONSENT_REQUIRED',
+  /** #17120 — le consentement cite une version de l'information qui n'est plus en vigueur. */
+  NOTICE_OUTDATED: 'EXTERNAL_CONVERSATION_NOTICE_OUTDATED',
 } as const;
 
 export type ExternalConversationErrorCode =
   (typeof EXTERNAL_CONVERSATION_ERROR_CODES)[keyof typeof EXTERNAL_CONVERSATION_ERROR_CODES];
 
 /**
- * La durée de conservation PROVISOIRE du numéro de l'ami, en jours, comptée
- * depuis la dernière ouverture par l'utilisateur. Exception bornée à #9225 :
- * la durée définitive et sa base légale sont fixées par le lot conformité
- * (#16999), qui remplace cette valeur. Elle ne dépasse jamais
+ * La durée de conservation PAR DÉFAUT du numéro de l'ami, en jours, comptée
+ * depuis la dernière ouverture par l'utilisateur. Exception bornée à #9225.
+ * La passerelle la lit d'UNE configuration (`EXTERNAL_PEER_HANDLE_RETENTION_DAYS`,
+ * #17120, `services/external-conversation/peer-retention.ts`) ; cette valeur
+ * PROVISOIRE et prudente s'applique quand rien n'est posé. La durée définitive
+ * et sa base légale restent au juriste (#16999). Elle ne dépasse jamais
  * `EXTERNAL_PEER_HANDLE_RETENTION_MAX_DAYS`.
  */
 export const EXTERNAL_PEER_HANDLE_RETENTION_DAYS = 90;

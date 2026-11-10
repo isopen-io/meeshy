@@ -23,6 +23,7 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { logError } from '../../utils/logger';
 import { externalConversationsEnabled } from '../../services/external-conversation/external-conversation-flag';
+import { externalPeerRetentionDays } from '../../services/external-conversation/peer-retention';
 import {
   externalConversationRequestSchema,
   openExternalConversation,
@@ -51,6 +52,11 @@ const REFUSALS: Readonly<Record<ExternalConversationRefusal, { readonly status: 
     status: 403,
     code: EXTERNAL_CONVERSATION_ERROR_CODES.END_TO_END_RESERVED,
     message: 'End-to-end encrypted conversations are not available to your account yet',
+  },
+  'consent-required': {
+    status: 403,
+    code: EXTERNAL_CONVERSATION_ERROR_CODES.CONSENT_REQUIRED,
+    message: 'Read what is shared with the other network and give your consent first',
   },
   'limit-reached': {
     status: 409,
@@ -161,7 +167,10 @@ export function registerExternalConversationRoute(
       if (!parsed.success) return sendBadRequest(reply, INVALID_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.INVALID });
 
       try {
-        const opening = await openExternalConversation({ prisma, regime }, { userId, ...parsed.data });
+        const opening = await openExternalConversation(
+          { prisma, regime, retentionDays: externalPeerRetentionDays(env) },
+          { userId, ...parsed.data },
+        );
         if (opening.kind === 'refused') {
           const refusal = REFUSALS[opening.refusal];
           return sendError(reply, refusal.status, refusal.message, { code: refusal.code });

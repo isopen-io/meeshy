@@ -19,6 +19,10 @@
  *   repousse l'échéance ; une conversation close, supprimée ou quittée est une
  *   ABSENCE : son adresse est effacée et une neuve s'ouvre.
  * - Un compte garde au plus `EXTERNAL_CONVERSATION_ACTIVE_CAP` adresses.
+ * - #17120 — aucune ouverture sans consentement DATÉ sous la version EN
+ *   VIGUEUR de l'information sur ce qui part chez Meta
+ *   (`isInteropConsentCurrent`) ; la durée de conservation vient d'UNE
+ *   configuration (`peer-retention.ts`).
  * - Ce module ne journalise rien : une erreur de base peut recopier ses
  *   arguments, donc le numéro. L'appelant ne journalise que son code.
  */
@@ -29,11 +33,13 @@ import {
   EXTERNAL_CONVERSATION_TYPE,
   EXTERNAL_PEER_HANDLE_RETENTION_DAYS,
 } from '@meeshy/shared/types/external-conversation';
+import { isInteropConsentCurrent } from '@meeshy/shared/types/external-interop-compliance';
 import { mayChooseEndToEnd } from '@meeshy/shared/utils/conversation-creation-encryption';
 import { e164Schema, externalNetworkSchema, type ExternalNetwork } from '../external-peer/external-peer-contract';
 import { nascentRegime, type NascentRegimeDeps } from '../conversations/creationRegime';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { retentionDeadline } from './peer-retention';
 
 /** La demande d'ouverture : un réseau et un numéro, rien d'autre — un nom posé à côté fait refuser l'appel. */
 export const externalConversationRequestSchema = z
@@ -50,21 +56,22 @@ export type ExternalConversationOpening =
   | { readonly kind: 'opened'; readonly conversationId: string; readonly created: boolean; readonly purgeAfter: Date }
   | { readonly kind: 'refused'; readonly refusal: ExternalConversationRefusal };
 
-export type ExternalConversationRefusal = 'phone-unverified' | 'end-to-end-reserved' | 'limit-reached';
+export type ExternalConversationRefusal = 'phone-unverified' | 'end-to-end-reserved' | 'consent-required' | 'limit-reached';
 
 export type ExternalConversationDeps = {
   readonly prisma: Pick<PrismaClient, 'user' | 'conversation' | 'externalConversationPeer'>;
   readonly regime: NascentRegimeDeps;
+  /** #17120 — la durée de conservation du numéro, lue d'UNE configuration (`externalPeerRetentionDays`). */
+  readonly retentionDays?: number;
 };
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const UNIQUE_VIOLATION = 'P2002';
 
 const isUniqueViolation = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && (error as { code?: unknown }).code === UNIQUE_VIOLATION;
 
-const retentionDeadline = (at: Date): Date => new Date(at.getTime() + EXTERNAL_PEER_HANDLE_RETENTION_DAYS * DAY_MS);
+const deadlineFrom = (deps: ExternalConversationDeps): Date =>
+  retentionDeadline(deps.regime.now(), deps.retentionDays ?? EXTERNAL_PEER_HANDLE_RETENTION_DAYS);
 
 /** La conversation est-elle encore un fil où l'ouvreur peut écrire ? */
 async function isAlive(deps: ExternalConversationDeps, conversationId: string, userId: string): Promise<boolean> {
@@ -91,7 +98,7 @@ async function reopen(deps: ExternalConversationDeps, request: ExternalConversat
     await deps.prisma.externalConversationPeer.deleteMany({ where: { id: existing.id } });
     return null;
   }
-  const purgeAfter = retentionDeadline(deps.regime.now());
+  const purgeAfter = deadlineFrom(deps);
   await deps.prisma.externalConversationPeer.update({ where: { id: existing.id }, data: { purgeAfter }, select: { id: true } });
   return { kind: 'opened', conversationId: existing.conversationId, created: false, purgeAfter };
 }
@@ -102,7 +109,7 @@ async function create(
   opener: { readonly displayName: string; readonly language: string },
 ): Promise<ExternalConversationOpening> {
   const nascent = await nascentRegime(deps.regime, { mode: 'e2ee', enabledBy: request.userId });
-  const purgeAfter = retentionDeadline(deps.regime.now());
+  const purgeAfter = deadlineFrom(deps);
   await deps.prisma.conversation.create({
     data: {
       id: nascent.conversationId,
@@ -138,10 +145,22 @@ export async function openExternalConversation(
 ): Promise<ExternalConversationOpening> {
   const user = await deps.prisma.user.findUnique({
     where: { id: request.userId },
-    select: { id: true, phoneVerifiedAt: true, role: true, displayName: true, username: true, ...RECIPIENT_LANG_SELECT },
+    select: {
+      id: true,
+      phoneVerifiedAt: true,
+      role: true,
+      displayName: true,
+      username: true,
+      whatsappInteropConsentAt: true,
+      whatsappInteropNoticeVersion: true,
+      ...RECIPIENT_LANG_SELECT,
+    },
   });
   if (!user?.phoneVerifiedAt) return { kind: 'refused', refusal: 'phone-unverified' };
   if (!mayChooseEndToEnd(user.role)) return { kind: 'refused', refusal: 'end-to-end-reserved' };
+  if (!isInteropConsentCurrent({ grantedAt: user.whatsappInteropConsentAt, noticeVersion: user.whatsappInteropNoticeVersion })) {
+    return { kind: 'refused', refusal: 'consent-required' };
+  }
 
   const reopened = await reopen(deps, request);
   if (reopened) return reopened;
