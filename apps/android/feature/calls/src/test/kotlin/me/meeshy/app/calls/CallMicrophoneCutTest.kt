@@ -207,7 +207,7 @@ class CallMicrophoneCutTest {
 
         verify(exactly = 1) { engine.sendDataChannelMessage(any()) }
         verify(exactly = 0) { social.emitTranscriptionSegment(any(), any()) }
-        assertThat(captions.state.value.journal.segments).isEmpty()
+        assertThat(captions.state.value.journal.segments.map { it.text }).containsExactly("Bon")
     }
 
     @Test
