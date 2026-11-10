@@ -11,7 +11,7 @@ const ptCallDevices = {
   'call.bubble.moveHint': 'As setas movem a bolha',
   'call.bubble.resizeHint': '+ e − mudam o tamanho, assim como Ctrl + roda do mouse ou o gesto de pinça',
   'call.pip.enter': 'Imagem em imagem',
-  'call.devices.open': 'Escolher dispositivos',
+  'call.devices.open': 'Escolher a saída de áudio',
   'call.devices.title': 'Dispositivos',
   'call.devices.camera': 'Câmara',
   'call.devices.microphone': 'Microfone',

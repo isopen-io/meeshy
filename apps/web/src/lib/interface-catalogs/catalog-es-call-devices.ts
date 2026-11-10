@@ -11,7 +11,7 @@ const esCallDevices = {
   'call.bubble.moveHint': 'Las flechas mueven la burbuja',
   'call.bubble.resizeHint': '+ y − cambian su tamaño, igual que Ctrl + rueda o el pellizco',
   'call.pip.enter': 'Imagen en imagen',
-  'call.devices.open': 'Elegir dispositivos',
+  'call.devices.open': 'Elegir la salida de audio',
   'call.devices.title': 'Dispositivos',
   'call.devices.camera': 'Cámara',
   'call.devices.microphone': 'Micrófono',

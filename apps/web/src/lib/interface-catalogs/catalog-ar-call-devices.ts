@@ -11,7 +11,7 @@ const arCallDevices = {
   'call.bubble.moveHint': 'الأسهم تحرّك الفقاعة',
   'call.bubble.resizeHint': 'يغيّر + و − حجمها، وكذلك Ctrl + عجلة الفأرة أو القرص بإصبعين',
   'call.pip.enter': 'صورة داخل صورة',
-  'call.devices.open': 'اختيار الأجهزة',
+  'call.devices.open': 'اختيار مخرج الصوت',
   'call.devices.title': 'الأجهزة',
   'call.devices.camera': 'الكاميرا',
   'call.devices.microphone': 'الميكروفون',

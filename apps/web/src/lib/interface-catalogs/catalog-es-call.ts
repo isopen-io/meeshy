@@ -30,7 +30,7 @@ const esCall = {
   'call.camera.peerOff': 'Cámara desactivada',
   'call.video.connecting': 'Conectando vídeo…',
   'call.hangup': 'Colgar',
-  'call.minimize': 'Minimizar llamada',
+  'call.minimize': 'Reducir',
   'call.expand': 'Volver a la llamada',
   'call.captions.on': 'Mostrar subtítulos traducidos',
   'call.captions.off': 'Ocultar subtítulos',
