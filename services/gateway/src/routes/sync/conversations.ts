@@ -10,6 +10,7 @@ import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from 
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
 import { participantProfileDecorSchema } from '@meeshy/shared/types/api-schemas';
+import { EXTERNAL_CONVERSATION_TYPE } from '@meeshy/shared/types/external-conversation';
 
 /**
  * Collection `conversations` de `/sync` (issue #4171, critère 1) — même forme
@@ -269,6 +270,12 @@ export async function syncConversations(opts: {
   cursor?: SyncCursor;
   /** `?fields=conversations.…` déjà analysé — `null` ⇒ le profil par défaut. */
   fields?: FieldSet;
+  /**
+   * #17117 / #9223 — le client annonce-t-il `external-conversations` ? Sans
+   * lui (défaut), aucune conversation `external` n'est servie : le client iOS
+   * publié la rendrait en tête-à-tête sans interlocuteur.
+   */
+  servesExternal?: boolean;
 }): Promise<SyncCollectionResult<Record<string, unknown>>> {
   const { prisma, identity, sinceDate, cap, scope, cursor } = opts;
   const fields = opts.fields ?? null;
@@ -305,6 +312,7 @@ export async function syncConversations(opts: {
   const changedRowsRaw = await prisma.conversation.findMany({
     where: {
       id: { in: [...conversationIds] },
+      ...(opts.servesExternal ? {} : { type: { not: EXTERNAL_CONVERSATION_TYPE } }),
       ...(cursor?.c
         ? {
             OR: [

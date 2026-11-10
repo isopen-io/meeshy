@@ -293,6 +293,10 @@ services:
       # PRODUCTION : livré ÉTEINT ; il s'allume après la recette de staging, par la seule
       # valeur exacte on sur l'hôte puis un redémarrage de la passerelle (aucun code à redéployer).
       - GAME_PHOTO_PUSH=${GAME_PHOTO_PUSH:-off}
+      # #17117 — les conversations externes (écrire à un ami WhatsApp, DMA art. 7) :
+      # ÉTEINTES en production jusqu'à la signature de l'accord avec Meta, décision du
+      # porteur. Le code les refuse ici même armées (NODE_ENV=production hors staging).
+      - EXTERNAL_CONVERSATIONS=off
       # #9668 — le verdict de la sauvegarde nocturne (etat.json), lu par la carte
       # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
       # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les

@@ -16,6 +16,7 @@ import { registerStatsRoutes } from './stats';
 import { registerThreadsRoutes } from './threads';
 import { registerDirectConversationCardRoute } from './card';
 import { registerConversationEngagementRoute } from './engagement';
+import { registerExternalConversationRoute } from './external';
 
 /**
  * Point d'entrée principal pour toutes les routes de conversations
@@ -55,4 +56,5 @@ export async function conversationRoutes(fastify: FastifyInstance) {
   registerThreadsRoutes(fastify, prisma, requiredAuth);
   registerDirectConversationCardRoute(fastify, prisma, optionalAuth);
   registerConversationEngagementRoute(fastify, prisma, requiredAuth);
+  registerExternalConversationRoute(fastify, prisma, requiredAuth);
 }

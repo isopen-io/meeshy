@@ -40,6 +40,8 @@ data class SocketAckRefusal(
     val limit: Int? = null,
     val errorCode: String? = null,
     val endReason: String? = null,
+    /** La conversation que la passerelle nomme avec certains refus (repli vocal du talkie, #17142). */
+    val conversationId: String? = null,
 ) {
     /** `DAILY_COMMENT_LIMIT` / `DAILY_REACTION_LIMIT`, avec la même loi que le REST ; `null` pour tout autre refus. */
     val dailyGestureLimit: DailyGestureLimit?

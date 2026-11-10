@@ -12,7 +12,7 @@ public data class AdtsFormat(val audioObjectType: Int, val sampleRateIndex: Int,
             (((sampleRateIndex and 1) shl 7) or (channels shl 3)).toByte(),
         )
 
-    private companion object {
+    internal companion object {
         val SAMPLE_RATES = listOf(96_000, 88_200, 64_000, 48_000, 44_100, 32_000, 24_000, 22_050, 16_000, 12_000, 11_025, 8_000, 7_350)
     }
 }
@@ -28,6 +28,30 @@ public class AdtsFrame(public val format: AdtsFormat, public val payload: ByteAr
 public object TalkieAdts {
     private const val HEADER_BYTES = 7
     private const val CRC_BYTES = 2
+    private const val MAX_FRAME_LENGTH = 0x1FFF
+    private const val AAC_LC_PROFILE = 1
+
+    /**
+     * L'en-tête ADTS (7 octets, sans CRC) qui rend une trame AAC-LC lisible SEULE (#17150, iso `TalkieAdts.frame` du
+     * SDK iOS) — c'est ce que lisent les trois récepteurs. `null` : une trame vide, une fréquence hors de la table MPEG-4,
+     * une configuration de canaux illisible ou une trame trop longue pour son champ de 13 bits.
+     */
+    public fun frame(packet: ByteArray, sampleRate: Int, channels: Int): ByteArray? {
+        val index = AdtsFormat.SAMPLE_RATES.indexOf(sampleRate)
+        if (packet.isEmpty() || index < 0 || channels !in 1..7) return null
+        val length = packet.size + HEADER_BYTES
+        if (length > MAX_FRAME_LENGTH) return null
+        val header = intArrayOf(
+            0xFF,
+            0xF1,
+            (AAC_LC_PROFILE shl 6) or (index shl 2) or (channels shr 2),
+            ((channels and 0x3) shl 6) or (length shr 11),
+            (length shr 3) and 0xFF,
+            ((length and 0x7) shl 5) or 0x1F,
+            0xFC,
+        )
+        return ByteArray(HEADER_BYTES) { header[it].toByte() } + packet
+    }
 
     public fun frames(bytes: ByteArray): List<AdtsFrame> = generateSequence(0 to frameAt(bytes, 0)) { (offset, frame) ->
         frame?.let { (_, length) -> (offset + length).let { next -> next to frameAt(bytes, next) } }

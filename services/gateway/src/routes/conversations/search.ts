@@ -29,6 +29,8 @@ import {
 import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
 import { servedListPreviewAttachment } from './utils/list-last-message-body';
 import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
+import { externalVisibilityClauses } from './utils/list-viewer-scope';
+import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITIES_HEADER } from '../../utils/client-capabilities';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
@@ -103,6 +105,9 @@ export function registerSearchRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
+      const servesExternal = announcesCapability(request.headers, CLIENT_CAPABILITIES.externalConversations);
+      appendVary(reply, CLIENT_CAPABILITIES_HEADER);
+
       if (!q || q.trim().length === 0) {
         return sendSuccess(reply, []);
       }
@@ -143,6 +148,8 @@ export function registerSearchRoutes(
                 { participants: { some: { userId, isActive: true } } },
               ],
             },
+            // #17117 — un ancien client ne trouve pas de conversation externe (`utils/list-viewer-scope.ts`).
+            ...externalVisibilityClauses(servesExternal),
           ],
         },
         include: {

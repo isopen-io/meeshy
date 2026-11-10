@@ -10,6 +10,7 @@ import android.media.MediaCodec
 import android.media.MediaFormat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +25,8 @@ import kotlinx.coroutines.launch
 import me.meeshy.app.calls.ActiveCallSnapshotHolder
 import me.meeshy.sdk.model.relation.AdtsFormat
 import me.meeshy.sdk.model.relation.TalkieAdts
+import me.meeshy.sdk.model.relation.TalkieWaveLaw
+import me.meeshy.sdk.talkie.TalkieLevelMeter
 import timber.log.Timber
 
 /**
@@ -183,6 +186,7 @@ class TalkieVoicePlayer @Inject constructor(
                     val pcm = ByteArray(info.size)
                     decoder.getOutputBuffer(index)?.apply { position(info.offset); get(pcm) }
                     decoder.releaseOutputBuffer(index, false)
+                    TalkieLevelMeter.incoming.push(pcmLevel(pcm))
                     track?.let { piste ->
                         piste.write(pcm, 0, pcm.size)
                         writtenFrames += pcm.size / (BYTES_PER_SAMPLE * piste.channelCount)
@@ -201,7 +205,15 @@ class TalkieVoicePlayer @Inject constructor(
             }
         }
 
+        /** Le niveau de la voix reçue (#17315), que l'onde de l'en-tête lit à chaque image : PCM 16 bits little-endian. */
+        private fun pcmLevel(pcm: ByteArray): Float {
+            val samples = ShortArray(pcm.size / BYTES_PER_SAMPLE)
+            ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(samples)
+            return TalkieWaveLaw.rms(samples)
+        }
+
         private fun close() {
+            TalkieLevelMeter.incoming.reset()
             codec?.runCatching { stop(); release() }
             codec = null
             track?.runCatching { release() }

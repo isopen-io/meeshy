@@ -13,6 +13,8 @@
  * message vocal, envoyée après la prise de parole, prend le relais.
  */
 
+import { talkieLevelMeters, talkieWaveRms, type TalkieLevelMeter } from './talkie-header-law';
+
 /** Le tampon de gigue : assez pour absorber l'écart entre deux fragments, trop peu pour s'entendre. */
 export const JITTER_LEAD_S = 0.08;
 
@@ -99,14 +101,31 @@ const contextConstructor = (): AudioContextConstructor | null => {
   return window.AudioContext ?? legacy ?? null;
 };
 
-/** L'audio du navigateur, créé au premier fragment (jamais au chargement) et gardé pour les suivants. */
-export function browserTalkieAudio(): () => TalkieAudio<AudioBuffer> | null {
+/** La fenêtre de l'analyseur : ~21 ms à 48 kHz, assez pour un niveau, trop peu pour retarder l'onde. */
+const ANALYSER_FFT_SIZE = 1_024;
+
+/**
+ * L'audio du navigateur, créé au premier fragment (jamais au chargement) et gardé pour les suivants. Chaque fragment
+ * passe par un analyseur que l'onde de l'en-tête lit à la demande (#17338) : le niveau de la voix qui arrive.
+ */
+export function browserTalkieAudio({
+  Context: resolveContext = contextConstructor,
+  meter = talkieLevelMeters.incoming,
+}: { readonly Context?: () => AudioContextConstructor | null; readonly meter?: Pick<TalkieLevelMeter, 'probe'> } = {}): () => TalkieAudio<AudioBuffer> | null {
   let port: TalkieAudio<AudioBuffer> | null = null;
   return () => {
     if (port !== null) return port;
-    const Context = contextConstructor();
+    const Context = resolveContext();
     if (Context === null) return null;
     const context = new Context();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = ANALYSER_FFT_SIZE;
+    analyser.connect(context.destination);
+    const frame = new Float32Array(ANALYSER_FFT_SIZE);
+    meter.probe(() => {
+      analyser.getFloatTimeDomainData(frame);
+      return talkieWaveRms(frame);
+    });
     port = {
       currentTime: () => context.currentTime,
       resume: () => {
@@ -116,7 +135,7 @@ export function browserTalkieAudio(): () => TalkieAudio<AudioBuffer> | null {
       start: (buffer, at) => {
         const source = context.createBufferSource();
         source.buffer = buffer;
-        source.connect(context.destination);
+        source.connect(analyser);
         source.start(at);
         return () => {
           try {
