@@ -51,14 +51,14 @@ final class RootPresentationRulesTests: XCTestCase {
         XCTAssertFalse(RootPresentationRules.visitorContentIsEligible(isAuthenticated: true, hasGuestSession: false, splashPhase: .gone))
     }
 
-    func test_onboarding_needsAllFiveConjunctions() {
+    func test_onboarding_needsAllSixConjunctions() {
         func shows(
             completed: Bool = false, authenticated: Bool = false, splash: LaunchSplashController.Phase = .gone,
-            guest: Bool = false, visitor: Bool = false
+            guest: Bool = false, visitor: Bool = false, preview: Bool = false
         ) -> Bool {
             RootPresentationRules.showsOnboarding(
                 hasCompletedOnboarding: completed, isAuthenticated: authenticated, splashPhase: splash,
-                hasGuestSession: guest, hasVisitorRequest: visitor
+                hasGuestSession: guest, hasVisitorRequest: visitor, previewReplacesLogin: preview
             )
         }
         XCTAssertTrue(shows())
@@ -67,6 +67,7 @@ final class RootPresentationRulesTests: XCTestCase {
         XCTAssertFalse(shows(splash: .covering))
         XCTAssertFalse(shows(guest: true))
         XCTAssertFalse(shows(visitor: true))
+        XCTAssertFalse(shows(preview: true))
     }
 
     func test_celebration_needsASessionAndTheCelebrationShowing() {
