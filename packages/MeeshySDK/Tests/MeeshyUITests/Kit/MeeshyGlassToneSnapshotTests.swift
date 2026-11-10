@@ -45,7 +45,30 @@ final class MeeshyGlassToneSnapshotTests: XCTestCase {
         }
     }
 
+    /// Les planches portent le verre dessiné : le Liquid Glass du système ne se
+    /// photographie pas hors écran.
+    @MainActor
+    func test_planchesDuKit_portentLeVerreDessine() {
+        var forcesDrawn: Bool?
+        let board = SnapshotHelpers.kitBoardGlass(GlassForcingProbe { forcesDrawn = $0 })
+        _ = UIHostingController(rootView: board).sizeThatFits(in: CGSize(width: 10, height: 10))
+
+        XCTAssertEqual(forcesDrawn, true)
+    }
+
     private static func entry() throws -> MeeshyKitCatalogEntry {
         try XCTUnwrap(MeeshyKitCatalog.listedEntry(matching: "K01"), "l'entrée K01 doit être livrée")
+    }
+}
+
+/// Lit, au rendu, le forçage du verre dessiné que reçoit son contenu.
+private struct GlassForcingProbe: View {
+    let read: (Bool) -> Void
+
+    @Environment(\.meeshyGlassForcesDrawn) private var forcesDrawn
+
+    var body: some View {
+        read(forcesDrawn)
+        return Color.clear.frame(width: 1, height: 1)
     }
 }

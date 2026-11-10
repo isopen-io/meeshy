@@ -105,11 +105,25 @@ extension SnapshotHelpers {
 
     @MainActor
     static func kitBoard(_ entry: MeeshyKitCatalogEntry) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ForEach(entry.tiles) { tile in
-                MeeshyKitCatalogStage(key: entry.key, state: tile.state, isPressed: tile.isPressed)
+        kitBoardGlass(
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                ForEach(entry.tiles) { tile in
+                    MeeshyKitCatalogStage(key: entry.key, state: tile.state, isPressed: tile.isPressed)
+                }
             }
-        }
-        .frame(width: kitBoardWidth, alignment: .leading)
+            .frame(width: kitBoardWidth, alignment: .leading)
+        )
+    }
+
+    /// Le verre des planches est le verre DESSINÉ, sur toute version d'iOS. Le
+    /// Liquid Glass du système est composé par le serveur de rendu, que la
+    /// capture hors écran (`layer.render`) ne voit pas ; un verre teinté y
+    /// EFFACE même ce qui a été peint avant lui : la première planche de K01
+    /// n'a gardé que sa dernière tuile, la seule sans verre. Une planche juge la
+    /// mise en page (grande police, RTL), pas la matière, que les images de
+    /// chaque état photographient sur les deux chemins.
+    @MainActor
+    static func kitBoardGlass<V: View>(_ board: V) -> some View {
+        board.environment(\.meeshyGlassForcesDrawn, true)
     }
 }
