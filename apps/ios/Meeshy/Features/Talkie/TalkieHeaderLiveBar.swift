@@ -243,8 +243,7 @@ nonisolated enum TalkieHeaderWording {
     }
 
     static func elapsed(_ seconds: TimeInterval) -> String {
-        let whole = seconds.isFinite ? max(Int(seconds), 0) : 0
-        return "\(whole / 60):" + String(format: "%02d", whole % 60)
+        MediaFormat.duration(seconds, style: .clock)
     }
 }
 
