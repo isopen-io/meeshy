@@ -29,12 +29,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -175,8 +177,11 @@ public fun MeeshyGlass(
                 drawContent()
                 val topLight = rest.topLight + (full.topLight - rest.topLight) * glow
                 if (topLight > 0f) {
-                    val edge = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithContent)) }
-                    drawPath(edge, if (glow == 0f) restTopLight else sheenBrush(topLight), style = Stroke(width = 1.dp.toPx()))
+                    strokeOutline(
+                        outline = shape.createOutline(size, layoutDirection, this),
+                        brush = if (glow == 0f) restTopLight else sheenBrush(topLight),
+                        stroke = Stroke(width = 1.dp.toPx()),
+                    )
                 }
             }
             .then(if (rim != null) Modifier.border(1.dp, rim, shape) else Modifier),
@@ -265,4 +270,24 @@ private fun MeeshyGlassRecipe.rimBrush(): Brush? {
         start = Offset.Zero,
         end = Offset.Infinite,
     )
+}
+
+/** Trace le contour d'une forme quelconque : Compose n'expose pas de `drawOutline` public. */
+private fun DrawScope.strokeOutline(outline: Outline, brush: Brush, stroke: Stroke) {
+    when (outline) {
+        is Outline.Rectangle -> drawRect(
+            brush = brush,
+            topLeft = Offset(outline.rect.left, outline.rect.top),
+            size = outline.rect.size,
+            style = stroke,
+        )
+        is Outline.Rounded -> drawRoundRect(
+            brush = brush,
+            topLeft = Offset(outline.roundRect.left, outline.roundRect.top),
+            size = Size(outline.roundRect.width, outline.roundRect.height),
+            cornerRadius = outline.roundRect.topLeftCornerRadius,
+            style = stroke,
+        )
+        is Outline.Generic -> drawPath(path = outline.path, brush = brush, style = stroke)
+    }
 }
