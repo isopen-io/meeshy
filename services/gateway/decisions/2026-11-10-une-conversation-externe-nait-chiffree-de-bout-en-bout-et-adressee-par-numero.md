@@ -22,7 +22,11 @@ ouverte par l'utilisateur lui-même, avec une durée de conservation (exception 
   adversarial du 2026-11-10) : la loi unique `conversationAdmitsNewMembers` (`@meeshy/shared/types/external-conversation`)
   est consultée par les quatre portes d'entrée — `POST …/participants`, `POST …/invite`, la création d'un lien
   (`mintConversationShareLink`) et la jonction par lien (`admitLinkEntry`, cœur des trois routes de lien, invité
-  compris) — qui refusent en `409 EXTERNAL_CONVERSATION_SINGLE_MEMBER` sans rien écrire. Un second membre écrirait
+  compris) — qui refusent en `409 EXTERNAL_CONVERSATION_SINGLE_MEMBER` sans rien écrire. Le rattachement à une
+  communauté (`POST /communities/:id/conversations/:conversationId`) refuse de même (revue du 2026-11-10) : un salon
+  confère aux administrateurs de la communauté des droits sur la conversation, la ressert par
+  `GET /communities/:id/conversations` sans le jeton de capacité, et en fait sortir l'ouvreur quand il quitte la
+  communauté, par un chemin qui n'efface pas l'adresse. Un second membre écrirait
   sous l'identité téléphonique de l'ouvreur, et son ancien client recevrait le fil. Un balayage
   (`external-conversation-doors-sweep.test.ts`) exige l'appel de toute porte qui appelle `resolveConversationEntry`
   ou `mayMintShareLink`.
