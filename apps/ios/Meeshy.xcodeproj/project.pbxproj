@@ -537,6 +537,12 @@
 		1C60CFB26728427A4D6250E0 /* ProgressionConceptFiche.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B934082A5917B457877688E /* ProgressionConceptFiche.swift */; };
 		1C6365864E731B06380DFC8A /* ConversationAttachmentFileReadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43178A787FA413CCEAEB1C74 /* ConversationAttachmentFileReadTests.swift */; };
 		1C6EEEE0AFFEAD171ADB8CF6 /* SettingsSectionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520A3402898E98A6780AF1FD /* SettingsSectionCard.swift */; };
+		AB9C03D33F3E760C52254A57 /* SecurityTwoFactorSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C464674B9E8236F38C7E30D3 /* SecurityTwoFactorSection.swift */; };
+		C6D8AA4B03C208417A6FACC8 /* SecurityConversationLockSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 319C03E3031BFB3912A170A9 /* SecurityConversationLockSection.swift */; };
+		A275010F5326DE746FEED117 /* SecurityPhoneSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5CA5DD4A81FAE63B43D46E /* SecurityPhoneSection.swift */; };
+		B057F72C5FF84A178926B83E /* SecurityEmailSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EBEFF9741CB7D6B8D680E3F /* SecurityEmailSection.swift */; };
+		E3356AB3964BD26C6A48BD88 /* SecuritySectionChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0CB690E6CB292FD55FD98E0 /* SecuritySectionChrome.swift */; };
+		1E93DFBF418C4444A62F2D02 /* SettingsSectionBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2455EF090D11A6B1440A891E /* SettingsSectionBackground.swift */; };
 		1C831AA82900A745A44D476F /* SessionTransitionPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0016995061E3B6CB76B0738A /* SessionTransitionPlan.swift */; };
 		1C83CE0D5D3FB4D22AEF5413 /* ConversationPreviewEffectRendering.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2730E3BC2E9C3DAF2C80337A /* ConversationPreviewEffectRendering.swift */; };
 		1C94A3139CECA8E35947EE0B /* ConversationHistoryLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D2116AF5688A49EE3F0D424 /* ConversationHistoryLoaderTests.swift */; };
@@ -3073,6 +3079,10 @@
 		AE6502791E964C14DA506113 /* AttachmentAudioMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B24EF94238C11564E8779356 /* AttachmentAudioMetadataTests.swift */; };
 		AE7D4C16F368FC059BAD2982 /* LentilleScreenNotMountedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DB9A3E6DBF46FBE759F688 /* LentilleScreenNotMountedTests.swift */; };
 		AE865743451BCC784FCE9696 /* ContentCaptureReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF7CBB1BED4ED59FA0190931 /* ContentCaptureReporter.swift */; };
+		04C6BE452D8D1CF42BADE097 /* LocationPickerModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DA32102194955C8D60B59D4 /* LocationPickerModel.swift */; };
+		DBD5F95347E9610A8AA47230 /* LocationPickerPlanning.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117433919A3A4761E1A591B /* LocationPickerPlanning.swift */; };
+		7B44EF1EAE312BC7684F0A0E /* LocationPickerBottomCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4642BA6B555C978B10796C9 /* LocationPickerBottomCard.swift */; };
+		8E9EF7C164BB1B68AA81AFF1 /* LocationPickerView+StoryComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A6182779AE93FA7181A4946 /* LocationPickerView+StoryComposer.swift */; };
 		AE8744C4E1B345BF20B8B371 /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17C113ABEF2601E98448BDB5 /* LocationPickerView.swift */; };
 		AE8AF5914C9A6CF45A7FD944 /* ConversationListView+StickyHeaderInset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 092C0526AD58F9DA3FD893B9 /* ConversationListView+StickyHeaderInset.swift */; };
 		AE9B2A9A6D6B3AAAF229D2F0 /* MeeshyComposerHost+Pickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2946F870B62F9EAB5A6DE2B /* MeeshyComposerHost+Pickers.swift */; };
@@ -5057,6 +5067,10 @@
 		177B9E4AA64878EA26F8AE65 /* StoryViewerView+Navigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Navigation.swift"; sourceTree = "<group>"; };
 		177F473D335B6DAD86EAD393 /* ComposerCameraHardwareShutter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCameraHardwareShutter.swift; sourceTree = "<group>"; };
 		17A05CE9A04D93083527BA0C /* BundleVersionVariableGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BundleVersionVariableGuardTests.swift; sourceTree = "<group>"; };
+		4DA32102194955C8D60B59D4 /* LocationPickerModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocationPickerModel.swift"; sourceTree = "<group>"; };
+		A117433919A3A4761E1A591B /* LocationPickerPlanning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocationPickerPlanning.swift"; sourceTree = "<group>"; };
+		B4642BA6B555C978B10796C9 /* LocationPickerBottomCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocationPickerBottomCard.swift"; sourceTree = "<group>"; };
+		0A6182779AE93FA7181A4946 /* LocationPickerView+StoryComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LocationPickerView+StoryComposer.swift"; sourceTree = "<group>"; };
 		17C113ABEF2601E98448BDB5 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		17C5DB1304EF19C0CD8E2E5B /* GameBannerBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameBannerBadge.swift; sourceTree = "<group>"; };
 		17C905DFA967E8B974FED6D5 /* CallMontageLayersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallMontageLayersTests.swift; sourceTree = "<group>"; };
@@ -6115,6 +6129,12 @@
 		51E71626FDC6462BA14C739C /* CallManager+ScreenShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+ScreenShare.swift"; sourceTree = "<group>"; };
 		5203557BAEB64457C9E35A75 /* PostSceneCardHeightCapGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostSceneCardHeightCapGuardTests.swift; sourceTree = "<group>"; };
 		520A3402898E98A6780AF1FD /* SettingsSectionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSectionCard.swift; sourceTree = "<group>"; };
+		C464674B9E8236F38C7E30D3 /* SecurityTwoFactorSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityTwoFactorSection.swift; sourceTree = "<group>"; };
+		319C03E3031BFB3912A170A9 /* SecurityConversationLockSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityConversationLockSection.swift; sourceTree = "<group>"; };
+		DA5CA5DD4A81FAE63B43D46E /* SecurityPhoneSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityPhoneSection.swift; sourceTree = "<group>"; };
+		0EBEFF9741CB7D6B8D680E3F /* SecurityEmailSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecurityEmailSection.swift; sourceTree = "<group>"; };
+		B0CB690E6CB292FD55FD98E0 /* SecuritySectionChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecuritySectionChrome.swift; sourceTree = "<group>"; };
+		2455EF090D11A6B1440A891E /* SettingsSectionBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSectionBackground.swift; sourceTree = "<group>"; };
 		520E8ADE5083A7ADAA8305DA /* CommunityDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityDetailViewModel.swift; sourceTree = "<group>"; };
 		520F326CDB7A81A77A3B3A62 /* StickerSubjectLiftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerSubjectLiftTests.swift; sourceTree = "<group>"; };
 		52432CCBB9E092679AF97BB3 /* CallBackRequestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallBackRequestTests.swift; sourceTree = "<group>"; };
@@ -10254,6 +10274,10 @@
 				AF2590C2EA71D9226AEA79E4 /* LivePresence.swift */,
 				5B0E572518B85B56D055F46A /* LocalizedNumber.swift */,
 				EBFA6D9CA5AC9FB9B143B2F1 /* LocationPickerOffer.swift */,
+				4DA32102194955C8D60B59D4 /* LocationPickerModel.swift */,
+				A117433919A3A4761E1A591B /* LocationPickerPlanning.swift */,
+				B4642BA6B555C978B10796C9 /* LocationPickerBottomCard.swift */,
+				0A6182779AE93FA7181A4946 /* LocationPickerView+StoryComposer.swift */,
 				17C113ABEF2601E98448BDB5 /* LocationPickerView.swift */,
 				847552A5CB44115090FB35B1 /* MediaKindLabel.swift */,
 				D6FF6D75BA31845A17CC44B7 /* MediaPlayerContext.swift */,
@@ -13920,6 +13944,12 @@
 				77AD4A39B962F96F7DA53074 /* SecurityView.swift */,
 				C35381B5279645BF152DA527 /* SettingsFocus.swift */,
 				520A3402898E98A6780AF1FD /* SettingsSectionCard.swift */,
+				C464674B9E8236F38C7E30D3 /* SecurityTwoFactorSection.swift */,
+				319C03E3031BFB3912A170A9 /* SecurityConversationLockSection.swift */,
+				DA5CA5DD4A81FAE63B43D46E /* SecurityPhoneSection.swift */,
+				0EBEFF9741CB7D6B8D680E3F /* SecurityEmailSection.swift */,
+				B0CB690E6CB292FD55FD98E0 /* SecuritySectionChrome.swift */,
+				2455EF090D11A6B1440A891E /* SettingsSectionBackground.swift */,
 				8E780A9A85D32A41AA6094B0 /* SettingsSessionButtons.swift */,
 				3031AB3B7C2FE3250BE771F3 /* SettingsView.swift */,
 				D8B3DDF7C9F9B0FBBC3AA3D5 /* SupportView.swift */,
@@ -16960,6 +16990,10 @@
 				5D6C70D16FC779863CF0DCD3 /* LocalizedNumber.swift in Sources */,
 				74E2A29E0CAD6844008FC5B4 /* LocallyHiddenMessagesStore.swift in Sources */,
 				C231B0A8E1C8B19E464E33A2 /* LocationPickerOffer.swift in Sources */,
+				04C6BE452D8D1CF42BADE097 /* LocationPickerModel.swift in Sources */,
+				DBD5F95347E9610A8AA47230 /* LocationPickerPlanning.swift in Sources */,
+				7B44EF1EAE312BC7684F0A0E /* LocationPickerBottomCard.swift in Sources */,
+				8E9EF7C164BB1B68AA81AFF1 /* LocationPickerView+StoryComposer.swift in Sources */,
 				AE8744C4E1B345BF20B8B371 /* LocationPickerView.swift in Sources */,
 				44AF583A8E0B775C2BA34676 /* LocationSharingSettingsSection.swift in Sources */,
 				704D9AB5D9F73B18C336836E /* LockedConversationNotificationCategory.swift in Sources */,
@@ -17554,6 +17588,12 @@
 				1C831AA82900A745A44D476F /* SessionTransitionPlan.swift in Sources */,
 				76BAA74CA7B2168E531BA079 /* SettingsFocus.swift in Sources */,
 				1C6EEEE0AFFEAD171ADB8CF6 /* SettingsSectionCard.swift in Sources */,
+				AB9C03D33F3E760C52254A57 /* SecurityTwoFactorSection.swift in Sources */,
+				C6D8AA4B03C208417A6FACC8 /* SecurityConversationLockSection.swift in Sources */,
+				A275010F5326DE746FEED117 /* SecurityPhoneSection.swift in Sources */,
+				B057F72C5FF84A178926B83E /* SecurityEmailSection.swift in Sources */,
+				E3356AB3964BD26C6A48BD88 /* SecuritySectionChrome.swift in Sources */,
+				1E93DFBF418C4444A62F2D02 /* SettingsSectionBackground.swift in Sources */,
 				E47EC7F356CEA5B7BB61FE16 /* SettingsSessionButtons.swift in Sources */,
 				42248CD6C48CC089F813D1E6 /* SettingsView.swift in Sources */,
 				F1579FC4FE3C6B6A2EBA8B98 /* ShareComposeDoor.swift in Sources */,
