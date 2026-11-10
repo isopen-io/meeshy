@@ -16,7 +16,8 @@
  *     dessus de la ligne de base, dans le cadre de la pilule ; chacune défile
  *     à l'horizontale sur une seule ligne, SANS accroche obligatoire (#8575 :
  *     elle ramenait à zéro tout débord plus petit qu'un bouton) ; la rangée de
- *     l'appel porte « Ajouter », « Réagir » et « Journal » (44 px, sans verre) ;
+ *     l'appel porte « Ajouter », « Réagir » et « Journal » (44 px, chacun son
+ *     disque de verre dessiné, sans flou à lui — #17345) ;
  *  2. « Réagir » : la palette REMPLACE les rangées (#8578), avec ‹ Retour et
  *     ✕ Fermer ; 🎉 part (`call:reaction`) et monte aussitôt ; la réaction du
  *     pair monte sous son nom ; sous `prefers-reduced-motion`, elle s'efface
@@ -104,7 +105,7 @@ const ARM_PEER_AND_ZOOM = () => {
 };
 
 const sizes = (page, selector) =>
-  page.$$eval(selector, (elements) => elements.map((element) => ({ w: element.getBoundingClientRect().width, h: element.getBoundingClientRect().height, glass: element.className.includes('glass-call') })));
+  page.$$eval(selector, (elements) => elements.map((element) => ({ w: element.getBoundingClientRect().width, h: element.getBoundingClientRect().height, blur: ['glass-call', 'glass-call-prominent'].some((token) => element.classList.contains(token)), disc: element.classList.contains('glass-call-disc') || element.querySelector('.glass-call-disc') !== null })));
 
 const nestedGlass = (page) =>
   page.evaluate(() => {
@@ -311,7 +312,7 @@ try {
       const actions = await sizes(page, '[data-call-row="call"] [data-call-control="invite"], [data-call-row="call"] [data-call-control="react"], [data-call-row="call"] [data-call-control="journal"]');
       check(actions.length === 3, `${label} : la rangée de l'appel porte « Ajouter », « Réagir » et « Journal »`);
       check((await page.$('[data-call-control="capture"]')) === null, `${label} : en audio, pas de « Capturer »`);
-      check(actions.every((button) => button.w >= TAP_FLOOR && button.h >= TAP_FLOOR && !button.glass), `${label} : ils font ${TAP_FLOOR} et n'ont pas de verre à eux`);
+      check(actions.every((button) => button.w >= TAP_FLOOR && button.h >= TAP_FLOOR && button.disc && !button.blur), `${label} : ils font ${TAP_FLOOR}, portent leur disque de verre et n'ont pas de flou à eux (#17345)`);
       await capture(page, `controles-actions-${slug}`);
 
       // ------------------------------------------------ 2. réagir

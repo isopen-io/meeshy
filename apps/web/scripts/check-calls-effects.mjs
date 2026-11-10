@@ -16,7 +16,7 @@
  *  2. l'en-tête porte Réduire puis « Conversation » (verre isolé, 44 px), et
  *     « Messages » a quitté les actions (#8436) ;
  *  3. les commandes de ma caméra, dans ma vignette : Caméra, (Retourner),
- *     Effets, Écran — chaque bouton fait 44, sans verre à lui, et le (…) ne
+ *     Effets, Écran — chaque bouton fait 44, porte son disque de verre sans flou à lui, et le (…) ne
  *     les double pas (#8432, #8550, #8626) ;
  *  4. « Effets » entre dans le MODE Effets (#8578) : l'en-tête, la pilule et
  *     ses rangées partent, ma vidéo prend tout l'écran ; « Visage · Couleur »
@@ -268,10 +268,10 @@ try {
 
       // ------------------------------------------------ 3. la rangée de mon image
       check((await page.$('[data-call-row="mine"]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra`);
-      const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-row] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
+      const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-row] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), blur: ['glass-call', 'glass-call-prominent'].some((token) => button.classList.contains(token)), disc: button.classList.contains('glass-call-disc') || button.querySelector('.glass-call-disc') !== null, solid: (button.getAttribute('style') ?? '').includes('background'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
       const labels = mine.map((button) => button.label).filter((name) => name !== 'Retourner la caméra');
       check(JSON.stringify(labels) === JSON.stringify(['Effets de ma vidéo', 'Partager l’écran', 'Couper la caméra', 'Zoom de ma caméra, 1×']), `${label} : mon image, et le cran du zoom (#8441) — ${mine.map((b) => b.label).join(' · ')}`);
-      check(mine.every((button) => !button.glass && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons de la rangée de ma vignette font ${TAP_FLOOR} et n'ont pas de verre à eux`);
+      check(mine.every((button) => (button.disc || button.solid) && !button.blur && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons de la rangée de ma vignette font ${TAP_FLOOR}, portent leur disque de verre (ou leur plein, enclenchés) et n'ont pas de flou à eux (#17345)`);
 
       // ------------------------------------------------ 5 (avant le mode). le micro coupé
       await page.click('[data-call-screen] button[aria-label="Couper le micro"]');
