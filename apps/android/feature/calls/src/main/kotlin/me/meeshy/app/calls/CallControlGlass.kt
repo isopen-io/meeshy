@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -114,28 +113,18 @@ internal object CallButtonFill {
 internal val LocalCallChromeInteraction = staticCompositionLocalOf<((CallChromeInteraction) -> Unit)?> { null }
 
 /**
- * The round glyph of a pill button, on ITS OWN glass disc (#17323) : [CallButtonGlassRule] picks the treatment, the
- * glass is [CallGlassPlate]. The glass does not answer the finger by itself, so it lightens under it.
+ * The round glyph of a pill button, on ITS OWN glass disc (#17323) : [CallGlassButtonSurface] carries the treatment
+ * [CallButtonGlassRule] picks. The glass does not answer the finger by itself, so it lightens under it.
  */
 @Composable
 internal fun CallPillGlyph(icon: ImageVector, kind: CallPillKind, diameter: Dp, isPressed: Boolean) {
-    val treatment = CallButtonGlassRule.treatment(kind.glassRole())
-    val tone = LocalCallGlassTone.current
-    CallGlassPlate(
-        modifier = Modifier.size(diameter),
+    CallGlassButtonSurface(
+        role = kind.glassRole(),
         shape = CircleShape,
-        tint = CallButtonFill.glassTint(treatment, tone),
-        liquid = treatment.isInteractive,
+        isPressed = isPressed,
+        modifier = Modifier.size(diameter),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(CallButtonFill.backing(treatment, tone))
-                .background(CallButtonFill.pressedHighlight(isPressed && treatment.drawsPressHighlight)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = CallButtonFill.glyph(kind), modifier = Modifier.size(diameter * 0.45f))
-        }
+        Icon(icon, contentDescription = null, tint = CallButtonFill.glyph(kind), modifier = Modifier.size(diameter * 0.45f))
     }
 }
 
@@ -216,6 +205,38 @@ internal fun CallGlassPlate(
     content: @Composable BoxScope.() -> Unit,
 ) {
     MeeshyGlassSurface(modifier = modifier, shape = shape, tint = tint, liquid = liquid, content = content)
+}
+
+/**
+ * #17323 — le verre de N'IMPORTE QUEL bouton de l'appel : disque de la pilule et de l'en-tête, mais aussi les boutons
+ * voisins (« Non merci », « Refuser », « Message », puces d'ambiance, son et bascules de l'aperçu). La loi pure
+ * [CallButtonGlassRule] choisit, [CallGlassPlate] dessine, le ton de la loi 3 ([LocalCallGlassTone]) habille, et le
+ * verre s'éclaircit sous le doigt. Le contenu est centré ; la taille vient de [modifier] ou du contenu.
+ */
+@Composable
+internal fun CallGlassButtonSurface(
+    role: CallButtonRole,
+    shape: Shape,
+    isPressed: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val treatment = CallButtonGlassRule.treatment(role)
+    val tone = LocalCallGlassTone.current
+    CallGlassPlate(
+        modifier = modifier,
+        shape = shape,
+        tint = CallButtonFill.glassTint(treatment, tone),
+        liquid = treatment.isInteractive,
+    ) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(CallButtonFill.backing(treatment, tone))
+                .background(CallButtonFill.pressedHighlight(isPressed && treatment.drawsPressHighlight)),
+        )
+        Box(Modifier.align(Alignment.Center), contentAlignment = Alignment.Center, content = content)
+    }
 }
 
 /**

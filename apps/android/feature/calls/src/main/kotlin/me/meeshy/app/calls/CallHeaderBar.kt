@@ -33,7 +33,7 @@ import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 private val GLYPH_DIAMETER = 40.dp
-private val CHIP_HEIGHT = 44.dp
+private val CHIP_HEIGHT = 48.dp
 
 /**
  * L'en-tête de l'écran d'appel (miroir de iOS `topChrome`) : le chevron « Réduire » et la porte vers
