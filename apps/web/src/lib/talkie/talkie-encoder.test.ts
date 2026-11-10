@@ -49,3 +49,40 @@ describe('talkieEncodingSupported', () => {
     expect(failure).toBe('talkie-unsupported');
   });
 });
+
+describe('le niveau du micro pour l’onde de l’en-tête (#17338)', () => {
+  function liveEnv(frames: readonly (readonly number[])[]) {
+    let stopped = 0;
+    const track = { stop: () => void (stopped += 1) } as unknown as MediaStreamTrack;
+    const stream = { getAudioTracks: () => [track], getTracks: () => [track] } as unknown as MediaStream;
+    const audioData = (samples: readonly number[]) => ({
+      sampleRate: 48_000,
+      numberOfChannels: 1,
+      numberOfFrames: samples.length,
+      copyTo: (destination: Float32Array) => destination.set(samples),
+      close: () => undefined,
+    });
+    const queue = frames.map(audioData);
+    const Processor = function Processor() {
+      return { readable: new ReadableStream({ pull: (controller) => (queue.length > 0 ? controller.enqueue(queue.shift()) : undefined) }) };
+    } as unknown as NonNullable<TalkieEncoderEnv['MediaStreamTrackProcessor']>;
+    const Encoder = function Encoder() {
+      const encoder = { state: 'unconfigured', configure: () => void (encoder.state = 'configured'), encode: () => undefined, flush: async () => undefined, close: () => void (encoder.state = 'closed') };
+      return encoder;
+    } as unknown as NonNullable<TalkieEncoderEnv['AudioEncoder']>;
+    const env: TalkieEncoderEnv = { AudioEncoder: Encoder, MediaStreamTrackProcessor: Processor, getUserMedia: async () => stream };
+    return { env, stopped: () => stopped };
+  }
+
+  test('chaque tampon capté pousse sa moyenne quadratique au compteur, et l’arrêt le remet au silence', async () => {
+    const pushed: number[] = [];
+    let resets = 0;
+    const meter = { push: (rms: number) => void pushed.push(rms), reset: () => void (resets += 1) };
+    const { env } = liveEnv([[0.5, -0.5, 0.5, -0.5], [0, 0]]);
+    const capture = await createTalkieCapture(env, { meter })({ onFrame: () => undefined });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(pushed).toEqual([0.5, 0]);
+    await capture.stop();
+    expect(resets).toBe(1);
+  });
+});

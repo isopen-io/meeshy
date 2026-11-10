@@ -1,3 +1,4 @@
+import { talkieLevelMeters, talkieWaveRms, type TalkieLevelMeter } from './talkie-header-law';
 import type { TalkieCapture, TalkieCaptureFactory } from './talkie-sender';
 
 /**
@@ -28,7 +29,29 @@ type AacConfig = {
 };
 
 type EncodedChunkLike = { readonly byteLength: number; readonly duration: number | null; copyTo(destination: Uint8Array): void };
-type AudioDataLike = { readonly sampleRate: number; readonly numberOfChannels: number; close(): void };
+type AudioDataLike = {
+  readonly sampleRate: number;
+  readonly numberOfChannels: number;
+  readonly numberOfFrames?: number;
+  copyTo?(destination: Float32Array, options: { readonly planeIndex: number; readonly format: 'f32-planar' }): void;
+  close(): void;
+};
+
+/** Ce que l'onde de l'en-tête lit de mon micro (#17338) : une moyenne quadratique par tampon capté, le silence à l'arrêt. */
+export type TalkieLevelSink = Pick<TalkieLevelMeter, 'push' | 'reset'>;
+
+/** La moyenne quadratique du premier canal d'un tampon ; `null` quand le navigateur ne livre pas ses échantillons. */
+function rmsOfAudioData(data: AudioDataLike): number | null {
+  const frames = data.numberOfFrames ?? 0;
+  if (frames <= 0 || data.copyTo === undefined) return null;
+  try {
+    const samples = new Float32Array(frames);
+    data.copyTo(samples, { planeIndex: 0, format: 'f32-planar' });
+    return talkieWaveRms(samples);
+  } catch {
+    return null;
+  }
+}
 
 type AudioEncoderLike = {
   readonly state: string;
@@ -86,7 +109,10 @@ export const talkieEncodingSupportedOnce = (): Promise<boolean> => (cachedSuppor
 /** Une trame AAC dure 1024 échantillons : sa durée se déduit quand le navigateur ne la donne pas. */
 const frameDurationMs = (chunk: EncodedChunkLike, sampleRate: number): number => (chunk.duration !== null && chunk.duration > 0 ? chunk.duration / 1_000 : (1_024 / sampleRate) * 1_000);
 
-export function createTalkieCapture(env: TalkieEncoderEnv = browserTalkieEnv()): TalkieCaptureFactory {
+export function createTalkieCapture(
+  env: TalkieEncoderEnv = browserTalkieEnv(),
+  { meter = talkieLevelMeters.outgoing }: { readonly meter?: TalkieLevelSink } = {},
+): TalkieCaptureFactory {
   return async ({ onFrame }) => {
     const { AudioEncoder, MediaStreamTrackProcessor, getUserMedia } = env;
     if (AudioEncoder === undefined || MediaStreamTrackProcessor === undefined || getUserMedia === undefined) throw new Error('talkie-unsupported');
@@ -114,6 +140,8 @@ export function createTalkieCapture(env: TalkieEncoderEnv = browserTalkieEnv()):
           sampleRate = value.sampleRate;
           encoder.configure(aacConfigFor(value.sampleRate, value.numberOfChannels));
         }
+        const rms = rmsOfAudioData(value);
+        if (rms !== null) meter.push(rms);
         if (encoder.state === 'configured') encoder.encode(value);
         value.close();
       }
@@ -126,6 +154,7 @@ export function createTalkieCapture(env: TalkieEncoderEnv = browserTalkieEnv()):
         if (encoder.state === 'configured') await encoder.flush().catch(() => undefined);
         if (encoder.state !== 'closed') encoder.close();
         stream.getTracks().forEach((t) => t.stop());
+        meter.reset();
       },
     };
     return handle;

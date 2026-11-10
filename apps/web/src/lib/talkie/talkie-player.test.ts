@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createTalkiePlayer, type TalkieAudio } from './talkie-player';
+import { createTalkieLevelMeter } from './talkie-header-law';
+import { browserTalkieAudio, createTalkiePlayer, type TalkieAudio } from './talkie-player';
 
 /**
  * LE LECTEUR DE FRAGMENTS (#16638) — chaque fragment AAC ADTS se décode dès son
@@ -109,5 +110,36 @@ describe('le lecteur de fragments du talkie', () => {
     const player = createTalkiePlayer({ audio: () => null });
     expect(() => player.play('t1', bytes(0))).not.toThrow();
     expect(() => player.silence('t1')).not.toThrow();
+  });
+});
+
+describe('le niveau de la voix qui arrive (#17338)', () => {
+  test('chaque fragment passe par un analyseur que l’onde de l’en-tête lit à la demande', () => {
+    const connections: string[] = [];
+    const samples = Float32Array.from([1, -1, 1, -1]);
+    class FakeContext {
+      readonly currentTime = 0;
+      readonly state = 'running';
+      readonly destination = { name: 'destination' };
+      createAnalyser() {
+        return {
+          name: 'analyser',
+          fftSize: 0,
+          connect: (target: { readonly name: string }) => void connections.push(`analyser→${target.name}`),
+          getFloatTimeDomainData: (out: Float32Array) => out.set(samples.subarray(0, Math.min(out.length, samples.length))),
+        };
+      }
+      createBufferSource() {
+        return { buffer: null, connect: (target: { readonly name: string }) => void connections.push(`source→${target.name}`), start: () => undefined, stop: () => undefined };
+      }
+      decodeAudioData = async () => ({ duration: 0.2 });
+      resume = async () => undefined;
+    }
+    const meter = createTalkieLevelMeter();
+    const port = browserTalkieAudio({ Context: () => FakeContext as unknown as new () => AudioContext, meter })();
+    expect(port).not.toBeNull();
+    port?.start({ duration: 0.2 } as AudioBuffer, 0);
+    expect(connections).toEqual(['analyser→destination', 'source→analyser']);
+    expect(meter.level()).toBeGreaterThan(0);
   });
 });

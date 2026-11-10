@@ -346,6 +346,7 @@
     "POST /api/v1/auth/revoke-all-sessions",
     "POST /api/v1/conversations/:id/mark-read",
     "POST /api/v1/conversations/:id/message-request/accept",
+    "POST /api/v1/conversations/external",
     "POST /api/v1/e2ee/conversations/:conversationId/signals",
     "POST /api/v1/e2ee/devices",
     "POST /api/v1/e2ee/envelopes/ack",
