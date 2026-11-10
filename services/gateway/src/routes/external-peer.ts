@@ -193,6 +193,7 @@ export function registerCoquillePage(fastify: FastifyInstance, directory: string
       .send(file.bytes);
   };
 
+  fastify.get(`${BASE}/coquille`, async (request, reply) => reply.redirect(`${request.routeOptions.url}/`, 308));
   fastify.get(`${BASE}/coquille/`, async (_request, reply) => serve(reply, 'index.html'));
   fastify.get<{ Params: { file: string } }>(`${BASE}/coquille/:file`, async (request, reply) => serve(reply, request.params.file));
 }

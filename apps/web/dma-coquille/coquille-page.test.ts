@@ -84,6 +84,24 @@ describe('la page de la coquille', () => {
     root.remove();
   });
 
+  test('n’ouvre qu’une coquille quand on clique deux fois avant la fin de la première ouverture', async () => {
+    const porte = createFakePorte({ accounts: { recette: { password: 'secret-de-test', userId: TEAM, role: 'MODERATOR' } } });
+    const root = document.createElement('main');
+    document.body.append(root);
+    mountCoquillePage(root, { origin: 'https://gate.staging.test', fetch: porte.fetch, openBridge: async () => bridge });
+
+    type(field(root, 'Identifiant de l’équipe'), 'recette');
+    type(field(root, 'Mot de passe'), 'secret-de-test');
+    type(field(root, 'Numéro WhatsApp simulé'), HANDLE);
+    button(root, 'Ouvrir la coquille').click();
+    button(root, 'Ouvrir la coquille').click();
+    await settle(() => root.textContent?.includes(`Coquille ouverte : ${HANDLE}, appareil 1`) ?? false);
+
+    expect(porte.publications()).toHaveLength(1);
+    expect(button(root, 'Ouvrir la coquille').disabled).toBe(false);
+    root.remove();
+  });
+
   test('dit en clair pourquoi la connexion échoue', async () => {
     const porte = createFakePorte({ accounts: {} });
     const root = document.createElement('main');

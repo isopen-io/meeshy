@@ -79,8 +79,23 @@ export const mountCoquillePage = (root: HTMLElement, { origin, fetch, openBridge
     say(received.length === 0 ? 'Aucun message en attente' : `${received.length} message(s) relevé(s)`);
   };
 
+  const actions = [open, relever, send];
+  let busy = false;
+  const setBusy = (value: boolean): void => {
+    busy = value;
+    actions.forEach((control) => {
+      control.disabled = value;
+    });
+    root.setAttribute('aria-busy', String(value));
+  };
+
+  /** Une action à la fois : deux ouvertures croisées publieraient deux bundles, deux relèves ouvriraient deux fois la même enveloppe. */
   const guarded = (action: () => Promise<void>) => () => {
-    action().catch((error: unknown) => say(`Échec — ${reasonOf(error)}`));
+    if (busy) return;
+    setBusy(true);
+    action()
+      .catch((error: unknown) => say(`Échec — ${reasonOf(error)}`))
+      .finally(() => setBusy(false));
   };
 
   form.addEventListener('submit', (event) => {

@@ -24,6 +24,8 @@ et parle à la passerelle par la porte « pair externe » (#17115), qu'aucune ro
   contenu propre : `script-src 'self' 'wasm-unsafe-eval'` (le minimum pour compiler un WASM),
   `connect-src 'self'`, `frame-ancestors 'none'`, `default-src 'none'` ; `no-store`, `noindex`. La page ne
   porte aucun secret : tout ce qu'elle fait passe par les routes réservées à l'équipe.
+  L'adresse sans barre finale (`…/coquille`) renvoie (`308`) vers `…/coquille/` : la passerelle ne pose pas
+  `ignoreTrailingSlash`, et la page charge son module et son WASM à côté d'elle.
 - **Construction** : l'image de la passerelle construit la coquille avec bun depuis les sources du web
   (`apps/web/dma-coquille/`, hors de `src/` donc hors de l’application, et le pont `apps/web/src/lib/e2ee/`) — aucune copie du pont ni du WASM dans
   la passerelle, aucune dépendance installée. Les fichiers sont donc dans toute image ; seule la porte décide

@@ -51,6 +51,17 @@ describe('la coquille ami WhatsApp', () => {
     expect(script.headers['content-type']).toContain('text/javascript');
   });
 
+  it('renvoie l’adresse sans barre finale vers la page, dont les fichiers se résolvent à côté d’elle', async () => {
+    const app = await serve(STAGING);
+
+    const bare = await app.inject({ method: 'GET', url: '/external-peer/whatsapp/coquille' });
+    const forged = await app.inject({ method: 'GET', url: '/external-peer/whatsapp/coquille?next=//ailleurs.test' });
+
+    expect(bare.statusCode).toBe(308);
+    expect(bare.headers.location).toBe('/external-peer/whatsapp/coquille/');
+    expect(forged.headers.location).toBe('/external-peer/whatsapp/coquille/');
+  });
+
   it('ne sert rien hors de son répertoire', async () => {
     const app = await serve(STAGING);
 
