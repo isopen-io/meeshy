@@ -126,7 +126,8 @@ const FACTURE = `FACTURE (directive porteur du 2026-11-10, #17406) — elle vaut
   le bord de l'écran et sort par lui ; une option de la barre du bas s'ouvre par MORPHISME, la même barre s'allonge et grandit pour la
   contenir, puis reprend sa forme ; tout ce qui se pose par-dessus suit la même règle, sauf si la planche écrit autre chose pour une vue.
   L'animation ne touche que la transformation et l'opacité, ne perd aucune image, reste interruptible (un bouton touché pendant le
-  mouvement répond), et « Réduire les animations » la remplace par un fondu court.${CONSIGNES ? `
+  mouvement répond), et « Réduire les animations » la remplace par un fondu court.
+- UNE RANGÉE QUI DÉFILE (puces, vignettes) n'est jamais coupée net : elle s'efface en fondu à ses deux bords, à gauche comme à droite.${CONSIGNES ? `
 CONSIGNES DE CE PASSAGE (données par la session qui lance, elles s'ajoutent sans rien retirer) : ${CONSIGNES}` : ''}`
 
 const ECRITURE = (cle, plateforme) => `CLONE PRIVÉ : D=${LOTS}/${cle} ; s'il n'existe pas :
