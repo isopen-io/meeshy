@@ -478,6 +478,11 @@ semantic colours, theme tokens, typography, spacing, motion, the conversation
 `:sdk-ui`. Roborazzi screenshot tests (light + dark) are a CI gate for every
 primitive and screen. No hardcoded hex in feature code.
 
+**Mise en oeuvre (K00, #17335).** Roborazzi 1.43.1, sans son greffon Gradle, sous Robolectric 4.13 :
+le catalogue du kit (`:feature:kit`, debug seulement) est la première surface photographiée. Les références
+s'enregistrent par l'entrée `record_snapshots` d'`android.yml`, jamais sur un poste. Fiche :
+`docs/product/kit/K00-Catalogue.md` § 11.
+
 **Rejected.** Per-feature styling; a Material-You dynamic-colour theme (would
 override the brand Indigo).
 
