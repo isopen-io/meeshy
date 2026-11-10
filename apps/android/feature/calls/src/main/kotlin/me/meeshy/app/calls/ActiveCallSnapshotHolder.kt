@@ -45,11 +45,11 @@ class ActiveCallSnapshotHolder @Inject constructor() {
 
     fun publish(snapshot: CallActivitySnapshot?) {
         _snapshot.value = snapshot
+        _microphoneMuted.value = snapshot?.isMuted == true
     }
 
-    fun setMicrophoneMuted(muted: Boolean) {
-        _microphoneMuted.value = muted
-    }
+    @Suppress("UNUSED_PARAMETER")
+    fun setMicrophoneMuted(muted: Boolean) = Unit
 
     fun attach(commands: ActiveCallCommands) {
         this.commands = commands
