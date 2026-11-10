@@ -331,6 +331,7 @@ extension CallView {
                 toggleState: callManager.screenShare.isSharing,
                 diameter: diameter
             ) {
+                if callManager.screenShare.isSharing { HapticFeedback.light() }
                 screenSharePicker.toggle(controller: callManager.screenShare)
             }
         case .captions:
@@ -375,6 +376,7 @@ extension CallView {
             toggleState: isEnabled,
             diameter: diameter
         ) {
+            HapticFeedback.light()
             callManager.cameraActuator.toggleVideo()
         }
         // Le partage d'écran remplace la piste caméra : la bascule attend.
