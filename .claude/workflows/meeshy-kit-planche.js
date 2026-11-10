@@ -320,7 +320,7 @@ const etat = await agent(`
 Prépare le chantier du kit. mkdir -p ${RUN}/lots ; git -C ${REPO} fetch -q origin ${BASE}.
 Lis ${REPO}/${REGISTRE} sur origin/${BASE} (git show origin/${BASE}:${REGISTRE}) et rends CHAQUE lot (cle, type, nom, titre, contrat, vues, depend,
 modele_ios, modele_android, modele_web : celui d'Android s'il est absent) avec, constaté et non supposé :
-- ios / android / web : « livre » si le fichier cible existe sur origin/${BASE} (cible_ios, cible_android, cible_web ; pour une intégration : son issue est fermée),
+- ios / android / web : « livre » si la cible existe sur origin/${BASE} (cible_ios, cible_android, cible_web : un fichier, ou un DOSSIER qui porte au moins un fichier — git ls-tree origin/${BASE} -- <cible>, jamais une supposition ; pour une intégration : son issue est fermée),
   « pr » si une PR ouverte part de la branche claude/kit-<clé en minuscules>-<plateforme>, « a_faire » sinon, « sans_objet » si le lot ne vise pas la plateforme ;
 - fiche : vrai si ${FICHES}/<clé>-<nom>.md existe sur origin/${BASE} ;
 - issue : le numéro de l'issue ouverte ou fermée dont le titre est exactement celui du lot, si elle existe.
@@ -358,7 +358,7 @@ if (ETAPE !== 'verifier') {
       const rendus = (await parallel(tranche.map((x) => () => menerLot(x.l, x.p, etat)))).filter(Boolean)
       rendus.forEach((r) => {
         resultats.push(r)
-        if (r.statut === 'fusionne') livre[r.plateforme].add(r.cle)
+        if (r.statut === 'fusionne' || r.statut === 'deja_tenu') livre[r.plateforme].add(r.cle)
       })
     }
   }
