@@ -28,7 +28,7 @@ extension CallView {
                     duoOverlays
                 }
 
-                cameraRail
+                callEdgeControls
 
                 callControlsLayer
 
@@ -44,7 +44,7 @@ extension CallView {
         }
         // Le sélecteur système de diffusion vit dans la hiérarchie en
         // permanence, et en UN seul endroit : le bouton « Écran » vit avec les
-        // commandes de ma caméra (vignette, haut de l'écran ou (…)).
+        // commandes de ma caméra (rail gauche du duo, ou rangée « Mon image » du groupe).
         .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
         // §7.1 — populate the camera list when video turns on so the « mon
         // image » actions can decide flip vs device picker (Continuity/USB).
@@ -215,7 +215,7 @@ extension CallView {
     }
 
     /// Ce qui flotte AU-DESSUS de la disposition 1:1 : la vignette perso. Les
-    /// actions du `(…)` montent au-dessus de la pilule.
+    /// actions du `(…)` sortent en rails sur les bords (#17327).
     @ViewBuilder
     private var duoOverlays: some View {
         // §7.2 — draggable, corner-snapping PiP showing the secondary

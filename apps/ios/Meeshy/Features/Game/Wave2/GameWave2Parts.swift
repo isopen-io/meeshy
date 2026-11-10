@@ -102,7 +102,7 @@ private struct GameWave2Frame<Content: View>: View {
                     .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.backgroundSecondary))
             }
         }
-        .onAppear { refresh?.action = { [weak model] in await model?.refresh() } }
+        .onAppear { [weak model] in refresh?.action = { await model?.refresh() } }
         .task { await progression.appear() }
         .task { await model.loadSettings() }
         // Le calendrier des saisons servi (#10232) : chargé à l'ouverture du Jeu, sans rien bloquer.
