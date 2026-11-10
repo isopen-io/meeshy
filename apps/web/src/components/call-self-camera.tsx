@@ -133,7 +133,7 @@ export function CallZoomStep({ stream, local, language, Button, rowItem }: ZoomS
       label={`${translate(language, 'call.zoom')}, ${said}`}
       glyph={<span className="text-mini font-semibold tabular-nums">{said}</span>}
       onPress={() => zoom.set(nextZoomStop(zoom.range, zoom.value))}
-      tone="bare"
+      tone="disc"
       size={44}
       data={{ 'data-call-self-control': 'zoom', 'data-call-zoom-mode': zoom.mode, [rowItem]: '' }}
     />

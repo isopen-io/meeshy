@@ -788,7 +788,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
   });
 });
 
-describe('CallScreen — le verre, sans verre sur verre (#8432)', () => {
+describe('CallScreen — le verre : un seul flou par pilule, un disque de verre par bouton (#8432, #17345)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
   beforeAll(() => {
@@ -822,16 +822,88 @@ describe('CallScreen — le verre, sans verre sur verre (#8432)', () => {
     return { nested, glasses: glasses.length, panel };
   };
 
-  test('en duo, actions sorties et panneau « Réagir » ouvert : chaque groupe a UN verre', async () => {
+  test('en duo, actions sorties et panneau « Réagir » ouvert : chaque groupe a UN flou', async () => {
     const view = await nestedGlass({ cameraOn: true, members: { 'u-peer': member() } }, true);
     expect(view.panel).not.toBeNull();
     expect(view.glasses).toBeGreaterThan(3);
     expect(view.nested).toEqual([]);
   });
 
-  test('en groupe, la pilule qui a grandi porte ses rangées sans verre à elles', async () => {
+  test('en groupe, la pilule qui a grandi porte ses rangées sans second flou', async () => {
     const view = await nestedGlass({ isGroup: true, cameraOn: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }, true);
     expect(view.nested).toEqual([]);
+  });
+
+  const BLUR = '.glass-call, .glass-call-prominent';
+  const DISC = 'glass-call-disc';
+
+  const mountPill = async (overrides: Partial<ActiveCall>, expand: boolean) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={{ color: true, blur: true }} />));
+    if (expand) {
+      act(() => (host.querySelector('[data-call-more]') as HTMLElement | null)?.click());
+      await act(async () => {});
+    }
+    const pill = host.querySelector('[data-call-control-pill]') as HTMLElement;
+    const buttons = [...pill.querySelectorAll('button')] as HTMLElement[];
+    const done = () => {
+      act(() => root.unmount());
+      host.remove();
+    };
+    return { pill, buttons, done };
+  };
+
+  const discOf = (button: HTMLElement) => (button.classList.contains(DISC) ? button : button.querySelector(`.${DISC}`));
+
+  test('(#17345) chaque bouton au repos de la pilule porte son disque de verre dessiné : (…), Micro, Sortie', async () => {
+    const view = await mountPill({ cameraOn: true, members: { 'u-peer': member() } }, false);
+    const resting = ['[data-call-more]', '[aria-label="Couper le micro"]', '[data-call-devices-open]'].map((selector) => view.pill.querySelector(selector) as HTMLElement);
+    expect(resting.every((button) => button != null)).toBe(true);
+    for (const button of resting) expect(discOf(button)).not.toBeNull();
+    view.done();
+  });
+
+  test('(#17345) aucun bouton de la pilule n’est transparent', async () => {
+    const view = await mountPill({ cameraOn: true, members: { 'u-peer': member() } }, true);
+    expect(view.buttons.length).toBeGreaterThan(4);
+    for (const button of view.buttons) {
+      const round = (button.querySelector('span[class*="rounded-full"]') ?? button) as HTMLElement;
+      const filled = discOf(button) != null || round.style.background !== '' || round.style.backgroundColor !== '';
+      expect([button.getAttribute('aria-label'), filled]).toEqual([button.getAttribute('aria-label'), true]);
+      expect(round.style.background).not.toBe('transparent');
+    }
+    view.done();
+  });
+
+  test('(#17345) les rangées sorties par (…) portent aussi leurs disques, sous le même flou', async () => {
+    const view = await mountPill({ cameraOn: true, members: { 'u-peer': member() } }, true);
+    const rows = [...view.pill.querySelectorAll('[data-call-row] button')] as HTMLElement[];
+    expect(rows.length).toBeGreaterThan(2);
+    expect(rows.filter((button) => discOf(button) != null).length).toBeGreaterThan(0);
+    view.done();
+  });
+
+  test('(#17345) un seul flou : la pilule, repliée comme déployée, et aucun de ses disques', async () => {
+    for (const expand of [false, true]) {
+      const view = await mountPill({ cameraOn: true, members: { 'u-peer': member() } }, expand);
+      expect(view.pill.matches(BLUR)).toBe(true);
+      expect(view.pill.querySelectorAll(BLUR)).toHaveLength(0);
+      for (const disc of view.pill.querySelectorAll(`.${DISC}`)) expect(disc.matches(BLUR)).toBe(false);
+      view.done();
+    }
+  });
+
+  test('(#17345) enclenché reste un plein blanc, Fin reste rouge : ni l’un ni l’autre ne devient un disque de verre', async () => {
+    const view = await mountPill({ micMuted: true, members: { 'u-peer': member() } }, false);
+    const mic = view.pill.querySelector('[aria-pressed="true"]') as HTMLElement;
+    expect(mic.classList.contains(DISC)).toBe(false);
+    expect(mic.style.background).toContain('--color-on-media');
+    const hangup = view.pill.querySelector('[aria-label="Raccrocher"]') as HTMLElement | null;
+    expect(hangup?.classList.contains(DISC)).toBe(false);
+    expect(hangup?.style.background).toContain('--ios-error-strong');
+    view.done();
   });
 
   test('la sonnerie et l’écran de fin : les boutons neutres sont de verre, Refuser et Fin rouges, Accepter vert', () => {
