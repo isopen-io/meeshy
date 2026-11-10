@@ -20,6 +20,7 @@ extension CallView {
     /// Resting center for the PiP in a given container, accounting for device
     /// safe area insets (landscape notch/Dynamic Island cutouts) plus fixed
     /// clearances for the minimize chevron/badge (top) and control bar (bottom).
+    /// #17327 — ma vignette ne porte aucune commande autour d'elle : rien à lui réserver.
     func pipCenter(_ corner: PiPCorner, in container: CGSize, size: CGSize = CallSelfTileScale.standard.size, safeArea: EdgeInsets = .init()) -> CGPoint {
         let halfW = size.width / 2
         let halfH = size.height / 2
@@ -30,16 +31,12 @@ extension CallView {
         let trailingX = container.width - safeArea.trailing - margin - halfW
         let topY = topInset + halfH
         let bottomY = container.height - bottomInset - halfH
-        let anchor: CGPoint
         switch corner {
-        case .topLeading: anchor = CGPoint(x: leadingX, y: topY)
-        case .topTrailing: anchor = CGPoint(x: trailingX, y: topY)
-        case .bottomLeading: anchor = CGPoint(x: leadingX, y: bottomY)
-        case .bottomTrailing: anchor = CGPoint(x: trailingX, y: bottomY)
+        case .topLeading: return CGPoint(x: leadingX, y: topY)
+        case .topTrailing: return CGPoint(x: trailingX, y: topY)
+        case .bottomLeading: return CGPoint(x: leadingX, y: bottomY)
+        case .bottomTrailing: return CGPoint(x: trailingX, y: bottomY)
         }
-        // #8747 — au repos, une rangée de commandes tient entre la vignette
-        // et l'en-tête comme entre elle et la pilule.
-        return CallSelfTileControlsPlacement.restingCenter(anchor, tileSize: size, bounds: selfTileControlsBounds(in: container, safeArea: safeArea))
     }
 
     /// #8577 — la taille de la vignette : son palier, suivi du pincement en
@@ -114,14 +111,6 @@ extension CallView {
                         @unknown default: return
                         }
                     }
-                // #8747 — Effets · Écran au-dessus, Retourner · Caméra en
-                // dessous : ils suivent le glissé et le pincement.
-                selfTileControlRows(
-                    tile: CGRect(x: base.x - size.width / 2, y: base.y - size.height / 2, width: size.width, height: size.height),
-                    container: geo.size,
-                    safeArea: geo.safeAreaInsets,
-                    dragOffset: pipDragOffset
-                )
             }
         }
         .onAppear { selfTileScale = selfTileMemory.scale(for: callManager.currentCallId) }
