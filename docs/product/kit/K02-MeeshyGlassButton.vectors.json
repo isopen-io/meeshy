@@ -1,0 +1,142 @@
+{
+  "kit": "K02",
+  "glyphRatio": 0.46,
+  "disabledOpacity": 0.4,
+  "toneFadeMs": 200,
+  "tapTarget": {
+    "ios": 44,
+    "android": 48,
+    "web": 44
+  },
+  "longPress": {
+    "durationMs": 500,
+    "maxMovement": 10
+  },
+  "sizes": [
+    {
+      "size": "small",
+      "diameter": 36,
+      "glyph": 17,
+      "target": 44
+    },
+    {
+      "size": "compact",
+      "diameter": 40,
+      "glyph": 18,
+      "target": 44
+    },
+    {
+      "size": "regular",
+      "diameter": 44,
+      "glyph": 20,
+      "target": 44
+    },
+    {
+      "size": "large",
+      "diameter": 48,
+      "glyph": 22,
+      "target": 48
+    }
+  ],
+  "kinds": [
+    {
+      "kind": "normal",
+      "fill": "none",
+      "fillOpacity": 0,
+      "pressedFillOpacity": 0,
+      "ink": "onMedia",
+      "shadow": null
+    },
+    {
+      "kind": "active",
+      "fill": "white",
+      "fillOpacity": 0.94,
+      "pressedFillOpacity": 0.94,
+      "ink": "indigo950",
+      "shadow": {
+        "opacity": 0.22,
+        "radius": 14,
+        "y": 4
+      }
+    },
+    {
+      "kind": "destructive",
+      "fill": "red",
+      "fillOpacity": 0.94,
+      "pressedFillOpacity": 0.94,
+      "ink": "onMedia",
+      "shadow": null
+    },
+    {
+      "kind": "soft",
+      "fill": "veil",
+      "fillOpacity": 0.12,
+      "pressedFillOpacity": 0.22,
+      "ink": "onMedia",
+      "shadow": null
+    }
+  ],
+  "contrast": {
+    "glyphMin": 3.0,
+    "activeMin": 15.0,
+    "destructiveNominal": 3.8
+  },
+  "accessibility": [
+    {
+      "kind": "normal",
+      "isOn": null,
+      "selected": false,
+      "toggle": false
+    },
+    {
+      "kind": "active",
+      "isOn": null,
+      "selected": true,
+      "toggle": false
+    },
+    {
+      "kind": "normal",
+      "isOn": true,
+      "selected": true,
+      "toggle": true
+    },
+    {
+      "kind": "normal",
+      "isOn": false,
+      "selected": false,
+      "toggle": true
+    },
+    {
+      "kind": "active",
+      "isOn": false,
+      "selected": false,
+      "toggle": true
+    }
+  ],
+  "states": [
+    {
+      "isEnabled": true,
+      "isBusy": false,
+      "action": true,
+      "haptic": true,
+      "touchResponse": true,
+      "opacity": 1
+    },
+    {
+      "isEnabled": false,
+      "isBusy": false,
+      "action": false,
+      "haptic": false,
+      "touchResponse": false,
+      "opacity": 0.4
+    },
+    {
+      "isEnabled": true,
+      "isBusy": true,
+      "action": false,
+      "haptic": false,
+      "touchResponse": false,
+      "opacity": 1
+    }
+  ]
+}
