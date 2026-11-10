@@ -1,4 +1,6 @@
 import XCTest
+import UIKit
+import MeeshyUI
 @testable import Meeshy
 
 /// C5 / règle **O12 — LA SURFACE DÉCIDE**, étendue par la directive produit du
@@ -125,5 +127,57 @@ final class PasteDestinationTests: XCTestCase {
             PasteDestination.resolve(surface: .scene, ingest: .file).product,
             PasteDestination.resolve(surface: .stickers, ingest: .file).product
         )
+    }
+
+    // MARK: - Coller dans la vue principale : une image fait le fond, un texte va au contenu (#17434)
+
+    func test_target_image_becomesTheSceneBackground() {
+        XCTAssertEqual(ComposerPasteRouting.target(for: .image(UIImage())), .sceneBackground)
+    }
+
+    func test_target_text_goesToThePublicationContent_neverOnTheScene() {
+        XCTAssertEqual(ComposerPasteRouting.target(for: .text("Bonjour")), .publicationText)
+        XCTAssertEqual(ComposerPasteRouting.target(for: .text(Array(repeating: "mot", count: 40).joined(separator: " "))),
+                       .publicationText, "un texte long comme un texte court : jamais un objet texte de scène")
+    }
+
+    func test_target_videoAndSound_keepTheirScenePath() {
+        XCTAssertEqual(ComposerPasteRouting.target(for: .video(URL(fileURLWithPath: "/tmp/a.mov"))), .sceneMedia)
+        XCTAssertEqual(ComposerPasteRouting.target(for: .audio(URL(fileURLWithPath: "/tmp/a.m4a"))), .sceneSound)
+    }
+
+    func test_publicationText_emptyContent_takesThePastedText() {
+        XCTAssertEqual(ComposerPasteRouting.publicationText(current: "", pasted: "  Bonjour  "), "Bonjour")
+    }
+
+    func test_publicationText_existingContent_appendsOnANewLine() {
+        XCTAssertEqual(ComposerPasteRouting.publicationText(current: "Déjà écrit", pasted: "Collé"),
+                       "Déjà écrit\nCollé", "coller n'efface jamais ce que l'auteur a écrit")
+    }
+
+    func test_publicationText_blankPaste_leavesTheContentUntouched() {
+        XCTAssertEqual(ComposerPasteRouting.publicationText(current: "Déjà écrit", pasted: " \n "), "Déjà écrit")
+    }
+
+    func test_host_pastedItems_followTheRoutingLaw() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        let debut = try XCTUnwrap(source.range(of: "func handlePastedItems("))
+        let corps = String(source[debut.upperBound...].prefix(1800))
+        XCTAssertTrue(corps.contains("ComposerPasteRouting.target(for:"), "la destination vient de la loi")
+        XCTAssertFalse(corps.contains("StoryPastePolicy.placement"), "le texte ne devient plus un objet de scène")
+    }
+
+    func test_pasteEntry_showsTheGlyphOnly_inTheBrandBlue() throws {
+        let source = AppSourceGuard.stripComments(try String(contentsOf: Self.appFile("ComposerPasteEntryGate.swift"), encoding: .utf8))
+        XCTAssertTrue(source.contains(".labelStyle(.iconOnly)"), "aucun libellé visible")
+        XCTAssertTrue(source.contains("MeeshyColors.brandPrimary"), "le glyphe est bleu, couleur de marque")
+        XCTAssertTrue(source.contains("ComposerPasteEntry.accessibilityIdentifier"), "la recette l'atteint")
+    }
+
+    private static func appFile(_ name: String) -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/\(name)")
     }
 }

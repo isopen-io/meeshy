@@ -11,7 +11,8 @@ import MeeshySDK
 extension MeeshyComposerHost {
 
     /// L'étape du viseur, lue par la surface et le meuble.
-    var sceneCameraStage: ComposerSceneCameraStage { sceneCapture.stage }
+    /// Un viseur qui a cédé la scène à un outil (#17432) la laisse au repos : l'outil s'y ouvre.
+    var sceneCameraStage: ComposerSceneCameraStage { viewfinderYieldsToScene ? .off : sceneCapture.stage }
 
     /// **L'appui long sur une scène VIDE ouvre la caméra ET filme** (#4036, #4851, #8653), jamais
     /// pendant qu'on écrit (#15674) ; la tenue part dès que la session écrit.
@@ -118,6 +119,22 @@ extension MeeshyComposerHost {
         sceneCapture.arm(mode: mode)
     }
 
+    /// **Une entrée du viseur** (#17432) : Fond et Galerie coupent la caméra ; Texte et Sticker la
+    /// gardent armée, le viseur cède la scène le temps de l'outil, et la prise passera sous eux.
+    func handleViewfinderEntry(_ entree: ComposerViewfinderEntry) {
+        if entree.camera == .cut { disarmSceneCamera() } else { viewfinderYieldsToScene = true }
+        guard let porte = entree.door else {
+            openingPickFoundsScenes = true
+            showsOpeningLibrary = true
+            return
+        }
+        handleRailDoor(porte)
+    }
+
+    var viewfinderEntryToolIsOpen: Bool {
+        viewfinderYieldsToScene && (sceneToolOwnsScreen || presentedPortal != nil)
+    }
+
     /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
     /// entrée, pas un mode »).
     func poseSceneCapture(_ result: CameraResult) {
@@ -141,6 +158,7 @@ extension MeeshyComposerHost {
     /// les segments abandonnés avec leurs fichiers.
     func disarmSceneCamera() {
         sceneCaptureReplacesBackgroundId = nil
+        viewfinderYieldsToScene = false
         sceneCameraSize = .armed
         // Quitter sans prendre RETIRE la marque, sinon le prochain média d'une AUTRE porte irait sur la scène.
         railPosesNextMedia = false
@@ -157,10 +175,14 @@ extension MeeshyComposerHost {
         return ComposerCaptureMount(session: sceneCapture, size: $sceneCameraSize,
                                     allowsPhoto: modes.contains(.photo),
                                     allowsVideo: modes.contains(.video),
+                                    yieldsToScene: viewfinderYieldsToScene,
                                     onDisarm: { disarmSceneCamera() },
                                     onDeliver: { poseSceneCapture($0) }) {
             contenu
         }
+        .environment(\.composerViewfinderSceneEntry, { handleViewfinderEntry($0) })
+        // L'outil fermé, le viseur revient sur la scène composée (#17432).
+        .adaptiveOnChange(of: viewfinderEntryToolIsOpen) { _, ouvert in if !ouvert { viewfinderYieldsToScene = false } }
     }
 }
 
