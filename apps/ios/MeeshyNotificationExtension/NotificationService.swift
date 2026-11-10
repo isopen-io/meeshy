@@ -56,6 +56,7 @@ class NotificationService: UNNotificationServiceExtension {
     private func ringBringAlarm(_ userInfo: [AnyHashable: Any]) {
         let action = BringAlarmPlan.action(push: userInfo, now: Date())
         guard action != .none else { return }
+        BringAlarmLog.note("NSE : push du Bring reçu — \(String(describing: action))")
         bringAlarm = Task { await BringAlarmCoordinator.system.apply(action, mayAsk: false) }
     }
 
@@ -209,7 +210,9 @@ class NotificationService: UNNotificationServiceExtension {
         let isCommunicationType = Self.communicationTypes.contains(userInfo["type"] as? String ?? "")
         let identifier = request.identifier
         let owned = NSEOwnedContent(content: working)
+        let alarm = bringAlarm
         enrichment = Task {
+            _ = await alarm?.value
             await NotificationService.deliverEnriched(
                 owned.content,
                 plan: plan,
