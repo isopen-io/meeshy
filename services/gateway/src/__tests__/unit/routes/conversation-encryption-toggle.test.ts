@@ -46,6 +46,7 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 
 import encryptionRoutes from '../../../routes/conversation-encryption';
 import { openExternalConversation } from '../../../services/external-conversation/open-external-conversation';
+import { EXTERNAL_INTEROP_NOTICE_VERSION } from '@meeshy/shared/types/external-interop-compliance';
 
 const ALICE = '507f1f77bcf86cd799439011';
 const BOB = '507f1f77bcf86cd799439012';
@@ -445,7 +446,17 @@ describe('une conversation externe, telle qu’elle naît, ne se rétrograde jam
   const bornExternal = async (): Promise<MongoDocument> => {
     const created: MongoDocument[] = [];
     const prisma = {
-      user: { findUnique: async () => ({ id: ALICE, phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), displayName: 'Alice', username: 'alice', role: 'ANALYST' }) },
+      user: {
+        findUnique: async () => ({
+          id: ALICE,
+          phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'),
+          displayName: 'Alice',
+          username: 'alice',
+          role: 'ANALYST',
+          whatsappInteropConsentAt: new Date('2026-11-09T00:00:00Z'),
+          whatsappInteropNoticeVersion: EXTERNAL_INTEROP_NOTICE_VERSION,
+        }),
+      },
       externalConversationPeer: { findUnique: async () => null, update: async () => null, count: async () => 0 },
       conversation: {
         create: async ({ data }: { data: MongoDocument }) => {
