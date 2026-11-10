@@ -1,12 +1,16 @@
 package me.meeshy.app.calls
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.calls.R
@@ -96,9 +100,14 @@ class CallActionRailsTest {
     }
 
     @Test
-    @Config(qualifiers = "ldrtl-w360dp-h800dp")
     fun `right to left turns the rails round with the rest of the screen`() {
-        show(both)
+        rule.setContent {
+            MeeshyTheme {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    CallActionRails(both, items, emptySet(), {}, bottomClearance = 0.dp)
+                }
+            }
+        }
         val mine = rule.onNodeWithContentDescription("My image").fetchSemanticsNode().boundsInRoot
         val call = rule.onNodeWithContentDescription("The call").fetchSemanticsNode().boundsInRoot
         assertThat(mine.left).isGreaterThan(call.right)
@@ -108,7 +117,8 @@ class CallActionRailsTest {
     fun `the rails are centered on the free height`() {
         show(both)
         val rail = rule.onNodeWithContentDescription("My image").fetchSemanticsNode().boundsInRoot
-        assertThat((rail.top + rail.bottom) / 2).isWithin(1f).of((RAILS_TOP_DP + 800f) / 2)
+        val screen = rule.onRoot().fetchSemanticsNode().boundsInRoot.height
+        assertThat((rail.top + rail.bottom) / 2).isWithin(1f).of((RAILS_TOP_DP + screen) / 2)
     }
 
     @Test
