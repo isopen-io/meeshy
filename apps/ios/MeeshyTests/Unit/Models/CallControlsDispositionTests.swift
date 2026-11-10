@@ -46,42 +46,42 @@ final class CallControlsDispositionTests: XCTestCase {
     // MARK: - Les rails du duo
 
     func test_rails_menuOpen_aRailPerFamily_myImageThenTheCall() {
-        let rows = CallControlsDisposition.rails.rails(actions(), layer: .menu)
+        let rows = CallControlsDisposition.rails.railRows(actions(), layer: .menu)
         XCTAssertEqual(rows.map(\.family), [.myImage, .theCall])
     }
 
     func test_rails_menuClosed_noRailLeaves() {
-        XCTAssertTrue(CallControlsDisposition.rails.rails(actions(), layer: .idle).isEmpty)
+        XCTAssertTrue(CallControlsDisposition.rails.railRows(actions(), layer: .idle).isEmpty)
     }
 
     func test_rails_aModeFreesTheScreen_noRail() {
-        XCTAssertTrue(CallControlsDisposition.rails.rails(actions(), layer: .mode(.effects)).isEmpty)
+        XCTAssertTrue(CallControlsDisposition.rails.railRows(actions(), layer: .mode(.effects)).isEmpty)
     }
 
     /// Enregistrer et Réagir s'ouvrent DANS la pilule (morphisme) : les rails se retirent.
     func test_rails_anOptionDrawnInThePill_hidesTheRails() {
-        XCTAssertTrue(CallControlsDisposition.rails.rails(actions(), layer: .panel(.react)).isEmpty)
-        XCTAssertTrue(CallControlsDisposition.rails.rails(actions(), layer: .panel(.record)).isEmpty)
+        XCTAssertTrue(CallControlsDisposition.rails.railRows(actions(), layer: .panel(.react)).isEmpty)
+        XCTAssertTrue(CallControlsDisposition.rails.railRows(actions(), layer: .panel(.record)).isEmpty)
     }
 
     /// Ajouter et Journal s'ouvrent en feuille : les rails restent.
     func test_rails_aSheetPanel_keepsTheRails() {
-        XCTAssertEqual(CallControlsDisposition.rails.rails(actions(), layer: .panel(.journal)).count, 2)
-        XCTAssertEqual(CallControlsDisposition.rails.rails(actions(), layer: .panel(.people)).count, 2)
+        XCTAssertEqual(CallControlsDisposition.rails.railRows(actions(), layer: .panel(.journal)).count, 2)
+        XCTAssertEqual(CallControlsDisposition.rails.railRows(actions(), layer: .panel(.people)).count, 2)
     }
 
     func test_rails_cameraOff_myImageKeepsOnlyCameraAndScreen() {
-        let rows = CallControlsDisposition.rails.rails(actions(isVideoEnabled: false), layer: .menu)
+        let rows = CallControlsDisposition.rails.railRows(actions(isVideoEnabled: false), layer: .menu)
         XCTAssertEqual(rows.first { $0.family == .myImage }?.actions, [.camera, .screenShare])
     }
 
     func test_rails_cameraOn_myImageIsCameraFlipEffectsScreen() {
-        let rows = CallControlsDisposition.rails.rails(actions(), layer: .menu)
+        let rows = CallControlsDisposition.rails.railRows(actions(), layer: .menu)
         XCTAssertEqual(rows.first { $0.family == .myImage }?.actions, [.camera, .flipCamera, .effects, .screenShare])
     }
 
     func test_rails_theCall_isCaptionsRecordAddJournalReactCapture() {
-        let rows = CallControlsDisposition.rails.rails(actions(), layer: .menu)
+        let rows = CallControlsDisposition.rails.railRows(actions(), layer: .menu)
         XCTAssertEqual(rows.first { $0.family == .theCall }?.actions, [.captions, .recording, .addPeople, .journal, .react, .capture])
     }
 
@@ -100,7 +100,7 @@ final class CallControlsDispositionTests: XCTestCase {
 
     func test_rows_neverDrawsARailOverTheGrid() {
         for layer in [CallScreenLayer.idle, .menu, .panel(.journal), .panel(.react), .mode(.montage)] {
-            XCTAssertTrue(CallControlsDisposition.rows.rails(actions(), layer: layer).isEmpty, "\(layer)")
+            XCTAssertTrue(CallControlsDisposition.rows.railRows(actions(), layer: layer).isEmpty, "\(layer)")
         }
     }
 
@@ -129,22 +129,22 @@ final class CallControlsDispositionTests: XCTestCase {
         let set = actions()
         let duo = CallControlsDisposition.resolve(participantCount: 2)
         let group = CallControlsDisposition.resolve(participantCount: 3)
-        XCTAssertEqual(duo.rails(set, layer: layer).map(\.family), [.myImage, .theCall])
+        XCTAssertEqual(duo.railRows(set, layer: layer).map(\.family), [.myImage, .theCall])
         XCTAssertTrue(duo.pillRows(set, layer: layer).isEmpty)
         XCTAssertEqual(group.pillRows(set, layer: layer).map(\.family), [.myImage, .theCall])
-        XCTAssertTrue(group.rails(set, layer: layer).isEmpty)
+        XCTAssertTrue(group.railRows(set, layer: layer).isEmpty)
         XCTAssertEqual(layer.reconciled(with: set), .menu, "La disposition ne réécrit jamais l'état du (…)")
     }
 
     func test_fromThreeToTwo_aClosedMenuStaysClosed() {
         let set = actions()
         XCTAssertTrue(CallControlsDisposition.rows.pillRows(set, layer: .idle).isEmpty)
-        XCTAssertTrue(CallControlsDisposition.rails.rails(set, layer: .idle).isEmpty)
+        XCTAssertTrue(CallControlsDisposition.rails.railRows(set, layer: .idle).isEmpty)
     }
 
     func test_everyActionAppearsExactlyOnce_inEitherDisposition() {
         let set = actions()
-        let onRails = CallControlsDisposition.rails.rails(set, layer: .menu).flatMap(\.actions)
+        let onRails = CallControlsDisposition.rails.railRows(set, layer: .menu).flatMap(\.actions)
         let inRows = CallControlsDisposition.rows.pillRows(set, layer: .menu).flatMap(\.actions)
         XCTAssertEqual(onRails, inRows)
         XCTAssertEqual(Set(onRails).count, onRails.count)
@@ -158,17 +158,8 @@ final class CallControlsDispositionTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(Layout.buttonSide, 44)
     }
 
-    func test_height_countsEveryButtonAndItsGaps() {
-        XCTAssertEqual(Layout.height(buttonCount: 0), 0)
-        XCTAssertEqual(Layout.height(buttonCount: 1), Layout.buttonSide + 2 * Layout.padding)
-        XCTAssertEqual(
-            Layout.height(buttonCount: 6),
-            6 * Layout.buttonSide + 5 * Layout.buttonSpacing + 2 * Layout.padding
-        )
-    }
-
     /// Portrait : la pilule occupe presque toute la largeur, les rails s'arrêtent au-dessus d'elle.
-    func test_bottomClearance_portrait_railsStopAbovethePill() {
+    func test_bottomClearance_portrait_railsStopAboveThePill() {
         XCTAssertEqual(Layout.bottomClearance(containerWidth: 393, safeHorizontal: 0), Layout.pillHeight + Layout.pillGap)
     }
 
@@ -176,5 +167,22 @@ final class CallControlsDispositionTests: XCTestCase {
     /// et se centrent verticalement.
     func test_bottomClearance_landscape_railsFitBesideThePill() {
         XCTAssertEqual(Layout.bottomClearance(containerWidth: 844, safeHorizontal: 59), 0)
+    }
+
+    // MARK: - L'entrée et la sortie par le bord
+
+    func test_slideOffset_leadingRailLeavesByTheLeftEdge_trailingByTheRight() {
+        XCTAssertLessThan(Layout.slideOffset(side: .leading, isRightToLeft: false, safeHorizontal: 0), 0)
+        XCTAssertGreaterThan(Layout.slideOffset(side: .trailing, isRightToLeft: false, safeHorizontal: 0), 0)
+    }
+
+    func test_slideOffset_rightToLeft_mirrorsTheEdges() {
+        XCTAssertGreaterThan(Layout.slideOffset(side: .leading, isRightToLeft: true, safeHorizontal: 0), 0)
+        XCTAssertLessThan(Layout.slideOffset(side: .trailing, isRightToLeft: true, safeHorizontal: 0), 0)
+    }
+
+    func test_slideOffset_clearsTheRailAndTheSafeAreaCompletely() {
+        let travel = abs(Layout.slideOffset(side: .leading, isRightToLeft: false, safeHorizontal: 59))
+        XCTAssertGreaterThanOrEqual(travel, Layout.railWidth + Layout.edgeInset + 59)
     }
 }

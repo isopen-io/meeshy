@@ -158,21 +158,20 @@ final class CallScreenLayerTests: XCTestCase {
 
     // MARK: - Les options caméra (#8576)
 
-    func test_cameraRail_videoOnPhone_flipCameraEffectsScreen_inOrder() {
-        XCTAssertEqual(CallCameraRail.actions(from: actions()), [.flipCamera, .camera, .effects, .screenShare])
+    func test_myImage_videoOnPhone_cameraFlipEffectsScreen_inOrder() {
+        XCTAssertEqual(actions().myImage, [.camera, .flipCamera, .effects, .screenShare])
     }
 
-    func test_cameraRail_selectableCameras_offersThePicker() {
-        XCTAssertEqual(CallCameraRail.actions(from: actions(hasSelectableCameras: true)), [.cameraPicker, .camera, .effects, .screenShare])
+    func test_myImage_selectableCameras_offersThePicker() {
+        XCTAssertEqual(actions(hasSelectableCameras: true).myImage, [.camera, .cameraPicker, .effects, .screenShare])
     }
 
-    func test_cameraRail_onMac_offersCameraAndEffectsOnly() {
-        XCTAssertEqual(CallCameraRail.actions(from: actions(isOnMac: true)), [.camera, .effects])
+    func test_myImage_onMac_offersCameraAndEffectsOnly() {
+        XCTAssertEqual(actions(isOnMac: true).myImage, [.camera, .effects])
     }
 
-    func test_cameraRail_neverOffersAnActionOfTheCall() {
-        let rail = Set(CallCameraRail.actions(from: actions()))
-        XCTAssertTrue(rail.isDisjoint(with: Set(actions().theCall)))
+    func test_myImage_neverOffersAnActionOfTheCall() {
+        XCTAssertTrue(Set(actions().myImage).isDisjoint(with: Set(actions().theCall)))
     }
 
     func test_isMyImageFullScreen_duo_followsTheLocalPrimary() {
