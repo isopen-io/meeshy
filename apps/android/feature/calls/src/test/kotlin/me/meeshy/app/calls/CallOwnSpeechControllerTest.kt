@@ -7,8 +7,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.MeeshyUser
@@ -55,9 +57,10 @@ class CallOwnSpeechControllerTest {
     private fun runHarness(
         endToEnd: Boolean? = false,
         readiness: OwnSpeechReadiness = OwnSpeechReadiness(OwnSpeechSupport.Available, "fr-FR"),
+        eager: Boolean = true,
         block: suspend TestScope.(Harness) -> Unit,
     ) = runTest {
-        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        val scope = CoroutineScope(if (eager) UnconfinedTestDispatcher(testScheduler) else StandardTestDispatcher(testScheduler))
         val captions = CallCaptionsController(
             wires = CallCaptionsWires(
                 relayed = MutableSharedFlow<CallTranslatedSegmentPayload>(),
@@ -135,6 +138,38 @@ class CallOwnSpeechControllerTest {
         muted.value = false
         listening.tryEmit(CallTranscriptionActive("call-1", "peer", active = false))
         assertThat(isCapturing).isFalse()
+    }
+
+    @Test
+    fun `a segment already in flight when I mute never leaves, even before the capture has stopped`() = runHarness(eager = false) { h ->
+        h.connected()
+        advanceUntilIdle()
+        h.captions.advance()
+        advanceUntilIdle()
+        assertThat(isCapturing).isTrue()
+
+        muted.value = true
+        heard.tryEmit(CallSpeechEvent.Final("Bonjour", 0.9))
+        advanceUntilIdle()
+
+        assertThat(sentToPeer).isEmpty()
+        assertThat(relayed).isEmpty()
+        assertThat(h.captions.state.value.journal.segments).isEmpty()
+        assertThat(isCapturing).isFalse()
+    }
+
+    @Test
+    fun `unmuting after a cut resumes the capture and my next words leave again`() = runHarness { h ->
+        h.connected()
+        h.captions.advance()
+        muted.value = true
+        assertThat(isCapturing).isFalse()
+
+        muted.value = false
+        assertThat(isCapturing).isTrue()
+        heard.tryEmit(CallSpeechEvent.Partial("Re"))
+
+        assertThat(sentToPeer.map { it.text }).containsExactly("Re")
     }
 
     @Test
