@@ -31,6 +31,13 @@ extension View {
         adaptiveLiquidGlass(in: Capsule(), tint: isActive ? tint.opacity(MeeshyOpacity.strong) : nil, interactive: true)
     }
 
+    /// Prominent red Liquid Glass circle for the hang-up button.
+    func endCallGlass(diameter: CGFloat) -> some View {
+        self
+            .frame(width: diameter, height: diameter)
+            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
+    }
+
     /// #8394 — le verre d'un GROUPE flottant qui ne porte AUCUN bouton de verre
     /// (bandeau de sous-titres, puce de durée, légende de la scène). Un voile
     /// sombre sous le contenu garde le verre lisible sur une image claire
@@ -43,11 +50,9 @@ extension View {
 
     /// #8459 — la pilule d'appel est UN bloc de verre réel (`glassEffect`
     /// sous iOS 26, matériau avant) : les boutons Plus · Micro · Sortie · Fin
-    /// ET les actions déployées du (…) vivent dedans. #17323 — chacun de ces
-    /// boutons est lui-même un verre (`CallButtonGlassModifier`), composé avec ses
-    /// voisins dans un `AdaptiveGlassContainer`. Un voile sombre dessous garde
-    /// les légendes lisibles sur une image claire (écran partagé, document
-    /// filmé).
+    /// ET les actions déployées du (…) vivent dedans. #17323 — chacun est lui-même
+    /// un verre (`CallButtonGlassModifier`). Un voile sombre dessous garde les
+    /// légendes lisibles sur une image claire (écran partagé, document filmé).
     func callControlsGlass<S: Shape>(in shape: S) -> some View {
         self
             .background(shape.fill(Color.black.opacity(MeeshyOpacity.light)))
