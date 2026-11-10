@@ -229,7 +229,7 @@ jobs:
               echo "agent=true" >> $GITHUB_OUTPUT
             else
             echo "webapp=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-            echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"apps/web/dma-coquille/"* ]] || [[ "$CHANGED" == *"apps/web/src/lib/e2ee/"* ]] || [[ "$CHANGED" == *"apps/web/scripts/build-dma-coquille.ts"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             fi
