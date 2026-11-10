@@ -1,9 +1,9 @@
-Meeshy 1.1.3 — todo se crea en la escena
+Meeshy 1.1.7 — más fácil de empezar, más agradable cada día.
 
-• Stickers: una sola hoja, en tus chats y también en tus historias, publicaciones y reels; Mee y Meo cobran vida, y una Tienda instala o quita un pack con un toque
-• Editor: toca la herramienta Texto para crear tu escena y edita texto, imágenes, stickers y fondo directamente en ella; un pellizco agranda tu texto sin romper sus líneas
-• Tus fotos y vídeos se editan en la escena antes de enviarlos: recorta una imagen (Original, 1:1, 4:5, 9:16), acorta un vídeo, y la cámara se abre a pantalla completa
-• Barra de redacción más ligera: fototeca y cámara con un toque, e iconos con los colores de tu efecto
-• Llamadas: ve cuándo la otra persona apaga su cámara o su micro, retoma una llamada interrumpida en lugar de perderla, y una llamada en grupo sigue cuando alguien se va; en vídeo, un tono de piel natural y un suavizado ajustable
-• Un enlace de Meeshy abierto sin cuenta muestra la publicación y quién te la compartió; un reel sin texto muestra su leyenda, y editar una publicación conserva su tipo
-• Correcciones y más fluidez
+• Vista previa de conversaciones: una pulsación larga muestra la conversación sin abrirla y su menú se desliza hacia arriba; un toque corto la abre.
+• Muéstrate: desde el registro, pon tu foto y tu portada, retocadas con el mismo editor que la cámara.
+• Cámara: temporizador de 3 s y 10 s, nivel de horizonte, botones de volumen y Camera Control para disparar y hacer zoom, vídeo estabilizado.
+• Llamadas: antes de contestar, elige micrófono y cámara y mira lo que verá la otra persona, o contesta sin vídeo.
+• Accesibilidad: cada botón se anuncia en VoiceOver, los textos siguen el tamaño elegido y cada control se toca con facilidad.
+
+Y, por supuesto, correcciones y más fluidez en todas partes.

@@ -203,6 +203,10 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         XCTAssertEqual(Self.invoker(above: 2, in: gesture), .gesture)
         XCTAssertTrue(Self.isExposed(gestureAt: 0, in: exposed))
         XCTAssertFalse(Self.isExposed(gestureAt: 0, in: bare))
+        let builder = [".onTapGesture(count: 2) { open() }", ".accessibilityActions {", "    if on { Button(\"x\") { open() } }", "}"]
+        let emptyBuilder = [".onTapGesture { open() }", ".accessibilityActions { rows }"]
+        XCTAssertTrue(MeeshyUISourceScan.ungatedTapGestures(in: builder.joined(separator: "\n")).isEmpty)
+        XCTAssertEqual(MeeshyUISourceScan.ungatedTapGestures(in: emptyBuilder.joined(separator: "\n")), [1])
     }
 
     func test_lesLibellesNeufsSontTraduitsDansLesSeptLangues() throws {
