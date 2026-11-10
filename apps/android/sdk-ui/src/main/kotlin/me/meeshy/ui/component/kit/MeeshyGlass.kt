@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -174,8 +175,8 @@ public fun MeeshyGlass(
                 drawContent()
                 val topLight = rest.topLight + (full.topLight - rest.topLight) * glow
                 if (topLight > 0f) {
-                    val outline = shape.createOutline(size, layoutDirection, this)
-                    drawOutline(outline, if (glow == 0f) restTopLight else sheenBrush(topLight), style = Stroke(width = 1.dp.toPx()))
+                    val edge = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithContent)) }
+                    drawPath(edge, if (glow == 0f) restTopLight else sheenBrush(topLight), style = Stroke(width = 1.dp.toPx()))
                 }
             }
             .then(if (rim != null) Modifier.border(1.dp, rim, shape) else Modifier),
