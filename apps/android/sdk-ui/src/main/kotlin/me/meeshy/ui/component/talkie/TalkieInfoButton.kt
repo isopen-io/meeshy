@@ -7,9 +7,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +33,7 @@ import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.icons.MeeshyIcons
 
 public const val TALKIE_INFO_TAG: String = "talkie.info"
 public const val TALKIE_INFO_BUBBLE_TAG: String = "talkie.info.bubble"
@@ -61,7 +59,7 @@ public fun TalkieInfoButton(tint: Color = MeeshyPalette.Indigo500, modifier: Mod
                 }
                 .testTag(TALKIE_INFO_TAG),
         ) {
-            Icon(Icons.Outlined.Info, contentDescription = null, tint = tint)
+            Icon(MeeshyIcons.Info, contentDescription = null, tint = tint)
         }
         if (showing) {
             Popup(
@@ -89,7 +87,7 @@ private fun TalkieInfoBubble(text: String) {
             modifier = Modifier.padding(MeeshySpacing.lg),
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         ) {
-            Icon(Icons.Filled.Warning, contentDescription = null, tint = MeeshyPalette.Indigo500)
+            Icon(MeeshyIcons.WarningFilled, contentDescription = null, tint = MeeshyPalette.Indigo500)
             Text(text = text, style = MaterialTheme.typography.bodyMedium, color = MeeshyTheme.tokens.textPrimary)
         }
     }

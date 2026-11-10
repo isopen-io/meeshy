@@ -11,9 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -50,6 +47,7 @@ import me.meeshy.ui.component.talkie.talkieHold
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.icons.MeeshyIcons
 
 internal const val PROFILE_TALKIE_SEND_TAG = "talkie.send"
 
@@ -142,7 +140,7 @@ private fun HoldButton(live: Boolean, label: String, a11yName: String, modifier:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.CenterHorizontally),
     ) {
-        Icon(if (live) Icons.Filled.GraphicEq else Icons.Filled.Mic, contentDescription = null, tint = tint)
+        Icon(if (live) MeeshyIcons.Waveform else MeeshyIcons.Mic, contentDescription = null, tint = tint)
         Text(text = label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = tint)
     }
 }
