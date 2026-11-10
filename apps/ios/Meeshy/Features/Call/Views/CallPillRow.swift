@@ -37,6 +37,8 @@ struct CallPanelHeader: View {
     }
 }
 
+/// #17323 — une rangée du (…) : ses puces sont des verres interactifs voisins,
+/// composés dans un `AdaptiveGlassContainer` sans toucher à l'accroche du défilement.
 struct CallPillRow<Content: View>: View {
     let title: String?
     let content: Content
