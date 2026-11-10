@@ -206,10 +206,13 @@ describe('ouvrir une conversation externe', () => {
       purgeAfter: NOW,
     };
 
+    const winnerConversation = { id: '507f1f77bcf86cd799439c99', isActive: true, closedAt: null, participants: [{ userId: ALICE, isActive: true }] };
+    world.conversations.push(winnerConversation);
+
     const opening = await open(world);
 
     expect(opening).toMatchObject({ kind: 'opened', conversationId: '507f1f77bcf86cd799439c99', created: false });
-    expect(world.conversations).toEqual([]);
+    expect(world.conversations).toEqual([winnerConversation]);
   });
 });
 

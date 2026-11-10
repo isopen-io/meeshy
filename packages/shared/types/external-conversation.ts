@@ -30,6 +30,19 @@ export const EXTERNAL_CONVERSATION_ERROR_CODES = {
   PHONE_UNVERIFIED: 'EXTERNAL_CONVERSATION_PHONE_UNVERIFIED',
   /** La demande ne respecte pas le contrat (réseau inconnu, numéro hors E.164, champ en trop). */
   INVALID: 'EXTERNAL_CONVERSATION_INVALID',
+  /**
+   * Le compte ne peut pas encore choisir le bout en bout (`mayChooseEndToEnd`,
+   * phase de test) : une conversation externe ne naît qu'en `e2ee`.
+   */
+  END_TO_END_RESERVED: 'EXTERNAL_CONVERSATION_END_TO_END_RESERVED',
+  /** Le compte garde déjà `EXTERNAL_CONVERSATION_ACTIVE_CAP` adresses d'amis : une ouverture NEUVE est refusée. */
+  LIMIT_REACHED: 'EXTERNAL_CONVERSATION_LIMIT_REACHED',
+  /**
+   * Une conversation externe n'a qu'un membre Meeshy, son ouvreur : aucune porte
+   * (ajout, invitation, lien, jonction par lien) n'y fait entrer quelqu'un. Un
+   * second membre écrirait sous l'identité téléphonique de l'ouvreur.
+   */
+  SINGLE_MEMBER: 'EXTERNAL_CONVERSATION_SINGLE_MEMBER',
 } as const;
 
 export type ExternalConversationErrorCode =
@@ -46,3 +59,25 @@ export const EXTERNAL_PEER_HANDLE_RETENTION_DAYS = 90;
 
 /** La borne qu'aucune durée de conservation du numéro ne franchit, quelle que soit la décision à venir. */
 export const EXTERNAL_PEER_HANDLE_RETENTION_MAX_DAYS = 365;
+
+/**
+ * Le nombre d'adresses d'amis qu'un compte peut garder à la fois (une par
+ * conversation externe ouverte et vivante). Fermer une conversation efface
+ * son adresse et libère une place.
+ */
+export const EXTERNAL_CONVERSATION_ACTIVE_CAP = 50;
+
+/** Les ouvertures (neuves ou non) qu'un compte peut demander par heure. */
+export const EXTERNAL_CONVERSATION_OPENINGS_PER_HOUR = 20;
+
+/**
+ * LA loi « un seul membre Meeshy » : une conversation de ce type admet-elle
+ * qu'on y fasse entrer quelqu'un d'autre que son ouvreur ? Consultée par toute
+ * porte d'entrée (balayage `external-conversation-doors-sweep.test.ts`).
+ */
+/** Le message lisible d'un refus `SINGLE_MEMBER`, le même à chaque porte. */
+export const EXTERNAL_SINGLE_MEMBER_MESSAGE = 'Nobody else can join a conversation with a friend on another network';
+
+export function conversationAdmitsNewMembers(type: string | null | undefined): boolean {
+  return type !== EXTERNAL_CONVERSATION_TYPE;
+}

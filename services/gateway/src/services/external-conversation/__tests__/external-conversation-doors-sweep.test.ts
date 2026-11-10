@@ -4,8 +4,9 @@
  *
  * 1. **Un seul membre Meeshy.** Toute porte qui fait entrer quelqu'un dans une
  *    conversation existante — celles qui décident l'entrée par
- *    `resolveConversationEntry`, la jonction par lien (`admitLinkEntry`) et la
- *    création d'un lien (`mayMintShareLink`) — consulte le prédicat UNIQUE
+ *    `resolveConversationEntry` (dont le cœur de la jonction par lien,
+ *    `linkAdmission.ts`, que ses trois routes appellent) et la création d'un
+ *    lien (`mayMintShareLink`) — consulte le prédicat UNIQUE
  *    `conversationAdmitsNewMembers`. Le discriminant est l'appel à la loi
  *    d'entrée : une cinquième porte qui l'appelle entre dans ce balayage sans
  *    que personne y pense.
@@ -42,7 +43,7 @@ const codeOf = (text: string): string =>
 
 const sources = productionFiles(SRC).map((path) => ({ file: relative(SRC, path), code: codeOf(readFileSync(path, 'utf8')) }));
 
-const ENTRY_LAWS = ['resolveConversationEntry(', 'admitLinkEntry(', 'mayMintShareLink('];
+const ENTRY_LAWS = ['resolveConversationEntry(', 'mayMintShareLink('];
 
 /** Les fichiers qui DÉFINISSENT une loi d'entrée, sans être une porte. */
 const DEFINES_ENTRY_LAW = new Set([

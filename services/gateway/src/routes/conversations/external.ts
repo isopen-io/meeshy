@@ -15,6 +15,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest, preHandlerHookHandl
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   EXTERNAL_CONVERSATION_ERROR_CODES,
+  EXTERNAL_CONVERSATION_OPENINGS_PER_HOUR,
   EXTERNAL_CONVERSATION_TYPE,
 } from '@meeshy/shared/types/external-conversation';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -26,9 +27,10 @@ import {
   externalConversationRequestSchema,
   openExternalConversation,
   type ExternalConversationOpening,
+  type ExternalConversationRefusal,
 } from '../../services/external-conversation/open-external-conversation';
 import { nascentRegimeDeps, type NascentRegimeDeps } from '../../services/conversations/creationRegime';
-import { sendBadRequest, sendForbidden, sendInternalError, sendSuccess, sendUnauthorized } from '../../utils/response';
+import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendSuccess, sendUnauthorized } from '../../utils/response';
 
 export type ExternalConversationRouteOptions = {
   readonly env?: Readonly<Record<string, string | undefined>>;
@@ -37,7 +39,41 @@ export type ExternalConversationRouteOptions = {
 
 const DISABLED_MESSAGE = 'Writing to a friend on another network is not available yet';
 const INVALID_MESSAGE = 'Expected a supported network and a phone number in international format (E.164)';
-const PHONE_UNVERIFIED_MESSAGE = 'Verify your phone number to write to a friend on another network';
+
+/** Le refus servi pour chaque refus du service : statut, code stable, message lisible par un ancien client. */
+const REFUSALS: Readonly<Record<ExternalConversationRefusal, { readonly status: number; readonly code: string; readonly message: string }>> = {
+  'phone-unverified': {
+    status: 403,
+    code: EXTERNAL_CONVERSATION_ERROR_CODES.PHONE_UNVERIFIED,
+    message: 'Verify your phone number to write to a friend on another network',
+  },
+  'end-to-end-reserved': {
+    status: 403,
+    code: EXTERNAL_CONVERSATION_ERROR_CODES.END_TO_END_RESERVED,
+    message: 'End-to-end encrypted conversations are not available to your account yet',
+  },
+  'limit-reached': {
+    status: 409,
+    code: EXTERNAL_CONVERSATION_ERROR_CODES.LIMIT_REACHED,
+    message: 'Close a conversation with a friend on another network before opening a new one',
+  },
+};
+
+/**
+ * Le débit PAR COMPTE (audit adversarial du 2026-11-10) : le limiteur global
+ * compte par adresse IP ; celui-ci borne ce qu'un compte peut demander, ouvertures
+ * neuves comme réouvertures. Compté après l'authentification (`preHandler`), et
+ * fermé si le compteur tombe.
+ */
+const openingRateLimit = {
+  max: EXTERNAL_CONVERSATION_OPENINGS_PER_HOUR,
+  timeWindow: '1 hour',
+  hook: 'preHandler' as const,
+  skipOnError: false,
+  keyGenerator: (request: FastifyRequest) =>
+    `external-conversation:open:${(request as UnifiedAuthRequest).authContext?.registeredUser?.id ?? `ip:${request.ip}`}`,
+  errorResponseBuilder: () => ({ success: false, error: 'Too many conversations opened. Try again later.', statusCode: 429 }),
+};
 
 /** Ce qu'une erreur inattendue laisse au journal : son nom et son code, jamais son message. */
 const errorTrace = (error: unknown): { readonly name: string; readonly code: string | null } => ({
@@ -73,6 +109,7 @@ const errorResponses = {
   400: errorResponseSchema,
   401: errorResponseSchema,
   403: errorResponseSchema,
+  409: errorResponseSchema,
   429: errorResponseSchema,
   500: errorResponseSchema,
 } as const;
@@ -103,6 +140,7 @@ export function registerExternalConversationRoute(
     '/conversations/external',
     {
       preValidation: [requiredAuth],
+      config: { rateLimit: openingRateLimit },
       schema: {
         description: 'Open (or reopen) an end-to-end encrypted conversation with a friend on another network, addressed by phone number',
         tags: ['conversations'],
@@ -125,7 +163,8 @@ export function registerExternalConversationRoute(
       try {
         const opening = await openExternalConversation({ prisma, regime }, { userId, ...parsed.data });
         if (opening.kind === 'refused') {
-          return sendForbidden(reply, PHONE_UNVERIFIED_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.PHONE_UNVERIFIED });
+          const refusal = REFUSALS[opening.refusal];
+          return sendError(reply, refusal.status, refusal.message, { code: refusal.code });
         }
         return sendOpening(reply, opening, parsed.data.network);
       } catch (error) {

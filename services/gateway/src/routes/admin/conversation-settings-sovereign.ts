@@ -70,6 +70,7 @@ import { emitConversationMemberCountEvent } from '../../socketio/emitConversatio
 import { endConversationMembership } from '../../socketio/endConversationMembership';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
+import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers';
 import {
   composeConversationUpdate,
   broadcastConversationUpdated,
@@ -255,6 +256,8 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
       const apres = ferme
         ? (await fastify.prisma.$transaction([ecriture, deactivateShareLinksOnClose(fastify.prisma, conversationId)]))[0]
         : await ecriture;
+      // #17117 — le numéro de l'ami d'une conversation externe ne survit pas au fil.
+      if (ferme) await eraseExternalPeerOnClose(fastify.prisma, { id: conversationId, type: avant.type });
 
       const { manager, io: serveur } = io(fastify);
       if (Object.keys(changedFields).length > 0) {
