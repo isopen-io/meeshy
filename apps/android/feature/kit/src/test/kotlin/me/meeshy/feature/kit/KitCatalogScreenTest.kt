@@ -24,6 +24,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
+import com.google.common.truth.Truth.assertWithMessage
 import me.meeshy.ui.component.kit.MeeshyKitCatalogEntry
 import me.meeshy.ui.component.kit.MeeshyKitCatalogState
 import me.meeshy.ui.theme.DarkMeeshyTokens
@@ -203,7 +204,8 @@ class KitCatalogScreenTest {
             val layout = textLayoutOf(node)
             assertThat(node.boundsInRoot.left).isAtLeast(0f)
             assertThat(node.boundsInRoot.right).isAtMost(width)
-            assertThat(layout.hasVisualOverflow).isFalse()
+            assertWithMessage("« $text » rognée en largeur : ${layout.size.width} < ${layout.multiParagraph.width}")
+                .that(layout.didOverflowWidth).isFalse()
             assertThat(layout.layoutInput.layoutDirection).isEqualTo(LayoutDirection.Rtl)
             assertThat(layout.layoutInput.density.fontScale).isEqualTo(2f)
         }
