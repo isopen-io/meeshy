@@ -79,6 +79,28 @@ const expectOpened = (received: readonly Received[], from: PorteParty, plaintext
   if (!mine.some((item) => item.text === plaintext)) throw new StepFailure('enveloppe reçue mais illisible ou différente du message envoyé');
 };
 
+const WASM_MAGIC = [0x00, 0x61, 0x73, 0x6d] as const;
+
+const getCoquille = (options: ScenarioOptions, name: string) => options.fetch(`${options.baseUrl}${PORTE_PATH}/coquille/${name}`, { method: 'GET', headers: {} });
+
+const expectFile = async (options: ScenarioOptions, name: string, contentType: string) => {
+  const response = await getCoquille(options, name);
+  if (response.status !== 200) throw new StepFailure(`${name} : statut ${response.status}`);
+  if (!(response.headers.get('content-type') ?? '').startsWith(contentType)) throw new StepFailure(`${name} : type ${response.headers.get('content-type') ?? 'absent'}`);
+  return response;
+};
+
+/** Ouvrir la coquille, c'est charger sa page, son module et le WASM du pont, sous une politique qui laisse ce WASM se compiler. */
+const expectCoquilleServed = async (options: ScenarioOptions): Promise<void> => {
+  const page = await getCoquille(options, '');
+  if (page.status !== 200) throw new StepFailure(`statut ${page.status} (la porte est-elle ouverte au staging ?)`);
+  if (!(await page.text()).includes('data-coquille')) throw new StepFailure('la page servie n’est pas la coquille');
+  if (!(page.headers.get('content-security-policy') ?? '').includes("'wasm-unsafe-eval'")) throw new StepFailure('la politique de contenu interdit de compiler le WASM (\'wasm-unsafe-eval\' absent)');
+  await expectFile(options, 'coquille.js', 'text/javascript');
+  const wasm = new Uint8Array(await (await expectFile(options, 'libsignal_wasm_bg.wasm', 'application/wasm')).arrayBuffer());
+  if (!WASM_MAGIC.every((byte, index) => wasm[index] === byte)) throw new StepFailure('libsignal_wasm_bg.wasm : ce n’est pas un module WASM');
+};
+
 const meeshyParty = (context: Context): MeeshyParty => ({ side: 'meeshy', userId: required(context.userId, 'compte'), deviceId: context.options.meeshyDeviceId ?? 42 });
 const friendParty = (context: Context): ExternalParty => ({ side: 'external', network: 'whatsapp', handle: context.options.handle, deviceId: 1 });
 
@@ -94,9 +116,7 @@ const STEPS: readonly Step[] = [
   {
     name: 'la coquille est servie',
     run: async (context) => {
-      const response = await context.options.fetch(`${context.options.baseUrl}${PORTE_PATH}/coquille/`, { method: 'GET', headers: {} });
-      if (response.status !== 200) throw new StepFailure(`statut ${response.status} (la porte est-elle ouverte au staging ?)`);
-      if (!(await response.text()).includes('data-coquille')) throw new StepFailure('la page servie n’est pas la coquille');
+      await expectCoquilleServed(context.options);
       return context;
     },
   },
