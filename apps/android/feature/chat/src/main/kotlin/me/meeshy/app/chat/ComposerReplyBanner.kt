@@ -34,7 +34,7 @@ internal data class ComposerReplyBanner(
                 else -> ReplyBannerAuthor.Unknown
             }
             val isProtected = bubble.isBlurred || bubble.isViewOnce
-            val preview = bubble.text.trim().takeUnless { isProtected || it.isEmpty() }
+            val preview = (bubble.quotedNoticeText ?: bubble.text).trim().takeUnless { isProtected || it.isEmpty() }
             return ComposerReplyBanner(author, preview, kindOf(bubble))
         }
 
