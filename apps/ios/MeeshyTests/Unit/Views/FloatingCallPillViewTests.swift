@@ -795,6 +795,7 @@ final class CallParticipantVisualTests: XCTestCase {
 // Libellés d'accessibilité de la pilule d'appel, nommés comme la planche
 // `docs/product/appels-vue-finale.md` (P1.13, P2.5, P2.6, #17417).
 
+@MainActor
 final class CallPillLabelsTests: XCTestCase {
 
     private static let langues = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
