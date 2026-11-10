@@ -226,13 +226,10 @@ nonisolated final class TalkiePushToTalkDelegate: NSObject, PTChannelManagerDele
         self.prepareAudio = prepareAudio
     }
 
-    /// PushToTalk n'active la session audio — et n'appelle `didActivate` — que si elle est en `.playAndRecord`.
+    /// PushToTalk n'active la session audio — et n'appelle `didActivate` — que si elle est en `.playAndRecord`. La pose
+    /// passe par la file du coordinateur de session, comme toute écriture de session (#17038).
     static func preparePlayAndRecord() {
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP])
-        } catch {
-            Logger.talkiePTT.error("talkie · session audio PushToTalk non préparée : \(error.localizedDescription, privacy: .public)")
-        }
+        MediaSessionCoordinator.shared.preparePushToTalkPlayAndRecord()
     }
 
     /// La session du compte finit : un réveil annoncé pour lui ne se rejoint plus.

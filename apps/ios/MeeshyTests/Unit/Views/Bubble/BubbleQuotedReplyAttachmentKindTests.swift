@@ -605,26 +605,32 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     /// cette moitié, un hôte pourrait empiler un second geste sur la citation
     /// (« ouvrir le fil », « répondre à nouveau ») sans qu'aucune garde ne
     /// bouge : le composant, lui, resterait à trois.
+    ///
+    /// Chaque zone a aussi sa face VoiceOver (#17296) : l'action nommée
+    /// « Ouvrir le message cité », qui appelle le MÊME geste. Elle n'est pas
+    /// un second point actionnable — c'est la même zone, lue autrement — et
+    /// elle se compte à part : exactement une par zone posée dans le fichier.
     func test_loiDesZones_chaqueHoteNePoseQuUneSeuleZone3() throws {
-        let hosts: [(path: String, marker: String, floor: Int, jump: String, sites: Int)] = [
+        let hosts: [(path: String, marker: String, floor: Int, jump: String, sites: Int, mirrors: Int)] = [
             (
                 "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
                 "struct BubbleStandardLayout", 20_000,
                 // Depuis #10628 la carte citée de la bulle et celle de l'emoji
                 // en réponse partagent UN geste (`openQuotedTarget`). Le type
                 // se lit comme son unité (#10678) : la bulle texte et l'emoji
-                // en réponse y posent chacun leur unique appel.
-                "openQuotedTarget(reply)", 2
+                // en réponse y posent chacun leur unique toucher. L'unité
+                // comprend `+Media`, d'où sa face VoiceOver en plus des deux.
+                ".onTapGesture { openQuotedTarget(reply) }", 2, 3
             ),
             (
                 "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
                 "func mediaWithReplyContainer", 5_000,
-                "onStoryReplyTap?(reply.reference.messageId)", 1
+                "onStoryReplyTap?(reply.reference.messageId)", 1, 1
             ),
             (
                 "Meeshy/Features/Main/Views/ConversationMediaViews.swift",
                 "struct AudioMediaView", 20_000,
-                "onStoryReplyTap?(ref.messageId)", 1
+                "onStoryReplyTap?(ref.messageId)", 1, 1
             )
         ]
 
@@ -635,6 +641,11 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
                 "\(host.path) doit poser EXACTEMENT \(host.sites) zone(s) 3 (retour au message cité) autour de la " +
                 "citation. \(code.components(separatedBy: host.jump).count - 1) trouvée(s) : moins = la citation " +
                 "n'est plus suivable, plus = un second point actionnable pour une seule capacité."
+            )
+            XCTAssertEqual(
+                code.components(separatedBy: "a11y.main.quotedReply.open").count - 1, host.mirrors,
+                "\(host.path) : chaque zone 3 porte UNE action VoiceOver « Ouvrir le message cité » — ni zone muette " +
+                "pour VoiceOver, ni seconde action pour la même zone."
             )
             XCTAssertTrue(
                 code.contains("onQuotedAuthorTap: onQuotedAuthorTap"),
