@@ -171,6 +171,13 @@ final class OnboardingViewModel: ObservableObject {
         user.map { $0.displayName ?? $0.username } ?? ""
     }
 
+    /// La photo déjà posée sur le compte : l'aperçu « Montre-toi » la montre
+    /// tant qu'aucune nouvelle image n'est choisie (#17236).
+    var userAvatarURL: String? {
+        guard let avatar = user?.avatar, !avatar.isEmpty else { return nil }
+        return avatar
+    }
+
     /// Le pseudo affiché sous le nom dans l'aperçu « Montre-toi » (#17236).
     var userHandle: String? {
         guard let username = user?.username, !username.isEmpty else { return nil }
