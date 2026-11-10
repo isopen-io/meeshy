@@ -2,19 +2,23 @@ package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
@@ -79,8 +83,9 @@ internal fun CallHeaderBar(
 
 /**
  * La puce de verre (miroir de iOS `durationChip`) : glyphe de signal transitoire, durée tabulaire qui se
- * recompose seule, wifi d'alerte du réseau du pair, flèche de reconnexion. Un toucher ouvre la feuille de
- * qualité ; TalkBack lit UNE phrase composée ([CallVideoBadgeAccessibility]) suivie de la durée parlée.
+ * recompose seule, wifi d'alerte du réseau du pair, flèche de reconnexion. #17323 — elle s'ouvre au toucher (la feuille
+ * de qualité) : un verre interactif, comme les boutons voisins. TalkBack lit UNE phrase composée
+ * ([CallVideoBadgeAccessibility]) suivie de la durée parlée.
  */
 @Composable
 private fun CallDurationChip(state: CallUiState, onOpenQualityDetail: () -> Unit) {
@@ -103,32 +108,41 @@ private fun CallDurationChip(state: CallUiState, onOpenQualityDetail: () -> Unit
     val hint = stringResource(R.string.call_quality_open_hint)
     val warning = MeeshyTheme.tokens.warning
     val glassTone = LocalCallGlassTone.current
-    Row(
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    CallGlassPlate(
         modifier = Modifier
             .height(CHIP_HEIGHT)
-            .clip(CircleShape)
-            .background(glassTone.veil(glassTone.chipScrimAlpha), CircleShape)
-            .clickable(role = Role.Button, onClick = onOpenQualityDetail)
-            .padding(horizontal = MeeshySpacing.smPlus, vertical = MeeshySpacing.xs)
+            .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onOpenQualityDetail)
             .semantics(mergeDescendants = true) {
                 contentDescription = description
                 onClick(label = hint) { onOpenQualityDetail(); true }
             },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+        shape = RoundedCornerShape(percent = 50),
+        liquid = true,
     ) {
-        TransientCallSignalGlyph(strength)
-        CallDurationClockText(
-            hasLiveClock = state.hasLiveClock,
-            fixedSeconds = state.durationSeconds,
-            fixedLabel = state.durationLabel,
-            color = CallPalette.Ink,
-        )
-        if (state.isPeerQualityDegraded) {
-            Icon(MeeshyIcons.WifiProblem, contentDescription = null, tint = warning, modifier = Modifier.size(14.dp))
-        }
-        if (reconnecting) {
-            Icon(MeeshyIcons.Sync, contentDescription = null, tint = warning, modifier = Modifier.size(14.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxHeight()
+                .background(glassTone.veil(glassTone.chipScrimAlpha))
+                .background(CallButtonFill.pressedHighlight(pressed))
+                .padding(horizontal = MeeshySpacing.smPlus, vertical = MeeshySpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+        ) {
+            TransientCallSignalGlyph(strength)
+            CallDurationClockText(
+                hasLiveClock = state.hasLiveClock,
+                fixedSeconds = state.durationSeconds,
+                fixedLabel = state.durationLabel,
+                color = CallPalette.Ink,
+            )
+            if (state.isPeerQualityDegraded) {
+                Icon(MeeshyIcons.WifiProblem, contentDescription = null, tint = warning, modifier = Modifier.size(14.dp))
+            }
+            if (reconnecting) {
+                Icon(MeeshyIcons.Sync, contentDescription = null, tint = warning, modifier = Modifier.size(14.dp))
+            }
         }
     }
 }
