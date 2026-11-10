@@ -138,11 +138,19 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
     const shapes = [screen({ members: { 'u-peer': member() } }), screen({ cameraOn: true, members: { 'u-peer': member() } }), screen({ isGroup: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } })];
     for (const html of shapes) {
       const pill = html.slice(html.indexOf('data-call-control-pill'));
-      const order = ['Plus d’actions', 'Couper le micro', 'Choisir les périphériques', 'Raccrocher'].map((label) => pill.indexOf(`aria-label="${label}"`));
+      const order = ['Afficher les actions', 'Couper le micro', 'Choisir la sortie audio', 'Raccrocher'].map((label) => pill.indexOf(`aria-label="${label}"`));
       expect(order.every((index) => index >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
       expect(html).toMatch(/class="glass-call[^"]*"[^>]*data-call-control-pill/);
     }
+  });
+
+  test('le bouton (…) annonce l’action : « Masquer les actions » une fois ouvert', () => {
+    expect(expandedScreen({ members: { 'u-peer': member() } })).toMatch(/aria-label="Masquer les actions"[^>]*data-call-more/);
+  });
+
+  test('micro coupé, le bouton annonce « Réactiver le micro »', () => {
+    expect(screen({ micMuted: true, members: { 'u-peer': member() } })).toContain('aria-label="Réactiver le micro"');
   });
 
   test('(…) dit son état : actions rangées à l’ouverture de l’appel', () => {
@@ -158,16 +166,16 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
   });
 
   test('Réduire est un bouton de verre isolé', () => {
-    expect(screen({ members: { 'u-peer': member() } })).toMatch(/aria-label="Réduire l’appel"[^>]*class="glass-call/);
+    expect(screen({ members: { 'u-peer': member() } })).toMatch(/aria-label="Réduire"[^>]*class="glass-call/);
   });
 
   test('UN seul chemin vers la conversation : « Conversation » dans l’en-tête, juste à droite de Réduire (#8436)', () => {
     const html = screen({ members: { 'u-peer': member() } });
     const header = html.slice(html.indexOf('data-call-header'));
-    const order = ['aria-label="Réduire l’appel"', 'data-call-conversation'].map((marker) => header.indexOf(marker));
+    const order = ['aria-label="Réduire"', 'data-call-conversation'].map((marker) => header.indexOf(marker));
     expect(order.every((at) => at >= 0)).toBe(true);
     expect(order[0]).toBeLessThan(order[1] as number);
-    expect(header).toMatch(/aria-label="Ouvrir la conversation"[^>]*class="glass-call/);
+    expect(header).toMatch(/aria-label="Conversation"[^>]*class="glass-call/);
     expect(html).not.toContain('data-call-control="messages"');
   });
 
