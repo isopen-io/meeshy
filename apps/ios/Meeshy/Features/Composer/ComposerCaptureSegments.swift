@@ -123,14 +123,12 @@ nonisolated enum ComposerCaptureSegments {
 /// (vue A9, #17109).
 ///
 /// Chaque format a sa durée maximale : une story se lit d'un trait, un réel
-/// porte un peu plus. La barre du haut découpe ce maximum en cases égales qui
-/// se remplissent pendant qu'on filme, segments déjà pris compris ; l'anneau
+/// porte un peu plus. La barre du haut est UNE piste continue de ce maximum,
+/// remplie pendant qu'on filme, et découpée seulement à partir de deux prises
+/// (#17433, `ComposerCaptureProgressDisplay.isSegmented`) ; l'anneau
 /// rouge du déclencheur dit la même fraction. À la limite, la prise se clôt
 /// d'elle-même plutôt que de produire un fichier que le format refusera.
 nonisolated enum ComposerCaptureRecordingBudget {
-
-    /// Le nombre de cases de la barre (vue A9).
-    static let slots = 5
 
     /// La durée maximale d'une prise pour ce format ; `nil` ⇒ le format ne
     /// filme pas (un statut n'a pas de scène).

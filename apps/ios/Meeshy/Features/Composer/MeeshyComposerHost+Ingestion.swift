@@ -63,57 +63,35 @@ extension MeeshyComposerHost {
     /// image n'a pas de durée, et `ComposerMediaProbe.durationMs` la
     /// classerait `nil` de toute façon — l'appeler ici serait un aller-retour
     /// pour rien.
-    /// **Ce qu'un COLLAGE pose** (#4092) — et il ne pose pas comme l'atelier.
-    ///
-    /// L'atelier a `posePastedItems`, qui route vers `addCapturedMedia` et
-    /// `addRecordingToBackground` : deux helpers qui portent son état de
-    /// CHARGEMENT (`isLoadingMedia`, `mediaLoadProgress`), une orchestration de
-    /// vue que le meuble n'a pas et n'a pas à recopier.
-    ///
-    /// Le meuble a le sien, et il est déjà écrit : `ingestCameraCapture` pose
-    /// une image ou une vidéo dans `documentLocalMedia`, en sondant le mime et
-    /// la durée. Un collage d'image EST une capture, du point de vue de ce qui
-    /// arrive dans le document — la seule différence est d'où viennent les
-    /// octets.
-    ///
-    /// **Ce n'est donc pas une réécriture de `posePastedItems`, c'est le même
-    /// geste branché sur l'ingestion de CE meuble.** Recopier les helpers de
-    /// l'atelier aurait apporté avec eux un état de chargement dont rien ici ne
-    /// se sert (leçon 336 : emprunter ce qui décide, pas ce qui orchestre).
-    ///
-    /// Le TEXTE, lui, garde sa règle partagée : `StoryPastePolicy` décide s'il
-    /// devient la description ou un objet de scène, et cette question ne dépend
-    /// pas de la surface qui colle.
+    /// **Ce qu'un COLLAGE pose** (#4092, #17434) : la destination vient de
+    /// `ComposerPasteRouting` — une image fait le FOND, un texte va au contenu de
+    /// la publication ; vidéo et son passent par l'ingestion de CE meuble.
     func handlePastedItems(_ items: [StoryPastedItem]) {
         guard sceneIntakeAllowsAnother else { return }
         for item in items {
-            switch item {
-            case .image(let image):
-                // Une image venue du presse-papier n'a pas d'octets d'origine
-                // à nous remettre : le repli redresse et ré-encode.
-                Task { await ingestCameraCapture(.photo(image, data: nil)) }
-            case .video(let url):
+            switch (ComposerPasteRouting.target(for: item), item) {
+            case (.sceneBackground, .image(let image)):
+                pasteAsSceneBackground(image)
+            case (.sceneMedia, .video(let url)):
                 Task { await ingestCameraCapture(.video(url)) }
-            case .audio(let url):
-                // Un son collé rejoint la scène comme un son EMPRUNTÉ le ferait
-                // — c'est le même objet, et `addAudioObject` en est le site
-                // unique. Le fichier voyage par `loadedAudioURLs`.
+            case (.sceneSound, .audio(let url)):
                 viewModel.attachPastedAudio(url: url)
-            case .text(let contenu):
-                switch StoryPastePolicy.placement(forText: contenu) {
-                case .description(let texte):
-                    documentText = texte
-                case .textObject(let texte):
-                    if let objet = viewModel.addText() {
-                        viewModel.updateTextContent(id: objet.id, text: texte)
-                        viewModel.exitTextEditingMode()
-                    }
-                case nil:
-                    break   // coller le vide n'est pas une erreur, c'est un geste sans matière
-                }
+            case (.publicationText, .text(let contenu)):
+                documentText = ComposerPasteRouting.publicationText(current: documentText, pasted: contenu)
+            default:
+                break
             }
         }
         HapticFeedback.light()
+    }
+
+    /// Une image collée devient le FOND (#17434), en remplaçant l'ancien comme « Remplacer ».
+    private func pasteAsSceneBackground(_ image: UIImage) {
+        let fondActuel = viewModel.currentSlide.effects.mediaObjects?.first { $0.isBackground }?.id
+        let dejaUnFond = fondActuel != nil || viewModel.slideImages[viewModel.currentSlide.id] != nil
+        if dejaUnFond { backgroundReplacementId = fondActuel ?? viewModel.currentSlide.id }
+        railPosesNextMedia = true
+        Task { await ingestCameraCapture(.photo(image, data: nil)) }
     }
 
     func ingestCameraCapture(_ result: CameraResult) async {

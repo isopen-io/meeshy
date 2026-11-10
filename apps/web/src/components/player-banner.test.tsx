@@ -180,7 +180,7 @@ describe('accessible', () => {
     }
   });
 
-  test('une cible d’au moins 44 px (bandeau 48 : anneau, jauge, rang) ; les pièces du milieu font 24, sur deux lignes', async () => {
+  test('une cible d’au moins 44 px (bandeau 48 : anneau, jauge, rang) ; les pièces du milieu font 24, sur deux lignes — le contenant de l’Héritage entre le Rêve et la ligue (#17437)', async () => {
     expect(markup(newcomer())).toMatch(/data-player-banner=""[^>]*min-height:(4[4-9]|[5-9]\d)px/);
     const host = await mount(<PlayerBanner model={modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }))} motion={motion().value} />);
     const direct = Array.from(host.querySelectorAll('[data-player-banner] > a[data-player-banner-link]'));
@@ -191,7 +191,7 @@ describe('accessible', () => {
     );
     expect(rows).toEqual([
       ['flame', 'meesh'],
-      ['missions', 'league'],
+      ['missions', 'meesh', 'league'],
     ]);
     for (const link of Array.from(host.querySelectorAll('[data-player-banner-middle] a[data-player-banner-link]'))) expect(link.getAttribute('style') ?? '').toMatch(/min-height:\s*24px/);
   });
@@ -231,6 +231,19 @@ describe('le toucher : chaque pièce ouvre SA fiche (porteur 2026-10-16)', () =>
     expect(host.querySelector('a[data-player-banner-link="showcase"]')?.getAttribute('aria-label')).toBe('Trophées : 2');
     expect(host.querySelector('a[data-player-banner-link="missions"]')?.getAttribute('aria-label')).toBe('Rêve : 1 sur 3');
     expect(host.querySelector('a[data-player-banner-link="season"]')?.getAttribute('aria-label')).toBe('Voyage : 25 pas');
+  });
+
+  test('le contenant de l\'Héritage : sous la Flamme, à droite du Rêve, il ouvre la fiche Meesh (#17437)', async () => {
+    const model: PlayerBannerModel = { ...newcomer(), flame: { form: 'braise', days: 3 }, missions: { done: 1, total: 3 }, treasury: 'coffre', league: { league: 'jade', place: 4 } };
+    const host = await mount(<PlayerBanner model={model} />);
+    const bottom = host.querySelector('[data-player-banner-row="bottom"]');
+    const order = [...(bottom?.querySelectorAll('[data-player-banner-link]') ?? [])].map((link) => link.getAttribute('data-player-banner-link'));
+    expect(order).toEqual(['missions', 'meesh', 'league']);
+    const piece = bottom?.querySelector('[data-player-banner-treasury="coffre"]');
+    expect(piece?.querySelector('[data-treasury-emblem="coffre"]')).not.toBeNull();
+    const link = piece?.closest('a');
+    expect(link?.getAttribute('href')).toBe('/me/progression/concept/meesh');
+    expect(link?.getAttribute('aria-label')).toBe('Héritage : Coffre');
   });
 
   test('une pièce absente n\'a pas de lien', async () => {

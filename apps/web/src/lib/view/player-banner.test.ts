@@ -77,6 +77,13 @@ describe('seulement ce qui a du sens (#9536)', () => {
     expect(shown({ ...NEWCOMER, balance: 1 }).meeshes).toBe(1);
   });
 
+  test('le contenant de l’Héritage paraît avec la première Meesh gardée, nommé par son palier (#17437)', () => {
+    expect(shown(NEWCOMER).treasury).toBeNull();
+    expect(shown({ ...NEWCOMER, balance: 1 }).treasury).toBe('bourse');
+    expect(shown({ ...NEWCOMER, balance: 120 }).treasury).toBe('coffre');
+    expect(playerBannerPieceLabels(shown({ ...NEWCOMER, balance: 120 }), 'fr').treasury).toBe('Héritage : Coffre');
+  });
+
   test('pas de Gloire : pas de blason ; il paraît dès la première Gloire', () => {
     expect(shown(NEWCOMER).rank).toBeNull();
     const model = shown({ ...NEWCOMER, glory: 1 });
@@ -131,7 +138,7 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
 
   test('fr : tout ce qui existe, dans l’ordre de la rangée compacte — l’anneau, le milieu, le rang au bout (#11125)', () => {
     const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Rêve : \d+ sur \d+, joute de Jade · \d+(re|e), Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III$/u);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Rêve : \d+ sur \d+, Héritage : Escarcelle, joute de Jade · \d+(re|e), Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III$/u);
   });
 
   test('fr : trophées et saison ne sont dits que dans la disposition grand texte, où ils restent (#11125)', () => {
@@ -151,7 +158,7 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
 
   test('en : l’ordinal anglais de la place', () => {
     const model = shownExtras({ balance: 12, streak: 23 });
-    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Flame 23 days, .*, Dream: \d+ of \d+, Jade joust · \d+(st|nd|rd|th), .*$/);
+    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Flame 23 days, .*, Dream: \d+ of \d+, Legacy: Pouch, Jade joust · \d+(st|nd|rd|th), .*$/);
   });
 
   test('aucune langue ne laisse une clé nue, un paramètre en clair ou un « undefined »', () => {

@@ -13,8 +13,7 @@ final class ComposerCaptureRecordingBudgetTests: XCTestCase {
         XCTAssertNil(ComposerCaptureRecordingBudget.maxDuration(for: .status))
     }
 
-    func test_theBar_hasFiveSlots_andItsFractionIsBounded() {
-        XCTAssertEqual(ComposerCaptureRecordingBudget.slots, 5)
+    func test_theBarFraction_isBounded() {
         XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: 30, budget: 60), 0.5, accuracy: 0.0001)
         XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: 12, budget: nil), 0)
         XCTAssertEqual(ComposerCaptureRecordingBudget.fraction(elapsed: 500, budget: 60), 1)
@@ -170,6 +169,47 @@ final class ComposerCaptureProgressDisplayTests: XCTestCase {
 
     func test_spans_withoutBudget_isEmpty() {
         XCTAssertTrue(ComposerCaptureProgressDisplay.spans(segments: [6], live: 3, capturing: true, budget: nil).isEmpty)
+    }
+
+    // MARK: - Une ligne tant qu'il n'y a qu'une prise, N segments à partir de deux (#17433)
+
+    func test_isSegmented_noTakeYet_isOneContinuousLine() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [], live: 0, capturing: true, budget: 60)
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isSegmented(parts), "la tenue qui commence n'est pas un segment")
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isSegmented([]))
+    }
+
+    func test_isSegmented_firstTakeRecording_isOneContinuousLine() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [], live: 12, capturing: true, budget: 60)
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isSegmented(parts),
+                       "au premier enregistrement, la barre est une seule ligne qui avance")
+        XCTAssertEqual(ComposerCaptureProgressDisplay.gap(parts), 0)
+    }
+
+    func test_isSegmented_oneClosedTake_isOneContinuousLine() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [12], live: 0, capturing: false, budget: 60)
+        XCTAssertFalse(ComposerCaptureProgressDisplay.isSegmented(parts))
+        XCTAssertEqual(ComposerCaptureProgressDisplay.gap(parts), 0)
+    }
+
+    func test_isSegmented_secondTakeRecording_cutsTheLineInTwo() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [12], live: 3, capturing: true, budget: 60)
+        XCTAssertEqual(parts.count, 2)
+        XCTAssertTrue(ComposerCaptureProgressDisplay.isSegmented(parts))
+        XCTAssertGreaterThan(ComposerCaptureProgressDisplay.gap(parts), 0, "deux prises se lisent séparées")
+    }
+
+    func test_isSegmented_threeTakes_drawsThreeSegments() {
+        let parts = ComposerCaptureProgressDisplay.spans(segments: [6, 12, 4], live: 0, capturing: false, budget: 60)
+        XCTAssertEqual(parts.count, 3)
+        XCTAssertTrue(ComposerCaptureProgressDisplay.isSegmented(parts))
+    }
+
+    func test_budgetBar_drawsOneTrack_neverFixedSlots() throws {
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertFalse(barre.contains("ComposerCaptureRecordingBudget.slots"),
+                       "des cases fixes se lisent comme des segments dès la première prise")
+        XCTAssertTrue(barre.contains("ComposerCaptureProgressDisplay.gap("), "l'écart vient de la loi")
     }
 
     // MARK: - L'anneau
