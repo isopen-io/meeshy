@@ -4,7 +4,8 @@ import MeeshySDK
 import MeeshyUI
 
 // #8394 — la pilule du bas, identique en audio, en vidéo et en groupe :
-// (…) · Micro · Sortie · Fin. #8459 — la pilule est UN bloc de verre réel.
+// (…) · Micro · Sortie · Fin. #8459 — la pilule est UN bloc de verre réel,
+// #17323 — et chacun de ses boutons un verre interactif à lui.
 // #8550 — le (…) empile au-dessus de la rangée de base une rangée par
 // famille (« Mon image », « L'appel »). #8578 — un panneau REMPLACE les
 // rangées, jamais empilé. La conversation n'est pas une action : sa seule
@@ -179,33 +180,35 @@ extension CallView {
     /// légendées sont déployées au-dessus d'eux.
     private var baseRow: some View {
         let captioned = layer.isExpanded
-        return HStack(alignment: .top, spacing: 0) {
-            moreButton(captioned: captioned)
-                .frame(maxWidth: .infinity)
-            muteButton(captioned: captioned)
-                .frame(maxWidth: .infinity)
-            // §7.1/§7.3 — sur Mac la sortie est celle du système : un
-            // basculement de haut-parleur y serait un contrôle inerte.
-            if !isOnMac {
-                CallOutputPillButton(
-                    isSpeaker: callManager.isSpeaker,
-                    caption: captioned ? String(localized: "call.control.output.caption", defaultValue: "Sortie", bundle: .main) : nil,
-                    diameter: Self.pillGlyphDiameter,
-                    onToggleSpeaker: { callManager.toggleSpeaker() }
-                )
+        return AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
+            HStack(alignment: .top, spacing: 0) {
+                moreButton(captioned: captioned)
+                    .frame(maxWidth: .infinity)
+                muteButton(captioned: captioned)
+                    .frame(maxWidth: .infinity)
+                // §7.1/§7.3 — sur Mac la sortie est celle du système : un
+                // basculement de haut-parleur y serait un contrôle inerte.
+                if !isOnMac {
+                    CallOutputPillButton(
+                        isSpeaker: callManager.isSpeaker,
+                        caption: captioned ? String(localized: "call.control.output.caption", defaultValue: "Sortie", bundle: .main) : nil,
+                        diameter: Self.pillGlyphDiameter,
+                        onToggleSpeaker: { callManager.toggleSpeaker() }
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                CallPillButton(
+                    symbol: "phone.down.fill",
+                    kind: .destructive,
+                    label: String(localized: "call.end", defaultValue: "Raccrocher", bundle: .main),
+                    caption: captioned ? String(localized: "call.end.caption", defaultValue: "Raccrocher", bundle: .main) : nil,
+                    hint: String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main),
+                    diameter: Self.pillGlyphDiameter
+                ) {
+                    callManager.endCall()
+                }
                 .frame(maxWidth: .infinity)
             }
-            CallPillButton(
-                symbol: "phone.down.fill",
-                kind: .destructive,
-                label: String(localized: "call.end", defaultValue: "Raccrocher", bundle: .main),
-                caption: captioned ? String(localized: "call.end.caption", defaultValue: "Raccrocher", bundle: .main) : nil,
-                hint: String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main),
-                diameter: Self.pillGlyphDiameter
-            ) {
-                callManager.endCall()
-            }
-            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, MeeshySpacing.smPlus)
@@ -226,7 +229,7 @@ extension CallView {
                 diameter: Self.pillGlyphDiameter
             )
         }
-        .buttonStyle(CallPressButtonStyle())
+        .buttonStyle(CallPressButtonStyle(glassPressesItself: true))
         .accessibilityLabel(CallControlsCopy.more)
         .accessibilityHint(CallControlsCopy.moreHint)
         .accessibilityValue(CallControlsCopy.moreValue(isExpanded: isExpanded))
