@@ -22,9 +22,25 @@ Ce fichier sert à reprendre le chantier depuis une session neuve, sur un autre 
 | Le catalogue tient sans compte (l'accueil plein écran ne le recouvre plus) ; fiche en mode clair ; verre `onLight` lisible sous Liquid Glass | #17398, #17411 |
 | Le verre sur média se rend en sombre quelle que soit l'apparence (contrastes mesurés sur le Mac) | #17416 |
 
+## Déjà fait, à ne PAS refaire (état à l'arrêt du tour, 2026-11-10 21 h 25, heure de Paris)
+
+Le tour `wf_416c8fe9-eb0` a été arrêté à la demande du porteur pendant `prouver:K01:ios:2`, une étape qui ne fait que lire la CI. Tout ce qu'il avait produit était déjà poussé et fusionné : les trois branches de lot n'ont plus aucun commit absent de `dev`.
+
+| étape | K00 Catalogue | K01 Le verre (`MeeshyGlassTone`) | K02 |
+|---|---|---|---|
+| fiche de contrat (Spécifier) | ✅ `docs/product/kit/K00-Catalogue.md` | ✅ `docs/product/kit/K01-MeeshyGlassTone.md` + `.vectors.json` | ⬜ à écrire |
+| issue de lot | ✅ #17335 | ✅ #17400 | ⬜ |
+| iOS | ✅ livré #17336, relu, prouvé vert | ✅ livré #17401 + #17430, relu, corrigé, prouvé vert (sdk-tests run 42854312207) ; la 2ᵉ preuve a été interrompue, elle n'a rien à refaire | ⬜ |
+| Android | ✅ livré #17399, relu, prouvé vert | ⬜ à faire | ⬜ |
+| web | ⬜ à faire | ⬜ à faire | ⬜ |
+
+Une session neuve relance le tour : il trouve les fiches, les issues et les PR fusionnées, et ne doit reprendre que les cases ⬜. Si un agent propose de réécrire une fiche ✅ ou de rouvrir une branche fusionnée, c'est un doublon : l'arrêter.
+
+**Travail d'une autre session, hors du kit, sauvegardé incomplet.** Une session du Mac travaillait sur #17441 (citer un appel, une arrivée ou un départ) dans le dossier principal, sans avoir poussé. Ses commits (`05781f0266` shared, `f47322f096` gateway, `29b116d66d` jeu) et une modification non commitée de `project.pbxproj` sont copiés sur la branche **`claude/project-thread-mzpa78`** (commit `1d8c17fd34`, qui remplace `db2fdcffd9`), avec tout le travail non commité du dossier : la suite web et shared de #17441 (quotable-notice, message-actions, quoted-preview, use-reply-preview, message-blocks…) et le travail en cours d'une autre session sur le viseur du composer (`ComposerViewfinderScene`, `StoryCanvasTouchClaim` et voisins, sans doute #17432). Cette branche est une copie de secours, pas une PR : la session qui reprend part de là (`git cherry-pick` des commits utiles, ou `git checkout 1d8c17fd34 -- <fichiers>`, sur une branche neuve depuis `dev`), au lieu de recommencer. Le détail de #17441 est dans https://github.com/isopen-io/meeshy/issues/17441#issuecomment-6778419775 .
+
 ## Ce qui reste
 
-- **Tour pilote** (`seulement: K00, K01, K02`) : K00 web, K01 Android et web, K02 sur les trois plateformes. Le run en cours au moment de la passation était à `prouver:K01:ios:2`.
+- **Tour pilote** (`seulement: K00, K01, K02`) : K00 web, K01 Android et web, K02 sur les trois plateformes. Le tour a été arrêté pendant `prouver:K01:ios:2` (voir le tableau ci-dessus).
 - **Tour kit complet** (`etape: kit`, sans `seulement`), à répéter jusqu'aux 26 lots livrés sur iOS, Android et web.
 - **Tour intégrations** (`etape: integration`) : s'arrête à la PR ouverte. Captures web faites dans le conteneur ; captures iOS et Android par le Mac du porteur, avec son accord, une fois par vague.
 - **Tour vérification** (`etape: verifier`), répété jusqu'à zéro écart bloquant sur 70 vues × 3 plateformes. Écarts actuels de couverture : #17349 à #17356.
