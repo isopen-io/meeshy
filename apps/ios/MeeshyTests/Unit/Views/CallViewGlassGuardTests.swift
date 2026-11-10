@@ -119,6 +119,17 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(handler.contains("layer"), "De deux à trois, l'état du (…) ne bouge pas : seule la forme change")
     }
 
+    /// #17327 — les boutons de ma vignette retirés vibraient au toucher pour
+    /// allumer ou couper la caméra et pour arrêter le partage d'écran : le rail
+    /// gauche et la rangée « Mon image », qui les remplacent, gardent ce retour.
+    func test_myImageButtons_keepTheTouchFeedbackOfTheRemovedTileButtons() throws {
+        let code = try callViewCode()
+        let camera = try block("private func cameraActionButton(captioned: Bool, diameter: CGFloat) -> some View {", until: "private func cameraPickerActionButton", in: code)
+        XCTAssertTrue(camera.contains("HapticFeedback.light()\n            callManager.cameraActuator.toggleVideo()"), "Caméra : retour au toucher avant la bascule")
+        let screenShare = try block("case .screenShare:", until: "case .captions:", in: code)
+        XCTAssertTrue(screenShare.contains("if callManager.screenShare.isSharing { HapticFeedback.light() }"), "Écran : retour au toucher à l'arrêt du partage")
+    }
+
     /// Le bloc de verre est un verre RÉEL sous iOS 26 (`adaptiveGlass`, qui
     /// porte le `glassEffect` et le repli matériau) ; les disques de verre
     /// voisins qu'il porte se composent dans un `AdaptiveGlassContainer`.
