@@ -273,6 +273,7 @@ struct ComposerCaptureChrome: View {
             cropPresets
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
             ComposerCaptureGestureHint(session: session)
+            ComposerFlashStrikeLayer(flash: session.flash, recording: session.stage == .recording)
             VStack(spacing: 0) {
                 // Toujours montée : une rangée retirée peut rester peinte le temps
                 // d'une transition, et porte la croix qui présente l'alerte.
@@ -290,15 +291,7 @@ struct ComposerCaptureChrome: View {
                 }
             }
             .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop, chromeVeilBottom], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
-            if session.isRenderingLook {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .controlSize(.large)
-                    .padding(MeeshySpacing.lg)
-                    .adaptiveLiquidGlass(in: Circle())
-                    .accessibilityLabel(ComposerCaptureCopy.rendering)
-            }
+            if session.isRenderingLook { renderingSpinner }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
@@ -375,6 +368,17 @@ struct ComposerCaptureChrome: View {
             .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
             .transition(.opacity)
         }
+    }
+
+    /// Le rendu du look est en cours : la prise attend, et le dit.
+    private var renderingSpinner: some View {
+        ProgressView()
+            .progressViewStyle(.circular)
+            .tint(.white)
+            .controlSize(.large)
+            .padding(MeeshySpacing.lg)
+            .adaptiveLiquidGlass(in: Circle())
+            .accessibilityLabel(ComposerCaptureCopy.rendering)
     }
 
     /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur

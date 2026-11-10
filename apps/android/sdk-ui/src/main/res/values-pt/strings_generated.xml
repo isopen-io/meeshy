@@ -83,7 +83,7 @@
     <string name="bring_confirm_body">O Bring é só para emergências extremas. Ele toca até %1$s parar, no máximo dois minutos. O Meeshy não é um serviço de emergência: em caso de perigo, ligue para os serviços de emergência.</string>
     <string name="bring_confirm_send">Fazer tocar</string>
     <string name="bring_confirm_title">Fazer o telefone de %1$s tocar?</string>
-    <string name="bring_explain">Para uma emergência extrema: o telefone dela toca, mesmo no silencioso.</string>
+    <string name="bring_explain">Para uma emergência extrema: o telefone dela toca, mesmo bloqueado. Conforme os ajustes, um iPhone no silencioso pode mostrar só um alerta prioritário.</string>
     <string name="bring_failed">O Bring não foi enviado, tente de novo</string>
     <string name="bring_offline">O Bring precisa de conexão</string>
     <string name="bring_quota">Sem mais Bring hoje para %1$s</string>

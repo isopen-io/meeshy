@@ -83,7 +83,7 @@
     <string name="bring_confirm_body">Bring ist nur für extreme Notfälle. Es klingelt, bis %1$s es stoppt, höchstens zwei Minuten. Meeshy ist kein Notdienst: Bei Gefahr ruf den Notruf an.</string>
     <string name="bring_confirm_send">Klingeln lassen</string>
     <string name="bring_confirm_title">Das Telefon von %1$s klingeln lassen?</string>
-    <string name="bring_explain">Für einen extremen Notfall: Das Telefon klingelt, auch im Lautlos-Modus.</string>
+    <string name="bring_explain">Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt. Ein iPhone im Lautlos-Modus zeigt je nach Einstellung nur einen dringenden Hinweis.</string>
     <string name="bring_failed">Das Bring wurde nicht gesendet, versuch es erneut</string>
     <string name="bring_offline">Bring braucht eine Verbindung</string>
     <string name="bring_quota">Heute kein Bring mehr an %1$s</string>

@@ -83,7 +83,7 @@
     <string name="bring_confirm_body">Bring is for extreme emergencies only. It rings until %1$s stops it, two minutes at most. Meeshy is not an emergency service: if you’re in danger, call emergency services.</string>
     <string name="bring_confirm_send">Ring</string>
     <string name="bring_confirm_title">Ring %1$s’s phone?</string>
-    <string name="bring_explain">For an extreme emergency: their phone rings, even on silent.</string>
+    <string name="bring_explain">For an extreme emergency: their phone rings, even when locked. Depending on settings, an iPhone on silent may only show a priority alert.</string>
     <string name="bring_failed">The Bring didn’t go through, try again</string>
     <string name="bring_offline">Bring needs a connection</string>
     <string name="bring_quota">No more Brings to %1$s today</string>

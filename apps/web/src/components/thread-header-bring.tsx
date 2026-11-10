@@ -42,9 +42,9 @@ export function ThreadHeaderBring({
   const [notice, announce] = useTransientNotice();
   const bring = usePersonBring({ language, personId: peerId, name: peerName, offered: true, onNotice: announce, store, deps });
   const state = bringHeaderState({ availability: bring.availability, ringing: bring.ringing });
-  const quota = translateCircles(language, 'bring.quota', { name: peerName });
 
   if (!ready) return null;
+  const quota = translateCircles(language, 'bring.quota', { name: peerName });
   const label =
     state === 'ringing'
       ? `${translateCircles(language, 'bring.cancel')} · ${translateCircles(language, 'bring.ringing', { name: peerName })}`
