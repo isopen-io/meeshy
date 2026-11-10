@@ -82,9 +82,8 @@ describe('railRows — les rails du duo', () => {
     expect(railRows('rails', set(), menu).find((row) => row.family === 'call')?.actions).toEqual(['captions', 'record', 'invite', 'journal', 'react', 'capture']);
   });
 
-  test('un rail sans bouton ne sort pas', () => {
-    expect(families(railRows('rails', set({ cameraOn: false, canShare: false }), menu))).toEqual(['mine', 'call']);
-    expect(families(railRows('rails', set({ phase: { kind: 'outgoing' }, canShare: false, cameraOn: false }), menu))).toEqual(['mine', 'call']);
+  test('un rail sans bouton ne sort pas : pendant la sonnerie, « l’appel » n’a rien à offrir', () => {
+    expect(families(railRows('rails', set({ phase: { kind: 'outgoing' }, canShare: false, cameraOn: false }), menu))).toEqual(['mine']);
   });
 
   test('chaque famille a son bord : « mon image » au début, « l’appel » à la fin', () => {

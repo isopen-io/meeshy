@@ -10,9 +10,7 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { useFlip } from '@/lib/use-flip';
 import { useTileDrag, type TileOffset } from '@/components/use-tile-drag';
 import { useTilePinch } from '@/components/use-tile-pinch';
-import type { MineAction } from '@/lib/calls/call-controls';
 import type { CallModeration } from '@/lib/calls/call-moderation';
-import { inSelfGroup, selfRowBounds, selfRowsLayout, selfRowWidth, type SelfControlGroup, type SelfRow } from '@/lib/calls/call-self-controls';
 import {
   cornerAfterArrow,
   nearestSelfCorner,
@@ -30,6 +28,7 @@ import {
   type SelfTileScale,
   type TileSize,
 } from '@/lib/calls/call-self-tile';
+import type { ZoomControl } from '@/lib/calls/call-self-controls';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall } from '@/lib/calls/call-store';
@@ -54,11 +53,10 @@ import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color
  *   et son coin tient pour l'appel. Ses rangées la suivent pendant le geste.
  * - Le micro coupé du pair (#8787) se voit SUR son image — grande ou en
  *   vignette — et se dit dans le libellé de la scène, chrome masqué ou non.
- * - Les commandes de MA caméra (#8626) vivent AUTOUR de ma vignette (#8747) :
- *   Effets · Écran au-dessus, Retourner · Couper et le cran du zoom en
- *   dessous (`selfRowsLayout`) ; quand mon image passe en PLEIN ÉCRAN, elles
- *   montent en haut au centre. La vignette se pose 8 rem sous la zone sûre
- *   dans les deux cas : la rangée du haut tient entre elle et l'en-tête.
+ * - Ma vignette ne porte AUCUNE commande (#17327) : Caméra, Retourner, Effets
+ *   et Écran sont le rail « mon image » du `(…)` (`call-screen.tsx`). Seul le
+ *   cran du zoom (#8441) vit dans son coin haut, quand une cible de 44 y tient ;
+ *   en PLEIN ÉCRAN, mon image porte la capsule du zoom sur le bord.
  * - Mon image en plein écran, DUO ou GROUPE (ma tuile à la une, #9182), porte
  *   le zoom de ma caméra, chargé à part (`call-self-camera.tsx`). Tout se
  *   retire dans un mode.
@@ -68,12 +66,8 @@ import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color
 export type SelfView = {
   readonly full: boolean;
   readonly onToggle: () => void;
-  /** Les commandes de ma caméra (rangée, zoom) — retirées dans un mode. */
-  readonly controls: boolean;
-  /** Les commandes de ma caméra offertes — la largeur des rangées autour de ma vignette. */
-  readonly mine: readonly MineAction[];
-  /** La rangée des commandes de ma caméra (#8626) : entière en haut au centre en plein écran, une moitié (`group`) de chaque côté de ma vignette (#8747). */
-  readonly row: (group?: SelfControlGroup) => ReactNode;
+  /** Le zoom de ma caméra, là où la loi le pose (`zoomControlIn`) : le cran de ma vignette, la capsule du plein écran, ou rien — sans vignette, ou dans un mode. */
+  readonly zoom: ZoomControl | null;
   /** La colonne de la capsule du zoom, sur le bord. */
   readonly column: (capsule: ReactNode) => ReactNode;
   /** Le zoom de ma caméra courante (#9182) — absent : un témoin qui n'en parle pas (aucun zoom offert, ancien comportement). */
@@ -85,6 +79,11 @@ export type SelfView = {
 };
 
 const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
+
+const CallZoomStep = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallZoomStep })));
+
+/** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */
+const ZOOM_STEP_ROOM = 52;
 
 const TILE_SAID: Readonly<Record<SelfTileScale, 'callControls.selfTile.small' | 'callControls.selfTile.medium' | 'callControls.selfTile.large'>> = {
   1: 'callControls.selfTile.small',
@@ -157,22 +156,6 @@ function PeerMuted({ where }: { readonly where: 'main' | 'corner' }) {
     </span>
   );
 }
-
-/** Une moitié des commandes de ma caméra, posée hors de ma vignette (`row` est relatif au cadre de la vignette). */
-function SelfRowSlot({ group, row, tile, children }: { readonly group: SelfControlGroup; readonly row: SelfRow; readonly tile: { readonly x: number; readonly y: number }; readonly children: ReactNode }) {
-  return (
-    <div
-      className="absolute top-0 left-0 z-20 flex justify-center transition-[translate] duration-200 motion-reduce:transition-none"
-      style={{ translate: `${row.x - tile.x}px ${row.y - tile.y}px`, width: row.width, height: row.height }}
-      data-call-self-row={group}
-      data-call-self-row-side={row.side}
-    >
-      {children}
-    </div>
-  );
-}
-
-const controlsTop = (topInset: number) => ({ top: `calc(env(safe-area-inset-top) + 3.5rem + ${topInset}px)` }) as const;
 
 function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
   const sharer = screenSharer(call.members);
@@ -260,7 +243,6 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
     duration: SELF_TILE_FLIP_MS,
     easing: 'ease-out',
   });
-  const tileBox = offset === null ? rest : { ...rest, x: rest.x + offset.dx, y: rest.y + offset.dy };
   const onArrow = (event: KeyboardEvent<HTMLButtonElement>): void => {
     const next = swapped ? null : cornerAfterArrow(corner, event.key);
     if (next === null) return;
@@ -269,8 +251,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
   };
   const peerMuted = firstPeer?.micMuted === true;
   const stageLabel = peerMuted ? `${call.title} · ${translate(language, 'call.peer.muted')}` : call.title;
-  const count = (group: SelfControlGroup): number => self.mine.filter((action) => inSelfGroup(group, action)).length;
-  const rows = swapped || !self.controls ? null : selfRowsLayout({ tile: tileBox, bounds: selfRowBounds(screen, topInset), effectsWidth: selfRowWidth(count('effects')), cameraWidth: selfRowWidth(count('camera') + 1) });
+  const zoomStep = !swapped && self.zoom === 'step' && call.cameraOn && !composed && size.width >= ZOOM_STEP_ROOM && size.height >= ZOOM_STEP_ROOM;
   const glyphs = { plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> };
   return (
     <div role="group" aria-label={stageLabel} className="absolute inset-0" data-call-duo-stage="">
@@ -291,14 +272,9 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
       )}
       {peerMuted && !swapped ? <PeerMuted where="main" /> : null}
       {swapped ? (
-        <Suspense fallback={self.controls ? self.column(null) : null}>
-          <CallSelfCamera stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} glyphs={glyphs} column={self.controls ? self.column : null} />
+        <Suspense fallback={self.zoom === 'capsule' ? self.column(null) : null}>
+          <CallSelfCamera stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} glyphs={glyphs} column={self.zoom === 'capsule' ? self.column : null} />
         </Suspense>
-      ) : null}
-      {swapped && self.controls ? (
-        <div className="absolute left-1/2 z-20 -translate-x-1/2" style={controlsTop(topInset)}>
-          {self.row()}
-        </div>
       ) : null}
       {cornerShown ? (
         <div
@@ -312,11 +288,6 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
           data-call-self-tile-compact={compact ? '' : undefined}
           data-call-self-tile-dragging={offset === null ? undefined : ''}
         >
-          {rows?.effects ? (
-            <SelfRowSlot group="effects" row={rows.effects} tile={tileBox}>
-              {self.row('effects')}
-            </SelfRowSlot>
-          ) : null}
           <button
             type="button"
             aria-label={translate(language, 'call.video.swap')}
@@ -332,10 +303,12 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
             {cornerVideo ? <StreamVideo stream={cornerStream} mirrored={!swapped && selfMirrored} className="size-full" member={swapped ? firstPeer?.userId : undefined} self={!swapped} /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} presenceKey={call.peerKey ?? undefined} />}
             {peerMuted && swapped ? <PeerMuted where="corner" /> : null}
           </button>
-          {rows?.camera ? (
-            <SelfRowSlot group="camera" row={rows.camera} tile={tileBox}>
-              {self.row('camera')}
-            </SelfRowSlot>
+          {zoomStep ? (
+            <div className="absolute right-1 top-1 z-20" data-call-chrome-fade="" data-call-self-zoom="">
+              <Suspense fallback={null}>
+                <CallZoomStep stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} Button={CallButton} />
+              </Suspense>
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -357,7 +330,6 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
         members={orderedMembers(call.members)}
         remoteStreams={call.remoteStreams}
         self={{ id: me?.id ?? null, stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
-        selfControls={self.controls ? self.row() : null}
         choice={choice}
         onChoose={onChoose}
         immersive={immersive}
@@ -366,7 +338,7 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
         language={language}
         chromeVisible={chromeVisible}
         onRevealChrome={onRevealChrome}
-        selfZoom={self.local === undefined ? null : { local: self.local, column: self.column }}
+        selfZoom={self.local === undefined || self.zoom !== 'capsule' ? null : { local: self.local, column: self.column }}
       />
     );
   }

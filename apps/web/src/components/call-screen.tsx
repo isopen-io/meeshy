@@ -3,6 +3,7 @@ import { useStore } from 'zustand/react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
+import { CallRails } from '@/components/call-rails';
 import { CallButton } from '@/components/call-glass-button';
 import { CallIncomingAnswer } from '@/components/call-incoming-answer';
 import { CallJournalColumn } from '@/components/call-journal-column';
@@ -21,11 +22,12 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
+import { controlsDisposition, participantCountOf, pillRows, railRows, unfoldsPill } from '@/lib/calls/call-controls-disposition';
 import { useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
-import { mineInMenu, SELF_CONTROL_GROUPS, selfControlsPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
+import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
@@ -55,8 +57,11 @@ import type { EffectsCompanion } from './call-effects-companions';
  *
  * Connecté, la vue suit « C adapté » : en bas, une pilule de verre identique en
  * audio, vidéo et groupe — `(…)` · Micro · Sortie · Fin (`call-control-pill.tsx`) ;
- * `(…)` la fait grandir vers le haut et y empile une rangée par famille, qui
- * défile à l'horizontale (`call-control-actions.tsx`, #8550) ; en haut,
+ * ce que `(…)` sort suit le nombre de participants (`call-controls-disposition.ts`,
+ * #17327) : à deux, deux rails sur les bords, « Mon image » à gauche et
+ * « L'appel » à droite, sans que la pilule grandisse (`call-rails.tsx`) ; à
+ * plusieurs, la pilule grandit vers le haut et empile une rangée par famille,
+ * qui défile à l'horizontale (`call-control-actions.tsx`, #8550) ; en haut,
  * Réduire et la puce « Nom · durée » (`call-screen-header.tsx`). En vidéo,
  * toucher la scène efface TOUTES les commandes et un second toucher les rend ;
  * rien d'autre ne les efface, aucune attente (#8988, `use-call-chrome.ts`). En
@@ -124,8 +129,6 @@ const ROWS_KIT: CallRowsKit = {
   requestPip: requestCallPip,
   pipGlyph: <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={22} />,
 };
-
-const CallCameraControls = lazy(() => loadActions().then((module) => ({ default: module.CallCameraControls })));
 
 const loadEffectsMode = once(() =>
   import('./call-effects-mode').then(async (module) => {
@@ -326,7 +329,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const cameraSwitch = useCameraSwitch(call.cameraOn);
   const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), cameraSwitch, canPip: shouldOfferPip(call, browserPipSupport()), videoScene });
   const framed = liveFrameShown(call, liveFrame, live && layer.kind !== 'mode');
-  const place = spotlight !== null && spotlight.featured === null ? 'top' : selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn && !framed });
+  const place = spotlight !== null && spotlight.featured === null ? 'top' : selfZoomPlace({ layout, selfFull, selfTileShown: call.cameraOn && !framed });
   const local = useLocalZoom(call.callId, call.facing);
   const offer: LayerOffer = {
     effects: set.mine.includes('effects'),
@@ -338,6 +341,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   };
   const shown = live ? layerOffered(layer, offer) : IDLE;
   const chrome = layerChrome(shown);
+  const disposition = controlsDisposition({ participantCount: participantCountOf(call, layout), showsGroupGrid: layout === 'grid' });
+  const rails = railRows(disposition, set, shown);
   const swipe = useCallSwipeDown({
     root,
     allowed: live && swipeDownAllowed({ joined, layout, layerIdle: shown.kind === 'idle' }),
@@ -358,6 +363,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const nameOf = (userId: string): string | null => call.members[userId]?.name ?? null;
   const closeGlyph = <GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />;
   const expanded = shown.kind === 'menu' || shown.kind === 'panel';
+  const grown = unfoldsPill(disposition, shown);
 
   useEffect(() => {
     if (!live) return undefined;
@@ -446,30 +452,12 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     full: selfFull,
     tileHidden: framed && !selfFull,
     onToggle: () => setSelfFull((full) => !full),
-    controls: chrome.selfControls,
-    mine: set.mine,
-    row: (group) =>
-      place === 'menu' ? null : (
-        <div className={fade} aria-hidden={hidden ? true : undefined} data-call-self-controls-holder={place}>
-          <Suspense fallback={null}>
-            <CallCameraControls
-              call={call}
-              set={set}
-              language={language}
-              panels={panels}
-              kit={ROWS_KIT}
-              place={place}
-              local={zoomControlIn(place) === 'step' && group !== 'effects' ? local : null}
-              group={group}
-              only={group === undefined ? undefined : SELF_CONTROL_GROUPS[group]}
-            />
-          </Suspense>
-        </div>
-      ),
+    zoom: chrome.selfZoom ? zoomControlIn(place) : null,
+    /* La capsule du zoom en plein écran se pose au bord de début, centrée : quand le rail « mon image » y sort, elle se range derrière lui par une translation, jamais d'un saut (#17327). */
     column: (capsule) =>
       capsule === null ? null : (
         <div className={`absolute left-3 top-1/2 z-10 -translate-y-1/2 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-self-column="">
-          {capsule}
+          <div className={`transition-[translate] duration-300 motion-reduce:transition-none ${railsShown ? 'translate-x-[4.5rem] rtl:-translate-x-[4.5rem]' : ''}`}>{capsule}</div>
         </div>
       ),
     local,
@@ -508,10 +496,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
 
   const overlayVideo = layout === 'video-duo' || layout === 'screen';
   const hidden = visibility !== 'shown' || immersive;
+  const railsShown = rails.length > 0 && !hidden;
   /* Les sous-titres ne s'effacent JAMAIS avec les commandes : posés dans le
      cadre de la pilule déployée, ils en sortent quand elle s'efface, et
      restent lus (et annoncés) au-dessus de sa place. */
-  const captionsFramed = expanded && !hidden && chrome.panel !== 'journal';
+  const captionsFramed = grown && !hidden && chrome.panel !== 'journal';
   const colorOf = (who: Pick<CallCaption, 'speakerId' | 'speakerName'>): string => speakerColor(who.speakerId, who.speakerName);
   const captions =
     call.captionsMode === 'off' || !live || chrome.panel === 'journal' ? null : (
@@ -650,8 +639,9 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                 <CallControlPill
                   call={call}
                   language={language}
-                  set={mineInMenu(set, place)}
+                  rows={pillRows(disposition, set, shown)}
                   expanded={expanded}
+                  grown={grown}
                   onToggle={() => send({ type: 'toggle-menu' })}
                   prominent={sharedScreenShown}
                   framedCaptions={captionsFramed ? captions : null}
@@ -667,6 +657,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         ) : (
           <div className="pb-6">{phase === 'incoming' ? incomingControls : endedControls}</div>
         )}
+        {live && chrome.mode === null ? <CallRails call={call} rows={rails} open={railsShown} language={language} panels={panels} kit={ROWS_KIT} inset={bleedEnd} /> : null}
         {column.shown ? (
           <CallJournalColumn>
             <Suspense fallback={null}>

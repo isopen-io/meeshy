@@ -73,8 +73,6 @@ afterAll(async () => {
 
 const fresh = () => selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
 
-const MINE = ['flip', 'camera', 'effects', 'screen'] as const;
-
 function Harness({ active, onSwap, chromeVisible = true }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly chromeVisible?: boolean }) {
   const [full, setFull] = useState(false);
   const self = {
@@ -83,9 +81,7 @@ function Harness({ active, onSwap, chromeVisible = true }: { readonly active: Ac
       onSwap();
       setFull((value) => !value);
     },
-    controls: true,
-    mine: MINE,
-    row: (group?: string) => <div data-test-row={group ?? 'all'} />,
+    zoom: 'step' as const,
     column: () => null,
   };
   return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} />;
@@ -167,14 +163,13 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
     view.done();
   });
 
-  test('pendant le glissé, la vignette et ses deux rangées suivent le doigt, sans transition', () => {
+  test('pendant le glissé, la vignette suit le doigt, sans transition — et ne traîne aucune rangée de commandes (#17327)', () => {
     fresh();
     const view = mount();
     view.drag(-40, 60, { release: false });
     expect(view.frame().style.transform).toBe('translate(-40px, 60px)');
     expect(view.frame().getAttribute('data-call-self-tile-dragging')).toBe('');
-    expect(view.find('[data-call-corner-frame] [data-call-self-row="effects"] [data-test-row="effects"]')).not.toBeNull();
-    expect(view.find('[data-call-corner-frame] [data-call-self-row="camera"] [data-test-row="camera"]')).not.toBeNull();
+    expect(view.find('[data-call-self-row]')).toBeNull();
     view.done();
   });
 

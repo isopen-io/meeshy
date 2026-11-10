@@ -8,7 +8,6 @@ import {
   nearestSelfCorner,
   scaleAfterPinch,
   scaleAfterWheel,
-  SELF_CORNERS,
   selfTileBox,
   selfTileCornerFor,
   selfTileScaleFor,

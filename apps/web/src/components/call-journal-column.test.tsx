@@ -93,6 +93,7 @@ const mount = (overrides: Partial<ActiveCall>, wide: boolean) => {
 
 const openJournal = async (view: ReturnType<typeof mount>) => {
   view.press('[data-call-more]');
+  await view.settle();
   view.press('[data-call-control="journal"]');
   await view.settle();
 };
@@ -138,6 +139,32 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     view.press('[data-call-journal-column] [data-panel-close]');
     expect(view.find('[data-call-journal-column]')).toBeNull();
     expect(view.find('[data-call-screen]')?.hasAttribute('data-call-journal-dock')).toBe(false);
+    view.done();
+  });
+
+  test('en duo (W1), la colonne reste ouverte quand (…) s’ouvre : le rail « l’appel » s’arrête à elle, celui de « mon image » garde son bord (#17327)', async () => {
+    const view = mount({}, true);
+    await openJournal(view);
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('menu');
+    expect(view.find('[data-call-journal-column]')).not.toBeNull();
+    expect(view.find('[data-call-journal-column] [data-call-journal-panel]')).not.toBeNull();
+    const rails = view.find('[data-call-rails]');
+    expect(rails).not.toBeNull();
+    expect(rails?.style.paddingInlineEnd).toContain(`${JOURNAL_COLUMN_RESERVE}px`);
+    expect(rails?.style.paddingInlineStart).not.toContain('px)');
+    expect(view.find('[data-call-rail="mine"]')).not.toBeNull();
+    expect(view.find('[data-call-rail="call"]')).not.toBeNull();
+    view.press('[data-call-more]');
+    view.press('[data-call-more]');
+    expect(view.find('[data-call-journal-column]')).not.toBeNull();
+    expect(view.find('[data-call-rail="call"]')).not.toBeNull();
+    view.done();
+  });
+
+  test('sans colonne, les rails gardent leurs deux bords entiers (#17327)', async () => {
+    const view = mount({}, false);
+    view.press('[data-call-more]');
+    expect(view.find('[data-call-rails]')?.style.paddingInlineEnd).not.toContain('px)');
     view.done();
   });
 
