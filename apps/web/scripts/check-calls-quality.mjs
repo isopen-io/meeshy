@@ -219,10 +219,10 @@ try {
         await capture(page, 'alertes');
         const overlaps = await page.evaluate(() => {
           const capsule = document.querySelector('[data-call-alert="capturing"]')?.getBoundingClientRect();
-          const holders = [...document.querySelectorAll('[data-call-self-controls-holder]')].map((el) => el.getBoundingClientRect()).filter((box) => box.width > 0 && box.height > 0);
+          const holders = [...document.querySelectorAll('[data-call-self-zoom], [data-call-rail]')].map((el) => el.getBoundingClientRect()).filter((box) => box.width > 0 && box.height > 0);
           return capsule === undefined ? [] : holders.filter((box) => box.left < capsule.right && capsule.left < box.right && box.top < capsule.bottom && capsule.top < box.bottom).length;
         });
-        check(overlaps === 0, `${label} : R1 — la capsule de capture n'est recouverte par aucune commande de ma vignette (${overlaps} chevauchement(s))`);
+        check(overlaps === 0, `${label} : R1 — la capsule de capture n'est recouverte par aucune commande (cran du zoom de ma vignette, rails) (${overlaps} chevauchement(s))`);
         const { width: stageWidth, height: stageHeight } = page.viewportSize();
         await page.mouse.click(stageWidth * 0.3, stageHeight * 0.55);
         check(await appears(page, '[data-call-chrome="hidden"]', 2000), `${label} : un toucher sur la scène range le chrome`);

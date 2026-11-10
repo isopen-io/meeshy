@@ -76,8 +76,6 @@ export type CallGridProps = {
     readonly name?: string | null;
     readonly avatar?: string | null;
   };
-  /** Les commandes de ma caméra, posées en haut au centre quand MA tuile est à la une. */
-  readonly selfControls?: ReactNode;
   /** Le zoom de ma caméra quand MA tuile est à la une (#9182, comme `GroupCallStageView.featuredTile` sur iOS) — pincer, Ctrl + molette, capsule sur le bord. `null` : pas de zoom à offrir (un témoin qui n'en parle pas garde l'ancien comportement). */
   readonly selfZoom?: { readonly local: LocalZoom; readonly column: (capsule: ReactNode) => ReactNode } | null;
   readonly choice: SpotlightChoice;
@@ -203,7 +201,7 @@ function SharedScreen({ member, stream, language }: { readonly member: CallMembe
   );
 }
 
-export function CallGrid({ members, remoteStreams, self, selfControls = null, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined }: CallGridProps) {
+export function CallGrid({ members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined }: CallGridProps) {
   /** #9183 — chrome masqué, toucher une tuile le RANGE/rend au lieu de changer la une (`GroupStageTapRule` sur iOS). */
   const featureSelf = () => (chromeVisible ? onChoose(chooseSelf()) : onRevealChrome());
   const feature = (member: CallMember) => () => (chromeVisible ? onChoose(chooseMember(member.userId)) : onRevealChrome());
@@ -240,11 +238,6 @@ export function CallGrid({ members, remoteStreams, self, selfControls = null, se
             <Tile member={featured} stream={remoteStreams[featured.userId]} language={language} onPress={null} label={featured.name} portrait={96} />
           </div>
         )}
-        {featured === null && selfControls !== null ? (
-          <div className="absolute left-1/2 top-2 z-10 -translate-x-1/2" data-call-self-featured-controls="">
-            {selfControls}
-          </div>
-        ) : null}
         {featured === null && selfZoom !== null ? (
           <Suspense fallback={null}>
             <CallSelfCamera
