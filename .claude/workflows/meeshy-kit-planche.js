@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Le kit de composants de la planche « Composer, vue finale » : chaque composant de la planche devient UN composant réutilisable dans toute l'application, sur iOS d'abord (MeeshyUI/Kit) puis reproduit sur Android (:sdk-ui component/kit) et sur le web (apps/web/src/components/kit), et les écrans l'adoptent. Registre des lots, fiche de contrat par composant (fable), exécution (haiku ou sonnet selon le lot), relecture, divergences iOS ↔ Android ↔ web ↔ planche et intégrations (opus), preuve par la CI, couverture des 70 vues",
   whenToUse:
-    "Lancer ou reprendre le chantier du kit depuis n'importe quelle session. Args (objet ou chaîne JSON) : { attribution (OBLIGATOIRE : les lignes Co-Authored-By et Claude-Session de la session qui lance), attributionPR (le bloc de deux lignes que la session doit poser en tête de chaque PR, s'il existe), date, etape ('kit' par défaut : socle + composants ; 'integration' : adoption par les écrans ; 'verifier' : aucune écriture, seulement divergences et couverture ; 'tout'), plateformes (['ios','android','web']), seulement [clés], sauter [clés], devPar (2), maxFix (3), run ('/home/user/meeshy-kit-run'), base ('dev') }.",
+    "Lancer ou reprendre le chantier du kit depuis n'importe quelle session. Args (objet ou chaîne JSON) : { attribution (OBLIGATOIRE : les lignes Co-Authored-By et Claude-Session de la session qui lance), attributionPR (le bloc de deux lignes que la session doit poser en tête de chaque PR, s'il existe), date, etape ('kit' par défaut : socle + composants ; 'integration' : adoption par les écrans ; 'verifier' : aucune écriture, seulement divergences et couverture ; 'tout'), plateformes (['ios','android','web']), seulement [clés], sauter [clés], devPar (2), maxFix (3), run ('/home/user/meeshy-kit-run'), base ('dev'), autonome (false : true = aucune question n'arrête un lot, chaque choix est tranché, consigné en issue décision-produit et rendu dans le bilan), consignes ({ '*': texte pour tous les lots, 'K02': texte pour un lot } : change une décision prise et prime sur elle) }.",
   phases: [
     { title: 'Préparer', detail: 'dev à jour, registre lu, état de chaque lot par plateforme (livré, en PR, à faire)', model: 'haiku' },
     { title: 'Spécifier', detail: 'la fiche de contrat du composant : API, états, gestes, accessibilité, jumeaux à absorber, sur les trois plateformes', model: 'fable' },
@@ -48,6 +48,15 @@ const DEV_PAR = Number.isInteger(A.devPar) && A.devPar > 0 ? Math.min(A.devPar, 
 const MAX_FIX = Number.isInteger(A.maxFix) && A.maxFix > 0 ? A.maxFix : 3
 const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter : [])
 const SEULEMENT = Array.isArray(A.seulement) && A.seulement.length ? new Set(A.seulement) : null
+const AUTONOME = A.autonome === true
+const CONSIGNES = A.consignes && typeof A.consignes === 'object' ? A.consignes : {}
+const consigneDe = (cle) => [CONSIGNES['*'], CONSIGNES[cle]].filter((c) => typeof c === 'string' && c.trim()).join('\n')
+const REGLE_AUTONOME = `MODE AUTONOME (le porteur a demandé que tout se développe sans intervention) : aucune question ne t'arrête. Devant une décision de produit
+ou de design que la fiche, la planche et les lois ne tranchent pas, tu prends le choix le plus fidèle à la planche, SANS régression de feature, le plus
+réversible et le moins coûteux à changer ; tu l'appliques ; tu ouvres (ou retrouves) une issue labellisée « décision-produit », titre = la décision PRISE,
+corps = la question, l'option retenue, les alternatives, le coût d'un changement, et la façon de la changer (relancer le workflow avec
+args.consignes.<clé du lot> = « … ») ; et tu la rends dans « decisions ». « bloque » reste réservé à un empêchement technique (CI, accès, conflit
+qu'on ne peut résoudre sans perte), jamais à une question.`
 const REGISTRE = '.claude/workflows/meeshy-kit-planche.lots.json'
 const PLANCHE = 'docs/product/composer-vue-finale/planche.html'
 const LOIS = 'docs/product/composer-vue-finale.md'
@@ -106,7 +115,7 @@ et ses lois ${LOIS} font foi pour le dessin ; l'ISSUE du lot fait foi pour l'ét
 Titre du lot : ${l.titre}
 Contrat : ${l.contrat}
 Vues de la planche : ${(l.vues || []).join(' ') || '(transverse)'} — captures de référence : docs/product/composer-vue-finale/vues/<vue>.png
-Règles qui ne se discutent pas :
+${AUTONOME ? REGLE_AUTONOME + '\n' : ''}${consigneDe(l.cle) ? `CONSIGNES DU PORTEUR pour ce lot (elles priment sur toute décision antérieure, y compris une décision-produit déjà prise ; tu mets à jour son issue) :\n${consigneDe(l.cle)}\n` : ''}Règles qui ne se discutent pas :
 - AUCUNE RÉGRESSION DE FEATURE : quand le code et la planche divergent, la planche garde son épure ET chaque feature du code en plus est conservée, posée là où elle s'intègre le plus sobrement, sans doublon de ce que la planche rend déjà autrement ; retirer un comportement sans équivalent est un écart bloquant ;
 - composant AGNOSTIQUE (paramètres opaques, aucun type du composer ni des appels, aucun singleton nommé Meeshy) ; l'orchestration reste côté app ;
 - EXTRAIRE avant de créer : le jumeau le plus complet devient le composant ; ne supprime un jumeau que si ton lot est une intégration ;
@@ -148,11 +157,12 @@ const ETAT = S({
   }, ['cle', 'type', 'titre', 'contrat', 'depend', 'modele_ios', 'modele_android', 'ios', 'android', 'web', 'fiche']) },
   rouge_prealable: TXT,
 }, ['lots'])
-const FICHE = S({ fiche_markdown: TXT, nom_ios: TXT, nom_android: TXT, nom_web: TXT, jumeaux_ios: LISTE, jumeaux_android: LISTE, jumeaux_web: LISTE, questions_porteur: LISTE, modele_conseille: { type: 'string', enum: ['haiku', 'sonnet', 'opus'] } },
+const FICHE = S({ decisions: DECISIONS, fiche_markdown: TXT, nom_ios: TXT, nom_android: TXT, nom_web: TXT, jumeaux_ios: LISTE, jumeaux_android: LISTE, jumeaux_web: LISTE, questions_porteur: LISTE, modele_conseille: { type: 'string', enum: ['haiku', 'sonnet', 'opus'] } },
   ['fiche_markdown', 'nom_ios', 'nom_android', 'nom_web', 'jumeaux_ios', 'jumeaux_android', 'jumeaux_web', 'questions_porteur', 'modele_conseille'])
 const ISSUE = S({ issue: { type: 'integer' } })
-const FAIT = S({ statut: { type: 'string', enum: ['pousse', 'cede', 'bloque', 'deja_tenu'] }, sha: TXT, fichiers: LISTE, suites: LISTE, resume: TXT, escalade: TXT }, ['statut', 'resume'])
-const REVUE = S({ conforme: { type: 'boolean' }, ecarts_corriges: LISTE, ecarts_restants: LISTE, sha: TXT }, ['conforme', 'ecarts_corriges', 'ecarts_restants'])
+const DECISIONS = { type: 'array', items: S({ question: TXT, choix: TXT, alternatives: LISTE, issue: { type: 'integer' } }, ['question', 'choix']) }
+const FAIT = S({ statut: { type: 'string', enum: ['pousse', 'cede', 'bloque', 'deja_tenu'] }, sha: TXT, fichiers: LISTE, suites: LISTE, resume: TXT, escalade: TXT, decisions: DECISIONS }, ['statut', 'resume'])
+const REVUE = S({ conforme: { type: 'boolean' }, ecarts_corriges: LISTE, ecarts_restants: LISTE, sha: TXT, decisions: DECISIONS }, ['conforme', 'ecarts_corriges', 'ecarts_restants'])
 const PREUVE = S({ vert: { type: 'boolean' }, pr: { type: 'integer' }, sha: TXT, rouges: LISTE, cause_hors_lot: { type: 'boolean' }, images: LISTE }, ['vert', 'rouges'])
 const LIVRAISON = S({ statut: { type: 'string', enum: ['fusionne', 'pr_en_attente_porteur', 'bloque'] }, pr: { type: 'integer' }, resume: TXT }, ['statut', 'resume'])
 const DIVERGENCE = S({ cle: TXT, verdict: { type: 'string', enum: ['iso', 'ecarts', 'incomplet'] }, ecarts: { type: 'array', items: S({ quoi: TXT, plateforme: TXT, gravite: { type: 'string', enum: ['bloquant', 'a_corriger', 'assume'] }, issue: { type: 'integer' } }, ['quoi', 'plateforme', 'gravite']) }, jumeaux_restants: LISTE },
@@ -183,7 +193,7 @@ La fiche, en français, tient en une page et fixe, pour les TROIS plateformes à
 6. Jetons de design employés (aucune valeur en dur) et mesures tirées de la planche.
 7. Jumeaux à absorber : pour chaque plateforme, lequel devient le composant, lesquels seront supprimés et par quel lot d'intégration.
 8. Témoins exigés : comportements à tester, instantanés à produire, entrée au catalogue.
-9. Écarts connus entre la planche et le code, et les questions qui reviennent au porteur (jamais tranchées par toi).
+9. Écarts connus entre la planche et le code, et les questions qui reviennent au porteur ${AUTONOME ? `— MODE AUTONOME : tu les TRANCHES toi-même (le choix le plus fidèle à la planche, sans régression, le plus réversible), la fiche dit le choix retenu et ses alternatives, et tu les rends dans « decisions » (questions_porteur reste vide)` : '(jamais tranchées par toi)'}.${consigneDe(l.cle) ? `\nCONSIGNES DU PORTEUR (elles priment) : ${consigneDe(l.cle)}` : ''}
 Conseille aussi le modèle d'exécution : haiku si la fiche ne laisse AUCUNE décision à prendre et qu'aucun jumeau n'est à arbitrer,
 sonnet s'il reste de l'état, un geste ou une fusion de jumeaux, opus seulement si le composant touche une loi partagée.`,
   { label: `specifier:${l.cle}`, phase: 'Spécifier', schema: FICHE, model: MODELE.reflexion, effort: 'high' })
@@ -285,11 +295,14 @@ en disant quelle plateforme manque. Supprime le clone.`}`,
   { label: `livrer:${l.cle}:${plateforme}`, phase: 'Livrer', schema: LIVRAISON, model: MODELE.livrer, effort: 'medium' })
 
 const issues = {}
+const decisionsPrises = []
+const noter = (l, plateforme, d) => (d && Array.isArray(d.decisions) ? d.decisions : []).forEach((x) => decisionsPrises.push({ cle: l.cle, plateforme, ...x }))
 const menerLot = async (l, plateforme, etat) => {
   const integration = l.type === 'integration'
   // La fiche s'écrit UNE fois (fable), avant iOS ; Android et le web la relisent depuis le dépôt, où le lot iOS l'a commitée.
   const f = integration || l.fiche || plateforme !== 'ios' ? null : await specifier(l)
   const issue = issues[l.cle] || l.issue || ((await ouvrirIssue(l, f, etat)) || {}).issue
+  noter(l, plateforme, f)
   if (!issue) return { cle: l.cle, plateforme, statut: 'bloque', resume: "pas d'issue" }
   issues[l.cle] = issue
   let fait = integration ? await integrer(l, plateforme, issue) : await developper(l, plateforme, f, issue, {})
@@ -297,8 +310,10 @@ const menerLot = async (l, plateforme, etat) => {
     log(`${l.cle} ${plateforme} : haiku rend la main (${fait.escalade}) — le lot repart sur sonnet`)
     fait = await developper(l, plateforme, f, issue, { escalade: true })
   }
+  noter(l, plateforme, fait)
   if (!fait || fait.statut !== 'pousse') return { cle: l.cle, plateforme, issue, statut: fait ? fait.statut : 'bloque', resume: fait ? fait.resume : 'agent interrompu' }
   const revue = await relire(l, plateforme, f)
+  noter(l, plateforme, revue)
   let preuve = null
   for (let tour = 1; tour <= MAX_FIX; tour++) {
     preuve = await prouver(l, plateforme, tour)
@@ -398,11 +413,12 @@ const bilan = {
   couverture: couverture ? { conformes: couverture.vues_conformes.length, en_ecart: couverture.vues_en_ecart, cliquets: couverture.cliquets } : null,
   en_attente_porteur: resultats.filter((r) => r.statut === 'pr_en_attente_porteur').map((r) => ({ cle: r.cle, plateforme: r.plateforme, pr: r.pr })),
   rouge_prealable: etat.rouge_prealable || '',
+  decisions: decisionsPrises,
 }
 await agent(`
 Poste UN commentaire daté (${DATE}) sur l'issue du chantier #${etat.chantier || '(lis le champ chantier de ' + REGISTRE + ')'} de ${GH} : compte rendu de ce tour du workflow
 meeshy-kit-planche, en français, phrases complètes. Sections : lots livrés (PR), lots en attente de captures et d'accord du porteur, lots rouges ou
-bloqués avec la raison, divergences iOS ↔ Android ↔ web ouvertes, couverture des 70 vues, ce qui est à lancer ensuite. Le commentaire est un compte
+bloqués avec la raison, divergences iOS ↔ Android ↔ web ouvertes, couverture des 70 vues, DÉCISIONS PRISES en mode autonome (question, choix, alternatives, issue, et comment la changer : args.consignes.<clé>), ce qui est à lancer ensuite. Le commentaire est un compte
 rendu daté : l'état fait foi dans les issues. Pied Claude Code obligatoire.
 DONNÉES : ${JSON.stringify(bilan)}`,
   { label: 'bilan', phase: 'Bilan', model: MODELE.mecanique, effort: 'low' })
