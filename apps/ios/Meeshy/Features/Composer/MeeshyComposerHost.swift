@@ -583,6 +583,7 @@ struct MeeshyComposerHost: View {
     /// Le fond que la prochaine prise du viseur REMPLACE — posé par
     /// « Reprendre une photo », consommé à la pose, oublié au désarmement.
     @State var sceneCaptureReplacesBackgroundId: String?
+    @State var viewfinderYieldsToScene = false
 
     /// **La bande contextuelle DEMANDÉE sur la surface de scène.**
     ///

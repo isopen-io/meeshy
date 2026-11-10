@@ -161,13 +161,18 @@ final class ComposerSceneCameraOverlayTests: XCTestCase {
         }
     }
 
-    /// **Les rails CÈDENT au viseur** (A8, #17109, loi 13 « pas de rail au
-    /// viseur ») : la caméra s'arme plein écran, sa sortie est « Quitter » dans
-    /// son en-tête. Scène rendue, les rails reviennent.
-    func test_lesRails_cèdentAuViseurArmé_etReviennentAvecLaScène() {
+    /// **Les rails de la scène cèdent au viseur, qui porte SA colonne** (#17432,
+    /// retourne « pas de rail au viseur » d'A8, #17109) : la caméra s'arme plein
+    /// écran, et c'est la colonne du viseur — Texte · Fond · Galerie · Sticker,
+    /// puis les familles de look — qui sert la scène. Scène rendue, les rails
+    /// reviennent.
+    func test_lesRails_cèdentAuViseurArmé_quiPorteSaColonneDeScène() {
         XCTAssertFalse(ComposerSceneCameraOverlay.isServed(.rails, stage: .armed))
         XCTAssertFalse(ComposerSceneCameraOverlay.isServed(.rails, stage: .recording))
         XCTAssertTrue(ComposerSceneCameraOverlay.isServed(.rails, stage: .off))
+        XCTAssertEqual(ComposerViewfinderColumn.entries(composesScene: true, context: ComposerCaptureGestureContext()),
+                       [.text, .background, .gallery, .sticker],
+                       "le viseur armé n'est plus un viseur seul : la scène s'y compose")
     }
 
     /// **Trois meubles, et la règle décide encore** : une règle où tout
@@ -255,3 +260,58 @@ final class ComposerSceneCameraSizeTests: XCTestCase {
     // 2026-09-29) : elle est là dans les deux tailles, et son témoin vit dans
     // `ComposerSceneQuickCaptureTests`.
 }
+
+/// **Le viseur porte Texte · Fond · Galerie · Sticker avant Filtres et Effets** (#17432).
+@MainActor
+final class ComposerViewfinderColumnTests: XCTestCase {
+
+    private func context(stage: ComposerSceneCameraStage = .armed, editing: Bool = false,
+                         holding: Bool = false, pendingSegments: Int = 0) -> ComposerCaptureGestureContext {
+        ComposerCaptureGestureContext(stage: stage, editing: editing, holding: holding, pendingSegments: pendingSegments)
+    }
+
+    func test_entries_composerViewfinder_servesTheFourSceneEntriesInOrder() {
+        XCTAssertEqual(ComposerViewfinderColumn.entries(composesScene: true, context: context()),
+                       [.text, .background, .gallery, .sticker])
+    }
+
+    func test_entries_conversationCamera_servesNone() {
+        XCTAssertTrue(ComposerViewfinderColumn.entries(composesScene: false, context: context()).isEmpty,
+                      "la caméra de la barre de conversation n'a pas de scène à composer")
+    }
+
+    func test_entries_whileFilmingHoldingOrRetouching_servesNone() {
+        XCTAssertTrue(ComposerViewfinderColumn.entries(composesScene: true, context: context(stage: .recording)).isEmpty)
+        XCTAssertTrue(ComposerViewfinderColumn.entries(composesScene: true, context: context(holding: true)).isEmpty)
+        XCTAssertTrue(ComposerViewfinderColumn.entries(composesScene: true, context: context(editing: true)).isEmpty)
+        XCTAssertTrue(ComposerViewfinderColumn.entries(composesScene: true, context: context(stage: .off)).isEmpty)
+    }
+
+    func test_entries_pendingSegments_keepOnlyWhatKeepsTheCamera() {
+        XCTAssertEqual(ComposerViewfinderColumn.entries(composesScene: true, context: context(pendingSegments: 2)),
+                       [.text, .sticker], "Fond et Galerie couperaient la caméra et ses segments en attente")
+    }
+
+    func test_camera_textAndStickerKeepIt_backgroundAndGalleryCutIt() {
+        XCTAssertEqual(ComposerViewfinderEntry.text.camera, .kept)
+        XCTAssertEqual(ComposerViewfinderEntry.sticker.camera, .kept)
+        XCTAssertEqual(ComposerViewfinderEntry.background.camera, .cut)
+        XCTAssertEqual(ComposerViewfinderEntry.gallery.camera, .cut)
+    }
+
+    func test_entry_hasALabelASymbolAndAnIdentifier() {
+        for entree in ComposerViewfinderEntry.allCases {
+            XCTAssertFalse(ComposerViewfinderColumn.label(entree).isEmpty, "\(entree) : VoiceOver le nomme")
+            XCTAssertFalse(entree.symbol.isEmpty)
+            XCTAssertEqual(entree.accessibilityIdentifier, "composer.viewfinder.\(entree.rawValue)")
+        }
+    }
+
+    func test_bottomRow_mountsTheSceneEntries_beforeTheLookFamilies() throws {
+        let rangee = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureBottomRow.swift")
+        let colonne = try XCTUnwrap(rangee.range(of: "ComposerViewfinderColumnView("))
+        let familles = try XCTUnwrap(rangee.range(of: "ComposerLookRail(open:"))
+        XCTAssertLessThan(colonne.lowerBound, familles.lowerBound, "Texte · Fond · Galerie · Sticker avant les familles")
+    }
+}
+
