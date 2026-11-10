@@ -4,6 +4,7 @@ import XCTest
 /// #17323 — la loi pure qui choisit le traitement de verre de CHAQUE bouton de
 /// l'appel : Liquid Glass interactif quand l'OS le permet, verre dessiné sinon,
 /// Fin toujours rouge, actif toujours blanc plein à icône sombre.
+@MainActor
 final class CallButtonGlassRuleTests: XCTestCase {
 
     private let allKinds: [CallPillButtonKind] = [.normal, .active, .destructive, .warning]
