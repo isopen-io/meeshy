@@ -3,8 +3,9 @@ import SwiftUI
 // MARK: - Le verre du kit
 
 /// L'UNIQUE entrée de verre du kit : elle choisit la matière selon l'appareil
-/// (Liquid Glass du système sur iOS 26+, verre dessiné dessous, fond plein sous
-/// « réduire la transparence »), le ton selon l'hôte, et elle répond au toucher.
+/// (Liquid Glass du système sur iOS 26+, qui se givre lui-même sous « réduire la
+/// transparence » ; dessous, verre dessiné, ou fond plein sous ce réglage), le
+/// ton selon l'hôte, et elle répond au toucher.
 ///
 /// Atome opaque, par pureté du SDK : l'appelant passe une forme et une teinte.
 /// La surface ne pose ni action, ni nom accessible, ni retour haptique.
