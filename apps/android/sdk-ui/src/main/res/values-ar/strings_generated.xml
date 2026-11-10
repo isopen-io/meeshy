@@ -83,7 +83,7 @@
     <string name="bring_confirm_body">Bring مخصص للحالات الطارئة القصوى فقط. يرنّ حتى يوقفه %1$s، دقيقتين على الأكثر. Meeshy ليس خدمة طوارئ: عند الخطر اتصل بخدمات الطوارئ.</string>
     <string name="bring_confirm_send">اجعله يرنّ</string>
     <string name="bring_confirm_title">هل تريد جعل هاتف %1$s يرنّ؟</string>
-    <string name="bring_explain">لحالة طارئة قصوى: يرنّ هاتفه حتى في الوضع الصامت.</string>
+    <string name="bring_explain">لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل. قد يعرض آيفون في الوضع الصامت تنبيهًا ذا أولوية فقط.</string>
     <string name="bring_failed">لم يُرسل Bring، حاول مجددًا</string>
     <string name="bring_offline">يحتاج Bring إلى اتصال بالشبكة</string>
     <string name="bring_quota">لا مزيد من Bring اليوم إلى %1$s</string>

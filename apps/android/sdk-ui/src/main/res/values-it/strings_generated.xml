@@ -83,7 +83,7 @@
     <string name="bring_confirm_body">Il Bring è solo per le emergenze estreme. Squilla finché %1$s non lo ferma, al massimo due minuti. Meeshy non è un servizio di emergenza: in caso di pericolo, chiama i soccorsi.</string>
     <string name="bring_confirm_send">Fai squillare</string>
     <string name="bring_confirm_title">Far squillare il telefono di %1$s?</string>
-    <string name="bring_explain">Per un’emergenza estrema: il suo telefono squilla, anche in silenzioso.</string>
+    <string name="bring_explain">Per un’emergenza estrema: il suo telefono squilla, anche bloccato. In base alle impostazioni, un iPhone in silenzioso può mostrare solo un avviso prioritario.</string>
     <string name="bring_failed">Il Bring non è partito, riprova</string>
     <string name="bring_offline">Il Bring ha bisogno della rete</string>
     <string name="bring_quota">Nessun altro Bring oggi verso %1$s</string>

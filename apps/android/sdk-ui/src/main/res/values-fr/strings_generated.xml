@@ -83,7 +83,7 @@
     <string name="bring_confirm_body">Le Bring est réservé aux urgences extrêmes. Il sonne jusqu’à ce que %1$s l’arrête, deux minutes au plus. Meeshy n’est pas un service d’urgence : en cas de danger, appelez les secours.</string>
     <string name="bring_confirm_send">Faire sonner</string>
     <string name="bring_confirm_title">Faire sonner le téléphone de %1$s ?</string>
-    <string name="bring_explain">Pour une urgence extrême : son téléphone sonne, même en silencieux.</string>
+    <string name="bring_explain">Pour une urgence extrême : son téléphone sonne, même verrouillé. Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.</string>
     <string name="bring_failed">Le Bring n’est pas parti, réessayez</string>
     <string name="bring_offline">Le Bring a besoin du réseau</string>
     <string name="bring_quota">Plus de Bring aujourd’hui vers %1$s</string>

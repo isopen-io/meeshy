@@ -52,7 +52,11 @@ internal object CallPillModel {
         return CallPillItem(
             action = CallAction.Camera,
             icon = if (state.isCameraOn) Icons.Filled.Videocam else Icons.Filled.VideocamOff,
-            labelRes = if (paused) R.string.call_control_video_paused else R.string.call_action_camera,
+            labelRes = when {
+                paused -> R.string.call_control_video_paused
+                state.isCameraOn -> R.string.call_control_camera_off
+                else -> R.string.call_control_camera_on
+            },
             kind = when {
                 paused -> CallPillKind.Warning
                 state.isCameraOn -> CallPillKind.Active
