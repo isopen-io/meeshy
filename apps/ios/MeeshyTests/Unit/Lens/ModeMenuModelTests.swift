@@ -429,7 +429,8 @@ final class ModeMenuModelTests: XCTestCase {
     /// `nativeContextMenuView` APRÈS "Marquer lu" ». Depuis #11230 l'ordre ne
     /// se lit plus aux offsets du fichier : les deux chemins d'OS parcourent
     /// `ConversationMenuCatalog`, et c'est SON ordre qui se vérifie — Marquer
-    /// lu, puis le sous-menu, puis Détails.
+    /// lu, puis Détails (première entrée sous la tête, directive porteur
+    /// #17242), puis le sous-menu.
     func test_readingModeSubmenu_isMountedOnce_afterMarkRead_behindTheFlag() throws {
         let raw = try overlaysSource()
 
@@ -451,7 +452,7 @@ final class ModeMenuModelTests: XCTestCase {
         let submenu = try XCTUnwrap(entries.firstIndex(of: .readingMode), "Le sous-menu doit être au catalogue.")
         let details = try XCTUnwrap(entries.firstIndex(of: .details), "« Détails » doit rester au menu.")
         XCTAssertTrue(markRead < submenu, "Le sous-menu « Mode de lecture » vient APRÈS « Marquer lu ».")
-        XCTAssertTrue(submenu < details, "Le sous-menu se glisse AVANT « Détails ».")
+        XCTAssertTrue(details < submenu, "« Détails » est la première entrée sous la tête (#17242) : le sous-menu vient APRÈS.")
 
         let normalized = normalizedCode(raw)
         XCTAssertTrue(

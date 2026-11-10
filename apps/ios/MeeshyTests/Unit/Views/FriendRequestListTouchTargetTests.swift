@@ -19,8 +19,12 @@ import XCTest
 ///     Image(systemName: "xmark")
 ///         .frame(width: 36, height: 36)   // visible pill — unchanged
 ///         .background(Circle().fill(…))
-///         .frame(width: 44, height: 44)   // touch target
+///         .meeshyTapTarget()              // touch target (44 pt, MeeshyControlSize.tapTarget)
 ///         .contentShape(Circle())
+///
+/// Since #17296 the pills reach the floor through the shared `.meeshyTapTarget()`
+/// modifier instead of a `.frame(width: 44, height: 44)` literal: one source for
+/// the 44 pt floor. The witnesses count either form as a touch target.
 ///
 /// `spacing: 8` becomes `spacing: 0` so the 4 pt transparent inset on each side
 /// of a 36 pt pill centred in 44 pt *becomes* the original 8 pt gap: the row
@@ -56,6 +60,10 @@ final class FriendRequestListTouchTargetTests: XCTestCase {
             index = found.upperBound
         }
         return count
+    }
+
+    private func normalized(_ source: String) -> String {
+        source.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
     }
 
     /// Text within `window` characters after `anchor`. Anchoring matters here:
@@ -130,7 +138,7 @@ final class FriendRequestListTouchTargetTests: XCTestCase {
             "grew the circles instead of the hit regions."
         )
         XCTAssertEqual(
-            occurrences(of: "frame(width: 44, height: 44)\n", in: source), 2,
+            occurrences(of: ".meeshyTapTarget() .contentShape(Circle())", in: normalized(source)), 2,
             "Decline and Accept each need a 44 pt touch target wrapping their unchanged pill."
         )
         XCTAssertEqual(
@@ -164,7 +172,8 @@ final class FriendRequestListTouchTargetTests: XCTestCase {
         let source = try code()
 
         XCTAssertEqual(
-            occurrences(of: "frame(width: 44, height: 44", in: source), 3,
+            occurrences(of: "frame(width: 44, height: 44", in: source)
+                + occurrences(of: ".meeshyTapTarget()", in: source), 3,
             "Exactly three controls on this screen (back, decline, accept) — each needs a 44 pt target."
         )
         XCTAssertEqual(

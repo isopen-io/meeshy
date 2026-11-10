@@ -105,7 +105,7 @@ public struct CodeViewerView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    .font(.system(size: 11, weight: .bold))
+                    .meeshyScaledFont(11, weight: .bold)
                     .foregroundStyle(Color.white)
                     .padding(4)
                     .background(
@@ -314,7 +314,7 @@ public struct CodeFullSheet: View {
                 ForEach(Array(highlightedLines.enumerated()), id: \.offset) { index, attributed in
                     HStack(alignment: .top, spacing: 0) {
                         Text("\(index + 1)")
-                            .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundColor(syntaxTheme.lineNumber)
                             .frame(width: lineNumWidth, alignment: .trailing)
                             .padding(.trailing, 10)

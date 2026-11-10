@@ -680,8 +680,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
         XCTAssertEqual(Self.fixedGlyphSites(in: onImage).map(\.receiver), [.glyph])
     }
 
+    /// La référence nomme son `design` : sans lui, l'appel retient la surcharge
+    /// iOS 16 (`design: Font.Design?` → `nil`), dont le fournisseur ne se compare
+    /// pas égal à celui de `design: .default` — même rendu, deux `Font` distincts.
     func test_laPoliceDeGlypheFigeRendLaTailleAuPointPres() {
-        XCTAssertEqual(MeeshyFont.fixedGlyph(24, weight: .medium), Font.system(size: 24, weight: .medium))
+        XCTAssertEqual(MeeshyFont.fixedGlyph(24, weight: .medium),
+                       Font.system(size: 24, weight: .medium, design: .default))
         XCTAssertEqual(MeeshyFont.fixedGlyph(30, weight: .regular, design: .rounded),
                        Font.system(size: 30, weight: .regular, design: .rounded))
     }

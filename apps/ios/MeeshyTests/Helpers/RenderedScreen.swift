@@ -61,6 +61,13 @@ final class RenderedScreen {
 
     private var window: UIWindow?
 
+    /// Où la descente commence : la FENÊTRE, pas la seule vue de l'hôte. Une
+    /// présentation (`fullScreenCover`, `sheet`) pose son contenu dans un
+    /// conteneur de transition FRÈRE de l'hôte, et une descente bornée à
+    /// `root` déclarait muet un écran que l'utilisateur voyait. Après
+    /// `dismount()`, plus de fenêtre : la descente retombe sur `root`.
+    private var racine: UIView { window ?? root }
+
     /// Monte `vue` dans une fenêtre RÉELLE et rend la main quand l'arbre parle.
     ///
     /// La fenêtre n'est pas une précaution, c'est une CONDITION : hors fenêtre,
@@ -138,7 +145,7 @@ final class RenderedScreen {
         self.root = host.view
 
         let aParle = RenderedScreen.attendre(borne: borne) {
-            RenderedScreen.noeuds(host.view).contains { $0.label != nil || $0.identifier != nil }
+            RenderedScreen.noeuds(window).contains { $0.label != nil || $0.identifier != nil }
         }
         if !aParle {
             let etats = scenes.map { "\($0.activationState.rawValue)" }.joined(separator: ",")
@@ -176,19 +183,19 @@ final class RenderedScreen {
     // MARK: - Ce que l'écran dit
 
     /// Tout ce que l'écran ANNONCE, dans l'ordre de l'arbre.
-    var labels: [String] { RenderedScreen.noeuds(root).compactMap(\.label) }
+    var labels: [String] { RenderedScreen.noeuds(racine).compactMap(\.label) }
 
     /// Tous les identifiants POSÉS, dans l'ordre de l'arbre.
-    var identifiers: [String] { RenderedScreen.noeuds(root).compactMap(\.identifier) }
+    var identifiers: [String] { RenderedScreen.noeuds(racine).compactMap(\.identifier) }
 
     /// Tout l'arbre rendu, cadres compris, dans l'ordre de l'arbre — pour les
     /// témoins qui retrouvent un élément par son LIBELLÉ (une vignette annonce
     /// sa position, elle ne porte pas d'identifiant).
-    var nodes: [Node] { RenderedScreen.noeuds(root) }
+    var nodes: [Node] { RenderedScreen.noeuds(racine) }
 
     /// Le nœud portant cet identifiant, s'il est rendu.
     func node(_ identifier: String) -> Node? {
-        RenderedScreen.noeuds(root).first { $0.identifier == identifier }
+        RenderedScreen.noeuds(racine).first { $0.identifier == identifier }
     }
 
     /// Le cadre ANNONCÉ du nœud portant cet identifiant, attendu jusqu'à `borne`.
@@ -210,10 +217,10 @@ final class RenderedScreen {
     func frame(of identifier: String, borne: TimeInterval = 20) -> CGRect? {
         var pose: CGRect?
         _ = RenderedScreen.attendre(borne: borne) {
-            pose = RenderedScreen.noeuds(root)
+            pose = RenderedScreen.noeuds(racine)
                 .first { $0.identifier == identifier && $0.frame.width > 0 }?
                 .frame
-                ?? RenderedScreen.vue(portant: identifier, dans: root)
+                ?? RenderedScreen.vue(portant: identifier, dans: racine)
                     .map { $0.convert($0.bounds, to: nil) }
                     .flatMap { $0.width > 0 ? $0 : nil }
             return pose != nil
@@ -235,7 +242,7 @@ final class RenderedScreen {
     /// (une tuile de scène, un bouton du composer), et dont le libellé porte un
     /// suffixe variable (« Scène 1, vidéo »).
     func frame(labeledPrefix prefixe: String) -> CGRect? {
-        RenderedScreen.noeuds(root)
+        RenderedScreen.noeuds(racine)
             .first { ($0.label ?? "").hasPrefix(prefixe) && $0.frame.width > 0 }?
             .frame
     }

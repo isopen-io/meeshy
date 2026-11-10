@@ -577,19 +577,20 @@ struct AudioMediaView: View, Equatable {
                 onQuotedMediaTap: onQuotedMediaTap
             )
             .contentShape(Rectangle())
-            .onTapGesture {
-                guard ref.opensQuotedTarget else { return }
-                HapticFeedback.light()
-                if replyIsStory {
-                    onStoryReplyTap?(ref.messageId)
-                } else {
-                    onReplyTap?(ref.messageId)
-                }
-            }
-            .accessibilityAction(named: Text(String(localized: "a11y.main.quotedReply.open", bundle: .main))) {
-                guard ref.opensQuotedTarget else { return }
-                if replyIsStory { onStoryReplyTap?(ref.messageId) } else { onReplyTap?(ref.messageId) }
-            }
+            .onTapGesture { openQuotedTarget(ref) }
+            .accessibilityAction(named: Text(String(localized: "a11y.main.quotedReply.open", bundle: .main))) { openQuotedTarget(ref) }
+        }
+    }
+
+    /// Le geste de la citation, partagé par le toucher et VoiceOver : une
+    /// cible qui n'ouvre rien ne vibre pas (loi 4).
+    private func openQuotedTarget(_ ref: ReplyReference) {
+        guard ref.opensQuotedTarget else { return }
+        HapticFeedback.light()
+        if replyIsStory {
+            onStoryReplyTap?(ref.messageId)
+        } else {
+            onReplyTap?(ref.messageId)
         }
     }
 

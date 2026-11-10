@@ -483,7 +483,7 @@ final class ConversationMenuCatalogDispatchTests: XCTestCase {
         let details = exposed.firstIndex(of: ConversationMenuEntry.details.rawValue)
         XCTAssertNotNil(details)
         if let firstMode, let details {
-            XCTAssertTrue(firstMode < details, "Les modes se lisent avant « Détails ».")
+            XCTAssertTrue(details < firstMode, "« Détails » se lit d'abord sous la tête (#17242), les modes ensuite.")
         }
     }
 
