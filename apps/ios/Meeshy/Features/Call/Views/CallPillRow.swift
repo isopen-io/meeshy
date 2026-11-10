@@ -80,6 +80,15 @@ enum CallPillChipArt {
     case symbol(String)
     case emoji(String)
     case image(CGImage)
+
+    /// #17323 — un glyphe et un emoji reposent sur un verre interactif, qui
+    /// répond seul au doigt sous iOS 26 ; une vignette d'image n'en a pas.
+    var carriesGlass: Bool {
+        switch self {
+        case .symbol, .emoji: return true
+        case .image: return false
+        }
+    }
 }
 
 struct CallPillChip: View {
@@ -111,7 +120,7 @@ struct CallPillChip: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(CallPressButtonStyle())
+        .buttonStyle(CallPressButtonStyle(glassPressesItself: art.carriesGlass))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)

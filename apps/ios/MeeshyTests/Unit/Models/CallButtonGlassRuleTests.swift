@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import Meeshy
 
 /// #17323 — la loi pure qui choisit le traitement de verre de CHAQUE bouton de
@@ -65,5 +66,19 @@ final class CallButtonGlassRuleTests: XCTestCase {
         XCTAssertEqual(CallPressFeedback.scale(isPressed: true, reduceMotion: false, glassPressesItself: true), 1)
         XCTAssertEqual(CallPressFeedback.scale(isPressed: true, reduceMotion: false, glassPressesItself: false), 0.88, accuracy: 0.0001)
         XCTAssertEqual(CallPressFeedback.scale(isPressed: true, reduceMotion: false), 0.88, accuracy: 0.0001)
+    }
+
+    /// Une puce du (…) dont l'art est un verre (glyphe, emoji) ne rétrécit pas
+    /// une seconde fois sous iOS 26 ; une vignette d'image n'a pas de verre et
+    /// garde le rétrécissement comme seul retour au toucher.
+    func test_chipArt_carriesGlass_onlyForGlyphAndEmoji() throws {
+        XCTAssertTrue(CallPillChipArt.symbol("sparkles").carriesGlass)
+        XCTAssertTrue(CallPillChipArt.emoji("🎉").carriesGlass)
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        let image = try XCTUnwrap(context.makeImage())
+        XCTAssertFalse(CallPillChipArt.image(image).carriesGlass)
     }
 }

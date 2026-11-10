@@ -46,6 +46,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         where url.pathExtension == "swift" {
             let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             XCTAssertFalse(code.contains("CallButtonFill.color("), "\(url.lastPathComponent) : un disque plat par état")
+            XCTAssertFalse(code.contains("Color.white.opacity(0.16)"), "\(url.lastPathComponent) : plus aucun disque translucide dessiné dans la vue d'appel (#17323)")
         }
     }
 
@@ -123,6 +124,8 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(row.contains("callChromeGlass"))
         XCTAssertTrue(row.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"), "Les disques voisins d'une rangée se composent ensemble")
         XCTAssertFalse(row.contains("CallButtonFill.color"))
+        let chip = try block("struct CallPillChip: View {", until: "private var artwork: some View {", in: row)
+        XCTAssertTrue(chip.contains(".buttonStyle(CallPressButtonStyle(glassPressesItself: art.carriesGlass))"), "Une puce de verre ne rétrécit pas par-dessus son verre interactif")
     }
 
     /// Les fichiers de l'écran d'appel qui portent un défilement horizontal
