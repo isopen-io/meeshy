@@ -14,8 +14,9 @@ import { CallStage } from './call-stage';
 
 /**
  * LE DUO VIDÉO (#8747, #8787) — ma vignette se GLISSE vers l'un des quatre
- * coins, ses deux rangées de commandes la suivent, un toucher reste un
- * toucher, les flèches la déplacent ; et le micro coupé du correspondant se
+ * coins (le cran du zoom, seule commande qu'elle porte, la suit — les
+ * rails vivent sur les bords, #17327), un toucher reste un toucher, les
+ * flèches la déplacent ; et le micro coupé du correspondant se
  * VOIT sur son image, et se dit dans le libellé de la scène.
  */
 
