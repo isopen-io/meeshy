@@ -4,10 +4,15 @@ import { useStore } from 'zustand/react';
 
 import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 import { CreationEncryptionPicker } from '@/components/creation-encryption-picker';
+import { ExternalConversationEntry } from '@/components/external-conversation-entry';
+import type { PhoneCodeDeps } from '@/components/phone-code-form';
 import { Glyph } from '@/components/glyph';
 import { PeerAvatar } from '@/components/peer-avatar';
 import { createDirectConversation, createGroupConversation, CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
+import { requestPhoneCode, verifyPhoneCode } from '@/lib/api/activation';
+import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
+import { openExternalConversation } from '@/lib/api/external-conversations';
 import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
@@ -16,6 +21,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { candidatesFor, friendsOf } from '@/lib/conversation-new/candidates';
 import { CREATION_FAILED, creationOutcomeOf } from '@/lib/conversation-new/creation';
 import { chosenCreationMode, webCreationEncryptionOffer } from '@/lib/conversation-new/encryption';
+import { externalConversationEntryVisible } from '@/lib/external-conversation/external-conversation';
 import {
   EMPTY_GROUP_DRAFT,
   GROUP_CREATION_FAILED,
@@ -138,6 +144,16 @@ export default function ConversationNewScreen() {
     },
     enabled: searching,
   });
+
+  const externalVisible = mode === 'direct' && externalConversationEntryVisible({ base: apiConfig.base, platformRole });
+  const externalPhone = useMemo<PhoneCodeDeps>(
+    () => ({ requestPhoneCode: (phone) => requestPhoneCode(apiDeps, phone), verifyPhoneCode: (code) => verifyPhoneCode(apiDeps, code) }),
+    [],
+  );
+  const openExternal = (conversationId: string) => {
+    void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    navigate(href('thread', { conversation: conversationId }));
+  };
 
   const encryptionOffer = useMemo(() => webCreationEncryptionOffer({ platformRole, conversationType: mode }), [platformRole, mode]);
   const encryptionMode = chosenCreationMode(encryptionOffer, pickedEncryption);
@@ -291,6 +307,14 @@ export default function ConversationNewScreen() {
       </div>
 
       <GroupToggle on={mode === 'group'} solo={draft.participantIds.length === 0} onToggle={() => switchMode(mode === 'group' ? 'direct' : 'group')} />
+      <ExternalConversationEntry
+        visible={externalVisible}
+        language={currentInterfaceLanguage()}
+        online={online}
+        open={(handle) => openExternalConversation(apiDeps, { network: 'whatsapp', handle })}
+        phone={externalPhone}
+        onOpened={openExternal}
+      />
 
       {creationFailure === null ? null : (
         <p role="alert" className="shrink-0 px-4 pb-2 text-caption" style={{ color: 'var(--color-error)' }}>

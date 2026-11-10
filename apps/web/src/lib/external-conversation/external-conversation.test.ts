@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { EXTERNAL_CONVERSATION_ERROR_CODES } from '@meeshy/shared/types/external-conversation';
 
-import type { ApiResult } from '@/lib/api/http';
+import { openExternalConversation } from '@/lib/api/external-conversations';
+import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { PRODUCTION_ORIGIN } from '@/lib/api/production-origin';
 
 import {
@@ -125,5 +126,31 @@ describe('chaque réponse de la passerelle devient un état dessiné', () => {
 
   test('hors ligne, la cause est le réseau', () => {
     expect(externalOpeningOutcomeOf({ result: refused(0), online: false })).toEqual({ kind: 'refused', reason: 'offline' });
+  });
+});
+
+describe('le port d’ouverture', () => {
+  const recording = () => {
+    const requests: HttpRequest[] = [];
+    const transport = {
+      request: async <T,>(request: HttpRequest): Promise<ApiResult<T>> => {
+        requests.push(request);
+        return { ok: false, status: 503, error: 'stub' };
+      },
+    } as unknown as HttpTransport;
+    return { requests, transport };
+  };
+
+  test('il n’envoie que le réseau et le numéro, à la route d’ouverture', async () => {
+    const { requests, transport } = recording();
+    await openExternalConversation({ source: 'gateway', transport }, { network: 'whatsapp', handle: '+33612345678' });
+    expect(requests).toEqual([{ method: 'POST', path: '/api/v1/conversations/external', body: { network: 'whatsapp', handle: '+33612345678' } }]);
+  });
+
+  test('en fixtures, aucune passerelle ne joue l’ami : la porte se dit absente', async () => {
+    const { requests, transport } = recording();
+    const result = await openExternalConversation({ source: 'fixtures', transport }, { network: 'whatsapp', handle: '+33612345678' });
+    expect(requests).toEqual([]);
+    expect(externalOpeningOutcomeOf({ result, online: true })).toEqual({ kind: 'refused', reason: 'disabled' });
   });
 });

@@ -331,3 +331,11 @@ describe('la photo des personnes (#6975)', () => {
     expect(chip?.querySelector('.avatar-root img')).not.toBeNull();
   });
 });
+
+describe('« écrire à un ami WhatsApp » reste absent hors de l’équipe (#17118)', () => {
+  test('un compte ordinaire ne voit pas l’entrée : l’écran est celui d’avant', async () => {
+    const container = await mount();
+    expect(container.querySelector('[data-external-conversation-entry]')).toBeNull();
+    expect(container.querySelector('[data-new-group-toggle]')).not.toBeNull();
+  });
+});

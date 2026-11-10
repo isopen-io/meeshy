@@ -553,9 +553,6 @@ const PENDING_CLIENT_ENTRIES = {
   // ces deux routes REST — le relais se fait pour l'instant par socket (`talkie:join`).
   'talkie.byTalkieIdAudio': { issue: 17142, reason: 'GET /talkie/:talkieId/audio — l’audio tamponné d’un talkie de réveil, que le web et Android liront (#17142)' },
   'users.mePushToTalkToken': { issue: 17142, reason: 'POST|DELETE /users/me/push-to-talk-token — le jeton PushToTalk, lié à la session côté iOS' },
-  // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
-  // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
-  'conversations.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp, depuis le web, iOS et Android' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

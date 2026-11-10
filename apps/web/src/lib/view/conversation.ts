@@ -1,5 +1,6 @@
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { getUserPresenceStatus } from '@meeshy/shared/utils/user-presence';
+import { EXTERNAL_CONVERSATION_TYPE } from '@meeshy/shared/types/external-conversation';
 
 import { customNameOf } from '@/lib/api/preferences';
 import type { Conversation, Participant, UserPresenceStatus } from '@/lib/api/types';
@@ -23,7 +24,22 @@ import type { Conversation, Participant, UserPresenceStatus } from '@/lib/api/ty
  * l'affichage est « montre-t-on un nom d'expéditeur et un compte de membres »,
  * pas la nature du salon.
  */
-export const isGroup = (conversation: Conversation): boolean => conversation.type !== 'direct';
+export const isGroup = (conversation: Conversation): boolean => conversation.type !== 'direct' && !isExternal(conversation);
+
+/**
+ * **UNE CONVERSATION AVEC UN AMI D'UN RÉSEAU TIERS** (#17117, #17118) — un
+ * tête-à-tête dont le pair n'est pas un `Participant` : la passerelle ne sert
+ * ni son nom ni son numéro (`ExternalConversationPeer` ne quitte pas son
+ * module). Elle porte donc le nom du RÉSEAU, langue-neutre, jamais
+ * l'identifiant technique `ext_<id>`. Le type est lu sans élargir l'énumération
+ * partagée `ConversationType`, qu'un ancien client et la passerelle partagent.
+ */
+const EXTERNAL_NETWORK_NAME = 'WhatsApp';
+
+export const isExternal = (conversation: Pick<Conversation, 'type'>): boolean => {
+  const type: string = conversation.type;
+  return type === EXTERNAL_CONVERSATION_TYPE;
+};
 
 /** ABSENT ⇒ 0 : le serveur qui ne compte pas n'annonce pas « non lu ». */
 export const unreadOf = (conversation: Conversation): number => conversation.unreadCount ?? 0;
@@ -55,6 +71,7 @@ export const unreadOf = (conversation: Conversation): number => conversation.unr
  * `identifier` ferme la marche pour qu'une ligne ne soit jamais vide.
  */
 export const titleOf = (conversation: Conversation, viewerId: string): string => {
+  if (isExternal(conversation)) return customNameOf(conversation) ?? EXTERNAL_NETWORK_NAME;
   const peerName = peerOf(conversation, viewerId)?.displayName ?? undefined;
   const served =
     conversation.type === 'direct' ? (peerName ?? conversation.title) : (conversation.title ?? peerName);

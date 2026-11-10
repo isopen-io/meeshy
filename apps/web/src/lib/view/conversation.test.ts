@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { avatarOf, initialsOf, participantAvatarOf, presenceOf, previewKindOf, titleOf } from './conversation';
+import { avatarOf, initialsOf, isGroup, participantAvatarOf, presenceOf, previewKindOf, titleOf } from './conversation';
 import type { Conversation, Message, Participant } from '@/lib/api/types';
 
 const NOW = Date.parse('2026-09-07T12:00:00.000Z');
@@ -351,5 +351,35 @@ describe('initialsOf — des LETTRES, jamais la ponctuation d’un nom de carnet
     expect(initialsOf('')).toBe('?');
     expect(initialsOf('   ')).toBe('?');
     expect(initialsOf('(🎉) !!')).toBe('?');
+  });
+});
+
+describe('une conversation avec un ami WhatsApp (#17118)', () => {
+  const external = (partial: Partial<Conversation> = {}): Conversation =>
+    conversation({
+      type: 'external' as Conversation['type'],
+      identifier: 'ext_6730c0ffee0000000000abcd',
+      memberCount: 1,
+      participants: [participant({ userId: 'u-viewer', displayName: 'Vous' })],
+      ...partial,
+    });
+
+  test('elle porte le nom du réseau, jamais son identifiant technique', () => {
+    expect(titleOf(external(), 'u-viewer')).toBe('WhatsApp');
+  });
+
+  test('le nom que le lecteur lui a donné prime', () => {
+    expect(titleOf(external({ userPreferences: [{ customName: 'Awa' }] } as Partial<Conversation>), 'u-viewer')).toBe('Awa');
+  });
+
+  test('c’est un tête-à-tête : ni nom d’expéditeur ni compte de membres', () => {
+    expect(isGroup(external())).toBe(false);
+  });
+
+  test('rien ne change pour Meeshy-Meeshy', () => {
+    expect(isGroup(conversation({ type: 'direct' }))).toBe(false);
+    expect(isGroup(conversation({ type: 'group' }))).toBe(true);
+    expect(isGroup(conversation({ type: 'public' }))).toBe(true);
+    expect(titleOf(conversation({ type: 'group', title: 'Famille', identifier: 'mshy_famille' }), 'u-viewer')).toBe('Famille');
   });
 });
