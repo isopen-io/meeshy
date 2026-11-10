@@ -40,6 +40,7 @@ export type ExternalOpeningRefusal = 'disabled' | 'reserved' | 'limit' | 'invali
 export type ExternalOpeningOutcome =
   | { readonly kind: 'open'; readonly conversationId: string; readonly created: boolean }
   | { readonly kind: 'phone-unverified' }
+  | { readonly kind: 'consent-required' }
   | { readonly kind: 'refused'; readonly reason: ExternalOpeningRefusal };
 
 const STAGING_GATEWAY = 'gate.staging.meeshy.me';
@@ -119,6 +120,7 @@ export function externalOpeningOutcomeOf(params: { readonly result: ApiResult<Ex
   }
   if (!params.online) return { kind: 'refused', reason: 'offline' };
   if (result.code === EXTERNAL_CONVERSATION_ERROR_CODES.PHONE_UNVERIFIED) return { kind: 'phone-unverified' };
+  if (result.code === EXTERNAL_CONVERSATION_ERROR_CODES.CONSENT_REQUIRED) return { kind: 'consent-required' };
   const known = result.code === undefined ? undefined : REFUSAL_OF_CODE[result.code];
   return { kind: 'refused', reason: known ?? refusalOfStatus(result.status) };
 }

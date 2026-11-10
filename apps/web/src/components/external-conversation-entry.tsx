@@ -1,4 +1,6 @@
-import { useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+
+import type { ExternalInteropConsentStatus } from '@meeshy/shared/types/external-interop-compliance';
 
 import type { ApiResult } from '@/lib/api/http';
 import {
@@ -16,6 +18,7 @@ import {
 } from '@/lib/i18n-external-conversation-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
+import { ExternalInteropNotice } from './external-interop-notice';
 import { Glyph } from './glyph';
 import { PhoneCodeForm, phonePrimaryButton, type PhoneCodeDeps } from './phone-code-form';
 
@@ -37,12 +40,19 @@ import { PhoneCodeForm, phonePrimaryButton, type PhoneCodeDeps } from './phone-c
  * serveur. Le numéro ne quitte l'appareil que vers `POST conversations.external`.
  */
 
+/** #17120 — lire et enregistrer le consentement à ce qui part chez Meta (`lib/api/external-interop-compliance.ts`). */
+export type ExternalInteropConsentDeps = {
+  readonly read: () => Promise<ApiResult<ExternalInteropConsentStatus>>;
+  readonly record: (granted: boolean) => Promise<ApiResult<ExternalInteropConsentStatus>>;
+};
+
 export type ExternalConversationEntryProps = {
   readonly visible: boolean;
   readonly language: InterfaceLanguage;
   readonly online: boolean;
   readonly open: (handle: string) => Promise<ApiResult<ExternalOpening>>;
   readonly phone: PhoneCodeDeps;
+  readonly consent: ExternalInteropConsentDeps;
   readonly onOpened: (conversationId: string) => void;
 };
 
@@ -119,6 +129,7 @@ function ExternalConversationForm({
   online,
   open,
   phone,
+  consent,
   onOpened,
   onCancel,
   t,
@@ -144,6 +155,7 @@ function ExternalConversationForm({
     }
     setFieldError(false);
     setPhoneVerified(false);
+    setOutcome(null);
     setPending(true);
     const next = await open(handle).then(
       (result) => externalOpeningOutcomeOf({ result, online }),
@@ -158,6 +170,10 @@ function ExternalConversationForm({
     setFieldError(next.kind === 'refused' && next.reason === 'invalid');
     setOutcome(next.kind === 'refused' && next.reason === 'invalid' ? null : next);
   };
+
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  const onConsented = useCallback(() => void submitRef.current(), []);
 
   return (
     <div className="grid gap-2 px-3.5 pb-3.5">
@@ -221,6 +237,15 @@ function ExternalConversationForm({
           </button>
         </div>
       </form>
+      {outcome?.kind === 'consent-required' ? (
+        <ExternalInteropNotice
+          language={language}
+          read={consent.read}
+          record={consent.record}
+          onConsented={onConsented}
+          onCancel={() => setOutcome(null)}
+        />
+      ) : null}
       <OutcomeNotice
         outcome={outcome}
         phoneVerified={phoneVerified}
@@ -258,7 +283,7 @@ function OutcomeNotice({
       </p>
     );
   }
-  if (outcome === null || outcome.kind === 'open') return null;
+  if (outcome === null || outcome.kind === 'open' || outcome.kind === 'consent-required') return null;
   if (outcome.kind === 'phone-unverified') {
     return (
       <div data-external-conversation-outcome="phone-unverified" className="grid gap-2">

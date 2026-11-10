@@ -4,7 +4,7 @@ import { useStore } from 'zustand/react';
 
 import type { CreationEncryptionMode } from '@meeshy/shared/utils/conversation-creation-encryption';
 import { CreationEncryptionPicker } from '@/components/creation-encryption-picker';
-import { ExternalConversationEntry } from '@/components/external-conversation-entry';
+import { ExternalConversationEntry, type ExternalInteropConsentDeps } from '@/components/external-conversation-entry';
 import type { PhoneCodeDeps } from '@/components/phone-code-form';
 import { Glyph } from '@/components/glyph';
 import { PeerAvatar } from '@/components/peer-avatar';
@@ -13,6 +13,7 @@ import { requestPhoneCode, verifyPhoneCode } from '@/lib/api/activation';
 import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { openExternalConversation } from '@/lib/api/external-conversations';
+import { readExternalInteropConsent, recordExternalInteropConsent } from '@/lib/api/external-interop-compliance';
 import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
@@ -148,6 +149,10 @@ export default function ConversationNewScreen() {
   const externalVisible = mode === 'direct' && externalConversationEntryVisible({ base: apiConfig.base, platformRole });
   const externalPhone = useMemo<PhoneCodeDeps>(
     () => ({ requestPhoneCode: (phone) => requestPhoneCode(apiDeps, phone), verifyPhoneCode: (code) => verifyPhoneCode(apiDeps, code) }),
+    [],
+  );
+  const externalConsent = useMemo<ExternalInteropConsentDeps>(
+    () => ({ read: () => readExternalInteropConsent(apiDeps), record: (granted) => recordExternalInteropConsent(apiDeps, granted) }),
     [],
   );
   const openExternal = (conversationId: string) => {
@@ -313,6 +318,7 @@ export default function ConversationNewScreen() {
         online={online}
         open={(handle) => openExternalConversation(apiDeps, { network: 'whatsapp', handle })}
         phone={externalPhone}
+        consent={externalConsent}
         onOpened={openExternal}
       />
 
