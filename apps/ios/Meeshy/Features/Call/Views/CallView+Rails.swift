@@ -21,18 +21,6 @@ extension CallView {
         CallControlsDisposition.resolve(participantCount: callParticipantCount, showsGroupGrid: isGroupStage)
     }
 
-    /// Le rail entre par le bord de l'écran et en sort par lui, vers l'extérieur
-    /// (transformation et opacité seulement). Réduire les animations le remplace
-    /// par un fondu.
-    private func railTransition(_ side: CallRailSide, safeHorizontal: CGFloat) -> AnyTransition {
-        guard !reduceMotion else { return .opacity }
-        return .modifier(
-            active: CallRailSlide(side: side, safeHorizontal: safeHorizontal, isAway: true),
-            identity: CallRailSlide(side: side, safeHorizontal: safeHorizontal, isAway: false)
-        )
-        .combined(with: .opacity)
-    }
-
     /// Le retrait de la zone sûre horizontale, identique des deux côtés : la
     /// fenêtre donne des bords physiques, pas des bords de lecture.
     private static var railsSafeHorizontal: CGFloat {
@@ -75,7 +63,7 @@ extension CallView {
             .padding(.top, Self.chromeTopInset + 52)
             .padding(.bottom, bottom)
             .callChromeVisibility(isChromeVisible)
-            .transition(railTransition(side, safeHorizontal: safeHorizontal))
+            .transition(CallRailSlide.transition(side, safeHorizontal: safeHorizontal, reduceMotion: reduceMotion))
     }
 
     /// Une capsule de verre verticale : ses boutons de 44 pt se composent dans un
@@ -112,5 +100,17 @@ private struct CallRailSlide: ViewModifier {
 
     func body(content: Content) -> some View {
         content.offset(x: isAway ? CallRailsLayout.slideOffset(side: side, isRightToLeft: layoutDirection == .rightToLeft, safeHorizontal: safeHorizontal) : 0)
+    }
+
+    /// Le rail entre par le bord de l'écran et en sort par lui, vers l'extérieur
+    /// (transformation et opacité seulement). Réduire les animations le remplace
+    /// par un fondu.
+    static func transition(_ side: CallRailSide, safeHorizontal: CGFloat, reduceMotion: Bool) -> AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .modifier(
+            active: CallRailSlide(side: side, safeHorizontal: safeHorizontal, isAway: true),
+            identity: CallRailSlide(side: side, safeHorizontal: safeHorizontal, isAway: false)
+        )
+        .combined(with: .opacity)
     }
 }
