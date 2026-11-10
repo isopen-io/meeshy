@@ -123,6 +123,14 @@ struct MeeshyGlassToneTests {
         #expect(rest == pressed)
     }
 
+    @Test("sur iOS 26, onLight fonce le verre du système comme la planche ; les autres tons le laissent faire")
+    func liquidWash_darkensOnlyOnLight() {
+        #expect(MeeshyGlassRecipe.liquidWash(tone: .onLight) == 0.62)
+        #expect(MeeshyGlassRecipe.liquidWash(tone: .plain) == nil)
+        #expect(MeeshyGlassRecipe.liquidWash(tone: .deep) == nil)
+        #expect(MeeshyGlassRecipe.liquidWash(tone: .theme) == nil)
+    }
+
     @Test("opaque : ni flou, ni reflet, ni ombre ; la surface pleine répond par l'échelle", arguments: MeeshyGlassTone.allCases)
     func recipe_opaque_hasNoBlurNorSheen(tone: MeeshyGlassTone) {
         let rest = Self.recipe(tone: tone, interactive: true, pressed: false, material: .opaque)
