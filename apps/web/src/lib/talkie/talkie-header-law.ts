@@ -60,6 +60,24 @@ export function headerTalkieChrome(voice: TalkieHeaderVoice): TalkieHeaderChrome
 /** Le talkie n'est pas chiffré de bout en bout : il reste fermé dans un direct `e2ee` (iOS `TalkieOfferRule.mayShowInHeader`). */
 export const mayShowTalkieInHeader = (encryptionMode: string | null | undefined): boolean => encryptionMode !== 'e2ee';
 
+/** Le pair à qui le talkie de l'en-tête parle : celui d'un direct, hors aperçu, hors invité sans compte, hors E2EE. */
+export function threadHeaderTalkiePeer({
+  group,
+  preview,
+  guest,
+  encryptionMode,
+  peerId,
+}: {
+  readonly group: boolean;
+  readonly preview: boolean;
+  readonly guest: boolean;
+  readonly encryptionMode: string | null | undefined;
+  readonly peerId: string | null | undefined;
+}): string | null {
+  if (group || preview || guest || !mayShowTalkieInHeader(encryptionMode)) return null;
+  return peerId ?? null;
+}
+
 /** En deçà, c'est le silence ; 0 dBFS est le plafond. */
 export const TALKIE_WAVE_FLOOR_DB = -50;
 const ATTACK = 0.55;
@@ -69,9 +87,12 @@ export const TALKIE_WAVE_TRAIL_STEP_MS = 1_000 / 30;
 
 const clamp01 = (value: number): number => (Number.isNaN(value) ? 0 : Math.min(Math.max(value, 0), 1));
 
-export function talkieWaveRms(samples: ArrayLike<number>): number {
+const squared = (total: number, sample: number): number => total + sample * sample;
+
+/** Sans copie : appelée à chaque image sur la fenêtre de l'analyseur. */
+export function talkieWaveRms(samples: Float32Array | readonly number[]): number {
   if (samples.length === 0) return 0;
-  const energy = Array.prototype.reduce.call(samples, (total: number, sample: number) => total + sample * sample, 0) as number;
+  const energy = samples instanceof Float32Array ? samples.reduce(squared, 0) : samples.reduce(squared, 0);
   return Math.sqrt(energy / samples.length);
 }
 
