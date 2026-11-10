@@ -26,6 +26,11 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// liste et le détail ; absent d'une ligne mise en cache par une version
     /// antérieure, jusqu'au prochain rafraîchissement.
     public var encryptionEnabledAt: Date? = nil
+    /// Le réseau tiers de l'ami joint par une conversation EXTERNE (#17117, #17118) —
+    /// `nil` pour toute conversation Meeshy-Meeshy. Le type reste `.direct` (un
+    /// tête-à-tête) sans élargir `ConversationType`, que les ~11 aiguillages
+    /// exhaustifs de l'app lisent : ce champ est la seule marque du type.
+    public var externalNetwork: ExternalNetwork? = nil
     public let createdAt: Date
     public var updatedAt: Date
 
@@ -172,6 +177,10 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// Meeshy Global (`meeshy`) est une AUTRE conversation globale.
     public static let worldWideIdentifier = "world"
     public var isWorldWide: Bool { identifier == Self.worldWideIdentifier }
+
+    /// Une conversation avec un ami d'un réseau tiers (#17118) : chiffrée de bout
+    /// en bout, sans pair Meeshy, sans appel.
+    public var isExternal: Bool { externalNetwork != nil }
 
     /// Présence du pair d'une conversation directe, dérivée du SEUL signal que
     /// le modèle porte (`lastSeenAt`) via la règle produit 1/3/5.
@@ -534,7 +543,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessageNature, lastReaction, lastReactionTargetsReader, activeCall, listRankAt
         case viewerEngagement, viewerWriteRestriction, viewerCapabilities
         case recentMessages, tags
-        case bridge
+        case bridge, externalNetwork
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
         case participantUserId, participantUsername, participantAvatarURL, participantBanner, participantRing, participantAccountClosed, lastSeenAt
         case closedAt, closedBy, currentUserRole, currentUserJoinedAt
@@ -574,7 +583,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.memberCount = try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
         self.memberCountCapped = try c.decodeIfPresent(Bool.self, forKey: .memberCountCapped) ?? false
         self.lastMessageAt = try c.decode(Date.self, forKey: .lastMessageAt)
-        self.encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode); self.encryptionEnabledAt = (try? c.decodeIfPresent(Date.self, forKey: .encryptionEnabledAt)) ?? nil
+        self.encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode); self.encryptionEnabledAt = (try? c.decodeIfPresent(Date.self, forKey: .encryptionEnabledAt)) ?? nil; self.externalNetwork = (try? c.decodeIfPresent(ExternalNetwork.self, forKey: .externalNetwork)) ?? nil
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
         self.updatedAt = try c.decode(Date.self, forKey: .updatedAt)
 
@@ -678,7 +687,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encode(memberCount, forKey: .memberCount)
         try c.encode(memberCountCapped, forKey: .memberCountCapped)
         try c.encode(lastMessageAt, forKey: .lastMessageAt)
-        try c.encodeIfPresent(encryptionMode, forKey: .encryptionMode); try c.encodeIfPresent(encryptionEnabledAt, forKey: .encryptionEnabledAt)
+        try c.encodeIfPresent(encryptionMode, forKey: .encryptionMode); try c.encodeIfPresent(encryptionEnabledAt, forKey: .encryptionEnabledAt); try c.encodeIfPresent(externalNetwork, forKey: .externalNetwork)
         try c.encode(createdAt, forKey: .createdAt)
         try c.encode(updatedAt, forKey: .updatedAt)
 

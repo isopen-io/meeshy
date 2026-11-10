@@ -376,21 +376,11 @@ extension APIConversation {
         let otherParticipant = interlocutor(readerId: currentUserId)
         let otherUser = otherParticipant?.user
 
-        let convType: MeeshyConversation.ConversationType = {
-            switch type.lowercased() {
-            case "direct", "dm": return .direct
-            case "group": return .group
-            case "community": return .community
-            case "channel": return .channel
-            case "public": return .public
-            case "global": return .global
-            case "bot": return .bot
-            case "broadcast": return .broadcast
-            default: return .direct
-            }
-        }()
+        let convType = MeeshyConversation.ConversationType(wireType: type)
+        let externalNetwork = ExternalNetwork(conversationType: type)
 
         let displayName: String = {
+            if let externalNetwork { return externalNetwork.displayName }
             if convType == .direct {
                 return directDisplayName(interlocutor: otherParticipant, readerId: currentUserId)
             }
@@ -521,6 +511,7 @@ extension APIConversation {
         conversation.lastReactionTargetsReader = lastReaction?.targets(readerId: currentUserId) ?? false
         conversation.listRankAt = listRankAt
         conversation.activeCall = activeCall
+        conversation.externalNetwork = externalNetwork
         conversation = conversation.servingViewerFacets(of: self)
 
         // La frontière de lecture (#7198, #7222) — même idiome que la Prisme
@@ -558,5 +549,23 @@ extension MeeshyConversation {
         conversation.viewerWriteRestriction = served.viewerWriteRestriction
         conversation.viewerCapabilities = served.viewerCapabilities
         return conversation.imposingServedArchive()
+    }
+}
+
+extension MeeshyConversation.ConversationType {
+    /// Le type que la passerelle sert. Un type inconnu — dont `external`
+    /// (#17118), porté à part par `externalNetwork` — se lit comme un
+    /// tête-à-tête.
+    public init(wireType: String) {
+        switch wireType.lowercased() {
+        case "group": self = .group
+        case "community": self = .community
+        case "channel": self = .channel
+        case "public": self = .public
+        case "global": self = .global
+        case "bot": self = .bot
+        case "broadcast": self = .broadcast
+        default: self = .direct
+        }
     }
 }

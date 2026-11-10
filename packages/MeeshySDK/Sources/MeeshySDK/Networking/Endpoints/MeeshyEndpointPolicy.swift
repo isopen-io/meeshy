@@ -112,9 +112,13 @@ public extension ConversationsEndpoint {
     /// Une seule adresse : toutes les autres routes de conversation gardent la
     /// forme d'erreur qu'elles ont, et les sites qui filtrent leurs
     /// `.server(400, _)` ne bougent pas.
+    ///
+    /// **L'ouverture d'une conversation externe la rejoint (#17118)** : 409
+    /// `EXTERNAL_CONVERSATION_LIMIT_REACHED` et 400 `EXTERNAL_CONVERSATION_INVALID`
+    /// disent chacun une phrase différente ; `ExternalOpeningOutcome` en lit le CODE.
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
-        case .byIdSharedTranslations: return .structured
+        case .byIdSharedTranslations, .external: return .structured
         default: return .opaque
         }
     }

@@ -125,4 +125,46 @@ struct ExternalConversationEntryTests {
         #expect(ExternalOpeningOutcome.of(error: MeeshyError.server(statusCode: 500, message: "boom")) == .refused(.failed))
         #expect(ExternalOpeningOutcome.of(error: Self.forbidden(code: "AUTRE_CHOSE")) == .refused(.failed))
     }
+
+    // MARK: - 4. La conversation servie
+
+    private static func served(type: String) throws -> MeeshyConversation {
+        let payload: [String: Any] = [
+            "id": "c1",
+            "identifier": "ext_c1",
+            "type": type,
+            "encryptionMode": "e2ee",
+            "createdAt": "2026-11-10T10:00:00Z",
+            "participants": [["id": "p1", "userId": "moi", "displayName": "Moi"]],
+        ]
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let api = try decoder.decode(APIConversation.self, from: JSONSerialization.data(withJSONObject: payload))
+        return api.toConversation(currentUserId: "moi")
+    }
+
+    @Test("Une conversation externe porte le nom du réseau, jamais ext_<id> ni le nom du lecteur")
+    func externalConversation_isNamedAfterTheNetwork() throws {
+        let conversation = try Self.served(type: "external")
+        #expect(conversation.isExternal)
+        #expect(conversation.externalNetwork == .whatsapp)
+        #expect(conversation.name == "WhatsApp")
+        #expect(conversation.type == .direct)
+    }
+
+    @Test("Une conversation Meeshy-Meeshy n'est jamais externe")
+    func meeshyConversation_isNeverExternal() throws {
+        #expect(try Self.served(type: "direct").isExternal == false)
+        #expect(try Self.served(type: "group").isExternal == false)
+    }
+
+    @Test("La marque externe survit au cache (aller-retour Codable)")
+    func externalMark_survivesTheCache() throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let revived = try decoder.decode(MeeshyConversation.self, from: encoder.encode(try Self.served(type: "external")))
+        #expect(revived.externalNetwork == .whatsapp)
+    }
 }
