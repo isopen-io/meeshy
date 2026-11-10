@@ -57,9 +57,10 @@ internal object KitSnapshot {
 
     fun file(name: String, stem: String): File = File(directory, "$name/$stem.png")
 
-    private val options = RoborazziOptions(
-        compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.001f),
-    )
+    // Paresseux : RoborazziOptions s'initialise avec l'environnement Android, que l'audit pur (JVM nue) n'a pas.
+    private val options: RoborazziOptions by lazy {
+        RoborazziOptions(compareOptions = RoborazziOptions.CompareOptions(changeThreshold = 0.001f))
+    }
 
     /** Photographie la racine du contenu posé : l'image est cadrée au composant, jamais à l'appareil. */
     fun capture(provider: SemanticsNodeInteractionsProvider, name: String, stem: String) {
