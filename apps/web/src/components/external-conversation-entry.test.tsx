@@ -154,3 +154,13 @@ describe('chaque refus se dit', () => {
     expect(host.querySelector('[data-external-conversation-outcome="offline"]')?.textContent).toContain('Hors ligne');
   });
 });
+
+describe('la langue de l’interface', () => {
+  test('changer de langue redit l’entrée dans la nouvelle langue', async () => {
+    const { element } = harness();
+    const host = await mounter.mount(element);
+    expect(host.querySelector('[data-external-conversation-toggle]')?.textContent).toContain('Écrire à un ami WhatsApp');
+    await mounter.rerender(host, <ExternalConversationEntry {...element.props} language="en" />);
+    expect(host.querySelector('[data-external-conversation-toggle]')?.textContent).toContain('Write to a friend on WhatsApp');
+  });
+});

@@ -60,19 +60,21 @@ const OPEN_FAILURE: ExternalOpeningOutcome = { kind: 'refused', reason: 'failed'
 const OPEN_OFFLINE: ExternalOpeningOutcome = { kind: 'refused', reason: 'offline' };
 
 function useCatalogReady(visible: boolean, language: InterfaceLanguage): boolean {
-  const [ready, setReady] = useState(() => isExternalConversationCatalogLoaded(language));
+  const [readyLanguage, setReadyLanguage] = useState<InterfaceLanguage | null>(() => (isExternalConversationCatalogLoaded(language) ? language : null));
   useEffect(() => {
     if (!visible) return undefined;
     let live = true;
     void loadExternalConversationCatalog(language).then(
-      () => live && setReady(true),
+      () => {
+        if (live) setReadyLanguage(language);
+      },
       () => undefined,
     );
     return () => {
       live = false;
     };
   }, [visible, language]);
-  return ready && isExternalConversationCatalogLoaded(language);
+  return readyLanguage === language && isExternalConversationCatalogLoaded(language);
 }
 
 export function ExternalConversationEntry(props: ExternalConversationEntryProps) {
