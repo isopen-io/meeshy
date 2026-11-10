@@ -2,11 +2,11 @@ import SwiftUI
 import UIKit
 import MeeshySDK
 import MeeshyUI
-import os
 
 // Le chrome du haut de l'écran d'appel : Réduire, Conversation, et le
 // passage vers la conversation pendant l'appel. Sorti de `CallView.swift`
-// (hors budget de taille, #8276).
+// (hors budget de taille, #8276). #17323 — ses boutons sont des verres
+// interactifs voisins, composés dans un `AdaptiveGlassContainer`.
 
 extension CallView {
     // MARK: - Top Chrome
@@ -14,54 +14,56 @@ extension CallView {
     /// Minimize-to-PiP affordance + ouverture de la conversation.
     var topChrome: some View {
         VStack {
-            HStack {
-                Button {
-                    collapseIntoPip()
-                } label: {
-                    Image(systemName: "chevron.down")
-                        // Doctrine 82i : glyphe de chrome dans un cadre glass fixe
-                        // (diameter 40) → taille figée (ne doit pas déborder du cercle).
-                        .font(MeeshyFont.fixedGlyph(16, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .callControlGlass(diameter: 40, isActive: false, tint: .white)
-                        // Visual glass circle stays 40pt (doctrine 82i), but the
-                        // tappable area must meet the HIG 44×44 minimum.
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Réduire l'appel", bundle: .main))
-                .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une bannière flottante", bundle: .main))
-
-                // #8436 — la SEULE porte vers la conversation pendant l'appel,
-                // juste à droite de la flèche (plus d'action « Messages »).
-                // Ouvrir la conversation (DM) de l'interlocuteur tout en
-                // gardant l'appel actif (minimisé en pilule). Masqué quand
-                // la conversationId est inconnue (ex: appel entrant réveillé
-                // par un push VoIP sans conversationId dans le payload).
-                if callManager.conversationId != nil {
+            AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
+                HStack {
                     Button {
-                        openConversationDuringCall()
+                        collapseIntoPip()
                     } label: {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            // Doctrine 82i : glyphe de chrome dans un cadre
-                            // glass fixe (diameter 40) → taille figée.
-                            .font(MeeshyFont.fixedGlyph(15, weight: .semibold))
+                        Image(systemName: "chevron.down")
+                            // Doctrine 82i : glyphe de chrome dans un cadre glass fixe
+                            // (diameter 40) → taille figée (ne doit pas déborder du cercle).
+                            .font(MeeshyFont.fixedGlyph(16, weight: .semibold))
                             .foregroundStyle(Color.white)
                             .callControlGlass(diameter: 40, isActive: false, tint: .white)
-                            // Cercle glass 40pt (doctrine 82i) mais cible
-                            // tactile HIG 44×44.
+                            // Visual glass circle stays 40pt (doctrine 82i), but the
+                            // tappable area must meet the HIG 44×44 minimum.
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
-                    .padding(.leading, MeeshySpacing.sm)
-                    .accessibilityLabel(String(localized: "call.openConversation", defaultValue: "Conversation", bundle: .main))
-                    .accessibilityHint(String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main))
-                }
-                Spacer()
-                // #8394 — la puce durée/qualité, à DROITE de la rangée
-                // d'en-tête, en duo vidéo comme en groupe.
-                if showsDurationChip {
-                    durationChip
+                    .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Réduire l'appel", bundle: .main))
+                    .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une bannière flottante", bundle: .main))
+
+                    // #8436 — la SEULE porte vers la conversation pendant l'appel,
+                    // juste à droite de la flèche (plus d'action « Messages »).
+                    // Ouvrir la conversation (DM) de l'interlocuteur tout en
+                    // gardant l'appel actif (minimisé en pilule). Masqué quand
+                    // la conversationId est inconnue (ex: appel entrant réveillé
+                    // par un push VoIP sans conversationId dans le payload).
+                    if callManager.conversationId != nil {
+                        Button {
+                            openConversationDuringCall()
+                        } label: {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                // Doctrine 82i : glyphe de chrome dans un cadre
+                                // glass fixe (diameter 40) → taille figée.
+                                .font(MeeshyFont.fixedGlyph(15, weight: .semibold))
+                                .foregroundStyle(Color.white)
+                                .callControlGlass(diameter: 40, isActive: false, tint: .white)
+                                // Cercle glass 40pt (doctrine 82i) mais cible
+                                // tactile HIG 44×44.
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .padding(.leading, MeeshySpacing.sm)
+                        .accessibilityLabel(String(localized: "call.openConversation", defaultValue: "Conversation", bundle: .main))
+                        .accessibilityHint(String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main))
+                    }
+                    Spacer()
+                    // #8394 — la puce durée/qualité, à DROITE de la rangée
+                    // d'en-tête, en duo vidéo comme en groupe.
+                    if showsDurationChip {
+                        durationChip
+                    }
                 }
             }
             Spacer()
@@ -119,7 +121,9 @@ extension CallView {
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             // Verre adaptatif à fond sombre (#8394) : lisible sur un flux clair.
-            .callChromeGlass(in: Capsule())
+            // #17323 — la capsule s'ouvre au toucher (détail de la qualité) :
+            // un verre interactif, comme les boutons voisins.
+            .modifier(CallInteractiveChromeGlass(shape: Capsule()))
             .clipShape(Capsule())
             .frame(height: 44)
             .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
@@ -193,35 +197,6 @@ extension CallView {
     func openConversationDuringCall() {
         guard let conversationId = callManager.conversationId else { return }
         collapseIntoPip()
-        Task { await resolveAndOpenConversation(conversationId: conversationId) }
+        Task { await CallConversationOpener.open(conversationId: conversationId) }
     }
-
-    /// Résout la conversation cache-first (Instant App : la conversation de
-    /// l'appel est quasi toujours déjà dans la liste en cache → navigation
-    /// immédiate), avec repli réseau — le socket d'appel étant vivant, le repli
-    /// `getById` aboutit. La `Conversation` résolue est postée sur le canal
-    /// `.navigateToConversation` que RootView/iPadRootView routent vers le DM.
-    private func resolveAndOpenConversation(conversationId: String) async {
-        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-        switch await CacheCoordinator.shared.conversations.load(for: "list") {
-        case .fresh(let list, _), .stale(let list, _):
-            if let conv = list.first(where: { $0.id == conversationId }) {
-                NotificationCenter.default.post(name: .navigateToConversation, object: conv)
-                return
-            }
-        case .expired, .empty:
-            break
-        }
-        do {
-            let apiConv = try await ConversationService.shared.getById(conversationId)
-            let conv = apiConv.toConversation(currentUserId: currentUserId)
-            NotificationCenter.default.post(name: .navigateToConversation, object: conv)
-        } catch {
-            Logger.calls.warning("CallView: conversation d'appel non résolue (\(conversationId)): \(error.localizedDescription)")
-        }
-    }
-}
-
-private extension Logger {
-    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

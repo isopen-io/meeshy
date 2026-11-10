@@ -28,7 +28,7 @@ struct CallPanelHeader: View {
                 .font(.footnote.weight(.bold))
                 .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-                .background(Circle().fill(CallButtonFill.color(for: .normal)))
+                .modifier(CallButtonGlassModifier(kind: .normal))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -58,11 +58,13 @@ struct CallPillRow<Content: View>: View {
                     .accessibilityAddTraits(.isHeader)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: MeeshySpacing.xxs) {
-                    content
+                AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
+                    HStack(alignment: .top, spacing: MeeshySpacing.xxs) {
+                        content
+                    }
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .callRowScrollTargetLayout()
                 }
-                .padding(.horizontal, MeeshySpacing.sm)
-                .callRowScrollTargetLayout()
             }
             .callRowScrollTargetBehavior()
             .modifier(CallRowScrollInteraction())
@@ -124,7 +126,7 @@ struct CallPillChip: View {
             Text(emoji)
                 .font(.title2)
                 .frame(width: Self.artDiameter, height: Self.artDiameter)
-                .background(Circle().fill(isSelected ? Color.white.opacity(MeeshyOpacity.intense) : CallButtonFill.color(for: .normal)))
+                .modifier(CallButtonGlassModifier(kind: isSelected ? .active : .normal))
                 .accessibilityHidden(true)
         case .image(let image):
             Image(decorative: image, scale: 1)
