@@ -30,7 +30,9 @@ Les valeurs posées ici sont PROVISOIRES et prudentes.
   (constante partagée), au-delà de 365 ⇒ 365. L'ouverture et la réouverture posent `purgeAfter` depuis elle, et
   `GET …/consent` la dit à l'utilisateur. Le staging la pose à 90 par défaut.
 - **Purge planifiée** : `purgeExpiredExternalPeers` (adresses `purgeAfter <= maintenant`) tourne au démarrage puis
-  toutes les heures (`external-peer-retention-sweep`, `jobs/index.ts`). Elle ne REMPLACE pas l'index TTL de #17117 :
+  toutes les heures (`external-peer-retention-sweep`, `jobs/index.ts`), là seulement où le drapeau
+  `EXTERNAL_CONVERSATIONS` l'admet — donc jamais en production avant la signature : aucune purge de production ne
+  part sans décision du porteur (#9223), et c'est là aussi qu'une conversation externe peut exister. Elle ne REMPLACE pas l'index TTL de #17117 :
   elle en est le filet — l'index n'existe que si la migration nommée a tourné, et la décision précédente notait qu'une
   tâche peut s'arrêter ; à deux, aucun des deux oublis ne garde un numéro. La purge à la suppression de la conversation
   ou du compte reste celle de #17117 (`eraseExternalPeerOnClose`, `eraseExternalPeerHandlesOpenedBy`).
@@ -58,6 +60,10 @@ Les valeurs posées ici sont PROVISOIRES et prudentes.
   trace de son blocage.
 
 ### Conséquences
+- Drapeau éteint, le consentement ne se retire pas par cette route (aucune conversation externe ne peut alors
+  s'ouvrir) ; un staging qui éteint le drapeau après des consentements les garde jusqu'à la suppression du compte.
+- Un signalant qui a déjà un signalement OUVERT sur la même conversation reçoit l'accusé de la ligne existante
+  (`ReportService.createReport`, #14627) : un nouveau texte joint n'y est pas ajouté ; le blocage s'applique.
 - Le relais (lot suivant) doit lire `blockedAt` et ne rien remettre d'un pair bloqué ; aucun déblocage n'existe encore.
 - L'export RGPD (`GET /me/export`) ne porte encore ni le consentement d'interopérabilité ni les adresses d'amis gardées :
   suivi par issue.

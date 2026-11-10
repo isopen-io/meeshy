@@ -145,7 +145,7 @@ describe('la durée de conservation du numéro vient d’UNE configuration (#171
 
 describe('la tâche planifiée efface les adresses échues (#17120)', () => {
   it('efface exactement les adresses dont l’échéance est passée, et rend leur nombre', async () => {
-    const deleteMany = jest.fn(async () => ({ count: 3 }));
+    const deleteMany = jest.fn(async (_args: unknown) => ({ count: 3 }));
 
     const purged = await purgeExpiredExternalPeers({ externalConversationPeer: { deleteMany } } as never, NOW);
 
@@ -154,10 +154,11 @@ describe('la tâche planifiée efface les adresses échues (#17120)', () => {
     expect(deleteMany).toHaveBeenCalledWith({ where: { purgeAfter: { lte: NOW } } });
   });
 
-  it('est armée par le gestionnaire des tâches de fond, à intervalle régulier', () => {
+  it('est armée par le gestionnaire des tâches de fond, à intervalle régulier, là seulement où le drapeau l’admet (jamais en production)', () => {
     const jobs = readFileSync(join(__dirname, '../../../../jobs/index.ts'), 'utf8');
 
     expect(jobs).toContain('purgeExpiredExternalPeers(');
     expect(jobs).toMatch(/name: 'external-peer-retention-sweep'/);
+    expect(jobs).toMatch(/if \(externalConversationsEnabled\(process\.env\)\) \{\s*balayerLesNumerosEchus\(\);/);
   });
 });

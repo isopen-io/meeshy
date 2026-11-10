@@ -24,6 +24,7 @@ import { RelationWeeklyJob } from './relation-weekly';
 import { createE2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
 import { sweepDevicesOfEndedSessions } from '../services/e2ee/device-retirement';
 import { purgeExpiredExternalPeers } from '../services/external-conversation/peer-retention';
+import { externalConversationsEnabled } from '../services/external-conversation/external-conversation-flag';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -159,9 +160,15 @@ export class BackgroundJobsManager {
         .then((n) => { if (n > 0) logger.info(`${n} expired external peer address(es) erased`); })
         .catch((err) => logger.error('External peer retention sweep failed', err instanceof Error ? err.name : 'unknown'));
     };
-    balayerLesNumerosEchus();
-    this.externalPeerSweepInterval = guardedInterval({ name: 'external-peer-retention-sweep', everyMs: 60 * 60 * 1000, logger, run: balayerLesNumerosEchus });
-    this.externalPeerSweepInterval.unref();
+    /* Armée là seulement où une conversation externe peut exister (drapeau
+       `EXTERNAL_CONVERSATIONS`, jamais en production avant la signature) :
+       aucune purge ne tourne en production sans décision (#9223). L'index
+       TTL reste le premier mécanisme partout. */
+    if (externalConversationsEnabled(process.env)) {
+      balayerLesNumerosEchus();
+      this.externalPeerSweepInterval = guardedInterval({ name: 'external-peer-retention-sweep', everyMs: 60 * 60 * 1000, logger, run: balayerLesNumerosEchus });
+      this.externalPeerSweepInterval.unref();
+    }
 
     /* LE CACHE GEOIP SE LIBÈRE (#9239). Ses entrées expirées n'étaient
        qu'IGNORÉES à la lecture : la table, indexée par l'IP du client,
