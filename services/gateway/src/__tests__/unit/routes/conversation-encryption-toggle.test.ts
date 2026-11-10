@@ -45,6 +45,7 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 }));
 
 import encryptionRoutes from '../../../routes/conversation-encryption';
+import { openExternalConversation } from '../../../services/external-conversation/open-external-conversation';
 
 const ALICE = '507f1f77bcf86cd799439011';
 const BOB = '507f1f77bcf86cd799439012';
@@ -431,6 +432,66 @@ describe('encryption-status sert l’époque et le droit de basculer (spec § 5.
     const res = await status(app);
 
     expect(res.json().data).toMatchObject({ isEncrypted: false, epoch: 0 });
+    await app.close();
+  });
+});
+
+/**
+ * #17117 — la conversation EXTERNE, telle que `openExternalConversation` la fait
+ * naître (régime posé par la création), ne se rétrograde par aucune route, même
+ * quand son unique membre est un rang de plateforme (« admin compris »).
+ */
+describe('une conversation externe, telle qu’elle naît, ne se rétrograde jamais (#17117)', () => {
+  const bornExternal = async (): Promise<MongoDocument> => {
+    const created: MongoDocument[] = [];
+    const prisma = {
+      user: { findUnique: async () => ({ id: ALICE, phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), displayName: 'Alice', username: 'alice' }) },
+      externalConversationPeer: { findUnique: async () => null, update: async () => null },
+      conversation: {
+        create: async ({ data }: { data: MongoDocument }) => {
+          const { participants: _participants, externalPeer: _peer, ...conversation } = data;
+          created.push(conversation);
+          return { id: conversation.id };
+        },
+      },
+    };
+    await openExternalConversation(
+      {
+        prisma: prisma as never,
+        regime: { newConversationId: () => CONV_ID, now: () => new Date('2026-11-10T09:00:00Z'), serverKeyIdFor: async () => 'never' },
+      },
+      { userId: ALICE, network: 'whatsapp', handle: '+33612345678' },
+    );
+    return created[0];
+  };
+
+  it.each(['ANALYST', 'ADMIN', 'BIGBOSS'])('son membre %s : désactiver rend 409 E2EE_IRREVERSIBLE, rien n’est écrit', async (role) => {
+    as(ALICE);
+    const born = await bornExternal();
+    const world = makeWorld(born, [{ userId: ALICE, role: 'creator', user: { role } }]);
+    const before = { ...world.conversation };
+    const app = await buildApp(world);
+
+    const res = await disable(app);
+
+    expect(born).toMatchObject({ type: 'external', encryptionMode: 'e2ee' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ success: false, code: 'E2EE_IRREVERSIBLE' });
+    expect(world.conversation).toEqual(before);
+    expect(world.emitted).toEqual([]);
+    await app.close();
+  });
+
+  it.each(['server', 'hybrid'])('reposer le mode %s : 409 E2EE_IRREVERSIBLE', async (mode) => {
+    as(ALICE);
+    const world = makeWorld(await bornExternal(), [{ userId: ALICE, role: 'creator', user: { role: 'BIGBOSS' } }]);
+    const app = await buildApp(world);
+
+    const res = await enable(app, CONV_ID, mode);
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ code: 'E2EE_IRREVERSIBLE' });
+    expect(world.conversation).toMatchObject({ type: 'external', encryptionMode: 'e2ee', encryptionEpoch: 1 });
     await app.close();
   });
 });
