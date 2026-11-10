@@ -27,6 +27,24 @@ final class MeeshyGlassToneSnapshotTests: XCTestCase {
         }
     }
 
+    /// Le cadrage des images rend la taille NATURELLE : sous la proposition nulle
+    /// de `.sizeThatFits`, la tuile mesure ce qu'elle mesure sans contrainte,
+    /// libellé compris.
+    @MainActor
+    func test_cadrageDuKit_rendLaTailleNaturelleSousLaPropositionNulle() throws {
+        let entry = try Self.entry()
+        for state in entry.states {
+            let stage = MeeshyKitCatalogStage(key: entry.key, state: state)
+            let natural = UIHostingController(rootView: stage)
+                .sizeThatFits(in: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude))
+            let framed = UIHostingController(rootView: SnapshotHelpers.kitFramed(stage))
+                .sizeThatFits(in: .zero)
+
+            XCTAssertEqual(framed.width, natural.width, accuracy: 0.5, state.id)
+            XCTAssertEqual(framed.height, natural.height, accuracy: 0.5, state.id)
+        }
+    }
+
     private static func entry() throws -> MeeshyKitCatalogEntry {
         try XCTUnwrap(MeeshyKitCatalog.listedEntry(matching: "K01"), "l'entrée K01 doit être livrée")
     }

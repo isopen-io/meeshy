@@ -38,6 +38,16 @@ extension SnapshotHelpers {
         state.isTouchable ? [.clair, .sombre, .presse] : [.clair, .sombre]
     }
 
+    /// La taille NATURELLE du composant. `layout: .sizeThatFits` mesure l'hôte
+    /// sous une proposition NULLE (`sizeThatFits(in: .zero)`) : tout ce qui se
+    /// comprime s'y efface — le libellé d'une pilule disparaissait des 40
+    /// premières références de K01, seul le glyphe restait. `fixedSize()` rend
+    /// la taille idéale, celle que le composant prend à l'écran.
+    @MainActor
+    static func kitFramed<V: View>(_ view: V) -> some View {
+        view.fixedSize()
+    }
+
     @MainActor
     static func assertKitImage<V: View>(
         of view: V,
@@ -50,7 +60,7 @@ extension SnapshotHelpers {
     ) {
         let recording: Bool? = nil
         let failure = SnapshotTesting.verifySnapshot(
-            of: view.environment(\.colorScheme, colorScheme),
+            of: kitFramed(view).environment(\.colorScheme, colorScheme),
             as: .image(precision: 0.99, perceptualPrecision: 0.98, layout: .sizeThatFits),
             named: variant.rawValue + osBaselineSuffix,
             record: recording,
