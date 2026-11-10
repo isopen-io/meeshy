@@ -3,7 +3,6 @@ import { useStore } from 'zustand/react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
-import { CallRails } from '@/components/call-rails';
 import { CallButton } from '@/components/call-glass-button';
 import { CallIncomingAnswer } from '@/components/call-incoming-answer';
 import { CallJournalColumn } from '@/components/call-journal-column';
@@ -22,18 +21,20 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
-import { controlsDisposition, participantCountOf, pillRows, railRows, unfoldsPill } from '@/lib/calls/call-controls-disposition';
+import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
 import { useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
+import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall, type CallMember } from '@/lib/calls/call-store';
 import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
+import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { useCallSwipeDown } from '@/lib/calls/use-call-swipe-down';
@@ -110,6 +111,11 @@ const CallCaptionsPanel = lazy(() => loadCaptions().then((module) => ({ default:
 
 const loadActions = once(() => import('./call-control-actions'));
 
+/* Les rails du duo (#17327) : leur cadre, leur glissement et la loi qui les écarte de ma vignette (#17429) sont un chunk à part (`budgets.json` › `call_rails`), chargé dès que l'appel vit. */
+const loadRails = once(() => import('./call-rails'));
+const CallRails = lazy(() => loadRails().then((module) => ({ default: module.CallRails })));
+const CallActionRail = lazy(() => loadActions().then((module) => ({ default: module.CallActionRail })));
+
 const CallPreview = lazy(() => import('./call-preview').then((module) => ({ default: module.CallPreview })));
 
 const PREVIEW_KIT = { Video: StreamVideo, Audio: StreamAudio, soundOn: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerHigh} size={22} />, soundOff: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerSlash} size={22} /> };
@@ -164,6 +170,7 @@ const CallJournalPanel = lazy(() => loadJournal().then((module) => ({ default: m
  */
 const PREFETCH: readonly (() => Promise<unknown>)[] = [
   loadActions,
+  loadRails,
   loadEffectsMode,
   loadMontageMode,
   loadPanels,
@@ -343,6 +350,9 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const chrome = layerChrome(shown);
   const disposition = controlsDisposition({ participantCount: participantCountOf(call, layout), showsGroupGrid: layout === 'grid' });
   const rails = railRows(disposition, set, shown);
+  const viewport = useCallViewport();
+  const tileCorner = useStore(selfTileStore, (state) => selfTileCornerFor(state, call.callId ?? ''));
+  const tileScale = useStore(selfTileStore, (state) => selfTileScaleFor(state, call.callId ?? ''));
   const swipe = useCallSwipeDown({
     root,
     allowed: live && swipeDownAllowed({ joined, layout, layerIdle: shown.kind === 'idle' }),
@@ -368,6 +378,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   useEffect(() => {
     if (!live) return undefined;
     void loadActions().catch(() => undefined);
+    void loadRails().catch(() => undefined);
     return whenIdle(prefetchCallChunks);
   }, [live]);
 
@@ -447,8 +458,9 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     </div>
   ) : null;
 
+  const selfTopInset = captureShown ? CALL_CAPTURE_ROW_CLEARANCE : 0;
   const self: SelfView = {
-    topInset: captureShown ? CALL_CAPTURE_ROW_CLEARANCE : 0,
+    topInset: selfTopInset,
     full: selfFull,
     tileHidden: framed && !selfFull,
     onToggle: () => setSelfFull((full) => !full),
@@ -657,7 +669,22 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         ) : (
           <div className="pb-6">{phase === 'incoming' ? incomingControls : endedControls}</div>
         )}
-        {live && chrome.mode === null ? <CallRails call={call} rows={rails} open={railsShown} language={language} panels={panels} kit={ROWS_KIT} inset={bleedEnd} /> : null}
+        {live && chrome.mode === null ? (
+          <Suspense fallback={null}>
+            <CallRails
+              call={call}
+              rails={railsBySide(rails)}
+              open={railsShown}
+              language={language}
+              panels={panels}
+              kit={ROWS_KIT}
+              Rail={CallActionRail}
+              viewport={viewport}
+              inset={bleedEnd}
+              tile={selfTileFootprint({ layout, cameraOn: call.cameraOn, swapped: selfFull, framed, immersive, corner: tileCorner, scale: tileScale, viewport, topInset: selfTopInset })}
+            />
+          </Suspense>
+        ) : null}
         {column.shown ? (
           <CallJournalColumn>
             <Suspense fallback={null}>

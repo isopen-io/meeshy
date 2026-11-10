@@ -49,6 +49,11 @@ export type RailSide = 'leading' | 'trailing';
 
 export const RAIL_SIDE: Readonly<Record<CallFamily, RailSide>> = { mine: 'leading', call: 'trailing' };
 
+/** Les rails à poser, rangés par bord : le chunk des rails n'a qu'à les lire. */
+export type RailsBySide = Readonly<Partial<Record<RailSide, CallFamilyRow>>>;
+
+export const railsBySide = (rows: readonly CallFamilyRow[]): RailsBySide => Object.fromEntries(rows.map((row) => [RAIL_SIDE[row.family], row]));
+
 const familyRows = (set: CallControlSet): readonly CallFamilyRow[] =>
   ([
     { family: 'mine', actions: set.mine },

@@ -14,6 +14,7 @@ import type { CallModeration } from '@/lib/calls/call-moderation';
 import {
   cornerAfterArrow,
   nearestSelfCorner,
+  SCREEN_SELF_TILE,
   SELF_TILE_BOTTOM,
   SELF_TILE_MARGIN,
   SELF_TILE_TOP,
@@ -31,6 +32,7 @@ import {
 import type { ZoomControl } from '@/lib/calls/call-self-controls';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
+import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { hasVideo, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
@@ -91,8 +93,6 @@ const TILE_SAID: Readonly<Record<SelfTileScale, 'callControls.selfTile.small' | 
   3: 'callControls.selfTile.large',
 };
 
-const viewport = () => (typeof window === 'undefined' ? { width: 390, height: 844 } : { width: window.innerWidth, height: window.innerHeight });
-
 /** Mon image dans son aperçu (#8696) : la loi du miroir, jamais une condition locale. */
 export const selfPreviewMirrored = (call: Pick<ActiveCall, 'facing' | 'screenSharing'>): boolean => cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing });
 
@@ -118,7 +118,7 @@ type StageProps = {
 /** Le tempo d'un changement de coin : celui de l'ancienne transition. */
 const SELF_TILE_FLIP_MS = 300;
 
-const cornerTop = { top: 'calc(env(safe-area-inset-top) + 4.5rem)' } as const;
+const screenCorner = { top: `calc(env(safe-area-inset-top) + ${SCREEN_SELF_TILE.y}px)`, right: SELF_TILE_MARGIN, width: SCREEN_SELF_TILE.width, height: SCREEN_SELF_TILE.height } as const;
 
 const TILE_CORNER_SAID: Readonly<Record<SelfTileCorner, `callControls.selfTile.corner.${SelfTileCorner}`>> = {
   'top-left': 'callControls.selfTile.corner.top-left',
@@ -165,7 +165,7 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
     <div className="absolute inset-0" data-call-shared-screen="">
       <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />
       {call.cameraOn && !immersive ? (
-        <div className="absolute right-4 h-40 w-28 overflow-hidden rounded-card shadow-lg" style={cornerTop} data-call-corner="">
+        <div className="absolute overflow-hidden rounded-card shadow-lg" style={screenCorner} data-call-corner="">
           <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" self />
         </div>
       ) : null}
@@ -217,7 +217,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
   /* Ma vignette composée dans un cadre en direct (#16943) reste montée, invisible et intouchable : sa vidéo est la source de ma case. */
   const composed = self.tileHidden === true && !swapped;
   const cornerVideo = swapped ? remoteVideoOn : call.cameraOn;
-  const screen = viewport();
+  const screen = useCallViewport();
   const compact = !chromeVisible;
   const size = selfTileSize(compact ? 1 : scale, screen);
   const topInset = self.topInset ?? 0;

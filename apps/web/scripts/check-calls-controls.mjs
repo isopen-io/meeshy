@@ -49,8 +49,10 @@
  *     partent, le carrousel se centre en bas ; ✕ en sort ;
  *  9. au DOIGT (320 × 568) : sans geste, rien ne s'efface (#8988) ; un
  *     toucher sur la scène range les commandes, le suivant les rend — même
- *     posé là où était `(…)`, qui, rangé, n'agit pas ; en paysage, un glissé fait
- *     défiler CHAQUE rail débordant sans rien ranger (#8736), et les carrousels
+ *     posé là où était `(…)`, qui, rangé, n'agit pas ; en portrait comme en
+ *     paysage, aucun rail ne recouvre ma vignette (P2, #17429) ; en paysage, un
+ *     glissé fait défiler CHAQUE rail débordant sans rien ranger (#8736), ce qui
+ *     y défile s'estompant à ses deux bords (facture #17406), et les carrousels
  *     des deux modes (`scrollLeft` mesuré) ; un pincement à
  *     deux doigts sur ma vignette la passe à ×3, un pincement serré à ×1 ; la
  *     taille est retenue pour l'appel.
@@ -170,7 +172,13 @@ const railsOf = (page) =>
         label: rail.getAttribute('aria-label') ?? '',
         role: rail.getAttribute('role'),
         orientation: rail.getAttribute('aria-orientation'),
-        overflowY: getComputedStyle(rail).overflowY,
+        overflowY: getComputedStyle(rail.querySelector('[data-call-rail-scroll]') ?? rail).overflowY,
+        fade: /^linear-gradient\(.*rgba\(0, 0, 0, 0\).*rgba\(0, 0, 0, 0\)\)$/.test(getComputedStyle(rail.querySelector('[data-call-rail-scroll]') ?? rail).maskImage ?? ''),
+        tile: document.querySelector('[data-call-corner-frame], [data-call-shared-screen] [data-call-corner]')?.getBoundingClientRect().toJSON() ?? null,
+        clearOfTile: (() => {
+          const tile = document.querySelector('[data-call-corner-frame], [data-call-shared-screen] [data-call-corner]')?.getBoundingClientRect();
+          return tile === undefined || box.right <= tile.left || box.left >= tile.right || box.bottom <= tile.top || box.top >= tile.bottom;
+        })(),
         keys: buttons.map(keyOfButton),
         sizes: boxes.map((b) => Math.round(Math.min(b.width, b.height))),
         disc: buttons.every((button) => button.classList.contains('glass-call-disc') || button.querySelector('.glass-call-disc') !== null),
@@ -613,11 +621,17 @@ try {
       const portrait = await railsOf(page);
       check(portrait.length === 2 && portrait.every((rail) => rail.onScreen && rail.sizes.every((size) => size >= TAP_FLOOR)) && portrait.find((rail) => rail.family === 'mine')?.onStart === true && portrait.find((rail) => rail.family === 'call')?.onEnd === true, `doigt : à 320 × 568, deux rails à l’écran, un par bord, ${TAP_FLOOR} px chacun (${JSON.stringify(portrait.map((rail) => [rail.family, rail.box]))})`);
       await page.setViewportSize({ width: 568, height: 320 });
-      check(await until(page, () => document.querySelector('[data-call-rails="shown"]') !== null && [...document.querySelectorAll('[data-call-rail]')].some((rail) => rail.scrollHeight - rail.clientHeight > 1)), 'doigt : en paysage (568 × 320), un rail déborde et défile sur place');
-      const slid = await page.evaluate(() => [...document.querySelectorAll('[data-call-rail]')].map((rail) => ({ family: rail.getAttribute('data-call-rail'), room: Math.round(rail.scrollHeight - rail.clientHeight), box: rail.getBoundingClientRect().toJSON() })).filter((rail) => rail.room > 1));
+      check(portrait.every((rail) => rail.clearOfTile), `doigt : à 320 × 568, aucun rail ne recouvre ma vignette (P2, #17429 — ${JSON.stringify(portrait.map((rail) => [rail.family, rail.box]))})`);
+      await page.setViewportSize({ width: 568, height: 320 });
+      check(await until(page, () => document.querySelector('[data-call-rails="shown"]') !== null && [...document.querySelectorAll('[data-call-rail-scroll]')].some((rail) => rail.scrollHeight - rail.clientHeight > 1)), 'doigt : en paysage (568 × 320), un rail déborde et défile sur place');
+      /* Ma vignette rejoint son coin de paysage en glissant (300 ms) : on la mesure posée. */
+      await page.waitForTimeout(450);
+      const landscape = await railsOf(page);
+      check(landscape.length === 2 && landscape.every((rail) => rail.clearOfTile && rail.fade), `doigt : en paysage, aucun rail ne recouvre ma vignette, et ce qui y défile s’estompe à ses deux bords (${JSON.stringify(landscape.map((rail) => [rail.family, rail.clearOfTile, rail.fade, rail.box, rail.tile]))})`);
+      const slid = await page.evaluate(() => [...document.querySelectorAll('[data-call-rail]')].map((rail) => ({ family: rail.getAttribute('data-call-rail'), room: Math.round((rail.querySelector('[data-call-rail-scroll]')?.scrollHeight ?? 0) - (rail.querySelector('[data-call-rail-scroll]')?.clientHeight ?? 0)), box: rail.getBoundingClientRect().toJSON() })).filter((rail) => rail.room > 1));
       const sliding = [];
       for (const rail of slid) {
-        const track = page.locator(`[data-call-rail="${rail.family}"]`);
+        const track = page.locator(`[data-call-rail="${rail.family}"] [data-call-rail-scroll]`);
         await track.evaluate((element) => void (element.scrollTop = 0));
         const x = rail.box.x + rail.box.width / 2;
         const span = Math.min(rail.box.height - 24, rail.room * 0.8);

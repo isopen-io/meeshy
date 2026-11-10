@@ -12,13 +12,17 @@ import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import { CallModePending, CallScreen } from './call-screen';
 import { ThreadCallButton } from './thread-call-button';
 
-/* Les rangées d'actions vivent dans leur chunk (`call-control-actions.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
+/* Les rangées d'actions et les rails du duo vivent dans leurs chunks (`call-control-actions.tsx`, `call-rails.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming', preview: { getVideoTracks: () => [], getTracks: () => [] } as unknown as MediaStream })} />);
   await import('./call-control-actions');
+  await import('./call-rails');
   await import('./call-preview');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  /* Le cadre des rails arrivé, un second rendu amorce le contenu d'un rail, qu'il charge à son tour. */
+  renderToStaticMarkup(<CallScreen call={call({ members: { 'u-peer': member() } })} canShare initiallyExpanded />);
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
@@ -264,7 +268,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(rail?.getAttribute('aria-orientation')).toBe('vertical');
     expect(rail?.getAttribute('aria-label')).toBe('L’appel');
     expect(rail?.className).toContain('glass-call');
-    expect(rail?.className).toContain('overflow-y-auto');
+    expect(rail?.querySelector('[data-call-rail-scroll]')?.className).toContain('overflow-y-auto');
     expect(view.find('[data-call-rail] [data-call-captions]')).not.toBeNull();
     expect(view.find('[data-call-rail] [data-call-record]')).not.toBeNull();
     expect(view.find('[data-call-rail] button')?.className).not.toContain('glass-call ');

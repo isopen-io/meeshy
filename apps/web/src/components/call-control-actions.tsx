@@ -336,10 +336,16 @@ export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-on-med
 
 const FAMILY_LEGEND = { mine: 'call.section.mine', call: 'call.section.call' } as const;
 
+/** Ce qui défile dans un rail s'efface en fondu à ses deux bords, sur les 8 px de son bord : au repos, aucun bouton n'est estompé. */
+const RAIL_FADE = { maskImage: 'linear-gradient(to bottom, transparent, #000 8px, #000 calc(100% - 8px), transparent)' } as const;
+
 /**
  * UN RAIL (#17327) — une famille en colonne de verre sur le bord de l'écran :
- * des boutons de 44 sans légende, la capsule défile quand l'écran est court
- * (paysage). Le nom de la famille est celui de la rangée du groupe : « Mon
+ * des boutons de 44 sans légende, qui défilent DANS la capsule quand l'écran
+ * est court (paysage), en s'effaçant en fondu en haut comme en bas (facture
+ * #17406) — le verre, lui, reste entier : le fondu est posé sur ce qui défile,
+ * jamais sur la capsule, et les disques des boutons n'ont pas de flou qu'il
+ * couperait. Le nom de la famille est celui de la rangée du groupe : « Mon
  * image », « L'appel ».
  */
 export function CallActionRail({ call, row, language, panels, kit }: { readonly call: ActiveCall; readonly row: CallFamilyRow; readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit }) {
@@ -350,10 +356,12 @@ export function CallActionRail({ call, row, language, panels, kit }: { readonly 
       aria-label={translate(language, FAMILY_LEGEND[row.family])}
       aria-orientation="vertical"
       onKeyDown={kit.onRowKeyDown}
-      className="glass-call pointer-events-auto flex max-h-full flex-col items-center gap-2 overflow-y-auto overscroll-contain rounded-full p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0"
+      className="glass-call pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-full"
       data-call-rail={row.family}
     >
-      <Family actions={row.actions} context={context} variant="rail" />
+      <div className="flex min-h-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0" style={RAIL_FADE} data-call-rail-scroll="">
+        <Family actions={row.actions} context={context} variant="rail" />
+      </div>
     </div>
   );
 }
