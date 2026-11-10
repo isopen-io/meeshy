@@ -9,6 +9,7 @@ import {
   type MessageTranslationJSON,
 } from '../../utils/translation-transformer';
 import type { AttachmentReplyTo } from './attachmentReplySnapshot';
+import { quotableNoticeKind } from '@meeshy/shared/utils/quotable-notice';
 
 /**
  * Ce qu'une CITATION a le droit de transporter — site UNIQUE des trois
@@ -62,6 +63,8 @@ export type QuotedMessageRow = {
   readonly id?: string;
   readonly translations?: unknown;
   readonly attachments?: unknown;
+  /// #17441 — la nature d'un avis cité (appel, arrivée, départ annoncé).
+  readonly metadata?: unknown;
   /// #9915 — `_count.attachments` lu avec `QUOTED_VISUAL_ATTACHMENT_COUNT` :
   /// les tuiles du message cité, au-delà des quatre pièces servies.
   readonly _count?: { readonly attachments?: number } | null;
@@ -251,6 +254,10 @@ export function servedQuotedMessage(
   // room n'a pas de schéma pour les retirer. Écrasées ici, fail-closed.
   served['thirdPartyEditorId'] = undefined;
   served['thirdPartyEditorRole'] = undefined;
+  // #17441 — un avis AFFICHÉ se cite : sa métadonnée voyage seule, pour que le
+  // client le DISE dans la langue de son lecteur (le `content` stocké n'est
+  // qu'un repli français). Toujours POSÉE : un autre message n'en porte pas.
+  served['notice'] = quotableNoticeKind(quoted) === null ? undefined : quoted.metadata;
 
   return served;
 }
@@ -278,6 +285,7 @@ function servedDeletedQuote(deletedAt: Date | string): Record<string, unknown> {
     _count: undefined,
     thirdPartyEditorId: undefined,
     thirdPartyEditorRole: undefined,
+    notice: undefined,
   };
 }
 
