@@ -121,7 +121,7 @@ struct ReportUserView: View {
                     .accessibilityAddTraits(selectedReason == reason ? .isSelected : [])
                 }
             }
-            .background(sectionBackground(tint: MeeshyColors.warningHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.warningHex))
         }
     }
 
@@ -224,15 +224,6 @@ struct ReportUserView: View {
                 .tracking(1.2)
         }
         .padding(.leading, MeeshySpacing.xs)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
     }
 }
 

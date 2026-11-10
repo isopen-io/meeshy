@@ -11,8 +11,6 @@ struct SettingsSectionCard<Content: View>: View {
     let color: String
     let content: Content
 
-    private var theme: ThemeManager { ThemeManager.shared }
-
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             HStack(spacing: MeeshySpacing.sm) {
@@ -37,14 +35,7 @@ struct SettingsSectionCard<Content: View>: View {
             VStack(spacing: 0) {
                 content
             }
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(theme.surfaceGradient(tint: color))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .stroke(theme.border(tint: color), lineWidth: 1)
-                    )
-            )
+            .background(SettingsSectionBackground(tint: color))
         }
     }
 }
