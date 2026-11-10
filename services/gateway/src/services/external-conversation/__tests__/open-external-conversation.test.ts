@@ -10,6 +10,7 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import {
+  EXTERNAL_CONVERSATION_ACTIVE_CAP,
   EXTERNAL_CONVERSATION_TYPE,
   EXTERNAL_PEER_HANDLE_RETENTION_DAYS,
   EXTERNAL_PEER_HANDLE_RETENTION_MAX_DAYS,
@@ -26,9 +27,15 @@ const FRIEND = '+33612345678';
 const NOW = new Date('2026-11-10T09:00:00.000Z');
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-type User = { readonly id: string; readonly phoneVerifiedAt: Date | null; readonly displayName: string; readonly username: string };
+type User = {
+  readonly id: string;
+  readonly phoneVerifiedAt: Date | null;
+  readonly displayName: string;
+  readonly username: string;
+  readonly role: string;
+};
 
-const verifiedAlice: User = { id: ALICE, phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), displayName: 'Alice', username: 'alice' };
+const verifiedAlice: User = { id: ALICE, phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), displayName: 'Alice', username: 'alice', role: 'ANALYST' };
 
 type World = {
   readonly users: readonly User[];
@@ -59,8 +66,20 @@ function depsFor(world: World, ids: readonly string[] = [NEW_CONVERSATION]): Ext
         Object.assign(peer, data);
         return peer;
       },
+      deleteMany: async ({ where }: { where: MongoDocument }) => {
+        const doomed = world.peers.filter((peer) => matchesMongoWhere(peer, where));
+        doomed.forEach((peer) => world.peers.splice(world.peers.indexOf(peer), 1));
+        return { count: doomed.length };
+      },
+      count: async ({ where }: { where: MongoDocument }) => world.peers.filter((peer) => matchesMongoWhere(peer, where)).length,
     },
     conversation: {
+      findUnique: async ({ where, select }: { where: { id: string }; select: { participants: { where: MongoDocument } } }) => {
+        const found = world.conversations.find((row) => row.id === where.id);
+        if (!found) return null;
+        const participants = (found.participants as MongoDocument[]).filter((row) => matchesMongoWhere(row, select.participants.where));
+        return { isActive: found.isActive ?? true, closedAt: found.closedAt ?? null, participants };
+      },
       create: async ({ data }: { data: MongoDocument }) => {
         world.creates += 1;
         if (world.raceBeforeCreate) world.peers.push(world.raceBeforeCreate);
@@ -71,7 +90,7 @@ function depsFor(world: World, ids: readonly string[] = [NEW_CONVERSATION]): Ext
         const peer = { id: `peer-${world.peers.length}`, conversationId: conversation.id, ...externalPeer.create };
         if (world.peers.some((row) => triple(row) === triple(peer))) throw Object.assign(new Error('unique'), { code: 'P2002' });
         world.peers.push(peer);
-        world.conversations.push({ ...conversation, participants: participants.create });
+        world.conversations.push({ ...conversation, participants: participants.create.map((row) => ({ isActive: true, ...row })) });
         return { id: conversation.id };
       },
     },
@@ -191,6 +210,83 @@ describe('ouvrir une conversation externe', () => {
 
     expect(opening).toMatchObject({ kind: 'opened', conversationId: '507f1f77bcf86cd799439c99', created: false });
     expect(world.conversations).toEqual([]);
+  });
+});
+
+describe('rouvrir une conversation morte en ouvre une neuve (audit du 2026-11-10)', () => {
+  const SECOND = '507f1f77bcf86cd799439c02';
+  const reopenLater = (world: World) => {
+    const deps = depsFor(world, [SECOND]);
+    const later = new Date(NOW.getTime() + 10 * DAY_MS);
+    return openExternalConversation(
+      { ...deps, regime: { ...deps.regime, now: () => later } },
+      { userId: ALICE, network: 'whatsapp', handle: FRIEND },
+    );
+  };
+
+  it.each([
+    ['close (sortie du dernier membre)', (conversation: MongoDocument) => Object.assign(conversation, { isActive: false, closedAt: NOW })],
+    ['supprimée sans closedAt (ligne héritée)', (conversation: MongoDocument) => Object.assign(conversation, { isActive: false })],
+    ['dont l’ouvreur n’est plus membre actif', (conversation: MongoDocument) => {
+      (conversation.participants as MongoDocument[]).forEach((row) => Object.assign(row, { isActive: false }));
+    }],
+  ] as const)('une conversation %s : une neuve, et l’ancienne adresse est effacée au lieu d’être repoussée', async (_label, kill) => {
+    const world = worldWith([verifiedAlice]);
+    await open(world);
+    kill(world.conversations[0]);
+
+    const again = await reopenLater(world);
+
+    expect(again).toMatchObject({ kind: 'opened', conversationId: SECOND, created: true });
+    expect(world.peers).toHaveLength(1);
+    expect(world.peers[0]).toMatchObject({ conversationId: SECOND, handle: FRIEND });
+  });
+
+  it('une adresse dont la conversation a disparu est effacée, et une neuve s’ouvre', async () => {
+    const world = worldWith([verifiedAlice]);
+    await open(world);
+    world.conversations.splice(0, 1);
+
+    const again = await reopenLater(world);
+
+    expect(again).toMatchObject({ kind: 'opened', conversationId: SECOND, created: true });
+    expect(world.peers.map((peer) => peer.conversationId)).toEqual([SECOND]);
+  });
+});
+
+describe('les bornes d’un compte (audit du 2026-11-10)', () => {
+  it(`refuse une ouverture NEUVE au-delà de ${EXTERNAL_CONVERSATION_ACTIVE_CAP} adresses gardées, sans rien créer`, async () => {
+    const world = worldWith([verifiedAlice]);
+    Array.from({ length: EXTERNAL_CONVERSATION_ACTIVE_CAP }, (_unused, index) => world.peers.push({
+      id: `peer-old-${index}`, conversationId: `c-${index}`, network: 'whatsapp', handle: `+3361000${String(index).padStart(4, '0')}`,
+      openedByUserId: ALICE, purgeAfter: NOW,
+    }));
+
+    await expect(open(world)).resolves.toEqual({ kind: 'refused', refusal: 'limit-reached' });
+    expect(world.creates).toBe(0);
+  });
+
+  it('le plafond ne compte que les adresses de CE compte', async () => {
+    const world = worldWith([verifiedAlice]);
+    Array.from({ length: EXTERNAL_CONVERSATION_ACTIVE_CAP }, (_unused, index) => world.peers.push({
+      id: `peer-other-${index}`, conversationId: `c-${index}`, network: 'whatsapp', handle: `+3361000${String(index).padStart(4, '0')}`,
+      openedByUserId: '507f1f77bcf86cd799439a99', purgeAfter: NOW,
+    }));
+
+    await expect(open(world)).resolves.toMatchObject({ kind: 'opened', created: true });
+  });
+
+  it.each(['USER', 'UNKNOWN_ROLE'])('un compte %s ne choisit pas le bout en bout pendant la phase de test : refusé, rien créé', async (role) => {
+    const world = worldWith([{ ...verifiedAlice, role }]);
+
+    await expect(open(world)).resolves.toEqual({ kind: 'refused', refusal: 'end-to-end-reserved' });
+    expect(world.creates).toBe(0);
+  });
+
+  it.each(['ANALYST', 'MODERATOR', 'BIGBOSS'])('un compte %s l’ouvre', async (role) => {
+    const world = worldWith([{ ...verifiedAlice, role }]);
+
+    await expect(open(world)).resolves.toMatchObject({ kind: 'opened', created: true });
   });
 });
 

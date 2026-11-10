@@ -7,7 +7,13 @@
  * @jest-environment node
  */
 import { describe, it, expect, jest } from '@jest/globals';
-import { EXTERNAL_CONVERSATION_ERROR_CODES } from '@meeshy/shared/types/external-conversation';
+import Fastify from 'fastify';
+import rateLimit from '@fastify/rate-limit';
+import {
+  EXTERNAL_CONVERSATION_ACTIVE_CAP,
+  EXTERNAL_CONVERSATION_ERROR_CODES,
+  EXTERNAL_CONVERSATION_OPENINGS_PER_HOUR,
+} from '@meeshy/shared/types/external-conversation';
 import { registerExternalConversationRoute } from '../../../../routes/conversations/external';
 
 const ALICE = '507f1f77bcf86cd799439a01';
@@ -45,11 +51,11 @@ const createReply = () => {
   return reply;
 };
 
-type PrismaWorld = { phoneVerifiedAt: Date | null; existing: boolean; failWith?: Error; creates: number };
+type PrismaWorld = { phoneVerifiedAt: Date | null; role: string; existing: boolean; kept: number; failWith?: Error; creates: number };
 
 const prismaFor = (world: PrismaWorld) => ({
   user: {
-    findUnique: jest.fn(async () => ({ id: ALICE, phoneVerifiedAt: world.phoneVerifiedAt, displayName: 'Alice', username: 'alice' })),
+    findUnique: jest.fn(async () => ({ id: ALICE, phoneVerifiedAt: world.phoneVerifiedAt, displayName: 'Alice', username: 'alice', role: world.role })),
   },
   externalConversationPeer: {
     findUnique: jest.fn(async () => {
@@ -57,8 +63,11 @@ const prismaFor = (world: PrismaWorld) => ({
       return world.existing ? { id: 'peer-0', conversationId: CONVERSATION } : null;
     }),
     update: jest.fn(async () => ({ id: 'peer-0' })),
+    deleteMany: jest.fn(async () => ({ count: 0 })),
+    count: jest.fn(async () => world.kept),
   },
   conversation: {
+    findUnique: jest.fn(async () => ({ isActive: true, closedAt: null, participants: [{ id: 'p-0' }] })),
     create: jest.fn(async ({ data }: { data: { id: string } }) => { world.creates += 1; return { id: data.id }; }),
   },
 });
@@ -74,7 +83,7 @@ const post = async (params: {
 }) => {
   const logged: Logged[] = [];
   const fastify = createFastify(logged);
-  const world: PrismaWorld = { phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), existing: false, creates: 0, ...params.world };
+  const world: PrismaWorld = { phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), role: 'ANALYST', existing: false, kept: 0, creates: 0, ...params.world };
   const prisma = prismaFor(world);
   registerExternalConversationRoute(fastify as never, prisma as never, jest.fn() as never, {
     env: params.env ?? ARMED,
@@ -163,5 +172,58 @@ describe('POST /conversations/external', () => {
     expect(JSON.stringify(res.body)).not.toContain('612345678');
     expect(res.logged.length).toBeGreaterThan(0);
     expect(JSON.stringify(res.logged, (_key, value) => (value instanceof Error ? value.message : value))).not.toContain('612345678');
+  });
+
+  it(`au plafond de ${EXTERNAL_CONVERSATION_ACTIVE_CAP} adresses gardées : 409 EXTERNAL_CONVERSATION_LIMIT_REACHED, rien créé`, async () => {
+    const res = await post({ world: { kept: EXTERNAL_CONVERSATION_ACTIVE_CAP } });
+
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ success: false, code: EXTERNAL_CONVERSATION_ERROR_CODES.LIMIT_REACHED });
+    expect(res.world.creates).toBe(0);
+  });
+
+  it('un compte qui ne peut pas encore choisir le bout en bout : 403 EXTERNAL_CONVERSATION_END_TO_END_RESERVED', async () => {
+    const res = await post({ world: { role: 'USER' } });
+
+    expect(res.status).toBe(403);
+    expect(res.body).toMatchObject({ success: false, code: EXTERNAL_CONVERSATION_ERROR_CODES.END_TO_END_RESERVED });
+    expect(res.world.creates).toBe(0);
+  });
+});
+
+describe('POST /conversations/external — débit par compte (audit du 2026-11-10)', () => {
+  const app = async () => {
+    const instance = Fastify({ logger: false });
+    await instance.register(rateLimit, { global: false });
+    const world: PrismaWorld = { phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), role: 'ANALYST', existing: true, kept: 0, creates: 0 };
+    const auth = async (request: { headers: Record<string, unknown>; authContext?: unknown }) => {
+      const userId = String(request.headers['x-test-user']);
+      request.authContext = { type: 'user', isAuthenticated: true, isAnonymous: false, userId, registeredUser: { id: userId, role: 'ANALYST' } };
+    };
+    registerExternalConversationRoute(instance as never, prismaFor(world) as never, auth as never, {
+      env: ARMED,
+      regime: { newConversationId: () => CONVERSATION, now: () => new Date('2026-11-10T09:00:00Z'), serverKeyIdFor: async () => 'never' },
+    });
+    await instance.ready();
+    return instance;
+  };
+
+  const open = (instance: Awaited<ReturnType<typeof app>>, user: string) =>
+    instance.inject({ method: 'POST', url: '/conversations/external', headers: { 'x-test-user': user }, payload: { network: 'whatsapp', handle: FRIEND } });
+
+  it(`au-delà de ${EXTERNAL_CONVERSATION_OPENINGS_PER_HOUR} ouvertures par heure, le compte reçoit 429 ; un autre compte, non`, async () => {
+    const instance = await app();
+    try {
+      const statuses = await Array.from({ length: EXTERNAL_CONVERSATION_OPENINGS_PER_HOUR + 1 }).reduce<Promise<number[]>>(
+        async (previous) => [...(await previous), (await open(instance, ALICE)).statusCode],
+        Promise.resolve([]),
+      );
+
+      expect(statuses.slice(0, EXTERNAL_CONVERSATION_OPENINGS_PER_HOUR).every((status) => status === 200)).toBe(true);
+      expect(statuses.at(-1)).toBe(429);
+      expect((await open(instance, '507f1f77bcf86cd799439a02')).statusCode).toBe(200);
+    } finally {
+      await instance.close();
+    }
   });
 });

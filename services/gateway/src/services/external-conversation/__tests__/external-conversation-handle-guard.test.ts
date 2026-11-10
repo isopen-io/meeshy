@@ -21,7 +21,22 @@ const SRC = join(__dirname, '../../..');
 const OWNER = 'services/external-conversation/';
 const ROUTE = 'routes/conversations/external.ts';
 
-const PEER_ACCESS = /\bexternalConversationPeer\b|\bexternalPeer\b/;
+/**
+ * Le délégué, la relation ET le nom de la collection, sans casse : un accès écrit
+ * `prisma['externalConversationPeer']`, `$runCommandRaw({ find: 'ExternalConversationPeer' })`
+ * ou `db.collection('ExternalConversationPeer')` tombe sous la garde comme
+ * `prisma.externalConversationPeer`. Une chaîne ASSEMBLÉE à l'exécution lui
+ * échappe : c'est la limite d'une garde de texte, et la revue la couvre.
+ */
+const PEER_ACCESS = /[eE]xternal_?[cC]onversation_?[pP]eer|\bexternalPeer\b/;
+
+/** Les fichiers hors du module qui NOMMENT la collection sans lire une adresse, et pourquoi. */
+const NAMES_WITHOUT_READING: Record<string, string> = {
+  'migrations/named/external-conversation-peer-indexes.ts':
+    'pose les index (unicités, TTL) de la collection ; ne lit ni n’écrit aucun document',
+  'migrations/named/registry.ts':
+    'inscrit la migration des index par son nom (`externalConversationPeerIndexes`) ; ne touche à aucun document',
+};
 const LOG_CALL = /\b(console|logger|enhancedLogger|log)\s*\.\s*(log|info|warn|error|debug|trace|fatal)\s*\(|\blog(Error|Warn|Info|Debug)\s*\(/;
 const LOG_LINE = /(\b(console|logger|enhancedLogger|log)\s*\.\s*(log|info|warn|error|debug|trace|fatal)\s*\(|\blog(Error|Warn|Info|Debug)\s*\().*$/gm;
 
@@ -44,10 +59,25 @@ describe('le numéro de l’ami ne sort pas de son module', () => {
 
   it('seul services/external-conversation/ touche à l’adresse du pair', () => {
     const outsiders = sources
-      .filter(({ file, text }) => !file.startsWith(OWNER) && PEER_ACCESS.test(text))
+      .filter(({ file, text }) => !file.startsWith(OWNER) && !(file in NAMES_WITHOUT_READING) && PEER_ACCESS.test(text))
       .map(({ file }) => file);
 
     expect(outsiders).toEqual([]);
+  });
+
+  it.each([
+    "prisma['externalConversationPeer'].findMany()",
+    "prisma.$runCommandRaw({ find: 'ExternalConversationPeer' })",
+    "db.collection('ExternalConversationPeer').find()",
+    'include: { externalPeer: true }',
+  ])('le motif d’accès attrape %s', (source) => {
+    expect(PEER_ACCESS.test(source)).toBe(true);
+  });
+
+  it('les exemptions nomment des fichiers qui existent et nomment vraiment la collection', () => {
+    Object.keys(NAMES_WITHOUT_READING).forEach((file) => {
+      expect(sources.find((source) => source.file === file)?.text).toMatch(PEER_ACCESS);
+    });
   });
 
   it('le module propriétaire ne journalise rien', () => {
