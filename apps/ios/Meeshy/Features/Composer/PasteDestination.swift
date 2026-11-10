@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyUI
 
 /// Où l'on colle, dans le composer. Deux surfaces, deux intentions.
 nonisolated enum PasteSurface: Equatable {
@@ -75,5 +76,38 @@ nonisolated struct PasteDestination: Equatable {
         case .image: return surface == .stickers ? .sticker : .mediaObject
         case .video, .audio: return .mediaObject
         }
+    }
+}
+
+/// Où va ce que « Coller » apporte dans la vue principale du composer (#17434).
+nonisolated enum ComposerPasteTarget: Equatable, Sendable {
+    /// Une image devient le FOND de la scène.
+    case sceneBackground
+    /// Un texte va au champ de contenu de la publication, jamais en objet de scène.
+    case publicationText
+    /// Une vidéo garde son chemin de scène.
+    case sceneMedia
+    /// Un son rejoint la scène comme un son emprunté.
+    case sceneSound
+}
+
+/// **La loi du collage de la vue principale** (#17434, directive porteur) : une
+/// image fait le fond, un texte va au contenu.
+nonisolated enum ComposerPasteRouting {
+    static func target(for item: StoryPastedItem) -> ComposerPasteTarget {
+        switch item {
+        case .image: return .sceneBackground
+        case .text: return .publicationText
+        case .video: return .sceneMedia
+        case .audio: return .sceneSound
+        }
+    }
+
+    /// Le contenu après le collage : le texte collé, rogné, s'ajoute à la ligne
+    /// sous ce que l'auteur a déjà écrit ; un collage vide ne change rien.
+    static func publicationText(current: String, pasted: String) -> String {
+        let colle = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !colle.isEmpty else { return current }
+        return current.isEmpty ? colle : current + "\n" + colle
     }
 }
