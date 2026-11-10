@@ -8,7 +8,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -27,6 +29,9 @@ import me.meeshy.sdk.model.avatar.AvatarContext
 import me.meeshy.sdk.model.ConversationEngagementSnapshot
 import me.meeshy.sdk.model.engagement.HeaderFlameLaw
 import me.meeshy.sdk.model.profile.ProfileSheetUser
+import me.meeshy.sdk.model.relation.TalkieOfferRule
+import me.meeshy.ui.component.talkie.TalkieHeaderLive
+import me.meeshy.ui.component.talkie.TalkieHeaderLiveBar
 import me.meeshy.ui.component.reading.ReadingModeChip
 import me.meeshy.ui.component.rememberConversationHere
 import me.meeshy.ui.component.rememberPresence
@@ -117,6 +122,15 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
         )
     }
 
+    // Le talkie d'un direct (#17315) : dès Proche, jamais chiffré, jamais pour un invité.
+    val talkiePeer = state.directPeerUserId?.takeIf {
+        !state.isGroup && !isGuest && TalkieOfferRule.mayShowInHeader(state.encryptionMode)
+    }
+    val talkie = talkiePeer?.let { peer ->
+        rememberChatHeaderTalkie(peerUserId = peer, peerName = header.peerDisplayName ?: title, accent = accentColor)
+    }
+    val talkieLive = talkie?.live ?: TalkieHeaderLive.Rest
+
     Column(Modifier.statusBarsPadding()) {
         if (isGuest) {
             ChatGuestHeaderBar(
@@ -169,7 +183,7 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                     },
                     avatar = { headerAvatar(AvatarContext.ConversationHeaderExpanded) },
                 )
-            } else {
+            } else Box {
                 ChatConversationHeaderBand(
                     accentColor = accentColor,
                     actionsHidden = host.chrome.isScrolling,
@@ -177,7 +191,9 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                     onBack = navigation.onBack,
                     onSearch = actions.openSearch,
                     onToggle = toggle,
+                    talkieChrome = talkieLive.chrome,
                     callSlot = {
+                        talkie?.button?.invoke()
                         ChatHeaderCallSlot(
                             conversationId = state.conversationId,
                             entry = navigation.callEntry.takeIf { !isGuest },
@@ -219,6 +235,14 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                         }
                     },
                 )
+                if (talkieLive.chrome.talkieSpansBar) {
+                    TalkieHeaderLiveBar(
+                        live = talkieLive,
+                        modifier = Modifier
+                            .matchParentSize()
+                            .padding(top = MeeshySpacing.sm, start = MeeshySpacing.lg, end = MeeshySpacing.lg + MeeshySpacing.sm),
+                    )
+                }
             }
         }
         AnimatedVisibility(
