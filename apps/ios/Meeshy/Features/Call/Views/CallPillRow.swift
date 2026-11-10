@@ -28,7 +28,7 @@ struct CallPanelHeader: View {
                 .font(.footnote.weight(.bold))
                 .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-                .background(Circle().fill(CallButtonFill.color(for: .normal)))
+                .modifier(CallButtonGlassModifier(kind: .normal, diameter: MeeshyControlSize.small))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -37,6 +37,8 @@ struct CallPanelHeader: View {
     }
 }
 
+/// #17323 — une rangée du (…) : ses puces sont des verres interactifs voisins,
+/// composés dans un `AdaptiveGlassContainer` sans toucher à l'accroche du défilement.
 struct CallPillRow<Content: View>: View {
     let title: String?
     let content: Content
@@ -58,11 +60,13 @@ struct CallPillRow<Content: View>: View {
                     .accessibilityAddTraits(.isHeader)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: MeeshySpacing.xxs) {
-                    content
+                AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
+                    HStack(alignment: .top, spacing: MeeshySpacing.xxs) {
+                        content
+                    }
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .callRowScrollTargetLayout()
                 }
-                .padding(.horizontal, MeeshySpacing.sm)
-                .callRowScrollTargetLayout()
             }
             .callRowScrollTargetBehavior()
             .modifier(CallRowScrollInteraction())
@@ -76,6 +80,15 @@ enum CallPillChipArt {
     case symbol(String)
     case emoji(String)
     case image(CGImage)
+
+    /// #17323 — un glyphe et un emoji reposent sur un verre interactif, qui
+    /// répond seul au doigt sous iOS 26 ; une vignette d'image n'en a pas.
+    var carriesGlass: Bool {
+        switch self {
+        case .symbol, .emoji: return true
+        case .image: return false
+        }
+    }
 }
 
 struct CallPillChip: View {
@@ -107,7 +120,7 @@ struct CallPillChip: View {
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(CallPressButtonStyle())
+        .buttonStyle(CallPressButtonStyle(glassPressesItself: art.carriesGlass))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
@@ -124,7 +137,7 @@ struct CallPillChip: View {
             Text(emoji)
                 .font(.title2)
                 .frame(width: Self.artDiameter, height: Self.artDiameter)
-                .background(Circle().fill(isSelected ? Color.white.opacity(MeeshyOpacity.intense) : CallButtonFill.color(for: .normal)))
+                .modifier(CallButtonGlassModifier(kind: isSelected ? .active : .normal, diameter: Self.artDiameter))
                 .accessibilityHidden(true)
         case .image(let image):
             Image(decorative: image, scale: 1)

@@ -55,7 +55,8 @@
      - « Revenir au direct » apparaît dès qu'on a remonté ;
      - le journal survit à l'appel réduit, aux sous-titres coupés et à une reconnexion.
 8. **Micro coupé = ma parole n'est plus transcrite** (#8475).
-9. **Effets = filtres vidéo et flou d'arrière-plan, sans effets de voix** (#8050).
+9. **Effets = des looks : filtres, cadres, effets de visage, de paysage et de voix.** La directive porteur du 2026-11-10 (#17409) rend les effets de voix, que #8050 avait retirés le 2026-09-27 ; elle est postérieure et la supplante.
+   - **Effets emprunte au composer** (directive porteur du 2026-11-10, #17406) : les filtres, les cadres et les effets sont des LOOKS, choisis en surimpression sur mon image, dans la bande du composer (`ComposerLookStrip`), et les puces qui les trient (`ComposerLookFilterChips` : Tout · Filtres · Cadres · Visage · Paysage · Voix…) apparaissent dans la barre du bas (P8). Elles défilent à l'horizontale sans coupure brute : la rangée s'efface toujours en fondu à gauche comme à droite (#17409). L'appel ne recrée ni la bande, ni les puces, ni le catalogue.
 10. **L'écran partagé de quelqu'un d'autre passe à la une tout seul.** La caméra de celui qui partage passe en médaillon, au liseré de sa couleur.
 
 11. **Un toucher n'importe où sur l'image range tout, un autre toucher rend tout** (#16663).
@@ -73,9 +74,10 @@
     - L'enregistrement demande l'accord de tous, sur une carte qui ne se cache jamais, et le journal note son début et sa fin.
     - **Contrat (#16665), rétrocompatible.** `call:screen-capture-detected` porte un `kind` optionnel, `recording` (enregistrement d'écran, `isCapturing` vrai puis faux) ou `screenshot` (capture ponctuelle, `isCapturing` vrai seul). Un `kind` absent se lit `recording`, ce qu'envoient les clients d'avant. La passerelle relaie `kind` dans `call:screen-capture-alert`. Elle persiste chaque DÉBUT (`isCapturing` vrai) dans `CallCaptureEvent` (`callSessionId`, `participantId`, `userId?`, `kind`, `offsetMs`, `createdAt`), au plus une ligne par participant, par sorte et par fenêtre de 5 s. L'enregistrement CONSENTI de l'appel (`call:recording-started` / `call:recording-stopped`, aucun fil client nouveau) s'y écrit aussi, par la passerelle là où elle diffuse ces deux événements : `kind` vaut `call-recording-started` (au nom de l'enregistreur) ou `call-recording-stopped` (seulement s'il avait commencé ; `participantId` et `userId` nuls quand personne ne l'a demandé : fin d'appel, délai, arrivée). `GET /calls/:callId/transcript` ajoute `captures: [{ id, participantId, userId, displayName, kind, offsetMs, at }]` à côté de `segments` (les trois champs d'auteur peuvent être nuls pour un arrêt d'enregistrement ; une sorte inconnue s'ignore). Les clients insèrent ces lignes à leur heure, dans le journal vivant comme dans celui d'après l'appel : « Awa a capturé l'écran » ou « Awa enregistre l'écran », « L'enregistrement de l'appel a commencé » ou « L'enregistrement de l'appel s'est arrêté », en encre secondaire, sans couleur d'auteur sur la phrase (le pseudo garde la sienne).
 14. **Options en surimpression.**
-    - Une option à réglages (Enregistrer, Réagir) s'ouvre DANS la pilule, qui grandit vers le haut avec ‹ Retour et Fermer.
+    - Une option à réglages (Enregistrer, Réagir) s'ouvre DANS la pilule, par morphisme : la même barre s'allonge et grandit pour la contenir, avec ‹ Retour et Fermer, puis reprend sa forme (loi 17). C'est la même barre agrandie qui porte les sous-titres et le journal.
     - « Participants » s'ouvre en feuille ; « Journal » s'ouvre dans la pilule (loi 7).
-    - Effets et Montage sont des modes plein écran avec Quitter · Réglages · Valider ; « Quitter » rend mon image d'avant. Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
+    - Effets est un mode plein écran qui parle la langue du composer (directive porteur du 2026-11-10, #17409) : ‹ · Réglages · (+). Le look touché s'applique tout de suite, sans « Valider » ; ‹ revient à l'appel ; (+) ajoute un look par-dessus le précédent, pour les cumuler ; « Aucun » rend mon image d'origine. Le choix se fait dans les looks du composer (loi 9).
+    - Montage garde Quitter · Réglages · Valider tant que le porteur ne l'a pas aligné ; « Quitter » rend mon image d'avant. Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
 15. **À la une.**
     - Toucher une vignette la met à la une, choix local jamais imposé. Si les contrôles sont cachés, le toucher les rend d'abord.
     - La vignette à la une n'a pas de badge : une capsule en haut à droite offre « Revenir à la grille » et « Plein écran ».
@@ -85,6 +87,17 @@
     - Je choisis un cadre dans Montage (ambiances, carrousel, déclinaisons par balayage vertical, option « Cadre »). Il s'applique chez moi et se PROPOSE à l'autre (« Non merci » · « Appliquer »).
     - Le proposeur apprend la réponse en une capsule.
     - Le cadre tombe si l'appel passe à trois.
+17. **Rien n'apparaît ni ne disparaît d'un coup** (directive porteur du 2026-11-10, #17406).
+    - Un élément arrive depuis l'endroit d'où il vient, et repart vers lui.
+    - Les rails latéraux entrent par le bord de l'écran et sortent par lui, vers l'extérieur.
+    - Ce qui s'ouvre depuis la barre du bas (options, sous-titres, journal, rangées d'actions en groupe) s'ouvre par morphisme : la barre s'allonge et grandit, puis reprend sa forme.
+    - Une rangée qui défile (puces, bandeau de vignettes) n'est jamais coupée net : elle s'efface en fondu à ses deux bords (#17409).
+    - Tout ce qui se pose par-dessus l'image suit la même logique. Seule exception : Effets, qui emprunte au composer (loi 9).
+    - Le mouvement ne perd aucune image, reste interruptible (loi 11) et « Réduire les animations » le remplace par un fondu court.
+18. **Simplicité : la vue affiche ce qu'elle dessine, rien en plus** (directive porteur du 2026-11-10, #17406).
+    - Aucun extra : ni libellé, ni badge, ni bouton, ni panneau d'appoint que la vue ne montre pas.
+    - Rien de ce qui existe ne se recrée : un lot réutilise ou étend le composant, la loi et le texte déjà là.
+    - Le verre est partout l'atome adaptatif (`adaptiveLiquidGlass` sur iOS, `MeeshyGlassSurface` sur Android, la surface de verre partagée sur le web).
 
 ## Les vues
 
@@ -217,5 +230,6 @@ Ce tableau est un compte rendu daté. L'état vivant est dans les issues du mile
 - Les deux files d'agents en cours ont reçu leur direction :
   - routine « calling agent » (passerelle et web) : `docs/engineering/calling-agent/STATE.md` ;
   - routine « vue d'appel » iOS : `apps/ios/tasks/routine-appels.md`.
+- Ne rien recréer, ne rien ajouter que la vue ne dessine, verre adaptatif partout, et chaque apparition comme chaque sortie en mouvement (lois 17 et 18).
 - Quand la planche change, régénérer les captures (`capture.mjs`) dans le même commit.
 - La conformité de chaque vue se relève par le workflow `.claude/workflows/meeshy-conformite-vues.js` (#17311, mode d'emploi dans le `.md` voisin) : contrat de clauses par vue, audit iOS puis Android, écarts avec fichier et ligne.

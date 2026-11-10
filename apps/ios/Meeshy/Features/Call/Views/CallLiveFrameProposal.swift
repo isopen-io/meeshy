@@ -94,7 +94,7 @@ struct CallLiveFrameProposalCard: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Capsule().fill(Color.white.opacity(0.16)))
+                        .callChipGlass(isActive: false, tint: .white)
                 }
                 .buttonStyle(.plain)
                 Button(action: onAccept) {

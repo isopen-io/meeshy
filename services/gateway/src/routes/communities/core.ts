@@ -26,6 +26,11 @@ import { CerclesAchievements } from '../../services/achievements/CerclesAchievem
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import {
+  conversationAdmitsNewMembers,
+  EXTERNAL_CONVERSATION_ERROR_CODES,
+  EXTERNAL_SINGLE_MEMBER_MESSAGE,
+} from '@meeshy/shared/types/external-conversation';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -689,6 +694,7 @@ const community = await fastify.prisma.community.findFirst({
         where: { id: conversationId },
         select: {
           id: true,
+          type: true,
           communityId: true,
           participants: { select: { userId: true, role: true, isActive: true } }
         }
@@ -719,6 +725,12 @@ const community = await fastify.prisma.community.findFirst({
         // de « elle n'existe pas » ferait de cette route un oracle d'existence
         // sur tout identifiant de conversation.
         return refuserCommeIntrouvable(reply);
+      }
+
+      // #17117 — une conversation externe n'a qu'un membre Meeshy : un salon
+      // donnerait des droits sur elle aux administrateurs de la communauté.
+      if (!conversationAdmitsNewMembers(conversation.type)) {
+        return sendConflict(reply, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
       }
 
       // Administrer la conversation ne donne pas le droit de la SOUSTRAIRE à
