@@ -6,7 +6,9 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallActionFamily
-import me.meeshy.sdk.model.call.CallCameraControlsPlacement
+import me.meeshy.sdk.model.call.CallControlsDisposition
+import me.meeshy.sdk.model.call.CallGroupStageSizing
+import me.meeshy.sdk.model.call.CallScreenLayer
 import me.meeshy.sdk.model.call.CallState
 import org.junit.Test
 
@@ -54,7 +56,7 @@ class CallPillModelTest {
     fun `an action without a handler is absent from the rows`() {
         val items = CallPillModel.items(state(), offered(CallAction.Captions))
         val set = CallPillModel.available(state(), items) { it == CallAction.Captions }
-        val rows = CallPillModel.rows(set, isCompactHeight = false, CallCameraControlsPlacement.Menu)
+        val rows = CallGroupStageSizing.rows(set.familyRows, isCompactHeight = false)
         assertThat(rows.flatMap { it.actions }).containsExactly(CallAction.Camera, CallAction.FlipCamera, CallAction.Captions).inOrder()
         assertThat(CallAction.Journal in set).isFalse()
     }
@@ -63,7 +65,7 @@ class CallPillModelTest {
     fun `each family gets its own titled row`() {
         val items = CallPillModel.items(state(), offered(CallAction.Captions))
         val set = CallPillModel.available(state(), items) { false }
-        val rows = CallPillModel.rows(set, isCompactHeight = false, CallCameraControlsPlacement.Menu)
+        val rows = CallGroupStageSizing.rows(set.familyRows, isCompactHeight = false)
         assertThat(rows.map { it.family }).containsExactly(CallActionFamily.MyImage, CallActionFamily.TheCall).inOrder()
     }
 
@@ -71,7 +73,7 @@ class CallPillModelTest {
     fun `in compact height the rows fold into one untitled line`() {
         val items = CallPillModel.items(state(), offered(CallAction.Captions))
         val set = CallPillModel.available(state(), items) { false }
-        val rows = CallPillModel.rows(set, isCompactHeight = true, CallCameraControlsPlacement.Menu)
+        val rows = CallGroupStageSizing.rows(set.familyRows, isCompactHeight = true)
         assertThat(rows).hasSize(1)
         assertThat(rows.single().family).isNull()
         assertThat(rows.single().actions).containsExactly(CallAction.Camera, CallAction.FlipCamera, CallAction.Captions).inOrder()
@@ -80,7 +82,7 @@ class CallPillModelTest {
     @Test
     fun `a call with nothing to offer has no rows`() {
         val set = CallPillModel.available(state(isVideo = false), emptyMap()) { false }
-        assertThat(CallPillModel.rows(set, isCompactHeight = false, CallCameraControlsPlacement.Menu)).isEmpty()
+        assertThat(CallGroupStageSizing.rows(set.familyRows, isCompactHeight = false)).isEmpty()
     }
 
     @Test
@@ -90,27 +92,12 @@ class CallPillModelTest {
         assertThat(CallAction.Recording in CallPillModel.available(state(), items) { false }).isFalse()
     }
     @Test
-    fun `when my tile or the top rail carries my image, the pill no longer repeats its controls`() {
+    fun `my image stays a family of the rows whatever the camera zoom does (17327)`() {
         val items = CallPillModel.items(state(), offered(CallAction.Captions, CallAction.Effects))
         val set = CallPillModel.available(state(), items) { it == CallAction.Captions || it == CallAction.Effects }
-        listOf(CallCameraControlsPlacement.SelfTile, CallCameraControlsPlacement.TopCenter).forEach { placement ->
-            val rows = CallPillModel.rows(set, isCompactHeight = false, placement)
-            assertThat(rows.flatMap { it.actions }).containsExactly(CallAction.Captions)
-            assertThat(CallPillModel.rows(set, isCompactHeight = true, placement).single().actions).containsExactly(CallAction.Captions)
-        }
-    }
-
-    @Test
-    fun `the effects row around my tile holds effects only, screen sharing has no handler on Android`() {
-        val items = CallPillModel.items(state(), offered(CallAction.Effects))
-        val set = CallPillModel.available(state(), items) { it == CallAction.Effects }
-        assertThat(CallPillModel.selfEffects(set, items).map { it.action }).containsExactly(CallAction.Effects)
-    }
-
-    @Test
-    fun `no effects handler, no effects row`() {
-        val items = CallPillModel.items(state(), emptyList())
-        val set = CallPillModel.available(state(), items) { false }
-        assertThat(CallPillModel.selfEffects(set, items)).isEmpty()
+        val rows = CallControlsDisposition.Rows.pillRows(set, CallScreenLayer.Menu)
+        assertThat(rows.map { it.family }).containsExactly(CallActionFamily.MyImage, CallActionFamily.TheCall).inOrder()
+        assertThat(rows.first().actions).contains(CallAction.Effects)
+        assertThat(CallGroupStageSizing.rows(rows, isCompactHeight = true).single().actions).contains(CallAction.Effects)
     }
 }

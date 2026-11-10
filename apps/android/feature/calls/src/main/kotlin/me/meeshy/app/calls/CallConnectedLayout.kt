@@ -32,18 +32,27 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import me.meeshy.sdk.model.call.CallCameraControlsPlacement
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallControlsDisposition
 import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallHeaderLaw
+import me.meeshy.sdk.model.call.CallRailsLayout
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.ui.theme.MeeshySpacing
+
+/** What the rails leave free at the foot of the screen: the pill and its margins in portrait, nothing when it fits between them. */
+private fun callRailsBottomClearance(widthDp: Float): Dp {
+    val clearance = CallRailsLayout.bottomClearance(containerWidthDp = widthDp, safeHorizontalDp = 0f)
+    return if (clearance == 0f) 0.dp else MeeshySpacing.xl * 2 + clearance.dp
+}
 
 /** Is a screen reader exploring by touch? Then the chrome never hides under the finger. */
 @Composable
@@ -133,7 +142,6 @@ internal fun CallConnectedColumn(
     videoStage: Boolean,
     peer: CallPeerVisual,
     pill: CallPillActions,
-    cameraPlacement: CallCameraControlsPlacement,
     modifier: Modifier = Modifier,
     inPip: Boolean = false,
     /** La scène d'un appel de groupe (#13740), posée à la place du bloc du pair ; `null` en duo. */
@@ -158,10 +166,10 @@ internal fun CallConnectedColumn(
     LaunchedEffect(state.isVideoCall) { routeViewModel.onEvent(CallAudioRouteUiEvent.Start(state.isVideoCall)) }
 
     BoxWithConstraints(modifier) {
-        // iOS `CallCameraRail.menuRows` : ma vignette ou le rail du haut portent les commandes de mon image, le (…)
-        // ne les répète pas.
         val audioPanel = groupStage == null && !videoStage && state.captions.mode != CaptionsMode.Off
-        val rows = CallPillModel.rows(available, CallGroupStageSizing.isCompactHeight(maxHeight.value), cameraPlacement)
+        // #17327 : à deux le (…) fait sortir deux rails sur les bords, à plusieurs il déplie des rangées dans la pilule.
+        val disposition = CallControlsDisposition.resolve(CallControlsDisposition.MAX_PARTICIPANTS_ON_RAILS, showsGroupGrid = groupStage != null)
+        val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), CallGroupStageSizing.isCompactHeight(maxHeight.value))
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -197,6 +205,7 @@ internal fun CallConnectedColumn(
                     CallControlsPill(
                         state = state,
                         layer = chromeState.layer,
+                        disposition = disposition,
                         rows = rows,
                         items = pill.items,
                         outputIcon = route.route.active?.kind?.icon() ?: Icons.Filled.VolumeUp,
@@ -222,6 +231,15 @@ internal fun CallConnectedColumn(
                     )
                 }
             }
+        }
+        androidx.compose.runtime.CompositionLocalProvider(LocalCallChromeInteraction provides chrome::onInteraction) {
+            CallActionRails(
+                rows = if (controlsVisible) disposition.railRows(available, chromeState.layer) else emptyList(),
+                items = pill.items,
+                dimmed = if (state.isOnHold) HOLD_DIMMED_ACTIONS else emptySet(),
+                onAction = pill.onAction,
+                bottomClearance = callRailsBottomClearance(maxWidth.value),
+            )
         }
         // #16665 — R1 : la capsule de capture, UNE fois sous l'en-tête, en audio comme en vidéo, en duo
         // comme en groupe ; hors du fondu du chrome : une capture ne se cache pas.

@@ -11,7 +11,8 @@ import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
-import me.meeshy.sdk.model.call.CallCameraControlsPlacement
+import me.meeshy.sdk.model.call.CallControlsDisposition
+import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallScreenLayer
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.ui.theme.MeeshyTheme
@@ -41,6 +42,7 @@ class CallControlsPillSemanticsTest {
 
     private fun setPill(
         layer: CallScreenLayer = CallScreenLayer.Idle,
+        disposition: CallControlsDisposition = CallControlsDisposition.Rows,
         muted: Boolean = false,
         taps: MutableList<String> = mutableListOf(),
         actions: MutableList<CallAction> = mutableListOf(),
@@ -53,7 +55,8 @@ class CallControlsPillSemanticsTest {
                 CallControlsPill(
                     state = state,
                     layer = layer,
-                    rows = CallPillModel.rows(set, isCompactHeight = false, CallCameraControlsPlacement.Menu),
+                    disposition = disposition,
+                    rows = CallGroupStageSizing.rows(disposition.pillRows(set, layer), isCompactHeight = false),
                     items = items,
                     outputIcon = Icons.Filled.VolumeUp,
                     onToggleMenu = { taps += "more" },
@@ -91,10 +94,19 @@ class CallControlsPillSemanticsTest {
     }
 
     @Test
-    fun `unfolded, the pill stacks one titled row per family`() {
+    fun `on a group, the open menu stacks one titled row per family in the pill`() {
         setPill(layer = CallScreenLayer.Menu)
         rule.onNodeWithText("My image".uppercase()).assertExists()
         rule.onNodeWithText("The call".uppercase()).assertExists()
+    }
+
+    @Test
+    fun `on a duo, the open menu leaves the pill as it was, its actions are on the rails`() {
+        setPill(layer = CallScreenLayer.Menu, disposition = CallControlsDisposition.Rails)
+        rule.onNodeWithText("My image".uppercase()).assertDoesNotExist()
+        rule.onNodeWithText("The call".uppercase()).assertDoesNotExist()
+        rule.onNodeWithContentDescription("Speaker").assertDoesNotExist()
+        rule.onNodeWithContentDescription("More actions").assertHasClickAction()
     }
 
     @Test

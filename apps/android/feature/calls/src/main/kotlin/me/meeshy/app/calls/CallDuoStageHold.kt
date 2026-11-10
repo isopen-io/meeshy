@@ -29,7 +29,7 @@ internal class CallDuoStageHold(
 
 /**
  * La scène du duo (iOS `isMyImageFullScreen` + `showsMyImageTile`). La permutation vit ICI, pas dans la scène : la
- * pilule lit la même disposition pour ne pas répéter les commandes de mon image (iOS `CallCameraRail.placement`), et le
+ * disposition dit où vit le zoom de ma caméra (iOS `CallCameraRail.placement`), et le
  * verre adaptatif sait si MON image tient la scène (loi 3). Le cadre en direct est un habit du DUO : il tombe dès que
  * l'appel passe à trois (loi 16).
  */

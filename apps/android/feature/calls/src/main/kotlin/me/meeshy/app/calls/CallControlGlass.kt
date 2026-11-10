@@ -243,11 +243,14 @@ internal fun CallGlassButtonSurface(
  * The glass block of the pill: ONE surface that grows with what it holds (open panel or family
  * rows, then the base row). A dark veil under it keeps the captions legible over a bright picture, denser over a received
  * screen ([LocalCallGlassTone], law 3) ; each button inside is its own glass disc ([CallPillGlyph]), which keeps the
- * light tone ([CallGlassTone.withinVeiledBlock]).
+ * light tone ([CallGlassTone.withinVeiledBlock]). The same block, capsule-shaped, is each rail of a duo (#17327).
  */
 @Composable
-internal fun CallControlsGlass(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    val shape = RoundedCornerShape(CALL_PILL_RADIUS)
+internal fun CallControlsGlass(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(CALL_PILL_RADIUS),
+    content: @Composable ColumnScope.() -> Unit,
+) {
     CallGlassPlate(modifier = modifier, shape = shape) {
         val tone = LocalCallGlassTone.current
         CompositionLocalProvider(LocalCallGlassTone provides tone.withinVeiledBlock) {
