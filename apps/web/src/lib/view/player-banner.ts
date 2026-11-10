@@ -3,6 +3,7 @@ import type { FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import type { GloryDivision5, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
+import type { TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 
 import { formatGameCompact, formatGameNumber, translateGame, translateGameOrdinal, translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -16,7 +17,8 @@ import { capOpener, shownLevelOf, sparksReading } from '@/lib/game/ladder';
  * LA BANNIÈRE DU JOUEUR (#9494, conception XIII.1) — ce que le bandeau du haut
  * montre quand aucun appel ni aucun audio ne l'occupe. Ordre FIXE, de gauche à
  * droite, en une rangée de 48 px (#11125) : l'anneau et la jauge des étincelles ;
- * au milieu la Flamme et les Meeshes, la mission du jour et la ligue ; au bout le
+ * au milieu la Flamme et les Meeshes, la mission du jour, le contenant de
+ * l'Héritage (#17437) et la ligue ; au bout le
  * blason du rang, sa jauge de Gloire et ce qui manque pour le rang suivant.
  *
  * SEULEMENT CE QUI A DU SENS : un élément sans donnée vaut `null` et ne se
@@ -72,6 +74,8 @@ export type PlayerBannerModel = {
   readonly missions: { readonly done: number; readonly total: number } | null;
   /** Les étoiles de la saison ouverte ; `null` hors saison. */
   readonly season: { readonly stars: number } | null;
+  /** Le contenant de l'Héritage, de la Bourse à la Réserve (#17437) ; `null` sans Meesh gardée. */
+  readonly treasury: TreasuryTierKey | null;
 };
 
 const BURNING: ReadonlySet<GameBlock['flame']['status']> = new Set(['lit', 'at-risk', 'covered']);
@@ -112,6 +116,7 @@ export function playerBannerModel(game: GameBlock): PlayerBannerModel | null {
     trophies: (game.trophies?.items.length ?? 0) > 0 ? (game.trophies?.items.length ?? 0) : null,
     missions: game.missions.unlocked && game.missions.items.length > 0 ? { done: game.missions.items.filter((m) => m.completedAt !== null).length, total: game.missions.items.length } : null,
     season: game.season === null || game.season === undefined ? null : { stars: game.season.stars },
+    treasury: treasury.held > 0 ? treasury.tier : null,
   };
   return hasAnything(model) ? model : null;
 }
@@ -139,6 +144,10 @@ const rankSentence = (rank: PlayerBannerRank, language: InterfaceLanguage): stri
   ];
   return parts.filter((part): part is string => part !== null).join(translateGame(language, 'game.banner.separator'));
 };
+
+/** « Héritage : Coffre » — le contenant dit par son nom. */
+const treasurySentence = (model: PlayerBannerModel, language: InterfaceLanguage): string | null =>
+  model.treasury === null ? null : translateGame(language, 'game.banner.link.treasury', { tier: translateGame(language, `game.banner.treasury.${model.treasury}`) });
 
 const hasAnything = (model: PlayerBannerModel): boolean =>
   model.level !== null || model.points !== null || model.meeshes !== null || model.rank !== null || model.league !== null || model.flame !== null || model.trophies !== null || model.missions !== null || model.season !== null;
@@ -174,6 +183,7 @@ export function playerBannerLabel(model: PlayerBannerModel, language: InterfaceL
     model.flame === null ? null : translateGame(language, 'game.banner.flame', { days: translateGamePlural(language, 'game.days', model.flame.days) }),
     model.meeshes === null ? null : translateGamePlural(language, 'game.meeshes', model.meeshes),
     model.missions === null ? null : translateGame(language, 'game.banner.link.missions', { done: count(model.missions.done), total: count(model.missions.total) }),
+    treasurySentence(model, language),
     model.league === null
       ? null
       : translateGame(language, 'game.banner.league', { league: leagueName(model.league.league, language), place: leaguePlace(model.league.place, language) }),
@@ -199,6 +209,7 @@ export type PlayerBannerPieceLabels = {
   readonly trophies: string | null;
   readonly missions: string | null;
   readonly season: string | null;
+  readonly treasury: string | null;
 };
 
 export function playerBannerPieceLabels(model: PlayerBannerModel, language: InterfaceLanguage = currentInterfaceLanguage()): PlayerBannerPieceLabels {
@@ -233,6 +244,7 @@ export function playerBannerPieceLabels(model: PlayerBannerModel, language: Inte
     trophies: model.trophies === null ? null : translateGame(language, 'game.banner.link.trophies', { count: count(model.trophies) }),
     missions: model.missions === null ? null : translateGame(language, 'game.banner.link.missions', { done: count(model.missions.done), total: count(model.missions.total) }),
     season: model.season === null ? null : translateGame(language, 'game.banner.link.season', { stars: count(model.season.stars) }),
+    treasury: treasurySentence(model, language),
   };
 }
 
