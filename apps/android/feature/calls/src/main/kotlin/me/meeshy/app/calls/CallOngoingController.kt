@@ -83,13 +83,18 @@ class CallOngoingController @Inject constructor(
         val last = running
         running = null
         connectedSince = null
+        holder.setMicrophoneMuted(false)
         if (last != null) {
             holder.publish(null)
             services.sync(null)
         }
     }
 
+    /** Le micro coupé atteint la capture de ma parole à l'instant du geste, avant l'anti-rebond de la notification. */
+    fun microphoneMuted(muted: Boolean) = holder.setMicrophoneMuted(muted)
+
     private suspend fun onState(ui: CallUiState) {
+        holder.setMicrophoneMuted(ui.isMuted)
         val input = inputOf(ui)
         val step = CallActivityLaw.step(running, input, wording.current())
         if (step.action is CallActivityLaw.Action.Update) delay(DEBOUNCE_MS)
