@@ -92,16 +92,17 @@ final class CallTranscriptJournalTests: XCTestCase {
 
     // MARK: - Les surfaces
 
-    /// Le journal, le panneau audio et la feuille partagent UNE liste
-    /// paresseuse ; le bandeau ne résout que ses deux dernières phrases.
+    /// Le journal de la pilule est UNE liste paresseuse (#17343 : plus de feuille, plus de
+    /// panneau audio) ; les sous-titres ne résolvent que leurs deux dernières phrases.
     func test_journalSurfaces_shareOneLazyList_andTheBandResolvesTwoLines() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
         let list = try XCTUnwrap(code.range(of: "struct CallJournalList: View {"))
         let body = String(code[list.upperBound...].prefix(2500))
         XCTAssertTrue(body.contains("LazyVStack("))
         XCTAssertTrue(body.contains("CallJournalFollow"))
-        XCTAssertTrue(code.contains("CallJournalList(items: items"), "La feuille du journal monte la liste commune")
-        XCTAssertTrue(code.contains("CallJournalList(\n            items: journal.items"), "Le panneau audio aussi")
+        XCTAssertTrue(code.contains("CallJournalList(items: items"), "Le panneau du journal, dans la pilule, monte la liste commune")
+        XCTAssertFalse(code.contains("CallCaptionsJournalSheet"), "Le journal n'est plus une feuille modale (#17343)")
+        XCTAssertFalse(code.contains("transcriptPanel"), "Plus de panneau audio hors de la pilule (#17343)")
         XCTAssertTrue(code.contains("journal.items.suffix(2).map(journal.line)"), "#16665 — le bandeau lit les mêmes lignes, captures comprises")
         let service = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         XCTAssertFalse(service.contains("segmentRetentionLimit"), "Plus de plafond de 50 phrases sur le journal")

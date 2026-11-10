@@ -6,6 +6,7 @@ import XCTest
 /// refermer les actions les rend, et la pilule rangée laisse les sous-titres dans
 /// un verre sans rangée (loi 11). Ces témoins éprouvent la loi pure ; la vue ne fait
 /// que la dessiner.
+@MainActor
 final class CallPillTextTests: XCTestCase {
 
     private func text(
@@ -101,21 +102,22 @@ final class CallPillTextTests: XCTestCase {
 
     // MARK: - La hauteur du journal
 
-    func test_journalHeight_isAShareOfTheWindow_neverBelowAReadableFloor() {
+    func test_journalHeight_isAShareOfTheWindow_neverBelowAReadableMinimum() {
         XCTAssertEqual(CallJournalSizing.height(windowHeight: 844), 844 * 0.45, accuracy: 0.001)
-        XCTAssertEqual(CallJournalSizing.height(windowHeight: 390), CallJournalSizing.floor)
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 320), CallJournalSizing.minimum)
     }
 
-    func test_journalHeight_neverExceedsTheCeiling_onATallScreen() {
-        XCTAssertEqual(CallJournalSizing.height(windowHeight: 1366), CallJournalSizing.ceiling)
+    func test_journalHeight_neverExceedsTheMaximum_onATallScreen() {
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 1366), CallJournalSizing.maximum)
     }
 
-    func test_journalHeight_withoutAWindow_isTheFloor() {
-        XCTAssertEqual(CallJournalSizing.height(windowHeight: 0), CallJournalSizing.floor)
+    func test_journalHeight_withoutAWindow_isTheMinimum() {
+        XCTAssertEqual(CallJournalSizing.height(windowHeight: 0), CallJournalSizing.minimum)
     }
 }
 
 /// #17343 — le pied des sous-titres : ce que la ligne dit de la traduction, à côté du bouton Journal.
+@MainActor
 final class CallCaptionsFooterTests: XCTestCase {
 
     private func line(tag: String? = nil, isEvent: Bool = false) -> CallCaptionLine {

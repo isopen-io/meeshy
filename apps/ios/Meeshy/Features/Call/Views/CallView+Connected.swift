@@ -73,7 +73,7 @@ extension CallView {
         // Surfaces a start failure that `advanceCaptionsMode()` couldn't see at
         // tap time (the start path is async — permission request + on-device
         // recognizer/audio-engine checks all happen after the button already
-        // optimistically opened the transcript panel). Without this, a failed
+        // optimistically opened the captions). Without this, a failed
         // start (e.g. no on-device speech recognizer for the user's language —
         // never falls back to Apple's server-side recognizer, privacy decision)
         // would leave the panel open and empty with zero feedback.
@@ -90,9 +90,6 @@ extension CallView {
         }
         .adaptiveOnChange(of: latestFinalRemoteSegmentId) { _, _ in
             announceLatestCaption()
-        }
-        .sheet(isPresented: panelSheet(.journal)) {
-            captionsJournal
         }
         .task(id: liveFrameBindingKey) { await bindLiveFrame() }
         .task(id: callManager.currentCallId) { await liveFrame.runClock() }
@@ -117,53 +114,30 @@ extension CallView {
 
             VStack(spacing: MeeshySpacing.md) {
                 if !callManager.isVideoUIActive {
-                    if showTranscript {
-                        // Captions active on an audio call: compact header at
-                        // the top, structural transcript panel filling the
-                        // freed space — replaces the old vertically-centered
-                        // avatar layout while captions are on.
-                        compactAudioCallHeader
-                            .padding(.top, Self.chromeTopInset + 52)
-                        transcriptPanel
-                            .padding(.horizontal, MeeshySpacing.lg)
-                            .frame(maxHeight: .infinity)
-                    } else {
-                        // En audio aussi, glisser vers le bas quitte
-                        // le plein écran. Pas sur le panneau de sous-titres :
-                        // son défilement garde ses propres glissés.
-                        VStack(spacing: MeeshySpacing.md) {
-                            Spacer()
-                            audioCallLayout
-                            Spacer()
-                        }
-                        .contentShape(Rectangle())
-                        .simultaneousGesture(swipeDownToLeaveGesture)
+                    // En audio aussi, glisser vers le bas quitte le plein
+                    // écran. Les sous-titres vivent dans la pilule (#17343) :
+                    // l'avatar garde sa place, aucun panneau ne le remplace.
+                    VStack(spacing: MeeshySpacing.md) {
+                        Spacer()
+                        audioCallLayout
+                        Spacer()
                     }
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(swipeDownToLeaveGesture)
                 } else {
                     Spacer()
                 }
 
-                VStack(spacing: MeeshySpacing.md) {
-                    // Le bandeau de sous-titres, juste au-dessus de la
-                    // pilule ; il RESTE quand les actions sont rangées, et
-                    // quand le chrome se masque.
-                    if callManager.isVideoUIActive && showTranscript {
-                        captionsBand(hasOwnGlass: true)
-                            .padding(.horizontal, MeeshySpacing.lg)
-                            .transition(.opacity)
-                    }
-
-                    // §7.3 — la pilule et ses actions se masquent avec l'en-tête
-                    // en vidéo (4 s) ; toujours visibles en audio, sur Mac, avec
-                    // VoiceOver. Masquées, elles ne captent aucun toucher.
-                    callControlsPill
-                        .padding(.horizontal, MeeshySpacing.lg)
-                        .padding(.bottom, Self.chromeBottomInset)
-                        .callChromeVisibility(isChromeVisible)
-                }
-                // Les invitations qui sonnent et le mot de retour se
-                // posent AU-DESSUS du bloc, jamais sur ses rangées.
-                .overlay(alignment: .top) { callControlsNoticesAbove }
+                // §7.3 — la pilule et ses actions se masquent avec l'en-tête
+                // en vidéo (4 s) ; toujours visibles en audio, sur Mac, avec
+                // VoiceOver. Masquées, elles ne captent aucun toucher, et les
+                // sous-titres restent dans un verre sans rangée (loi 11).
+                callControlsBlock
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.bottom, Self.chromeBottomInset)
+                    // Les invitations qui sonnent et le mot de retour se
+                    // posent AU-DESSUS du bloc, jamais sur ses rangées.
+                    .overlay(alignment: .top) { callControlsNoticesAbove }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showTranscript)
         }
@@ -247,18 +221,11 @@ extension CallView {
                 // défilent alors), jamais la grille sous ce minimum.
                 .frame(minHeight: CallGroupStageSizing.minimumGridHeight)
             if !isStageFullScreen {
-                ZStack(alignment: .bottom) {
-                    callControlsPill
-                        .callChromeVisibility(isChromeVisible)
-                    if showTranscript && !isChromeVisible {
-                        captionsBand(hasOwnGlass: true)
-                            .transition(.opacity)
-                    }
-                }
-                .overlay(alignment: .top) { callControlsNoticesAbove }
-                .padding(.horizontal, MeeshySpacing.md)
-                .padding(.bottom, Self.chromeBottomInset)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                callControlsBlock
+                    .overlay(alignment: .top) { callControlsNoticesAbove }
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.bottom, Self.chromeBottomInset)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .padding(.bottom, isStageFullScreen ? DeviceLayout.safeAreaBottom : 0)
@@ -421,49 +388,6 @@ extension CallView {
             }
         }
     }
-
-    /// Compacted header shown INSTEAD of `audioCallLayout` while captions are
-    /// active — avatar shrunk (120 → 56), status pills dropped, no longer
-    /// vertically centered (sits at the top) so `transcriptPanel` gets the
-    /// freed vertical space.
-    var compactAudioCallHeader: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            callAvatarPair(size: 56)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                    .font(.system(.headline, design: .rounded).weight(.semibold))
-                    .foregroundStyle(Color.white)
-                    .lineLimit(1)
-
-                CallDurationClock {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        TransientCallSignalGlyph(strength: signalStrength)
-                        Text(callManager.formattedDuration)
-                            .font(.caption.weight(.medium).monospacedDigit())
-                            .foregroundColor(durationColor)
-                            // Same context-free-timer fix as audioCallLayout: this
-                            // caption-mode header has no status-pill row, so the
-                            // labelled value is the only place the timer gains meaning.
-                            .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                            .accessibilityValue(callManager.spokenDuration)
-                    }
-                    // Same naked-readout fix as audioCallLayout — captions-active
-                    // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                    .accessibilityValue(callManager.spokenDuration)
-                    .accessibilityAddTraits(.updatesFrequently)
-                }
-                .callQualityDetailTrigger(isPresented: $showQualityDetail)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-    }
-
 
     // MARK: - Connection Quality (glyphe signal)
 
