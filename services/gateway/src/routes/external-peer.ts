@@ -24,6 +24,7 @@ import { isPlatformTeam } from '@meeshy/shared/types/role-types';
 import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middleware/auth';
 import { sendError, sendForbidden, sendInternalError, sendSuccess, sendUnauthorized } from '../utils/response.js';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { AUTH_ERROR_CODES } from '../utils/auth-error-codes';
 import { getCacheStore } from '../services/CacheStore';
 import {
   EXTERNAL_PEER_ERROR_CODES,
@@ -100,7 +101,7 @@ type Actor = (body: unknown) => unknown;
 
 const teamOnly = (actor: Actor | null, handler: Handler) => async (request: FastifyRequest, reply: FastifyReply) => {
   const caller = callerOf(request);
-  if (!caller) return sendUnauthorized(reply, 'Un compte de l’équipe est requis');
+  if (!caller) return sendUnauthorized(reply, 'Un compte de l’équipe est requis', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
   if (!isPlatformTeam(caller.role)) {
     return sendForbidden(reply, 'La porte pair externe est réservée à l’équipe', { code: EXTERNAL_PEER_ROUTE_CODES.TEAM_ONLY });
   }
