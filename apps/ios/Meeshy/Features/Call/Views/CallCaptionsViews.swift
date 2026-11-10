@@ -144,6 +144,16 @@ struct CallCaptionRow: View {
     }
 }
 
+/// Une phrase qui arrive ne redessine que sa ligne : les autres se comparent par ce
+/// qu'elles MONTRENT (la ligne résolue, l'heure), et leur couleur d'auteur ne se
+/// recalcule pas pendant le défilement. L'action ne compte pas : elle ne fait que
+/// relayer l'identifiant de la ligne.
+extension CallCaptionRow: Equatable {
+    static func == (lhs: CallCaptionRow, rhs: CallCaptionRow) -> Bool {
+        lhs.line == rhs.line && lhs.showsTime == rhs.showsTime
+    }
+}
+
 /// Les sous-titres : les deux dernières phrases, puis un pied (ce que la ligne dit de
 /// sa traduction) et le bouton Journal. Ils vivent DANS la pilule, au-dessus de sa
 /// rangée de base, dans le même verre (`hasOwnGlass: false`, #17343) ; ils ne
@@ -179,6 +189,7 @@ struct CallCaptionsBand: View {
                 } else {
                     ForEach(lines) { line in
                         CallCaptionRow(line: line) { onToggleOriginal(line.id) }
+                            .equatable()
                     }
                 }
             }
@@ -250,6 +261,7 @@ struct CallJournalList: View {
                         ForEach(items) { item in
                             let resolved = line(item)
                             CallCaptionRow(line: resolved, showsTime: true) { onToggleOriginal(resolved.id) }
+                                .equatable()
                         }
                         Color.clear
                             .frame(height: 1)
@@ -390,6 +402,8 @@ struct CallJournalPanel: View {
     let onToggleOriginal: (UUID) -> Void
     let onClose: () -> Void
 
+    @AccessibilityFocusState private var titleHasFocus: Bool
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -398,6 +412,7 @@ struct CallJournalPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallCaptionsCopy.journalTitle)
+        .onAppear { titleHasFocus = true }
     }
 
     private var header: some View {
@@ -407,6 +422,7 @@ struct CallJournalPanel: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($titleHasFocus)
             Spacer(minLength: 0)
             Picker(CallCaptionsCopy.journalTitle, selection: $showsOriginal) {
                 Text(CallCaptionsCopy.translated).tag(false)
