@@ -340,6 +340,12 @@ jobs:
       - name: Room schema export matches the committed JSON
         run: ./scripts/check-room-schema.sh --built
 
+      # Le kit de la planche (K00, #17335) : son verdict propre, AVANT la passe générale. Sans cette étape, un échec ailleurs
+      # (Gradle arrête de planifier au premier test rouge) laisse le catalogue, ses gardes et ses instantanés sans verdict.
+      # Les instantanés se COMPARENT ici (mode `verify`), ils ne s'enregistrent que par `record_snapshots`.
+      - name: Kit du catalogue (modèle, gardes, instantanés)
+        run: ./gradlew :sdk-ui:testDebugUnitTest --tests 'me.meeshy.ui.component.kit.*' :feature:kit:testDebugUnitTest --no-daemon
+
       # Un test FIGÉ ne laisse aucune trace : Gradle n'écrit le résultat d'une classe qu'à sa fin, et le délai du job
       # annule tout d'un « The operation was canceled » sans nom (vu le 2026-11-02, #14650, quand les tests de
       # :sdk-core ont recompilé). Passé 15 min — une passe normale en prend 10 à 12 —, le chien de garde vide deux
