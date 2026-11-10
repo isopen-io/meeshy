@@ -17,7 +17,10 @@ import {
   EXTERNAL_CONVERSATION_ERROR_CODES,
   EXTERNAL_CONVERSATION_TYPE,
 } from '@meeshy/shared/types/external-conversation';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { logError } from '../../utils/logger';
 import { externalConversationsEnabled } from '../../services/external-conversation/external-conversation-flag';
 import {
   externalConversationRequestSchema,
@@ -43,6 +46,36 @@ const errorTrace = (error: unknown): { readonly name: string; readonly code: str
     ? (error as { code: string }).code
     : null,
 });
+
+/** La réponse d'ouverture, FERMÉE : rien de ce que le service rendrait en plus (l'adresse du pair) ne part. */
+const openingResponseSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['success', 'data'],
+  properties: {
+    success: { type: 'boolean' },
+    data: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['conversationId', 'type', 'encryptionMode', 'network', 'created'],
+      properties: {
+        conversationId: { type: 'string' },
+        type: { type: 'string', enum: [EXTERNAL_CONVERSATION_TYPE] },
+        encryptionMode: { type: 'string', enum: ['e2ee'] },
+        network: { type: 'string' },
+        created: { type: 'boolean' },
+      },
+    },
+  },
+} as const;
+
+const errorResponses = {
+  400: errorResponseSchema,
+  401: errorResponseSchema,
+  403: errorResponseSchema,
+  429: errorResponseSchema,
+  500: errorResponseSchema,
+} as const;
 
 const sendOpening = (reply: FastifyReply, opening: Extract<ExternalConversationOpening, { kind: 'opened' }>, network: string) =>
   sendSuccess(
@@ -74,6 +107,7 @@ export function registerExternalConversationRoute(
         description: 'Open (or reopen) an end-to-end encrypted conversation with a friend on another network, addressed by phone number',
         tags: ['conversations'],
         summary: 'Open an external conversation',
+        response: { 200: openingResponseSchema, 201: openingResponseSchema, ...errorResponses },
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -81,7 +115,9 @@ export function registerExternalConversationRoute(
         return sendForbidden(reply, DISABLED_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.DISABLED });
       }
       const userId = (request as UnifiedAuthRequest).authContext?.registeredUser?.id;
-      if (!userId) return sendUnauthorized(reply, 'An account is required to write to a friend on another network');
+      if (!userId) {
+        return sendUnauthorized(reply, 'An account is required to write to a friend on another network', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
+      }
 
       const parsed = externalConversationRequestSchema.safeParse(request.body);
       if (!parsed.success) return sendBadRequest(reply, INVALID_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.INVALID });
@@ -93,7 +129,7 @@ export function registerExternalConversationRoute(
         }
         return sendOpening(reply, opening, parsed.data.network);
       } catch (error) {
-        fastify.log.error({ externalConversation: errorTrace(error) }, 'external conversation opening failed');
+        logError(fastify.log, 'external conversation opening failed', JSON.stringify(errorTrace(error)));
         return sendInternalError(reply);
       }
     },

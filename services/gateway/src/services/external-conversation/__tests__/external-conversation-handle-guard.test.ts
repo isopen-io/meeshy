@@ -8,7 +8,7 @@
  *   un `include` ou un `select` posé ailleurs.
  * - Ni ce module ni sa route ne journalisent : une erreur de base recopie ses
  *   arguments, donc le numéro. Le seul appel au journal de la route ne porte que
- *   le nom et le code de l'erreur (`errorTrace`).
+ *   le nom et le code de l'erreur (`errorTrace`) : `logError` recopierait sinon le message d'une erreur Prisma.
  *
  * @jest-environment node
  */
@@ -22,8 +22,8 @@ const OWNER = 'services/external-conversation/';
 const ROUTE = 'routes/conversations/external.ts';
 
 const PEER_ACCESS = /\bexternalConversationPeer\b|\bexternalPeer\b/;
-const LOG_CALL = /\b(console|logger|enhancedLogger|log)\s*\.\s*(log|info|warn|error|debug|trace|fatal)\s*\(/;
-const LOG_LINE = /\b(console|logger|enhancedLogger|log)\s*\.\s*(log|info|warn|error|debug|trace|fatal)\s*\(.*$/gm;
+const LOG_CALL = /\b(console|logger|enhancedLogger|log)\s*\.\s*(log|info|warn|error|debug|trace|fatal)\s*\(|\blog(Error|Warn|Info|Debug)\s*\(/;
+const LOG_LINE = /(\b(console|logger|enhancedLogger|log)\s*\.\s*(log|info|warn|error|debug|trace|fatal)\s*\(|\blog(Error|Warn|Info|Debug)\s*\().*$/gm;
 
 function productionFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -67,6 +67,7 @@ describe('le numéro de l’ami ne sort pas de son module', () => {
   it('le motif de journal attrape les formes courantes', () => {
     expect(LOG_CALL.test('fastify.log.error({ handle }, "x")')).toBe(true);
     expect(LOG_CALL.test('console.warn(handle)')).toBe(true);
+    expect(LOG_CALL.test('logError(fastify.log, "x", error)')).toBe(true);
     expect(LOG_CALL.test('logger.info`x`')).toBe(false);
   });
 });
