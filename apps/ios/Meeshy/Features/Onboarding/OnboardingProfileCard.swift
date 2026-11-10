@@ -73,10 +73,17 @@ struct OnboardingProfileCard: View {
     /// Les deux sélecteurs sont FRÈRES, jamais l'un dans l'autre (#17251) :
     /// toucher l'avatar n'ouvre que le sien, et rien n'enchaîne sur la bannière.
     private var preview: some View {
-        VStack(spacing: MeeshySpacing.sm) {
+        let banner = profile.banner.shown
+        let bannerUploading = profile.banner.isUploading
+        let name = model.userDisplayName
+        let avatarURL = model.userAvatarURL
+        let avatar = profile.avatar.shown
+        let avatarUploading = profile.avatar.isUploading
+        let dark = isDark
+        return VStack(spacing: MeeshySpacing.sm) {
             ZStack(alignment: .bottom) {
                 PhotosPicker(selection: $bannerItem, matching: .images) {
-                    OnboardingProfileBannerTile(image: profile.banner.shown, isUploading: profile.banner.isUploading)
+                    OnboardingProfileBannerTile(image: banner, isUploading: bannerUploading)
                 }
                 .buttonStyle(.plain)
                 .disabled(profile.banner.isUploading)
@@ -84,9 +91,8 @@ struct OnboardingProfileCard: View {
                 .accessibilityIdentifier("onboarding.profile.banner")
                 .padding(.bottom, OnboardingProfileAvatarTile.size / 2)
                 PhotosPicker(selection: $avatarItem, matching: .images) {
-                    OnboardingProfileAvatarTile(name: model.userDisplayName, avatarURL: model.userAvatarURL,
-                                                image: profile.avatar.shown,
-                                                isUploading: profile.avatar.isUploading, isDark: isDark)
+                    OnboardingProfileAvatarTile(name: name, avatarURL: avatarURL, image: avatar,
+                                                isUploading: avatarUploading, isDark: dark)
                 }
                 .buttonStyle(.plain)
                 .disabled(profile.avatar.isUploading)
