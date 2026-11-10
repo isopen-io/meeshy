@@ -14,9 +14,31 @@ import type { FetchLike, OutboundEnvelope, PorteBundle, PorteEnvelope, PortePart
 
 type Account = { readonly password: string; readonly userId: string; readonly role: string };
 
+/** Ce que la doublure sert de la coquille : sa page toujours, son module et le WASM du pont sauf mention contraire. */
+export type FakeCoquille = { readonly module?: boolean; readonly wasm?: boolean; readonly csp?: string };
+
 export type FakePorteOptions = {
   readonly accounts: Readonly<Record<string, Account>>;
   readonly acceptsPlaintext?: boolean;
+  readonly coquille?: FakeCoquille;
+};
+
+/** La politique de contenu de la vraie coquille (`services/gateway/src/routes/external-peer.ts`), dans ce qu'elle a d'utile au témoin. */
+const COQUILLE_CSP = "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; frame-ancestors 'none'";
+const WASM_MAGIC = Uint8Array.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+const COQUILLE_PATH = '/api/v1/external-peer/whatsapp/coquille/';
+
+type Served = { readonly status: number; readonly contentType: string; readonly bytes: Uint8Array; readonly csp: string | null };
+
+const servedFile = (status: number, contentType: string, bytes: Uint8Array, csp: string | null): Served => ({ status, contentType, bytes, csp });
+
+const coquilleFile = (name: string, { module = true, wasm = true, csp = COQUILLE_CSP }: FakeCoquille): Served | null => {
+  const encoded = (text: string) => new TextEncoder().encode(text);
+  if (name === '') return servedFile(200, 'text/html; charset=utf-8', encoded('<!doctype html><main data-coquille></main><script type="module" src="./coquille.js"></script>'), csp);
+  if (name === 'coquille.js' && module) return servedFile(200, 'text/javascript; charset=utf-8', encoded('export {};'), csp);
+  if (name === 'libsignal_wasm_bg.wasm' && wasm) return servedFile(200, 'application/wasm', WASM_MAGIC, csp);
+  if (name === 'coquille.js' || name === 'libsignal_wasm_bg.wasm') return servedFile(404, 'application/json; charset=utf-8', encoded('{"success":false}'), null);
+  return null;
 };
 
 type Reply = { readonly status: number; readonly payload: unknown };
@@ -120,13 +142,14 @@ const newState = (): FakeState => {
   return { bundles: new Map(), claimed: new Set(), queues, published: [], wire, enqueue };
 };
 
-export const createFakePorte = ({ accounts, acceptsPlaintext = false }: FakePorteOptions) => {
+export const createFakePorte = ({ accounts, acceptsPlaintext = false, coquille = {} }: FakePorteOptions) => {
   const tokens = new Map<string, Account>(Object.entries(accounts).map(([name, account]) => [`jeton-${name}`, account]));
   const state = newState();
 
-  const route = (url: string, method: string, headers: Readonly<Record<string, string>>, body: Readonly<Record<string, unknown>>): Reply | { readonly status: number; readonly html: string } => {
+  const route = (url: string, method: string, headers: Readonly<Record<string, string>>, body: Readonly<Record<string, unknown>>): Reply | Served => {
     const path = new URL(url).pathname;
-    if (method === 'GET' && path === '/api/v1/external-peer/whatsapp/coquille/') return { status: 200, html: '<!doctype html><main data-coquille></main>' };
+    const file = method === 'GET' && path.startsWith(COQUILLE_PATH) ? coquilleFile(path.slice(COQUILLE_PATH.length), coquille) : null;
+    if (file) return file;
     if (path === '/api/v1/auth/login') {
       const account = accounts[String(body.username)];
       return account && account.password === body.password ? ok({ token: `jeton-${String(body.username)}`, user: { id: account.userId } }) : refused(401, 'INVALID_CREDENTIALS');
@@ -140,9 +163,17 @@ export const createFakePorte = ({ accounts, acceptsPlaintext = false }: FakePort
     const body = init.body ? (JSON.parse(init.body) as Record<string, unknown>) : {};
     if (init.body) state.wire.push(init.body);
     const reply = route(url, init.method, init.headers, body);
-    const text = 'html' in reply ? reply.html : JSON.stringify(reply.payload);
+    const served = 'bytes' in reply ? reply : servedFile(reply.status, 'application/json; charset=utf-8', new TextEncoder().encode(JSON.stringify(reply.payload)), null);
+    const text = new TextDecoder().decode(served.bytes);
     state.wire.push(text);
-    return { status: reply.status, json: async () => JSON.parse(text) as unknown, text: async () => text };
+    const headerOf: Readonly<Record<string, string | null>> = { 'content-type': served.contentType, 'content-security-policy': served.csp };
+    return {
+      status: served.status,
+      headers: { get: (name: string) => headerOf[name.toLowerCase()] ?? null },
+      json: async () => JSON.parse(text) as unknown,
+      text: async () => text,
+      arrayBuffer: async () => served.bytes.slice().buffer,
+    };
   };
 
   return {

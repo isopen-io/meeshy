@@ -81,6 +81,28 @@ describe('le scénario sans tête de la coquille', () => {
     expect(lines.join('\n')).not.toContain(porte.tokenOf('membre'));
   });
 
+  test('échoue à « la coquille est servie » quand le WASM du pont manque : la page s’afficherait sans pouvoir rien ouvrir', async () => {
+    const { report, lines } = await play({ coquille: { wasm: false } });
+
+    expect(report.ok).toBe(false);
+    expect(report.steps.at(-1)).toMatchObject({ name: 'la coquille est servie', ok: false });
+    expect(lines.join('\n')).toContain('libsignal_wasm_bg.wasm');
+  });
+
+  test('échoue à « la coquille est servie » quand son module manque', async () => {
+    const { report, lines } = await play({ coquille: { module: false } });
+
+    expect(report.steps.at(-1)).toMatchObject({ name: 'la coquille est servie', ok: false });
+    expect(lines.join('\n')).toContain('coquille.js');
+  });
+
+  test('échoue à « la coquille est servie » quand sa politique de contenu interdit de compiler le WASM', async () => {
+    const { report, lines } = await play({ coquille: { csp: "default-src 'none'; script-src 'self'" } });
+
+    expect(report.steps.at(-1)).toMatchObject({ name: 'la coquille est servie', ok: false });
+    expect(lines.join('\n')).toContain('wasm-unsafe-eval');
+  });
+
   test('n’écrit jamais le clair du message dans sa sortie', async () => {
     const { lines } = await play();
 

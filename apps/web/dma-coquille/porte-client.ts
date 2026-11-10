@@ -54,8 +54,10 @@ export type OutboundEnvelope = { readonly from: PorteParty; readonly to: PortePa
 
 export type FetchLike = (input: string, init: { readonly method: string; readonly headers: Readonly<Record<string, string>>; readonly body?: string }) => Promise<{
   readonly status: number;
+  readonly headers: { readonly get: (name: string) => string | null };
   readonly json: () => Promise<unknown>;
   readonly text: () => Promise<string>;
+  readonly arrayBuffer: () => Promise<ArrayBuffer>;
 }>;
 
 export class PorteError extends Error {
