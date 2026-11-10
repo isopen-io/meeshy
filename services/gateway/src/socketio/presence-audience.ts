@@ -1,4 +1,6 @@
+import type { UserRole } from '@meeshy/shared/prisma/client';
 import type { RelationLevel } from '@meeshy/shared/types/relation';
+import { GlobalUserRole, isGlobalAdmin, isPlatformTeam } from '@meeshy/shared/types/role-types';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import type { RelationAgeClass } from '@meeshy/shared/utils/relation-access';
@@ -58,12 +60,16 @@ export type PresenceAudienceInput = {
  * à la transition d'un collègue (#16623) : actifs, ni supprimés ni désactivés. Un compte
  * parti ne reçoit plus la présence de l'équipe. Les ADMIN/BIGBOSS sont déjà dans `adminIds`.
  */
+const TEAM_COLLEAGUE_ROLES = Object.values(GlobalUserRole).filter(
+  (role) => isPlatformTeam(role) && !isGlobalAdmin(role),
+) as unknown as UserRole[];
+
 export const TEAM_COLLEAGUES_WHERE = {
-  role: { in: ['ANALYST', 'AUDIT', 'MODERATOR'] },
+  role: { in: TEAM_COLLEAGUE_ROLES },
   isActive: true,
   deletedAt: null,
   deactivatedAt: null,
-} as const;
+};
 
 export type PresenceStatusAudience = {
   /**
