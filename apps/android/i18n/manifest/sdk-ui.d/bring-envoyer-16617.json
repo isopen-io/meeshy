@@ -1,79 +1,79 @@
 {
   "schemaVersion": 1,
   "modules": {
-    ":feature:profile": {
-      "resDir": "feature/profile/src/main/res",
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
       "entries": [
         {
           "catalog": "app",
           "iosKey": "bring.explain",
-          "androidName": "profile_bring_explain",
+          "androidName": "bring_explain",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.action",
-          "androidName": "profile_bring_action",
+          "androidName": "bring_action",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.remaining",
-          "androidName": "profile_bring_remaining",
+          "androidName": "bring_remaining",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.unlimited",
-          "androidName": "profile_bring_unlimited",
+          "androidName": "bring_unlimited",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.quota",
-          "androidName": "profile_bring_quota",
+          "androidName": "bring_quota",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.ringing",
-          "androidName": "profile_bring_ringing",
+          "androidName": "bring_ringing",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.cancel",
-          "androidName": "profile_bring_cancel",
+          "androidName": "bring_cancel",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.confirm.title",
-          "androidName": "profile_bring_confirm_title",
+          "androidName": "bring_confirm_title",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.confirm.body",
-          "androidName": "profile_bring_confirm_body",
+          "androidName": "bring_confirm_body",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.confirm.send",
-          "androidName": "profile_bring_confirm_send",
+          "androidName": "bring_confirm_send",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.offline",
-          "androidName": "profile_bring_offline",
+          "androidName": "bring_offline",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "bring.failed",
-          "androidName": "profile_bring_failed",
+          "androidName": "bring_failed",
           "status": "adopted"
         }
       ]

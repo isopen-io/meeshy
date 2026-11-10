@@ -193,6 +193,10 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                     onToggle = toggle,
                     talkieChrome = talkieLive.chrome,
                     callSlot = {
+                        // Le Bring (#17442) : tout direct ouvert, dès Ami — la passerelle décide, même chiffré.
+                        state.directPeerUserId?.takeIf { !state.isGroup }?.let { peer ->
+                            ChatHeaderBringButton(peerUserId = peer, peerName = header.peerDisplayName ?: title)
+                        }
                         talkie?.button?.invoke()
                         ChatHeaderCallSlot(
                             conversationId = state.conversationId,
