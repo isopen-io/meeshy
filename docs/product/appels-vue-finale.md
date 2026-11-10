@@ -55,8 +55,8 @@
      - « Revenir au direct » apparaît dès qu'on a remonté ;
      - le journal survit à l'appel réduit, aux sous-titres coupés et à une reconnexion.
 8. **Micro coupé = ma parole n'est plus transcrite** (#8475).
-9. **Effets = filtres vidéo et flou d'arrière-plan, sans effets de voix** (#8050).
-   - **Effets emprunte au composer** (directive porteur du 2026-11-10, #17406) : les filtres, les cadres et les effets sont des LOOKS, choisis en surimpression sur mon image, dans la bande du composer (`ComposerLookStrip`), et les puces qui les trient (`ComposerLookFilterChips` : Tout · Filtres · Cadres · Effets) apparaissent dans la barre du bas (P8). L'appel ne recrée ni la bande, ni les puces, ni le catalogue.
+9. **Effets = des looks : filtres, cadres, effets de visage, de paysage et de voix.** La directive porteur du 2026-11-10 (#17409) rend les effets de voix, que #8050 avait retirés le 2026-09-27 ; elle est postérieure et la supplante.
+   - **Effets emprunte au composer** (directive porteur du 2026-11-10, #17406) : les filtres, les cadres et les effets sont des LOOKS, choisis en surimpression sur mon image, dans la bande du composer (`ComposerLookStrip`), et les puces qui les trient (`ComposerLookFilterChips` : Tout · Filtres · Cadres · Visage · Paysage · Voix…) apparaissent dans la barre du bas (P8). Elles défilent à l'horizontale sans coupure brute : la rangée s'efface toujours en fondu à gauche comme à droite (#17409). L'appel ne recrée ni la bande, ni les puces, ni le catalogue.
 10. **L'écran partagé de quelqu'un d'autre passe à la une tout seul.** La caméra de celui qui partage passe en médaillon, au liseré de sa couleur.
 
 11. **Un toucher n'importe où sur l'image range tout, un autre toucher rend tout** (#16663).
@@ -90,6 +90,7 @@
     - Un élément arrive depuis l'endroit d'où il vient, et repart vers lui.
     - Les rails latéraux entrent par le bord de l'écran et sortent par lui, vers l'extérieur.
     - Ce qui s'ouvre depuis la barre du bas (options, sous-titres, journal, rangées d'actions en groupe) s'ouvre par morphisme : la barre s'allonge et grandit, puis reprend sa forme.
+    - Une rangée qui défile (puces, bandeau de vignettes) n'est jamais coupée net : elle s'efface en fondu à ses deux bords (#17409).
     - Tout ce qui se pose par-dessus l'image suit la même logique. Seule exception : Effets, qui emprunte au composer (loi 9).
     - Le mouvement ne perd aucune image, reste interruptible (loi 11) et « Réduire les animations » le remplace par un fondu court.
 18. **Simplicité : la vue affiche ce qu'elle dessine, rien en plus** (directive porteur du 2026-11-10, #17406).
