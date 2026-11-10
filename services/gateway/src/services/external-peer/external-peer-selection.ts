@@ -20,7 +20,13 @@ export const FAKE_WHATSAPP_PROVIDER = 'fake-whatsapp' as const;
 
 const NODE_ENVS_WITHOUT_USERS: ReadonlySet<string> = new Set(['development', 'test']);
 
-const mayOpenFake = (env: ExternalPeerSelection['env']): boolean =>
+/**
+ * L'environnement est-il de ceux où rien de l'interopérabilité ne touche un
+ * utilisateur réel avant la signature avec Meta ? Développement, test (liste
+ * FERMÉE) ou staging déclaré ; tout le reste — production comprise — non.
+ * Partagé par le choix du pair et par le drapeau des conversations externes.
+ */
+export const isPreSignatureEnvironment = (env: Readonly<Record<string, string | undefined>>): boolean =>
   isStagingEnvironment(env.MEESHY_ENV) || NODE_ENVS_WITHOUT_USERS.has(env.NODE_ENV ?? '');
 
 export type ExternalPeerSelection = {
@@ -32,6 +38,6 @@ export type ExternalPeerSelection = {
 
 export function selectExternalPeer({ env, store, logger, libsignal = loadLibsignalMessages }: ExternalPeerSelection): ExternalPeer | null {
   if (env.EXTERNAL_PEER_PROVIDER !== FAKE_WHATSAPP_PROVIDER) return null;
-  if (!mayOpenFake(env)) return null;
+  if (!isPreSignatureEnvironment(env)) return null;
   return admitExternalPeer(createFakeWhatsAppPeer({ store }), { libsignal, logger });
 }
