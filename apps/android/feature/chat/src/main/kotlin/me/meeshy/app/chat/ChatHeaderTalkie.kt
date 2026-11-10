@@ -9,9 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.WifiTethering
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +47,7 @@ import me.meeshy.ui.component.talkie.TalkieHoldActions
 import me.meeshy.ui.component.talkie.TalkieNoticeEffect
 import me.meeshy.ui.component.talkie.TalkieWording
 import me.meeshy.ui.component.talkie.talkieHold
+import me.meeshy.ui.icons.MeeshyIcons
 
 internal const val CHAT_HEADER_TALKIE_TAG = "conversation.header.talkie"
 
@@ -148,10 +146,10 @@ private fun TalkieGlyph(
                 contentAlignment = Alignment.Center,
             ) {
                 if (look == TalkieHoldLook.IDLE) {
-                    GradientIcon(Icons.Filled.WifiTethering, gradient, Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp()))
+                    GradientIcon(MeeshyIcons.Sensors, gradient, Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp()))
                 } else {
                     Icon(
-                        if (look == TalkieHoldLook.LIVE) Icons.Filled.GraphicEq else Icons.Filled.WifiTethering,
+                        if (look == TalkieHoldLook.LIVE) MeeshyIcons.Waveform else MeeshyIcons.Sensors,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp()),
