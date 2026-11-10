@@ -1,0 +1,43 @@
+{
+  "kit": "K01",
+  "tone": {
+    "plainCeiling": 0.118,
+    "deepCeiling": 0.613,
+    "hysteresis": 0.03,
+    "cases": [
+      { "luminance": null, "previous": null, "tone": "deep" },
+      { "luminance": null, "previous": "plain", "tone": "deep" },
+      { "luminance": 0.0, "previous": null, "tone": "plain" },
+      { "luminance": 0.117, "previous": null, "tone": "plain" },
+      { "luminance": 0.119, "previous": null, "tone": "deep" },
+      { "luminance": 0.612, "previous": null, "tone": "deep" },
+      { "luminance": 0.614, "previous": null, "tone": "onLight" },
+      { "luminance": 1.0, "previous": null, "tone": "onLight" },
+      { "luminance": 0.14, "previous": "plain", "tone": "plain" },
+      { "luminance": 0.16, "previous": "plain", "tone": "deep" },
+      { "luminance": 0.1, "previous": "deep", "tone": "deep" },
+      { "luminance": 0.08, "previous": "deep", "tone": "plain" },
+      { "luminance": 0.63, "previous": "deep", "tone": "deep" },
+      { "luminance": 0.65, "previous": "deep", "tone": "onLight" },
+      { "luminance": 0.59, "previous": "onLight", "tone": "onLight" },
+      { "luminance": 0.57, "previous": "onLight", "tone": "deep" }
+    ]
+  },
+  "recipe": {
+    "blurRadius": 24,
+    "saturation": 1.8,
+    "pressScale": 1.04,
+    "pressSheenFactor": 2,
+    "topLight": 0.38,
+    "shadowOpacity": 0.28,
+    "shadowOffsetY": 10,
+    "drawn": [
+      { "tone": "plain", "density": "regular", "fill": "light", "fillOpacity": 0.14, "rim": 0.24 },
+      { "tone": "plain", "density": "dense", "fill": "light", "fillOpacity": 0.14, "rim": 0.24 },
+      { "tone": "deep", "density": "regular", "fill": "dark", "fillOpacity": 0.46, "rim": 0.2 },
+      { "tone": "deep", "density": "dense", "fill": "dark", "fillOpacity": 0.66, "rim": 0.2 },
+      { "tone": "onLight", "density": "regular", "fill": "dark", "fillOpacity": 0.62, "rim": 0.2 },
+      { "tone": "onLight", "density": "dense", "fill": "dark", "fillOpacity": 0.62, "rim": 0.2 }
+    ]
+  }
+}
