@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 
-import { selfRowBounds, selfRowsLayout, selfRowWidth } from './call-self-controls';
 import {
   cornerAfterArrow,
   DEFAULT_SELF_CORNER,
@@ -9,7 +8,6 @@ import {
   nearestSelfCorner,
   scaleAfterPinch,
   scaleAfterWheel,
-  SELF_CORNERS,
   selfTileBox,
   selfTileCornerFor,
   selfTileScaleFor,
@@ -152,34 +150,6 @@ describe('cornerAfterArrow — au clavier, de coin en coin', () => {
     expect(cornerAfterArrow('top-right', 'ArrowRight')).toBeNull();
     expect(cornerAfterArrow('top-right', 'ArrowUp')).toBeNull();
     expect(cornerAfterArrow('top-right', 'Enter')).toBeNull();
-  });
-});
-
-describe('les rangées de commandes suivent la vignette dans les quatre coins', () => {
-  const size = { width: 112, height: 160 };
-  const bounds = selfRowBounds(phone);
-  for (const corner of SELF_CORNERS) {
-    test(`${corner} : Effets au-dessus, la caméra en dessous, dans l’écran, hors de la vignette`, () => {
-      const tile = selfTileBox({ corner, size, viewport: phone });
-      const rows = selfRowsLayout({ tile, bounds, effectsWidth: selfRowWidth(2), cameraWidth: selfRowWidth(3) });
-      expect(rows.effects?.side).toBe('above');
-      expect(rows.camera?.side).toBe('below');
-      for (const row of [rows.effects, rows.camera]) {
-        if (row === null) throw new Error('rangée absente');
-        expect(row.x).toBeGreaterThanOrEqual(bounds.x);
-        expect(row.x + row.width).toBeLessThanOrEqual(bounds.x + bounds.width);
-        expect(row.y).toBeGreaterThanOrEqual(bounds.y);
-        expect(row.y + row.height).toBeLessThanOrEqual(bounds.y + bounds.height);
-      }
-    });
-  }
-
-  test('glissée tout en haut, la rangée Effets passe sous la caméra plutôt que sous l’en-tête', () => {
-    const tile = { x: 140, y: 40, width: 112, height: 160 };
-    const rows = selfRowsLayout({ tile, bounds, effectsWidth: selfRowWidth(2), cameraWidth: selfRowWidth(2) });
-    expect(rows.effects?.side).toBe('below');
-    expect(rows.camera?.side).toBe('below');
-    expect(rows.effects?.y).toBeGreaterThan(rows.camera?.y ?? 0);
   });
 });
 

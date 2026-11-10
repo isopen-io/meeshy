@@ -109,6 +109,9 @@ const peerReceives = async (page) => {
   return false;
 };
 
+/** Les rails glissent (300 ms) : on mesure et on touche posés, jamais en route (#17327). */
+const railsSettled = (page) => page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => !(animation instanceof CSSTransition) || animation.playState !== 'running') ?? true, undefined, { timeout: 3000 }).then(() => true, () => false);
+
 /**
  * Les actions vivent derrière le (…) de la pilule (#8391), qui les déplie
  * s'il ne l'a pas déjà fait. En vidéo, aucune attente n'efface les commandes
@@ -118,7 +121,8 @@ const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  await appears(page, '[data-call-actions]');
+  await appears(page, '[data-call-rails="shown"], [data-call-actions]');
+  await railsSettled(page);
 };
 
 const startConnectedAudioCall = async (page) => {

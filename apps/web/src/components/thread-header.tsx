@@ -52,6 +52,7 @@ import { accentPaletteOf } from '@/lib/accent';
 import { headerTalkieChrome, talkieLevelMeters, threadHeaderTalkiePeer, type TalkieHeaderDelivery, type TalkieHeaderVoice } from '@/lib/talkie/talkie-header-law';
 
 const ThreadHeaderTalkie = lazy(() => import('./thread-header-talkie').then((m) => ({ default: m.ThreadHeaderTalkie })));
+const ThreadHeaderBring = lazy(() => import('./thread-header-bring').then((m) => ({ default: m.ThreadHeaderBring })));
 const TalkieHeaderBand = lazy(() => import('./thread-header-talkie').then((m) => ({ default: m.TalkieHeaderBand })));
 
 type HeaderTalkieLive = { readonly voice: TalkieHeaderVoice; readonly delivery: TalkieHeaderDelivery };
@@ -264,6 +265,7 @@ export function ThreadHeader({
      qui tient le bouton reste dessous. */
   const talkiePeer = threadHeaderTalkiePeer({ group, preview, guest: sessionIsGuest, encryptionMode: conversation.encryptionMode, peerId: peerKey });
   const [talkieLive, setTalkieLive] = useState<HeaderTalkieLive>(TALKIE_AT_REST);
+  const bringPeer = group || preview || sessionIsGuest ? null : (peerKey ?? null);
   const talkieSpans = talkiePeer !== null && headerTalkieChrome(talkieLive.voice).talkieSpansBar;
   const talkieSecondary = accentPaletteOf(conversation).secondary;
   const pickSearchHit = (messageId: string) => {
@@ -462,6 +464,13 @@ export function ThreadHeader({
 {/* L'APPEL (#6382) — vocal ou vidéo, offert par `threadCallOffer`
                 (#10207) : « start » lance, « join-only » ne garde que les portes
                 d'un appel déjà en cours, « none » ne montre rien. */}
+            {/* LE BRING (#17442) — à gauche du talkie, dans tout direct dont la
+                passerelle l'ouvre (dès Ami) ; jamais en aperçu. */}
+            {bringPeer === null ? null : (
+              <Suspense fallback={null}>
+                <ThreadHeaderBring key={bringPeer} language={interfaceLanguage} peerId={bringPeer} peerName={title} />
+              </Suspense>
+            )}
             {talkiePeer === null ? null : (
               <Suspense fallback={null}>
                 <ThreadHeaderTalkie key={talkiePeer} language={interfaceLanguage} peerId={talkiePeer} peerName={title} secondary={talkieSecondary} onLive={setTalkieLive} />

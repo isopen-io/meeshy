@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
 import { apiDeps } from '@/lib/api/deps';
@@ -20,6 +19,7 @@ import { CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { talkieAnnouncement, THREAD_TALKIE_REST, type ThreadTalkieLive } from './talkie-header-band';
+import { ThreadHeaderNotice, useTransientNotice } from './thread-header-notice';
 
 export { TalkieHeaderBand, talkieAnnouncement, THREAD_TALKIE_REST, type ThreadTalkieLive } from './talkie-header-band';
 
@@ -38,24 +38,6 @@ export { TalkieHeaderBand, talkieAnnouncement, THREAD_TALKIE_REST, type ThreadTa
  * - Le (i) du talkie ne vit que sur la fiche.
  */
 
-const NOTICE_MS = 4_000;
-
-function TalkieHeaderNotice({ text }: { readonly text: string }) {
-  if (typeof document === 'undefined') return null;
-  return createPortal(
-    <p
-      role="status"
-      aria-live="polite"
-      data-thread-talkie-notice=""
-      className="pointer-events-none fixed inset-x-0 z-[70] mx-auto w-fit max-w-[calc(100%-2rem)] rounded-chip px-4 py-2.5 text-center text-caption font-semibold shadow-lg"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 72px)', color: 'var(--color-ios-card)', backgroundColor: 'var(--color-ios-ink)' }}
-    >
-      {text}
-    </p>,
-    document.body,
-  );
-}
-
 function useEncodes(supported: () => Promise<boolean>): boolean | null {
   const [encodes, setEncodes] = useState<boolean | null>(null);
   useEffect(() => {
@@ -68,16 +50,6 @@ function useEncodes(supported: () => Promise<boolean>): boolean | null {
     };
   }, [supported]);
   return encodes;
-}
-
-function useTransientNotice(): readonly [string | null, (text: string) => void] {
-  const [notice, setNotice] = useState<string | null>(null);
-  useEffect(() => {
-    if (notice === null) return undefined;
-    const timer = setTimeout(() => setNotice(null), NOTICE_MS);
-    return () => clearTimeout(timer);
-  }, [notice]);
-  return [notice, setNotice];
 }
 
 export function ThreadHeaderTalkie({
@@ -166,7 +138,7 @@ export function ThreadHeaderTalkie({
       <span data-thread-talkie-announce="" role="status" aria-live="polite" className="sr-only">
         {talkieAnnouncement(language, { voice, delivery })}
       </span>
-      {banner === null ? null : <TalkieHeaderNotice text={banner} />}
+      {banner === null ? null : <ThreadHeaderNotice text={banner} marker="talkie" />}
     </>
   );
 }

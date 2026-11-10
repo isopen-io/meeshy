@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import MeeshySDK
+import UIKit
 import MeeshyUI
 
 /// Ce qui fait (et cesse de faire) sonner l'appareil pendant un Bring. Le vrai son est la sonnerie d'appel,
@@ -43,6 +44,8 @@ final class BringCenter: ObservableObject {
     private let people: CirclePeopleResolving
     private let ringer: BringRinging
     private let now: () -> Date
+    private let alarms: BringAlarmCoordinator
+    private let isAppActive: @MainActor () -> Bool
     private var seen: [String] = []
     private var timers: [String: Task<Void, Never>] = [:]
     private var cancellables = Set<AnyCancellable>()
@@ -55,12 +58,16 @@ final class BringCenter: ObservableObject {
         ringer: BringRinging,
         ringEvents: AnyPublisher<BringRing, Never> = BringEvents.ring,
         stoppedEvents: AnyPublisher<BringStopped, Never> = BringEvents.stopped,
+        alarms: BringAlarmCoordinator = .inert,
+        isAppActive: @escaping @MainActor () -> Bool = { UIApplication.shared.applicationState == .active },
         now: @escaping () -> Date = { Date() }
     ) {
         self.service = service
         self.people = people
         self.ringer = ringer
         self.now = now
+        self.alarms = alarms
+        self.isAppActive = isAppActive
         let lane = OrderedEventLane()
         ringEvents
             .relay(through: lane) { [weak self] ring in await self?.receive(ring) }
@@ -84,6 +91,7 @@ final class BringCenter: ObservableObject {
         ringer.startRinging()
         HapticFeedback.warning()
         schedule(ring.bringId, at: deadline)
+        manageAlarm(for: ring, name: incoming?.name, deadline: deadline)
         if incoming?.name == nil { Task { await self.hydrate(ring) } }
     }
 
@@ -94,6 +102,21 @@ final class BringCenter: ObservableObject {
         end(current.id)
         let service = self.service
         Task { try? await service.stop(bringId: current.id) }
+    }
+
+    /// Le même geste, depuis le bouton « Arrêter » de l'alarme système (AlarmKit) : l'alarme se tait d'elle-même, le
+    /// Bring s'arrête partout.
+    func stop(bringId: String) {
+        end(bringId)
+        let service = self.service
+        Task { try? await service.stop(bringId: bringId) }
+    }
+
+    /// Le même arrêt, attendu : l'action « Arrêter » d'une bannière s'exécute en arrière-plan, et le système ne la
+    /// laisse vivre que le temps de sa réponse.
+    func stopAndWait(bringId: String) async {
+        end(bringId)
+        try? await service.stop(bringId: bringId)
     }
 
     // MARK: - Envoyer
@@ -130,12 +153,37 @@ final class BringCenter: ObservableObject {
 
     private func end(_ bringId: String) {
         remember(bringId)
+        let alarms = self.alarms
+        Task { await alarms.cancel(bringId: bringId) }
         timers.removeValue(forKey: bringId)?.cancel()
         if incoming?.id == bringId {
             incoming = nil
             ringer.stopRinging()
         }
         outgoing = outgoing.filter { $0.value.bringId != bringId }
+    }
+
+    /// AlarmKit sonne là où la sonnerie de l'app ne le peut pas (silencieux, Concentration, app à l'arrière-plan) ; au
+    /// premier plan, l'app sonne seule et retire l'alarme qu'une extension aurait posée — jamais deux sonneries.
+    private func manageAlarm(for ring: BringRing, name: String?, deadline: Date) {
+        let alarms = self.alarms
+        let bringId = ring.bringId
+        guard alarms.enabled else { return }
+        let active = isAppActive()
+        guard BringAlarmPlan.appShouldRingAlarm(enabled: alarms.enabled, appIsActive: active) else {
+            Task {
+                await alarms.cancel(bringId: bringId)
+                await alarms.primeAuthorization()
+            }
+            return
+        }
+        let request = BringAlarmPlan.Request(
+            bringId: bringId,
+            title: BringAlarmWording.title(name: name),
+            stopLabel: BringAlarmWording.stop,
+            deadline: deadline
+        )
+        Task { await alarms.apply(.ring(request), mayAsk: false) }
     }
 
     private func remember(_ bringId: String) {

@@ -80,21 +80,22 @@ describe('layerOffered', () => {
 });
 
 describe('layerChrome', () => {
+  /* #17327 — ma vignette ne porte aucune commande : seul son zoom suit la couche. */
   /* Aucune couche n'efface ses commandes au bout d'une attente (#8988) : la
      couche ne dit que ce qu'elle montre, jamais quand cela s'efface. */
   test('au repos : en-tête, pilule, pas de rangées', () => {
-    expect(layerChrome(IDLE)).toEqual({ header: true, pill: true, rows: false, panel: null, mode: null, selfControls: true });
+    expect(layerChrome(IDLE)).toEqual({ header: true, pill: true, rows: false, panel: null, mode: null, selfZoom: true });
   });
 
   test('menu : les rangées au-dessus de la pilule', () => {
-    expect(layerChrome(menu)).toEqual({ header: true, pill: true, rows: true, panel: null, mode: null, selfControls: true });
+    expect(layerChrome(menu)).toEqual({ header: true, pill: true, rows: true, panel: null, mode: null, selfZoom: true });
   });
 
   test('panneau : il remplace les rangées', () => {
-    expect(layerChrome(panel('react'))).toEqual({ header: true, pill: true, rows: false, panel: 'react', mode: null, selfControls: true });
+    expect(layerChrome(panel('react'))).toEqual({ header: true, pill: true, rows: false, panel: 'react', mode: null, selfZoom: true });
   });
 
   test('mode : TOUT le chrome d’appel s’efface, seul le mode reste', () => {
-    expect(layerChrome(mode('montage'))).toEqual({ header: false, pill: false, rows: false, panel: null, mode: 'montage', selfControls: false });
+    expect(layerChrome(mode('montage'))).toEqual({ header: false, pill: false, rows: false, panel: null, mode: 'montage', selfZoom: false });
   });
 });
