@@ -336227,6 +336227,617 @@
           }
         }
       }
+    },
+    "conversation.external.consent.lead": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "للوصول إلى صديقك على واتساب، يرسل Meeshy إلى Meta، الشركة المشغّلة لواتساب:"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um deinen Freund auf WhatsApp zu erreichen, übermittelt Meeshy an Meta, den Betreiber von WhatsApp:"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To reach your friend on WhatsApp, Meeshy shares with Meta, which operates WhatsApp:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para contactar con tu amigo en WhatsApp, Meeshy comparte con Meta, que gestiona WhatsApp:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour joindre votre ami sur WhatsApp, Meeshy transmet à Meta, qui exploite WhatsApp :"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per raggiungere il tuo amico su WhatsApp, Meeshy trasmette a Meta, che gestisce WhatsApp:"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para falar com seu amigo no WhatsApp, a Meeshy compartilha com a Meta, que opera o WhatsApp:"
+          }
+        }
+      }
+    },
+    "conversation.external.consent.disclosure.phoneNumber": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رقم هاتفك الموثَّق، الذي يعرّف بك على واتساب؛"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "deine verifizierte Telefonnummer, die dich bei WhatsApp identifiziert;"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "your verified phone number, which identifies you on WhatsApp;"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tu número de teléfono verificado, que te identifica en WhatsApp;"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "votre numéro de téléphone vérifié, qui vous identifie chez WhatsApp ;"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "il tuo numero di telefono verificato, che ti identifica su WhatsApp;"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "seu número de telefone verificado, que identifica você no WhatsApp;"
+          }
+        }
+      }
+    },
+    "conversation.external.consent.disclosure.profileName": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اسمك المعروض؛"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "deinen Anzeigenamen;"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "your display name;"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tu nombre visible;"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "votre nom affiché ;"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "il tuo nome visualizzato;"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "seu nome de exibição;"
+          }
+        }
+      }
+    },
+    "conversation.external.consent.disclosure.publicKeys": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مفاتيح التشفير العامة لأجهزتك؛"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "die öffentlichen Verschlüsselungsschlüssel deiner Geräte;"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the public encryption keys of your devices;"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "las claves públicas de cifrado de tus dispositivos;"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "les clés publiques de chiffrement de vos appareils ;"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "le chiavi pubbliche di crittografia dei tuoi dispositivi;"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "as chaves públicas de criptografia dos seus dispositivos;"
+          }
+        }
+      }
+    },
+    "conversation.external.consent.disclosure.encryptedContent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسائلك ووسائطك، مشفّرة من طرف إلى طرف: لا تستطيع Meta قراءتها؛"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "deine Nachrichten und Medien, Ende-zu-Ende-verschlüsselt: Meta kann sie nicht lesen;"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "your messages and media, end-to-end encrypted: Meta cannot read them;"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tus mensajes y archivos, cifrados de extremo a extremo: Meta no puede leerlos;"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vos messages et médias, chiffrés de bout en bout : Meta ne peut pas les lire ;"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "i tuoi messaggi e contenuti multimediali, crittografati end-to-end: Meta non può leggerli;"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "suas mensagens e mídias, criptografadas de ponta a ponta: a Meta não consegue lê-las;"
+          }
+        }
+      }
+    },
+    "conversation.external.consent.disclosure.deliveryMetadata": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يكتب إلى من، ومتى، وحجم المرسَلات، وإشعارات الاستلام."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wer wem wann schreibt, die Größe der Sendungen und die Zustellbestätigungen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "who writes to whom, when, the size of what is sent and delivery receipts."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "quién escribe a quién, cuándo, el tamaño de los envíos y las confirmaciones de entrega."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "qui écrit à qui, quand, la taille des envois et les accusés de réception."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "chi scrive a chi, quando, la dimensione degli invii e le conferme di consegna."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "quem escreve a quem, quando, o tamanho dos envios e as confirmações de entrega."
+          }
+        }
+      }
+    },
+    "conversation.external.consent.retention": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحتفظ Meeshy برقم صديقك لمدة %lld يومًا بعد آخر مرة تفتح فيها المحادثة، ثم يحذفه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy speichert die Nummer deines Freundes %lld Tage nach deinem letzten Öffnen der Unterhaltung und löscht sie dann."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy keeps your friend’s number for %lld days after you last open the conversation, then erases it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy guarda el número de tu amigo %lld días después de la última vez que abres la conversación y luego lo borra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy garde le numéro de votre ami %lld jours après votre dernière ouverture de la conversation, puis l’efface."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy conserva il numero del tuo amico per %lld giorni dopo l’ultima apertura della conversazione, poi lo cancella."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Meeshy guarda o número do seu amigo por %lld dias depois da última vez que você abre a conversa e, em seguida, o apaga."
+          }
+        }
+      }
+    },
+    "conversation.external.consent.retention.unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحتفظ Meeshy برقم صديقك لمدة محدودة، ثم يحذفه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy speichert die Nummer deines Freundes für eine begrenzte Zeit und löscht sie dann."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy keeps your friend’s number for a limited time, then erases it."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy guarda el número de tu amigo durante un tiempo limitado y luego lo borra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy garde le numéro de votre ami pendant une durée limitée, puis l’efface."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshy conserva il numero del tuo amico per un periodo limitato, poi lo cancella."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A Meeshy guarda o número do seu amigo por um tempo limitado e, em seguida, o apaga."
+          }
+        }
+      }
+    },
+    "conversation.external.consent.translation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تتم الترجمة على جهازك: لا يرى Meeshy محتوى هذه المحادثة أبدًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Übersetzung erfolgt auf deinem Gerät: Meeshy sieht den Inhalt dieser Unterhaltung nie."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translation happens on your device: Meeshy never sees the content of this conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traducción se hace en tu dispositivo: Meeshy nunca ve el contenido de esta conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traduction se fait sur votre appareil : Meeshy ne voit jamais le contenu de cette conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La traduzione avviene sul tuo dispositivo: Meeshy non vede mai il contenuto di questa conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A tradução é feita no seu dispositivo: a Meeshy nunca vê o conteúdo desta conversa."
+          }
+        }
+      }
+    },
+    "conversation.external.consent.withdraw": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكنك سحب هذه الموافقة في أي وقت: يحذف Meeshy عندها أرقام أصدقائك على واتساب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst diese Einwilligung jederzeit widerrufen: Meeshy löscht dann die Nummern deiner WhatsApp-Freunde."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can withdraw this consent at any time: Meeshy then erases your WhatsApp friends’ numbers."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes retirar este consentimiento en cualquier momento: Meeshy borra entonces los números de tus amigos de WhatsApp."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pouvez retirer ce consentement à tout moment : Meeshy efface alors les numéros de vos amis WhatsApp."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puoi revocare questo consenso in qualsiasi momento: Meeshy cancella allora i numeri dei tuoi amici WhatsApp."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você pode retirar este consentimento a qualquer momento: a Meeshy então apaga os números dos seus amigos do WhatsApp."
+          }
+        }
+      }
+    },
+    "conversation.external.consent.accept": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أوافق وأتابع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ich stimme zu und fahre fort"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I agree and continue"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acepto y continúo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "J’accepte et je continue"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accetto e continuo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aceito e continuo"
+          }
+        }
+      }
+    },
+    "conversation.external.consent.outdated": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تغيّرت هذه المعلومات: حدِّث Meeshy لقراءتها مجددًا قبل الموافقة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Information hat sich geändert: Aktualisiere Meeshy, um sie vor der Zustimmung erneut zu lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This information has changed: update Meeshy to read it again before agreeing."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta información ha cambiado: actualiza Meeshy para volver a leerla antes de aceptar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette information a changé : mettez Meeshy à jour pour la relire avant d’accepter."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa informazione è cambiata: aggiorna Meeshy per rileggerla prima di accettare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta informação mudou: atualize a Meeshy para lê-la novamente antes de aceitar."
+          }
+        }
+      }
+    },
+    "conversation.external.consent.error": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر حفظ موافقتك. أعد المحاولة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Einwilligung konnte nicht gespeichert werden. Versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your consent could not be saved. Try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se ha podido guardar tu consentimiento. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre consentement n’a pas pu être enregistré. Réessayez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è stato possibile salvare il tuo consenso. Riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível salvar seu consentimento. Tente novamente."
+          }
+        }
+      }
     }
   },
   "version": "1.1"

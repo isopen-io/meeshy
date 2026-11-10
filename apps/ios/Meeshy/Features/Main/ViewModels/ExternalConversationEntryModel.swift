@@ -17,6 +17,8 @@ nonisolated enum ExternalConversationEntryPhase: Equatable, Sendable {
     /// Le numéro n'est pas au format international : rien n'est parti.
     case malformed
     case phoneUnverified
+    /// L'information sur ce qui part chez Meta doit être lue et acceptée d'abord (#17120).
+    case consentRequired
     case refused(ExternalOpeningRefusal)
 }
 
@@ -45,6 +47,9 @@ final class ExternalConversationEntryModel: ObservableObject {
     /// Le numéro de l'utilisateur doit être vérifié : la vue propose la vérification sur place.
     var offersPhoneVerification: Bool { phase == .phoneUnverified }
 
+    /// La passerelle exige le consentement à ce qui part chez Meta : la vue montre l'information.
+    var asksForConsent: Bool { phase == .consentRequired }
+
     func toggle() {
         isExpanded.toggle()
         guard !isExpanded else { return }
@@ -58,6 +63,22 @@ final class ExternalConversationEntryModel: ObservableObject {
             phase = .malformed
             return
         }
+        await open(e164)
+    }
+
+    /// Le consentement est enregistré : le même numéro repart, sans nouvelle saisie.
+    func consentGranted() async {
+        guard phase == .consentRequired, let e164 = ExternalConversationEntry.normalizeHandle(handle) else { return }
+        await open(e164)
+    }
+
+    /// « Annuler » sur l'information : rien n'est écrit, rien ne s'ouvre.
+    func consentDeclined() {
+        guard phase == .consentRequired else { return }
+        phase = .idle
+    }
+
+    private func open(_ e164: String) async {
         phase = .opening
         switch await service.open(network: .whatsapp, handle: e164) {
         case .open(let conversationId, _):
@@ -65,6 +86,8 @@ final class ExternalConversationEntryModel: ObservableObject {
             openedConversationId = conversationId
         case .phoneUnverified:
             phase = .phoneUnverified
+        case .consentRequired:
+            phase = .consentRequired
         case .refused(let refusal):
             phase = .refused(refusal)
         }
@@ -79,7 +102,7 @@ final class ExternalConversationEntryModel: ObservableObject {
 nonisolated enum ExternalConversationEntryCopy {
     static func message(for phase: ExternalConversationEntryPhase) -> String? {
         switch phase {
-        case .idle, .opening:
+        case .idle, .opening, .consentRequired:
             return nil
         case .malformed:
             return String(localized: "conversation.external.handle.invalid", defaultValue: "Ce numéro n’est pas au format international. Commencez par + et l’indicatif du pays.", bundle: .main)

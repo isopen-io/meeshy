@@ -43,6 +43,15 @@ struct NewConversationExternalEntry: View {
         .sheet(isPresented: $showsPhoneVerification) {
             PhonePromptSheet()
         }
+        .sheet(
+            isPresented: Binding(get: { model.asksForConsent }, set: { _ in }),
+            onDismiss: { if model.asksForConsent { model.consentDeclined() } }
+        ) {
+            ExternalInteropConsentSheet(
+                onConsented: { Task { await model.consentGranted() } },
+                onCancel: { model.consentDeclined() }
+            )
+        }
     }
 
     // MARK: - La rangée
@@ -123,7 +132,7 @@ struct NewConversationExternalEntry: View {
             .padding(.vertical, MeeshySpacing.smPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .stroke(model.phase == .malformed ? MeeshyColors.error : theme.border(tint: MeeshyColors.brandDeepHex), lineWidth: 1)
+                    .stroke(model.phase == .malformed ? AnyShapeStyle(MeeshyColors.error) : AnyShapeStyle(theme.border(tint: MeeshyColors.brandDeepHex)), lineWidth: 1)
             )
             .accessibilityIdentifier("new-conversation-external-handle")
     }

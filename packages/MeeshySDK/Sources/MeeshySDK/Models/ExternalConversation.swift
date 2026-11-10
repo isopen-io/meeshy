@@ -42,6 +42,10 @@ public enum ExternalConversationErrorCode {
     public static let invalid = "EXTERNAL_CONVERSATION_INVALID"
     public static let endToEndReserved = "EXTERNAL_CONVERSATION_END_TO_END_RESERVED"
     public static let limitReached = "EXTERNAL_CONVERSATION_LIMIT_REACHED"
+    /// #17120 — aucun consentement sous la version en vigueur de l'information sur ce qui part chez Meta.
+    public static let consentRequired = "EXTERNAL_CONVERSATION_CONSENT_REQUIRED"
+    /// #17120 — le consentement cite une version de l'information qui n'est plus en vigueur.
+    public static let noticeOutdated = "EXTERNAL_CONVERSATION_NOTICE_OUTDATED"
 }
 
 /// **L'ENTRÉE EST ÉTEINTE EN PRODUCTION** (design § 6, jusqu'à la signature
@@ -143,6 +147,8 @@ public enum ExternalOpeningOutcome: Sendable, Equatable {
     case open(conversationId: String, created: Bool)
     /// L'utilisateur Meeshy doit vérifier son numéro avant d'écrire à un réseau tiers.
     case phoneUnverified
+    /// #17120 — l'information sur ce qui part chez Meta doit être lue et acceptée d'abord.
+    case consentRequired
     case refused(ExternalOpeningRefusal)
 
     /// Une réponse « ouverte » qui ne dirait pas une conversation externe
@@ -159,6 +165,7 @@ public enum ExternalOpeningOutcome: Sendable, Equatable {
         if case .network(.noConnection) = failure { return .refused(.offline) }
         let (status, code) = statusAndCode(of: failure)
         if code == ExternalConversationErrorCode.phoneUnverified { return .phoneUnverified }
+        if code == ExternalConversationErrorCode.consentRequired { return .consentRequired }
         if let code, let refusal = refusalOfCode[code] { return .refused(refusal) }
         return .refused(refusalOfStatus(status))
     }
@@ -178,7 +185,7 @@ public enum ExternalOpeningOutcome: Sendable, Equatable {
         }
     }
 
-    private static func statusAndCode(of failure: MeeshyError) -> (Int?, String?) {
+    static func statusAndCode(of failure: MeeshyError) -> (Int?, String?) {
         switch failure {
         case .rejected(let rejection):
             return (rejection.statusCode, rejection.code)
@@ -194,5 +201,24 @@ public enum ExternalOpeningOutcome: Sendable, Equatable {
 
     private struct RefusalEnvelope: Decodable {
         let code: String?
+    }
+}
+
+/// Ce que l'écran d'information dit d'un consentement qui n'a pas été
+/// enregistré (`PUT /conversations/external/consent`, #17120). Miroir de
+/// `consentAnswerOf` (`apps/web/src/lib/api/external-interop-compliance.ts`).
+public enum ExternalInteropConsentAnswer: String, Sendable, Equatable, CaseIterable {
+    /// L'information a changé depuis la version que ce client montre : il faut mettre Meeshy à jour.
+    case outdated
+    /// Drapeau éteint ou passerelle trop ancienne : « pas encore disponible ici ».
+    case unavailable
+    /// Toute autre panne : on peut réessayer.
+    case failed
+
+    public static func of(error: Error) -> ExternalInteropConsentAnswer {
+        let (status, code) = ExternalOpeningOutcome.statusAndCode(of: MeeshyError.from(error))
+        if code == ExternalConversationErrorCode.noticeOutdated || status == 409 { return .outdated }
+        if code == ExternalConversationErrorCode.disabled || status == 404 { return .unavailable }
+        return .failed
     }
 }
