@@ -83,6 +83,36 @@ class PatternRules(unittest.TestCase):
                 self.assertEqual(count(rule_id, misses), 0)
 
 
+class KitGlassRatchets(unittest.TestCase):
+    KIT = "packages/MeeshySDK/Sources/MeeshyUI/Kit/MeeshyGlassButton.swift"
+    COMPAT = "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveLiquidGlass.swift"
+    SRC = (
+        "a.adaptiveGlass(in: Circle())\n"
+        "b.adaptiveLiquidGlass(in: Circle(), interactive: true)\n"
+        "c.adaptiveGlassProminent(in: Capsule(),\n    tint: MeeshyColors.error)\n"
+        "d.glassEffect(.regular.interactive(), in: Circle())\n"
+        "// e.adaptiveGlass(in: Circle())\n"
+    )
+
+    def test_every_call_outside_the_kit_counts_even_across_lines(self):
+        self.assertEqual(count("kit-glass-call", self.SRC), 4)
+
+    def test_round_counts_circle_shapes_only(self):
+        self.assertEqual(count("kit-glass-round", self.SRC), 3)
+
+    def test_no_touch_counts_calls_without_interactive_true(self):
+        self.assertEqual(count("kit-glass-no-touch", self.SRC), 2)
+
+    def test_the_kit_and_the_compatibility_layer_are_exempt(self):
+        for rel in (self.KIT, self.COMPAT):
+            for rule_id in ("kit-glass-call", "kit-glass-round", "kit-glass-no-touch"):
+                self.assertEqual(count(rule_id, self.SRC, rel), 0)
+
+    def test_other_ui_files_are_not_exempt(self):
+        other = "packages/MeeshySDK/Sources/MeeshyUI/Media/Other.swift"
+        self.assertEqual(count("kit-glass-call", self.SRC, other), 4)
+
+
 class UncheckedSendable(unittest.TestCase):
     BARE = "final class A: @unchecked Sendable {}\n"
 
