@@ -25,6 +25,7 @@ enum CallPillText: Equatable, Sendable {
         return isCaptionsEnabled && layer == .idle ? .captions : .none
     }
 
+    /// Seule la pilule rangée laisse les sous-titres sans leur rangée de base.
     var hasBaseRow: Bool {
         self != .captionsAlone
     }
