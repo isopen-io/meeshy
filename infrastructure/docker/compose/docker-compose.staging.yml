@@ -457,6 +457,12 @@ services:
       # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
       # Sans BREVO_API_KEY sur l'hôte, rien ne part (la passerelle le journalise).
       - MEESHY_ENV=staging
+      # #17116 — la porte « pair externe » ouvre le FAUX WhatsApp au staging (jamais
+      # en production : `selectExternalPeer` la garde close hors staging déclaré),
+      # et la passerelle sert la coquille « ami WhatsApp » de recette sous
+      # `/api/v1/external-peer/whatsapp/coquille/`, routes réservées à l'équipe.
+      # Toute autre valeur (`off`) dans le .env de l'hôte ferme la porte.
+      - EXTERNAL_PEER_PROVIDER=${EXTERNAL_PEER_PROVIDER:-fake-whatsapp}
       # #9614, #9642 — la purge de conservation (sessions closes 90 j, journaux
       # 12 mois, adresses d'inscription et de connexion 12 mois). ARMÉE par la
       # seule valeur exacte true ; sinon elle compte et journalise sans écrire.

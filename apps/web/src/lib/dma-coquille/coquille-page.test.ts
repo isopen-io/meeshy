@@ -91,13 +91,13 @@ describe('la page de la coquille', () => {
     mountCoquillePage(root, { origin: 'https://gate.staging.test', fetch: porte.fetch, openBridge: async () => bridge });
 
     type(field(root, 'Identifiant de l’équipe'), 'inconnu');
-    type(field(root, 'Mot de passe'), 'faux');
+    type(field(root, 'Mot de passe'), 'mdp-errone-41');
     type(field(root, 'Numéro WhatsApp simulé'), HANDLE);
     button(root, 'Ouvrir la coquille').click();
     await settle(() => root.querySelector('[role="status"]')?.textContent?.includes('Échec') ?? false);
 
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('connexion refusée (401)');
-    expect(root.textContent).not.toContain('faux');
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('connexion refusée (401 INVALID_CREDENTIALS)');
+    expect(root.textContent).not.toContain('mdp-errone-41');
     root.remove();
   });
 });

@@ -280,7 +280,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 100 : #17142 ajoute `talkie` — la voix gardée d'un talkie réveillé (`GET /api/v1/talkie/:talkieId/audio`)
     // et le jeton PushToTalk (`POST`/`DELETE /api/v1/users/me/push-to-talk-token`). Aucun alias, aucune
     // route retirée ni renommée ; le manifeste gagne exactement ses trois routes.
-    expect(ROUTE_TABLE.length).toBe(100);
+    // 101 : #17116 ajoute `external-peer` — la porte « pair externe » et la coquille « ami WhatsApp »
+    // (`/api/v1/external-peer/whatsapp/*`), montées au staging déclaré seulement : sans
+    // `EXTERNAL_PEER_PROVIDER`, le montage n'enregistre rien et le manifeste ne bouge pas.
+    expect(ROUTE_TABLE.length).toBe(101);
   });
 });
 

@@ -170,6 +170,7 @@ import communityPreferencesRoutes from './community-preferences';
 import conversationEncryptionRoutes from './conversation-encryption';
 import signalProtocolRoutes from './signal-protocol';
 import e2eeRoutes from './e2ee';
+import externalPeerRoutes from './external-peer';
 import e2eeSignalRoutes from './e2ee-signals';
 import affiliateRoutes from './affiliate';
 import { userStatsRoutes } from './user-stats';
@@ -423,6 +424,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // L'annuaire E2EE par appareil et le relais d'enveloppes libsignal (#3706).
   { name: 'e2ee', prefix: API_PREFIX, module: e2eeRoutes },
   { name: 'e2ee-signals', prefix: API_PREFIX, module: e2eeSignalRoutes },
+  // La porte « pair externe » et la coquille « ami WhatsApp » de recette (#17116) : montées au
+  // staging déclaré qui demande le faux WhatsApp, jamais en production (aucune route sinon).
+  { name: 'external-peer', prefix: API_PREFIX, module: externalPeerRoutes },
   { name: 'affiliate', prefix: API_PREFIX, module: affiliateRoutes },
   { name: 'user-stats', prefix: API_PREFIX, module: userStatsRoutes },
   { name: 'maintenance', prefix: API_PREFIX, module: maintenanceRoutes },

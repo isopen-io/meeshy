@@ -120,6 +120,16 @@ RUN echo "=== Generating Prisma client ===" && \
     cp packages/shared/prisma/schema.prisma dist/packages/shared/prisma/ && \
     echo "=== Build completed ==="
 
+# La coquille « ami WhatsApp » (#17116) : construite depuis le pont libsignal du
+# web (`apps/web/src/lib/e2ee/`), jamais copiée, avec bun et sans dépendance
+# installée. Ses fichiers sont dans TOUTE image, mais ne sont servis que là où la
+# porte « pair externe » est montée (`routes/external-peer.ts`) : staging déclaré
+# qui demande le faux WhatsApp. La production ne monte ni la porte ni la page.
+COPY apps/web/src/lib/e2ee/ ./coquille/src/lib/e2ee/
+COPY apps/web/src/lib/dma-coquille/ ./coquille/src/lib/dma-coquille/
+COPY apps/web/scripts/build-dma-coquille.ts ./coquille/scripts/build-dma-coquille.ts
+RUN bun ./coquille/scripts/build-dma-coquille.ts /app/dist-coquille
+
 # ===== PROD-DEPS STAGE (production dependencies only) =====
 FROM base AS prod-deps
 
@@ -238,6 +248,7 @@ COPY --from=prod-deps --chown=gateway:nodejs /app/node_modules ./node_modules
 
 # Copy built artifacts from builder
 COPY --from=builder --chown=gateway:nodejs /app/dist ./dist
+COPY --from=builder --chown=gateway:nodejs /app/dist-coquille ./assets/dma-coquille
 COPY --from=builder --chown=gateway:nodejs /app/packages/shared ./packages/shared
 
 # Fix @meeshy/shared symlink: Docker COPY resolves symlinks to copies,
