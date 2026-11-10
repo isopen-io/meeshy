@@ -2,10 +2,8 @@ package me.meeshy.feature.kit
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.test.ComposeUiTest
@@ -71,18 +69,21 @@ internal object KitSnapshot {
     @OptIn(ExperimentalTestApi::class)
     fun show(test: ComposeUiTest, key: String, state: MeeshyKitCatalogState, variant: Variant) {
         test.setContent {
-            MeeshyTheme(darkTheme = variant != Variant.Clair) {
+            MeeshyTheme(darkTheme = variant == Variant.Sombre) {
                 MeeshyKitCatalogStage(key = key, state = state, isPressed = variant == Variant.Presse)
             }
         }
     }
 
-    /** Toutes les tuiles d'un composant empilées, en grande police ou en RTL. */
+    /**
+     * Toutes les tuiles d'un composant empilées, en grande police ou en RTL. Même planche qu'iOS (`kitBoard`) : au clair,
+     * tuiles espacées de `md`, sans marge autour (chaque scène porte déjà la sienne).
+     */
     @OptIn(ExperimentalTestApi::class)
     fun showBoard(test: ComposeUiTest, entry: MeeshyKitCatalogEntry, variant: Variant) {
         test.setContent {
             BoardEnvironment(variant) {
-                Column(Modifier.padding(MeeshySpacing.lg), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg)) {
+                Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                     entry.tiles.forEach { tile ->
                         MeeshyKitCatalogStage(key = entry.key, state = tile.state, isPressed = tile.isPressed)
                     }
@@ -94,7 +95,7 @@ internal object KitSnapshot {
     @Composable
     fun BoardEnvironment(variant: Variant, content: @Composable () -> Unit) {
         val density = LocalDensity.current
-        MeeshyTheme(darkTheme = true) {
+        MeeshyTheme(darkTheme = false) {
             CompositionLocalProvider(
                 LocalLayoutDirection provides if (variant == Variant.Rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
                 LocalDensity provides if (variant == Variant.GrandePolice) Density(density.density, fontScale = LARGE_FONT_SCALE) else density,

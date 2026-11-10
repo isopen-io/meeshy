@@ -2,10 +2,7 @@ package me.meeshy.feature.kit
 
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
@@ -62,7 +59,7 @@ class CatalogueSnapshotTest {
 
     @androidx.compose.runtime.Composable
     private fun EmptyBoard() {
-        Column(Modifier.padding(MeeshySpacing.lg)) { MeeshyKitCatalogEmptyState() }
+        Column { MeeshyKitCatalogEmptyState() }
     }
 
     private companion object {
