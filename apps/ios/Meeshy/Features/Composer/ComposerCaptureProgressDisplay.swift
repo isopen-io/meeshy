@@ -53,6 +53,20 @@ nonisolated enum ComposerCaptureProgressDisplay {
         }
     }
 
+    /// **Une ligne tant qu'il n'y a qu'une prise, N segments à partir de deux**
+    /// (#17433, porteur : « la capture vidéo montre des segments en haut, même
+    /// au premier »). La barre ne se découpe qu'au fil des enregistrements.
+    static func isSegmented(_ spans: [ComposerCaptureBarSpan]) -> Bool {
+        spans.count >= 2
+    }
+
+    /// L'écart, en points, entre deux segments ; nul sur une ligne continue.
+    static func gap(_ spans: [ComposerCaptureBarSpan]) -> Double {
+        isSegmented(spans) ? segmentGap : 0
+    }
+
+    static let segmentGap: Double = 2
+
     /// La part du maximum que l'anneau du déclencheur montre : segments clos et
     /// prise en cours.
     static func ringProgress(segments: [ComposerCaptureSegment], rawLive: TimeInterval,
