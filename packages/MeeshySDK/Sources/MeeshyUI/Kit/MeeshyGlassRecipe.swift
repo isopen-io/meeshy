@@ -89,6 +89,16 @@ public nonisolated struct MeeshyGlassRecipe: Equatable, Sendable {
     }
 }
 
+public nonisolated extension MeeshyGlassRecipe {
+    /// Le Liquid Glass du système ne se fonce pas de lui-même : sur un contenu
+    /// clair, l'encre blanche d'un verre `onLight` y tombait vers 1,5:1. Ce ton
+    /// y pose donc le voile sombre de la planche (#17413) ; les autres tons
+    /// laissent le système faire. Une teinte explicite de l'appelant l'emporte.
+    static func liquidWash(tone: MeeshyGlassTone) -> Double? {
+        tone == .onLight ? GlassMeasure.onLightFill : nil
+    }
+}
+
 // MARK: - Mesures de la planche
 
 private nonisolated enum GlassMeasure {
