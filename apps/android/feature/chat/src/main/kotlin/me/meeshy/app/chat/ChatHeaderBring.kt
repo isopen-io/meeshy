@@ -98,7 +98,10 @@ internal fun ChatHeaderBringButton(
                 .testTag(CHAT_HEADER_BRING_TAG),
             contentAlignment = Alignment.Center,
         ) {
-            ChatHeaderGlassDisc(tint = MeeshyPalette.Error, fill = SolidColor(MeeshyPalette.Error).takeIf { ringing }) {
+            ChatHeaderGlassDisc(
+                tint = MeeshyPalette.Error.copy(alpha = 0.4f),
+                fill = SolidColor(if (ringing) MeeshyPalette.Error else Color.Transparent),
+            ) {
                 Icon(
                     if (ringing) MeeshyIcons.BellOff else MeeshyIcons.BellFilled,
                     contentDescription = null,

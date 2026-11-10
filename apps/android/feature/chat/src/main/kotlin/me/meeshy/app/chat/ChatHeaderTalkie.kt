@@ -129,7 +129,10 @@ private fun TalkieGlyph(
             .testTag(CHAT_HEADER_TALKIE_TAG),
         contentAlignment = Alignment.Center,
     ) {
-        ChatHeaderGlassDisc(tint = accent, fill = gradient.takeUnless { look == TalkieHoldLook.IDLE }) {
+        ChatHeaderGlassDisc(
+            tint = accent.copy(alpha = 0.4f),
+            fill = if (look == TalkieHoldLook.IDLE) Brush.linearGradient(listOf(Color.Transparent, Color.Transparent)) else gradient,
+        ) {
             if (look == TalkieHoldLook.IDLE) {
                 GradientIcon(MeeshyIcons.Sensors, gradient, Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp()))
             } else {

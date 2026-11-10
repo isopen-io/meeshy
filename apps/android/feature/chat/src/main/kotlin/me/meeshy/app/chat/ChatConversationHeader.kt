@@ -282,7 +282,7 @@ internal fun ChatHeaderGlassAction(
             },
         contentAlignment = Alignment.Center,
     ) {
-        ChatHeaderGlassDisc(tint = accentColor) {
+        ChatHeaderGlassDisc(tint = accentColor.copy(alpha = 0.4f)) {
             GradientIcon(
                 icon = icon,
                 brush = Brush.linearGradient(listOf(accentColor, MeeshyPalette.Indigo500)),

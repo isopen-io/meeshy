@@ -11,28 +11,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 
 /**
- * Le cercle de verre de 28 des actions de l'en-tête (iOS `MeeshyControlSize.small`), teinté de [tint] à 40 % : UN seul
- * site pour l'action, le talkie et le Bring, que le cliquet du verre compte une fois. [fill] remplit le disque quand
- * l'action est vivante (dégradé du talkie qui parle, rouge du Bring qui sonne).
+ * Le disque de verre des actions de l'en-tête (action générique, talkie, Bring) : UNE seule recette, teintée par
+ * l'action, avec un fond optionnel quand l'action est active (le talkie qui parle, le Bring qui sonne).
  */
 @Composable
 internal fun ChatHeaderGlassDisc(
     tint: Color,
-    fill: Brush? = null,
+    fill: Brush = SolidColor(Color.Transparent),
     content: @Composable BoxScope.() -> Unit,
 ) {
     MeeshyGlassSurface(
         modifier = Modifier.size(ChatHeaderMetrics.ACTION_GLASS),
         shape = CircleShape,
-        tint = tint.copy(alpha = 0.4f),
+        tint = tint,
     ) {
         Box(
-            modifier = Modifier
+            Modifier
                 .size(ChatHeaderMetrics.ACTION_GLASS)
-                .then(if (fill == null) Modifier else Modifier.clip(CircleShape).background(fill)),
+                .clip(CircleShape)
+                .background(fill),
             contentAlignment = Alignment.Center,
             content = content,
         )
