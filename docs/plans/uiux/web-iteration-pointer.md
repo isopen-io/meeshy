@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-jsk76s` |
+| Branche de travail de la session courante | `claude/practical-fermat-kt6x2g` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -46,7 +46,24 @@ normal.
 | **79w** | 2026-11-02 | `claude/practical-fermat-js1tyc` | → `dev` | ✅ mergé |
 | **80w** | 2026-11-07 | `claude/practical-fermat-k0hf3y` | → `dev` | ✅ mergé |
 | **81w** | 2026-11-08 | `claude/practical-fermat-9e6ean` | → `dev` | ✅ mergé |
-| **82w** | 2026-11-09 | `claude/practical-fermat-jsk76s` | → `dev` | ⏳ ouverte |
+| **82w** | 2026-11-09 | `claude/practical-fermat-jsk76s` | → `dev` | ✅ mergé |
+| **83w** | 2026-11-10 | `claude/practical-fermat-kt6x2g` | → `dev` | ⏳ ouverte |
+
+**83w** — cohérence de positionnement / maintenabilité : l'aperçu de liste
+(`components/lens-preview-line.tsx`) peignait le fini « rainbow » d'un message avec
+un dégradé codé en dur (`#f43f5e, #f59e0b, #22c55e, #3b82f6, #a855f7`) — une
+JUMELLE DIVERGENTE du spectre de la maison `RAINBOW_SPECTRUM`
+(`@/lib/effects-playback`, miroir iOS `houseSpectrum`), que la bulle
+(`effects-runner`) et iOS jouent déjà. Même message « rainbow » ⇒ trois
+arcs-en-ciel différents (liste / bulle / iOS), et les 5 dernières hex de la plus
+grosse poche du gate. L'aperçu dérive désormais de `RAINBOW_SPECTRUM`
+(`linear-gradient(90deg, …join)`) — source unique, pas exemption. Témoins :
+`check-design-harmony.test.ts` (describe « le fini arc-en-ciel d'un aperçu »,
+`scanSource` → `[]`, 23→25) + `lens-row-preview.test.tsx` (parité : style ⊇
+`RAINBOW_SPECTRUM`, ⊄ jumelle). Gate **14 → 9 violations** (−5, exactement
+`lens-preview-line.tsx`), **8 → 7 fichiers** ; `tsc` 0. Housekeeping : 82w
+confirmée mergée (`mood-page` tokens sur `dev`) ; appariement analyses↔plans 1:1
+revérifié (45w→82w). Analyse : `docs/analyses/uiux/2026-11-10-iteration-83w.md`.
 
 **82w** — cohérence de thème / maintenabilité : l'écran d'une humeur reçue
 (`components/mood-page.tsx`) peignait son chrome immersif en littéraux bruts —
@@ -142,9 +159,10 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **83w**
-Revue fraîche `apps/web` — voir les pistes 83w+ en pied de
-`docs/analyses/uiux/2026-11-09-iteration-82w.md` (gate d'harmonie à 14/8 :
-`lens-preview-line.tsx` (5, fini « rainbow » = couleur de tiers → exemption),
-`message-menu`/`message-edit-composer`, `comment-compose-bar`, letterbox admin ;
+## Prochaine itération : **84w**
+Revue fraîche `apps/web` — voir les pistes 84w+ en pied de
+`docs/analyses/uiux/2026-11-10-iteration-83w.md` (gate d'harmonie à 9/7 :
+`comment-compose-bar.tsx` (▶ sur vignette vidéo → `text-on-media` ou exempt),
+`message-menu`/`message-edit-composer` (encre sur accent/scrim), letterbox admin
+(`#000`, exempt motivé), `call-overlay`/`conversation-backdrop`/`rank-blason` ;
 + axe épuration, toujours non entamé).

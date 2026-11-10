@@ -13,9 +13,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.call.WebRtcEngine
@@ -42,7 +42,7 @@ import javax.inject.Singleton
 
 /** Where my words come from and where they go: seams, so the controller is testable. */
 class CallOwnSpeechWires(
-    val muted: Flow<Boolean>,
+    val muted: StateFlow<Boolean>,
     val readiness: suspend (language: String) -> OwnSpeechReadiness,
     val capture: (recognizerTag: String) -> Flow<CallSpeechEvent>,
     val sendToPeer: (ByteArray) -> Boolean,
@@ -84,7 +84,7 @@ class CallOwnSpeechController internal constructor(
         session: SessionRepository,
     ) : this(
         wires = CallOwnSpeechWires(
-            muted = holder.snapshot.map { it?.isMuted == true },
+            muted = holder.microphoneMuted,
             readiness = capture::readiness,
             capture = capture::capture,
             sendToPeer = engine::sendDataChannelMessage,
@@ -195,8 +195,16 @@ class CallOwnSpeechController internal constructor(
         captions.receiveOwn(emission.journal)
     }
 
-    /** The gate is read again before every revision: a conversation sealed meanwhile stops everything. */
+    /**
+     * The gate is read again before every revision: a conversation sealed meanwhile stops everything, and a
+     * microphone muted meanwhile too — read from the gesture's own state, so not one segment leaves between
+     * the tap and the capture stopping (#17361).
+     */
     private fun mayLeave(): Boolean {
+        if (wires.muted.value) {
+            stop()
+            return false
+        }
         if (!captions.state.value.gate.allowsCaptions || conversationId.isBlank()) {
             stop()
             return false
