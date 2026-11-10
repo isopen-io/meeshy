@@ -266,6 +266,11 @@ nonisolated enum ComposerViewfinderColumn {
         return ComposerViewfinderEntry.allCases.filter { $0.camera == .kept }
     }
 
+    /// Un trait sépare ce qu'on pose de ce qui teinte la prise, quand le rail porte les deux.
+    static func separatesLooks(sceneEntries: [ComposerViewfinderEntry], offersLooks: Bool) -> Bool {
+        !sceneEntries.isEmpty && offersLooks
+    }
+
     static func label(_ entry: ComposerViewfinderEntry) -> String {
         guard let door = entry.door else {
             return String(localized: "composer.viewfinder.gallery", defaultValue: "Galerie", bundle: .main)
