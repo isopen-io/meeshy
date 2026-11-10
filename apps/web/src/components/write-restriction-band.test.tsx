@@ -34,3 +34,24 @@ describe('WriteRestrictionBand — conversation chiffrée de bout en bout', () =
     );
   });
 });
+
+/**
+ * UN AMI WHATSAPP (#17118) — aucun relais ne porte encore un message vers un
+ * réseau tiers : le bandeau ne renvoie vers AUCUNE app (aucune ne sait encore
+ * lui écrire), il dit l'attente, dans chaque langue et dans la coque aussi.
+ */
+describe('WriteRestrictionBand — conversation avec un ami WhatsApp', () => {
+  test('le bandeau dit que l’envoi vers WhatsApp n’est pas encore ouvert, jamais « écrivez depuis l’app »', () => {
+    const band = renderToStaticMarkup(<WriteRestrictionBand restriction="external-pending" language="fr" />);
+    expect(band).toContain('L’envoi vers WhatsApp n’est pas encore ouvert');
+    expect(band).not.toContain('app Meeshy');
+  });
+
+  test('chaque langue, coque comprise, a sa phrase', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const phrase = translate(language, 'composer.writeRestriction.externalPending');
+      expect(phrase).not.toBe('composer.writeRestriction.externalPending');
+      expect(renderToStaticMarkup(<WriteRestrictionBand restriction="external-pending" language={language} shell />)).toContain(phrase);
+    }
+  });
+});

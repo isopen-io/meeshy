@@ -30,6 +30,17 @@ const conversation = (extra: Record<string, unknown> = {}): Conversation =>
 const message = (clientMessageId: string): LocalMessage =>
   ({ id: clientMessageId, clientMessageId, conversationId: 'c-global', content: 'salut' }) as unknown as LocalMessage;
 
+describe('servedWriteRestriction — un ami WhatsApp (#17118)', () => {
+  test('une conversation externe ferme le composeur sur l’attente du relais, avant le bout en bout', () => {
+    expect(servedWriteRestriction(conversation({ type: 'external', encryptionMode: 'e2ee' }))).toBe('external-pending');
+    expect(writeRestrictionOf(conversation({ type: 'external', encryptionMode: 'e2ee' }), {}, true)).toBe('external-pending');
+  });
+
+  test('un tête-à-tête Meeshy-Meeshy chiffré garde son bandeau de bout en bout', () => {
+    expect(servedWriteRestriction(conversation({ type: 'direct', encryptionMode: 'e2ee' }))).toBe('end-to-end-encrypted');
+  });
+});
+
 describe('servedWriteRestriction — ce que la passerelle a calculé', () => {
   test('« minor-global » se lit ; null, absent ou inconnu ne restreignent rien', () => {
     expect(servedWriteRestriction(conversation({ viewerWriteRestriction: 'minor-global' }))).toBe('minor-global');
