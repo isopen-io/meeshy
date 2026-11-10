@@ -18,7 +18,7 @@ import os
 ///
 /// File-level (not a method) because call sites include closures that do not
 /// capture the `CallManager` as `self`.
-func applyBestEffortAudioSetting(
+nonisolated func applyBestEffortAudioSetting(
     _ name: String,
     _ apply: () throws -> Void
 ) {
