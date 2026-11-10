@@ -212,6 +212,12 @@ export type MessageMenuContext = {
   readonly isViewOnce?: boolean;
   /** Supprimé, ou éphémère échu : il n'est plus là pour personne (#11210). */
   readonly gone?: boolean;
+  /**
+   * UN AVIS (appel, arrivée, départ) N'EST PAS UNE PRISE DE PAROLE (#17441) :
+   * il ne s'organise, ne s'exporte ni ne se supprime — il se cite, quand la loi
+   * le dit (`canReply`), et rien d'autre.
+   */
+  readonly notice?: boolean;
   readonly hasDefaultExportFormat?: boolean;
   /** UNE PHOTO, UNE VIDÉO OU UN VOCAL NON MASQUÉS (#8693). */
   readonly hasImageableMedia?: boolean;
@@ -282,7 +288,8 @@ export function firstLinkOf(text: string): string | null {
 
 type MenuMessage = Omit<ExitMessage, 'attachments'> &
   Pick<Message, 'content'> &
-  Partial<Omit<ActionMessage, 'attachments' | 'content'>> & {
+  Partial<Omit<ActionMessage, 'attachments' | 'content'>> &
+  Partial<Pick<Message, 'messageSource'>> & {
     readonly translations?: readonly MessageTranslation[];
     readonly attachments?: readonly MenuPiece[];
     readonly replyTo?: ExitMessage | null;
@@ -338,6 +345,7 @@ export function messageMenuContextOf(
     imageLeaves: messageExitOffers(message, 'image', input.now),
     isViewOnce: message.isViewOnce === true,
     gone,
+    notice: message.messageType === 'system' || message.messageSource === 'system',
     hasImageableMedia: open.some((form) => form !== 'file'),
     composableIndex: composable === -1 ? null : composable,
     link: firstLinkOf(message.content),
@@ -455,6 +463,9 @@ export function messageMenuGroups(ctx: MessageMenuContext): MessageMenuGroups {
   const discards = ctx.actions?.groups.destructive.includes('discard') === true && ctx.canDiscard === true && labels(ctx);
   const destructive = [...(deletes ? [entry('delete', 'destructive')] : []), ...(discards ? [entry('discard', 'destructive')] : [])];
   if (ctx.gone === true) return { primary: [], organize: [], more: [], moderation: [], destructive };
+  if (ctx.notice === true) {
+    return { primary: primaryCandidates(ctx).filter((item) => item.id === 'reply'), organize: [], more: [], moderation: [], destructive: [] };
+  }
   const moderation = verdicts?.remove != null && labels(ctx) ? [entry('remove', 'moderation')] : [];
   const notice = verdicts?.serverFeatureAbsence != null && ctx.regimeKnown === true && labels(ctx) ? [entry('e2eeNotice', 'more')] : [];
   if (ctx.isViewOnce === true) return { primary: [], organize: [], more: [entry('more', 'more'), ...notice], moderation, destructive };

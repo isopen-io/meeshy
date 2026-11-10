@@ -4,6 +4,7 @@ import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
 import { arrivalsNoticeText, parseArrivalsNotice, type ArrivalsNoticeMetadata } from '@meeshy/shared/utils/arrivals-notice';
 import { captureNoticeText, parseCaptureNotice, type CaptureNoticeMetadata } from '@meeshy/shared/utils/capture-notice';
 import { editedByThirdParty } from '@meeshy/shared/utils/message-edit-attribution';
+import { quotableNoticeKind } from '@meeshy/shared/utils/quotable-notice';
 
 import type { Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
@@ -51,6 +52,16 @@ export type MessageBadge =
  */
 export function isSystemMessage(message: Pick<Message, 'messageType' | 'messageSource'>): boolean {
   return message.messageType === 'system' || message.messageSource === 'system';
+}
+
+/**
+ * LA SURFACE DE GESTES DU MESSAGE (#17441) — appui long, menu et glissé. Une
+ * prise de parole la prend ; une rangée système n'y entre que si elle est un
+ * avis CITABLE (appel, arrivée, départ annoncé, `quotableNoticeKind`) : le
+ * menu ne lui offre alors que « Répondre », la loi décidant du reste.
+ */
+export function takesMessageGestures(message: Pick<Message, 'messageType' | 'messageSource'> & Partial<Pick<Message, 'metadata'>>): boolean {
+  return !isSystemMessage(message) || quotableNoticeKind(message) !== null;
 }
 
 /**

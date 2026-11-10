@@ -32,7 +32,7 @@ import { unreadSeparatorLabel } from '@/lib/view/unread-separator';
 import { UnfoldStoreContext, createUnfoldStore } from '@/lib/view/unfold-store';
 import { keepReadingInPlaceExceptUnfolding } from '@/lib/view/thread-resize-compensation';
 import { composeMessageLabel } from '@/lib/view/message-a11y-label';
-import { isSystemMessage } from '@/lib/view/message-badges';
+import { isSystemMessage, takesMessageGestures } from '@/lib/view/message-badges';
 import { reactionCapsuleInset, reactionCapsuleTargetId } from '@/lib/view/reaction-capsule';
 import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
@@ -693,7 +693,7 @@ export function ThreadModes({
               rowProtection !== 'deleted' &&
               rowProtection !== 'expired';
             const rowSwipeOffer =
-              rowSelected !== undefined || isSystemMessage(p.message) || onSwipeAction === undefined
+              rowSelected !== undefined || !takesMessageGestures(p.message) || onSwipeAction === undefined
                 ? undefined
                 : swipeActionsOf?.(p.message);
             const rowSwipeActions =
@@ -779,9 +779,10 @@ export function ThreadModes({
                     contrôle existe s'il a un EFFET »). Le geste propre à un
                     résumé d'appel (détail d'appel, iOS) reste HORS tranche —
                     ce lot fait seulement SORTIR les rangées système de la
-                    surface de gestes du message. `isSystemMessage` est le
-                    SITE UNIQUE de cette loi (`lib/view/message-badges.ts`),
-                    déjà consommé par `systemRowOf`/`composeMessageLabel`. */}
+                    surface de gestes du message. `takesMessageGestures` est le
+                    SITE UNIQUE de cette loi (`lib/view/message-badges.ts`) :
+                    depuis #17441, un avis CITABLE (appel, arrivée, départ
+                    annoncé) y rentre, et son menu n'offre que « Répondre ». */}
                 {/* `tabIndex` ET les gestionnaires d'appui long vont ENSEMBLE
                     (#6862) : un `tabIndex={0}` sans geste est une halte de
                     tabulation qui n'ouvre rien — le clavier s'arrêterait sur
@@ -799,10 +800,10 @@ export function ThreadModes({
                 <div
                   {...rowMotionProps({ destroying: rowPhase === 'destroying', id: p.message.id, arriving: threadRowKeyOf(p.message) === arrivingKey, exit: rowExit })}
                   {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
-                  {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
+                  {...(takesMessageGestures(p.message) ? { 'data-row': p.message.id } : {})}
                   {...sealedProps(p.message, Date.now())}
                   {...rowCapture}
-                  {...(isSystemMessage(p.message) || longPress === undefined || rowLeaving ? {} : { tabIndex: 0, ...longPress })}
+                  {...(!takesMessageGestures(p.message) || longPress === undefined || rowLeaving ? {} : { tabIndex: 0, ...longPress })}
                   role="article"
                   aria-label={rowLabel}
                   {...(rowServed.language === '' ? {} : { lang: rowServed.language })}

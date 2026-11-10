@@ -12,6 +12,7 @@ import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
 import { quotedPreviewOf, type QuotedMediaKind } from '@/lib/view/quoted-preview';
+import { useViewer } from '@/lib/view/use-viewer';
 import { quotedAudioOf } from '@/lib/view/quoted-audio';
 
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
@@ -746,10 +747,12 @@ export function Quote({
   /* SITE UNIQUE (`lib/view/quoted-preview.ts`) — ce composant DESSINE, il ne
      RÉSOUT pas : une seconde descente ici servirait une autre langue que le
      bandeau du composeur, qui lit la même fonction. */
+  const viewerId = useViewer().id;
   const preview = quotedPreviewOf({
     quoted: quote,
     readerLanguages: languages,
     interfaceLanguage: currentInterfaceLanguage(),
+    viewerId,
   });
   const media = preview.media;
   const ink = isMine ? 'var(--color-meta-mine)' : 'var(--color-ios-ink-2)';
