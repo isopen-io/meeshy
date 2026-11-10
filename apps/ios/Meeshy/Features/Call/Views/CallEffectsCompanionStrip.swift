@@ -115,7 +115,7 @@ struct CallEffectsCompanionStrip: View {
             .minimumScaleFactor(0.7)
             .foregroundColor(.white)
             .frame(width: Self.chipDiameter, height: Self.chipDiameter)
-            .background(Circle().fill(Color.white.opacity(0.16)))
+            .callChromeGlass(in: Circle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(
                 format: String(localized: "call.effects.companions.more", defaultValue: "%lld autres participants", bundle: .main),
