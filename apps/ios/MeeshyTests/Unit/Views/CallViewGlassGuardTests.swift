@@ -23,7 +23,7 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// de la loi pure `CallButtonGlassRule`, jamais d'un disque dessiné.
     func test_pillGlyph_isAnInteractiveGlassDisc_chosenByThePureRule() throws {
         let glyph = try block("struct CallPillGlyph: View {", until: "struct CallPillButtonLabel", in: try callViewCode())
-        XCTAssertTrue(glyph.contains(".modifier(CallButtonGlassModifier(kind: kind))"))
+        XCTAssertTrue(glyph.contains(".modifier(CallButtonGlassModifier(kind: kind, diameter: diameter))"))
         XCTAssertFalse(glyph.contains("CallButtonFill.color"), "Plus de disque dessiné sous le glyphe")
         XCTAssertFalse(glyph.contains("Color.white.opacity(0.16)"))
         XCTAssertTrue(glyph.contains("CallButtonGlassRule.treatment("), "Le toucher dessiné ne reste que là où le verre ne réagit pas seul")
@@ -36,9 +36,10 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(glass.contains("Color.white.opacity(0.16)"))
         XCTAssertFalse(glass.contains("static func color(for kind: CallPillButtonKind)"), "Le disque plat par état a quitté l'écran d'appel")
         let modifier = try block("struct CallButtonGlassModifier: ViewModifier {", until: "\n}\n", in: glass)
-        XCTAssertTrue(modifier.contains(".adaptiveLiquidGlass(in: Circle()"), "Verre dessiné sous iOS 26, Liquid Glass au-delà")
-        XCTAssertTrue(modifier.contains("interactive: treatment.isInteractive"))
-        XCTAssertTrue(modifier.contains(".adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error"), "Fin reste rouge")
+        XCTAssertTrue(modifier.contains(".callControlGlass(diameter: diameter"), "Le verre neutre est celui de l'en-tête : adaptiveLiquidGlass interactif")
+        XCTAssertTrue(modifier.contains(".endCallGlass(diameter: diameter)"), "Fin reste rouge")
+        let endGlass = try block("func endCallGlass(diameter: CGFloat) -> some View {", until: "\n    }\n", in: glass)
+        XCTAssertTrue(endGlass.contains(".adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)"))
         let anchor = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Call/Views/CallModeCarousel.swift").first)
         let directory = anchor.deletingLastPathComponent()
         for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
@@ -102,7 +103,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertEqual(chrome.components(separatedBy: ".callControlGlass(diameter: 40").count - 1, 2)
         XCTAssertFalse(chrome.contains(".adaptiveGlass("))
         let chip = try block("private var durationChip: some View {", until: "// MARK: - Open Conversation During Call", in: header)
-        XCTAssertTrue(chip.contains(".modifier(CallInteractiveChromeGlass(shape: Capsule()))"))
+        XCTAssertTrue(chip.contains(".modifier(CallInteractiveChromeCapsule())"))
     }
 
     /// Les rangées d'actions ne portent plus aucun fond propre : elles sont

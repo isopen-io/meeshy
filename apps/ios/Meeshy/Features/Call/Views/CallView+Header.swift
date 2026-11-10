@@ -123,7 +123,7 @@ extension CallView {
             // Verre adaptatif à fond sombre (#8394) : lisible sur un flux clair.
             // #17323 — la capsule s'ouvre au toucher (détail de la qualité) :
             // un verre interactif, comme les boutons voisins.
-            .modifier(CallInteractiveChromeGlass(shape: Capsule()))
+            .modifier(CallInteractiveChromeCapsule())
             .clipShape(Capsule())
             .frame(height: 44)
             .accessibilityLabel(videoDurationBadgeAccessibilityLabel)

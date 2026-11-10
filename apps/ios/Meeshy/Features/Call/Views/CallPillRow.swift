@@ -28,7 +28,7 @@ struct CallPanelHeader: View {
                 .font(.footnote.weight(.bold))
                 .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-                .modifier(CallButtonGlassModifier(kind: .normal))
+                .modifier(CallButtonGlassModifier(kind: .normal, diameter: MeeshyControlSize.small))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -128,7 +128,7 @@ struct CallPillChip: View {
             Text(emoji)
                 .font(.title2)
                 .frame(width: Self.artDiameter, height: Self.artDiameter)
-                .modifier(CallButtonGlassModifier(kind: isSelected ? .active : .normal))
+                .modifier(CallButtonGlassModifier(kind: isSelected ? .active : .normal, diameter: Self.artDiameter))
                 .accessibilityHidden(true)
         case .image(let image):
             Image(decorative: image, scale: 1)

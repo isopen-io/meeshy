@@ -1,8 +1,8 @@
 import Foundation
 
 /// #17323 — la loi pure qui choisit le traitement de verre de CHAQUE bouton de
-/// l'appel (pilule, rangées du (…), panneaux, puces). Directive porteur du
-/// 2026-11-09 : le Liquid Glass interactif l'emporte quand l'OS le permet
+/// l'appel (pilule, rangées du (…), panneaux, puces). Directive du porteur :
+/// le Liquid Glass interactif l'emporte quand l'OS le permet
 /// (iOS 26 et plus), le verre dessiné de `adaptiveLiquidGlass` le remplace
 /// avant, et Fin reste rouge.
 ///

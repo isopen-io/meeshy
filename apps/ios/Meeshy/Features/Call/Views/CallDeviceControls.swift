@@ -34,7 +34,7 @@ struct CallPillGlyph: View {
             .foregroundStyle(foreground)
             .frame(width: diameter, height: diameter)
             .background(Circle().fill(CallButtonFill.pressedHighlight(isPressed: isPressed && treatment.drawsPressHighlight)))
-            .modifier(CallButtonGlassModifier(kind: kind))
+            .modifier(CallButtonGlassModifier(kind: kind, diameter: diameter))
             .accessibilityHidden(true)
     }
 

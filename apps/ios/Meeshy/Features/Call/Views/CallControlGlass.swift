@@ -121,34 +121,35 @@ private struct CallChromeVisibilityModifier: ViewModifier {
 }
 
 /// #17323 — le verre d'UN bouton : `CallButtonGlassRule` choisit son
-/// traitement. Fin garde son verre rouge (`adaptiveGlassProminent`), tout autre
-/// bouton est un verre neutre, adossé à un blanc plein quand il est actif.
+/// traitement. Fin garde son verre rouge (`endCallGlass`), tout autre bouton
+/// est un verre neutre (`callControlGlass`), adossé à un blanc plein quand il
+/// est actif. Aucun appel de verre n'est réécrit ici : les deux sites existent.
 struct CallButtonGlassModifier: ViewModifier {
     let kind: CallPillButtonKind
+    let diameter: CGFloat
 
     @ViewBuilder
     func body(content: Content) -> some View {
         let treatment = CallButtonGlassRule.treatment(for: kind, isLiquidGlassAvailable: Platform.isIOS26OrLater)
         switch treatment.surface {
         case .prominentRed:
-            content.adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error, interactive: treatment.isInteractive)
+            content.endCallGlass(diameter: diameter)
         case .liquidGlass:
             content
-                .adaptiveLiquidGlass(in: Circle(), interactive: treatment.isInteractive)
+                .callControlGlass(diameter: diameter, isActive: false, tint: .white)
                 .background(treatment.hasSolidWhiteBacking ? Color.white : Color.clear, in: Circle())
         }
     }
 }
 
 /// #17323 — une capsule d'en-tête qui s'ouvre au toucher (la qualité du
-/// lien) : le voile sombre de `callChromeGlass`, sous un verre interactif.
-struct CallInteractiveChromeGlass<S: Shape>: ViewModifier {
-    let shape: S
-
+/// lien) : le voile sombre de `callChromeGlass`, sous le verre interactif de
+/// la puce d'ambiance (`callChipGlass`).
+struct CallInteractiveChromeCapsule: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .background(shape.fill(Color.black.opacity(0.22)))
-            .adaptiveLiquidGlass(in: shape, interactive: true)
+            .background(Capsule().fill(Color.black.opacity(0.22)))
+            .callChipGlass(isActive: false, tint: .white)
     }
 }
 
