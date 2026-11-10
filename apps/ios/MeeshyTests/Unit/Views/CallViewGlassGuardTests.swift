@@ -103,7 +103,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(chrome.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"))
         XCTAssertEqual(chrome.components(separatedBy: ".callControlGlass(diameter: 40").count - 1, 2)
         XCTAssertFalse(chrome.contains(".adaptiveGlass("))
-        let chip = try block("private var durationChip: some View {", until: "// MARK: - Open Conversation During Call", in: header)
+        let chip = try block("private var durationChip: some View {", until: "func collapseIntoPip()", in: header)
         XCTAssertTrue(chip.contains(".modifier(CallInteractiveChromeCapsule())"))
     }
 
@@ -166,7 +166,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"))
         XCTAssertTrue(code.contains("struct CallPressButtonStyle: ButtonStyle"))
         for file in ["CallPillRow.swift", "CallModeCarousel.swift"] {
-            XCTAssertTrue(scrollers[file]?.contains(".buttonStyle(CallPressButtonStyle())") == true, file)
+            XCTAssertTrue(scrollers[file]?.contains(".buttonStyle(CallPressButtonStyle(") == true, file)
         }
     }
 
