@@ -44,7 +44,7 @@ internal fun BubbleContent.actionContext(
     hostedEntries = hostedEntries,
     exitOffer = exitOffer,
     isNotice = isSystem,
-    isQuotableNotice = isSystem && (callSummary != null || joinNotice != null || isArrivalsNotice),
+    isQuotableNotice = isSystem && (quotedNoticeText != null || callSummary != null || joinNotice != null || isArrivalsNotice),
     isViewOnce = isViewOnce,
     isUnconfirmed = ObjectIdGuard.isLocalId(messageId),
     canWrite = canWrite,

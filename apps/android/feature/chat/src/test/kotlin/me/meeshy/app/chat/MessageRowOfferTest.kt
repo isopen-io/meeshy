@@ -104,6 +104,7 @@ class MessageRowOfferTest {
             bubble(isSystem = true, callSummary = missedCall),
             bubble(isSystem = true, joinNotice = arrival),
             bubble(isSystem = true, isArrivalsNotice = true),
+            bubble(isSystem = true).copy(quotedNoticeText = "Bob left the conversation"),
         ).forEach { notice ->
             val offer = offer(notice)
             assertThat(offer.canReply).isTrue()
