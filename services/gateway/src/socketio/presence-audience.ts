@@ -54,10 +54,16 @@ export type PresenceAudienceInput = {
 };
 
 /**
- * Les MODERATOR candidats à la transition d'un collègue (#16623) : actifs, ni supprimés
- * ni désactivés. Un compte parti ne reçoit plus la présence de l'équipe.
+ * Les collègues de l'équipe hors administrateurs (ANALYST, AUDIT, MODERATOR), candidats
+ * à la transition d'un collègue (#16623) : actifs, ni supprimés ni désactivés. Un compte
+ * parti ne reçoit plus la présence de l'équipe. Les ADMIN/BIGBOSS sont déjà dans `adminIds`.
  */
-export const TEAM_COLLEAGUES_WHERE = { role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: null } as const;
+export const TEAM_COLLEAGUES_WHERE = {
+  role: { in: ['ANALYST', 'AUDIT', 'MODERATOR'] },
+  isActive: true,
+  deletedAt: null,
+  deactivatedAt: null,
+} as const;
 
 export type PresenceStatusAudience = {
   /**
