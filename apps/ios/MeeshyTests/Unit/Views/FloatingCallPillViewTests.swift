@@ -852,6 +852,23 @@ final class CallPillLabelsTests: XCTestCase {
         XCTAssertEqual(CallControlsCopy.cameraLabel(isEnabled: false), try Self.valeur(chaines, cle: "call.control.camera.on", langue: "en"))
     }
 
+    // Le bouton Caméra autour de ma vignette est le même bouton que celui de la
+    // pilule (planche, loi 2 : « Gauche = mon image : Caméra… ») : même mot.
+    func test_myImageCameraLabel_isThePillCameraLabel() throws {
+        XCTAssertEqual(CallMyImageCopy.video(isEnabled: true, isPaused: false), CallControlsCopy.cameraLabel(isEnabled: true))
+        XCTAssertEqual(CallMyImageCopy.video(isEnabled: false, isPaused: false), CallControlsCopy.cameraLabel(isEnabled: false))
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let rail = try String(
+            contentsOf: racine.appendingPathComponent("Meeshy/Features/Call/Views/CallView+CameraRail.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(rail.contains("CallControlsCopy.cameraLabel(isEnabled:"), "le rail de ma caméra doit lire le libellé de la pilule")
+        XCTAssertFalse(rail.contains("\"call.control.videoOff\""), "« Désactiver la vidéo » n'est pas le mot de la planche")
+        XCTAssertFalse(rail.contains("\"call.control.videoOn\""), "« Activer la vidéo » n'est pas le mot de la planche")
+    }
+
     func test_outputLabel_isTheAudioOutput() throws {
         let chaines = try Self.catalogue()
         XCTAssertEqual(CallControlsCopy.outputAudioLabel, try Self.valeur(chaines, cle: "call.control.output.a11y", langue: "en"))
