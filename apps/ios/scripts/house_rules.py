@@ -22,7 +22,7 @@ TOKEN = re.compile(r'//|/\*|#*"')
 class Rule:
     id: str
     pattern: re.Pattern
-    kind: Literal["pattern", "unchecked", "floor", "comment"] = "pattern"
+    kind: Literal["pattern", "unchecked", "floor", "comment", "glass"] = "pattern"
     excluded: tuple = ()
     file_name: re.Pattern | None = None
 
@@ -34,6 +34,11 @@ def _pattern(rule_id, regex, excluded=()):
 def _named(rule_id, regex, file_name, excluded=()):
     return Rule(rule_id, re.compile(regex), "pattern", excluded, re.compile(file_name))
 
+
+GLASS_CALL = re.compile(r"\.(?:adaptiveGlassProminent|adaptiveGlass|adaptiveLiquidGlass|glassEffect)\(")
+GLASS_OUTSIDE_KIT = re.compile(r"^(?!packages/MeeshySDK/Sources/MeeshyUI/(?:Compatibility|Kit)/)")
+GLASS_ROUND = re.compile(r"\bin:\s*(?:Circle\(\)|\.circle\b)")
+GLASS_TOUCH = re.compile(r"\binteractive:\s*true\b|\.interactive\(\s*\)")
 
 RULES = (
     _pattern("uiscreen-main", r"UIScreen\.main\b"),
@@ -103,6 +108,9 @@ RULES = (
         ("packages/MeeshySDK/Sources/MeeshySDK/Utils/MeeshyCoders.swift",),
     ),
     _pattern("environment-router", r"@EnvironmentObject\s+(?:\w+(?:\(set\))?\s+)*var\s+\w+\s*:\s*Router\b"),
+    Rule("kit-glass-call", GLASS_CALL, "glass", (), GLASS_OUTSIDE_KIT),
+    Rule("kit-glass-round", GLASS_CALL, "glass", (), GLASS_OUTSIDE_KIT),
+    Rule("kit-glass-no-touch", GLASS_CALL, "glass", (), GLASS_OUTSIDE_KIT),
     Rule(
         "narrative-comment",
         re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),
@@ -243,6 +251,29 @@ def _count_comment(rule, src, stripped):
     )
 
 
+def _balanced_arguments(stripped, start):
+    depth, i, n = 0, start, len(stripped)
+    while i < n:
+        depth += (stripped[i] == "(") - (stripped[i] == ")")
+        i += 1
+        if depth == 0:
+            return stripped[start:i]
+    return stripped[start:]
+
+
+def _glass_arguments(rule, stripped):
+    return [_balanced_arguments(stripped, m.end() - 1) for m in rule.pattern.finditer(stripped)]
+
+
+def _count_glass(rule, stripped):
+    calls = _glass_arguments(rule, stripped)
+    if rule.id == "kit-glass-round":
+        return sum(1 for args in calls if GLASS_ROUND.search(args))
+    if rule.id == "kit-glass-no-touch":
+        return sum(1 for args in calls if not GLASS_TOUCH.search(args))
+    return len(calls)
+
+
 def count_stripped(rule, rel, src, stripped):
     if rel in rule.excluded:
         return 0
@@ -254,6 +285,8 @@ def count_stripped(rule, rel, src, stripped):
         return _count_floor(rule, rel, stripped)
     if rule.kind == "comment":
         return _count_comment(rule, src, stripped)
+    if rule.kind == "glass":
+        return _count_glass(rule, stripped)
     return len(rule.pattern.findall(stripped))
 
 
