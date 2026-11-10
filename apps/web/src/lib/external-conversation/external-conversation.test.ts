@@ -103,6 +103,12 @@ describe('chaque réponse de la passerelle devient un état dessiné', () => {
     expect(externalOpeningOutcomeOf({ result: plaintext, online: true })).toEqual({ kind: 'refused', reason: 'failed' });
   });
 
+  test('#17120 — sans consentement sous l’information en vigueur, l’entrée montre ce qui part chez Meta', () => {
+    expect(externalOpeningOutcomeOf({ result: refused(403, EXTERNAL_CONVERSATION_ERROR_CODES.CONSENT_REQUIRED), online: true })).toEqual({
+      kind: 'consent-required',
+    });
+  });
+
   test('numéro non vérifié : la vérification est proposée', () => {
     expect(externalOpeningOutcomeOf({ result: refused(403, EXTERNAL_CONVERSATION_ERROR_CODES.PHONE_UNVERIFIED), online: true })).toEqual({
       kind: 'phone-unverified',

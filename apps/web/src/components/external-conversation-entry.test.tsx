@@ -2,10 +2,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { EXTERNAL_CONVERSATION_ERROR_CODES } from '@meeshy/shared/types/external-conversation';
 
+import { EXTERNAL_INTEROP_DISCLOSURES, EXTERNAL_INTEROP_NOTICE_VERSION, type ExternalInteropConsentStatus } from '@meeshy/shared/types/external-interop-compliance';
+
 import type { ApiResult } from '@/lib/api/http';
 import type { ExternalOpening } from '@/lib/external-conversation/external-conversation';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadExternalConversationCatalog } from '@/lib/i18n-external-conversation-catalog';
+import { loadExternalInteropCatalog } from '@/lib/i18n-external-interop-catalog';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -27,6 +30,7 @@ beforeAll(async () => {
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
   await loadExternalConversationCatalog('fr');
+  await loadExternalInteropCatalog('fr');
 });
 
 afterAll(async () => {
@@ -47,9 +51,23 @@ const OPENED: ApiResult<ExternalOpening> = {
   data: { conversationId: '6730c0ffee0000000000abcd', type: 'external', encryptionMode: 'e2ee', network: 'whatsapp', created: true },
 };
 
-function harness(answer: ApiResult<ExternalOpening> = OPENED, options: { readonly visible?: boolean; readonly online?: boolean } = {}) {
+const consentStatus = (current: boolean): ExternalInteropConsentStatus => ({
+  network: 'whatsapp',
+  noticeVersion: EXTERNAL_INTEROP_NOTICE_VERSION,
+  disclosures: [...EXTERNAL_INTEROP_DISCLOSURES],
+  retentionDays: 90,
+  consent: current ? { grantedAt: '2026-11-10T09:00:00.000Z', noticeVersion: EXTERNAL_INTEROP_NOTICE_VERSION } : null,
+  current,
+});
+
+function harness(
+  answer: ApiResult<ExternalOpening> | readonly ApiResult<ExternalOpening>[] = OPENED,
+  options: { readonly visible?: boolean; readonly online?: boolean } = {},
+) {
   const sent: string[] = [];
   const opened: string[] = [];
+  const recorded: boolean[] = [];
+  const answers = Array.isArray(answer) ? [...answer] : [answer];
   const element = (
     <ExternalConversationEntry
       visible={options.visible ?? true}
@@ -57,13 +75,20 @@ function harness(answer: ApiResult<ExternalOpening> = OPENED, options: { readonl
       online={options.online ?? true}
       open={async (handle) => {
         sent.push(handle);
-        return answer;
+        return answers.length > 1 ? (answers.shift() ?? OPENED) : (answers[0] ?? OPENED);
       }}
       phone={PHONE}
+      consent={{
+        read: async () => ({ ok: true, data: consentStatus(false) }),
+        record: async (granted) => {
+          recorded.push(granted);
+          return { ok: true, data: consentStatus(true) };
+        },
+      }}
       onOpened={(conversationId) => opened.push(conversationId)}
     />
   );
-  return { sent, opened, element };
+  return { sent, opened, recorded, element };
 }
 
 const writeNumber = async (host: HTMLDivElement, value: string) => {
@@ -112,6 +137,39 @@ describe('le chemin nominal', () => {
     expect(sent).toEqual([]);
     expect(host.querySelector('input[type="tel"]')?.getAttribute('aria-invalid')).toBe('true');
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('format international');
+  });
+});
+
+describe('le consentement à ce qui part chez Meta (#17120)', () => {
+  test('sans consentement, l’information se montre ; accepter l’enregistre puis ouvre le fil', async () => {
+    const consentRequired: ApiResult<ExternalOpening> = { ok: false, status: 403, error: 'x', code: EXTERNAL_CONVERSATION_ERROR_CODES.CONSENT_REQUIRED };
+    const { sent, opened, recorded, element } = harness([consentRequired, OPENED]);
+    const host = await mounter.mount(element);
+    await writeNumber(host, '+33612345678');
+    await mounter.submit(host);
+
+    expect(opened).toEqual([]);
+    expect(host.ownerDocument.querySelector('[data-external-interop-notice]')).not.toBeNull();
+
+    await mounter.click(buttonNamed(host.ownerDocument.body, 'J’accepte et je continue'));
+
+    expect(recorded).toEqual([true]);
+    expect(sent).toEqual(['+33612345678', '+33612345678']);
+    expect(opened).toEqual(['6730c0ffee0000000000abcd']);
+  });
+
+  test('annuler l’information n’écrit rien et n’ouvre rien', async () => {
+    const consentRequired: ApiResult<ExternalOpening> = { ok: false, status: 403, error: 'x', code: EXTERNAL_CONVERSATION_ERROR_CODES.CONSENT_REQUIRED };
+    const { opened, recorded, element } = harness([consentRequired, OPENED]);
+    const host = await mounter.mount(element);
+    await writeNumber(host, '+33612345678');
+    await mounter.submit(host);
+
+    await mounter.click(buttonNamed(host.ownerDocument.body.querySelector('[data-external-interop-notice]') ?? host, 'Annuler'));
+
+    expect(recorded).toEqual([]);
+    expect(opened).toEqual([]);
+    expect(host.ownerDocument.querySelector('[data-external-interop-notice]')).toBeNull();
   });
 });
 

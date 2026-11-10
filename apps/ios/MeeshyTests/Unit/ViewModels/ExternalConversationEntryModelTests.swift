@@ -93,6 +93,44 @@ final class ExternalConversationEntryModelTests: XCTestCase {
         XCTAssertEqual(model.handle, "+33612345678")
     }
 
+    // MARK: - Le consentement à ce qui part chez Meta (#17120)
+
+    func test_submit_consentRequired_asksForConsentWithoutOpening() async {
+        let (model, _) = makeSUT(outcome: .consentRequired)
+        model.handle = "+33612345678"
+
+        await model.submit()
+
+        XCTAssertEqual(model.phase, .consentRequired)
+        XCTAssertTrue(model.asksForConsent)
+        XCTAssertNil(model.openedConversationId)
+    }
+
+    func test_consentGranted_reopensTheSameNumber() async {
+        let (model, service) = makeSUT(outcome: .consentRequired)
+        model.handle = "+33612345678"
+        await model.submit()
+        service.outcome = .open(conversationId: "c7", created: true)
+
+        await model.consentGranted()
+
+        XCTAssertEqual(service.openCallCount, 2)
+        XCTAssertEqual(service.lastHandle, "+33612345678")
+        XCTAssertEqual(model.openedConversationId, "c7")
+    }
+
+    func test_consentDeclined_opensNothing() async {
+        let (model, service) = makeSUT(outcome: .consentRequired)
+        model.handle = "+33612345678"
+        await model.submit()
+
+        model.consentDeclined()
+
+        XCTAssertEqual(model.phase, .idle)
+        XCTAssertFalse(model.asksForConsent)
+        XCTAssertEqual(service.openCallCount, 1)
+    }
+
     func test_collapse_forgetsTheNumberAndTheState() async {
         let (model, _) = makeSUT(outcome: .refused(.failed))
         model.toggle()

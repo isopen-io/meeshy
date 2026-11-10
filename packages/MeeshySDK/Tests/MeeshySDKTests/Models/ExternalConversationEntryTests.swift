@@ -126,6 +126,21 @@ struct ExternalConversationEntryTests {
         #expect(ExternalOpeningOutcome.of(error: Self.forbidden(code: "AUTRE_CHOSE")) == .refused(.failed))
     }
 
+    @Test("#17120 — sans consentement, l'entrée montre ce qui part chez Meta")
+    func consentRequired_isItsOwnState() {
+        #expect(ExternalOpeningOutcome.of(error: Self.forbidden(code: ExternalConversationErrorCode.consentRequired)) == .consentRequired)
+    }
+
+    @Test("#17120 — chaque réponse au consentement a sa phrase")
+    func consentAnswers_areDistinct() {
+        #expect(ExternalInteropConsentAnswer.of(error: Self.rejected(409, code: ExternalConversationErrorCode.noticeOutdated)) == .outdated)
+        #expect(ExternalInteropConsentAnswer.of(error: MeeshyError.server(statusCode: 409, message: "outdated")) == .outdated)
+        #expect(ExternalInteropConsentAnswer.of(error: Self.forbidden(code: ExternalConversationErrorCode.disabled)) == .unavailable)
+        #expect(ExternalInteropConsentAnswer.of(error: MeeshyError.server(statusCode: 404, message: "Not Found")) == .unavailable)
+        #expect(ExternalInteropConsentAnswer.of(error: URLError(.notConnectedToInternet)) == .failed)
+        #expect(ExternalInteropConsentAnswer.of(error: MeeshyError.server(statusCode: 500, message: "boom")) == .failed)
+    }
+
     // MARK: - 4. La conversation servie
 
     private static func served(type: String) throws -> MeeshyConversation {
