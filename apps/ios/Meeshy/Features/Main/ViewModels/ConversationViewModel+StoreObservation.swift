@@ -161,10 +161,12 @@ extension ConversationViewModel {
                 guard payload.kind == .sendMessage else { return }
                 pendingServerIds[payload.tempId] = payload.serverId
                 ackLane.submit { [persistence = messagePersistence] in
-                    _ = try? await persistence.applyEvent(
-                        localId: payload.tempId,
-                        event: .serverAck(serverId: payload.serverId, at: Date())
-                    )
+                    await bestEffort("conversationViewModel.messagePersistence.serverAck") {
+                        try await persistence.applyEvent(
+                            localId: payload.tempId,
+                            event: .serverAck(serverId: payload.serverId, at: Date())
+                        )
+                    }
                 }
             }
             .store(in: &cancellables)
