@@ -8,6 +8,7 @@ import {
   resolveTalkieHeaderDelivery,
   resolveTalkieHeaderVoice,
   talkieElapsed,
+  threadHeaderTalkiePeer,
   TALKIE_WAVE_FLOOR_DB,
   TALKIE_WAVE_TRAIL_CAPACITY,
   TALKIE_WAVE_TRAIL_STEP_MS,
@@ -67,6 +68,22 @@ describe('ce que l’en-tête montre', () => {
     expect(mayShowTalkieInHeader('hybrid')).toBe(true);
     expect(mayShowTalkieInHeader(null)).toBe(true);
     expect(mayShowTalkieInHeader(undefined)).toBe(true);
+  });
+});
+
+describe('à qui le talkie de l’en-tête parle', () => {
+  const direct = { group: false, preview: false, guest: false, encryptionMode: 'server', peerId: 'u-ada' } as const;
+
+  test('le pair d’un direct', () => {
+    expect(threadHeaderTalkiePeer(direct)).toBe('u-ada');
+  });
+
+  test('ni en groupe, ni en aperçu, ni pour un invité sans compte, ni dans un direct chiffré, ni sans pair connu', () => {
+    expect(threadHeaderTalkiePeer({ ...direct, group: true })).toBeNull();
+    expect(threadHeaderTalkiePeer({ ...direct, preview: true })).toBeNull();
+    expect(threadHeaderTalkiePeer({ ...direct, guest: true })).toBeNull();
+    expect(threadHeaderTalkiePeer({ ...direct, encryptionMode: 'e2ee' })).toBeNull();
+    expect(threadHeaderTalkiePeer({ ...direct, peerId: undefined })).toBeNull();
   });
 });
 
