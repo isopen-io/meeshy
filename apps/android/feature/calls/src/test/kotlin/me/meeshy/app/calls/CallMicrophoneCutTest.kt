@@ -200,6 +200,7 @@ class CallMicrophoneCutTest {
         captions.advance()
         heard.tryEmit(CallSpeechEvent.Partial("Bon"))
         verify(exactly = 1) { engine.sendDataChannelMessage(any()) }
+        val journalBeforeTheCut = captions.state.value.journal.segments
 
         vm.toggleMute()
         heard.tryEmit(CallSpeechEvent.Partial("Bonjour"))
@@ -207,7 +208,7 @@ class CallMicrophoneCutTest {
 
         verify(exactly = 1) { engine.sendDataChannelMessage(any()) }
         verify(exactly = 0) { social.emitTranscriptionSegment(any(), any()) }
-        assertThat(captions.state.value.journal.segments).isEmpty()
+        assertThat(captions.state.value.journal.segments).isEqualTo(journalBeforeTheCut)
     }
 
     @Test
