@@ -58,6 +58,7 @@ public object ApiRoutesConversations {
     public const val BY_ID_STATUS: String = "conversations/{id}/status"
     public const val BY_ID_THREADS_BY_MESSAGE_ID: String = "conversations/{id}/threads/{messageId}"
     public const val CHECK_IDENTIFIER_BY_IDENTIFIER: String = "conversations/check-identifier/{identifier}"
+    public const val EXTERNAL: String = "conversations/external"
     public const val JOIN_BY_LINK_ID: String = "conversations/join/{linkId}"
     public const val ROOT: String = "conversations"
     public const val SEARCH: String = "conversations/search"
