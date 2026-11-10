@@ -589,9 +589,6 @@ const PENDING_CLIENT_ENTRIES = {
   'PublishersEndpoint.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web seulement' },
   // Le partage temporaire de position par personne (#16980) : le serveur sert le rattrapage par emprise avant la carte iOS.
   'RelationsEndpoint.locations': { issue: 16983, reason: 'GET /relations/locations?bbox= — les positions qu’on me partage, lues par la carte iOS' },
-  // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
-  // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
-  'ConversationsEndpoint.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp depuis iOS' },
 };
 
 const BASELINE_DEAD_ENTRIES = 328;
