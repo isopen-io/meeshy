@@ -97,7 +97,9 @@ private struct MeeshyGlassModifier<S: Shape>: ViewModifier {
     func body(content: Content) -> some View {
         let recipe = self.recipe
         if #available(iOS 26.0, *), recipe.material == .liquid {
-            content.glassEffect(makeMeeshyGlass(tint: liquidTint, interactive: isInteractive), in: shape)
+            content
+                .glassEffect(makeMeeshyGlass(tint: liquidTint, interactive: isInteractive), in: shape)
+                .environment(\.colorScheme, liquidColorScheme)
         } else {
             content
                 .environment(\.meeshyGlassIsPressed, false)
@@ -115,6 +117,10 @@ private struct MeeshyGlassModifier<S: Shape>: ViewModifier {
 
     private var resolvedTone: MeeshyGlassTone {
         tone ?? hostTone
+    }
+
+    private var liquidColorScheme: ColorScheme {
+        MeeshyGlassRecipe.liquidForcesDark(tone: resolvedTone) ? .dark : colorScheme
     }
 
     private var liquidTint: Color? {
