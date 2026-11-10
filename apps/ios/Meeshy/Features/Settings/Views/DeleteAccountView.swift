@@ -230,7 +230,7 @@ struct DeleteAccountView: View {
                 )
             }
             .padding(MeeshySpacing.mdPlus)
-            .background(sectionBackground(tint: MeeshyColors.amber500Hex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.amber500Hex))
         }
     }
 
@@ -394,14 +394,5 @@ struct DeleteAccountView: View {
         .padding(.leading, MeeshySpacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
     }
 }
