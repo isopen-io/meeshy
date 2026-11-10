@@ -55,8 +55,8 @@ struct MeeshyGlassButtonTests {
     @Test("le voile doux s'éclaircit sous le doigt, et n'existe pas sous le Liquid Glass")
     func recipe_soft_veilBrightensAndYieldsToLiquidGlass() {
         let soft = MeeshyGlassButtonRecipe.resolve(kind: .soft, size: .compact)
-        #expect(soft.fillOpacity(isPressed: false) == 0.12)
-        #expect(soft.fillOpacity(isPressed: true) == 0.22)
+        #expect(soft.resolvedFillOpacity(isPressed: false) == 0.12)
+        #expect(soft.resolvedFillOpacity(isPressed: true) == 0.22)
         #expect(!soft.fillsUnderLiquid)
         #expect(MeeshyGlassButtonRecipe.resolve(kind: .active, size: .compact).fillsUnderLiquid)
     }

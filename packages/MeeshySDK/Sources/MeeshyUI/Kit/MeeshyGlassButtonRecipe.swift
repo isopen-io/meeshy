@@ -122,7 +122,7 @@ public nonisolated struct MeeshyGlassButtonRecipe: Equatable, Sendable {
         }
     }
 
-    public func fillOpacity(isPressed: Bool) -> Double {
+    public func resolvedFillOpacity(isPressed: Bool) -> Double {
         isPressed ? pressedFillOpacity : fillOpacity
     }
 }

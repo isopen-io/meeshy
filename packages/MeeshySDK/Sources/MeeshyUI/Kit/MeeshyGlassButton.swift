@@ -142,7 +142,7 @@ private struct MeeshyGlassButtonFillLayer: View {
 
     private var opacity: Double {
         guard recipe.fillsUnderLiquid || material != .liquid else { return 0 }
-        return recipe.fillOpacity(isPressed: isPressed)
+        return recipe.resolvedFillOpacity(isPressed: isPressed)
     }
 
     private var shadowColor: Color {
