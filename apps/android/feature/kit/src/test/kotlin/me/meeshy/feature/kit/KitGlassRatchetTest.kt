@@ -146,10 +146,10 @@ class KitGlassRatchetTest {
     }
 
     private companion object {
-        /** Mesuré sur `dev` fusionné le 2026-11-10 (70 appels dans 53 fichiers), abaissé à 69 par le retrait du rail du haut de ma caméra (#17327). Abaisser, jamais relever. */
-        const val CALLS_CEILING = 69
+        /** Mesuré sur `dev` fusionné le 2026-11-10 (70 appels dans 53 fichiers), abaissé à 69 par le retrait du rail du haut de ma caméra (#17327), puis à 68 quand les trois disques de l'en-tête (action, talkie, Bring) passent par `ChatHeaderGlassDisc`. Abaisser, jamais relever. */
+        const val CALLS_CEILING = 68
 
-        /** Mesuré sur `dev` fusionné le 2026-11-10. Abaisser, jamais relever. */
-        const val ROUND_CEILING = 23
+        /** Mesuré sur `dev` fusionné le 2026-11-10, abaissé à 22 par `ChatHeaderGlassDisc`. Abaisser, jamais relever. */
+        const val ROUND_CEILING = 22
     }
 }
