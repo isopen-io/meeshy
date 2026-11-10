@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { apiDeps } from '@/lib/api/deps';
@@ -40,6 +40,9 @@ import { BRAND, BRAND_FILL, FOCUS, INK_2 } from './user-profile-style';
 
 const LEVELS_WITH_TALKIE: ReadonlySet<string> = new Set(['CLOSE', 'BLOOD']);
 
+/** Le talkie est proposé dès Proche (D-4, CAL-03) : la fiche et l'en-tête d'un direct lisent la même règle. */
+export const talkieOfferedAt = (level: string | null | undefined): boolean => level != null && LEVELS_WITH_TALKIE.has(level);
+
 export const TALKIE_OUTCOME_NOTICE = {
   voice: 'talkie.send.voice',
   e2ee: 'talkie.send.e2ee',
@@ -51,6 +54,34 @@ export const TALKIE_OUTCOME_NOTICE = {
 } as const satisfies Readonly<Record<Exclude<TalkieSendOutcome, 'not-allowed'>, CirclesCatalogKey>>;
 
 const HOLD_KEYS: ReadonlySet<string> = new Set([' ', 'Enter']);
+
+/**
+ * Maintenir pour parler, partagé par la fiche et l'en-tête d'un direct : pointeur maintenu (souris, doigt, stylet) ou
+ * Espace / Entrée maintenue ; relâcher, quitter le bouton ou perdre le focus termine.
+ */
+export function talkieHoldHandlers({ onPress, onRelease }: { readonly onPress: () => void; readonly onRelease: () => void }) {
+  return {
+    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      onPress();
+    },
+    onPointerUp: onRelease,
+    onPointerCancel: onRelease,
+    onLostPointerCapture: onRelease,
+    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (!HOLD_KEYS.has(event.key)) return;
+      event.preventDefault();
+      if (!event.repeat) onPress();
+    },
+    onKeyUp: (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (!HOLD_KEYS.has(event.key)) return;
+      event.preventDefault();
+      onRelease();
+    },
+    onBlur: onRelease,
+    onContextMenu: (event: { preventDefault(): void }) => event.preventDefault(),
+  };
+}
 
 export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   language,
@@ -82,16 +113,6 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
     phase === 'talking'
       ? translateCircles(language, waking ? 'talkie.send.waking' : 'talkie.send.talking', { name })
       : phase === 'starting' ? translateCircles(language, 'talkie.send.connecting') : translateCircles(language, 'talkie.send.hold');
-  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
-    if (!HOLD_KEYS.has(event.key)) return;
-    event.preventDefault();
-    if (!event.repeat) onPress();
-  };
-  const onKeyUp = (event: KeyboardEvent<HTMLButtonElement>): void => {
-    if (!HOLD_KEYS.has(event.key)) return;
-    event.preventDefault();
-    onRelease();
-  };
   return (
     <div data-talkie-row="" className="grid gap-2 rounded-card px-3.5 py-3" style={{ backgroundColor: BRAND_FILL }}>
       <div className="flex items-start gap-2">
@@ -121,17 +142,7 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
         data-talkie-send=""
         aria-pressed={live}
         aria-label={translateCircles(language, 'talkie.send.hold.a11y', { name })}
-        onPointerDown={(event) => {
-          event.currentTarget.setPointerCapture?.(event.pointerId);
-          onPress();
-        }}
-        onPointerUp={onRelease}
-        onPointerCancel={onRelease}
-        onLostPointerCapture={onRelease}
-        onKeyDown={onKeyDown}
-        onKeyUp={onKeyUp}
-        onBlur={onRelease}
-        onContextMenu={(event) => event.preventDefault()}
+        {...talkieHoldHandlers({ onPress, onRelease })}
         className={`grid select-none place-items-center rounded-chip px-4 text-body font-bold ${FOCUS}`}
         style={{
           minHeight: 52,
@@ -158,7 +169,7 @@ export const ProfileTalkieRowView = memo(function ProfileTalkieRowView({
   );
 });
 
-function useTalkieSender({ watch, capture, onOutcome }: { readonly watch: WatchRealtime; readonly capture: TalkieCaptureFactory; readonly onOutcome: (outcome: TalkieSendOutcome) => void }) {
+export function useTalkieSender({ watch, capture, onOutcome }: { readonly watch: WatchRealtime; readonly capture: TalkieCaptureFactory; readonly onOutcome: (outcome: TalkieSendOutcome) => void }) {
   const socketRef = useRef<SocketClient | null>(null);
   const outcomeRef = useRef(onOutcome);
   outcomeRef.current = onOutcome;
@@ -222,7 +233,7 @@ export function ProfileTalkieRow({
   const phase = useStore(sender.store, (state) => state.phase.kind);
   const waking = useStore(sender.store, (state) => state.phase.kind === 'talking' && state.phase.delivery === 'waking');
 
-  if (!ready || encodes === null || refused || level === null || !LEVELS_WITH_TALKIE.has(level)) return null;
+  if (!ready || encodes === null || refused || !talkieOfferedAt(level)) return null;
   const name = person.displayName ?? person.username;
   return (
     <ProfileTalkieRowView

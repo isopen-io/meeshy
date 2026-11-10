@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { lazy, Suspense, useState, useSyncExternalStore } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
@@ -48,6 +48,14 @@ import { useThreadSearch } from '@/lib/view/use-thread-search';
 import { searchLandingMode } from '@/lib/view/thread-search';
 import { useThreadSearchDoor } from '@/lib/view/thread-search-door';
 import { useOptionalRoute } from '@/lib/router';
+import { accentPaletteOf } from '@/lib/accent';
+import { headerTalkieChrome, talkieLevelMeters, threadHeaderTalkiePeer, type TalkieHeaderDelivery, type TalkieHeaderVoice } from '@/lib/talkie/talkie-header-law';
+
+const ThreadHeaderTalkie = lazy(() => import('./thread-header-talkie').then((m) => ({ default: m.ThreadHeaderTalkie })));
+const TalkieHeaderBand = lazy(() => import('./thread-header-talkie').then((m) => ({ default: m.TalkieHeaderBand })));
+
+type HeaderTalkieLive = { readonly voice: TalkieHeaderVoice; readonly delivery: TalkieHeaderDelivery };
+const TALKIE_AT_REST: HeaderTalkieLive = { voice: 'none', delivery: 'live' };
 
 /**
  * L'EN-TÊTE DU FIL — extrait de `routes/thread.tsx` (revue #5814, défaut
@@ -250,6 +258,14 @@ export function ThreadHeader({
   const search = useThreadSearch({ conversationId: conversation.id, deps: apiDeps });
   const route = useOptionalRoute();
   useThreadSearchDoor({ search: route?.search, openSearch: search.openSearch });
+  /* LE TALKIE D'UN DIRECT (#17338, iOS #17337) — à gauche de l'appel, dès
+     Proche, jamais chiffré ni en aperçu. Une voix qui part ou arrive prend
+     toute la barre : le reste s'efface sans libérer sa place, et le pointeur
+     qui tient le bouton reste dessous. */
+  const talkiePeer = threadHeaderTalkiePeer({ group, preview, guest: sessionIsGuest, encryptionMode: conversation.encryptionMode, peerId: peerKey });
+  const [talkieLive, setTalkieLive] = useState<HeaderTalkieLive>(TALKIE_AT_REST);
+  const talkieSpans = talkiePeer !== null && headerTalkieChrome(talkieLive.voice).talkieSpansBar;
+  const talkieSecondary = accentPaletteOf(conversation).secondary;
   const pickSearchHit = (messageId: string) => {
     search.close();
     const landing = searchLandingMode(readingMenuRows.find((row) => row.isCurrent)?.mode);
@@ -275,7 +291,18 @@ export function ThreadHeader({
     <header
       className="thread-header glass absolute inset-x-0 top-0 z-30 pt-safe"
     >
-      <div className="thread-column flex items-center gap-2 px-4 py-2">
+      <div className="thread-column relative flex items-center gap-2 px-4 py-2" {...(talkieSpans ? { 'data-talkie-spans': '' } : {})}>
+        {talkieSpans ? (
+          <Suspense fallback={null}>
+            <TalkieHeaderBand
+              language={interfaceLanguage}
+              live={talkieLive}
+              accent={accent}
+              secondary={talkieSecondary}
+              meter={talkieLive.voice === 'incoming' ? talkieLevelMeters.incoming : talkieLevelMeters.outgoing}
+            />
+          </Suspense>
+        ) : null}
         {/*
           LE RETOUR ET SON COMPTE — SUR LA MÊME LIGNE (#6080, retour porteur).
 
@@ -435,6 +462,11 @@ export function ThreadHeader({
 {/* L'APPEL (#6382) — vocal ou vidéo, offert par `threadCallOffer`
                 (#10207) : « start » lance, « join-only » ne garde que les portes
                 d'un appel déjà en cours, « none » ne montre rien. */}
+            {talkiePeer === null ? null : (
+              <Suspense fallback={null}>
+                <ThreadHeaderTalkie key={talkiePeer} language={interfaceLanguage} peerId={talkiePeer} peerName={title} secondary={talkieSecondary} onLive={setTalkieLive} />
+              </Suspense>
+            )}
             {callOffer === 'none' || !callsAvailable() ? null : (
               <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} peerKey={group ? null : (peerKey ?? null)} liveCallHint={(conversation as ListConversation).activeCall ?? null} mayStart={callOffer === 'start'} />
             )}

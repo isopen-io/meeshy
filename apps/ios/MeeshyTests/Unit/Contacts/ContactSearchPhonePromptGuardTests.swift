@@ -15,7 +15,10 @@ final class ContactSearchPhonePromptGuardTests: XCTestCase {
         "Meeshy/Features/Contacts/PhonebookListView.swift",
         "Meeshy/Features/Contacts/DiscoverTab.swift",
     ]
-    private static let securityView = "Meeshy/Features/Settings/Views/SecurityView.swift"
+    private static let securityViewFiles = [
+        "Meeshy/Features/Settings/Views/SecurityView.swift",
+        "Meeshy/Features/Settings/Views/SecurityPhoneSection.swift",
+    ]
     private static let promptSheet = "Meeshy/Features/Contacts/PhonePromptSheet.swift"
     private static let catalog = "Meeshy/Localizable.xcstrings"
     private static let sevenLanguages: Set<String> = ["fr", "en", "es", "pt-BR", "de", "it", "ar"]
@@ -37,7 +40,9 @@ final class ContactSearchPhonePromptGuardTests: XCTestCase {
     }
 
     func test_securityView_usesTheSharedPhoneFlow() throws {
-        let source = try MyStoriesSourceCorpus.text(of: Self.securityView)
+        let source = try Self.securityViewFiles
+            .map { try MyStoriesSourceCorpus.text(of: $0) }
+            .joined(separator: "\n")
         XCTAssertTrue(source.contains("PhoneChangeFlowModel"),
                       "SecurityView consomme le flux partagé")
         XCTAssertFalse(source.contains("UserService.shared.changePhone"),

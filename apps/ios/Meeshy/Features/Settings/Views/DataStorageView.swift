@@ -83,7 +83,7 @@ struct DataStorageView: View {
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.bottom, MeeshySpacing.smPlus)
             }
-            .background(sectionBackground(tint: accentColor))
+            .background(SettingsSectionBackground(tint: accentColor))
         }
     }
 
@@ -113,15 +113,6 @@ struct DataStorageView: View {
                 .tracking(1.2)
         }
         .padding(.leading, MeeshySpacing.xs)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {
