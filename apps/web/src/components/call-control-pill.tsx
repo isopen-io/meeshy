@@ -21,6 +21,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * chose : les rangées des familles (`call-control-actions.tsx`) OU le panneau
  * ouvert, qui les REMPLACE (#8578) — jamais les deux empilés.
  *
+ * Chaque bouton de la pilule porte son DISQUE de verre dessiné (#17345 —
+ * `CallButton`, ton `disc`, `.glass-call-disc`) : un voile et un liseré, sans
+ * flou à eux. Le seul `backdrop-filter` du groupe est celui de la pilule.
+ *
  * « Sortie » ouvre la feuille des appareils (caméra, micro, sortie audio —
  * `call-devices-sheet.tsx`, chunk à part chargé au premier geste).
  *
@@ -75,7 +79,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
             label={translate(language, 'call.more')}
             glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.dotsThree} size={24} />}
             onPress={onToggle}
-            tone={expanded ? 'active' : 'bare'}
+            tone={expanded ? 'active' : 'disc'}
             expanded={expanded}
             controls={kit.actionsId}
             data={{ 'data-call-more': '' }}
@@ -84,7 +88,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
             label={translate(language, call.micMuted ? 'call.mic.unmute' : 'call.mic.mute')}
             glyph={call.micMuted ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={22} /> : <Glyph name="microphone" size={22} />}
             onPress={callActions.toggleMic}
-            tone={call.micMuted ? 'active' : 'bare'}
+            tone={call.micMuted ? 'active' : 'disc'}
             pressed={call.micMuted}
           />
           <CallButton

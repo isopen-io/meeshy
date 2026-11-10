@@ -822,14 +822,14 @@ describe('CallScreen — le verre : un seul flou par pilule, un disque de verre 
     return { nested, glasses: glasses.length, panel };
   };
 
-  test('en duo, actions sorties et panneau « Réagir » ouvert : chaque groupe a UN verre', async () => {
+  test('en duo, actions sorties et panneau « Réagir » ouvert : chaque groupe a UN flou', async () => {
     const view = await nestedGlass({ cameraOn: true, members: { 'u-peer': member() } }, true);
     expect(view.panel).not.toBeNull();
     expect(view.glasses).toBeGreaterThan(3);
     expect(view.nested).toEqual([]);
   });
 
-  test('en groupe, la pilule qui a grandi porte ses rangées sans verre à elles', async () => {
+  test('en groupe, la pilule qui a grandi porte ses rangées sans second flou', async () => {
     const view = await nestedGlass({ isGroup: true, cameraOn: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }, true);
     expect(view.nested).toEqual([]);
   });
