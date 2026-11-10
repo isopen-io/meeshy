@@ -1,7 +1,7 @@
 /**
  * La construction de la coquille « ami WhatsApp » (#17116) : l'image de la
  * passerelle de staging la lance (`services/gateway/Dockerfile`) sur les seules
- * sources `src/lib/dma-coquille/` et `src/lib/e2ee/` du web, sans aucune
+ * sources `dma-coquille/` et `src/lib/e2ee/` du web, sans aucune
  * dépendance installée. Elle rend une page, un module et le WASM du pont, à
  * l'octet près celui que le web consigne : aucune copie de libsignal.
  */
@@ -43,8 +43,8 @@ describe('la construction de la coquille', () => {
   });
 
   test('ses sources n’importent que la coquille elle-même et le pont libsignal du web', () => {
-    const imports = sources(join(WEB_ROOT, 'src', 'lib', 'dma-coquille'))
+    const imports = sources(join(WEB_ROOT, 'dma-coquille'))
       .flatMap((path) => [...readFileSync(path, 'utf8').matchAll(/(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g)].map((match) => match[1] ?? ''));
-    expect(imports.filter((specifier) => !/^\.\/|^\.\.\/e2ee\/libsignal-bridge$/.test(specifier))).toEqual([]);
+    expect(imports.filter((specifier) => !/^\.\/|^\.\.\/src\/lib\/e2ee\/libsignal-bridge$/.test(specifier))).toEqual([]);
   });
 });

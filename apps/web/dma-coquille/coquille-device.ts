@@ -13,7 +13,7 @@
  * numéro E.164 pour un appareil WhatsApp — celles de la décision du
  * 2026-11-09 (« la passerelle parle à un pair externe par une interface unique »).
  */
-import type { DevicePreKeys, GeneratedPreKey, LibsignalBridge, LocalDevice, PreKeyEntry, PublicPreKeyBundle, SessionState, SignalAddress } from '../e2ee/libsignal-bridge';
+import type { DevicePreKeys, GeneratedPreKey, LibsignalBridge, LocalDevice, PreKeyEntry, PublicPreKeyBundle, SessionState, SignalAddress } from '../src/lib/e2ee/libsignal-bridge';
 
 import { fromBase64, toBase64, userOf, type PorteBundle, type PorteClient, type PorteParty, type PortePublication } from './porte-client';
 

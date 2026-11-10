@@ -8,7 +8,7 @@ import { mountCoquillePage } from './coquille-page';
 
 const openBridge = async () => {
   const [{ openLibsignalBridge }, wasm] = await Promise.all([
-    import('../e2ee/libsignal-bridge'),
+    import('../src/lib/e2ee/libsignal-bridge'),
     fetch(new URL('./libsignal_wasm_bg.wasm', location.href)).then((response) => response.arrayBuffer()),
   ]);
   return openLibsignalBridge(wasm);

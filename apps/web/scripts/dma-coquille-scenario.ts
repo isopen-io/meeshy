@@ -19,8 +19,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fictitiousHandle } from '../src/lib/dma-coquille/coquille-page';
-import { runCoquilleScenario } from '../src/lib/dma-coquille/coquille-scenario';
+import { fictitiousHandle } from '../dma-coquille/coquille-page';
+import { runCoquilleScenario } from '../dma-coquille/coquille-scenario';
 import { openLibsignalBridge } from '../src/lib/e2ee/libsignal-bridge';
 
 const WASM = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'lib', 'e2ee', 'libsignal', 'libsignal_wasm_bg.wasm');

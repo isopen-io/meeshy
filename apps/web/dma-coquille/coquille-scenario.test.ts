@@ -15,7 +15,7 @@ import { LIBSIGNAL_WASM_FILE } from '@/lib/licences/libsignal-engine';
 import { runCoquilleScenario, type ScenarioOptions } from './coquille-scenario';
 import { createFakePorte, type FakePorteOptions } from './test-support/fake-porte';
 
-const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const bridge = await openLibsignalBridge(readFileSync(join(WEB_ROOT, LIBSIGNAL_WASM_FILE)));
 
 const PASSWORD = 'mot-de-passe-de-recette';

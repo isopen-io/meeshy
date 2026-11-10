@@ -17,7 +17,7 @@ import { mountCoquillePage } from './coquille-page';
 import { createPorteClient, type ExternalParty, type MeeshyParty } from './porte-client';
 import { createFakePorte } from './test-support/fake-porte';
 
-const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const bridge = await openLibsignalBridge(readFileSync(join(WEB_ROOT, LIBSIGNAL_WASM_FILE)));
 
 const TEAM = 'a1'.repeat(12);

@@ -11,7 +11,7 @@
  * contient pas le texte envoyé. Il s'arrête à la première étape qui échoue et
  * la nomme. Sa sortie ne porte jamais un mot de passe, un jeton ni un clair.
  */
-import type { LibsignalBridge } from '../e2ee/libsignal-bridge';
+import type { LibsignalBridge } from '../src/lib/e2ee/libsignal-bridge';
 
 import { createCoquilleDevice, type CoquilleDevice, type Received } from './coquille-device';
 import {

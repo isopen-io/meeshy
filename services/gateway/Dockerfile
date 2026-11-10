@@ -126,7 +126,7 @@ RUN echo "=== Generating Prisma client ===" && \
 # porte « pair externe » est montée (`routes/external-peer.ts`) : staging déclaré
 # qui demande le faux WhatsApp. La production ne monte ni la porte ni la page.
 COPY apps/web/src/lib/e2ee/ ./coquille/src/lib/e2ee/
-COPY apps/web/src/lib/dma-coquille/ ./coquille/src/lib/dma-coquille/
+COPY apps/web/dma-coquille/ ./coquille/dma-coquille/
 COPY apps/web/scripts/build-dma-coquille.ts ./coquille/scripts/build-dma-coquille.ts
 RUN bun ./coquille/scripts/build-dma-coquille.ts /app/dist-coquille
 

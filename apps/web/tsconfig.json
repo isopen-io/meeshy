@@ -39,6 +39,7 @@
     "vite",
     "capacitor.config.ts",
     "capacitor.config.test.ts",
-    "scripts"
+    "scripts",
+    "dma-coquille"
   ]
 }

@@ -6,7 +6,7 @@
  *
  * Le clair d'un message n'existe que dans cette page, le temps de l'onglet.
  */
-import type { LibsignalBridge } from '../e2ee/libsignal-bridge';
+import type { LibsignalBridge } from '../src/lib/e2ee/libsignal-bridge';
 
 import { createCoquilleDevice, type CoquilleDevice, type Received } from './coquille-device';
 import { PorteError, createPorteClient, signIn, type ExternalParty, type FetchLike, type PorteParty } from './porte-client';

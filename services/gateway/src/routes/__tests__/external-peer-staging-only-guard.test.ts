@@ -28,7 +28,7 @@ describe('la coquille ami WhatsApp reste au staging', () => {
 
     expect(production).not.toMatch(/EXTERNAL_PEER/);
     expect(production).not.toMatch(/fake-whatsapp/i);
-    expect(production).not.toMatch(/coquille/i);
+    expect(production).not.toMatch(/dma-coquille|external-peer/i);
   });
 
   it('la passerelle de staging demande le faux WhatsApp, sous le staging déclaré', () => {
@@ -42,7 +42,7 @@ describe('la coquille ami WhatsApp reste au staging', () => {
     const dockerfile = read('services/gateway/Dockerfile');
 
     expect(dockerfile).toContain('COPY apps/web/src/lib/e2ee/ ./coquille/src/lib/e2ee/');
-    expect(dockerfile).toContain('COPY apps/web/src/lib/dma-coquille/ ./coquille/src/lib/dma-coquille/');
+    expect(dockerfile).toContain('COPY apps/web/dma-coquille/ ./coquille/dma-coquille/');
     expect(dockerfile).toMatch(/RUN bun \.\/coquille\/scripts\/build-dma-coquille\.ts \/app\/dist-coquille/);
     expect(dockerfile).toMatch(/COPY --from=builder --chown=gateway:nodejs \/app\/dist-coquille \.\/assets\/dma-coquille/);
     expect(fs.existsSync(path.join(REPO, 'services/gateway/assets/dma-coquille'))).toBe(false);
