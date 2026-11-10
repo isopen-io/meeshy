@@ -209,6 +209,12 @@ public data class BubbleContent(
     val isViewOnceSealed: Boolean = false,
     /** Le résumé d'un appel (message système d'appel), décodé de `metadata` ; nul pour tout autre message. */
     val callSummary: CallSummaryMetadata? = null,
+    /**
+     * #17441 — ce que dit la citation de cet avis (appel, arrivée, arrivées regroupées, départ annoncé), dans la langue
+     * du lecteur et de son point de vue ([me.meeshy.sdk.model.QuotedNoticeText]) ; nul pour tout autre message.
+     * Le bandeau du composeur le préfère à [text], repli français d'un avis d'appel.
+     */
+    val quotedNoticeText: String? = null,
     /** L'appel a été lancé par CE lecteur (initiateur = utilisateur courant) : la notice dit sortant. */
     val callIsOutgoing: Boolean = false,
     /** Le consentement vocal manque : un audio du message propose de l'activer (avis discret sous le lecteur). */
