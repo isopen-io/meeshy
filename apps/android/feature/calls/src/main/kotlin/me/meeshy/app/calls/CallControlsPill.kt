@@ -2,6 +2,9 @@ package me.meeshy.app.calls
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -22,6 +25,7 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
@@ -36,6 +40,8 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallControlsDisposition
 import me.meeshy.sdk.model.call.CallPillRowContent
+import me.meeshy.sdk.model.call.CallPillText
+import me.meeshy.sdk.model.call.CallPillWidth
 import me.meeshy.sdk.model.call.CallScreenLayer
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.ui.theme.MeeshySpacing
@@ -48,7 +54,9 @@ private val ROWS_MAX_HEIGHT = 340.dp
  * On a group the (…) stacks above the base row one row per family ("My image", "The call"); on a duo it brings out two
  * rails on the edges instead and the pill does not grow (#17327, [CallControlsDisposition]). A panel drawn in the pill
  * REPLACES the rows, never stacks with them. It is ONE glass block that grows with what it holds, and each button
- * inside is its own glass disc (#17323). Pure projection: the layer, the rows and every callback come from the caller.
+ * inside is its own glass disc (#17323). The captions live in it too, above the base row, and the journal opens in place
+ * of them (#17343, [CallPillText]): (…) stows them, and the base row stays under the journal. Pure projection: the layer,
+ * the rows and every callback come from the caller.
  */
 @Composable
 internal fun CallControlsPill(
@@ -66,26 +74,36 @@ internal fun CallControlsPill(
     onBackToMenu: () -> Unit,
     onClosePanel: () -> Unit,
     modifier: Modifier = Modifier,
+    pillText: CallPillText = CallPillText.None,
+    captions: @Composable () -> Unit = {},
     panelContent: @Composable (CallScreenPanel) -> Unit = {},
 ) {
     val reduceMotion = rememberCallReduceMotion()
     val expanded = disposition.unfoldsPill(layer)
     val unfoldScale = if (reduceMotion) EnterTransition.None else
         scaleIn(initialScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
-    CallControlsGlass(modifier = modifier.widthIn(max = 440.dp).fillMaxWidth()) {
+    val grow = if (reduceMotion) EnterTransition.None else expandVertically(tween(UNFOLD_MILLIS), expandFrom = Alignment.Bottom)
+    val shrink = if (reduceMotion) ExitTransition.None else shrinkVertically(tween(UNFOLD_MILLIS), shrinkTowards = Alignment.Bottom)
+    val panel = layer.pillPanel
+    val held = remember { HeldPanel() }
+    if (panel != null) held.panel = panel
+    CallControlsGlass(modifier = modifier.widthIn(max = CallPillWidth.maxWidthDp(pillText).dp).fillMaxWidth()) {
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale,
-            exit = fadeOut(tween(UNFOLD_MILLIS)),
+            enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale + grow,
+            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink,
         ) {
+            // The panel that is leaving keeps its content until it has faded: it does not vanish at once.
+            val shown = if (expanded) panel else held.panel
             Column {
-                val panel = layer.pillPanel
-                if (panel != null) {
+                if (shown == CallScreenPanel.Journal) {
+                    panelContent(CallScreenPanel.Journal)
+                } else if (shown != null) {
                     CallPillPanel(
-                        title = items[panel.action]?.let { stringResource(it.labelRes) }.orEmpty(),
+                        title = items[shown.action]?.let { stringResource(it.labelRes) }.orEmpty(),
                         onBack = onBackToMenu,
                         onClose = onClosePanel,
-                    ) { panelContent(panel) }
+                    ) { panelContent(shown) }
                 } else if (layer.showsFamilyRows) {
                     val label = stringResource(R.string.call_actions_label)
                     Column(
@@ -109,8 +127,23 @@ internal fun CallControlsPill(
                 CallPillHairline()
             }
         }
-        BaseRow(state, captioned = expanded, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
+        AnimatedVisibility(
+            visible = pillText == CallPillText.Captions,
+            enter = fadeIn(tween(UNFOLD_MILLIS)) + grow,
+            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink,
+        ) {
+            Column {
+                captions()
+                CallPillHairline()
+            }
+        }
+        BaseRow(state, captioned = expanded && panel != CallScreenPanel.Journal, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
     }
+}
+
+/** The panel the pill drew last: what a closing panel keeps showing while it fades (not state, never recomposes). */
+private class HeldPanel {
+    var panel: CallScreenPanel? = null
 }
 
 @Composable

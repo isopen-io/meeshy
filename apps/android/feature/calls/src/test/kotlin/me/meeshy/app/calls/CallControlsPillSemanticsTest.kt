@@ -3,6 +3,14 @@ package me.meeshy.app.calls
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -13,7 +21,9 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallControlsDisposition
 import me.meeshy.sdk.model.call.CallGroupStageSizing
+import me.meeshy.sdk.model.call.CallPillText
 import me.meeshy.sdk.model.call.CallScreenLayer
+import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -46,6 +56,9 @@ class CallControlsPillSemanticsTest {
         muted: Boolean = false,
         taps: MutableList<String> = mutableListOf(),
         actions: MutableList<CallAction> = mutableListOf(),
+        pillText: CallPillText = CallPillText.None,
+        captions: @Composable () -> Unit = {},
+        panelContent: @Composable (CallScreenPanel) -> Unit = {},
     ) {
         val state = ui(muted)
         val items = CallPillModel.items(state, offered)
@@ -66,6 +79,10 @@ class CallControlsPillSemanticsTest {
                     onAction = { actions += it },
                     onBackToMenu = {},
                     onClosePanel = {},
+                    pillText = pillText,
+                    captions = captions,
+                    panelContent = panelContent,
+                    modifier = Modifier.testTag("pill"),
                 )
             }
         }
@@ -126,5 +143,49 @@ class CallControlsPillSemanticsTest {
         setPill(layer = CallScreenLayer.Menu, actions = actions)
         rule.onNodeWithContentDescription("Speaker").performClick()
         assertThat(actions).containsExactly(CallAction.Captions)
+    }
+
+    @Test
+    fun `the captions live in the pill above its base row, the base row stays touchable (#17343)`() {
+        val taps = mutableListOf<String>()
+        setPill(taps = taps, pillText = CallPillText.Captions, captions = { Text("Bonjour Ada") })
+        rule.onNodeWithText("Bonjour Ada").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Hang up").performClick()
+        assertThat(taps).containsExactly("end")
+    }
+
+    @Test
+    fun `a pill without text carries no captions`() {
+        setPill(pillText = CallPillText.None, captions = { Text("Bonjour Ada") })
+        rule.onNodeWithText("Bonjour Ada").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the journal is drawn in the pill with no back button of its own, and the base row stays under it (#17343)`() {
+        val taps = mutableListOf<String>()
+        setPill(
+            layer = CallScreenLayer.Panel(CallScreenPanel.Journal),
+            taps = taps,
+            pillText = CallPillText.Journal,
+            panelContent = { Text("Journal du direct") },
+        )
+        rule.onNodeWithText("Journal du direct").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Back to actions").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Mute microphone").performClick()
+        assertThat(taps).containsExactly("mute")
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1000dp-h800dp")
+    fun `on a wide screen the pill that carries text stops at 560 dp and the resting pill at 440 dp (#17343)`() {
+        setPill(pillText = CallPillText.Captions, captions = { Text("Bonjour Ada") })
+        rule.onNodeWithTag("pill").assertWidthIsEqualTo(560.dp)
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1000dp-h800dp")
+    fun `the resting pill keeps its 440 dp`() {
+        setPill()
+        rule.onNodeWithTag("pill").assertWidthIsEqualTo(440.dp)
     }
 }

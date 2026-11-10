@@ -109,13 +109,13 @@ class CallCaptionsControllerTest {
     }
 
     @Test
-    fun `nothing is gathered while my captions are off, nor from another call`() = runController { controller ->
+    fun `the journal keeps what was transcribed while my captions were off, never another call's words (#17342)`() = runController { controller ->
         controller.connected()
         relayed.tryEmit(relay())
         controller.advance()
         relayed.tryEmit(relay(callId = "call-2", id = "w2"))
 
-        assertThat(controller.state.value.journal.isEmpty).isTrue()
+        assertThat(controller.state.value.journal.segments).hasSize(1)
     }
 
     @Test

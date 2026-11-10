@@ -100,6 +100,26 @@ class CallChromeControllerTest {
     }
 
     @Test
+    fun `the journal button of the stowed captions relights the chrome and opens the journal in the pill`() {
+        val chrome = controller()
+        chrome.onSceneTap(true, false)
+        assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Controls)).isFalse()
+        chrome.open(CallScreenPanel.Journal)
+        assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Controls)).isTrue()
+        assertThat(chrome.state.value.layer.pillPanel).isEqualTo(CallScreenPanel.Journal)
+    }
+
+    @Test
+    fun `the menu over an open journal stows it and closing the menu gives it back`() {
+        val chrome = controller()
+        chrome.open(CallScreenPanel.Journal)
+        chrome.toggleMenu()
+        assertThat(chrome.state.value.layer).isEqualTo(CallScreenLayer.MenuOverJournal)
+        chrome.toggleMenu()
+        assertThat(chrome.state.value.layer).isEqualTo(CallScreenLayer.Panel(CallScreenPanel.Journal))
+    }
+
+    @Test
     fun `a mode frees the screen and reveals the chrome`() {
         val chrome = controller()
         chrome.onSceneTap(true, false)
