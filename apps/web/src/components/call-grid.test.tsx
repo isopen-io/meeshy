@@ -43,7 +43,6 @@ const props = (overrides: Partial<CallGridProps> = {}): CallGridProps => ({
   members: [member('u-a', 'Awa'), member('u-b', 'Bintou')],
   remoteStreams: {},
   self: { stream: null, cameraOn: false, mirrored: true, micMuted: false },
-  selfControls: null,
   choice: null,
   onChoose: () => undefined,
   immersive: false,
@@ -152,18 +151,14 @@ describe('CallGrid — toute tuile à la une, la mienne aussi (#9098)', () => {
     expect(grid()).toContain('aria-label="Mettre mon image à la une"');
   });
 
-  test('ma tuile à la une : mon image occupe la scène, les commandes de ma caméra en haut au centre, tous les pairs en bandeau', () => {
-    const html = grid({ choice: { kind: 'self' }, selfControls: <span data-mine-row="" /> });
+  test('ma tuile à la une : mon image occupe la scène, tous les pairs en bandeau — aucune commande de ma caméra sur la grille (#17327)', () => {
+    const html = grid({ choice: { kind: 'self' } });
     expect(html).toContain('data-call-spotlight="self"');
-    expect(html).toMatch(/data-call-self-featured-controls=""[^>]*>[\s\S]*data-mine-row=""/);
+    expect(html).not.toContain('data-call-self-featured-controls');
     expect(html).toContain('data-call-strip=""');
     expect(html).toContain('data-call-tile="u-a"');
     expect(html).toContain('data-call-tile="u-b"');
     expect(html).toContain('aria-label="Revenir à la grille"');
-  });
-
-  test('ses commandes n’existent qu’à la une', () => {
-    expect(grid({ selfControls: <span data-mine-row="" /> })).not.toContain('data-mine-row');
   });
 
   test('le plein écran s’offre pour toute tuile à la une, pas seulement un écran partagé', () => {

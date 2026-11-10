@@ -1,5 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 
+import type { CallLayout } from './call-view';
+
 /**
  * **MA VIGNETTE EN COIN, EN LOI PURE** (#8577) — trois tailles, x1 · x2 · x3 ;
  * x2 est la vignette d'avant (112 × 160). Pincer ma vignette la fait passer
@@ -68,6 +70,39 @@ export const SELF_TILE_BOTTOM = 176;
 const DRAG_THRESHOLD = 8;
 
 export type TileBox = TileSize & { readonly x: number; readonly y: number };
+
+/** Ma vignette quand l'autre partage son écran : en haut à droite, 4,5 rem sous la zone sûre, à la taille x2. */
+export const SCREEN_SELF_TILE = { y: 72, width: 112, height: 160 } as const;
+
+/** Ma vignette en coin et son coin, dans les mesures de l'écran sous sa zone sûre. */
+export type TileFootprint = TileBox & { readonly corner: SelfTileCorner };
+
+/** Ce que l'écran d'appel sait de ma vignette ; son coin et sa taille sont ceux que je lui ai choisis (`selfTileStore`). */
+type FootprintInput = {
+  readonly layout: CallLayout;
+  readonly cameraOn: boolean;
+  /** Mon image remplit l'écran : le coin montre l'autre, et reste une vignette. */
+  readonly swapped: boolean;
+  /** Un cadre en direct me compose dans sa case : ma vignette se retire (#16943). */
+  readonly framed: boolean;
+  /** L'écran partagé de l'autre en plein écran : ma vignette se retire. */
+  readonly immersive: boolean;
+  readonly corner: SelfTileCorner;
+  readonly scale: SelfTileScale;
+  readonly viewport: TileSize;
+  /** Ce que la capsule de capture prend sous l'en-tête (R1) : ma vignette descend d'autant. */
+  readonly topInset: number;
+};
+
+/** La vignette du coin que la scène pose (`call-stage.tsx`), à sa taille choisie — les rails du duo l'évitent (#17429). */
+export function selfTileFootprint({ layout, cameraOn, swapped, framed, immersive, corner, scale, viewport, topInset }: FootprintInput): TileFootprint | null {
+  if (layout === 'screen') return cameraOn && !immersive ? { corner: 'top-right', x: viewport.width - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width, ...SCREEN_SELF_TILE } : null;
+  if (layout !== 'video-duo' || !(swapped || cameraOn) || (framed && !swapped)) return null;
+  return { corner, ...selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, topInset }) };
+}
+
+/** L'écran de l'appel ; hors navigateur, celui de la planche. */
+export const callViewport = (): TileSize => (typeof window === 'undefined' ? { width: 390, height: 844 } : { width: window.innerWidth, height: window.innerHeight });
 
 const onTop = (corner: SelfTileCorner): boolean => corner.startsWith('top');
 

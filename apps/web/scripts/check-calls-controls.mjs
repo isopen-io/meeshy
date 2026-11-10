@@ -12,12 +12,12 @@
  * (`fixtures-call-peer.ts`), en clair et en sombre (390 × 844) puis au doigt
  * (320 × 568, écran tactile émulé, gestes envoyés par CDP) :
  *
- *  1. un appel vocal se connecte ; le `(…)` sort DEUX rangées titrées, au-
- *     dessus de la ligne de base, dans le cadre de la pilule ; chacune défile
- *     à l'horizontale sur une seule ligne, SANS accroche obligatoire (#8575 :
- *     elle ramenait à zéro tout débord plus petit qu'un bouton) ; la rangée de
- *     l'appel porte « Ajouter », « Réagir » et « Journal » (44 px, chacun son
- *     disque de verre dessiné, sans flou à lui — #17345) ;
+ *  1. un appel vocal se connecte ; le `(…)` sort DEUX RAILS (#17327) : « Mon
+ *     image » sur le bord de début, « L'appel » sur le bord de fin, en
+ *     colonnes de verre de boutons de 44 px (chacun son disque, sans flou à
+ *     lui — #17345), au milieu de l'écran ; la pilule ne grandit pas ;
+ *     « L'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir ;
+ *     caméra éteinte, « Mon image » : Caméra et Écran seuls ;
  *  2. « Réagir » : la palette REMPLACE les rangées (#8578), avec ‹ Retour et
  *     ✕ Fermer ; 🎉 part (`call:reaction`) et monte aussitôt ; la réaction du
  *     pair monte sous son nom ; sous `prefers-reduced-motion`, elle s'efface
@@ -32,24 +32,27 @@
  *  5. sur la tuile du pair, le menu de modération : « Couper le micro » part
  *     (`call:mute-participant`) ; « Retirer de l'appel » demande confirmation,
  *     Annuler ne retire personne ;
- *  6. le pair coupe mon micro : il est coupé, et « Nadia Benali a coupé votre
+ *  6. à plusieurs, les deux familles reviennent en RANGÉES titrées DANS la
+ *     pilule, qui grandit, et aucun rail ne sort ; le pair coupe mon micro : il est coupé, et « Nadia Benali a coupé votre
  *     micro » s'affiche ; je peux le rouvrir ;
  *  7. aucun verre dans un verre, aucune erreur de page ;
- *  8. en vidéo : ma vignette en coin est à ×2, SANS capsule de zoom (#8576) ; un toucher
- *     sur la scène efface l'en-tête et la pilule, un second les rend ; rien
- *     ne s'efface tout seul, pas même un panneau ouvert (#8988) ; « Capturer » suit « Enregistrer » ; les
- *     commandes de MA caméra (Caméra · Effets · Écran et le cran du zoom,
- *     #8441, 44 px) sont une rangée
- *     en bas de ma vignette, et le (…) ne les double pas (#8626) ; toucher ma
- *     vignette met MON image en plein écran : la rangée monte en haut au
- *     centre, sous l'en-tête, la vignette du pair descend sous elle, la
- *     capsule du zoom se pose sur le bord ; un toucher les efface avec le
- *     reste ; « Effets » de la rangée entre dans le MODE : en-tête, pilule et
- *     rangée partent, le carrousel se centre en bas ; ✕ en sort ;
+ *  8. en vidéo : ma vignette en coin est à ×2, SANS capsule de zoom (#8576) et
+ *     SANS commande autour d'elle (seul le cran du zoom, #8441, se pose dans
+ *     son coin) ; « Capturer » suit « Réagir » dans le rail de l'appel ; les
+ *     commandes de MA caméra (Caméra · Effets · Écran) sont dans le rail de
+ *     « Mon image », et le (…) ne les double pas (#8626) ; un toucher sur la
+ *     scène efface l'en-tête et la pilule et fait glisser les rails hors de
+ *     l'écran, un second les rend ; rien ne s'efface tout seul, pas même un
+ *     panneau ouvert (#8988) ; toucher ma vignette met MON image en plein
+ *     écran : plus de rangée en haut, la capsule du zoom se pose sur le
+ *     bord ; « Effets » du rail entre dans le MODE : en-tête, pilule et rails
+ *     partent, le carrousel se centre en bas ; ✕ en sort ;
  *  9. au DOIGT (320 × 568) : sans geste, rien ne s'efface (#8988) ; un
  *     toucher sur la scène range les commandes, le suivant les rend — même
- *     posé là où était `(…)`, qui, rangé, n'agit pas ; un glissé fait défiler
- *     CHAQUE rangée débordante sans rien ranger (#8736), et les carrousels
+ *     posé là où était `(…)`, qui, rangé, n'agit pas ; en portrait comme en
+ *     paysage, aucun rail ne recouvre ma vignette (P2, #17429) ; en paysage, un
+ *     glissé fait défiler CHAQUE rail débordant sans rien ranger (#8736), ce qui
+ *     y défile s'estompant à ses deux bords (facture #17406), et les carrousels
  *     des deux modes (`scrollLeft` mesuré) ; un pincement à
  *     deux doigts sur ma vignette la passe à ×3, un pincement serré à ×1 ; la
  *     taille est retenue pour l'appel.
@@ -137,16 +140,59 @@ const rowsOf = (page) =>
     });
   });
 
-/** Un panneau : dans le cadre de la pilule, et SEUL — les rangées sont parties (#8578). */
+/** Un panneau : dans le cadre de la pilule, et SEUL — rangées et rails sont partis (#8578, #17327). */
 const replacesRows = (page, selector) =>
-  page.evaluate((target) => {
-    const panel = document.querySelector(target);
-    const pill = panel?.closest('[data-call-control-pill]');
-    if (panel == null || pill == null) return false;
-    const a = panel.getBoundingClientRect();
-    const b = pill.getBoundingClientRect();
-    return a.left >= b.left - 1 && a.right <= b.right + 1 && a.top >= b.top - 1 && a.bottom <= b.bottom + 1 && document.querySelector('[data-call-row]') === null;
-  }, selector);
+  until(
+    page,
+    (target) => {
+      const panel = document.querySelector(target);
+      const pill = panel?.closest('[data-call-control-pill]');
+      if (panel == null || pill == null) return false;
+      const a = panel.getBoundingClientRect();
+      const b = pill.getBoundingClientRect();
+      return a.left >= b.left - 1 && a.right <= b.right + 1 && a.top >= b.top - 1 && a.bottom <= b.bottom + 1 && document.querySelector('[data-call-row], [data-call-rail]') === null;
+    },
+    selector,
+    3000,
+  );
+
+/** Chaque rail : sa famille, son bord, ses boutons, sa place au milieu de l'écran (#17327). */
+const railsOf = (page) =>
+  page.evaluate(() => {
+    const keyOfButton = (button) => button.getAttribute('data-call-control') ?? (button.hasAttribute('data-call-record') ? 'record' : button.hasAttribute('data-call-captions') ? 'captions' : button.hasAttribute('data-call-screen-share') ? 'screen' : (button.getAttribute('aria-label') ?? '?'));
+    const pill = document.querySelector('[data-call-control-pill]')?.getBoundingClientRect();
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    return [...document.querySelectorAll('[data-call-rail]')].map((rail) => {
+      const box = rail.getBoundingClientRect();
+      const buttons = [...rail.querySelectorAll('button')];
+      const boxes = buttons.map((button) => button.getBoundingClientRect());
+      return {
+        family: rail.getAttribute('data-call-rail'),
+        label: rail.getAttribute('aria-label') ?? '',
+        role: rail.getAttribute('role'),
+        orientation: rail.getAttribute('aria-orientation'),
+        overflowY: getComputedStyle(rail.querySelector('[data-call-rail-scroll]') ?? rail).overflowY,
+        fade: /^linear-gradient\(.*rgba\(0, 0, 0, 0\).*rgba\(0, 0, 0, 0\)\)$/.test(getComputedStyle(rail.querySelector('[data-call-rail-scroll]') ?? rail).maskImage ?? ''),
+        tile: document.querySelector('[data-call-corner-frame], [data-call-shared-screen] [data-call-corner]')?.getBoundingClientRect().toJSON() ?? null,
+        clearOfTile: (() => {
+          const tile = document.querySelector('[data-call-corner-frame], [data-call-shared-screen] [data-call-corner]')?.getBoundingClientRect();
+          return tile === undefined || box.right <= tile.left || box.left >= tile.right || box.bottom <= tile.top || box.top >= tile.bottom;
+        })(),
+        keys: buttons.map(keyOfButton),
+        sizes: boxes.map((b) => Math.round(Math.min(b.width, b.height))),
+        disc: buttons.every((button) => button.classList.contains('glass-call-disc') || button.querySelector('.glass-call-disc') !== null),
+        blur: buttons.some((button) => ['glass-call', 'glass-call-prominent'].some((token) => button.classList.contains(token))),
+        onStart: box.right <= width / 2,
+        onEnd: box.left >= width / 2,
+        edge: Math.round(Math.min(box.left, width - box.right)),
+        middle: (box.top + box.bottom) / 2 > height * 0.3 && (box.top + box.bottom) / 2 < height * 0.7,
+        onScreen: box.left >= 0 && box.right <= width && box.top >= 0 && box.bottom <= height,
+        abovePill: pill === undefined || box.bottom <= pill.top + 1,
+        box: { left: Math.round(box.left), right: Math.round(box.right), top: Math.round(box.top), bottom: Math.round(box.bottom) },
+      };
+    });
+  });
 
 const panelFrame = async (page, label) => {
   const back = await sizes(page, '[data-panel-back]');
@@ -156,11 +202,15 @@ const panelFrame = async (page, label) => {
 
 const focused = (page, selector) => page.evaluate((target) => document.activeElement?.matches(target) === true, selector);
 
+/** Les rails et la capsule du zoom glissent (300 ms) : on les mesure posés, jamais en route. */
+const railsSettled = (page) => until(page, () => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => !(animation instanceof CSSTransition) || animation.playState !== 'running') ?? true, undefined, 3000);
+
 const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  await appears(page, '[data-call-actions]');
+  await appears(page, '[data-call-rails="shown"], [data-call-actions]');
+  await railsSettled(page);
 };
 
 const startConnectedCall = async (page) => {
@@ -305,14 +355,18 @@ try {
       await until(page, () => window.__meeshyFixtureCallPeer?.callId() != null);
       await openActions(page);
       check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) === 'menu', `${label} : le (…) passe l'écran au menu`);
-      const rows = await rowsOf(page);
-      check(JSON.stringify(rows.map((row) => row.side)) === JSON.stringify(['mine', 'call']) && rows.every((row) => row.title.length > 0), `${label} : deux rangées titrées, « ${rows.map((row) => row.title).join(' » puis « ')} »`);
-      check(rows.every((row) => row.role === 'toolbar' && row.overflowX === 'auto' && !row.snap.includes('mandatory') && row.wrap === 'nowrap' && row.oneLine), `${label} : chaque rangée défile à l'horizontale, sur une seule ligne, sans accroche obligatoire (${JSON.stringify(rows.map((row) => [row.overflowX, row.snap, row.wrap, row.oneLine]))})`);
-      check(rows.every((row) => row.above && row.inside), `${label} : elles s'empilent au-dessus de la ligne de base, dans le cadre de la pilule`);
-      const actions = await sizes(page, '[data-call-row="call"] [data-call-control="invite"], [data-call-row="call"] [data-call-control="react"], [data-call-row="call"] [data-call-control="journal"]');
-      check(actions.length === 3, `${label} : la rangée de l'appel porte « Ajouter », « Réagir » et « Journal »`);
+      const rails = await railsOf(page);
+      const mineRail = rails.find((rail) => rail.family === 'mine');
+      const callRail = rails.find((rail) => rail.family === 'call');
+      check(rails.length === 2 && mineRail !== undefined && callRail !== undefined && rails.every((rail) => rail.label.length > 0), `${label} : à deux, le (…) sort DEUX rails titrés, « ${rails.map((rail) => rail.label).join(' » et « ')} »`);
+      check(mineRail?.onStart === true && callRail?.onEnd === true, `${label} : « mon image » à gauche, « l'appel » à droite (${JSON.stringify(rails.map((rail) => [rail.family, rail.box.left, rail.box.right]))})`);
+      check(rails.every((rail) => rail.role === 'toolbar' && rail.orientation === 'vertical' && rail.overflowY === 'auto' && rail.middle && rail.onScreen && rail.edge >= 8), `${label} : chaque rail est une colonne verticale qui défile si l'écran est court, au milieu, hors des bords (${JSON.stringify(rails.map((rail) => [rail.role, rail.orientation, rail.overflowY, rail.middle, rail.edge]))})`);
+      check((await page.$('[data-call-control-pill="pill"]')) !== null && (await page.$('[data-call-control-pill="grown"]')) === null && (await page.$('[data-call-row]')) === null, `${label} : la pilule ne grandit pas, aucune rangée dedans`);
+      check(JSON.stringify(callRail?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'journal', 'react']), `${label} : « l'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir (${callRail?.keys.join(' · ')})`);
+      check(mineRail !== undefined && mineRail.keys.includes('camera') && mineRail.keys.every((key) => ['camera', 'screen'].includes(key)), `${label} : caméra éteinte, « mon image » : Caméra et Écran seuls (${mineRail?.keys.join(' · ')})`);
       check((await page.$('[data-call-control="capture"]')) === null, `${label} : en audio, pas de « Capturer »`);
-      check(actions.every((button) => button.w >= TAP_FLOOR && button.h >= TAP_FLOOR && button.disc && !button.blur), `${label} : ils font ${TAP_FLOOR}, portent leur disque de verre et n'ont pas de flou à eux (#17345)`);
+      check(rails.every((rail) => rail.sizes.length > 0 && rail.sizes.every((size) => size >= TAP_FLOOR) && rail.disc && !rail.blur), `${label} : boutons de ${TAP_FLOOR}, chacun son disque de verre et pas de flou à lui (#17345)`);
+      check((await nestedGlass(page)) === 0, `${label} : aucun verre posé dans un verre, rails ouverts`);
       await capture(page, `controles-actions-${slug}`);
 
       // ------------------------------------------------ 2. réagir
@@ -343,14 +397,15 @@ try {
       check(await gone(page, '[data-call-reaction="🎉"]', 4000), `${label} : elle s'efface en 2,5 s`);
       await page.click('[data-panel-back]');
       check(await gone(page, '[data-call-react-panel]'), `${label} : ‹ ferme la palette`);
-      check(await appears(page, '[data-call-row="call"]'), `${label} : ‹ rend les rangées`);
+      check(await appears(page, '[data-call-rails="shown"] [data-call-rail="call"]'), `${label} : ‹ rend les rails`);
       check(await until(page, () => document.activeElement?.getAttribute('data-call-control') === 'react'), `${label} : le focus revient à « Réagir »`);
       await page.click('[data-call-control="react"]');
       await appears(page, '[data-call-react-panel]');
       await page.focus('[data-call-react="👍"]');
       await page.keyboard.press('Escape');
       check(await gone(page, '[data-call-react-panel]'), `${label} : Échap ferme la palette`);
-      check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) === 'idle' && (await page.$('[data-call-row]')) === null, `${label} : Échap ferme TOUT — l'écran revient au repos`);
+      check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) === 'idle', `${label} : Échap ferme TOUT — l'écran revient au repos`);
+      check(await gone(page, '[data-call-rails]'), `${label} : et les rails, partis, ne sont plus dans l'écran`);
       check(await until(page, () => document.activeElement?.hasAttribute('data-call-more') === true), `${label} : le focus revient au (…)`);
       check((await page.$('[data-call-screen="connected"]')) !== null, `${label} : sans réduire l'appel`);
 
@@ -405,6 +460,9 @@ try {
 
       // ------------------------------------------------ 6. le pair coupe mon micro
       await openActions(page);
+      const groupRows = await rowsOf(page);
+      check(JSON.stringify(groupRows.map((row) => row.side)) === JSON.stringify(['mine', 'call']) && groupRows.every((row) => row.title.length > 0 && row.role === 'toolbar' && row.overflowX === 'auto' && row.wrap === 'nowrap' && row.oneLine && row.above && row.inside), `${label} : à plusieurs, deux rangées titrées DANS la pilule, qui défilent sur une ligne (${JSON.stringify(groupRows.map((row) => [row.side, row.title]))})`);
+      check((await page.$('[data-call-control-pill="grown"]')) !== null && (await page.$('[data-call-rail]')) === null, `${label} : la pilule grandit et aucun rail ne sort`);
       check((await page.$('[data-call-screen] button[aria-label="Couper le micro"]')) !== null, `${label} : mon micro est ouvert`);
       await page.evaluate(() => window.__meeshyFixtureCallPeer?.muteMe());
       check(await appears(page, '[data-call-screen] button[aria-label="Activer le micro"]'), `${label} : le pair coupe mon micro`);
@@ -434,35 +492,37 @@ try {
       const corner = await page.locator('[data-call-corner]').boundingBox();
       check(corner !== null && Math.round(corner.width) === 112 && Math.round(corner.height) === 160, `vidéo : ×2 mesure 112 × 160 (${corner && [Math.round(corner.width), Math.round(corner.height)]})`);
       check((await page.$('[data-call-zoom]')) === null, 'vidéo : aucune capsule de zoom sur la vignette en coin');
-      const tileRows = await page.$eval('[data-call-corner-frame]', (frame) => {
+      const tileControls = await page.$eval('[data-call-corner-frame]', (frame) => {
         const tile = frame.querySelector('[data-call-corner]')?.getBoundingClientRect();
-        const read = (group) => {
-          const row = frame.querySelector(`[data-call-self-row="${group}"] [data-call-self-controls="tile"]`);
-          if (row === null || tile === undefined) return null;
-          const box = row.getBoundingClientRect();
-          const buttons = [...row.querySelectorAll('[data-call-self-control]')];
-          return {
-            orientation: row.getAttribute('aria-orientation'),
-            actions: buttons.map((button) => button.getAttribute('data-call-self-control')),
-            sizes: buttons.map((button) => Math.round(Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
-            above: box.bottom <= tile.top,
-            below: box.top >= tile.bottom,
-            onScreen: box.left >= 0 && box.right <= window.innerWidth && box.top >= 0 && box.bottom <= window.innerHeight,
-          };
+        const corner = frame.querySelector('[data-call-corner]');
+        const buttons = [...frame.querySelectorAll('button')].filter((button) => button !== corner);
+        return {
+          rows: frame.querySelectorAll('[data-call-self-row], [data-call-self-controls]').length,
+          actions: buttons.map((button) => button.getAttribute('data-call-self-control') ?? button.getAttribute('aria-label')),
+          zoom: buttons
+            .filter((button) => button.getAttribute('data-call-self-control') === 'zoom')
+            .map((button) => {
+              const box = button.getBoundingClientRect();
+              return { size: Math.round(Math.min(box.width, box.height)), inside: tile !== undefined && box.left >= tile.left && box.right <= tile.right && box.top >= tile.top && box.bottom <= tile.bottom };
+            }),
         };
-        return { effects: read('effects'), camera: read('camera') };
       });
-      const { effects: aboveRow, camera: belowRow } = tileRows;
-      check(aboveRow !== null && belowRow !== null && aboveRow.orientation === 'horizontal' && belowRow.orientation === 'horizontal', `vignette : les commandes de ma caméra sont AUTOUR de ma vignette, en deux rangées (#8747) (${JSON.stringify(tileRows)})`);
-      check(aboveRow !== null && JSON.stringify(aboveRow.actions) === JSON.stringify(['effects', 'screen']) && aboveRow.above, `vignette : Effets · Écran au-dessus d’elle (${JSON.stringify(aboveRow)})`);
-      check(belowRow !== null && JSON.stringify(belowRow.actions.filter((action) => action !== 'flip')) === JSON.stringify(['camera', 'zoom']) && belowRow.below, `vignette : (Retourner) · Caméra · cran du zoom (#8441) en dessous d’elle (${JSON.stringify(belowRow)})`);
-      check([aboveRow, belowRow].every((row) => row !== null && row.sizes.every((size) => size >= TAP_FLOOR) && row.onScreen), `vignette : ${TAP_FLOOR} px chacun, hors de ma vignette, à l’écran (${JSON.stringify(tileRows)})`);
+      check(tileControls.rows === 0 && tileControls.actions.every((action) => action === 'zoom'), `vignette : aucune commande autour de ma vignette — seul le cran du zoom (#17327) (${JSON.stringify(tileControls)})`);
+      check(tileControls.zoom.length === 1 && tileControls.zoom[0].inside && tileControls.zoom[0].size >= TAP_FLOOR, `vignette : le cran du zoom (#8441) se pose dans son coin, ${TAP_FLOOR} px (${JSON.stringify(tileControls.zoom)})`);
+      const videoRails = await railsOf(page);
+      const videoMine = videoRails.find((rail) => rail.family === 'mine');
+      const videoCall = videoRails.find((rail) => rail.family === 'call');
+      check(videoMine?.onStart === true && videoCall?.onEnd === true, `vidéo : « mon image » à gauche, « l'appel » à droite (${JSON.stringify(videoRails.map((rail) => [rail.family, rail.box.left, rail.box.right]))})`);
+      check(JSON.stringify(videoMine?.keys.filter((key) => !['flip', 'camera-picker'].includes(key))) === JSON.stringify(['camera', 'effects', 'screen']) && (videoMine.keys[1] === 'flip' || videoMine.keys[1] === 'camera-picker' || !videoMine.keys.some((key) => ['flip', 'camera-picker'].includes(key))), `vidéo : « mon image » : Caméra · (Retourner) · Effets · Écran (${videoMine?.keys.join(' · ')})`);
+      check(JSON.stringify(videoCall?.keys.filter((key) => key !== 'pip')) === JSON.stringify(['captions', 'record', 'invite', 'journal', 'react', 'capture']), `vidéo : « l'appel » : Sous-titres, Enregistrer, Ajouter, Journal, Réagir, Capture (${videoCall?.keys.join(' · ')})`);
+      check(videoRails.every((rail) => rail.sizes.every((size) => size >= TAP_FLOOR) && rail.onScreen), `vidéo : ${TAP_FLOOR} px chacun, à l'écran (${JSON.stringify(videoRails.map((rail) => [rail.family, rail.sizes, rail.box]))})`);
       check((await page.$('[data-call-row="mine"]')) === null && (await page.locator('[data-call-control="camera"]').count()) === 1, 'vignette : le (…) ne double pas les commandes de ma caméra');
-      await capture(page, 'controles-vignette-rangee-dark');
-      const labels = await page.$$eval('[data-call-row="call"] [data-call-row-scroll] button', (buttons) => buttons.map((button) => button.getAttribute('data-call-control') ?? button.getAttribute('aria-label')));
-      const record = labels.findIndex((name) => /Enregistrer/.test(name ?? ''));
-      check(record >= 0 && labels[record + 1] === 'capture', `vidéo : « Capturer » suit « Enregistrer » dans la rangée de l’appel (${labels.join(' · ')})`);
-      await capture(page, 'controles-rangees-video-dark');
+      await capture(page, 'controles-rails-video-dark');
+
+      check(await tapStage(page, false), 'vidéo : un toucher sur la scène range les commandes, menu ouvert');
+      check(await gone(page, '[data-call-rails]', 3000), 'vidéo : les rails glissent hors de l’écran avec le reste');
+      check(await tapStage(page, true), 'vidéo : un second toucher rend tout');
+      await openActions(page);
 
       await page.click('[data-call-control="react"]');
       await appears(page, '[data-call-react-panel]');
@@ -472,8 +532,8 @@ try {
 
       await focusSettled(page, '[data-call-more]');
       check(await tapStage(page, false), 'vidéo : un toucher sur la scène efface les commandes');
-      const faded = await fadedAll(page, ['[data-call-header]', '[data-call-controls]', '[data-call-self-row="effects"] [data-call-self-controls="tile"]', '[data-call-self-row="camera"] [data-call-self-controls="tile"]']);
-      check(faded.done, `vidéo : l’en-tête, la pilule et la rangée de ma vignette s’effacent (${JSON.stringify(faded.seen)})`);
+      const faded = await fadedAll(page, ['[data-call-header]', '[data-call-controls]', '[data-call-self-zoom]']);
+      check(faded.done, `vidéo : l’en-tête, la pilule et le cran du zoom de ma vignette s’effacent (${JSON.stringify(faded.seen)})`);
       await capture(page, 'controles-toucher-efface-dark');
       check(await tapStage(page, true), 'vidéo : un second toucher rend tout');
       check(await tapStage(page, false), 'vidéo : un clic sur la scène les range à nouveau');
@@ -482,47 +542,39 @@ try {
       check(await appears(page, '[data-call-chrome="shown"]', 2000), 'vidéo : rangées, une touche les rend — même pressée hors de l’écran d’appel (#8988)');
 
       await page.click('[data-call-corner]');
-      check(await appears(page, '[data-call-self-controls="top"]'), 'plein écran : toucher ma vignette met mon image en plein écran, ses commandes en haut au centre');
-      const top = await page.$eval('[data-call-self-controls="top"]', (element) => {
-        const box = element.getBoundingClientRect();
-        const header = document.querySelector('[data-call-header]')?.getBoundingClientRect();
-        const corner = document.querySelector('[data-call-corner-frame]')?.getBoundingClientRect();
-        return {
-          role: element.getAttribute('role'),
-          orientation: element.getAttribute('aria-orientation'),
-          actions: [...element.querySelectorAll('[data-call-self-control]')].map((button) => button.getAttribute('data-call-self-control')),
-          sizes: [...element.querySelectorAll('[data-call-self-control]')].map((button) => Math.round(Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height))),
-          center: box.left + box.width / 2,
-          top: box.top,
-          belowHeader: header === undefined || box.top >= header.bottom,
-          clearOfCorner: corner === undefined || corner.top >= box.bottom,
-        };
-      });
-      const order = top.actions.filter((action) => action !== 'flip');
-      check(top.role === 'toolbar' && top.orientation === 'horizontal', `plein écran : une barre d’outils horizontale (${top.role}, ${top.orientation})`);
-      check(JSON.stringify(order) === JSON.stringify(['camera', 'effects', 'screen']) && (top.actions[0] === 'flip' || !top.actions.includes('flip')), `plein écran : (Retourner) · Caméra · Effets · Écran (${top.actions.join(' · ')})`);
-      check(top.sizes.every((size) => size >= TAP_FLOOR) && Math.abs(top.center - 195) <= 2 && top.top < 160 && top.belowHeader, `plein écran : ${TAP_FLOOR} px chacun, en haut au centre, sous l’en-tête (${JSON.stringify(top)})`);
-      check(top.clearOfCorner, 'plein écran : la vignette du pair descend sous la rangée, sans la couvrir');
-      check((await page.$('[data-call-self-controls="tile"]')) === null, 'plein écran : la rangée a quitté la vignette (un seul endroit)');
-      check(await appears(page, '[data-call-zoom]'), 'plein écran : la capsule du zoom apparaît sur le bord');
-      await page.focus('[data-call-self-control="camera"]');
-      await page.keyboard.press('ArrowRight');
-      check(await focused(page, '[data-call-self-control="effects"]'), 'plein écran : → passe au bouton suivant de la rangée');
+      check(await appears(page, '[data-call-zoom]'), 'plein écran : toucher ma vignette met mon image en plein écran, la capsule du zoom apparaît sur le bord');
+      check((await page.$('[data-call-self-controls], [data-call-self-row]')) === null, 'plein écran : plus aucune rangée de commandes en haut — elles sont dans le rail de « mon image »');
       await capture(page, 'controles-plein-ecran-dark');
       check(await tapStage(page, false), 'plein écran : un toucher efface tout');
-      const railFaded = await fadedAll(page, ['[data-call-self-controls="top"]', '[data-call-zoom]', '[data-call-header]']);
-      check(railFaded.done, `plein écran : la rangée et la capsule s’effacent avec le reste (${JSON.stringify(railFaded.seen)})`);
+      const railFaded = await fadedAll(page, ['[data-call-zoom]', '[data-call-header]']);
+      check(railFaded.done, `plein écran : la capsule s’efface avec le reste (${JSON.stringify(railFaded.seen)})`);
       check(
-        await until(page, () => ['[data-call-self-controls-holder]', '[data-call-self-column]'].every((selector) => document.querySelector(selector) !== null && getComputedStyle(document.querySelector(selector)).visibility === 'hidden'), undefined, 2000),
-        'plein écran : rangées d’un toucher, elles ne captent plus le toucher une fois leur fondu fini (invisibles, #8735)',
+        await until(page, () => document.querySelector('[data-call-self-column]') !== null && getComputedStyle(document.querySelector('[data-call-self-column]')).visibility === 'hidden', undefined, 2000),
+        'plein écran : la capsule, d’un toucher, ne capte plus le toucher une fois son fondu fini (invisible, #8735)',
       );
       check(await tapStage(page, true), 'plein écran : un second toucher les rend');
 
-      await page.click('[data-call-self-control="effects"]');
-      check(await appears(page, '[data-call-mode="effects"]'), 'mode : « Effets » de la rangée entre dans le mode Effets');
+      await openActions(page);
+      const fullRails = await railsOf(page);
+      const fullMine = fullRails.find((rail) => rail.family === 'mine');
+      check(fullMine?.onStart === true && fullMine.keys.includes('effects') && fullMine.sizes.every((size) => size >= TAP_FLOOR), `plein écran : le rail de « mon image » porte ses commandes (${fullMine?.keys.join(' · ')})`);
+      const clearOfRail = await page.evaluate(() => {
+        const rail = document.querySelector('[data-call-rail="mine"]')?.getBoundingClientRect();
+        const column = document.querySelector('[data-call-zoom]')?.getBoundingClientRect();
+        const apart = rail === undefined || column === undefined || rail.right <= column.left || column.right <= rail.left || rail.bottom <= column.top || column.bottom <= rail.top;
+        return { apart, rail: rail?.toJSON(), column: column?.toJSON() };
+      });
+      check(clearOfRail.apart, `plein écran : la capsule du zoom ne passe pas sous le rail (${JSON.stringify(clearOfRail)})`);
+      const second = fullMine?.keys[1];
+      await page.focus('[data-call-rail="mine"] [data-call-control="camera"]');
+      await page.keyboard.press('ArrowDown');
+      check(second !== undefined && (await focused(page, `[data-call-rail="mine"] [data-call-control="${second}"]`)), `plein écran : ↓ passe au bouton suivant du rail (${second})`);
+
+      await page.click('[data-call-rail="mine"] [data-call-control="effects"]');
+      check(await appears(page, '[data-call-mode="effects"]'), 'mode : « Effets » du rail entre dans le mode Effets');
       check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) === 'mode', 'mode : l’écran passe au mode');
-      const modeChrome = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-self-controls]', '[data-call-zoom]'].filter((selector) => document.querySelector(selector) !== null));
-      check(modeChrome.length === 0, `mode : en-tête, pilule, rangée de ma caméra et zoom partent (${JSON.stringify(modeChrome)})`);
+      const modeChrome = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-rails]', '[data-call-zoom]'].filter((selector) => document.querySelector(selector) !== null));
+      check(modeChrome.length === 0, `mode : en-tête, pilule, rails et zoom partent (${JSON.stringify(modeChrome)})`);
       const carousel = await page.$eval('[data-call-mode-carousel]', (element) => {
         const box = element.getBoundingClientRect();
         return { center: box.left + box.width / 2, bottom: box.bottom };
@@ -566,11 +618,38 @@ try {
       const layerAfter = await page.getAttribute('[data-call-screen]', 'data-call-layer');
       check((await appears(page, '[data-call-chrome="shown"]', 2000)) && layerAfter === 'idle', `doigt : le toucher suivant les rend — même posé là où était (…), qui, rangé, n’agit pas (#8988 — ${layerAfter})`);
       await openActions(page);
-      const rows = await dragEach(page, cdp, '[data-call-row] [data-call-row-scroll]');
-      const overflowing = rows.filter((row) => row.moved !== null);
-      check(overflowing.length >= 1, `doigt : au moins une rangée déborde à 320 (${JSON.stringify(rows)})`);
-      check(overflowing.every((row) => row.moved > 4), `doigt : un glissé fait défiler CHAQUE rangée qui déborde (${JSON.stringify(rows)})`);
-      check((await page.getAttribute('[data-call-screen]', 'data-call-chrome')) === 'shown', 'doigt : faire défiler les rangées ne les range pas (#8736)');
+      const portrait = await railsOf(page);
+      check(portrait.length === 2 && portrait.every((rail) => rail.onScreen && rail.sizes.every((size) => size >= TAP_FLOOR)) && portrait.find((rail) => rail.family === 'mine')?.onStart === true && portrait.find((rail) => rail.family === 'call')?.onEnd === true, `doigt : à 320 × 568, deux rails à l’écran, un par bord, ${TAP_FLOOR} px chacun (${JSON.stringify(portrait.map((rail) => [rail.family, rail.box]))})`);
+      await page.setViewportSize({ width: 568, height: 320 });
+      check(portrait.every((rail) => rail.clearOfTile), `doigt : à 320 × 568, aucun rail ne recouvre ma vignette (P2, #17429 — ${JSON.stringify(portrait.map((rail) => [rail.family, rail.box]))})`);
+      await page.setViewportSize({ width: 568, height: 320 });
+      check(await until(page, () => document.querySelector('[data-call-rails="shown"]') !== null && [...document.querySelectorAll('[data-call-rail-scroll]')].some((rail) => rail.scrollHeight - rail.clientHeight > 1)), 'doigt : en paysage (568 × 320), un rail déborde et défile sur place');
+      /* Ma vignette rejoint son coin de paysage en glissant (`useFlip`, une animation Web) : on la mesure posée. */
+      await until(page, () => (document.querySelector('[data-call-corner-frame]')?.getAnimations().length ?? 0) === 0, undefined, 2000);
+      const landscape = await railsOf(page);
+      check(landscape.length === 2 && landscape.every((rail) => rail.clearOfTile && rail.fade), `doigt : en paysage, aucun rail ne recouvre ma vignette, et ce qui y défile s’estompe à ses deux bords (${JSON.stringify(landscape.map((rail) => [rail.family, rail.clearOfTile, rail.fade, rail.box, rail.tile]))})`);
+      const slid = await page.evaluate(() => [...document.querySelectorAll('[data-call-rail]')].map((rail) => ({ family: rail.getAttribute('data-call-rail'), room: Math.round((rail.querySelector('[data-call-rail-scroll]')?.scrollHeight ?? 0) - (rail.querySelector('[data-call-rail-scroll]')?.clientHeight ?? 0)), box: rail.getBoundingClientRect().toJSON() })).filter((rail) => rail.room > 1));
+      const sliding = [];
+      for (const rail of slid) {
+        const track = page.locator(`[data-call-rail="${rail.family}"] [data-call-rail-scroll]`);
+        await track.evaluate((element) => void (element.scrollTop = 0));
+        const x = rail.box.x + rail.box.width / 2;
+        const span = Math.min(rail.box.height - 24, rail.room * 0.8);
+        const start = rail.box.y + rail.box.height - 12;
+        await drag(cdp, { x, y: start }, { x, y: start - span });
+        const moved = await track
+          .evaluate((element) => new Promise((resolve) => {
+            const started = performance.now();
+            const read = () => (element.scrollTop > 4 || performance.now() - started > 1500 ? resolve(Math.round(element.scrollTop)) : requestAnimationFrame(read));
+            read();
+          }))
+          .catch(() => 0);
+        sliding.push({ family: rail.family, room: rail.room, moved });
+      }
+      check(sliding.length >= 1 && sliding.every((rail) => rail.moved > 4), `doigt : un glissé fait défiler chaque rail qui déborde (${JSON.stringify(sliding)})`);
+      await page.setViewportSize({ width: 320, height: 568 });
+      check(await until(page, () => document.querySelector('[data-call-rails="shown"]') !== null), 'doigt : de retour en portrait, les rails sont là');
+      check((await page.getAttribute('[data-call-screen]', 'data-call-chrome')) === 'shown', 'doigt : faire défiler un rail ne les range pas (#8736)');
       await capture(page, 'controles-doigt-rangees-dark-320x568');
 
       await page.click('[data-call-control="effects"]');
@@ -600,11 +679,11 @@ try {
       });
       const bigger = await tile();
       check(grown, `pincer : ×3 tient dans 320 × 568 — 144 × 206 (${bigger.box && [Math.round(bigger.box.width), Math.round(bigger.box.height)]})`);
-      check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) !== 'mode' && (await page.$('[data-call-self-controls="top"]')) === null, 'pincer : un pincement n’est pas un toucher — mon image reste en coin');
+      check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) !== 'mode' && (await page.getAttribute('[data-call-corner]', 'data-call-self-tile')) !== null, 'pincer : un pincement n’est pas un toucher — mon image reste en coin');
       check((await page.textContent('[data-call-self-tile-status]'))?.length > 0, `pincer : la taille se dit au lecteur d’écran (« ${await page.textContent('[data-call-self-tile-status]')} »)`);
       await capture(page, 'controles-vignette-x3-dark-320x568');
       await page.click('[data-call-corner]');
-      await appears(page, '[data-call-self-controls="top"]');
+      await until(page, () => document.querySelector('[data-call-corner]')?.getAttribute('data-call-self-tile') == null);
       await page.click('[data-call-corner]');
       check(await until(page, () => document.querySelector('[data-call-corner]')?.getAttribute('data-call-self-tile') === '3'), 'pincer : la taille est retenue pour l’appel (plein écran puis retour)');
       const again = await tile();

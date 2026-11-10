@@ -4,12 +4,13 @@
  *
  * - `idle` : la scène, l'en-tête et la ligne de base (`(…)` · Micro · Sortie ·
  *   Fin) ;
- * - `menu` : `(…)` ouvert, les rangées « Mon image » et « L'appel » au-dessus
- *   de la ligne de base ;
+ * - `menu` : `(…)` ouvert, « Mon image » et « L'appel » déployés — en rails
+ *   sur les bords à deux, en rangées au-dessus de la ligne de base à plusieurs
+ *   (`call-controls-disposition.ts`, #17327) ;
  * - `panel` : un sous-menu (Réagir, Enregistrer, Ajouter, Journal) qui
  *   REMPLACE les rangées — ‹ revient au menu, ✕ ferme tout ;
  * - `mode` : Effets ou Montage — tout le chrome d'appel s'efface (en-tête,
- *   pilule, rangées, commandes de ma caméra) et seul reste le mode : son
+ *   pilule, rails, rangées, zoom de ma caméra) et seul reste le mode : son
  *   carrousel centré (deux tapes : photo, appui long : vidéo — #8625), ✕
  *   pour en sortir. Les sous-titres restent.
  *
@@ -78,18 +79,18 @@ export type LayerChrome = {
   readonly rows: boolean;
   readonly panel: CallPanelKind | null;
   readonly mode: CallModeKind | null;
-  /** Les commandes de ma caméra (rangée de ma vignette ou du haut, capsule du zoom). */
-  readonly selfControls: boolean;
+  /** Le zoom de ma caméra (cran de ma vignette, capsule du plein écran) : ma vignette ne porte aucune commande (#17327). */
+  readonly selfZoom: boolean;
 };
 
 export function layerChrome(layer: CallScreenLayer): LayerChrome {
-  if (layer.kind === 'mode') return { header: false, pill: false, rows: false, panel: null, mode: layer.mode, selfControls: false };
+  if (layer.kind === 'mode') return { header: false, pill: false, rows: false, panel: null, mode: layer.mode, selfZoom: false };
   return {
     header: true,
     pill: true,
     rows: layer.kind === 'menu',
     panel: layer.kind === 'panel' ? layer.panel : null,
     mode: null,
-    selfControls: true,
+    selfZoom: true,
   };
 }

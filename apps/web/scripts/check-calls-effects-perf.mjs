@@ -314,7 +314,7 @@ try {
 
   await page.click('[data-call-effects-validate]');
   await until(page, () => document.querySelector('[data-call-mode]') === null);
-  const step = '[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]';
+  const step = '[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]';
   const zoomOffered = (await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local';
   check(zoomOffered, 'le cran du zoom numérique est offert sur une caméra sans zoom (#8441)');
   if (zoomOffered) {
