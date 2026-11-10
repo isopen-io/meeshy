@@ -2,6 +2,8 @@ package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +43,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.WebRtcEngine
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallLiveFrameReply
 import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallLiveFrameDisplay
@@ -225,26 +228,35 @@ internal fun CallLiveFrameProposalCard(text: String, onAccept: () -> Unit, onDec
             Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = CallPalette.Ink)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-            CallLiveFrameButton(stringResource(R.string.call_live_frame_decline), Color.White.copy(alpha = 0.16f), onDecline, Modifier.weight(1f))
+            CallLiveFrameButton(stringResource(R.string.call_live_frame_decline), null, onDecline, Modifier.weight(1f))
             CallLiveFrameButton(stringResource(R.string.call_live_frame_accept), CallPalette.BrandDeep, onAccept, Modifier.weight(1f))
         }
     }
 }
 
+/** « Non merci » est un verre de bouton (#17323, iOS `callChipGlass`) ; « Appliquer » garde son [accent] plein. */
 @Composable
-private fun CallLiveFrameButton(label: String, fill: Color, onClick: () -> Unit, modifier: Modifier) {
+private fun CallLiveFrameButton(label: String, accent: Color?, onClick: () -> Unit, modifier: Modifier) {
     val haptics = LocalHapticFeedback.current
-    Box(
-        modifier
-            .height(48.dp)
-            .clip(CircleShape)
-            .background(fill)
-            .clickable(role = Role.Button) {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
-            },
-        contentAlignment = Alignment.Center,
-    ) { Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = CallPalette.Ink) }
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val target = modifier
+        .height(48.dp)
+        .clickable(interactionSource = source, indication = null, role = Role.Button) {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onClick()
+        }
+    val text: @Composable () -> Unit = {
+        Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = CallPalette.Ink)
+    }
+    if (accent == null) {
+        CallGlassButtonSurface(role = CallButtonRole.Neutral, shape = CircleShape, isPressed = pressed, modifier = target) { text() }
+    } else {
+        Box(
+            target.clip(CircleShape).background(accent).background(CallButtonFill.pressedHighlight(pressed)),
+            contentAlignment = Alignment.Center,
+        ) { text() }
+    }
 }
 
 /** Une ligne d'état du cadre : la réponse de l'autre, ou la raison d'une pause. */

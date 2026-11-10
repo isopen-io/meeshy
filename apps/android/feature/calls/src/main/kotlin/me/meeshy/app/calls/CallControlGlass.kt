@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
@@ -33,6 +34,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -47,6 +49,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.call.CallButtonGlassRule
+import me.meeshy.sdk.model.call.CallButtonGlassSurface
+import me.meeshy.sdk.model.call.CallButtonGlassTreatment
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
@@ -56,18 +62,39 @@ import me.meeshy.ui.theme.MeeshySpacing
 /** The visual state of a pill button: active = solid white disc and dark glyph, End = red, auto-pause = amber glyph. */
 internal enum class CallPillKind { Normal, Active, Destructive, Warning }
 
-/** The flat disc of ONE button of the glass block (iOS `CallButtonFill`, plus the adaptive tone of law 3 iOS does not carry yet). */
+/** Le rôle de verre d'un bouton (`CallButtonGlassRule`) : la pause automatique est neutre, son ambre est celui du glyphe. */
+internal fun CallPillKind.glassRole(): CallButtonRole = when (this) {
+    CallPillKind.Normal, CallPillKind.Warning -> CallButtonRole.Neutral
+    CallPillKind.Active -> CallButtonRole.Active
+    CallPillKind.Destructive -> CallButtonRole.Destructive
+}
+
+/**
+ * Ce qui habille le verre d'UN bouton (iOS `CallButtonFill` + `CallButtonGlassModifier`), plus le ton adaptatif de la
+ * loi 3 que iOS ne porte pas encore. Le choix du verre vient de [CallButtonGlassRule] ; ici ne restent que les valeurs.
+ */
 internal object CallButtonFill {
     private val Pressed = Color.White.copy(alpha = 0.22f)
 
     const val PRESSED_SCALE: Float = 0.88f
     const val MIN_TARGET_DP: Float = 48f
 
-    /** [tone] : le verre adaptatif (loi 3) — un bouton inactif s'assombrit sur un écran partagé reçu. */
-    fun color(kind: CallPillKind, tone: CallGlassTone = CallGlassTone.OverPicture): Color = when (kind) {
-        CallPillKind.Normal, CallPillKind.Warning -> tone.neutralFill
-        CallPillKind.Active -> Color.White
-        CallPillKind.Destructive -> MeeshyPalette.Error
+    /** Le lavis du verre : clair sur une image, rouge pour Fin, aucun pour l'actif (son blanc plein le couvre) ni sur un écran reçu (son voile sombre). */
+    fun glassTint(treatment: CallButtonGlassTreatment, tone: CallGlassTone = CallGlassTone.OverPicture): Color? = when {
+        treatment.surface == CallButtonGlassSurface.ProminentRed -> MeeshyPalette.Error
+        treatment.hasSolidWhiteBacking || tone.isDarkFill -> null
+        else -> CallPalette.Ink
+    }
+
+    /**
+     * Ce qui est posé SOUS le glyphe, dans le verre : le blanc plein de l'actif, le rouge plein de Fin, et sur un écran
+     * REÇU le voile sombre d'un bouton inactif (loi 3). Sur une image, un bouton neutre n'a que son verre.
+     */
+    fun backing(treatment: CallButtonGlassTreatment, tone: CallGlassTone = CallGlassTone.OverPicture): Color = when {
+        treatment.hasSolidWhiteBacking -> Color.White
+        treatment.surface == CallButtonGlassSurface.ProminentRed -> MeeshyPalette.Error
+        tone.isDarkFill -> tone.neutralFill
+        else -> Color.Transparent
     }
 
     fun glyph(kind: CallPillKind): Color = when (kind) {
@@ -85,16 +112,17 @@ internal object CallButtonFill {
 /** Where a button reports the finger put down / lifted, to arm or hold the chrome. `null` = nobody listens. */
 internal val LocalCallChromeInteraction = staticCompositionLocalOf<((CallChromeInteraction) -> Unit)?> { null }
 
-/** The round glyph of a pill button, on its flat disc. */
+/**
+ * The round glyph of a pill button, on ITS OWN glass disc (#17323) : [CallGlassButtonSurface] carries the treatment
+ * [CallButtonGlassRule] picks. The glass does not answer the finger by itself, so it lightens under it.
+ */
 @Composable
 internal fun CallPillGlyph(icon: ImageVector, kind: CallPillKind, diameter: Dp, isPressed: Boolean) {
-    Box(
-        modifier = Modifier
-            .size(diameter)
-            .clip(CircleShape)
-            .background(CallButtonFill.color(kind, LocalCallGlassTone.current))
-            .background(CallButtonFill.pressedHighlight(isPressed)),
-        contentAlignment = Alignment.Center,
+    CallGlassButtonSurface(
+        role = kind.glassRole(),
+        shape = CircleShape,
+        isPressed = isPressed,
+        modifier = Modifier.size(diameter),
     ) {
         Icon(icon, contentDescription = null, tint = CallButtonFill.glyph(kind), modifier = Modifier.size(diameter * 0.45f))
     }
@@ -165,14 +193,62 @@ internal fun CallPillButton(
 }
 
 /**
+ * LE verre de l'écran d'appel : l'unique entrée vers [MeeshyGlassSurface] de ce module, pour le bloc de la pilule,
+ * le disque de chaque bouton et la capsule de l'en-tête. Trois besoins, un seul site de dessin.
+ */
+@Composable
+internal fun CallGlassPlate(
+    modifier: Modifier = Modifier,
+    shape: Shape,
+    tint: Color? = null,
+    liquid: Boolean = false,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    MeeshyGlassSurface(modifier = modifier, shape = shape, tint = tint, liquid = liquid, content = content)
+}
+
+/**
+ * #17323 — le verre de N'IMPORTE QUEL bouton de l'appel : disque de la pilule et de l'en-tête, mais aussi les boutons
+ * voisins (« Non merci », « Refuser », « Message », puces d'ambiance, son et bascules de l'aperçu). La loi pure
+ * [CallButtonGlassRule] choisit, [CallGlassPlate] dessine, le ton de la loi 3 ([LocalCallGlassTone]) habille, et le
+ * verre s'éclaircit sous le doigt. Le contenu est centré ; la taille vient de [modifier] ou du contenu.
+ */
+@Composable
+internal fun CallGlassButtonSurface(
+    role: CallButtonRole,
+    shape: Shape,
+    isPressed: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val treatment = CallButtonGlassRule.treatment(role)
+    val tone = LocalCallGlassTone.current
+    CallGlassPlate(
+        modifier = modifier,
+        shape = shape,
+        tint = CallButtonFill.glassTint(treatment, tone),
+        liquid = treatment.isInteractive,
+    ) {
+        Box(
+            Modifier
+                .matchParentSize()
+                .background(CallButtonFill.backing(treatment, tone))
+                .background(CallButtonFill.pressedHighlight(isPressed && treatment.drawsPressHighlight)),
+        )
+        Box(Modifier.align(Alignment.Center), contentAlignment = Alignment.Center, content = content)
+    }
+}
+
+/**
  * The glass block of the pill: ONE surface that grows with what it holds (open panel or family
  * rows, then the base row). A dark veil under it keeps the captions legible over a bright picture, denser over a received
- * screen ([LocalCallGlassTone], law 3) ; the buttons inside keep the light disc ([CallGlassTone.withinVeiledBlock]).
+ * screen ([LocalCallGlassTone], law 3) ; each button inside is its own glass disc ([CallPillGlyph]), which keeps the
+ * light tone ([CallGlassTone.withinVeiledBlock]).
  */
 @Composable
 internal fun CallControlsGlass(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(CALL_PILL_RADIUS)
-    MeeshyGlassSurface(modifier = modifier, shape = shape) {
+    CallGlassPlate(modifier = modifier, shape = shape) {
         val tone = LocalCallGlassTone.current
         CompositionLocalProvider(LocalCallGlassTone provides tone.withinVeiledBlock) {
             Column(Modifier.fillMaxWidth().background(tone.veil(tone.veilAlpha), shape).clip(shape), content = content)

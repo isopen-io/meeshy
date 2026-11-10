@@ -2,6 +2,8 @@ package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallRecordingKind
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
@@ -77,7 +82,7 @@ internal fun CallRecordingConsentCard(
             }
             Text(text = detail, style = MaterialTheme.typography.bodySmall, color = MeeshyMediaChromeColors.OnMediaSecondary)
             Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus)) {
-                AnswerButton(stringResource(R.string.call_recording_refuse), Color.White.copy(alpha = 0.16f), Modifier.weight(1f)) {
+                AnswerButton(stringResource(R.string.call_recording_refuse), null, Modifier.weight(1f)) {
                     onAnswer(false)
                 }
                 AnswerButton(stringResource(R.string.call_recording_accept), accent, Modifier.weight(1f)) { onAnswer(true) }
@@ -91,16 +96,23 @@ internal fun RecordingDot(modifier: Modifier = Modifier) {
     Box(modifier.size(RECORDING_DOT_SIZE).clip(CircleShape).background(MeeshyPalette.Error))
 }
 
+/** « Refuser » est un verre de bouton (#17323) ; « Accepter » garde l'[accent] plein de la conversation. */
 @Composable
-private fun AnswerButton(label: String, background: Color, modifier: Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .heightIn(min = ANSWER_TARGET_MIN)
-            .clip(CircleShape)
-            .background(background)
-            .clickable(role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
+private fun AnswerButton(label: String, accent: Color?, modifier: Modifier, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val target = modifier
+        .heightIn(min = ANSWER_TARGET_MIN)
+        .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onClick)
+    val text: @Composable () -> Unit = {
         Text(text = label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+    }
+    if (accent == null) {
+        CallGlassButtonSurface(role = CallButtonRole.Neutral, shape = CircleShape, isPressed = pressed, modifier = target) { text() }
+    } else {
+        Box(
+            modifier = target.clip(CircleShape).background(accent).background(CallButtonFill.pressedHighlight(pressed)),
+            contentAlignment = Alignment.Center,
+        ) { text() }
     }
 }
