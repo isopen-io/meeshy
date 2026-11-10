@@ -175,7 +175,7 @@ extension MeeshyComposerHost {
         return ComposerCaptureMount(session: sceneCapture, size: $sceneCameraSize,
                                     allowsPhoto: modes.contains(.photo),
                                     allowsVideo: modes.contains(.video),
-                                    yieldsToScene: viewfinderYieldsToScene,
+                                    yieldsToScene: viewfinderYieldsToScene, sceneObjects: ComposerViewfinderSceneCanvas.mounted(by: self),
                                     onDisarm: { disarmSceneCamera() },
                                     onDeliver: { poseSceneCapture($0) }) {
             contenu
