@@ -152,18 +152,18 @@ extension ConversationViewModel {
         // worth reconciling with the optimistic local id. Reaction success
         // is a no-op at the ViewModel level — the `reaction:added` /
         // `reaction:removed` socket broadcast keeps every client in sync.
+        let ackLane = OrderedEventLane()
+        ackLane.store(in: &cancellables)
         OfflineQueue.shared.retrySucceeded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
                 guard payload.kind == .sendMessage else { return }
                 pendingServerIds[payload.tempId] = payload.serverId
-                let localId = payload.tempId
-                let serverId = payload.serverId
-                Task { [weak self] in
-                    _ = try? await self?.messagePersistence.applyEvent(
-                        localId: localId,
-                        event: .serverAck(serverId: serverId, at: Date())
+                ackLane.submit { [persistence = messagePersistence] in
+                    _ = try? await persistence.applyEvent(
+                        localId: payload.tempId,
+                        event: .serverAck(serverId: payload.serverId, at: Date())
                     )
                 }
             }

@@ -145,7 +145,9 @@ final class ComposerCameraSwitchFreezeTests: XCTestCase {
         XCTAssertTrue(code.contains("sessionQueue.resumeIfWanted(session)"))
         let modele = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Main/Components/CameraModel.swift"))
         XCTAssertTrue(modele.contains("observeSessionHealth()"), "le guet s'arme avec la session")
-        XCTAssertTrue(modele.contains("sessionObservers.forEach { NotificationCenter.default.removeObserver($0) }"))
+        // Le retrait vit dans la `deinit`, par la boîte de démontage (#17282).
+        XCTAssertTrue(modele.contains("observers.session.forEach { NotificationCenter.default.removeObserver($0) }"),
+                      "un modèle libéré retire son guet de la session")
     }
 
     // MARK: - 3. La prise basculée attend sa nouvelle connexion
