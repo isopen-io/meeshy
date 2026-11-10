@@ -11,7 +11,7 @@ const deCallDevices = {
   'call.bubble.moveHint': 'Die Pfeiltasten bewegen die Blase',
   'call.bubble.resizeHint': '+ und − ändern ihre Größe, ebenso Strg + Mausrad oder das Aufziehen mit zwei Fingern',
   'call.pip.enter': 'Bild-im-Bild',
-  'call.devices.open': 'Audioausgabe wählen',
+  'call.devices.open': 'Audioausgabe',
   'call.devices.title': 'Geräte',
   'call.devices.camera': 'Kamera',
   'call.devices.microphone': 'Mikrofon',

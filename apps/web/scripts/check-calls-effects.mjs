@@ -265,7 +265,7 @@ try {
 
       // ------------------------------------------------ 2. l'en-tête
       const header = await page.$$eval('[data-call-header] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
-      check(header[0]?.label === 'Réduire l’appel' && header[1]?.label === 'Ouvrir la conversation', `${label} : l'en-tête porte Réduire puis « Conversation » (${header.map((b) => b.label).join(' · ')})`);
+      check(header[0]?.label === 'Réduire' && header[1]?.label === 'Conversation', `${label} : l'en-tête porte Réduire puis « Conversation » (${header.map((b) => b.label).join(' · ')})`);
       check(header[1] !== undefined && header[1].glass && header[1].w >= TAP_FLOOR && header[1].h >= TAP_FLOOR, `${label} : « Conversation » est un verre isolé de ${TAP_FLOOR} au moins`);
       await openActions(page);
       check((await page.$('[data-call-control="messages"]')) === null, `${label} : « Messages » a quitté les actions`);
@@ -281,7 +281,7 @@ try {
 
       // ------------------------------------------------ 5 (avant le mode). le micro coupé
       await page.click('[data-call-screen] button[aria-label="Couper le micro"]');
-      await appears(page, '[data-call-screen] button[aria-label="Activer le micro"]');
+      await appears(page, '[data-call-screen] button[aria-label="Réactiver le micro"]');
 
       // ------------------------------------------------ 4. le mode Effets
       const before = await sentVideo(page);
@@ -415,7 +415,7 @@ try {
 
       // ------------------------------------------------ 8. le mode Montage
       await openActions(page);
-      await page.click('[data-call-screen] button[aria-label="Activer le micro"]').catch(() => undefined);
+      await page.click('[data-call-screen] button[aria-label="Réactiver le micro"]').catch(() => undefined);
       await page.click('[data-call-control="capture"]');
       check(await appears(page, '[data-call-mode="montage"]'), `${label} : « Capturer » entre dans le mode Montage`);
       check((await page.$('[data-call-control-pill]')) === null, `${label} : la pilule part`);
@@ -525,7 +525,7 @@ try {
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]'), `${label} : Échap quitte le mode Montage`);
 
-      await page.click('[data-call-screen] button[aria-label="Activer le micro"]').catch(() => undefined);
+      await page.click('[data-call-screen] button[aria-label="Réactiver le micro"]').catch(() => undefined);
       await openActions(page);
       await page.click('[data-call-screen] button[aria-label="Raccrocher"]');
     } catch (error) {

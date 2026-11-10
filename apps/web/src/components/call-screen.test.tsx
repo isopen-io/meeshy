@@ -138,7 +138,7 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
     const shapes = [screen({ members: { 'u-peer': member() } }), screen({ cameraOn: true, members: { 'u-peer': member() } }), screen({ isGroup: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } })];
     for (const html of shapes) {
       const pill = html.slice(html.indexOf('data-call-control-pill'));
-      const order = ['Afficher les actions', 'Couper le micro', 'Choisir la sortie audio', 'Raccrocher'].map((label) => pill.indexOf(`aria-label="${label}"`));
+      const order = ['Afficher les actions', 'Couper le micro', 'Sortie audio', 'Raccrocher'].map((label) => pill.indexOf(`aria-label="${label}"`));
       expect(order.every((index) => index >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
       expect(html).toMatch(/class="glass-call[^"]*"[^>]*data-call-control-pill/);
