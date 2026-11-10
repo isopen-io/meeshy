@@ -116,7 +116,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     ['en duo (W1)', {}],
     ['en groupe (W2)', group],
   ] as const) {
-    test(`${shape}, « Journal » ouvre la colonne à droite ; la pilule ne grandit pas et les sous-titres restent lus`, async () => {
+    test(`${shape}, « Journal » ouvre la colonne à droite ; la pilule ne grandit pas, (…) range les sous-titres et les rend (#17343)`, async () => {
       const view = mount(overrides, true);
       await openJournal(view);
       const column = view.find('[data-call-journal-column]');
@@ -124,7 +124,11 @@ describe('le journal en colonne de verre (W1, W2)', () => {
       expect(column?.className.split(' ')).toContain('glass-call-prominent');
       expect(column?.querySelectorAll('[data-call-journal-entry]')).toHaveLength(2);
       expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).toBeNull();
-      expect(view.find('[data-call-captions-panel]')).not.toBeNull();
+      expect(view.find('[data-call-captions-panel]')).toBeNull();
+      view.press('[data-call-more]');
+      expect(view.find('[data-call-control-pill] [data-call-captions-panel]')).not.toBeNull();
+      expect(view.find('[data-call-journal-column]')).not.toBeNull();
+      view.press('[data-call-more]');
       expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-expanded')).toBe('true');
       expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-controls')).toBe(column?.querySelector('[data-call-journal-panel]')?.id ?? 'absent');
       expect(view.find('[data-call-screen]')?.getAttribute('data-call-journal-dock')).toBe('column');
@@ -225,15 +229,37 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     view.done();
   });
 
-  test('sur grand écran, la bande des sous-titres reste une bande de lecture centrée (560 px), jamais un bandeau bord à bord', () => {
-    const wideView = mount({}, true);
-    const band = wideView.find('[data-call-captions-band]')?.className.split(' ') ?? [];
-    expect(band).toContain('mx-auto');
-    expect(band).toContain('max-w-[592px]');
-    wideView.done();
-    const narrow = mount({}, false);
-    expect(narrow.find('[data-call-captions-band]')?.className.split(' ')).not.toContain('max-w-[592px]');
-    narrow.done();
+  test('le verre qui porte du texte tient en 560 px SANS condition de fenêtre : grand écran ou téléphone en paysage, jamais bord à bord (P3.10)', async () => {
+    for (const wide of [true, false]) {
+      const view = mount({}, wide);
+      await view.settle();
+      const pill = view.find('[data-call-control-pill]');
+      expect(pill?.querySelector('[data-call-captions-panel]')).not.toBeNull();
+      expect(pill?.className.split(' ')).toContain('w-[min(calc(100%-1.5rem),560px)]');
+      view.done();
+    }
+  });
+
+  test('sur une fenêtre étroite, le journal vit DANS la pilule : « Journal » du pied des sous-titres l’ouvre à leur place (#17343, #17346)', async () => {
+    const view = mount({}, false);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('panel');
+    expect(view.find('[data-call-journal-column]')).toBeNull();
+    expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
+    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    view.done();
+  });
+
+  test('sur une fenêtre large, « Journal » du pied des sous-titres ouvre la colonne', async () => {
+    const view = mount({}, true);
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(view.find('[data-call-journal-column]')).not.toBeNull();
+    expect(view.find('[data-call-control-pill] [data-call-captions-panel]')).not.toBeNull();
+    view.done();
   });
 
   test('sur une fenêtre étroite, rien ne change : le journal remplace les rangées dans la pilule', async () => {

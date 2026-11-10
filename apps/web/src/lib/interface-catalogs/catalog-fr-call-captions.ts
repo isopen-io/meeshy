@@ -8,6 +8,7 @@
 const frCallCaptions = {
   'call.captions.original': 'Afficher les sous-titres originaux',
   'call.captions.invited': 'Afficher les sous-titres — votre interlocuteur les lit déjà',
+  'callCaptions.footer.touchForOriginal': '{pair} · toucher = original',
   'callCaptions.region': 'Sous-titres',
   'callCaptions.waiting': 'Les sous-titres s’affichent ici dès que quelqu’un parle',
   'callCaptions.mode.translated': 'Traduits dans votre langue',

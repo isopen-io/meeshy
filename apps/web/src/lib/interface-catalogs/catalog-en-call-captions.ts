@@ -8,6 +8,7 @@
 const enCallCaptions = {
   'call.captions.original': 'Show original captions',
   'call.captions.invited': 'Show captions — the other person is already reading them',
+  'callCaptions.footer.touchForOriginal': '{pair} · tap = original',
   'callCaptions.region': 'Captions',
   'callCaptions.waiting': 'Captions appear here as soon as someone speaks',
   'callCaptions.mode.translated': 'Translated into your language',

@@ -8,6 +8,7 @@
 const ptCallCaptions = {
   'call.captions.original': 'Mostrar legendas originais',
   'call.captions.invited': 'Mostrar legendas — o seu interlocutor já as está a ler',
+  'callCaptions.footer.touchForOriginal': '{pair} · toque = original',
   'callCaptions.region': 'Legendas',
   'callCaptions.waiting': 'As legendas aparecem aqui assim que alguém fala',
   'callCaptions.mode.translated': 'Traduzidas para o seu idioma',

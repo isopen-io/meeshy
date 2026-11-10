@@ -8,6 +8,7 @@
 const arCallCaptions = {
   'call.captions.original': 'إظهار الترجمة النصية الأصلية',
   'call.captions.invited': 'إظهار الترجمة النصية — محاورك يقرؤها بالفعل',
+  'callCaptions.footer.touchForOriginal': '{pair} · المس = الأصل',
   'callCaptions.region': 'الترجمة النصية',
   'callCaptions.waiting': 'تظهر الترجمة النصية هنا بمجرد أن يتحدث أحد',
   'callCaptions.mode.translated': 'مترجمة إلى لغتك',

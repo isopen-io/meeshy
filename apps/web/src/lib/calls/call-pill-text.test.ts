@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { callCaptionsFooter, callJournalHeight, callPillText, JOURNAL_HEIGHT_MAX, JOURNAL_HEIGHT_MIN, PILL_TEXT_MAX_WIDTH } from './call-pill-text';
+import { callCaptionsFooter, callJournalHeight, callPillText, JOURNAL_HEIGHT_MAX, JOURNAL_HEIGHT_MIN, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS } from './call-pill-text';
 import { IDLE, nextLayer, type CallScreenLayer } from './call-screen-layer';
 
 /**
@@ -86,6 +86,7 @@ describe('un toucher range la pilule : les sous-titres restent, sans rangée (lo
 describe('une seule largeur pour le verre (P3.10)', () => {
   test('le verre qui porte du texte, et le verre des sous-titres rangés, tiennent en 560 px — sans condition de fenêtre', () => {
     expect(PILL_TEXT_MAX_WIDTH).toBe(560);
+    expect(PILL_TEXT_WIDTH_CLASS).toContain(`${PILL_TEXT_MAX_WIDTH}px`);
   });
 });
 

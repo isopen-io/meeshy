@@ -8,6 +8,7 @@
 const deCallCaptions = {
   'call.captions.original': 'Originale Untertitel anzeigen',
   'call.captions.invited': 'Untertitel anzeigen — dein Gegenüber liest sie bereits',
+  'callCaptions.footer.touchForOriginal': '{pair} · Tippen = Original',
   'callCaptions.region': 'Untertitel',
   'callCaptions.waiting': 'Untertitel erscheinen hier, sobald jemand spricht',
   'callCaptions.mode.translated': 'In deine Sprache übersetzt',

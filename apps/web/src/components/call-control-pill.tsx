@@ -5,6 +5,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
+import { PILL_TEXT_WIDTH_CLASS, type CallPillText } from '@/lib/calls/call-pill-text';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
@@ -19,10 +20,15 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * nombre de participants (`call-controls-disposition.ts`) : à deux, deux rails
  * sur les bords (`call-screen.tsx`) et la pilule NE GRANDIT PAS ; à plusieurs,
  * elle GRANDIT vers le haut — sa ligne de commandes reste en bas, et au-dessus
- * d'elle, dans le MÊME cadre de verre, le bandeau des sous-titres puis UNE
- * chose : les rangées des familles (`call-control-actions.tsx`) OU le panneau
- * ouvert, qui les REMPLACE (#8578) — jamais les deux empilés. Un panneau la
- * fait grandir à deux comme à plusieurs.
+ * d'elle, dans le MÊME cadre de verre, UNE chose : les rangées des familles
+ * (`call-control-actions.tsx`) OU le panneau ouvert, qui les REMPLACE (#8578) —
+ * jamais les deux empilés. Un panneau la fait grandir à deux comme à plusieurs.
+ *
+ * LE TEXTE DE LA PILULE (#17343, `call-pill-text.ts`) : au repos, les sous-titres
+ * vivent DANS son verre, au-dessus de sa rangée de base, en duo comme en groupe ;
+ * le journal s'ouvre à leur place, et la rangée de base reste touchable ; `(…)`
+ * les range tous deux et refermer les actions les rend. Le verre qui porte du
+ * texte tient en 560 px, quelle que soit la fenêtre.
  *
  * Chaque bouton de la pilule porte son DISQUE de verre dessiné (#17345 —
  * `CallButton`, ton `disc`, `.glass-call-disc`) : un voile et un liseré, sans
@@ -50,8 +56,10 @@ type PillProps = {
   readonly grown: boolean;
   readonly onToggle: () => void;
   readonly prominent: boolean;
-  /** Le bandeau des sous-titres, posé en haut du cadre quand la pilule a grandi. */
-  readonly framedCaptions: ReactNode;
+  /** Ce que la pilule porte de texte au-dessus de sa rangée de base. */
+  readonly text: CallPillText;
+  /** Les sous-titres, posés dans le verre de la pilule au repos (`text === 'captions'`). */
+  readonly captions: ReactNode;
   readonly panels: CallPanels;
   /** Ce que les rangées, chargées à part, reçoivent de l'écran d'appel. */
   readonly kit: CallRowsKit;
@@ -59,26 +67,34 @@ type PillProps = {
   readonly panel: ReactNode;
 };
 
-export function CallControlPill({ call, language, rows, expanded, grown, onToggle, prominent, framedCaptions, panels, kit, panel }: PillProps) {
+export function CallControlPill({ call, language, rows, expanded, grown, onToggle, prominent, text, captions, panels, kit, panel }: PillProps) {
   const [devicesOpen, setDevicesOpen] = useState(false);
   return (
     <>
       <div
-        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${grown ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${text !== 'none' ? PILL_TEXT_WIDTH_CLASS : grown ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
         data-call-control-pill={grown ? 'grown' : 'pill'}
         data-call-chrome-keep=""
       >
         {grown ? (
           <>
             <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="">
-              {framedCaptions}
-              {panel ?? (
+              {panel === null ? (
                 <Suspense fallback={null}>
                   <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} />
                 </Suspense>
+              ) : (
+                <div data-call-pill-text={text === 'journal' ? 'journal' : undefined}>{panel}</div>
               )}
             </div>
             <hr className="mx-2 my-2 border-0 border-t border-media-hairline" />
+          </>
+        ) : text === 'captions' ? (
+          <>
+            <div className="pt-1" data-call-pill-text="captions" data-call-pill-captions="">
+              {captions}
+            </div>
+            <hr className="mx-2 my-1 border-0 border-t border-media-hairline" />
           </>
         ) : null}
         <div className="flex items-center justify-center gap-2">

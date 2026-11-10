@@ -8,6 +8,7 @@
 const esCallCaptions = {
   'call.captions.original': 'Mostrar subtítulos originales',
   'call.captions.invited': 'Mostrar subtítulos — tu interlocutor ya los está leyendo',
+  'callCaptions.footer.touchForOriginal': '{pair} · tocar = original',
   'callCaptions.region': 'Subtítulos',
   'callCaptions.waiting': 'Los subtítulos aparecen aquí en cuanto alguien habla',
   'callCaptions.mode.translated': 'Traducidos a tu idioma',

@@ -720,19 +720,24 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   const tapStage = (view: ReturnType<typeof mount>) => act(() => (view.find('[data-call-stage-surface]') as HTMLElement | null)?.click());
 
-  test('les sous-titres ne s’effacent pas avec les commandes — même sortis du cadre d’une pilule de groupe', async () => {
+  test('les sous-titres vivent DANS la pilule, (…) les range, et ils ne s’effacent pas avec les commandes : la pilule rangée les laisse dans un verre à eux (#17343, loi 11)', async () => {
     const view = mount({ isGroup: true, cameraOn: true, members: peers, captionsMode: 'translated' });
-    view.press('[data-call-more]');
     await act(async () => {
       await import('./call-captions-panel');
     });
     const panel = () => view.find('[data-call-captions-panel]');
+    expect(panel()?.getAttribute('data-call-captions-surface')).toBe('inset');
+    expect(panel()?.closest('[data-call-control-pill]')).not.toBeNull();
+    view.press('[data-call-more]');
+    expect(panel()).toBeNull();
+    view.press('[data-call-more]');
     expect(panel()?.getAttribute('data-call-captions-surface')).toBe('inset');
     tapStage(view);
     await act(async () => {});
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
     expect(panel()).not.toBeNull();
     expect(panel()?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(panel()?.closest('[data-call-control-pill]')).toBeNull();
     expect(panel()?.getAttribute('data-call-captions-surface')).toBe('glass');
     view.done();
   });
