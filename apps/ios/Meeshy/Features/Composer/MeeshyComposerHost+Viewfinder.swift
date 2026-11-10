@@ -119,16 +119,16 @@ extension MeeshyComposerHost {
         sceneCapture.arm(mode: mode)
     }
 
-    /// **Une entrée du viseur** (#17432) : Fond et Galerie coupent la caméra ; Texte et Sticker la
-    /// gardent armée, le viseur cède la scène le temps de l'outil, et la prise passera sous eux.
+    /// **Une entrée du viseur** (#17432) : aucune ne coupe la caméra ; une feuille se pose sur le
+    /// viseur vivant, le texte prend la scène. Seul un choix en Galerie l'arrête (`closeOpeningLibraryForPick`).
     func handleViewfinderEntry(_ entree: ComposerViewfinderEntry) {
-        if entree.camera == .cut { disarmSceneCamera() } else { viewfinderYieldsToScene = true }
         guard let porte = entree.door else {
             openingPickFoundsScenes = true
             showsOpeningLibrary = true
             return
         }
         handleRailDoor(porte)
+        viewfinderYieldsToScene = ComposerViewfinderColumn.yieldsToScene(toolPresentsSheet: presentedPortal != nil)
     }
 
     var viewfinderEntryToolIsOpen: Bool {

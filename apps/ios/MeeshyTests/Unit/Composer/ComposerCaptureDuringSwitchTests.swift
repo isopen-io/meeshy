@@ -52,7 +52,12 @@ final class ComposerCaptureDuringSwitchTests: XCTestCase {
 
     func test_cameraModel_isNotReadyWhileSwitching() throws {
         let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel+PhotoCapture.swift")
-        XCTAssertTrue(camera.contains("!isSwitchingCamera && CameraRecordingReadiness.mayCapturePhoto("))
+        XCTAssertTrue(camera.contains("isSwitching: isSwitchingCamera"), "la disponibilité lit la bascule")
+        XCTAssertTrue(camera.contains("var isCaptureReady: Bool { captureAvailability == .ready }"))
+        let facts = CameraCaptureAvailability.Facts(
+            wantsToRun: true, isRunning: true, isInterrupted: false, interruptionReason: nil, isSwitching: true,
+            hasPhotoConnection: true, photoConnectionIsActive: true, photoConnectionIsEnabled: true)
+        XCTAssertEqual(CameraCaptureAvailability.resolve(facts), .switching)
     }
 
     // MARK: - I2 : le lissage tient pendant toute la prise
