@@ -33,10 +33,7 @@ private struct KitCatalogList: View {
 
     var body: some View {
         if entries.isEmpty {
-            Text(verbatim: "Aucun composant livré")
-                .font(.body)
-                .foregroundStyle(MeeshyColors.textSecondary(isDark: colorScheme == .dark))
-                .padding(MeeshySpacing.lg)
+            MeeshyKitCatalogEmptyState()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background { MeeshyColors.backgroundPrimary(isDark: colorScheme == .dark).ignoresSafeArea() }
         } else {
