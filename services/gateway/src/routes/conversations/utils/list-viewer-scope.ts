@@ -3,6 +3,7 @@
  * que CE lecteur voit de la liste, extraites de `core-list.ts` (budget de taille).
  */
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { EXTERNAL_CONVERSATION_TYPE } from '@meeshy/shared/types/external-conversation';
 import { viewerRequestClause, type MessageRequestListMode } from '../../../services/messaging/messageRequests';
 
 /**
@@ -38,4 +39,22 @@ export const withViewerRequests = (
 ): Prisma.ConversationWhereInput['AND'] => {
   const existing = Array.isArray(and) ? and : and ? [and] : [];
   return [...existing, { participants: { some: { userId, isActive: true, ...viewerRequestClause(mode) } } }];
+};
+
+/**
+ * #17117 / #9223 — une conversation `external` n'est servie qu'au client qui
+ * annonce le jeton `external-conversations` : un client publié avant ce type
+ * reçoit EXACTEMENT la liste d'avant. Ajoutée au `AND` existant ; `type` est
+ * un champ requis, présent sur tout document, donc la négation n'écarte rien d'autre.
+ */
+export const externalVisibilityClauses = (announcesExternal: boolean): Prisma.ConversationWhereInput[] =>
+  announcesExternal ? [] : [{ type: { not: EXTERNAL_CONVERSATION_TYPE } }];
+
+export const withExternalVisibility = (
+  and: Prisma.ConversationWhereInput['AND'],
+  announcesExternal: boolean,
+): Prisma.ConversationWhereInput['AND'] => {
+  if (announcesExternal) return and;
+  const existing = Array.isArray(and) ? and : and ? [and] : [];
+  return [...existing, ...externalVisibilityClauses(announcesExternal)];
 };
