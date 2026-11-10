@@ -13,6 +13,15 @@ class CallButtonGlassGuardTest {
 
     private val commentLine = Regex("""^\s*(//|\*|/\*)""")
 
+    /** Non merci (cadre proposé), Refuser (enregistrement), puce d'ambiance, son et bascules de l'aperçu, Message (appel entrant). */
+    private val neighbourButtons = mapOf(
+        "CallLiveFrameUi.kt" to 1,
+        "CallRecordingConsentCard.kt" to 1,
+        "CallFrameMoodChips.kt" to 1,
+        "CallPreviewViews.kt" to 2,
+        "IncomingCallScreen.kt" to 1,
+    )
+
     private fun calls(): File = generateSequence(File("").absoluteFile) { it.parentFile }
         .map { File(it, "src/main/kotlin/me/meeshy/app/calls") }
         .first { File(it, "CallControlGlass.kt").isFile }
@@ -33,8 +42,8 @@ class CallButtonGlassGuardTest {
         val glass = code("CallControlGlass.kt")
         val glyph = block(glass, "internal fun CallPillGlyph(", "private const val DISABLED_ALPHA")
 
-        assertThat(glyph).contains("CallButtonGlassRule.treatment(")
-        assertThat(glyph).contains("CallGlassPlate(")
+        assertThat(glyph).contains("CallGlassButtonSurface(")
+        assertThat(glyph).contains("role = kind.glassRole()")
         assertThat(glyph).contains("shape = CircleShape")
         assertThat(glyph).doesNotContain("Color.White.copy(alpha = 0.16f)")
         assertThat(glyph).doesNotContain("CallButtonFill.color(")
@@ -71,6 +80,45 @@ class CallButtonGlassGuardTest {
         assertThat(chip).contains("liquid = true")
         assertThat(chip).contains("CallButtonFill.pressedHighlight(pressed)")
         assertThat(header).contains("CallPillButton(")
+    }
+
+    @Test
+    fun `le verre d'un bouton de l'appel est choisi par la loi pure, dessine par le seul site, et s'eclaircit sous le doigt`() {
+        val surface = block(code("CallControlGlass.kt"), "internal fun CallGlassButtonSurface(", "internal fun CallControlsGlass(")
+
+        assertThat(surface).contains("CallButtonGlassRule.treatment(role)")
+        assertThat(surface).contains("CallGlassPlate(")
+        assertThat(surface).contains("liquid = treatment.isInteractive")
+        assertThat(surface).contains("CallButtonFill.backing(treatment, tone)")
+        assertThat(surface).contains("CallButtonFill.pressedHighlight(isPressed && treatment.drawsPressHighlight)")
+    }
+
+    @Test
+    fun `plus aucun disque translucide dessine a plat dans l'ecran d'appel, comme sur iOS`() {
+        val files = calls().listFiles { file -> file.extension == "kt" }.orEmpty().toList()
+        assertThat(files.size).isAtLeast(50)
+
+        val flat = files.filter { "Color.White.copy(alpha = 0.16f)" in code(it.name) }.map { it.name }
+
+        assertThat(flat).isEmpty()
+    }
+
+    @Test
+    fun `les boutons voisins de la pilule portent le meme verre de bouton`() {
+        for (name in neighbourButtons.keys) {
+            val found = Regex("""CallGlassButtonSurface\(""").findAll(code(name)).count()
+
+            assertThat(found).isEqualTo(neighbourButtons.getValue(name))
+        }
+    }
+
+    @Test
+    fun `la puce des autres participants est un verre, pas un disque`() {
+        val chip = block(code("CallEffectsCompanionStrip.kt"), "private fun OverflowChip(", "Text(")
+
+        assertThat(chip).contains("CallGlassPlate(")
+        assertThat(chip).contains("shape = CircleShape")
+        assertThat(chip).doesNotContain(".background(Color.White")
     }
 
     @Test
