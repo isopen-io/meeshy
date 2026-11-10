@@ -292,7 +292,7 @@ struct CallOutputMenu<Face: View>: View {
         }
         .menuIndicator(.hidden)
         .background(routePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
-        .accessibilityLabel(String(localized: "call.control.output.caption", defaultValue: "Sortie", bundle: .main))
+        .accessibilityLabel(CallControlsCopy.outputAudioLabel)
         // UNE valeur : l'état du haut-parleur, puis la sortie courante — deux
         // `accessibilityValue` empilés se masqueraient l'un l'autre.
         .accessibilityValue(spokenValue)

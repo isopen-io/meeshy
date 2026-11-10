@@ -14,8 +14,20 @@ import MeeshyUI
 // porte est l'en-tête (#8436).
 
 enum CallControlsCopy {
-    static var more: String {
-        String(localized: "call.control.more", defaultValue: "Plus d'actions", bundle: .main)
+    static func moreLabel(isExpanded: Bool) -> String {
+        isExpanded
+            ? String(localized: "call.control.more.hide", defaultValue: "Masquer les actions", bundle: .main)
+            : String(localized: "call.control.more.show", defaultValue: "Afficher les actions", bundle: .main)
+    }
+
+    static func cameraLabel(isEnabled: Bool) -> String {
+        isEnabled
+            ? String(localized: "call.control.camera.off", defaultValue: "Couper la caméra", bundle: .main)
+            : String(localized: "call.control.camera.on", defaultValue: "Activer la caméra", bundle: .main)
+    }
+
+    static var outputAudioLabel: String {
+        String(localized: "call.control.output.a11y", defaultValue: "Sortie audio", bundle: .main)
     }
 
     static var moreCaption: String {
@@ -234,7 +246,7 @@ extension CallView {
             )
         }
         .buttonStyle(CallPressButtonStyle(glassPressesItself: true))
-        .accessibilityLabel(CallControlsCopy.more)
+        .accessibilityLabel(CallControlsCopy.moreLabel(isExpanded: isExpanded))
         .accessibilityHint(CallControlsCopy.moreHint)
         .accessibilityValue(CallControlsCopy.moreValue(isExpanded: isExpanded))
     }
@@ -362,9 +374,7 @@ extension CallView {
             kind: isPaused ? .warning : (isEnabled ? .active : .normal),
             label: isPaused
                 ? String(localized: "call.control.video.paused", defaultValue: "Vidéo en pause (connexion faible)", bundle: .main)
-                : (isEnabled
-                    ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main)
-                    : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)),
+                : CallControlsCopy.cameraLabel(isEnabled: isEnabled),
             caption: captioned
                 ? (isPaused
                     ? String(localized: "call.control.video.paused.caption", defaultValue: "En pause", bundle: .main)

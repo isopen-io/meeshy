@@ -85,7 +85,7 @@ struct CallZoomLensCapsule: View {
     }
 }
 
-/// Les libellés des commandes de MA caméra — mêmes clés que les boutons du
+/// Les libellés des commandes de MA caméra — mêmes mots que les boutons du
 /// (…) (`CallView+Pill.swift`), qui les portent quand aucune vignette ne
 /// montre mon image.
 enum CallMyImageCopy {
@@ -101,9 +101,7 @@ enum CallMyImageCopy {
         if isPaused {
             return String(localized: "call.control.video.paused", defaultValue: "Vidéo en pause (connexion faible)", bundle: .main)
         }
-        return isEnabled
-            ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main)
-            : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)
+        return CallControlsCopy.cameraLabel(isEnabled: isEnabled)
     }
 
     static var videoPausedHint: String {
