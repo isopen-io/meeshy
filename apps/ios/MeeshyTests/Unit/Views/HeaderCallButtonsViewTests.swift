@@ -141,4 +141,12 @@ final class HeaderCallEntryTests: XCTestCase {
         XCTAssertNil(HeaderCallEntry.resolve(conversation: conversation(type: .direct, peer: nil),
                                              viewerPlatformRole: "USER", viewerIsGuest: false))
     }
+
+    /// #17118 — un ami WhatsApp n'est pas joignable par un appel Meeshy, même si
+    /// une ligne servie portait un pair.
+    func test_resolve_externalConversation_offersNoCall_evenToTheTeam() {
+        var external = conversation(type: .direct, peer: "u2")
+        external.externalNetwork = .whatsapp
+        XCTAssertNil(HeaderCallEntry.resolve(conversation: external, viewerPlatformRole: "BIGBOSS", viewerIsGuest: false))
+    }
 }

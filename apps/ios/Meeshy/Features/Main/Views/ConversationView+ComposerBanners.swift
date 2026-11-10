@@ -501,34 +501,16 @@ extension ConversationView {
         if viewModel.isConversationClosed {
             closedConversationBanner
         } else if viewModel.writeRestriction(served: liveConversation?.viewerWriteRestriction) != nil {
-            minorGlobalBanner
+            ComposerNoticeZone(
+                systemImage: "hourglass", accentColor: accentColor, identifier: "conversation.composer.minorGlobal",
+                text: String(localized: "conversation.composer.minorGlobal", bundle: .main))
+        } else if liveConversation?.isExternal == true {
+            ComposerNoticeZone(
+                systemImage: "clock.badge.checkmark", accentColor: accentColor, identifier: "conversation.composer.externalPending",
+                text: String(localized: "conversation.external.composer.pending", defaultValue: "Chiffré de bout en bout. L’envoi vers WhatsApp n’est pas encore ouvert : rien ne part d’ici pour le moment.", bundle: .main))
         } else {
             themedComposer
         }
-    }
-
-    // MARK: - Global avant 18 ans (#9929)
-
-    /// Même motif que `closedConversationBanner` : une zone statique, sans
-    /// action, qui dit quand l'écriture s'ouvrira. Le sablier porte l'accent de
-    /// la conversation — c'est une attente, pas une faute.
-    var minorGlobalBanner: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "hourglass")
-                .foregroundStyle(Color(hex: accentColor))
-                .accessibilityHidden(true)
-            Text(String(localized: "conversation.composer.minorGlobal", bundle: .main))
-                .font(.subheadline)
-                .foregroundStyle(Color.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, MeeshySpacing.md + 2)
-        .padding(.horizontal, MeeshySpacing.lg)
-        .background(.ultraThinMaterial)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("conversation.composer.minorGlobal")
     }
 
     // MARK: - Closed Conversation Banner
@@ -584,5 +566,37 @@ extension ConversationView {
         .padding(.vertical, MeeshySpacing.lg)
         .padding(.horizontal, MeeshySpacing.xxl)
         .background(.ultraThinMaterial)
+    }
+}
+
+// MARK: - Une attente, pas une faute
+
+/// La zone statique, sans action, qui remplace le composeur et dit pourquoi on
+/// n'écrit pas encore : Global avant 18 ans (#9929), ou un ami WhatsApp tant
+/// qu'aucun relais ne porte un message vers son réseau (#17118) — un composeur
+/// y ferait croire qu'un message part. L'icône porte l'accent de la conversation.
+struct ComposerNoticeZone: View {
+    let systemImage: String
+    let accentColor: String
+    let identifier: String
+    let text: String
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Image(systemName: systemImage)
+                .foregroundStyle(Color(hex: accentColor))
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(Color.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.md + 2)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .background(.ultraThinMaterial)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(identifier)
     }
 }

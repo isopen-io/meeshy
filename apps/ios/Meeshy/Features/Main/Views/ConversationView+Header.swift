@@ -307,7 +307,7 @@ struct HeaderCallEntry: Equatable {
     let canStart: Bool
 
     static func resolve(conversation: Conversation?, viewerPlatformRole: String?, viewerIsGuest: Bool) -> HeaderCallEntry? {
-        guard let conversation, !viewerIsGuest, conversation.type != .global else { return nil }
+        guard let conversation, !viewerIsGuest, conversation.type != .global, !conversation.isExternal else { return nil }
         let canStart = CallPermission.canStartCall(CallPermission.Context(
             conversationType: conversation.type.rawValue,
             viewerIsCreator: conversation.currentUserRole?.lowercased() == MemberRole.creator.rawValue,

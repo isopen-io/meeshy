@@ -19,6 +19,8 @@ struct NewConversationView: View {
     @State private var groupRequested = false
     /// Le chiffrement, secondaire, se replie derrière une rangée qui dit le mode retenu.
     @State private var showsEncryptionOptions = false
+    /// « Écrire à un ami WhatsApp » (#17118) : monté seulement si l'entrée est visible.
+    @StateObject private var externalEntry = ExternalConversationEntryModel()
 
     /// Default initializer used by production callers. The `wrappedValue:`
     /// argument of `StateObject` is `@autoclosure @escaping`, so the
@@ -62,6 +64,9 @@ struct NewConversationView: View {
                 searchField
                 groupToggleRow
                 if isGroupMode { groupTitleField }
+                if !isGroupMode && externalEntryVisible {
+                    NewConversationExternalEntry(model: externalEntry, onOpened: openExternalConversation)
+                }
                 selectedUsersBar
                 resultsList
             }
@@ -122,6 +127,24 @@ struct NewConversationView: View {
             }
         )
         .withStatusBubble()
+    }
+
+    // MARK: - Écrire à un ami WhatsApp (#17118)
+
+    /// Jamais contre la passerelle de production, et au staging pour l'équipe seulement.
+    private var externalEntryVisible: Bool {
+        ExternalConversationEntry.isVisible(
+            apiBaseURL: MeeshyConfig.shared.apiBaseURL,
+            role: AuthManager.shared.currentUser?.role
+        )
+    }
+
+    private func openExternalConversation(_ conversationId: String) {
+        dismiss()
+        Task {
+            do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+            await CallConversationOpener.open(conversationId: conversationId)
+        }
     }
 
     // MARK: - Header

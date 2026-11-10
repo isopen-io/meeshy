@@ -335475,6 +335475,758 @@
           }
         }
       }
+    },
+    "conversation.external.entry.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "راسل صديقًا على واتساب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einem Freund auf WhatsApp schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write to a friend on WhatsApp"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir a un amigo en WhatsApp"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire à un ami WhatsApp"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivere a un amico su WhatsApp"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever a um amigo no WhatsApp"
+          }
+        }
+      }
+    },
+    "conversation.external.entry.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عبر رقمه، بتشفير تام بين الطرفين"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Über seine Nummer, Ende-zu-Ende-verschlüsselt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By their number, end-to-end encrypted"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por su número, cifrado de extremo a extremo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Par son numéro, chiffré de bout en bout"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tramite il suo numero, crittografato end-to-end"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pelo número dele, criptografado de ponta a ponta"
+          }
+        }
+      }
+    },
+    "conversation.external.handle.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رقم واتساب الخاص بصديقك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WhatsApp-Nummer deines Freundes"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your friend’s WhatsApp number"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Número de WhatsApp de tu amigo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Numéro WhatsApp de votre ami"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Numero WhatsApp del tuo amico"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Número de WhatsApp do seu amigo"
+          }
+        }
+      }
+    },
+    "conversation.external.handle.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بالصيغة الدولية، مع رمز البلد: ‎+971 50 123 4567."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im internationalen Format, mit Ländervorwahl: +49 151 23456789."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In international format, with the country code: +44 20 7946 0958."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En formato internacional, con el prefijo del país: +34 612 34 56 78."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Au format international, avec l’indicatif du pays : +33 6 12 34 56 78."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In formato internazionale, con il prefisso del paese: +39 312 345 6789."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No formato internacional, com o código do país: +351 912 345 678."
+          }
+        }
+      }
+    },
+    "conversation.external.handle.invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الرقم ليس بالصيغة الدولية. ابدأ بعلامة + ثم رمز البلد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Nummer ist nicht im internationalen Format. Beginne mit + und der Ländervorwahl."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This number is not in international format. Start with + and the country code."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este número no está en formato internacional. Empieza por + y el prefijo del país."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce numéro n’est pas au format international. Commencez par + et l’indicatif du pays."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo numero non è in formato internazionale. Inizia con + e il prefisso del paese."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este número não está no formato internacional. Comece por + e o código do país."
+          }
+        }
+      }
+    },
+    "conversation.external.submit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "راسل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreiben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever"
+          }
+        }
+      }
+    },
+    "conversation.external.encrypted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفّرة تشفيرًا تامًا بين الطرفين: لا يستطيع Meeshy قراءة رسائلك. تتم الترجمة على جهازك، والميزات التي تتطلب قراءة الرسالة على خوادمنا غير متاحة في هذه المحادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-verschlüsselt: Meeshy kann deine Nachrichten nicht lesen. Die Übersetzung erfolgt auf deinem Gerät, und Funktionen, die das Lesen der Nachricht auf unseren Servern erfordern, gibt es in dieser Unterhaltung nicht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encrypted: Meeshy cannot read your messages. Translation happens on your device, and features that require reading the message on our servers are not available in this conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado de extremo a extremo: Meeshy no puede leer tus mensajes. La traducción se hace en tu dispositivo, y las funciones que requieren leer el mensaje en nuestros servidores no existen en esta conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffré de bout en bout : Meeshy ne lit pas vos messages. La traduction se fait sur votre appareil, et les fonctions qui exigent de lire le message sur nos serveurs n’existent pas dans cette conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografato end-to-end: Meeshy non può leggere i tuoi messaggi. La traduzione avviene sul tuo dispositivo e le funzioni che richiedono di leggere il messaggio sui nostri server non esistono in questa conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografado de ponta a ponta: o Meeshy não consegue ler suas mensagens. A tradução é feita no seu dispositivo, e os recursos que exigem ler a mensagem nos nossos servidores não existem nesta conversa."
+          }
+        }
+      }
+    },
+    "conversation.external.phoneUnverified": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أكّد رقم هاتفك لتراسل صديقًا على واتساب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestätige deine Telefonnummer, um einem Freund auf WhatsApp zu schreiben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verify your phone number to write to a friend on WhatsApp."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifica tu número para escribir a un amigo en WhatsApp."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifiez votre numéro pour écrire à un ami WhatsApp."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifica il tuo numero per scrivere a un amico su WhatsApp."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifique seu número para escrever a um amigo no WhatsApp."
+          }
+        }
+      }
+    },
+    "conversation.external.refused.disabled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مراسلة صديق على واتساب غير متاحة هنا بعد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einem Freund auf WhatsApp zu schreiben ist hier noch nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writing to a friend on WhatsApp is not available here yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir a un amigo en WhatsApp todavía no está disponible aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire à un ami WhatsApp n’est pas encore disponible ici."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrivere a un amico su WhatsApp non è ancora disponibile qui."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escrever a um amigo no WhatsApp ainda não está disponível aqui."
+          }
+        }
+      }
+    },
+    "conversation.external.refused.reserved": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خلال المرحلة التجريبية، المحادثات المشفّرة تشفيرًا تامًا مخصّصة لبعض الحسابات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Während der Testphase sind Ende-zu-Ende-verschlüsselte Unterhaltungen einigen Konten vorbehalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "During the test phase, end-to-end encrypted conversations are reserved for some accounts."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durante la fase de prueba, las conversaciones cifradas de extremo a extremo están reservadas a algunas cuentas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pendant la phase de test, les conversations chiffrées de bout en bout sont réservées à certains comptes."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durante la fase di test, le conversazioni crittografate end-to-end sono riservate ad alcuni account."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Durante a fase de testes, as conversas criptografadas de ponta a ponta estão reservadas a algumas contas."
+          }
+        }
+      }
+    },
+    "conversation.external.refused.limit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لديك بالفعل الحد الأقصى من محادثات واتساب المفتوحة. أغلق واحدة لتفتح أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast bereits die maximale Zahl offener WhatsApp-Unterhaltungen. Schließe eine, um eine neue zu öffnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You already have the maximum number of open WhatsApp conversations. Close one to open another."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya tienes el número máximo de conversaciones de WhatsApp abiertas. Cierra una para abrir otra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous avez déjà le nombre maximal de conversations WhatsApp ouvertes. Fermez-en une pour en ouvrir une autre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hai già il numero massimo di conversazioni WhatsApp aperte. Chiudine una per aprirne un’altra."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você já tem o número máximo de conversas do WhatsApp abertas. Feche uma para abrir outra."
+          }
+        }
+      }
+    },
+    "conversation.external.refused.rateLimited": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فُتحت محادثات كثيرة في وقت قصير. حاول مجددًا بعد ساعة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu viele Unterhaltungen in kurzer Zeit geöffnet. Versuche es in einer Stunde erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many conversations opened in a short time. Try again in an hour."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiadas conversaciones abiertas en poco tiempo. Inténtalo de nuevo dentro de una hora."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop de conversations ouvertes en peu de temps. Réessayez dans une heure."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Troppe conversazioni aperte in poco tempo. Riprova tra un’ora."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muitas conversas abertas em pouco tempo. Tente de novo daqui a uma hora."
+          }
+        }
+      }
+    },
+    "conversation.external.refused.offline": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "غير متصل: أعد الاتصال ثم المس «راسل» مجددًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline: Stelle die Verbindung wieder her und tippe dann erneut auf „Schreiben“."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline: reconnect, then tap “Write” again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión: vuelve a conectarte y toca de nuevo «Escribir»."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hors ligne : reconnectez-vous, puis touchez de nouveau « Écrire »."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline: riconnettiti, poi tocca di nuovo «Scrivi»."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem conexão: reconecte-se e toque em “Escrever” de novo."
+          }
+        }
+      }
+    },
+    "conversation.external.refused.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر فتح هذه المحادثة. حاول مجددًا بعد لحظة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Unterhaltung konnte nicht geöffnet werden. Versuche es gleich noch einmal."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This conversation could not be opened. Try again in a moment."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo abrir esta conversación. Inténtalo de nuevo en un momento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’ouvrir cette conversation. Réessayez dans un instant."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile aprire questa conversazione. Riprova tra un attimo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível abrir esta conversa. Tente de novo em instantes."
+          }
+        }
+      }
+    },
+    "conversation.external.verifyPhone": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تأكيد رقمي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Nummer bestätigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verify my number"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificar mi número"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vérifier mon numéro"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifica il mio numero"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verificar meu número"
+          }
+        }
+      }
+    },
+    "conversation.external.composer.pending": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفّرة تشفيرًا تامًا بين الطرفين. الإرسال إلى واتساب غير متاح بعد: لا يُرسل شيء من هنا حاليًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-verschlüsselt. Das Senden an WhatsApp ist noch nicht geöffnet: Von hier geht vorerst nichts raus."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encrypted. Sending to WhatsApp is not open yet: nothing leaves from here for now."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrado de extremo a extremo. El envío a WhatsApp aún no está abierto: por ahora no sale nada desde aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffré de bout en bout. L’envoi vers WhatsApp n’est pas encore ouvert : rien ne part d’ici pour le moment."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografato end-to-end. L’invio a WhatsApp non è ancora aperto: per ora da qui non parte nulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografado de ponta a ponta. O envio para o WhatsApp ainda não está aberto: por enquanto nada sai daqui."
+          }
+        }
+      }
     }
   },
   "version": "1.1"
