@@ -52,6 +52,7 @@ const DEV_PAR = entier(A.devPar, 2, 3)
 const MAX_FIX = entier(A.maxFix, 3, 6)
 const SEULEMENT = Array.isArray(A.seulement) && A.seulement.length ? new Set(A.seulement) : null
 const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter : [])
+const CONSIGNES = texte(A.consignes, '').slice(0, 4000)
 
 const PLATEFORMES = {
   ios: {
@@ -113,6 +114,20 @@ PREUVE : un verdict porte un fichier et une ligne lus par toi dans ${REF}. Tu n'
 un écran allumé peut dire (un rendu, un fondu, une taille) se rend « indetermine », avec la capture ou le geste à rejouer sur simulateur.
 GITHUB : outils MCP mcp__github__* chargés par ToolSearch ; la CLI gh ne sert qu'à la recherche
 (gh api -X GET search/issues -f q='repo:${GH} …' --jq '.items[]|"\\(.number) \\(.state) \\(.title)"').`
+
+const FACTURE = `FACTURE (directive porteur du 2026-11-10, #17406) — elle vaut pour toute planche, et un diff qui l'enfreint n'est pas prêt :
+- NE RECRÉE RIEN. Avant d'écrire un composant, une loi, un texte ou une icône, cherche celui qui existe (grep dans les racines de la plateforme,
+  le kit partagé, le design system) : tu le réutilises ou tu l'étends. Un jumeau neuf d'un composant existant est un écart, pas une livraison.
+- LE VERRE EST L'ATOME ADAPTATIF, PARTOUT : iOS adaptiveLiquidGlass (Liquid Glass quand l'OS le permet, verre dessiné sinon), Android
+  MeeshyGlassSurface, web la surface de verre partagée. Aucun verre dessiné à la main dans une vue, aucun matériau système posé à côté.
+- SIMPLICITÉ : la vue affiche ce que la planche dessine, rien en plus. Ni libellé, ni badge, ni bouton, ni panneau d'appoint ; ce que le code
+  porte en plus et que la planche ne montre pas se signale au porteur, il ne s'ajoute pas et ne se retire pas en silence.
+- RIEN N'APPARAÎT NI NE DISPARAÎT D'UN COUP. Un élément arrive depuis l'endroit d'où il vient et repart vers lui : un rail latéral entre par
+  le bord de l'écran et sort par lui ; une option de la barre du bas s'ouvre par MORPHISME, la même barre s'allonge et grandit pour la
+  contenir, puis reprend sa forme ; tout ce qui se pose par-dessus suit la même règle, sauf si la planche écrit autre chose pour une vue.
+  L'animation ne touche que la transformation et l'opacité, ne perd aucune image, reste interruptible (un bouton touché pendant le
+  mouvement répond), et « Réduire les animations » la remplace par un fondu court.${CONSIGNES ? `
+CONSIGNES DE CE PASSAGE (données par la session qui lance, elles s'ajoutent sans rien retirer) : ${CONSIGNES}` : ''}`
 
 const ECRITURE = (cle, plateforme) => `CLONE PRIVÉ : D=${LOTS}/${cle} ; s'il n'existe pas :
 git clone -q --shared --no-checkout ${REPO} "$D" && cd "$D" && git remote set-url origin https://github.com/${GH} && git fetch -q origin ${BASE}
@@ -199,6 +214,8 @@ MISSION — INVENTORIER LA PLANCHE (${REF}/${PLANCHE}), sans juger.
 - references : les fichiers que la planche déclare faire autorité avec elle (modèles, autres planches, fichiers de consignes d'agents).`
 
 const coherencePrompt = (famille, inventaire) => `${SOCLE}
+${FACTURE}
+Chaque vue qui fait apparaître ou disparaître un élément reçoit une clause sur la manière dont il arrive et repart.
 MISSION — COHÉRENCE ET CONTRAT de la famille « ${famille.nom} ». Vues : ${JSON.stringify(famille.vues)}
 Lois de la planche : ${JSON.stringify(inventaire.regles)} ; références : ${JSON.stringify(inventaire.references)}.
 1. Lis la planche en entier, puis OUVRE chaque capture de la famille (outil Read sur le PNG) et décris-toi ce qu'elle montre.
@@ -284,6 +301,7 @@ labels ["décision-produit"], assignees ["jcnm"]${MILESTONE ? `, milestone ${MIL
 
 const developperPrompt = (lot, ecarts, issue, reference) => `${SOCLE}
 ${ECRITURE(lot.cle, lot.plateforme)}
+${FACTURE}
 MISSION — RENDRE CONFORMES les clauses du lot « ${lot.cle} » sur ${PLATEFORMES[lot.plateforme].nom} (issue #${issue}). ${contexteLot(lot, ecarts)}
 ${reference ? `Ce lot REPRODUIT le lot ${PLATEFORMES[REFERENCE].nom} déjà livré : ${JSON.stringify(reference).slice(0, 3000)}. Lis son diff (git fetch origin ${reference.branche || BASE}) et
 reprends ses décisions, ses noms de lois et l'intention de ses témoins ; transpose seulement ce que la plateforme impose.` : ''}
@@ -296,13 +314,15 @@ cede=true si une autre session tient ces fichiers (alors pushed=false).`
 
 const integrerPrompt = (lot, ecarts, issue, dev) => `${SOCLE}
 ${ECRITURE(lot.cle, lot.plateforme)}
+${FACTURE}
 MISSION — INTÉGRER le lot « ${lot.cle} » (issue #${issue}, branche ${brancheLot(lot)}). Rendu du développement : ${JSON.stringify(dev).slice(0, 3000)}
 ${contexteLot(lot, ecarts)}
 1. git fetch origin ${BASE} ${brancheLot(lot)} ; git merge origin/${BASE} ; résous chaque conflit en gardant les deux sémantiques (fichier généré : régénère).
 2. CONFLITS À VENIR : pour chaque PR ouverte vers ${BASE} qui touche un fichier du lot (gh api search, puis pull_request_read get_files),
    git merge-tree contre sa branche ; un conflit réel se note dans remarques avec le numéro de la PR.
 3. RELIS TOUT LE DIFF (git diff origin/${BASE}...HEAD) contre les clauses et les captures : chaque clause est tenue, rien n'est sorti du périmètre,
-   aucun témoin affaibli, aucune loi réécrite à côté de sa source, budgets de taille tenus. Corrige toi-même ce qui manque, en TDD.
+   aucun témoin affaibli, aucune loi réécrite à côté de sa source, budgets de taille tenus, et la FACTURE est tenue point par point
+   (rien de recréé, verre adaptatif, rien en plus, chaque apparition et chaque sortie en mouvement). Corrige toi-même ce qui manque, en TDD.
 4. Gardes locales, push. PR vers ${BASE} en BROUILLON (mcp__github__create_pull_request, ou celle qui existe pour cette tête). Corps :
    ${A.enTetePr ? `ces deux premières lignes, telles quelles : ${A.enTetePr} ; puis ` : ''}Closes #${issue}, les clauses tenues, les fichiers, les miroirs touchés, ce qui reste à rejouer sur simulateur.
 pret=false si le lot ne tient pas ses clauses malgré tes corrections (dis pourquoi dans remarques).`
