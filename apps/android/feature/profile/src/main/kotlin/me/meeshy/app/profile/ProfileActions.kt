@@ -57,6 +57,7 @@ import me.meeshy.sdk.model.profile.ProfileContextBanner
 import me.meeshy.sdk.model.profile.ProfileLayout
 import me.meeshy.app.contacts.circles.ReceptionBlockSection
 import me.meeshy.sdk.model.relation.ProfileCircle
+import me.meeshy.sdk.model.relation.TalkieOfferRule
 import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
@@ -137,6 +138,9 @@ internal fun ProfileActionsSection(
                         allowPromote = group.actions.isEmpty(),
                     )
                     ProfileBringRow(userId = circle.link.userId, displayName = displayName)
+                    if (TalkieOfferRule.offers(circle.level)) {
+                        ProfileTalkieRow(userId = circle.link.userId, displayName = displayName)
+                    }
                 } else if (group.showsConnected) {
                     ConnectedPill()
                 }

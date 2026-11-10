@@ -1,6 +1,11 @@
 import type { FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MemberRole } from '@meeshy/shared/types/role-types';
+import {
+  conversationAdmitsNewMembers,
+  EXTERNAL_CONVERSATION_ERROR_CODES,
+  EXTERNAL_SINGLE_MEMBER_MESSAGE,
+} from '@meeshy/shared/types/external-conversation';
 import { actorHasMinimumRole, actsWithCreatorRights, type ConversationActor } from '@meeshy/shared/utils/conversation-authority';
 import { isConversationClosed } from '../../../services/messaging/conversationWriteAdmission';
 import { resolveConversationId } from '../../../utils/conversation-id-cache';
@@ -213,6 +218,12 @@ export async function mintConversationShareLink(params: MintShareLinkParams): Pr
     // sur `/links` ; `new-link` en était totalement dépourvue.
     if (isConversationClosed(conversation)) {
       sendError(reply, 410, 'CONVERSATION_CLOSED', { message: 'Cette conversation est terminée' });
+      return null;
+    }
+
+    // #17117 — une conversation externe n'a qu'un membre Meeshy : aucun lien n'y mène.
+    if (!conversationAdmitsNewMembers(conversation.type)) {
+      sendError(reply, 409, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
       return null;
     }
 

@@ -14,6 +14,7 @@ import { resoudreSuccessionDuCreateur } from '../../services/conversations/creat
 import { announceParticipantRoleWithCapabilities } from '../../services/conversations/obsoleteCapability'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
+import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers'
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
@@ -183,6 +184,8 @@ export function registerLeaveRoutes(
             // ment.
             deactivateShareLinksOnClose(prisma, id),
           ])
+          // #17117 — le numéro de l'ami d'une conversation externe ne survit pas au fil.
+          await eraseExternalPeerOnClose(prisma, closed)
           closedAudience = (closed.participants ?? []).filter(p => p.isActive)
           conversationClosed = true
         }

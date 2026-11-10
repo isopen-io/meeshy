@@ -30,6 +30,11 @@ import { repondreAuRefus } from './utils/participant-geste-reponse';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import {
+  conversationAdmitsNewMembers,
+  EXTERNAL_CONVERSATION_ERROR_CODES,
+  EXTERNAL_SINGLE_MEMBER_MESSAGE,
+} from '@meeshy/shared/types/external-conversation';
+import {
   applyCommunityAdmission,
   loadSalonCommunity,
   planSalonEntry,
@@ -590,10 +595,13 @@ export function registerParticipantWriteRoutes(
       // fil terminé. Deux colonnes, cf. `conversationWriteAdmission`.
       const conversation = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { isActive: true, closedAt: true, communityId: true },
+        select: { isActive: true, closedAt: true, communityId: true, type: true },
       });
       if (conversation && (conversation.isActive === false || conversation.closedAt)) {
         return sendError(reply, 410, 'Cette conversation est terminée');
+      }
+      if (conversation && !conversationAdmitsNewMembers(conversation.type)) {
+        return sendError(reply, 409, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
       }
 
       // SÉQUENTIEL, et ce n'est pas une négligence : deux admissions

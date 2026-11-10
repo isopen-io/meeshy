@@ -32,11 +32,23 @@ class ActiveCallSnapshotHolder @Inject constructor() {
     /** Le dernier instantané servi par la loi ; `null` = aucun appel à montrer. */
     val snapshot: StateFlow<CallActivitySnapshot?> = _snapshot.asStateFlow()
 
+    private val _microphoneMuted = MutableStateFlow(false)
+
+    /**
+     * Le micro coupé, posé AU GESTE même (#17361) : ce que lit la capture de ma parole. [snapshot] ne le dit
+     * qu'après l'anti-rebond de 250 ms de la notification, une fenêtre où des segments partiraient encore.
+     */
+    val microphoneMuted: StateFlow<Boolean> = _microphoneMuted.asStateFlow()
+
     @Volatile
     private var commands: ActiveCallCommands? = null
 
     fun publish(snapshot: CallActivitySnapshot?) {
         _snapshot.value = snapshot
+    }
+
+    fun setMicrophoneMuted(muted: Boolean) {
+        _microphoneMuted.value = muted
     }
 
     fun attach(commands: ActiveCallCommands) {

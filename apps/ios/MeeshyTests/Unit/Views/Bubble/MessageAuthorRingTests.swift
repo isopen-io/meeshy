@@ -146,6 +146,7 @@ final class MessageAuthorRingTests: XCTestCase {
         "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": (1, "entité — les conversations d'un profil"),
         "Auth/LinkSignInConfirmationSheet.swift": (1, "soi, avant toute session — aucun profil servi"),
         "Auth/Signup/SignupView+Card.swift": (1, "soi, compte en création — aucun contour équipé"),
+        "Onboarding/OnboardingProfileCard.swift": (1, "soi, compte en création — l'aperçu « Montre-toi » précède tout contour équipé"),
         "Game/Photo/GameAuthorPlateView.swift": (1, "décor, illustration ou son — aucune personne"),
         "Main/Views/WidgetPreviewView.swift": (1, "décor, illustration ou son — aucune personne"),
         "Onboarding/OnboardingCards.swift": (1, "décor, illustration ou son — aucune personne"),

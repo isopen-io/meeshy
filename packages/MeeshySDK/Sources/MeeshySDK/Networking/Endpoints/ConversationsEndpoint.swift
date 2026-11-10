@@ -58,6 +58,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byIdStatus(id: String)
     case byIdThreadsByMessageId(id: String, messageId: String)
     case checkIdentifierByIdentifier(identifier: String)
+    case external
     case joinByLinkId(linkId: String)
     case root
     case search
@@ -110,6 +111,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byIdStatus(let id): return "/api/v1/conversations/\(id)/status"
         case .byIdThreadsByMessageId(let id, let messageId): return "/api/v1/conversations/\(id)/threads/\(messageId)"
         case .checkIdentifierByIdentifier(let identifier): return "/api/v1/conversations/check-identifier/\(identifier)"
+        case .external: return "/api/v1/conversations/external"
         case .joinByLinkId(let linkId): return "/api/v1/conversations/join/\(linkId)"
         case .root: return "/api/v1/conversations"
         case .search: return "/api/v1/conversations/search"

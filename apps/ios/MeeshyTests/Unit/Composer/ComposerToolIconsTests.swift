@@ -80,11 +80,20 @@ final class ComposerToolIconsTests: XCTestCase {
             src.contains(".symbolEffect(.bounce"),
             "Le rebond doit passer par `.symbolEffect(.bounce)` — l'effet SF demandé, appliqué au tap."
         )
+        // La profondeur de type de l'APPELANT reste constante parce que le garde vit
+        // dans le `body` d'un `ViewModifier` — frontière nominale, l'appelant ne voit
+        // que `ModifiedContent<_, ComposerToolBounceModifier>`. C'est la frontière qui
+        // borne la pile, pas un `AnyView` (leçon « un AnyView de plus ne répare pas un
+        // débordement de pile », règle maison `anyview` ; a525f5a1a2).
         XCTAssertTrue(
-            src.contains("AnyView"),
-            "Le garde doit passer par `AnyView` (profondeur de type constante), non par un "
-                + "`if #available` en `@ViewBuilder` : ce dernier ajoute un `_ConditionalContent` qui "
-                + "peut déborder la pile d'un appareil réel, invisible au gate simulateur."
+            src.contains("structComposerToolBounceModifier:ViewModifier"),
+            "Le garde doit vivre dans un `ViewModifier` : une frontière nominale borne la profondeur "
+                + "de type vue par l'appelant, invisible au gate simulateur sinon."
+        )
+        XCTAssertTrue(
+            src.contains("modifier(ComposerToolBounceModifier("),
+            "`composerToolBounce` doit poser le modificateur, jamais un `if #available` en "
+                + "`@ViewBuilder` dans l'extension de `View` : ce dernier double le type de chaque appelant."
         )
     }
 

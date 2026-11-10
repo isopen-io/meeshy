@@ -84,7 +84,8 @@ struct OnboardingProfileCard: View {
                 .accessibilityIdentifier("onboarding.profile.banner")
                 .padding(.bottom, OnboardingProfileAvatarTile.size / 2)
                 PhotosPicker(selection: $avatarItem, matching: .images) {
-                    OnboardingProfileAvatarTile(name: model.userDisplayName, image: profile.avatar.shown,
+                    OnboardingProfileAvatarTile(name: model.userDisplayName, avatarURL: model.userAvatarURL,
+                                                image: profile.avatar.shown,
                                                 isUploading: profile.avatar.isUploading, isDark: isDark)
                 }
                 .buttonStyle(.plain)
@@ -193,6 +194,7 @@ private struct OnboardingProfileAvatarTile: View {
     static let size: CGFloat = 96
 
     let name: String
+    let avatarURL: String?
     let image: UIImage?
     let isUploading: Bool
     let isDark: Bool
@@ -215,13 +217,13 @@ private struct OnboardingProfileAvatarTile: View {
             Image(uiImage: image).resizable().scaledToFill()
         } else {
             MeeshyAvatar(name: name.isEmpty ? "?" : name, context: .profileBanner,
-                         accentColor: DynamicColorGenerator.colorForName(name))
+                         accentColor: DynamicColorGenerator.colorForName(name), avatarURL: avatarURL)
                 .frame(width: Self.size, height: Self.size)
         }
     }
 
     private var badge: some View {
-        Image(systemName: image == nil ? "plus" : "camera.fill")
+        Image(systemName: image == nil && avatarURL == nil ? "plus" : "camera.fill")
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
             .foregroundStyle(.white)
             .frame(width: 30, height: 30)

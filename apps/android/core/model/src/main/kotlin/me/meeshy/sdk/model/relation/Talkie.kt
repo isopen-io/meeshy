@@ -14,6 +14,21 @@ public object TalkieContract {
 
     /** Le seul encodage relayé au MVP : celui du vocal (AAC mono, trames ADTS lisibles dès la première). */
     public const val CODEC: String = "aac-adts"
+
+    /** `TALKIE_MAX_CHUNK_BYTES` : un fragment pèse au plus 16 Ko. */
+    public const val MAX_CHUNK_BYTES: Int = 16_384
+
+    /** `TALKIE_MAX_TOTAL_BYTES` : plafond d'une prise de parole entière. */
+    public const val MAX_TOTAL_BYTES: Int = 512_000
+
+    /** `TALKIE_MAX_CHUNKS` : plafond du NOMBRE de fragments d'une prise de parole. */
+    public const val MAX_CHUNKS: Int = 300
+
+    /**
+     * La durée d'un fragment émis (#17094) : assez court pour que le premier mot parte vite, assez long pour que 30 s
+     * restent sous [MAX_CHUNKS] à toute fréquence du micro.
+     */
+    public const val FRAGMENT_DURATION_MS: Long = 120L
 }
 
 /** `talkie:incoming` — une prise de parole commence. Aucun nom ne voyage : l'écran l'hydrate par ses caches. */
@@ -78,6 +93,8 @@ public data class TalkieEnded(
     val toUserId: String? = null,
     val reason: String? = null,
     val endedAt: String? = null,
+    /** Une voix RÉVEILLÉE seulement (#17142) : `false` ⇒ personne ne l'a rejointe, l'émetteur en fait une copie vocale. */
+    val joined: Boolean? = null,
 ) {
     public val servedReason: TalkieEndReason? get() = TalkieEndReason.of(reason)
 

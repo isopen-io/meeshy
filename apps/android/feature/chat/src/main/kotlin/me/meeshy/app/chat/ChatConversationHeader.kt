@@ -2,6 +2,8 @@ package me.meeshy.app.chat
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -53,6 +55,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import me.meeshy.sdk.model.relation.TalkieHeaderChrome
+import me.meeshy.sdk.model.relation.TalkieHeaderVoice
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
@@ -109,6 +114,7 @@ internal fun ChatConversationHeaderBand(
     avatar: @Composable () -> Unit,
     modifier: Modifier = Modifier,
     readingModeSlot: @Composable () -> Unit = {},
+    talkieChrome: TalkieHeaderChrome = TalkieHeaderChrome.resolve(TalkieHeaderVoice.NONE),
 ) {
     Row(
         modifier = modifier
@@ -117,7 +123,9 @@ internal fun ChatConversationHeaderBand(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ChatHeaderBackButton(unread = otherUnread, accentColor = accentColor, onClick = onBack)
+        Box(Modifier.yieldingToTalkie(!talkieChrome.showsBackButton)) {
+            ChatHeaderBackButton(unread = otherUnread, accentColor = accentColor, onClick = onBack)
+        }
         // La zone libre : un toucher y bascule l'en-tête (replié ⇄ déplié), comme iOS.
         Spacer(
             Modifier
@@ -129,7 +137,9 @@ internal fun ChatConversationHeaderBand(
         // La grappe s'efface pendant le défilement et revient à l'arrêt (iOS `hiddenWhileScrolling`).
         val actionsAlpha by animateFloatAsState(if (actionsHidden) 0f else 1f, label = "headerActions")
         Row(
-            modifier = Modifier.graphicsLayer { alpha = actionsAlpha },
+            modifier = Modifier
+                .graphicsLayer { alpha = actionsAlpha }
+                .yieldingToTalkie(!talkieChrome.showsActions),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             callSlot()
@@ -142,9 +152,26 @@ internal fun ChatConversationHeaderBand(
             // Le chip de mode de lecture : APRÈS la recherche, jamais avant l'appel (iOS).
             readingModeSlot()
         }
-        avatar()
+        Box(Modifier.yieldingToTalkie(!talkieChrome.showsIdentity)) { avatar() }
     }
 }
+
+/**
+ * Ce qui cède la place au talkie élargi s'efface et sort de TalkBack, SANS libérer sa place (#17315, iso
+ * `YieldingToTalkie`) : le doigt qui tient le bouton talkie dessous garde son geste.
+ */
+@Composable
+private fun Modifier.yieldingToTalkie(yields: Boolean): Modifier {
+    val reduceMotion = LocalReduceMotion.current
+    val alpha by animateFloatAsState(
+        targetValue = if (yields) 0f else 1f,
+        animationSpec = if (reduceMotion) snap() else tween(TALKIE_YIELD_MS),
+        label = "talkieYield",
+    )
+    return graphicsLayer { this.alpha = alpha }.then(if (yields) Modifier.clearAndSetSemantics { } else Modifier)
+}
+
+private const val TALKIE_YIELD_MS = 180
 
 /**
  * Le retour iOS (`ThemedBackButton`) : chevron gras de 16 en dégradé [accent, indigo300] dans un

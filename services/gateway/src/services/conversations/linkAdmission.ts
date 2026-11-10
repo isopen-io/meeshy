@@ -91,6 +91,11 @@ import {
   type ConversationEntryReader,
 } from './conversationEntryAdmission';
 import { isIpInRange } from '../../utils/ip-range';
+import {
+  conversationAdmitsNewMembers,
+  EXTERNAL_CONVERSATION_ERROR_CODES,
+  EXTERNAL_SINGLE_MEMBER_MESSAGE,
+} from '@meeshy/shared/types/external-conversation';
 
 /** D'où vient qui entre — jamais du CHEMIN appelé, toujours de la créance. */
 export type LinkAdmissionIdentity =
@@ -139,7 +144,12 @@ export type LinkAdmissionRefusalCode =
    * ou modérateur de la communauté. Posé par `performLinkJoin`, après la loi
    * du lien — la communauté n'est pas une propriété du lien.
    */
-  | 'COMMUNITY_MEMBERS_ONLY';
+  | 'COMMUNITY_MEMBERS_ONLY'
+  /**
+   * #17117 — une conversation externe n'a qu'un membre Meeshy : un lien qui y
+   * mènerait (écrit avant la garde de création) n'y fait entrer personne.
+   */
+  | typeof EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER;
 
 export interface LinkAdmissionRefusal {
   readonly granted: false;
@@ -162,7 +172,7 @@ export type LinkAdmissionVerdict = LinkAdmissionRefusal | LinkAdmissionGrant;
 export interface AdmitLinkEntryParams {
   readonly prisma: ConversationEntryReader;
   readonly link: LinkAdmissionShareLink;
-  readonly conversation: ConversationTerminalStateRow | null;
+  readonly conversation: (ConversationTerminalStateRow & { readonly type?: string | null }) | null;
   readonly identity: LinkAdmissionIdentity;
   readonly request: LinkAdmissionRequestInfo;
 }
@@ -212,6 +222,10 @@ export async function admitLinkEntry(
   // § « L'ÉTAT DU CONTENEUR »).
   if (isConversationClosed(conversation)) {
     return refuse(410, 'CONVERSATION_CLOSED', 'Cette conversation est terminée');
+  }
+
+  if (conversation && !conversationAdmitsNewMembers(conversation.type)) {
+    return refuse(409, EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER, EXTERNAL_SINGLE_MEMBER_MESSAGE);
   }
 
   if (link.maxUses !== null && link.currentUses >= link.maxUses) {
