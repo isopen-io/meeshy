@@ -204,8 +204,9 @@ class KitCatalogScreenTest {
             val layout = textLayoutOf(node)
             assertThat(node.boundsInRoot.left).isAtLeast(0f)
             assertThat(node.boundsInRoot.right).isAtMost(width)
-            assertWithMessage("« $text » rognée en largeur : ${layout.size.width} < ${layout.multiParagraph.width}")
-                .that(layout.didOverflowWidth).isFalse()
+            val glyphs = text.indices.map { layout.getBoundingBox(it) }
+            assertWithMessage("« $text » sort de sa boîte de ${layout.size.width} px : ${glyphs.map { it.left to it.right }}")
+                .that(glyphs.all { it.left >= -1f && it.right <= layout.size.width + 1f }).isTrue()
             assertThat(layout.layoutInput.layoutDirection).isEqualTo(LayoutDirection.Rtl)
             assertThat(layout.layoutInput.density.fontScale).isEqualTo(2f)
         }
