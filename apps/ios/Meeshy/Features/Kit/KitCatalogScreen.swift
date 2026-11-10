@@ -91,7 +91,7 @@ private struct KitCatalogSettingsMenu: ToolbarContent {
     @Binding var settings: KitCatalogSettings
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarTrailing) {
+        ToolbarItem(placement: .primaryAction) {
             Menu {
                 Toggle(isOn: $settings.isDark) { Text(verbatim: "dark") }
                 Toggle(isOn: $settings.isRightToLeft) { Text(verbatim: "rtl") }
