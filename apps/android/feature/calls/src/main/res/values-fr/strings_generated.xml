@@ -5,7 +5,7 @@
     <string name="call_action_close">Fermer</string>
     <string name="call_action_decline">Refuser</string>
     <string name="call_action_hang_up">Raccrocher</string>
-    <string name="call_action_minimize">Réduire l\'appel</string>
+    <string name="call_action_minimize">Réduire</string>
     <string name="call_action_mute">Muet</string>
     <string name="call_action_retry">Réessayer</string>
     <string name="call_action_speaker">Haut-parleur</string>
