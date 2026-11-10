@@ -624,8 +624,8 @@ try {
       check(portrait.every((rail) => rail.clearOfTile), `doigt : à 320 × 568, aucun rail ne recouvre ma vignette (P2, #17429 — ${JSON.stringify(portrait.map((rail) => [rail.family, rail.box]))})`);
       await page.setViewportSize({ width: 568, height: 320 });
       check(await until(page, () => document.querySelector('[data-call-rails="shown"]') !== null && [...document.querySelectorAll('[data-call-rail-scroll]')].some((rail) => rail.scrollHeight - rail.clientHeight > 1)), 'doigt : en paysage (568 × 320), un rail déborde et défile sur place');
-      /* Ma vignette rejoint son coin de paysage en glissant (300 ms) : on la mesure posée. */
-      await page.waitForTimeout(450);
+      /* Ma vignette rejoint son coin de paysage en glissant (`useFlip`, une animation Web) : on la mesure posée. */
+      await until(page, () => (document.querySelector('[data-call-corner-frame]')?.getAnimations().length ?? 0) === 0, undefined, 2000);
       const landscape = await railsOf(page);
       check(landscape.length === 2 && landscape.every((rail) => rail.clearOfTile && rail.fade), `doigt : en paysage, aucun rail ne recouvre ma vignette, et ce qui y défile s’estompe à ses deux bords (${JSON.stringify(landscape.map((rail) => [rail.family, rail.clearOfTile, rail.fade, rail.box, rail.tile]))})`);
       const slid = await page.evaluate(() => [...document.querySelectorAll('[data-call-rail]')].map((rail) => ({ family: rail.getAttribute('data-call-rail'), room: Math.round((rail.querySelector('[data-call-rail-scroll]')?.scrollHeight ?? 0) - (rail.querySelector('[data-call-rail-scroll]')?.clientHeight ?? 0)), box: rail.getBoundingClientRect().toJSON() })).filter((rail) => rail.room > 1));
