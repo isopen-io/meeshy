@@ -15,6 +15,7 @@ import {
   EXTERNAL_PEER_HANDLE_RETENTION_DAYS,
   EXTERNAL_PEER_HANDLE_RETENTION_MAX_DAYS,
 } from '@meeshy/shared/types/external-conversation';
+import { EXTERNAL_INTEROP_NOTICE_VERSION } from '@meeshy/shared/types/external-interop-compliance';
 import { openExternalConversation, type ExternalConversationDeps } from '../open-external-conversation';
 import { admitSendUnderRegime } from '../../messaging/e2eeSendAdmission';
 import { isE2eePlaintextRefusal } from '../../messaging/e2eePlaintextAdmission';
@@ -33,9 +34,19 @@ type User = {
   readonly displayName: string;
   readonly username: string;
   readonly role: string;
+  readonly whatsappInteropConsentAt: Date | null;
+  readonly whatsappInteropNoticeVersion: string | null;
 };
 
-const verifiedAlice: User = { id: ALICE, phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), displayName: 'Alice', username: 'alice', role: 'ANALYST' };
+const verifiedAlice: User = {
+  id: ALICE,
+  phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'),
+  displayName: 'Alice',
+  username: 'alice',
+  role: 'ANALYST',
+  whatsappInteropConsentAt: new Date('2026-11-09T00:00:00Z'),
+  whatsappInteropNoticeVersion: EXTERNAL_INTEROP_NOTICE_VERSION,
+};
 
 type World = {
   readonly users: readonly User[];
