@@ -239,6 +239,18 @@ describe('opt-in des tests iOS par le sujet du commit', () => {
     );
   });
 
+  /**
+   * `dev` est le staging : ce qui y entre part ensuite vers `main`. Directive
+   * porteur du 2026-11-10 — « il faut activer tous les tests » : les rouges que
+   * seule la suite complète de `main` voyait (une quinzaine, découverts au
+   * moment de soumettre la 1.1.7) doivent apparaître dès la poussée sur `dev`.
+   */
+  it('force la suite complète sur une poussée vers dev, sans opt-in', () => {
+    expect(scopeJob()).toMatch(
+      /event_name \}\}" = "push"[^\n]*refs\/heads\/dev[\s\S]*?run_tests=true/,
+    );
+  });
+
   it('déclenche bien sur les poussées vers main — sans quoi la règle serait morte', () => {
     const pushTrigger = (): string => {
       const start = WORKFLOW.search(/^ {2}push:$/m);

@@ -82,6 +82,7 @@ on:
       - 'packages/shared/fixtures/libsignal/**'
       - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
+      - 'apps/ios/Meeshy/**'
       - 'scripts/ci/**'
   pull_request:
     branches:
@@ -135,6 +136,7 @@ on:
       - 'packages/shared/fixtures/libsignal/**'
       - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
+      - 'apps/ios/Meeshy/**'
       - 'scripts/ci/**'
   # Un workflow se déclenche quand son OUTILLAGE change (2026-10-23) : ce fichier et
   # `scripts/ci/**` (répartition, file Mac, verdict) font rejouer la suite, sans quoi une
