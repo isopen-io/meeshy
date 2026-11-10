@@ -34,7 +34,7 @@ class CallHeaderBarTest {
                 CallHeaderBar(connected(video = true), conversationId = "c1", showsMinimize = true, onMinimize = { minimized++ })
             }
         }
-        rule.onNodeWithContentDescription("Minimize call").assertExists()
+        rule.onNodeWithContentDescription("Minimize").assertExists()
         rule.onNodeWithContentDescription("Conversation").assertExists()
         rule.onNodeWithContentDescription("Call duration").assertExists()
         rule.onNodeWithText("Alice").assertDoesNotExist()
@@ -47,7 +47,7 @@ class CallHeaderBarTest {
         rule.setContent {
             MeeshyTheme { CallHeaderBar(connected(video = false), conversationId = "", showsMinimize = true, onMinimize = {}) }
         }
-        rule.onNodeWithContentDescription("Minimize call").assertExists()
+        rule.onNodeWithContentDescription("Minimize").assertExists()
         rule.onNodeWithContentDescription("Conversation").assertDoesNotExist()
         rule.onNodeWithContentDescription("Call duration").assertDoesNotExist()
     }
