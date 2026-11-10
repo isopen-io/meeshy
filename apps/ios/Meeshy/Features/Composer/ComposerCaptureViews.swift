@@ -173,6 +173,9 @@ struct ComposerCaptureChrome: View {
     var onToggleSize: () -> Void = {}
     let onDisarm: () -> Void
     let onValidateSegments: () -> Void
+    /// Les objets de la scène, posés sur l'aperçu à la place de la carte (#17432) — `nil` hors du composer.
+    var sceneObjects: AnyView?
+    var sceneObjectsFrame: CGRect?
 
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
@@ -250,8 +253,7 @@ struct ComposerCaptureChrome: View {
                     .accessibilityLabel(session.phase.isEditing
                         ? ComposerCaptureCopy.reframe
                         : ComposerSceneCameraCopy.shutterLabel(mode: session.mode ?? .photo, stage: session.stage))
-                    .accessibilityValue(session.phase.isEditing
-                        ? ComposerSceneCameraCopy.zoomValue(session.framing.scale) : "")
+                    .accessibilityValue(session.phase.isEditing ? ComposerSceneCameraCopy.zoomValue(session.framing.scale) : "")
                     .composerCaptureAccessibilityActions(zone: .scene, context: context) { action in
                         performAccessible(action, origin: origine)
                     }
@@ -265,6 +267,7 @@ struct ComposerCaptureChrome: View {
                     .overlay(alignment: .topLeading) { exposureLayer(width: proxy.size.width) }
                     .allowsHitTesting(!finishing)
             }
+            sceneObjectsLayer
             cropBrackets
             if !finishing, session.offersEditPlayback { editPlayback }
             cropPresets
@@ -314,6 +317,19 @@ struct ComposerCaptureChrome: View {
                 if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }
             }
             Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) { ComposerCaptureDiscardFlow.keep(session) }
+        }
+    }
+
+    /// **La scène sur le viseur** (#17432) : ses objets, sans son fond, à la place de la carte —
+    /// au-dessus de la nappe, sous le chrome. Un toucher sur un objet le prend, une zone vide
+    /// traverse vers la capture.
+    @ViewBuilder
+    private var sceneObjectsLayer: some View {
+        if let sceneObjects, let cadre = sceneObjectsFrame, !session.phase.isEditing {
+            sceneObjects
+                .frame(width: cadre.width, height: cadre.height)
+                .position(x: cadre.midX, y: cadre.midY)
+                .transition(.opacity)
         }
     }
 

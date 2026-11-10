@@ -158,6 +158,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// qu'il peint lui-même (la retouche de la caméra, pour son texte) le demande ; le défaut
     /// garde le canvas du composer tel qu'il était.
     public var paintsSceneBackground: Bool = true
+    /// Le canvas posé sur le viseur ne garde que les touchers qui tombent sur un objet (#17432).
+    public var passesThroughEmptyTouches: Bool = false
     /// La barre collée au clavier et le panneau d'options de l'hôte (#13839, L4).
     public var inlineEditInputLink: StoryInlineEditInputLink?
 
@@ -197,8 +199,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 localMediaAliases: [String: URL] = [:],
                 inlineEditYieldsToManipulation: Bool = false,
                 paintsSceneBackground: Bool = true,
+                passesThroughEmptyTouches: Bool = false,
                 inlineEditInputLink: StoryInlineEditInputLink? = nil) {
         self.inlineEditInputLink = inlineEditInputLink
+        self.passesThroughEmptyTouches = passesThroughEmptyTouches
         self.paintsSceneBackground = paintsSceneBackground
         self.localMediaAliases = localMediaAliases
         self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
@@ -295,6 +299,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // jamais ce drapeau et reste silencieux.
         view.playsVideoInEditMode = true
         Self.applyBackgroundPolicy(to: view, paintsSceneBackground: paintsSceneBackground)
+        view.passesThroughEmptyTouches = passesThroughEmptyTouches
         // Troisième famille vivante sur le canvas d'édition (#4999) : une
         // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
         // comme la vidéo et le son juste au-dessus et juste en dessous.

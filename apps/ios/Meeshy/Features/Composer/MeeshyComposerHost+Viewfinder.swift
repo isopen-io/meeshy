@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import MeeshySDK
+import MeeshyUI
 
 // **Le VISEUR EN SCÈNE — son geste, ses prises, et son montage** (#4080).
 //
@@ -176,6 +177,7 @@ extension MeeshyComposerHost {
                                     allowsPhoto: modes.contains(.photo),
                                     allowsVideo: modes.contains(.video),
                                     yieldsToScene: viewfinderYieldsToScene,
+                                    sceneObjects: viewfinderSceneObjects,
                                     onDisarm: { disarmSceneCamera() },
                                     onDeliver: { poseSceneCapture($0) }) {
             contenu
@@ -183,6 +185,40 @@ extension MeeshyComposerHost {
         .environment(\.composerViewfinderSceneEntry, { handleViewfinderEntry($0) })
         // L'outil fermé, le viseur revient sur la scène composée (#17432).
         .adaptiveOnChange(of: viewfinderEntryToolIsOpen) { _, ouvert in if !ouvert { viewfinderYieldsToScene = false } }
+    }
+}
+
+@MainActor
+extension MeeshyComposerHost {
+
+    /// **La scène posée sur l'aperçu** (#17432) : le canvas du composer, sans fond, ne gardant que
+    /// le doigt posé sur un objet. Il écrit la même slide que la scène : un objet déplacé ici est
+    /// déplacé là, et la prise posée passe dessous (`ComposerViewfinderScene`).
+    var viewfinderSceneObjects: AnyView? {
+        let slide = viewModel.currentSlide
+        guard ComposerViewfinderScene.showsSceneObjects(
+            stage: sceneCapture.stage, editing: sceneCapture.phase.isEditing, effects: slide.effects,
+            replacesBackground: sceneCaptureReplacesBackgroundId != nil) else { return nil }
+        let prendLeDoigt = ComposerViewfinderScene.route(
+            onChrome: false, onSceneObject: true,
+            objectsTakeTouches: ComposerViewfinderScene.objectsTakeTouches(
+                stage: sceneCapture.stage, holding: sceneCapture.holdStartedAt != nil)) == .sceneObject
+        return AnyView(
+            EmbeddedSceneCanvas(
+                slide: Binding(get: { viewModel.currentSlide }, set: { viewModel.currentSlide = $0 }),
+                aspectRatio: viewModel.currentCanvasRatio,
+                cornerRadius: MeeshyRadius.xlPlus,
+                onItemTapped: { id, kind in sceneSelectionRelay.selectSceneItem(id, kind: kind) },
+                editableKinds: [],
+                loadedImages: viewModel.loadedImages,
+                loadedStickerAnimations: viewModel.loadedStickerAnimations,
+                loadedImagesVersion: viewModel.loadedImagesVersion,
+                selectedItemId: selectedSceneItemId,
+                localMediaAliases: viewModel.adoptedLocalMedia,
+                paintsSceneBackground: false,
+                passesThroughEmptyTouches: true)
+            .allowsHitTesting(prendLeDoigt)
+            .accessibilityIdentifier("composer.viewfinder.scene"))
     }
 }
 
