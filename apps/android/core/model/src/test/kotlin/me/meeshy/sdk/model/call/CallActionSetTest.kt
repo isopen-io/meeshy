@@ -22,14 +22,23 @@ class CallActionSetTest {
     }
 
     @Test
+    fun `the call is captions, record, add, journal, react, capture (the order decided on 17329)`() {
+        val set = CallActionSet.resolve(context(isVideoEnabled = true, mayRecord = true))
+        assertThat(set.theCall).containsExactly(
+            CallAction.Captions, CallAction.Recording, CallAction.AddPeople,
+            CallAction.Journal, CallAction.React, CallAction.Capture,
+        ).inOrder()
+    }
+
+    @Test
     fun `connected video call on a phone offers the full families in order`() {
         val set = CallActionSet.resolve(context(isVideoEnabled = true, mayRecord = true, canPictureInPicture = true))
         assertThat(set.myImage).containsExactly(
             CallAction.Camera, CallAction.FlipCamera, CallAction.Effects, CallAction.ScreenShare,
         ).inOrder()
         assertThat(set.theCall).containsExactly(
-            CallAction.Captions, CallAction.Journal, CallAction.AddPeople, CallAction.React,
-            CallAction.Capture, CallAction.Recording, CallAction.PictureInPicture,
+            CallAction.Captions, CallAction.Recording, CallAction.AddPeople, CallAction.Journal,
+            CallAction.React, CallAction.Capture, CallAction.PictureInPicture,
         ).inOrder()
     }
 
