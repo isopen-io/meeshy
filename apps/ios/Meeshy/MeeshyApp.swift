@@ -49,6 +49,9 @@ struct MeeshyApp: App {
         // Le SDK ne lit pas le catalogue de l'app ; il reçoit ce mot une fois,
         // et ses chemins (pont socket, moteur de synchro) le relaient.
         ConversationListAuthor.configureReaderLabel(ConversationListViewModel.youAuthorLabel)
+        // La citation d'un avis (appel, arrivée, départ — #17441) se dit dans la
+        // langue de l'app : le SDK reçoit nos libellés, il n'en porte aucun.
+        QuotedNotice.lend(strings: { ConversationPreviewCatalog.strings() })
 
         // Sortie de bêta : la clé de la préférence « Activer les bêta » est effacée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()

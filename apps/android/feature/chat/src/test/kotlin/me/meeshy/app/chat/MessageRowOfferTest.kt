@@ -1,7 +1,9 @@
 package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.CallSummaryMetadata
 import me.meeshy.sdk.model.ContentExitLaw
+import me.meeshy.sdk.model.JoinNoticePresentation
 import me.meeshy.sdk.model.MessageExitOffer
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.ui.component.bubble.BubbleContent
@@ -23,6 +25,9 @@ class MessageRowOfferTest {
         isSystem: Boolean = false,
         isViewOnce: Boolean = false,
         exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
+        callSummary: CallSummaryMetadata? = null,
+        joinNotice: JoinNoticePresentation? = null,
+        isArrivalsNotice: Boolean = false,
     ) = BubbleContent(
         messageId = id,
         text = "Bonjour",
@@ -39,7 +44,23 @@ class MessageRowOfferTest {
         isSystem = isSystem,
         isViewOnce = isViewOnce,
         exitOffer = exitOffer,
+        callSummary = callSummary,
+        joinNotice = joinNotice,
+        isArrivalsNotice = isArrivalsNotice,
     )
+
+    private val missedCall = CallSummaryMetadata(
+        callId = "c-1",
+        initiatorId = "u-ama",
+        callType = CallSummaryMetadata.MediaType.AUDIO,
+        outcome = CallSummaryMetadata.Outcome.MISSED,
+        durationSeconds = 0,
+        bytesTotal = null,
+        bytesEstimated = false,
+        networkQuality = null,
+    )
+
+    private val arrival = JoinNoticePresentation(primaryName = "Bruno", handle = null, showsNoAccountBadge = false, rules = null)
 
     private fun offer(bubble: BubbleContent, canWrite: Boolean = true) = MessageRowOffer.of(bubble, canWrite)
 
@@ -75,6 +96,25 @@ class MessageRowOfferTest {
     @Test
     fun a_notice_offers_nothing() {
         assertThat(offer(bubble(isSystem = true)).accessibilityActions).isEmpty()
+    }
+
+    @Test
+    fun a_call_an_arrival_and_grouped_arrivals_are_answered_but_never_forwarded() {
+        listOf(
+            bubble(isSystem = true, callSummary = missedCall),
+            bubble(isSystem = true, joinNotice = arrival),
+            bubble(isSystem = true, isArrivalsNotice = true),
+        ).forEach { notice ->
+            val offer = offer(notice)
+            assertThat(offer.canReply).isTrue()
+            assertThat(offer.canForward).isFalse()
+            assertThat(offer.accessibilityActions).containsExactly(MessageRowAction.Reply)
+        }
+    }
+
+    @Test
+    fun a_quotable_notice_is_not_answered_by_a_reader_who_may_not_write() {
+        assertThat(offer(bubble(isSystem = true, callSummary = missedCall), canWrite = false).accessibilityActions).isEmpty()
     }
 
     @Test

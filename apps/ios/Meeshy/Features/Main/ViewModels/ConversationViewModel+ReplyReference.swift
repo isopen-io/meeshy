@@ -69,7 +69,7 @@ extension ConversationViewModel {
     func optimisticReplyReference(quoting quoted: Message,
                                   citing named: MessageAttachment? = nil) -> ReplyReference {
         QuotedReferenceFactory.reference(
-            quoting: quoted, citing: named,
+            quoting: quoted, citing: named, viewerId: currentUserId,
             servedText: { self.preferredTranslation(for: quoted.id)?.translatedContent }
         )
     }
