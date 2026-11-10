@@ -104,7 +104,7 @@ struct AboutView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xl)
-        .background(sectionBackground(tint: accentColor))
+        .background(SettingsSectionBackground(tint: accentColor))
     }
 
     // MARK: - Informations
@@ -119,7 +119,7 @@ struct AboutView: View {
                 infoRow(icon: "wrench.and.screwdriver.fill", title: String(localized: "about.info.sdkVersion", defaultValue: "Version du SDK", bundle: .main), value: "1.0.0", color: accentColor)
                 infoRow(icon: "gauge.with.dots.needle.67percent", title: String(localized: "about.info.mediaTier", defaultValue: "Profil média", bundle: .main), value: mediaTierLabel, color: accentColor)
             }
-            .background(sectionBackground(tint: accentColor))
+            .background(SettingsSectionBackground(tint: accentColor))
         }
     }
 
@@ -137,7 +137,7 @@ struct AboutView: View {
                     .padding(.horizontal, MeeshySpacing.md + 2)
                     .padding(.vertical, MeeshySpacing.md)
             }
-            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.indigo600Hex))
         }
     }
 
@@ -154,7 +154,7 @@ struct AboutView: View {
                 featureRow(title: String(localized: "about.feature.themes", defaultValue: "Thèmes personnalisables", bundle: .main), icon: "paintbrush.fill")
                 featureRow(title: String(localized: "about.feature.cloudSync", defaultValue: "Synchronisation cloud", bundle: .main), icon: "cloud.fill")
             }
-            .background(sectionBackground(tint: MeeshyColors.tileSaffronHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.tileSaffronHex))
         }
     }
 
@@ -182,7 +182,7 @@ struct AboutView: View {
                 linkRow(icon: "at", title: String(localized: "about.link.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.infoHex)
                 linkRow(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "about.link.github", defaultValue: "GitHub", bundle: .main), url: "https://github.com/meeshy", color: MeeshyColors.infoHex)
             }
-            .background(sectionBackground(tint: MeeshyColors.infoHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.infoHex))
         }
     }
 
@@ -212,15 +212,6 @@ struct AboutView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isHeader)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {
