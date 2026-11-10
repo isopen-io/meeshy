@@ -48,6 +48,7 @@ on:
       # assoupli sans que les cas communs bougent doit faire tourner la CI Android (#13927).
       - 'packages/shared/utils/relation-levels.ts'
       - 'packages/shared/utils/relation-access.ts'
+      - 'packages/shared/types/external-interop-compliance.ts'
       - 'packages/shared/types/relation.ts'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
@@ -77,6 +78,7 @@ on:
       # assoupli sans que les cas communs bougent doit faire tourner la CI Android (#13927).
       - 'packages/shared/utils/relation-levels.ts'
       - 'packages/shared/utils/relation-access.ts'
+      - 'packages/shared/types/external-interop-compliance.ts'
       - 'packages/shared/types/relation.ts'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'

@@ -6,14 +6,28 @@ import MeeshyUI
 // #8394 — la pilule du bas, identique en audio, en vidéo et en groupe :
 // (…) · Micro · Sortie · Fin. #8459 — la pilule est UN bloc de verre réel,
 // #17323 — et chacun de ses boutons un verre interactif à lui.
-// #8550 — le (…) empile au-dessus de la rangée de base une rangée par
-// famille (« Mon image », « L'appel »). #8578 — un panneau REMPLACE les
+// #8550 — en groupe, le (…) empile au-dessus de la rangée de base une rangée
+// par famille (« Mon image », « L'appel »). #17327 — à deux, il fait sortir
+// deux rails sur les bords (`CallView+Rails.swift`) et la pilule ne grandit
+// pas ; `CallControlsDisposition` choisit. #8578 — un panneau REMPLACE les
 // rangées, jamais empilé. La conversation n'est pas une action : sa seule
 // porte est l'en-tête (#8436).
 
 enum CallControlsCopy {
-    static var more: String {
-        String(localized: "call.control.more", defaultValue: "Plus d'actions", bundle: .main)
+    static func moreLabel(isExpanded: Bool) -> String {
+        isExpanded
+            ? String(localized: "call.control.more.hide", defaultValue: "Masquer les actions", bundle: .main)
+            : String(localized: "call.control.more.show", defaultValue: "Afficher les actions", bundle: .main)
+    }
+
+    static func cameraLabel(isEnabled: Bool) -> String {
+        isEnabled
+            ? String(localized: "call.control.camera.off", defaultValue: "Couper la caméra", bundle: .main)
+            : String(localized: "call.control.camera.on", defaultValue: "Activer la caméra", bundle: .main)
+    }
+
+    static var outputAudioLabel: String {
+        String(localized: "call.control.output.a11y", defaultValue: "Sortie audio", bundle: .main)
     }
 
     static var moreCaption: String {
@@ -126,19 +140,21 @@ extension CallView {
             : .opacity.combined(with: .scale(scale: 0.94, anchor: .bottom))
     }
 
-    /// UN bloc de verre : le panneau ouvert OU les familles, PUIS (en groupe)
-    /// les sous-titres, PUIS la rangée de base. Le verre enveloppe le tout et
-    /// grandit avec lui (#8459, #8550, #8578).
+    /// UN bloc de verre : le panneau ouvert OU (en groupe) les familles, PUIS (en
+    /// groupe) les sous-titres, PUIS la rangée de base. Le verre enveloppe le
+    /// tout et grandit avec lui (#8459, #8550, #8578). À deux, `(…)` ne le fait
+    /// pas grandir : ses actions sont sur les rails (#17327).
     var callControlsPill: some View {
         let actions = currentActionSet
+        let disposition = controlsDisposition
         return VStack(spacing: 0) {
-            if layer.isExpanded {
+            if disposition.unfoldsPill(for: layer) {
                 VStack(spacing: 0) {
                     unfoldedRows {
                         if let panel = layer.pillPanel {
                             panelRows(panel)
                         } else {
-                            familyRows(CallCameraRail.menuRows(actions, placement: cameraControlsPlacement))
+                            familyRows(disposition.pillRows(actions, layer: layer))
                         }
                     }
                     pillHairline
@@ -179,7 +195,7 @@ extension CallView {
     /// Les mêmes quatre boutons partout, légendés dès que les rangées
     /// légendées sont déployées au-dessus d'eux.
     private var baseRow: some View {
-        let captioned = layer.isExpanded
+        let captioned = controlsDisposition.unfoldsPill(for: layer)
         return AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
             HStack(alignment: .top, spacing: 0) {
                 moreButton(captioned: captioned)
@@ -230,7 +246,7 @@ extension CallView {
             )
         }
         .buttonStyle(CallPressButtonStyle(glassPressesItself: true))
-        .accessibilityLabel(CallControlsCopy.more)
+        .accessibilityLabel(CallControlsCopy.moreLabel(isExpanded: isExpanded))
         .accessibilityHint(CallControlsCopy.moreHint)
         .accessibilityValue(CallControlsCopy.moreValue(isExpanded: isExpanded))
     }
@@ -327,6 +343,7 @@ extension CallView {
                 toggleState: callManager.screenShare.isSharing,
                 diameter: diameter
             ) {
+                if callManager.screenShare.isSharing { HapticFeedback.light() }
                 screenSharePicker.toggle(controller: callManager.screenShare)
             }
         case .captions:
@@ -357,9 +374,7 @@ extension CallView {
             kind: isPaused ? .warning : (isEnabled ? .active : .normal),
             label: isPaused
                 ? String(localized: "call.control.video.paused", defaultValue: "Vidéo en pause (connexion faible)", bundle: .main)
-                : (isEnabled
-                    ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main)
-                    : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)),
+                : CallControlsCopy.cameraLabel(isEnabled: isEnabled),
             caption: captioned
                 ? (isPaused
                     ? String(localized: "call.control.video.paused.caption", defaultValue: "En pause", bundle: .main)
@@ -371,6 +386,7 @@ extension CallView {
             toggleState: isEnabled,
             diameter: diameter
         ) {
+            HapticFeedback.light()
             callManager.cameraActuator.toggleVideo()
         }
         // Le partage d'écran remplace la piste caméra : la bascule attend.

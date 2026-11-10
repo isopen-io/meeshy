@@ -38,6 +38,16 @@ extension SnapshotHelpers {
         state.isTouchable ? [.clair, .sombre, .presse] : [.clair, .sombre]
     }
 
+    /// La taille NATURELLE du composant. `layout: .sizeThatFits` mesure l'hôte
+    /// sous une proposition NULLE (`sizeThatFits(in: .zero)`) : tout ce qui se
+    /// comprime s'y efface — le libellé d'une pilule disparaissait des 40
+    /// premières références de K01, seul le glyphe restait. `fixedSize()` rend
+    /// la taille idéale, celle que le composant prend à l'écran.
+    @MainActor
+    static func kitFramed<V: View>(_ view: V) -> some View {
+        view.fixedSize()
+    }
+
     @MainActor
     static func assertKitImage<V: View>(
         of view: V,
@@ -50,7 +60,7 @@ extension SnapshotHelpers {
     ) {
         let recording: Bool? = nil
         let failure = SnapshotTesting.verifySnapshot(
-            of: view.environment(\.colorScheme, colorScheme),
+            of: kitFramed(view).environment(\.colorScheme, colorScheme),
             as: .image(precision: 0.99, perceptualPrecision: 0.98, layout: .sizeThatFits),
             named: variant.rawValue + osBaselineSuffix,
             record: recording,
@@ -95,11 +105,25 @@ extension SnapshotHelpers {
 
     @MainActor
     static func kitBoard(_ entry: MeeshyKitCatalogEntry) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            ForEach(entry.tiles) { tile in
-                MeeshyKitCatalogStage(key: entry.key, state: tile.state, isPressed: tile.isPressed)
+        kitBoardGlass(
+            VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+                ForEach(entry.tiles) { tile in
+                    MeeshyKitCatalogStage(key: entry.key, state: tile.state, isPressed: tile.isPressed)
+                }
             }
-        }
-        .frame(width: kitBoardWidth, alignment: .leading)
+            .frame(width: kitBoardWidth, alignment: .leading)
+        )
+    }
+
+    /// Le verre des planches est le verre DESSINÉ, sur toute version d'iOS. Le
+    /// Liquid Glass du système est composé par le serveur de rendu, que la
+    /// capture hors écran (`layer.render`) ne voit pas ; un verre teinté y
+    /// EFFACE même ce qui a été peint avant lui : la première planche de K01
+    /// n'a gardé que sa dernière tuile, la seule sans verre. Une planche juge la
+    /// mise en page (grande police, RTL), pas la matière, que les images de
+    /// chaque état photographient sur les deux chemins.
+    @MainActor
+    static func kitBoardGlass<V: View>(_ board: V) -> some View {
+        board.environment(\.meeshyGlassForcesDrawn, true)
     }
 }

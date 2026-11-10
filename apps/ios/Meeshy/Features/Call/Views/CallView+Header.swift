@@ -30,7 +30,7 @@ extension CallView {
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
-                    .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Réduire l'appel", bundle: .main))
+                    .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Réduire", bundle: .main))
                     .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une bannière flottante", bundle: .main))
 
                     // #8436 — la SEULE porte vers la conversation pendant l'appel,

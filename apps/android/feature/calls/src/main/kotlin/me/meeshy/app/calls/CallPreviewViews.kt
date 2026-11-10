@@ -2,6 +2,8 @@ package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallPreviewExposure
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.motion.pressable
@@ -66,18 +71,29 @@ internal fun CallPreviewSoundButton(isAudible: Boolean, onToggle: () -> Unit, mo
     val label = stringResource(if (isAudible) R.string.call_preview_sound_off else R.string.call_preview_sound_on)
     val hint = stringResource(R.string.call_preview_sound_hint)
     val ink = if (isAudible) Color.White else Color.Black
-    Row(
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    CallGlassButtonSurface(
+        role = if (isAudible) CallButtonRole.Neutral else CallButtonRole.Active,
+        shape = CircleShape,
+        isPressed = pressed,
         modifier = modifier
             .pressable()
             .defaultMinSize(minHeight = 50.dp)
-            .clip(CircleShape)
-            .background(if (isAudible) Color.White.copy(alpha = 0.16f) else Color.White)
-            .clickable(onClickLabel = hint, role = Role.Button, onClick = onToggle)
+            .clickable(interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onToggle)
             .semantics {
                 contentDescription = label
                 selected = isAudible
-            }
-            .padding(horizontal = MeeshySpacing.xxl),
+            },
+    ) {
+        CallPreviewSoundLabel(isAudible = isAudible, label = label, ink = ink)
+    }
+}
+
+@Composable
+private fun CallPreviewSoundLabel(isAudible: Boolean, label: String, ink: Color) {
+    Row(
+        modifier = Modifier.padding(horizontal = MeeshySpacing.xxl),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
@@ -190,22 +206,22 @@ private fun CallPreviewToggle(
     hint: String,
     onToggle: () -> Unit,
 ) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
     Column(
         modifier = Modifier
-            .toggleable(value = isOn, role = Role.Switch, onValueChange = { onToggle() })
+            .toggleable(value = isOn, interactionSource = source, indication = null, role = Role.Switch, onValueChange = { onToggle() })
             .semantics(mergeDescendants = true) {
                 contentDescription = "$label. $hint"
                 onClick(label = hint) { onToggle(); true }
             },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .pressable()
-                .size(64.dp)
-                .clip(CircleShape)
-                .background(if (isOn) Color.White else Color.White.copy(alpha = 0.16f)),
-            contentAlignment = Alignment.Center,
+        CallGlassButtonSurface(
+            role = if (isOn) CallButtonRole.Active else CallButtonRole.Neutral,
+            shape = CircleShape,
+            isPressed = pressed,
+            modifier = Modifier.pressable().size(64.dp),
         ) {
             Icon(
                 imageVector = if (isOn) on else off,

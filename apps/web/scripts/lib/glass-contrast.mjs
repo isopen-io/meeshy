@@ -134,6 +134,16 @@ export function loadGlassDensities() {
   return { glass: Number(regular[1]), 'glass-prominent': Number(prominent[1]), 'glass-call': Number(call[1]), 'glass-call-prominent': Number(callProminent[1]) };
 }
 
+/** Le voile blanc du disque de verre d'un bouton de l'appel (#17345), lu depuis `styles/glass.css`. */
+export function loadGlassDiscVeil() {
+  const css = readFileSync(GLASS_CSS_PATH, 'utf8');
+  const veil = /\.glass-call-disc\s*\{\s*--glass-disc-veil:\s*(\d+(?:\.\d+)?)%/.exec(css);
+  if (!veil) throw new Error('voile du disque introuvable dans glass.css');
+  return Number(veil[1]);
+}
+
+const WHITE = { r: 255, g: 255, b: 255, a: 1 };
+
 const relativeLuminance = (c) => {
   const channel = (v) => {
     const s = v / 255;
@@ -166,8 +176,9 @@ export function glassWorstCaseBackground({ tone, densityPercent, scheme, canvas 
  * (#8391) flotte sur une vidéo, et son pire cas est le blanc dans les deux
  * schémas.
  */
-export function glassWorstCaseContrast({ tone, ink, densityPercent, scheme, canvas }) {
-  const background = glassWorstCaseBackground({ tone, densityPercent, scheme, canvas });
+export function glassWorstCaseContrast({ tone, ink, densityPercent, scheme, canvas, veilPercent }) {
+  const glass = glassWorstCaseBackground({ tone, densityPercent, scheme, canvas });
+  const background = veilPercent === undefined ? glass : over({ ...WHITE, a: veilPercent / 100 }, glass);
   const text = over(ink, background);
   return wcagContrastRatio(text, background);
 }
@@ -351,6 +362,32 @@ export const GLASS_CONTRAST_INVENTORY = [
     canvas: 'white',
     kind: 'text',
   },
+  {
+    /* #17345 — LE DISQUE DE VERRE de chaque bouton de l'appel
+       (`glass-call-disc`, `styles/glass.css`) : un voile blanc posé SUR le
+       verre de la pilule, qui ÉCLAIRCIT le fond sous le glyphe blanc. Le pire
+       cas est donc le blanc sous la pilule PLUS le voile — `veil` le compose.
+       Le glyphe d'un bouton est un symbole : seuil non-texte (les légendes,
+       elles, sont lues SOUS le disque, sur le verre de la pilule, mesurées
+       par les entrées voisines). Sous Réduire la transparence le disque est
+       un plein indigo, gardé par `glass-contrast.test.ts`. */
+    site: 'src/components/call-glass-button.tsx — le glyphe blanc sur le disque de la pilule régulière (#17345)',
+    tone: '--ios-indigo-950',
+    ink: 'white',
+    density: 'glass-call',
+    veil: 'glass-call-disc',
+    canvas: 'white',
+    kind: 'non-text',
+  },
+  {
+    site: 'src/components/call-glass-button.tsx — le glyphe blanc sur le disque de la pilule sombre (#17345)',
+    tone: '--ios-indigo-950',
+    ink: 'white',
+    density: 'glass-call-prominent',
+    veil: 'glass-call-disc',
+    canvas: 'white',
+    kind: 'non-text',
+  },
 ];
 
 export const MIN_RATIO = { text: 4.5, 'non-text': 3 };
@@ -517,7 +554,8 @@ export function glassContrastAudit(inventory = GLASS_CONTRAST_INVENTORY) {
       const ink = resolveColor(entry.ink.startsWith('--') ? `var(${entry.ink})` : entry.ink, vars);
       const canvas = entry.canvas === undefined ? undefined : resolveColor(entry.canvas, vars);
       const densityPercent = densities[entry.density];
-      const ratio = glassWorstCaseContrast({ tone, ink, densityPercent, scheme, canvas });
+      const veilPercent = entry.veil === undefined ? undefined : loadGlassDiscVeil();
+      const ratio = glassWorstCaseContrast({ tone, ink, densityPercent, scheme, canvas, veilPercent });
       const minRatio = MIN_RATIO[entry.kind];
       return { ...entry, scheme, densityPercent, ratio, minRatio, passes: ratio >= minRatio };
     }),

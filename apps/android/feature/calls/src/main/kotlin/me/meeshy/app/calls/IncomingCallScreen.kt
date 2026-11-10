@@ -9,11 +9,14 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -48,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.IncomingCallAction
 import me.meeshy.sdk.model.call.IncomingCallChoices
 import me.meeshy.ui.theme.MeeshySpacing
@@ -235,26 +239,32 @@ private fun DeclineWithMessageButton(onClick: () -> Unit) {
     val label = stringResource(R.string.call_decline_open)
     val description = stringResource(R.string.call_decline_open_label)
     val hint = stringResource(R.string.call_decline_open_hint)
-    Row(
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    CallGlassButtonSurface(
+        role = CallButtonRole.Neutral,
+        shape = CircleShape,
+        isPressed = pressed,
         modifier = Modifier
             .pressable()
             .defaultMinSize(minHeight = 48.dp)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.16f))
-            .clickable(onClickLabel = hint, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = description }
-            .padding(horizontal = MeeshySpacing.xl),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+            .clickable(interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
     ) {
-        Icon(MeeshyIcons.MessageFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = Color.White,
-            modifier = Modifier.clearAndSetSemantics { },
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = MeeshySpacing.xl),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            Icon(MeeshyIcons.MessageFilled, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = Color.White,
+                modifier = Modifier.clearAndSetSemantics { },
+            )
+        }
     }
 }
 

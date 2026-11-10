@@ -97,6 +97,13 @@ public nonisolated extension MeeshyGlassRecipe {
     static func liquidWash(tone: MeeshyGlassTone) -> Double? {
         tone == .onLight ? GlassMeasure.onLightFill : nil
     }
+
+    /// Le Liquid Glass s'éclaircit avec l'apparence du système, alors que le ton
+    /// d'un verre suit ce qui se lit à travers lui : en clair, l'encre blanche
+    /// tombait à 2:1 sur `deep` (#17415). Hors `theme`, le verre se rend en sombre.
+    static func liquidForcesDark(tone: MeeshyGlassTone) -> Bool {
+        tone != .theme
+    }
 }
 
 // MARK: - Mesures de la planche
