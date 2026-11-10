@@ -10,6 +10,7 @@ import {
   type PreviewTone,
 } from '@meeshy/shared/utils/conversation-preview';
 
+import { RAINBOW_SPECTRUM } from '@/lib/effects-playback';
 import { BLUR_RADIUS_PX } from '@/lib/reading-mode/protection';
 import { entranceAnimation, shouldPlayEntrance } from '@/lib/view/preview-entrance';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
@@ -94,11 +95,17 @@ function langOf(
  * boucle : la lueur est une ombre douce à l'accent, l'arc-en-ciel un dégradé
  * posé sur le texte, les paillettes et la pulsation teintent l'icône. Seul le
  * TEXTE servi porte le fini, jamais les libellés du catalogue.
+ *
+ * L'arc-en-ciel réutilise `RAINBOW_SPECTRUM` — LE SPECTRE DE LA MAISON
+ * (`RainbowEffect.houseSpectrum`, miroir iOS `MessageEffectModifiers.swift`),
+ * le MÊME spectre que la bulle joue dans `effects-runner`. La liste et la
+ * bulle d'un même message chiffent ainsi le même arc-en-ciel : une jumelle
+ * codée en dur ici divergeait des deux.
  */
 const FINISH_TEXT: Readonly<Record<PreviewFinish, (accent: string) => CSSProperties | undefined>> = {
   glow: (accent) => ({ textShadow: `0 0 6px color-mix(in srgb, ${accent} 70%, transparent)` }),
   rainbow: () => ({
-    backgroundImage: 'linear-gradient(90deg, #f43f5e, #f59e0b, #22c55e, #3b82f6, #a855f7)',
+    backgroundImage: `linear-gradient(90deg, ${RAINBOW_SPECTRUM.join(', ')})`,
     WebkitBackgroundClip: 'text',
     backgroundClip: 'text',
     color: 'transparent',

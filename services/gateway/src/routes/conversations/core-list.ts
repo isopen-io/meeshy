@@ -56,7 +56,8 @@ import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
 import { loadListViewerCapabilities } from '../../services/conversations/obsoleteCapability';
 import { servedMessageRequest, withoutRequestFields, type MessageRequestListMode, type ServedMessageRequest } from '../../services/messaging/messageRequests';
-import { emptyDirectVisibility, withViewerRequests } from './utils/list-viewer-scope';
+import { emptyDirectVisibility, withExternalVisibility, withViewerRequests } from './utils/list-viewer-scope';
+import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITIES_HEADER } from '../../utils/client-capabilities';
 import { participantProfileDecor } from '../../services/appearance/profileDecor';
 import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import { startupPackIndex } from '../../services/packs/PackIndex';
@@ -228,6 +229,9 @@ export function registerConversationListRoute(
       // Visibilité DM vide (Prisme 2026-08-04) et boîte de demandes (#14107) : `utils/list-viewer-scope.ts`.
       whereClause.OR = emptyDirectVisibility(userId);
       if (request.query.requests) whereClause.AND = withViewerRequests(whereClause.AND, userId, request.query.requests);
+      // #17117 — un ancien client ne reçoit pas de conversation externe (`utils/list-viewer-scope.ts`).
+      whereClause.AND = withExternalVisibility(whereClause.AND, announcesCapability(request.headers, CLIENT_CAPABILITIES.externalConversations));
+      appendVary(reply, CLIENT_CAPABILITIES_HEADER);
 
       // Pagination par curseur — résolue DANS LE SCOPE DU LECTEUR (#6991).
       //

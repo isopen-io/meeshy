@@ -43,7 +43,7 @@ final class EmailSpamFolderHintTests: XCTestCase {
         "packages/MeeshySDK/Sources/MeeshyUI/Auth/MeeshyForgotPasswordView.swift",
         "apps/ios/Meeshy/Features/Auth/Views/MagicLinkView.swift",
         "apps/ios/Meeshy/Features/Auth/Views/EmailCodeEntry.swift",
-        "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityEmailSection.swift",
         "apps/ios/Meeshy/Features/Settings/Views/DeleteAccountView.swift",
         "apps/ios/Meeshy/Features/Onboarding/OnboardingCards.swift",
     ]
@@ -161,7 +161,7 @@ final class EmailSpamFolderHintTests: XCTestCase {
 
     /// Un SMS n'a pas de dossier spam : le parcours par téléphone ne dit rien.
     func test_phoneCodeSentLine_saysNothingAboutSpam() throws {
-        let security = try code("apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift")
+        let security = try code("apps/ios/Meeshy/Features/Settings/Views/SecurityPhoneSection.swift")
         let start = try XCTUnwrap(security.range(of: "settings.security.phone.code_sent"))
         let tail = security[start.lowerBound...].prefix(600)
 

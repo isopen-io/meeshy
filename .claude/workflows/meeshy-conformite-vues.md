@@ -53,7 +53,9 @@ Un périmètre réduit, puis la livraison :
   "attribution": "Co-Authored-By: …\nClaude-Session: …" }
 ```
 
-Arguments : `planche`, `plateformes` (défaut `["ios","android"]`, la première est la référence), `mode`, `grain`, `seulement`, `sauter`, `chantier`, `milestone`, `attribution`, `enTetePr`, `date`, `run`, `base`, `devPar`, `maxFix`.
+Arguments : `planche`, `plateformes` (défaut `["ios","android"]`, la première est la référence), `mode`, `grain`, `seulement`, `sauter`, `chantier`, `milestone`, `attribution`, `enTetePr`, `date`, `run`, `base`, `devPar`, `maxFix`, `consignes`.
+
+**La facture** (directive porteur du 2026-11-10, #17406) est injectée dans les passes Cohérence, Développer et Intégrer, pour toute planche : ne rien recréer de ce qui existe ; le verre adaptatif de la plateforme partout (`adaptiveLiquidGlass`, `MeeshyGlassSurface`, la surface de verre du web) ; la vue affiche ce que la planche dessine, rien en plus ; rien n'apparaît ni ne disparaît d'un coup (un rail entre et sort par le bord de l'écran, une option de la barre du bas s'ouvre par morphisme de la barre). `consignes` (texte libre, 4 000 caractères au plus) ajoute les règles propres à un passage, sans rien retirer.
 
 ## Limites
 

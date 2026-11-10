@@ -463,6 +463,9 @@ services:
       # `/api/v1/external-peer/whatsapp/coquille/`, routes réservées à l'équipe.
       # Toute autre valeur (`off`) dans le .env de l'hôte ferme la porte.
       - EXTERNAL_PEER_PROVIDER=${EXTERNAL_PEER_PROVIDER:-fake-whatsapp}
+      # #17117 — les conversations externes (écrire à un ami WhatsApp, chantier #17007) :
+      # armées par la seule valeur exacte on posée dans le .env de l'hôte, éteintes sinon.
+      - EXTERNAL_CONVERSATIONS=${EXTERNAL_CONVERSATIONS:-off}
       # #9614, #9642 — la purge de conservation (sessions closes 90 j, journaux
       # 12 mois, adresses d'inscription et de connexion 12 mois). ARMÉE par la
       # seule valeur exacte true ; sinon elle compte et journalise sans écrire.

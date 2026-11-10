@@ -150,6 +150,9 @@ export const byIdThreadsByMessageId = (id: string, messageId: string): string =>
 /** GET /api/v1/conversations/check-identifier/:identifier */
 export const checkIdentifierByIdentifier = (identifier: string): string => `/api/v1/conversations/check-identifier/${encodeURIComponent(identifier)}`;
 
+/** POST /api/v1/conversations/external */
+export const external = '/api/v1/conversations/external';
+
 /** POST /api/v1/conversations/join/:linkId */
 export const joinByLinkId = (linkId: string): string => `/api/v1/conversations/join/${encodeURIComponent(linkId)}`;
 

@@ -45,6 +45,7 @@ import type {
 } from './types';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
+import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
@@ -931,6 +932,8 @@ export function registerDeleteConversationRoute(
         }),
         deactivateShareLinksOnClose(prisma, conversationId),
       ]);
+      // #17117 — le numéro de l'ami d'une conversation externe ne survit pas au fil.
+      await eraseExternalPeerOnClose(prisma, closedConversation);
 
       // Broadcast closure to all members — ce que le commentaire annonçait sans
       // que le code le fasse. Adressée à la seule room de conversation, la
