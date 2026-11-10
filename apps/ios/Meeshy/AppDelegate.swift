@@ -15,6 +15,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
+    /// #17442 — le bouton « Arrêter » de l'alarme d'un Bring s'exécute dans l'app, parfois lancée en arrière-plan pour
+    /// lui : le branchement se pose à la construction du délégué, avant tout lancement.
+    private let bringAlarmStopBinding: Void = BringAlarmStopRouter.handler = { BringCenter.shared.stop(bringId: $0) }
+
     /// Un réveil en arrière-plan (push silencieux, app tuée) ne passe jamais par
     /// `checkExistingSession` : `APIClient` n'a pas de jeton alors que le
     /// Keychain en tient un valide. Le jeton de la session restaurée l'amorce ;
@@ -41,10 +45,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // (those don't trigger the live signal handlers since they're
         // delivered at next launch from the OS).
         let crashReporter = Self.bootCrashReporting()
-
-        // #17442 — le bouton « Arrêter » de l'alarme d'un Bring s'exécute dans l'app, parfois lancée en arrière-plan
-        // pour lui : le branchement se pose avant toute autre chose.
-        BringAlarmStopRouter.handler = { BringCenter.shared.stop(bringId: $0) }
 
         // Les copies brutes que le composeur, la bande récente et les retouches posent dans `tmp` ne sont
         // retirées par personne quand la publication n'aboutit pas : une semaine plus tard, elles partent.
@@ -465,21 +465,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: [.destructive]
         )
 
-        let stopBringAction = UNNotificationAction(
-            identifier: MeeshyNotificationAction.stopBring.rawValue,
-            title: String(localized: "notifications.action.stopBring", defaultValue: "Arrêter", bundle: bundle),
-            options: [.destructive]
-        )
-
-        // #17442 — la bannière d'un Bring (catégorie posée par la passerelle, `BRING_PUSH_CATEGORY`) : « Arrêter »
-        // l'éteint chez tous les appareils sans ouvrir l'app.
-        let bringCategory = UNNotificationCategory(
-            identifier: MeeshyNotificationCategory.bring.rawValue,
-            actions: [stopBringAction],
-            intentIdentifiers: [],
-            options: []
-        )
-
         let messageCategory = UNNotificationCategory(
             identifier: MeeshyNotificationCategory.message.rawValue,
             actions: [replyAction, markReadAction],
@@ -549,8 +534,23 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         register(Set([
             messageCategory, mentionCategory, friendRequestCategory, socialCategory, socialCommentableCategory,
             callIncomingCategory, callMissedCategory, legacyCallCategory, LockedConversationNotificationCategory.category,
-            bringCategory,
-        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle)))
+        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle) + [bringNotificationCategory(bundle: bundle)]))
+    }
+
+    /// #17442 — la bannière d'un Bring (catégorie posée par la passerelle, `BRING_PUSH_CATEGORY`) : « Arrêter » l'éteint
+    /// chez tous les appareils sans ouvrir l'app.
+    private static func bringNotificationCategory(bundle: Bundle) -> UNNotificationCategory {
+        let stop = UNNotificationAction(
+            identifier: MeeshyNotificationAction.stopBring.rawValue,
+            title: String(localized: "notifications.action.stopBring", defaultValue: "Arrêter", bundle: bundle),
+            options: [.destructive]
+        )
+        return UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.bring.rawValue,
+            actions: [stop],
+            intentIdentifiers: [],
+            options: []
+        )
     }
 
     // MARK: - Crash Reporting Bootstrap
