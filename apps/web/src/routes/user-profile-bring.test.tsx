@@ -14,7 +14,7 @@ import { ProfileBringRow, ProfileBringRowView } from './user-profile-bring';
 /**
  * LE BRING SUR LA FICHE D'UNE PERSONNE (#13936, `proche-bring@web`) — le bouton
  * n'existe que si le serveur le dit (`available`), il s'explique (« urgence
- * extrême, même en silencieux »), compte ce qui reste aujourd'hui, se confirme,
+ * extrême », et ce qui l’en empêche, #17442), compte ce qui reste aujourd'hui, se confirme,
  * puis dit « Ça sonne chez X » avec « Annuler » tant que ça sonne.
  */
 
@@ -62,7 +62,9 @@ describe('la ligne du Bring', () => {
   test('le bouton s’explique et compte ce qui reste aujourd’hui', () => {
     const html = view({ availability: availability() });
     expect(html).toContain('data-bring-send');
-    expect(html).toContain('même en silencieux');
+    expect(html).toContain('même verrouillé');
+    expect(html).not.toContain('même en silencieux');
+    expect(html).toContain('un iPhone en silencieux avec Meeshy fermé ne montre qu’une alerte prioritaire');
     expect(html).toContain('Restants aujourd’hui : 2');
   });
 

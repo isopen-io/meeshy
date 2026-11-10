@@ -33,8 +33,10 @@ public struct TreasuryTierEmblem: View {
 
     public var body: some View {
         Image(systemName: Self.symbol(for: tier))
-            .font(.system(size: side * 15 / 18, weight: .semibold))
+            .resizable()
+            .scaledToFit()
             .foregroundStyle(color)
+            .padding(side / 12)
             .frame(width: side, height: side)
             .accessibilityHidden(true)
     }

@@ -28,8 +28,8 @@ import { FOCUS, INK, INK_2 } from './user-profile-style';
 
 /**
  * **LE BRING SUR LA FICHE D'UNE PERSONNE** (#13936, sous-lot `proche-bring@web`,
- * spec cercles § 5 « Bring ») — « Bring » expliqué (« pour une urgence extrême,
- * il sonne même en silencieux »), compteur « Restants aujourd'hui », absent si
+ * spec cercles § 5 « Bring ») — « Bring » expliqué (« pour une urgence extrême »,
+ * et ce qui l'en empêche chez le destinataire — #17442), compteur « Restants aujourd'hui », absent si
  * le serveur ne l'ouvre pas.
  *
  * - **Le serveur décide de tout** : niveau (dès Ami), quota du jour du
@@ -128,6 +128,99 @@ export function bringAvailabilityQueryOptions(deps: BringDeps, userId: string) {
 }
 
 /**
+ * LE BRING VERS UNE PERSONNE, partagé par la fiche et l'en-tête d'un direct
+ * (#17442) : la disponibilité servie, la confirmation, l'envoi et son issue,
+ * l'annulation tant que ça sonne. Aucune règle n'est recalculée ici.
+ */
+export function usePersonBring({
+  language,
+  personId,
+  name,
+  offered,
+  onNotice,
+  store,
+  deps,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly personId: string;
+  readonly name: string;
+  readonly offered: boolean;
+  readonly onNotice: (message: string) => void;
+  readonly store: BringStoreApi;
+  readonly deps: BringDeps;
+}) {
+  const availability = useQuery({ ...bringAvailabilityQueryOptions(deps, personId), enabled: offered }, appQueryClient);
+  const outgoing = useStore(store, (state) => state.outgoing[personId] ?? null);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const key = bringAvailabilityQueryKey(personId);
+  const patch = (next: Partial<BringAvailabilityView>): void => {
+    appQueryClient.setQueryData<BringAvailabilityView>(key, (current) => (current === undefined ? current : { ...current, ...next }));
+  };
+
+  const send = async (): Promise<void> => {
+    setConfirming(false);
+    setBusy(true);
+    const outcome = bringSendOutcomeOf(await sendBring(deps, personId));
+    setBusy(false);
+    if (outcome.kind === 'sent') {
+      store.getState().sent(outcome.sent);
+      patch({ perDay: outcome.sent.perDay, remainingToday: outcome.sent.remainingToday });
+      return;
+    }
+    if (outcome.kind === 'gone') return patch({ available: false, remainingToday: 0 });
+    if (outcome.kind === 'quota') {
+      patch({ remainingToday: 0 });
+      return onNotice(translateCircles(language, 'bring.quota', { name }));
+    }
+    onNotice(translateCircles(language, outcome.kind === 'offline' ? 'bring.offline' : 'bring.failed'));
+  };
+
+  const cancel = (): void => {
+    if (outgoing === null) return;
+    store.getState().stop(outgoing.bringId);
+    void stopBring(deps, outgoing.bringId);
+  };
+
+  return {
+    availability: availability.data ?? null,
+    ringing: outgoing !== null,
+    busy,
+    confirming,
+    ask: () => setConfirming(true),
+    dismiss: () => setConfirming(false),
+    send,
+    cancel,
+  };
+}
+
+/** La confirmation du Bring, la MÊME depuis la fiche et depuis l'en-tête d'un direct. */
+export function BringSendConfirm({
+  language,
+  name,
+  onConfirm,
+  onCancel,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly name: string;
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
+}) {
+  return (
+    <ConfirmDialog
+      name="bring-send"
+      title={translateCircles(language, 'bring.confirm.title', { name })}
+      body={translateCircles(language, 'bring.confirm.body', { name })}
+      cancelLabel={translate(language, 'common.cancel')}
+      confirmLabel={translateCircles(language, 'bring.confirm.send')}
+      tone="destructive"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  );
+}
+
+/**
  * Hors amitié, la ligne ne demande le Bring que si la porte du lien (`GET /relations/:userId`,
  * même cache que le cercle de la fiche) sert un `accessLevel` d'au moins Ami : entre deux
  * comptes de l'équipe, Sang sans lien (#16623). Aucun rôle n'est lu ni déduit ici.
@@ -150,39 +243,8 @@ export function ProfileBringRow({
   const ready = useCirclesCatalog(language);
   const gate = useQuery({ ...relationRaiseGateQueryOptions(deps, person.id), enabled: !friend }, appQueryClient);
   const offered = friend || relationLevelIfAtLeast(gate.data?.accessLevel, 'FRIEND') !== null;
-  const availability = useQuery({ ...bringAvailabilityQueryOptions(deps, person.id), enabled: offered }, appQueryClient);
-  const outgoing = useStore(store, (state) => state.outgoing[person.id] ?? null);
-  const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
   const name = person.displayName ?? person.username;
-  const key = bringAvailabilityQueryKey(person.id);
-  const patch = (next: Partial<BringAvailabilityView>): void => {
-    appQueryClient.setQueryData<BringAvailabilityView>(key, (current) => (current === undefined ? current : { ...current, ...next }));
-  };
-
-  const send = async (): Promise<void> => {
-    setConfirming(false);
-    setBusy(true);
-    const outcome = bringSendOutcomeOf(await sendBring(deps, person.id));
-    setBusy(false);
-    if (outcome.kind === 'sent') {
-      store.getState().sent(outcome.sent);
-      patch({ perDay: outcome.sent.perDay, remainingToday: outcome.sent.remainingToday });
-      return;
-    }
-    if (outcome.kind === 'gone') return patch({ available: false, remainingToday: 0 });
-    if (outcome.kind === 'quota') {
-      patch({ remainingToday: 0 });
-      return onNotice(translateCircles(language, 'bring.quota', { name }));
-    }
-    onNotice(translateCircles(language, outcome.kind === 'offline' ? 'bring.offline' : 'bring.failed'));
-  };
-
-  const cancel = (): void => {
-    if (outgoing === null) return;
-    store.getState().stop(outgoing.bringId);
-    void stopBring(deps, outgoing.bringId);
-  };
+  const bring = usePersonBring({ language, personId: person.id, name, offered, onNotice, store, deps });
 
   if (!ready) return null;
   return (
@@ -190,24 +252,13 @@ export function ProfileBringRow({
       <ProfileBringRowView
         language={language}
         name={name}
-        availability={availability.data ?? null}
-        ringing={outgoing !== null}
-        busy={busy}
-        onBring={() => setConfirming(true)}
-        onCancel={cancel}
+        availability={bring.availability}
+        ringing={bring.ringing}
+        busy={bring.busy}
+        onBring={bring.ask}
+        onCancel={bring.cancel}
       />
-      {confirming ? (
-        <ConfirmDialog
-          name="bring-send"
-          title={translateCircles(language, 'bring.confirm.title', { name })}
-          body={translateCircles(language, 'bring.confirm.body', { name })}
-          cancelLabel={translate(language, 'common.cancel')}
-          confirmLabel={translateCircles(language, 'bring.confirm.send')}
-          tone="destructive"
-          onConfirm={() => void send()}
-          onCancel={() => setConfirming(false)}
-        />
-      ) : null}
+      {bring.confirming ? <BringSendConfirm language={language} name={name} onConfirm={() => void bring.send()} onCancel={bring.dismiss} /> : null}
     </>
   );
 }
