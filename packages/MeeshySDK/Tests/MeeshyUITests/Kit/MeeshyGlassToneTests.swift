@@ -18,9 +18,12 @@ struct MeeshyGlassToneTests {
         #expect(MeeshyGlassTone.resolve(luminance: 0.614) == .onLight)
     }
 
-    @Test("luminance inconnue ⇒ deep, quel que soit le ton précédent", arguments: [nil, MeeshyGlassTone.plain, .deep, .onLight, .theme])
-    func resolve_unknownLuminance_isDeep(previous: MeeshyGlassTone?) {
-        #expect(MeeshyGlassTone.resolve(luminance: nil, previous: previous) == .deep)
+    @Test("luminance inconnue ⇒ deep, quel que soit le ton précédent")
+    func resolve_unknownLuminance_isDeep() {
+        let previous: [MeeshyGlassTone?] = [nil, .plain, .deep, .onLight, .theme]
+        for tone in previous {
+            #expect(MeeshyGlassTone.resolve(luminance: nil, previous: tone) == .deep)
+        }
     }
 
     @Test("pas de bascule dans l'hystérésis, bascule au-delà")
@@ -200,9 +203,10 @@ struct MeeshyGlassToneTests {
         #expect(drawn.count == 6)
         for entry in drawn {
             let tone = try #require((entry["tone"] as? String).flatMap(Self.tone(named:)))
-            let density: MeeshyGlassDensity = entry["density"] as? String == "dense" ? .dense : .regular
+            let density: MeeshyGlassDensity = (entry["density"] as? String) == "dense" ? .dense : .regular
             let resolved = Self.recipe(tone: tone, density: density)
-            #expect(resolved.fill == (entry["fill"] as? String == "light" ? .light : .dark), "\(entry)")
+            let expectedFill: MeeshyGlassFill = (entry["fill"] as? String) == "light" ? .light : .dark
+            #expect(resolved.fill == expectedFill, "\(entry)")
             #expect(resolved.fillOpacity == entry["fillOpacity"] as? Double, "\(entry)")
             #expect(resolved.rimLit == entry["rim"] as? Double, "\(entry)")
             #expect(resolved.rimShade == entry["rim"] as? Double, "\(entry)")
