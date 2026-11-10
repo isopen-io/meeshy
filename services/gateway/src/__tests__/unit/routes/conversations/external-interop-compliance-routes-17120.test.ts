@@ -236,6 +236,21 @@ describe('PUT /conversations/external/consent', () => {
     expect(res.world.erasedFor).toEqual([ALICE]);
     expect(res.body).toMatchObject({ data: { consent: null, current: false } });
   });
+
+  it('retirer le consentement sous une version PÉRIMÉE (client pas encore mis à jour) efface quand même les adresses : le retrait n’est jamais bloqué par la version', async () => {
+    const world = newWorld({ consentAt: new Date('2026-11-01T00:00:00Z'), consentVersion: EXTERNAL_INTEROP_NOTICE_VERSION });
+
+    const res = await call({
+      route: 'PUT /conversations/external/consent',
+      body: { network: 'whatsapp', noticeVersion: '2026-01-01', granted: false },
+      world,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.world.userUpdates).toEqual([{ whatsappInteropConsentAt: null, whatsappInteropNoticeVersion: null }]);
+    expect(res.world.erasedFor).toEqual([ALICE]);
+    expect(res.body).toMatchObject({ data: { consent: null, current: false } });
+  });
 });
 
 describe('POST /conversations/:id/external/report', () => {

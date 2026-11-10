@@ -6,7 +6,10 @@
  *   vigueur (version, ce qui part chez Meta, durée de conservation du numéro de
  *   l'ami) et le consentement du compte ;
  * - `PUT /conversations/external/consent` `{ network, noticeVersion, granted }` :
- *   le consentement, daté par le SERVEUR ; une version périmée ⇒ 409 ;
+ *   le consentement, daté par le SERVEUR ; accorder sous une version périmée
+ *   ⇒ 409 (la version citée gouverne l'ACCORD, jamais le RETRAIT : un retrait
+ *   efface toujours la date et les adresses gardées, même venu d'un client pas
+ *   encore mis à jour après un changement de version — #17425) ;
  * - `POST /conversations/:id/external/report` : signaler un contenu reçu de
  *   WhatsApp (`reportExternalContent`).
  *
@@ -192,7 +195,7 @@ export function registerExternalComplianceRoutes(
       if (!userId) return;
       const body = consentBodySchema.safeParse(request.body);
       if (!body.success) return sendBadRequest(reply, 'Expected a network, the notice version shown and a decision', { code: EXTERNAL_CONVERSATION_ERROR_CODES.INVALID });
-      if (body.data.noticeVersion !== EXTERNAL_INTEROP_NOTICE_VERSION) {
+      if (body.data.granted && body.data.noticeVersion !== EXTERNAL_INTEROP_NOTICE_VERSION) {
         return sendError(reply, 409, 'The notice changed: read it again before consenting', {
           code: EXTERNAL_CONVERSATION_ERROR_CODES.NOTICE_OUTDATED,
           details: { expectedNoticeVersion: EXTERNAL_INTEROP_NOTICE_VERSION },
