@@ -330,6 +330,11 @@ jobs:
     # supprime les deux. 30 est le plafond ; le délai PAR TEST (600 s
     # ci-dessous) reste le garde-fou d'un test bloqué.
     timeout-minutes: 30
+    # `contents: write` pour le seul commit des références ré-enregistrées
+    # (étape « Commit re-recorded snapshots », branche de travail seulement).
+    permissions:
+      contents: write
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -496,6 +501,36 @@ jobs:
           retention-days: 7
           overwrite: true
           if-no-files-found: warn
+
+      # #17400 — les sessions des conteneurs ne peuvent pas télécharger un
+      # artefact (stockage refusé par le proxy) : sur une branche de travail,
+      # la tranche commit elle-même les références qu'elle vient d'enregistrer,
+      # comme `android.yml` le fait pour le kit. Sur `dev` et `main`, seul
+      # l'artefact ci-dessus est publié. Les tranches parallèles se rebasent
+      # l'une sur l'autre avant de pousser.
+      - name: Commit re-recorded snapshots
+        if: always() && inputs.record_snapshots && github.ref_name != 'dev' && github.ref_name != 'main'
+        env:
+          SHARD: ${{ matrix.shard }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- 'packages/MeeshySDK/Tests/**/__Snapshots__/**'
+          if git diff --cached --quiet; then
+            echo "::notice::aucune référence nouvelle ou modifiée (tranche ${SHARD})"
+            exit 0
+          fi
+          git commit -q -m "chore(sdk): références de capture enregistrées par la CI (tranche ${SHARD})" \
+            -m "Ré-enregistrées par sdk-tests.yml (record_snapshots), run ${{ github.run_id }}."
+          for attempt in 1 2 3; do
+            git pull -q --rebase origin "$BRANCH"
+            if git push -q origin "HEAD:${{ github.ref_name }}"; then exit 0; fi
+            echo "::warning::poussée refusée (tentative ${attempt}), nouveau rebase"
+          done
+          echo "::error::les références de la tranche ${SHARD} n'ont pas pu être poussées"
+          exit 1
 
       - name: Publish shard summary
         if: always()
