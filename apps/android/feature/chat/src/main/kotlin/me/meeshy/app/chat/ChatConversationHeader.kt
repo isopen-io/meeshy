@@ -282,18 +282,12 @@ internal fun ChatHeaderGlassAction(
             },
         contentAlignment = Alignment.Center,
     ) {
-        MeeshyGlassSurface(
-            modifier = Modifier.size(ChatHeaderMetrics.ACTION_GLASS),
-            shape = CircleShape,
-            tint = accentColor.copy(alpha = 0.4f),
-        ) {
-            Box(Modifier.size(ChatHeaderMetrics.ACTION_GLASS), contentAlignment = Alignment.Center) {
-                GradientIcon(
-                    icon = icon,
-                    brush = Brush.linearGradient(listOf(accentColor, MeeshyPalette.Indigo500)),
-                    modifier = Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp),
-                )
-            }
+        ChatHeaderGlassDisc(tint = accentColor) {
+            GradientIcon(
+                icon = icon,
+                brush = Brush.linearGradient(listOf(accentColor, MeeshyPalette.Indigo500)),
+                modifier = Modifier.size(ChatHeaderMetrics.ACTION_GLYPH + 2.dp),
+            )
         }
     }
 }
