@@ -127,7 +127,7 @@
    le verre par bouton d'iOS (`CallButtonGlassRule`, #17323) : chaque bouton
    d'une pilule ou d'un rail est un disque, pas un trou dans le verre du groupe.
 
-   SANS `backdrop-filter` : floutter chaque disque obligerait le navigateur à
+   SANS `backdrop-filter` : flouter chaque disque obligerait le navigateur à
    composer autant de couches d'arrière-plan que de boutons (jusqu'à une
    douzaine, rangées déployées) à chaque image — le flou de la pilule, un seul,
    passe SOUS les disques et leur donne leur profondeur. Le disque n'ajoute
