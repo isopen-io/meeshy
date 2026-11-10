@@ -445,8 +445,8 @@ describe('une conversation externe, telle qu’elle naît, ne se rétrograde jam
   const bornExternal = async (): Promise<MongoDocument> => {
     const created: MongoDocument[] = [];
     const prisma = {
-      user: { findUnique: async () => ({ id: ALICE, phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), displayName: 'Alice', username: 'alice' }) },
-      externalConversationPeer: { findUnique: async () => null, update: async () => null },
+      user: { findUnique: async () => ({ id: ALICE, phoneVerifiedAt: new Date('2026-10-01T00:00:00Z'), displayName: 'Alice', username: 'alice', role: 'ANALYST' }) },
+      externalConversationPeer: { findUnique: async () => null, update: async () => null, count: async () => 0 },
       conversation: {
         create: async ({ data }: { data: MongoDocument }) => {
           const { participants: _participants, externalPeer: _peer, ...conversation } = data;
