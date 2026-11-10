@@ -131,6 +131,16 @@ final class ExternalConversationEntryModelTests: XCTestCase {
         XCTAssertEqual(service.openCallCount, 1)
     }
 
+    func test_consentGranted_withoutAPendingConsent_sendsNothing() async {
+        let (model, service) = makeSUT()
+        model.handle = "+33612345678"
+
+        await model.consentGranted()
+
+        XCTAssertEqual(service.openCallCount, 0)
+        XCTAssertNil(model.openedConversationId)
+    }
+
     func test_collapse_forgetsTheNumberAndTheState() async {
         let (model, _) = makeSUT(outcome: .refused(.failed))
         model.toggle()
