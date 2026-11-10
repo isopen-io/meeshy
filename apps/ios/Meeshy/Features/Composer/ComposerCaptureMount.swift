@@ -31,6 +31,8 @@ struct ComposerCaptureMount<Content: View>: View {
     var offersSizeToggle = true
     var allowsPhoto = true
     var allowsVideo = true
+    /// Le viseur a cédé la scène à un outil sans se couper (#17432) : rien ne se peint.
+    var yieldsToScene = false
     let onDisarm: () -> Void
     let onDeliver: @MainActor (CameraResult) -> Void
     @ViewBuilder let content: () -> Content
@@ -58,7 +60,7 @@ struct ComposerCaptureMount<Content: View>: View {
                 // Les marges système se lisent ICI : la couche qui les ignore ne les voit plus.
                 GeometryReader { marges in
                     GeometryReader { proxy in
-                        if let ancre, session.stage != .off {
+                        if let ancre, ComposerCaptureSurfaceRule.showsViewfinder(stage: session.stage, yieldsToScene: yieldsToScene) {
                             // **UNE image, à la même place de l'arbre, en capture
                             // comme en retouche** (#10342) : deux branches
                             // démontaient l'aperçu à chaque entrée et sortie de
@@ -97,7 +99,7 @@ struct ComposerCaptureMount<Content: View>: View {
             }
             .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
                 GeometryReader { proxy in
-                    if let ancre, session.stage != .off {
+                    if let ancre, ComposerCaptureSurfaceRule.showsViewfinder(stage: session.stage, yieldsToScene: yieldsToScene) {
                         controls(rect: rect(card: proxy[ancre], in: proxy.size, taille), taille)
                     }
                 }

@@ -29,6 +29,8 @@ struct ComposerCaptureBottomRow: View {
     var railOpacity: Double = 1
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Les entrées de scène, posées par le composer seul (#17432).
+    @Environment(\.composerViewfinderSceneEntry) private var sceneEntry
     /// Le cadenas qui se ferme, élastique, avant de partir (#9753).
     @State private var lockSeal = ComposerLockSeal()
     /// Le tri de la bande ouverte (#17267), partagé par la bande et ses puces.
@@ -43,6 +45,11 @@ struct ComposerCaptureBottomRow: View {
     /// Ce que les miniatures peignent : le média retouché, l'objectif sinon.
     private var source: any ComposerFrameSourcing {
         session.editSource ?? session.camera.liveFeed
+    }
+
+    /// La colonne de scène du viseur (#17432) — vide sans composer derrière.
+    private var sceneEntries: [ComposerViewfinderEntry] {
+        ComposerViewfinderColumn.entries(composesScene: sceneEntry != nil, context: context)
     }
 
     private var showsLock: Bool {
@@ -103,15 +110,19 @@ struct ComposerCaptureBottomRow: View {
                 .environment(\.layoutDirection, .leftToRight)
             }
             .overlay(alignment: .bottomLeading) {
-                if ComposerCaptureGesture.offersRail(context) {
-                    ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
-                        session.toggleFamily(famille)
-                    }
-                    .opacity(railOpacity)
-                    .padding(.leading, MeeshySpacing.mdPlus)
-                    .padding(.bottom, ComposerLookStripRule.railBottomInset)
+                VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
+                    // **Texte · Fond · Galerie · Sticker AVANT les familles** (#17432).
+                    ComposerViewfinderColumnView(entries: sceneEntries) { sceneEntry?($0) }
+                    if ComposerCaptureGesture.offersRail(context) {
+                        ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                            session.toggleFamily(famille)
+                        }
                         .transition(.opacity)
+                    }
                 }
+                .opacity(railOpacity)
+                .padding(.leading, MeeshySpacing.mdPlus)
+                .padding(.bottom, ComposerLookStripRule.railBottomInset)
             }
             if session.openFamily != nil && ComposerCaptureGesture.offersRail(context) {
                 lookChips
@@ -291,5 +302,53 @@ struct ComposerEditRailFit: View {
                 rail.padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
             }
         }
+    }
+}
+
+/// **Les entrées de scène du viseur** (#17432) : un glyphe et son nom, comme les
+/// familles de look qu'elles précèdent ; 44 pt, nommées à VoiceOver.
+struct ComposerViewfinderColumnView: View {
+    let entries: [ComposerViewfinderEntry]
+    let onSelect: (ComposerViewfinderEntry) -> Void
+
+    var body: some View {
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
+                ForEach(entries, id: \.self) { entree in
+                    Button { onSelect(entree) } label: {
+                        HStack(spacing: MeeshySpacing.xs) {
+                            Image(systemName: entree.symbol)
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                            Text(ComposerViewfinderColumn.label(entree))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget,
+                               alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(ComposerBounceButtonStyle())
+                    .accessibilityLabel(ComposerViewfinderColumn.label(entree))
+                    .accessibilityIdentifier(entree.accessibilityIdentifier)
+                }
+            }
+            .transition(.opacity)
+        }
+    }
+}
+
+/// **Qui reçoit une entrée de scène du viseur** (#17432) : le composer la pose sur
+/// son montage ; la caméra de conversation n'en pose pas, et n'a pas de colonne.
+private struct ComposerViewfinderSceneEntryKey: EnvironmentKey {
+    static let defaultValue: (@MainActor (ComposerViewfinderEntry) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var composerViewfinderSceneEntry: (@MainActor (ComposerViewfinderEntry) -> Void)? {
+        get { self[ComposerViewfinderSceneEntryKey.self] }
+        set { self[ComposerViewfinderSceneEntryKey.self] = newValue }
     }
 }
