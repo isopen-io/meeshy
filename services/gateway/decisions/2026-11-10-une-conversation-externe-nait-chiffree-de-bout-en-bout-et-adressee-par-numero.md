@@ -33,9 +33,15 @@ ouverte par l'utilisateur lui-même, avec une durée de conservation (exception 
   `isPreSignatureEnvironment` (partagé avec le choix du pair externe) l'admet — développement, test, staging
   déclaré. Armé en production, il reste éteint. `docker-compose.prod.yml` le pose `off`, le staging le laisse
   `off` par défaut (`${EXTERNAL_CONVERSATIONS:-off}`). Éteint : `403 EXTERNAL_CONVERSATIONS_DISABLED`.
-- **Rétrocompatibilité** (#9223) : `GET /conversations` ne sert une conversation `external` qu'au client qui
-  annonce `X-Meeshy-Capabilities: external-conversations` ; sans le jeton, la liste est celle d'avant. `Vary` porte
-  l'en-tête.
+- **Rétrocompatibilité** (#9223) : les TROIS lectures qui listent les conversations d'un lecteur —
+  `GET /conversations`, `GET /sync?collections=conversations` (la liste du client iOS publié,
+  `ConversationSyncEngine`) et `GET /conversations/search` — ne servent une conversation `external` qu'au client
+  qui annonce `X-Meeshy-Capabilities: external-conversations` (`externalVisibilityClauses`,
+  `routes/conversations/utils/list-viewer-scope.ts`) ; sans le jeton, chacune rend ce qu'elle rendait avant.
+  `Vary` porte l'en-tête. Un client iOS publié replie un type inconnu sur `.direct` : sans ce filtre, il montrerait
+  un tête-à-tête sans interlocuteur.
+- **Effacement** : la purge d'un compte supprimé (`purgeAccountIsolatedData`) efface les adresses qu'il avait
+  ouvertes (`eraseExternalPeerHandlesOpenedBy`) sans attendre l'échéance : le numéro n'était gardé que pour lui.
 - **Ce qui part à côté** : la réponse d'ouverture ne recopie pas le numéro ; une demande refusée non plus ; une
   erreur inattendue n'est journalisée que par son nom et son code (une erreur Prisma recopie ses arguments).
 - **Index** : migration nommée `2026-11-10-external-conversation-peer-indexes` (deux unicités + TTL sous le nom
@@ -53,8 +59,9 @@ ouverte par l'utilisateur lui-même, avec une durée de conservation (exception 
 ### Conséquences
 - Aucune route ne relaie encore de message vers le pair : la conversation existe, chiffrée, adressée ; l'envoi par
   la porte « pair externe » et la réception sont des lots suivants (clients, relais).
-- Le détail (`GET /conversations/:id`), la synchronisation et les événements socket ne filtrent pas encore le type
-  pour un ancien client : la conversation n'a qu'un membre et n'est jointe qu'en connaissant son id, que seule la
-  liste sert. Suivi ouvert.
+- Le détail (`GET /conversations/:id`) et les événements socket ne filtrent pas le type pour un ancien client :
+  la conversation n'a qu'un membre, n'est jointe qu'en connaissant son id (que les trois lectures ci-dessus
+  retiennent), et aucun message n'y circule encore. Les collections `messages` / `participants` de `/sync`
+  suivront le même jeton avec le lot du relais, quand un message pourra y exister.
 - Le numéro de l'ami n'est encore servi à personne, l'ouvreur compris : ses autres appareils l'apprendront par le
   lot clients, qui décidera comment le leur servir (à l'ouvreur seul).

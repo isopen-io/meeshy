@@ -85,6 +85,8 @@ function base() {
     pairInteractionDay: table([]),
     relationFeatureSetting: table([]),
     friendRequest: table([]),
+    // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
+    externalConversationPeer: table([]),
     conversationShareLink: table([]),
     userContact,
     contactJoinNotice,

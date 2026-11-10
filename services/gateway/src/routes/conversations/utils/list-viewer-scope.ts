@@ -47,11 +47,14 @@ export const withViewerRequests = (
  * reçoit EXACTEMENT la liste d'avant. Ajoutée au `AND` existant ; `type` est
  * un champ requis, présent sur tout document, donc la négation n'écarte rien d'autre.
  */
+export const externalVisibilityClauses = (announcesExternal: boolean): Prisma.ConversationWhereInput[] =>
+  announcesExternal ? [] : [{ type: { not: EXTERNAL_CONVERSATION_TYPE } }];
+
 export const withExternalVisibility = (
   and: Prisma.ConversationWhereInput['AND'],
   announcesExternal: boolean,
 ): Prisma.ConversationWhereInput['AND'] => {
   if (announcesExternal) return and;
   const existing = Array.isArray(and) ? and : and ? [and] : [];
-  return [...existing, { type: { not: EXTERNAL_CONVERSATION_TYPE } }];
+  return [...existing, ...externalVisibilityClauses(announcesExternal)];
 };

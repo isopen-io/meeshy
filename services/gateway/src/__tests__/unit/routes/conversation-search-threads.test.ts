@@ -127,7 +127,7 @@ function getRoute(fastify: ReturnType<typeof createMockFastify>, method: string,
 }
 
 function createMockReply() {
-  return { _body: undefined as any };
+  return { _body: undefined as any, header: jest.fn() };
 }
 
 function createMockPrisma() {
@@ -156,6 +156,7 @@ function createMockPrisma() {
 function makeSearchRequest(q: string, userId = VALID_USER_ID) {
   return {
     query: { q },
+    headers: {},
     authContext: { userId, isAuthenticated: true },
   };
 }
@@ -197,10 +198,12 @@ function makeViewerRequest(q: string, viewer: { role: string } | 'anonymous') {
   return viewer === 'anonymous'
     ? {
         query: { q },
+        headers: {},
         authContext: { type: 'anonymous', userId: VALID_PARTICIPANT_ID, isAuthenticated: true, isAnonymous: true },
       }
     : {
         query: { q },
+        headers: {},
         authContext: {
           type: 'user',
           userId: VALID_USER_ID,
@@ -910,6 +913,7 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
     await route.handler(
       {
         query: { q: 'test' },
+        headers: {},
         authContext: {
           userId: VALID_PARTICIPANT_ID,
           type: 'anonymous',
@@ -939,6 +943,7 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
     await route.handler(
       {
         query: { q: 'test' },
+        headers: {},
         authContext: {
           userId: VALID_USER_ID,
           isAuthenticated: true,
