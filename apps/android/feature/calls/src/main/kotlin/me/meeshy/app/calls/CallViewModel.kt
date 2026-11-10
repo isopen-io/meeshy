@@ -582,6 +582,7 @@ class CallViewModel @Inject constructor(
     /** Toggle the local microphone mute and signal the peer. */
     fun toggleMute() {
         media = media.copy(isMuted = !media.isMuted)
+        ongoing.microphoneMuted(media.isMuted)
         publish()
         coordinator.setMuted(media.isMuted)
         emitIfIdentified { signalManager.emitToggleAudio(it, enabled = !media.isMuted) }
