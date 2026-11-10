@@ -46,7 +46,8 @@ private val ROWS_MAX_HEIGHT = 340.dp
  * The pill at the bottom of the call, the same in audio, video and group: (…) · Mic · Output · End.
  * The (…) stacks above the base row one row per family ("My image", "The call"); a panel drawn in
  * the pill REPLACES the rows, never stacks with them. It is ONE glass block that grows with what
- * it holds. Pure projection: the layer, the rows and every callback come from the caller.
+ * it holds, and each button inside is its own glass disc (#17323). Pure projection: the layer, the rows and
+ * every callback come from the caller.
  */
 @Composable
 internal fun CallControlsPill(

@@ -118,7 +118,7 @@ type ActionView = {
 
 const panelView = (panels: CallPanels, panel: CallPanelKind) => ({
   onPress: () => panels.toggle(panel),
-  tone: panels.open === panel ? ('active' as const) : ('bare' as const),
+  tone: panels.open === panel ? ('active' as const) : ('disc' as const),
   expanded: panels.open === panel,
   panel,
 });
@@ -132,7 +132,7 @@ function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, langua
         caption: translate(language, 'call.devices.camera'),
         glyph: cameraGlyph(call, kit),
         onPress: callActions.toggleCamera,
-        tone: call.cameraOn ? 'active' : 'bare',
+        tone: call.cameraOn ? 'active' : 'disc',
         pressed: call.cameraOn,
         disabled: call.screenSharing,
         data: { 'data-call-control': 'camera' },
@@ -144,7 +144,7 @@ function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, langua
         caption: translate(language, 'call.flip'),
         glyph: screenGlyph('cameraRotate'),
         onPress: callActions.switchCamera,
-        tone: 'bare',
+        tone: 'disc',
         data: { 'data-call-control': 'flip' },
       };
     case 'effects':
@@ -154,7 +154,7 @@ function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, langua
         caption: translate(language, 'call.effects'),
         glyph: <GlyphSvg glyph={kit.glyphs.magicWand} size={22} />,
         onPress: () => panels.enter('effects'),
-        tone: effectsActive ? 'active' : 'bare',
+        tone: effectsActive ? 'active' : 'disc',
         pressed: effectsActive,
         data: { 'data-call-control': 'effects' },
       };
@@ -165,7 +165,7 @@ function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, langua
         caption: translate(language, 'call.screen.short'),
         glyph: screenGlyph('monitorArrowUp'),
         onPress: callActions.toggleScreen,
-        tone: call.screenSharing ? 'active' : 'bare',
+        tone: call.screenSharing ? 'active' : 'disc',
         pressed: call.screenSharing,
         data: { 'data-call-screen-share': '' },
       };
@@ -216,7 +216,7 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       caption: translateCallControls(language, 'callControls.pip'),
       glyph: kit.pipGlyph,
       onPress: kit.requestPip,
-      tone: 'bare',
+      tone: 'disc',
       data: { 'data-call-control': 'pip', 'data-call-pip': '' },
     };
   if (action === 'capture')
@@ -226,7 +226,7 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       caption: translateCallControls(language, 'callControls.capture'),
       glyph: <GlyphSvg glyph={kit.glyphs.aperture} size={22} />,
       onPress: () => panels.enter('montage'),
-      tone: 'bare',
+      tone: 'disc',
       data: { 'data-call-control': 'capture' },
     };
   return captionsAction(context);
@@ -245,7 +245,7 @@ function captionsAction({ call, language }: ActionContext): ActionView {
       </span>
     ),
     onPress: callActions.toggleCaptions,
-    tone: call.captionsMode === 'off' ? 'bare' : 'active',
+    tone: call.captionsMode === 'off' ? 'disc' : 'active',
     pressed: call.captionsMode !== 'off',
     data: { 'data-call-captions': '' },
   };
@@ -282,7 +282,7 @@ function RecordButton({ language, panels, kit }: { readonly language: InterfaceL
       label={translate(language, idle ? 'callRecording.start' : 'callRecording.stop')}
       glyph={<span aria-hidden className={idle ? 'size-4 rounded-full border-2 border-current' : 'size-3.5 rounded-[3px]'} style={idle ? undefined : { background: 'var(--ios-error-strong)' }} />}
       onPress={() => (idle ? panels.toggle('record') : void callRecording.stop())}
-      tone={kind === 'recording' || choosing ? 'active' : 'bare'}
+      tone={kind === 'recording' || choosing ? 'active' : 'disc'}
       {...(idle ? { expanded: choosing, controls: kit.panelIds.record, popup: true } : { pressed: kind === 'recording' })}
       disabled={kind === 'asking'}
       caption={translate(language, 'call.record.short')}

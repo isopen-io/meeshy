@@ -8,6 +8,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +67,7 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.frames.CallFramePortrait
 import me.meeshy.sdk.call.frames.CallFrameThumbnailCache
 import me.meeshy.sdk.call.frames.CallFrameRenderer
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFrameMood
 import me.meeshy.sdk.model.call.frames.CallFramePerson
@@ -117,22 +120,29 @@ internal fun MoodChips(
     }
 }
 
+/** #17323 — une puce d'ambiance est un verre de bouton (iOS `callChipGlass`) ; la sélectionnée garde son blanc plein. */
 @Composable
 internal fun MoodChip(label: String, selected: Boolean, isEnabled: Boolean, hint: String? = null, onClick: () -> Unit) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = if (selected) MeeshyPalette.Indigo950 else CallPalette.Ink.copy(alpha = if (isEnabled) 1f else 0.5f),
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    CallGlassButtonSurface(
+        role = if (selected) CallButtonRole.Active else CallButtonRole.Neutral,
+        shape = CircleShape,
+        isPressed = pressed,
         modifier = Modifier
             .heightIn(min = 48.dp)
             .padding(vertical = MeeshySpacing.xs)
-            .clip(CircleShape)
-            .background(if (selected) Color.White else Color.White.copy(alpha = 0.16f))
-            .clickable(enabled = isEnabled, role = Role.Tab, onClickLabel = hint, onClick = onClick)
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
+            .clickable(enabled = isEnabled, interactionSource = source, indication = null, role = Role.Tab, onClickLabel = hint, onClick = onClick)
             .semantics { this.selected = selected },
-    )
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = if (selected) MeeshyPalette.Indigo950 else CallPalette.Ink.copy(alpha = if (isEnabled) 1f else 0.5f),
+            modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+        )
+    }
 }
 
 @Composable

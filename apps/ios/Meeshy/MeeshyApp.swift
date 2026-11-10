@@ -117,8 +117,9 @@ struct MeeshyApp: App {
     /// s'y superposer : un frère de `ZStack` est proposé la taille du plus
     /// grand, et `LoginView` en arabe sur iPhone SE en annonce 666 pour 647 —
     /// le calque débordait alors de 19 pt, coupant son bouton au bord.
-    /// Le catalogue du kit le remplace aussi : sans compte, l'accueil le
-    /// recouvrait une demi-seconde après son apparition (#17397).
+    /// Le catalogue du kit le remplace aussi, et aucun des deux n'est recouvert
+    /// par l'accueil plein écran : sans compte, il recouvrait le catalogue une
+    /// demi-seconde après son apparition (#17397).
     private static var debugPreviewReplacesLogin: Bool {
         #if DEBUG
         OnboardingPreviewLaunch.isActive || KitCatalogLaunch.isActive
@@ -174,7 +175,8 @@ struct MeeshyApp: App {
                             isAuthenticated: session.isAuthenticated,
                             splashPhase: inputs.splashPhase,
                             hasGuestSession: inputs.activeGuestSession != nil,
-                            hasVisitorRequest: inputs.hasVisitorRequest
+                            hasVisitorRequest: inputs.hasVisitorRequest,
+                            previewReplacesLogin: Self.debugPreviewReplacesLogin
                         )
                     },
                     set: { _ in }

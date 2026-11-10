@@ -86,7 +86,7 @@ export function CallCameraPicker({ call, language, kit, glyph, captioned, data }
 
   return (
     <>
-      <kit.Button label={label} glyph={glyph} onPress={toggle} tone={open ? 'active' : 'bare'} expanded={open} controls={CAMERA_PICKER_ID} popup {...(captioned ? { caption: translateCallControls(language, 'callControls.cameraPicker') } : { size: 44 })} data={data} />
+      <kit.Button label={label} glyph={glyph} onPress={toggle} tone={open ? 'active' : 'disc'} expanded={open} controls={CAMERA_PICKER_ID} popup {...(captioned ? { caption: translateCallControls(language, 'callControls.cameraPicker') } : { size: 44 })} data={data} />
       {open && typeof document !== 'undefined'
         ? createPortal(
             <div className="fixed inset-0 z-[230] flex items-end justify-center p-4 pb-safe" data-call-camera-picker="">
