@@ -19,7 +19,7 @@ import MeeshyUI
 /// **« Quitter » à GAUCHE, « ✓ Valider » à DROITE, le chrono au centre ; sous
 /// l'en-tête UNE capsule centrée Flash · Retardateur · Objectif · ⋯, et sous
 /// elle — flash allumé, 2 s après la dernière interaction — le curseur de son
-/// intensité ; en filmant, la barre en cases du maximum du format et le chrono
+/// intensité ; en filmant, la barre du maximum du format — une ligne, découpée à partir de deux prises — et le chrono
 /// seul** (vues A8–A9, #17109 — la disposition est la loi `ComposerCaptureTopRow`).
 struct ComposerSceneCameraBar: View {
 
@@ -460,22 +460,19 @@ struct ComposerSceneCameraBar: View {
         .accessibilityHidden(true)
     }
 
-    /// **La barre du maximum** (A9, #17268) : le maximum du format en cases
-    /// égales, et par-dessus UNE capsule par segment déjà pris, placée à sa part
-    /// du maximum ; la prise en cours, en rouge, grandit au bout. Un segment se
-    /// LIT, là où un remplissage continu ne disait que la durée.
+    /// **La barre du maximum** (A9, #17268, #17433) : UNE piste continue du
+    /// maximum du format ; la prise en cours, en rouge, grandit dessus. Elle ne
+    /// se découpe qu'à partir de deux prises — une capsule par prise, placée à sa
+    /// part du maximum, séparée de la suivante par l'écart que la loi donne.
     private var budgetBar: some View {
-        ZStack(alignment: .leading) {
-            HStack(spacing: MeeshySpacing.xs) {
-                ForEach(0..<ComposerCaptureRecordingBudget.slots, id: \.self) { _ in
-                    Capsule().fill(Color.white.opacity(0.3))
-                }
-            }
+        let ecart = CGFloat(ComposerCaptureProgressDisplay.gap(budgetSpans))
+        return ZStack(alignment: .leading) {
+            Capsule().fill(Color.white.opacity(0.3))
             GeometryReader { piste in
                 ForEach(Array(budgetSpans.enumerated()), id: \.offset) { _, part in
                     Capsule()
                         .fill(part.live ? MeeshyColors.error : Color.white)
-                        .frame(width: max(Self.minimumSpanWidth, piste.size.width * part.length - Self.spanGap),
+                        .frame(width: max(Self.minimumSpanWidth, piste.size.width * part.length - ecart),
                                height: piste.size.height)
                         .offset(x: piste.size.width * part.start)
                 }
@@ -488,7 +485,6 @@ struct ComposerSceneCameraBar: View {
     }
 
     private static let minimumSpanWidth: CGFloat = 4
-    private static let spanGap: CGFloat = 2
 
     private var elapsed: TimeInterval {
         ComposerCaptureSegments.elapsed(segments: segments, live: liveDuration, recording: stage == .recording)

@@ -479,7 +479,7 @@ final class ComposerCaptureSession: ObservableObject {
         // Deux doigts qui s'écartent à l'horizontale zooment ; ils ne
         // verrouillent pas la prise.
         guard holdPhase != .locked, !isPinching, !awaitsPreviousTake else { return }
-        lockProgress = ComposerShutterGesture.lockProgress(translationX: translation.x)
+        setIfChanged(\.lockProgress, ComposerShutterGesture.lockProgress(translationX: translation.x))
         guard ComposerCaptureHold.phase(translation: translation, wasLocked: false) == .locked else { return }
         holdPhase = .locked
         lockProgress = 1
@@ -600,7 +600,7 @@ final class ComposerCaptureSession: ObservableObject {
             dismissDragSpoiled = pinchSpoilsGestures
         }
         if isPinching { dismissDragSpoiled = true }
-        dismissDrag = dismissDragSpoiled ? 0 : translationY
+        setIfChanged(\.dismissDrag, dismissDragSpoiled ? 0 : translationY)
     }
 
     /// La levée du glissé : `true` ⇒ le viseur se range. En édition le doigt

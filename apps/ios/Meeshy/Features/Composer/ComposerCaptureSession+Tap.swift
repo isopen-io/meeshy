@@ -1,3 +1,4 @@
+import Combine
 import CoreGraphics
 import Foundation
 
@@ -64,5 +65,15 @@ extension ComposerCaptureSession {
         }
         let trouAffiche = ComposerCaptureFocusGeometry.slotInView(trou, canvas: toile, view: size)
         return (ComposerCaptureFocusGeometry.filled(source: source, into: trouAffiche), trouAffiche)
+    }
+}
+
+/// **Une valeur publiée ne se republie qu'en changeant** (#17433) : `@Published`
+/// émet à chaque écriture, même identique — et chaque émission recompose tout
+/// le viseur. Les gestes à la cadence du doigt passent par ici.
+extension ObservableObject {
+    func setIfChanged<Value: Equatable>(_ keyPath: ReferenceWritableKeyPath<Self, Value>, _ value: Value) {
+        guard self[keyPath: keyPath] != value else { return }
+        self[keyPath: keyPath] = value
     }
 }
