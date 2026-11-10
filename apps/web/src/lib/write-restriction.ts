@@ -1,6 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { ViewerWriteRestriction } from '@meeshy/shared/types/conversation';
+import { EXTERNAL_CONVERSATION_TYPE } from '@meeshy/shared/types/external-conversation';
 
 import type { Conversation } from '@/lib/api/types';
 import { isEndToEndMode } from '@/lib/end-to-end-regime-ledger';
@@ -16,7 +17,7 @@ import type { OutboxState } from '@/lib/send/outbox-store';
  *
  * Une valeur inconnue ne restreint rien : le serveur refuse de toute façon.
  */
-export type WriteRestriction = ViewerWriteRestriction | 'end-to-end-encrypted';
+export type WriteRestriction = ViewerWriteRestriction | 'end-to-end-encrypted' | 'external-pending';
 
 export const GLOBAL_ADULTS_ONLY = 'GLOBAL_ADULTS_ONLY';
 
@@ -28,8 +29,19 @@ export const GLOBAL_ADULTS_ONLY = 'GLOBAL_ADULTS_ONLY';
  */
 export const E2EE_PLAINTEXT_REFUSED = 'E2EE_PLAINTEXT_REFUSED';
 
+/**
+ * #17118 — une conversation avec un ami WhatsApp : aucun relais ne porte encore
+ * un message vers un réseau tiers, et aucune app ne sait encore lui écrire. Le
+ * composeur s'y efface sur l'attente, jamais sur « écrivez depuis l'app ».
+ */
+const isExternalConversation = (conversation: Conversation | undefined): boolean => {
+  const type: string | undefined = conversation?.type;
+  return type === EXTERNAL_CONVERSATION_TYPE;
+};
+
 export function servedWriteRestriction(conversation: Conversation | undefined): WriteRestriction | null {
   if (conversation?.viewerWriteRestriction === 'minor-global') return 'minor-global';
+  if (isExternalConversation(conversation)) return 'external-pending';
   return isEndToEndMode(conversation?.encryptionMode) ? 'end-to-end-encrypted' : null;
 }
 

@@ -5,6 +5,7 @@ const esWriteRestriction = {
   'composer.writeRestriction.minorGlobal': 'Global se abre a la escritura cuando cumplas 18 años',
   'composer.writeRestriction.endToEnd': 'Conversación cifrada de extremo a extremo: escribe desde la app de Meeshy',
   'composer.writeRestriction.endToEnd.shell': 'Conversación cifrada de extremo a extremo: escribe desde uno de tus dispositivos cifrados',
+  'composer.writeRestriction.externalPending': 'Cifrado de extremo a extremo. El envío a WhatsApp aún no está abierto: por ahora no sale nada desde aquí.',
   'age.blocked.title': 'Meeshy es para mayores de 13 años',
   'age.blocked.body': 'Esta cuenta no se puede usar antes de tus 13 años.',
   'age.blocked.confirm': 'Entendido',

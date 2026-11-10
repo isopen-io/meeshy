@@ -14,6 +14,7 @@ import type { WriteRestriction } from '@/lib/write-restriction';
 const KEY = {
   'minor-global': 'composer.writeRestriction.minorGlobal',
   'end-to-end-encrypted': 'composer.writeRestriction.endToEnd',
+  'external-pending': 'composer.writeRestriction.externalPending',
 } as const satisfies Record<WriteRestriction, string>;
 
 const SHELL_KEY = {
