@@ -174,6 +174,27 @@ describe("l'écran d'humeur — un chrome immersif qui se LIT dans la charte", (
   });
 });
 
+describe("le fini arc-en-ciel d'un aperçu — le spectre de la maison, pas une couleur en dur", () => {
+  // La ligne d'aperçu (`components/lens-preview-line.tsx`) peint le fini
+  // « rainbow » d'un message. Son spectre n'est PAS du chrome libre : c'est LE
+  // SPECTRE DE LA MAISON (`RAINBOW_SPECTRUM`, miroir iOS `houseSpectrum`), déjà
+  // joué par la bulle (`effects-runner`). Le dégradé doit donc en DÉRIVER —
+  // pas être un arc-en-ciel réécrit en littéraux ici, qui divergeait de la
+  // bulle et d'iOS. Pas une exemption : une source unique partagée.
+  const source = readFileSync(fileURLToPath(new URL('../src/components/lens-preview-line.tsx', import.meta.url)), 'utf8');
+
+  test('lens-preview-line.tsx ne porte aucune couleur en dur', () => {
+    expect(scanSource(source)).toEqual([]);
+  });
+
+  test('le spectre vient de la source unique RAINBOW_SPECTRUM, pas d’une jumelle ni d’une exemption', () => {
+    expect(exemptionOf('components/lens-preview-line.tsx')).toBe(null);
+    expect(source).toContain('RAINBOW_SPECTRUM');
+    expect(source).not.toContain('#f43f5e');
+    expect(source).not.toContain('#a855f7');
+  });
+});
+
 describe('auditSources — le rapport', () => {
   test('compte par fichier, ignore les exemptés et le hors-périmètre', () => {
     const [first] = EXEMPT_PATHS as readonly { prefix: string }[];
