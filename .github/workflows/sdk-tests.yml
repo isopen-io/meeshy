@@ -80,6 +80,7 @@ on:
       # comme la passerelle et :core:e2ee — une régénération, ou une montée de la version
       # épinglée, doit rejouer le miroir Swift.
       - 'packages/shared/fixtures/libsignal/**'
+      - 'packages/shared/types/external-interop-compliance.ts'
       - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
       - 'apps/ios/Meeshy/**'
@@ -134,6 +135,7 @@ on:
       - 'packages/shared/fixtures/keyframe-scale.vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
       - 'packages/shared/fixtures/libsignal/**'
+      - 'packages/shared/types/external-interop-compliance.ts'
       - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
       - 'apps/ios/Meeshy/**'
