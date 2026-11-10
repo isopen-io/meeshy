@@ -102,7 +102,7 @@ describe('le numéro ne survit pas au fil : chaque clôture efface l’adresse d
 });
 
 describe('eraseExternalPeerOnClose', () => {
-  const prismaDouble = () => ({ externalConversationPeer: { deleteMany: jest.fn(async () => ({ count: 1 })) } });
+  const prismaDouble = () => ({ externalConversationPeer: { deleteMany: jest.fn(async (_args: unknown) => ({ count: 1 })) } });
 
   it('efface l’adresse d’une conversation externe', async () => {
     const prisma = prismaDouble();
