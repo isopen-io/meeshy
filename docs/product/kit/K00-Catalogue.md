@@ -115,7 +115,7 @@ Câblage :
 - `:feature:kit` entre dans `settings.gradle.kts` ;
 - les fichiers de l'app iOS demandent `[xcodegen]`.
 
-Entrée au catalogue : K00 n'en a pas, il EST le catalogue ; son propre état « vide » est son premier instantané (`MeeshyKitCatalogEmptyState`, rangé sous le nom `Catalogue` : `Catalogue/vide.clair`, `Catalogue/vide.sombre`, `Catalogue/planche.grande-police`, `Catalogue/planche.rtl`).
+Entrée au catalogue : K00 n'en a pas, il EST le catalogue ; son propre état « vide » est son premier instantané (`MeeshyKitCatalogEmptyState`, sous le nom `Catalogue` : `Catalogue/vide.clair`, `Catalogue/vide.sombre`, `Catalogue/planche.grande-police`, `Catalogue/planche.rtl`).
 
 ## 9. Écarts connus
 - La CI iOS ne tourne que sur le simulateur 26.1 préinstallé (#9701) : la capture « sur un simulateur antérieur » du contrat n'a aucun runtime. `apps/ios/CLAUDE.md` dit encore « run = simu iOS 18.2 ».
@@ -134,4 +134,4 @@ Entrée au catalogue : K00 n'en a pas, il EST le catalogue ; son propre état «
 ## 10. Mise en oeuvre iOS (ce lot)
 - Nom des images : un dossier par composant, `Kit/__Snapshots__/<Nom>/<id>.<variante>.png` (la bibliothèque de capture fixe `<test>.<nom>.png` : le test porte l'`id`, le nom porte la variante). Variantes : `clair`, `sombre`, `presse`, et `grande-police`, `rtl` sous l'`id` `planche`.
 - Cliquets iOS dans `house_rules.py` : `kit-glass-call`, `kit-glass-round`, `kit-glass-no-touch` ; plafonds dans `house-rules-baseline.json`.
-- État vide : `MeeshyKitCatalogEmptyState` (MeeshyUI, `#if DEBUG`), monté par `KitCatalogScreen` et photographié par `MeeshyKitCatalogEmptyStateTests`.
+- État vide : `MeeshyKitCatalogEmptyState` (MeeshyUI, `#if DEBUG`), monté par `KitCatalogScreen`, donc photographiable par `SnapshotHelpers.assertKitImage` depuis MeeshyUITests. Son témoin d'image n'est pas encore au dépôt : `sdk-tests.yml` (`record_snapshots`) a enregistré ses quatre références (run 42750216430, artefact `sdk-snapshots-1`), mais le conteneur des sessions ne peut pas télécharger un artefact (stockage refusé par le proxy). Le témoin entre avec ses PNG, dans un même commit, depuis un poste qui peut lire l'artefact.
