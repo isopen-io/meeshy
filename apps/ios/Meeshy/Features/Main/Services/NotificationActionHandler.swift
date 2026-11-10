@@ -63,6 +63,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let conversationLocks: any ConversationLockProbing
     /// #12655 — une réponse refusée sous PIN le dit, hors de l'app.
     private let notifyRefusedReply: @MainActor (String?) -> Void
+    private let stopBring: @MainActor (String) async -> Void
     /// L'unique consommation du SDK, injectée pour que les tests l'observent :
     /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
     /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
@@ -187,8 +188,10 @@ final class NotificationActionHandler: NotificationActionHandling {
         },
         endToEnd: any EndToEndMessagingProviding = EndToEndMessagingRuntime.shared,
         repliesAwaitingRegime: any NotificationRepliesAwaitingRegimeStoring = NotificationRepliesAwaitingRegime.shared,
-        awaitingReplyRules: NotificationReplyRegimeWait.Rules = .live
+        awaitingReplyRules: NotificationReplyRegimeWait.Rules = .live,
+        stopBring: @escaping @MainActor (String) async -> Void = { await BringCenter.shared.stopAndWait(bringId: $0) }
     ) {
+        self.stopBring = stopBring
         self.repliesAwaitingRegime = repliesAwaitingRegime
         self.awaitingReplyRules = awaitingReplyRules
         self.destinationGuard = destinationGuard
@@ -293,6 +296,11 @@ final class NotificationActionHandler: NotificationActionHandling {
              MeeshyNotificationAction.joinInvite.rawValue:
             handleDetailAction(actionIdentifier, userInfo: userInfo)
             await consumeTapped(payload)
+
+        case MeeshyNotificationAction.stopBring.rawValue:
+            // #17442 — « Arrêter » sur la bannière d'un Bring : le Bring s'éteint partout, l'app ne s'ouvre pas.
+            guard let bringId = userInfo["bringId"] as? String, !bringId.isEmpty else { return }
+            await stopBring(bringId)
 
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the

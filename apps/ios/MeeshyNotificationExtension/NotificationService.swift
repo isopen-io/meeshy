@@ -22,6 +22,7 @@ class NotificationService: UNNotificationServiceExtension {
     private var delivery: NSEDelivery<UNNotificationContent>?
     private var bestAttemptContent: UNMutableNotificationContent?
     private var enrichment: Task<Void, Never>?
+    private var bringAlarm: Task<Bool, Never>?
 
     override func didReceive(
         _ request: UNNotificationRequest,
@@ -39,6 +40,7 @@ class NotificationService: UNNotificationServiceExtension {
             return
         }
         bestAttemptContent = content
+        ringBringAlarm(request.content.userInfo)
         prepareBestAttempt(content)
         startEnrichment(
             request: request,
@@ -46,6 +48,15 @@ class NotificationService: UNNotificationServiceExtension {
             delivery: delivery,
             budget: budget
         )
+    }
+
+    /// #17442 (essai AlarmKit) — un push `bring` programme l'alarme système avant même que la bannière soit livrée ;
+    /// un push `bring_stopped` la retire. Derrière le drapeau et iOS 26 : ailleurs, la ligne est sans effet. L'extension
+    /// ne montre jamais la demande d'autorisation — l'app la fait au premier Bring reçu ouverte.
+    private func ringBringAlarm(_ userInfo: [AnyHashable: Any]) {
+        let action = BringAlarmPlan.action(push: userInfo, now: Date())
+        guard action != .none else { return }
+        bringAlarm = Task { await BringAlarmCoordinator.system.apply(action, mayAsk: false) }
     }
 
     override func serviceExtensionTimeWillExpire() {

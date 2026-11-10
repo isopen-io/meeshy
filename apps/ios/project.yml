@@ -199,6 +199,11 @@ targets:
       # l’écran de partage unique (`Meeshy/Features/Share/`) pour l’extension de partage, en sens
       # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      # #17442 — l'alarme d'un Bring (essai AlarmKit) : la LOI (`BringAlarmPlan`, Foundation seul) et la couture
+      # (`BringAlarmScheduler`, AlarmKit derrière `canImport` et iOS 26) sont posées par l'app vivante ET par
+      # l'extension de notification, sur la MÊME alarme. Gardes : `BringAlarmPlanTests`, `BringAlarmCoordinatorTests`.
+      - path: MeeshyNotificationExtension/BringAlarmPlan.swift
+      - path: MeeshyNotificationExtension/BringAlarmScheduler.swift
       # #12655 — le miroir des conversations verrouillées par PIN : l'app
       # l'ÉCRIT, l'extension le LIT. Une seule définition tient les deux bouts
       # du fichier. Foundation seul ; garde : `NSELockedConversationMirrorTests`.
