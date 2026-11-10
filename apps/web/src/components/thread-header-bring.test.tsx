@@ -64,6 +64,15 @@ const slot = (props: { readonly deps: ReturnType<typeof scripted>['deps']; reado
 );
 
 describe('le Bring dans l’en-tête', () => {
+  test('monté avant que le catalogue « Mes cercles » soit chargé : ne lève rien, puis paraît', async () => {
+    const { deps } = scripted({ 'GET /api/v1/bring/u-ada': { ok: true, data: { userId: PEER, ...availability() } } });
+    const node = await mount(<ThreadHeaderBring language="it" peerId={PEER} peerName="Ada" store={createBringStore()} deps={deps} />);
+    await loadCirclesCatalog('it');
+    await settle();
+    await settle();
+    expect(node.querySelector(BUTTON)).not.toBeNull();
+  });
+
   test('ABSENT tant que la passerelle ne l’ouvre pas', async () => {
     const { deps, requests } = scripted({ 'GET /api/v1/bring/u-ada': { ok: true, data: { userId: PEER, ...availability({ available: false }) } } });
     const node = await mount(slot({ deps }));
