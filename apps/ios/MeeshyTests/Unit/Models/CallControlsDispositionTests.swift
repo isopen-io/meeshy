@@ -185,4 +185,10 @@ final class CallControlsDispositionTests: XCTestCase {
         let travel = abs(Layout.slideOffset(side: .leading, isRightToLeft: false, safeHorizontal: 59))
         XCTAssertGreaterThanOrEqual(travel, Layout.railWidth + Layout.edgeInset + 59)
     }
+
+    func test_slideOffset_bothRailsTravelTheSameDistance() {
+        let leading = Layout.slideOffset(side: .leading, isRightToLeft: false, safeHorizontal: 21)
+        let trailing = Layout.slideOffset(side: .trailing, isRightToLeft: false, safeHorizontal: 21)
+        XCTAssertEqual(abs(leading), abs(trailing))
+    }
 }
