@@ -3,6 +3,8 @@ import XCTest
 
 /// #8459 — la pilule est UN bloc de verre réel (iOS 26), et les actions du
 /// `(…)` s'y déploient au-dessus de la rangée de base, en duo comme en groupe.
+/// #17323 — chaque bouton y est lui-même un Liquid Glass interactif (iOS 26) ou
+/// le verre dessiné de `adaptiveLiquidGlass` (iOS 16 à 25) ; Fin reste rouge.
 /// #8435 — le bouton PiP quitte le plein écran par le même chemin que le glissé.
 @MainActor
 final class CallViewGlassGuardTests: XCTestCase {
@@ -17,24 +19,35 @@ final class CallViewGlassGuardTests: XCTestCase {
         return String(code[from.upperBound ..< to.lowerBound])
     }
 
-    /// #8459 — un bouton de la pilule est un disque PLAT dans le bloc de
-    /// verre : pas de verre sur verre, ni d'identité de morphing.
-    func test_pillGlyph_isAFlatDiscInsideTheGlassBlock() throws {
+    /// #17323 — un bouton de la pilule est un verre à lui : le traitement vient
+    /// de la loi pure `CallButtonGlassRule`, jamais d'un disque dessiné.
+    func test_pillGlyph_isAnInteractiveGlassDisc_chosenByThePureRule() throws {
         let glyph = try block("struct CallPillGlyph: View {", until: "struct CallPillButtonLabel", in: try callViewCode())
-        XCTAssertTrue(glyph.contains(".background(Circle().fill(CallButtonFill.color(for: kind)))"))
-        XCTAssertFalse(glyph.contains("CallButtonGlass"), "Un bouton de verre dans un bloc de verre, c'est du verre sur verre")
-        XCTAssertFalse(glyph.contains("adaptiveGlass"))
+        XCTAssertTrue(glyph.contains(".modifier(CallButtonGlassModifier(kind: kind, diameter: diameter))"))
+        XCTAssertFalse(glyph.contains("CallButtonFill.color"), "Plus de disque dessiné sous le glyphe")
+        XCTAssertFalse(glyph.contains("Color.white.opacity(0.16)"))
+        XCTAssertTrue(glyph.contains("CallButtonGlassRule.treatment("), "Le toucher dessiné ne reste que là où le verre ne réagit pas seul")
     }
 
-    func test_buttonFill_activeIsWhite_endIsRed_restIsTranslucent() throws {
+    func test_buttonGlass_noFlatTranslucentDiscRemains_andEndStaysRed() throws {
         let glass = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift")
         )
-        let fill = try block("enum CallButtonFill {", until: "\n}\n", in: glass)
-        XCTAssertTrue(fill.contains("case .active: return .white"))
-        XCTAssertTrue(fill.contains("case .destructive: return MeeshyColors.error"))
-        XCTAssertTrue(fill.contains("Color.white.opacity("))
-        XCTAssertFalse(glass.contains("struct CallButtonGlass"), "Le verre par bouton a quitté l'écran d'appel")
+        XCTAssertFalse(glass.contains("Color.white.opacity(0.16)"))
+        XCTAssertFalse(glass.contains("static func color(for kind: CallPillButtonKind)"), "Le disque plat par état a quitté l'écran d'appel")
+        let modifier = try block("struct CallButtonGlassModifier: ViewModifier {", until: "\n}\n", in: glass)
+        XCTAssertTrue(modifier.contains(".callControlGlass(diameter: diameter"), "Le verre neutre est celui de l'en-tête : adaptiveLiquidGlass interactif")
+        XCTAssertTrue(modifier.contains(".endCallGlass(diameter: diameter)"), "Fin reste rouge")
+        let endGlass = try block("func endCallGlass(diameter: CGFloat) -> some View {", until: "\n    }\n", in: glass)
+        XCTAssertTrue(endGlass.contains(".adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)"))
+        let anchor = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Call/Views/CallModeCarousel.swift").first)
+        let directory = anchor.deletingLastPathComponent()
+        for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        where url.pathExtension == "swift" {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            XCTAssertFalse(code.contains("CallButtonFill.color("), "\(url.lastPathComponent) : un disque plat par état")
+            XCTAssertFalse(code.contains("Color.white.opacity(0.16)"), "\(url.lastPathComponent) : plus aucun disque translucide dessiné dans la vue d'appel (#17323)")
+        }
     }
 
     /// #8459 · #8550 — UN seul bloc de verre réel : la pilule ; les familles
@@ -61,13 +74,37 @@ final class CallViewGlassGuardTests: XCTestCase {
     }
 
     /// Le bloc de verre est un verre RÉEL sous iOS 26 (`adaptiveGlass`, qui
-    /// porte le `glassEffect` et le repli matériau).
-    func test_controlsGlass_isRealAdaptiveGlass() throws {
+    /// porte le `glassEffect` et le repli matériau) ; les disques de verre
+    /// voisins qu'il porte se composent dans un `AdaptiveGlassContainer`.
+    func test_controlsGlass_isRealAdaptiveGlass_andItsButtonsShareAContainer() throws {
         let glass = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift")
         )
         let modifier = try block("func callControlsGlass<S: Shape>(in shape: S) -> some View {", until: "\n    }\n", in: glass)
         XCTAssertTrue(modifier.contains(".adaptiveGlass(in: shape)"))
+        let controlCircle = try block("func callControlGlass(diameter: CGFloat, isActive: Bool, tint: Color) -> some View {", until: "\n    }\n", in: glass)
+        XCTAssertTrue(controlCircle.contains(".adaptiveLiquidGlass(in: Circle()"), "Le disque de l'en-tête est un verre dessiné avant iOS 26")
+        XCTAssertTrue(controlCircle.contains("interactive: true"))
+        let chip = try block("func callChipGlass(isActive: Bool, tint: Color) -> some View {", until: "\n    }\n", in: glass)
+        XCTAssertTrue(chip.contains("adaptiveLiquidGlass(in: Capsule()"))
+        let code = try callViewCode()
+        let base = try block("private var baseRow: some View {", until: "private func moreButton(", in: code)
+        XCTAssertTrue(base.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"))
+    }
+
+    /// #17323 — l'en-tête : Réduire et Conversation sont des verres voisins,
+    /// composés ensemble ; la capsule de droite est un verre interactif quand
+    /// elle s'ouvre au toucher.
+    func test_header_buttonsShareAGlassContainer_andTheChipIsInteractive() throws {
+        let header = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Header.swift")
+        )
+        let chrome = try block("var topChrome: some View {", until: "private var showsDurationChip", in: header)
+        XCTAssertTrue(chrome.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"))
+        XCTAssertEqual(chrome.components(separatedBy: ".callControlGlass(diameter: 40").count - 1, 2)
+        XCTAssertFalse(chrome.contains(".adaptiveGlass("))
+        let chip = try block("private var durationChip: some View {", until: "func collapseIntoPip()", in: header)
+        XCTAssertTrue(chip.contains(".modifier(CallInteractiveChromeCapsule())"))
     }
 
     /// Les rangées d'actions ne portent plus aucun fond propre : elles sont
@@ -83,8 +120,12 @@ final class CallViewGlassGuardTests: XCTestCase {
         )
         XCTAssertTrue(row.contains("ScrollView(.horizontal, showsIndicators: false)"))
         XCTAssertTrue(row.contains("scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Un lancer va aussi loin qu'il porte (#8736)")
-        XCTAssertFalse(row.contains("adaptiveGlass"), "Une rangée dans le bloc de verre n'a pas de verre à elle")
+        XCTAssertFalse(row.contains(".adaptiveGlass("), "Une rangée n'a pas de plaque de verre à elle : seuls ses boutons sont du verre")
         XCTAssertFalse(row.contains("callChromeGlass"))
+        XCTAssertTrue(row.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"), "Les disques voisins d'une rangée se composent ensemble")
+        XCTAssertFalse(row.contains("CallButtonFill.color"))
+        let chip = try block("struct CallPillChip: View {", until: "private var artwork: some View {", in: row)
+        XCTAssertTrue(chip.contains(".buttonStyle(CallPressButtonStyle(glassPressesItself: art.carriesGlass))"), "Une puce de verre ne rétrécit pas par-dessus son verre interactif")
     }
 
     /// Les fichiers de l'écran d'appel qui portent un défilement horizontal
@@ -125,7 +166,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"))
         XCTAssertTrue(code.contains("struct CallPressButtonStyle: ButtonStyle"))
         for file in ["CallPillRow.swift", "CallModeCarousel.swift"] {
-            XCTAssertTrue(scrollers[file]?.contains(".buttonStyle(CallPressButtonStyle())") == true, file)
+            XCTAssertTrue(scrollers[file]?.contains(".buttonStyle(CallPressButtonStyle(") == true, file)
         }
     }
 
