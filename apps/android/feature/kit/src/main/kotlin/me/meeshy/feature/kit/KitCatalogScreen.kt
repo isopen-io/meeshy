@@ -42,15 +42,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.unit.dp
 import me.meeshy.ui.component.kit.MeeshyKitCatalogEntry
 import me.meeshy.ui.component.kit.MeeshyKitCatalogTile
 import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyControlSize
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-private val MinTouchTarget = 48.dp
 private const val LargeFontScale = 2f
 
 /** Les réglages du détail : clair ou sombre, LTR ou RTL, grande police. Ils ne touchent jamais la liste. */
@@ -103,7 +102,7 @@ private fun KitCatalogList(entries: List<MeeshyKitCatalogEntry>, onOpen: (Meeshy
                 color = MeeshyTheme.tokens.textPrimary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = MinTouchTarget)
+                    .heightIn(min = MeeshyControlSize.minTouchTarget)
                     .clickable(role = Role.Button) { onOpen(entry) }
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.smPlus),
             )
@@ -148,7 +147,7 @@ private fun KitCatalogHeader(
     onSettings: (KitCatalogSettings) -> Unit = {},
 ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = MeeshySpacing.xs),
+        Modifier.fillMaxWidth().heightIn(min = MeeshyControlSize.minTouchTarget).padding(horizontal = MeeshySpacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (onBack != null) {
@@ -177,9 +176,13 @@ private fun KitCatalogSettingsMenu(settings: KitCatalogSettings, onSettings: (Ki
             Icon(MeeshyIcons.Tune, contentDescription = KitCatalogLabels.SETTINGS, tint = MeeshyTheme.tokens.textPrimary)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            SettingRow(KitCatalogLabels.SETTING_DARK, settings.isDark) { onSettings(settings.copy(isDark = it)) }
-            SettingRow(KitCatalogLabels.SETTING_RTL, settings.isRightToLeft) { onSettings(settings.copy(isRightToLeft = it)) }
-            SettingRow(KitCatalogLabels.SETTING_LARGE_FONT, settings.isLargeFont) { onSettings(settings.copy(isLargeFont = it)) }
+            val choose: (KitCatalogSettings) -> Unit = {
+                expanded = false
+                onSettings(it)
+            }
+            SettingRow(KitCatalogLabels.SETTING_DARK, settings.isDark) { choose(settings.copy(isDark = it)) }
+            SettingRow(KitCatalogLabels.SETTING_RTL, settings.isRightToLeft) { choose(settings.copy(isRightToLeft = it)) }
+            SettingRow(KitCatalogLabels.SETTING_LARGE_FONT, settings.isLargeFont) { choose(settings.copy(isLargeFont = it)) }
         }
     }
 }
@@ -190,7 +193,7 @@ private fun SettingRow(label: String, checked: Boolean, onChange: (Boolean) -> U
         text = { Text(label) },
         leadingIcon = { Checkbox(checked = checked, onCheckedChange = null) },
         onClick = { onChange(!checked) },
-        modifier = Modifier.heightIn(min = MinTouchTarget),
+        modifier = Modifier.heightIn(min = MeeshyControlSize.minTouchTarget),
     )
 }
 

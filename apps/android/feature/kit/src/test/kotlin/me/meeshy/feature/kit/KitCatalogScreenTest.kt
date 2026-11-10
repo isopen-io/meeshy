@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -16,11 +18,16 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.component.kit.MeeshyKitCatalogEntry
 import me.meeshy.ui.component.kit.MeeshyKitCatalogState
+import me.meeshy.ui.theme.DarkMeeshyTokens
+import me.meeshy.ui.theme.LightMeeshyTokens
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -63,6 +70,20 @@ class KitCatalogScreenTest {
     }
 
     private fun pressSystemBack() = compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+
+    private fun chooseSetting(label: String) {
+        compose.onNodeWithContentDescription(KitCatalogLabels.SETTINGS).performClick()
+        compose.onNodeWithText(label).performClick()
+        compose.waitForIdle()
+    }
+
+    private fun textLayoutOf(node: SemanticsNode): TextLayoutResult {
+        val results = mutableListOf<TextLayoutResult>()
+        node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+        return results.single()
+    }
+
+    private fun legend(text: String): SemanticsNode = compose.onNodeWithText(text).fetchSemanticsNode()
 
     @Test
     fun `la liste n'affiche que les composants livres, dans l'ordre`() {
@@ -148,5 +169,56 @@ class KitCatalogScreenTest {
 
         compose.onNodeWithText(KitCatalogLabels.SETTING_RTL).assertIsDisplayed()
         assertThat(compose.onAllNodesWithText(KitCatalogLabels.SETTING_LARGE_FONT).fetchSemanticsNodes()).hasSize(1)
+    }
+
+    @Test
+    fun `un choix de reglage referme le menu`() {
+        show(initialKey = "K02")
+
+        chooseSetting(KitCatalogLabels.SETTING_RTL)
+
+        compose.onAllNodesWithText(KitCatalogLabels.SETTING_LARGE_FONT).assertCountEquals(0)
+    }
+
+    @Test
+    fun `le reglage dark bascule le detail du sombre au clair`() {
+        show(initialKey = "K02")
+        assertThat(textLayoutOf(legend("repos · R1")).layoutInput.style.color).isEqualTo(DarkMeeshyTokens.textSecondary)
+
+        chooseSetting(KitCatalogLabels.SETTING_DARK)
+
+        assertThat(textLayoutOf(legend("repos · R1")).layoutInput.style.color).isEqualTo(LightMeeshyTokens.textSecondary)
+    }
+
+    @Test
+    fun `en RTL et en grande police, les legendes passent a droite, grossissent et ne debordent pas`() {
+        show(initialKey = "K02")
+
+        chooseSetting(KitCatalogLabels.SETTING_RTL)
+        chooseSetting(KitCatalogLabels.SETTING_LARGE_FONT)
+
+        val width = compose.onRoot().fetchSemanticsNode().size.width.toFloat()
+        listOf("repos · R1", "actif · R3", "actif · R3 · isPressed").forEach { text ->
+            val node = legend(text)
+            val layout = textLayoutOf(node)
+            assertThat(node.boundsInRoot.left).isAtLeast(0f)
+            assertThat(node.boundsInRoot.right).isAtMost(width)
+            assertThat(layout.hasVisualOverflow).isFalse()
+            assertThat(layout.layoutInput.layoutDirection).isEqualTo(LayoutDirection.Rtl)
+            assertThat(layout.layoutInput.density.fontScale).isEqualTo(2f)
+        }
+        val short = legend("repos · R1").boundsInRoot
+        assertThat(width - short.right).isLessThan(short.left)
+    }
+
+    @Test
+    fun `les reglages du detail ne suivent pas jusqu'a la liste`() {
+        show(initialKey = "K02")
+        chooseSetting(KitCatalogLabels.SETTING_RTL)
+
+        compose.onNodeWithContentDescription(KitCatalogLabels.BACK).performClick()
+
+        val row = textLayoutOf(legend("K02 MeeshyGlassButton"))
+        assertThat(row.layoutInput.layoutDirection).isEqualTo(LayoutDirection.Ltr)
     }
 }
