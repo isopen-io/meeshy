@@ -1,33 +1,28 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { Portrait } from '@/components/call-grid';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { cameraOffFadeMs } from '@/lib/calls/call-camera-off';
-import { useCameraCrossfade } from '@/lib/calls/use-camera-crossfade';
+import { useOpacityFade } from '@/lib/calls/use-pill-motion';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
 /**
  * **LA SCÈNE NOIRE DE LA CAMÉRA COUPÉE** (G4, #17567) — l'avatar de la personne
  * sur fond noir, à SA couleur (celle de ses sous-titres), l'icône caméra à côté
  * du texte, et l'anneau + le halo de cette couleur à la parole seulement, rien
- * au repos. Leur place est réservée : seule leur OPACITÉ change.
+ * au repos : un seul calque d'ombres (`call-motion.css`), dont seule l'OPACITÉ change.
  *
- * L'image cède la place à l'avatar (et revient) en fondu : le voile noir monte
- * par-dessus l'image, qui ne part qu'une fois couverte ; `transform` et
- * `opacity` seulement, interruptible, plus court sous « Réduire les animations ».
+ * L'image cède la place à l'avatar (et revient) en fondu : la scène noire monte
+ * par-dessus l'image, qui ne part qu'une fois couverte ; revenue, l'image se monte
+ * dessous et la scène s'efface, puis se range (`invisible` : ni vue, ni lecteur
+ * d'écran). Opacité seule, interruptible, plus courte sous « Réduire les animations »
+ * (`useOpacityFade`) ; rien n'est calculé par image.
  */
-
-const INK_2 = 'var(--color-on-media-3)';
-
-/** Le disque de l’avatar ; l’anneau (3) et le halo (12) tiennent dans un seul calque, d’ombres, derrière lui. */
-const AVATAR_SIZE = 96;
-const RING_WIDTH = 3;
-const REACH = 12;
 
 type CameraOffStageProps = {
   readonly videoOn: boolean;
-  /** L'image en direct : montée tant que le voile ne l'a pas couverte. */
+  /** L'image en direct : montée tant que la scène noire ne l'a pas couverte. */
   readonly video: ReactNode;
   readonly name: string;
   readonly avatar: string | null;
@@ -40,26 +35,25 @@ type CameraOffStageProps = {
 
 export function CameraOffStage({ videoOn, video, name, avatar, presenceKey, color, speaking, label }: CameraOffStageProps) {
   const ms = cameraOffFadeMs(prefersReducedMotion());
-  const layers = useCameraCrossfade(videoOn, ms);
-  const fade = { transitionDuration: `${ms}ms` } as const;
-  const strength = speaking ? 1 : 0;
+  const [settledOn, settle] = useState(videoOn);
+  const veil = useRef<HTMLDivElement>(null);
+  const ring = useRef<HTMLSpanElement>(null);
+  useOpacityFade(veil, !videoOn, ms, () => settle(videoOn));
+  useOpacityFade(ring, speaking, ms);
   return (
     <>
-      {layers.video ? <div className="absolute inset-0 overflow-hidden">{video}</div> : null}
-      {layers.veil ? (
-        <div className="absolute inset-0 grid place-items-center bg-black transition-opacity" style={{ opacity: layers.covered ? 1 : 0, ...fade }} data-call-camera-off="">
-          <div className="flex flex-col items-center gap-3">
-            <div className="relative grid place-items-center">
-              <span aria-hidden className="absolute rounded-full transition-opacity" style={{ inset: REACH, boxShadow: `0 0 0 ${RING_WIDTH}px ${color}, 0 0 ${REACH * 2}px ${REACH / 2}px color-mix(in srgb, ${color} 50%, transparent)`, opacity: strength, ...fade }} data-call-camera-off-speech="" />
-              <Portrait name={name} avatar={avatar} size={AVATAR_SIZE} pulse={false} presenceKey={presenceKey} tint={color} />
-            </div>
-            <span className="flex items-center gap-2 text-body" style={{ color: INK_2 }} data-call-camera-off-label="">
-              <GlyphSvg glyph={CALL_SCREEN_GLYPHS.videoCamera} size={16} />
-              {label}
-            </span>
-          </div>
+      {videoOn || settledOn ? <div className="absolute inset-0 overflow-hidden">{video}</div> : null}
+      <div ref={veil} className={`absolute inset-0 grid place-items-center bg-black ${videoOn && settledOn ? 'invisible' : ''}`} style={{ '--call-tint': color } as CSSProperties} data-call-camera-off="">
+        <div className="flex flex-col items-center gap-3">
+          <Portrait name={name} avatar={avatar} size={96} pulse={false} presenceKey={presenceKey} tint={color}>
+            <span ref={ring} className="absolute inset-3 rounded-full" data-call-camera-off-speech="" />
+          </Portrait>
+          <span className="flex items-center gap-2 text-body text-on-media-3">
+            <GlyphSvg glyph={CALL_SCREEN_GLYPHS.videoCamera} size={16} />
+            {label}
+          </span>
         </div>
-      ) : null}
+      </div>
     </>
   );
 }

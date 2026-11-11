@@ -1,6 +1,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
@@ -8,6 +9,7 @@ import type { CallCaption } from '@/lib/calls/call-captions';
 import { DEFAULT_SELF_CORNER, DEFAULT_SELF_TILE, selfTileStore } from '@/lib/calls/call-self-tile';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 
 import { CallStage } from './call-stage';
 
@@ -28,6 +30,7 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall =>
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  await loadPillMotion();
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -60,7 +63,38 @@ const mount = (active: ActiveCall, { reducedMotion = false }: { readonly reduced
   };
 };
 
-const wait = (ms: number) => act(async () => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+/**
+ * Le fondu se joue par Web Animations : la règle générale de « Réduire les animations »
+ * (`app.css`, `transition-duration: 0s !important`) éteindrait une transition CSS, et le
+ * fondu court promis deviendrait une coupe sèche. Le témoin tient donc chaque animation
+ * demandée — d'où, vers où, en combien de temps — et décide quand elle finit.
+ */
+type Run = { readonly target: Element; readonly frames: readonly Keyframe[]; readonly duration: number; readonly finish: () => void; cancelled: boolean };
+const runs: Run[] = [];
+const animateSaved: { descriptor?: PropertyDescriptor | undefined } = {};
+beforeEach(() => {
+  runs.length = 0;
+  animateSaved.descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+  Object.defineProperty(HTMLElement.prototype, 'animate', {
+    configurable: true,
+    value(this: Element, frames: Keyframe[], options: KeyframeAnimationOptions) {
+      const settle: { resolve: () => void; reject: (reason: unknown) => void } = { resolve: () => undefined, reject: () => undefined };
+      const finished = new Promise<void>((resolve, reject) => Object.assign(settle, { resolve, reject }));
+      const run: Run = { target: this, frames, duration: Number(options.duration), finish: () => settle.resolve(), cancelled: false };
+      runs.push(run);
+      return { finished, cancel: () => { run.cancelled = true; settle.reject(new DOMException('cancelled', 'AbortError')); } };
+    },
+  });
+});
+afterEach(() => {
+  if (animateSaved.descriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+  else Object.defineProperty(HTMLElement.prototype, 'animate', animateSaved.descriptor);
+});
+
+const runsOf = (selector: string) => runs.filter((run) => run.target.matches(selector));
+const finish = (run: Run | undefined) => act(async () => run?.finish());
+const remoteVideo = '[data-call-duo-stage] video:not([data-call-self])';
+const cameraOn = () => call({ members: { 'u-peer': member({ cameraOn: true }) } });
 
 describe('G4.1 — la scène noire de la caméra coupée', () => {
   test('fond noir, avatar à la couleur de la personne, icône caméra à côté du texte', () => {
@@ -68,73 +102,97 @@ describe('G4.1 — la scène noire de la caméra coupée', () => {
     const off = view.find('[data-call-camera-off]');
     expect(off).not.toBeNull();
     expect(off?.className).toContain('bg-black');
-    expect(off?.innerHTML).toContain(speakerColor('u-peer', 'Awa Diallo'));
-    expect(view.find('[data-call-camera-off-label] svg')).not.toBeNull();
-    expect(view.find('[data-call-camera-off-label]')?.textContent).toBe('Caméra désactivée');
+    expect(off?.outerHTML).toContain(speakerColor('u-peer', 'Awa Diallo'));
+    expect(view.find('[data-call-camera-off] > div > span svg')).not.toBeNull();
+    expect(view.find('[data-call-camera-off] > div > span')?.textContent).toBe('Caméra désactivée');
     view.done();
   });
 });
 
 describe('G4.2 — anneau et halo (un seul calque, une ombre) : à la parole seulement', () => {
-  test('au repos, aucun anneau ni halo visible ; à la parole, ils prennent la couleur de la personne', () => {
+  test('au repos, aucun anneau ni halo visible ; à la parole, ils montent en opacité, puis retombent', () => {
     const view = mount(call());
     expect(view.find('[data-call-camera-off-speech]')?.style.opacity).toBe('0');
+    expect(runsOf('[data-call-camera-off-speech]')).toHaveLength(0);
     view.render(call({ captions: [speech(false)] }));
     expect(view.find('[data-call-camera-off-speech]')?.style.opacity).toBe('1');
-    expect(view.find('[data-call-camera-off-speech]')?.getAttribute('style')).toContain('box-shadow');
+    expect(runsOf('[data-call-camera-off-speech]').at(-1)?.frames).toEqual([{ opacity: '0' }, { opacity: 1 }]);
     view.render(call({ captions: [speech(true)] }));
     expect(view.find('[data-call-camera-off-speech]')?.style.opacity).toBe('0');
+    expect(runsOf('[data-call-camera-off-speech]').at(-1)?.frames).toEqual([{ opacity: '1' }, { opacity: 0 }]);
     view.done();
   });
 
-  test('ne bouge qu’en opacité : l’anneau garde sa place, son fondu suit la durée de la loi', () => {
+  test('l’anneau et le halo sont un seul calque d’ombres, à la couleur que la scène lui remet', () => {
+    const css = readFileSync(new URL('../styles/call-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    expect(css).toMatch(/\[data-call-camera-off-speech\]\s*\{\s*box-shadow:\s*0 0 0 3px var\(--call-tint\),\s*0 0 24px 6px color-mix\(in srgb, var\(--call-tint\) 50%, transparent\);/);
     const view = mount(call());
-    expect(view.find('[data-call-camera-off-speech]')?.style.transitionDuration).toBe('250ms');
+    expect(view.find('[data-call-camera-off]')?.style.getPropertyValue('--call-tint')).toBe(speakerColor('u-peer', 'Awa Diallo'));
     view.done();
+  });
+
+  test('ne bouge qu’en opacité : son fondu suit la durée de la loi, plus court — jamais coupé — sous « Réduire les animations »', () => {
+    const view = mount(call());
+    view.render(call({ captions: [speech(false)] }));
+    expect(runsOf('[data-call-camera-off-speech]').at(-1)?.duration).toBe(250);
+    view.done();
+    runs.length = 0;
     const reduced = mount(call(), { reducedMotion: true });
-    expect(reduced.find('[data-call-camera-off-speech]')?.style.transitionDuration).toBe('120ms');
+    reduced.render(call({ captions: [speech(false)] }));
+    expect(runsOf('[data-call-camera-off-speech]').at(-1)?.duration).toBe(120);
     reduced.done();
   });
 });
 
 describe('G4.6 — l’image cède la place à l’avatar (et revient) en fondu', () => {
+  test('la première peinture ne joue rien : image seule, scène noire rangée hors de la vue et du lecteur d’écran', () => {
+    const view = mount(cameraOn());
+    expect(runs).toHaveLength(0);
+    expect(view.find(remoteVideo)).not.toBeNull();
+    expect(view.find('[data-call-camera-off]')?.className).toContain('invisible');
+    view.done();
+  });
+
   test('caméra qui se coupe : l’avatar monte en opacité PAR-DESSUS l’image, qui ne part qu’une fois couverte', async () => {
-    const view = mount(call({ members: { 'u-peer': member({ cameraOn: true }) } }), { reducedMotion: true });
-    expect(view.find('[data-call-camera-off]')).toBeNull();
+    const view = mount(cameraOn(), { reducedMotion: true });
     view.render(call());
-    const veil = view.find('[data-call-camera-off]');
-    expect(veil).not.toBeNull();
-    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).not.toBeNull();
-    await wait(60);
-    expect(view.find('[data-call-camera-off]')?.style.opacity).toBe('1');
-    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).not.toBeNull();
-    await wait(160);
-    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).toBeNull();
+    expect(view.find('[data-call-camera-off]')?.className).not.toContain('invisible');
+    const veil = runsOf('[data-call-camera-off]').at(-1);
+    expect(veil?.frames).toEqual([{ opacity: '0' }, { opacity: 1 }]);
+    expect(veil?.duration).toBe(120);
+    expect(view.find(remoteVideo)).not.toBeNull();
+    await finish(veil);
+    expect(view.find(remoteVideo)).toBeNull();
     view.done();
   });
 
-  test('caméra qui revient : l’image se monte sous l’avatar, qui s’efface puis part', async () => {
-    const view = mount(call(), { reducedMotion: true });
-    view.render(call({ members: { 'u-peer': member({ cameraOn: true }) } }));
-    expect(view.find('[data-call-camera-off]')).not.toBeNull();
-    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).not.toBeNull();
-    await wait(60);
-    expect(view.find('[data-call-camera-off]')?.style.opacity).toBe('0');
-    await wait(160);
-    expect(view.find('[data-call-camera-off]')).toBeNull();
+  test('caméra qui revient : l’image se monte sous l’avatar, qui s’efface puis se range', async () => {
+    const view = mount(call());
+    view.render(cameraOn());
+    expect(view.find(remoteVideo)).not.toBeNull();
+    const veil = runsOf('[data-call-camera-off]').at(-1);
+    expect(veil?.frames).toEqual([{ opacity: '1' }, { opacity: 0 }]);
+    expect(veil?.duration).toBe(250);
+    expect(view.find('[data-call-camera-off]')?.className).not.toContain('invisible');
+    await finish(veil);
+    expect(view.find('[data-call-camera-off]')?.className).toContain('invisible');
     view.done();
   });
 
-  test('interruptible : une caméra qui se rallume pendant le fondu repart aussitôt', async () => {
-    const view = mount(call({ members: { 'u-peer': member({ cameraOn: true }) } }), { reducedMotion: true });
+  test('interruptible : une caméra qui se rallume pendant le fondu repart de là où il en est, l’image jamais démontée', async () => {
+    const view = mount(cameraOn());
     view.render(call());
-    await wait(30);
-    view.render(call({ members: { 'u-peer': member({ cameraOn: true }) } }));
-    await wait(60);
-    expect(view.find('[data-call-camera-off]')?.style.opacity).toBe('0');
-    await wait(160);
-    expect(view.find('[data-call-camera-off]')).toBeNull();
-    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).not.toBeNull();
+    const going = runsOf('[data-call-camera-off]').at(-1);
+    view.render(cameraOn());
+    expect(going?.cancelled).toBe(true);
+    const back = runsOf('[data-call-camera-off]').at(-1);
+    expect(back).not.toBe(going);
+    expect(back?.frames.at(-1)).toEqual({ opacity: 0 });
+    await act(async () => undefined);
+    expect(view.find(remoteVideo)).not.toBeNull();
+    await finish(back);
+    expect(view.find('[data-call-camera-off]')?.className).toContain('invisible');
+    expect(view.find(remoteVideo)).not.toBeNull();
     view.done();
   });
 });
