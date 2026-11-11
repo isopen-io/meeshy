@@ -109,7 +109,7 @@ const LOTS_DEF = [
 ].map(l => ({ ...l, cle: `${l.p}-${l.f}` }))
 
 const LOTS = LOTS_DEF.filter(l => PLATEFORMES.includes(l.p) && (SEULEMENT.size ? SEULEMENT.has(l.cle) : true) && !SAUTER.has(l.cle))
-const CONCURRENCE = { web: 2, android: 1, ios: 1 }
+const CONCURRENCE = { web: entier(A.webPar, 2, 1), android: 1, ios: 1 }
 
 const PIED = ATTR ? `Terminer chaque message de commit par ces lignes, telles quelles :\n${ATTR}` : 'Aucune ligne d’attribution dans les commits.'
 const COMMUN = l => {
