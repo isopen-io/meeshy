@@ -328,8 +328,7 @@ extension CallView {
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundStyle(Color.white)
 
-            // La durée, sous le nom. Le réseau dégradé n'est plus ici : il vit
-            // dans la capsule de droite de l'en-tête (#17341, `headerCapsule`).
+            // La durée, sous le nom ; le réseau dégradé vit dans la capsule de l'en-tête (#17341).
             CallDurationClock {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(callManager.formattedDuration)
