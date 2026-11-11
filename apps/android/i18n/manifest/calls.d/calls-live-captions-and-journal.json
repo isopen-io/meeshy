@@ -75,6 +75,30 @@
         {
           "androidName": "call_captions_footer_touch_for_original",
           "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_region",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_translating",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_hide_original_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_me",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_footer_translating",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_captions_footer_translated_languages",
+          "status": "android-only"
         }
       ]
     }

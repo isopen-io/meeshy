@@ -64,18 +64,31 @@ object CallJournalSizing {
     fun heightDp(windowHeightDp: Float): Float = min(max(windowHeightDp * SHARE, MINIMUM_DP), MAXIMUM_DP)
 }
 
-/** #17343 — the foot of the captions: what the line says of its translation, next to the Journal button. */
+/**
+ * #17343 — the foot of the captions: what the lines say of their translation, next to the Journal button. One
+ * component for the duo and the group: one pair of languages says « EN → FR · touch = original », several pairs
+ * « Translated · N languages », and a translation awaited « EN · translating » (the plate, views P3 and P13).
+ */
 sealed interface CallCaptionsFooter {
     data object None : CallCaptionsFooter
+
+    /** « EN · translating » — the language of the sentence whose translation is awaited. */
+    data class Translating(val language: String) : CallCaptionsFooter
 
     /** « EN → FR · touch = original ». */
     data class TouchForOriginal(val pair: String) : CallCaptionsFooter
 
+    /** « Translated · N languages » — the distinct languages the lines were read through. */
+    data class TranslatedLanguages(val count: Int) : CallCaptionsFooter
+
     companion object {
-        /** The newest line that carries a language tag decides the pair. */
+        /** [lines]: already `settled(nowMs)`, so a wait that fell no longer speaks. */
         fun resolve(lines: List<CallLiveCaptionLine>): CallCaptionsFooter {
-            val pair = lines.lastOrNull { it.languageTag != null }?.languageTag ?: return None
-            return TouchForOriginal(pair)
+            lines.lastOrNull { it.isAwaitingTranslation }?.originLanguage?.let { return Translating(it) }
+            val pairs = lines.mapNotNull { line -> line.originLanguage?.let { origin -> line.servedLanguage?.let { origin to it } } }
+            val newest = pairs.lastOrNull() ?: return None
+            if (pairs.distinct().size <= 1) return TouchForOriginal("${newest.first} → ${newest.second}")
+            return TranslatedLanguages(pairs.flatMap { listOf(it.first, it.second) }.toSet().size)
         }
     }
 }

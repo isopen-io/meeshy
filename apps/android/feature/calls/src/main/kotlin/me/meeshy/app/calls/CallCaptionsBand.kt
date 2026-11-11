@@ -1,7 +1,10 @@
 package me.meeshy.app.calls
 
-import android.text.format.DateFormat
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -9,7 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,36 +20,36 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import java.util.Date
+import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
 import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallCaptionLabels
 import me.meeshy.sdk.model.call.CallCaptionsFooter
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
+import me.meeshy.sdk.model.call.CallLiveCaptionLines
 import me.meeshy.sdk.model.call.CallPillText
 import me.meeshy.sdk.model.call.CallPillWidth
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
@@ -84,9 +86,9 @@ internal fun CallCaptionsBandHost(
 
 @Composable
 internal fun rememberCaptionLabels(): CallCaptionLabels {
-    val you = stringResource(R.string.call_avatar_you)
+    val me = stringResource(R.string.call_captions_me)
     val unknown = stringResource(R.string.call_unknown_peer)
-    return remember(you, unknown) { CallCaptionLabels(you = you, unknown = unknown) }
+    return remember(me, unknown) { CallCaptionLabels(me = me, unknown = unknown) }
 }
 
 /**
@@ -120,7 +122,8 @@ internal fun CallCaptionsBand(
     peerName: String = "",
     hasOwnGlass: Boolean = false,
 ) {
-    val title = stringResource(R.string.call_captions_title)
+    val region = stringResource(R.string.call_captions_region)
+    val swallowsTouch = Modifier.pointerInput(Unit) { detectTapGestures { } }
     val content = @Composable {
         CallCaptionsContent(
             lines = lines,
@@ -132,11 +135,11 @@ internal fun CallCaptionsBand(
         )
     }
     if (hasOwnGlass) {
-        CallControlsGlass(modifier = modifier.widthIn(max = CallPillWidth.maxWidthDp(CallPillText.CaptionsAlone).dp).fillMaxWidth().semantics { contentDescription = title }) {
+        CallControlsGlass(modifier = modifier.widthIn(max = CallPillWidth.maxWidthDp(CallPillText.CaptionsAlone).dp).fillMaxWidth().then(swallowsTouch).semantics { contentDescription = region }) {
             content()
         }
     } else {
-        Box(modifier.fillMaxWidth().semantics { contentDescription = title }) { content() }
+        Box(modifier.fillMaxWidth().then(swallowsTouch).semantics { contentDescription = region }) { content() }
     }
 }
 
@@ -150,8 +153,10 @@ private fun CallCaptionsContent(
     modifier: Modifier = Modifier,
 ) {
     val you = stringResource(R.string.call_avatar_you)
-    val entries = remember(lines, captures) { CallBandEntries.last(lines, captures, BAND_LINES) }
-    val footer = remember(lines) { CallCaptionsFooter.resolve(lines) }
+    val now = rememberSettlingClock(lines)
+    val settled = remember(lines, now) { lines.map { it.settled(now) } }
+    val entries = remember(settled, captures) { CallBandEntries.last(settled, captures, BAND_LINES) }
+    val footer = remember(settled) { CallCaptionsFooter.resolve(settled) }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(vertical = MeeshySpacing.xs),
@@ -167,7 +172,7 @@ private fun CallCaptionsContent(
                 entries.forEach { entry ->
                     key(entry.hashKey()) {
                         when (entry) {
-                            is CallBandEntry.Sentence -> CallCaptionRow(line = entry.line, showsTime = false, onToggleOriginal = onToggleOriginal)
+                            is CallBandEntry.Sentence -> CallCaptionRow(line = entry.line, showsTime = false, onToggleOriginal = onToggleOriginal, showsWaiting = true)
                             is CallBandEntry.Capture -> {
                                 val capture = entry.capture
                                 CallCaptureLine(
@@ -184,21 +189,57 @@ private fun CallCaptionsContent(
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-            if (footer is CallCaptionsFooter.TouchForOriginal) {
-                Text(
-                    text = stringResource(R.string.call_captions_footer_touch_for_original, footer.pair),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MeeshyMediaChromeColors.OnMediaSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                Spacer(Modifier.weight(1f))
-            }
+            CallCaptionsFootNote(footer, modifier = Modifier.weight(1f))
             CallJournalChip(onOpenJournal)
         }
     }
+}
+
+/** The foot: what the lines say of their translation; it fades from one note to the next, never swaps at once. */
+@Composable
+private fun CallCaptionsFootNote(footer: CallCaptionsFooter, modifier: Modifier = Modifier) {
+    val reduceMotion = rememberCallReduceMotion()
+    val note = when (footer) {
+        CallCaptionsFooter.None -> null
+        is CallCaptionsFooter.Translating -> stringResource(R.string.call_captions_footer_translating, footer.language)
+        is CallCaptionsFooter.TouchForOriginal -> stringResource(R.string.call_captions_footer_touch_for_original, footer.pair)
+        is CallCaptionsFooter.TranslatedLanguages ->
+            pluralStringResource(R.plurals.call_captions_footer_translated_languages, footer.count, footer.count)
+    }
+    val fade = if (reduceMotion) 120 else 220
+    AnimatedContent(
+        targetState = note,
+        modifier = modifier,
+        transitionSpec = { fadeIn(tween(fade)) togetherWith fadeOut(tween(fade)) },
+        label = "captions-foot",
+    ) { shown ->
+        if (shown != null) {
+            Text(
+                text = shown,
+                style = MaterialTheme.typography.labelMedium,
+                color = MeeshyMediaChromeColors.OnMediaSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * The clock the awaited translations settle on: it only moves at the next deadline, so a wait that falls takes its dots
+ * (and its « translating » foot) down at that very instant and nothing redraws before.
+ */
+@Composable
+private fun rememberSettlingClock(lines: List<CallLiveCaptionLine>): Long {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val next = CallLiveCaptionLines.nextDeadline(lines, now)
+    LaunchedEffect(next) {
+        if (next != null) {
+            delay((next - System.currentTimeMillis()).coerceAtLeast(0))
+            now = maxOf(System.currentTimeMillis(), next)
+        }
+    }
+    return now
 }
 
 private fun CallBandEntry.hashKey(): String = when (this) {
@@ -228,78 +269,6 @@ private fun CallJournalChip(onClick: () -> Unit) {
             color = Color.White,
             maxLines = 1,
             modifier = Modifier.padding(horizontal = MeeshySpacing.md),
-        )
-    }
-}
-
-/**
- * One sentence: the speaker's name in HIS colour, the « EN → FR » tag when translated, the words.
- * Touching a translated sentence shows its original, and back. TalkBack stops on FINAL sentences only.
- */
-@Composable
-internal fun CallCaptionRow(line: CallLiveCaptionLine, showsTime: Boolean, onToggleOriginal: (String) -> Unit) {
-    val context = LocalContext.current
-    val heading = if (showsTime) {
-        "${line.speakerName} (${DateFormat.getTimeFormat(context).format(Date(line.capturedAtMs))})"
-    } else {
-        line.speakerName
-    }
-    val hint = when {
-        !line.canRevealOriginal -> null
-        line.isShowingOriginal -> stringResource(R.string.call_transcript_show_translated)
-        else -> stringResource(R.string.call_transcript_show_original)
-    }
-    val a11y = remember(line) { CallCaptionAccessibility.of(line) }
-    val flip = { onToggleOriginal(line.key) }
-    val speakerColor = remember(line.speakerId) {
-        hexColor(CallSpeakerColor.hex(line.speakerId))
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 24.dp)
-            .then(if (line.canRevealOriginal) Modifier.clickable(role = Role.Button, onClick = flip) else Modifier)
-            .then(
-                if (a11y.isHidden) {
-                    Modifier.clearAndSetSemantics { }
-                } else {
-                    Modifier.semantics(mergeDescendants = true) {
-                        contentDescription = a11y.label
-                        if (line.canRevealOriginal) onClick(label = hint) { flip(); true }
-                        if (a11y.announces) liveRegion = LiveRegionMode.Polite
-                    }
-                },
-            ),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
-            Text(
-                text = heading,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = speakerColor,
-                maxLines = 1,
-            )
-            line.languageTag?.let { tag ->
-                Text(
-                    text = tag,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .padding(horizontal = MeeshySpacing.xs, vertical = 1.dp),
-                )
-            }
-        }
-        Text(
-            text = line.text,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (line.isFinal) FontWeight.Normal else FontWeight.Light,
-            color = CallSpeakerColor.textHex(line.speakerId, servesTranslation = !line.isShowingOriginal)?.let { hexColor(it) } ?: Color.White,
-            modifier = Modifier.alpha(if (line.isFinal) 1f else 0.7f),
         )
     }
 }

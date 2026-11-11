@@ -34,7 +34,7 @@ class CallCaptionsViewModelTest {
         every { currentUser } returns MutableStateFlow<MeeshyUser?>(MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
     }
     private val info = CallSessionInfo(callId = "call-1", config = CallConfig.EMPTY.copy(peerId = "peer", peerName = "Ada", conversationId = "conv-1"))
-    private val labels = CallCaptionLabels(you = "Vous", unknown = "Inconnu")
+    private val labels = CallCaptionLabels(me = "Moi", unknown = "Inconnu")
 
     private fun runViewModel(block: suspend TestScope.(CallCaptionsViewModel) -> Unit) = runTest {
         val controller = CallCaptionsController(
@@ -72,18 +72,23 @@ class CallCaptionsViewModelTest {
     }
 
     @Test
-    fun `a peer's sentence reads in the reader's language with its tag, and a touch shows the original`() = runViewModel { viewModel ->
+    fun `a peer's sentence reads in the reader's language with its tag, and a touch unfolds the original below`() = runViewModel { viewModel ->
         viewModel.advance()
         relayed.tryEmit(relay("w1", "How are you?", "Comment vas-tu ?"))
 
         val translated = viewModel.journalLines(viewModel.state.value, labels).single()
         assertThat(translated.text).isEqualTo("Comment vas-tu ?")
         assertThat(translated.languageTag).isEqualTo("EN → FR")
+        assertThat(translated.originalBelow).isNull()
 
         viewModel.toggleReveal(translated.key)
-        val original = viewModel.journalLines(viewModel.state.value, labels).single()
-        assertThat(original.text).isEqualTo("How are you?")
-        assertThat(original.languageTag).isNull()
+        val unfolded = viewModel.journalLines(viewModel.state.value, labels).single()
+        assertThat(unfolded.text).isEqualTo("Comment vas-tu ?")
+        assertThat(unfolded.languageTag).isEqualTo("EN → FR")
+        assertThat(unfolded.originalBelow).isEqualTo("How are you?")
+
+        viewModel.toggleReveal(translated.key)
+        assertThat(viewModel.journalLines(viewModel.state.value, labels).single().originalBelow).isNull()
     }
 
     @Test
