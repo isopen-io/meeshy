@@ -75,7 +75,6 @@ const fr = {
   'callControls.cameraPicker': 'Caméra',
   'callControls.cameraPicker.label': 'Choisir la caméra',
   'callControls.cameraPicker.unnamed': 'Caméra {n}',
-  'callControls.pip': 'PiP',
   'callControls.camera.options': 'Options de ma caméra',
   'callControls.selfTile.small': 'Ma vignette : petite',
   'callControls.selfTile.medium': 'Ma vignette : moyenne',

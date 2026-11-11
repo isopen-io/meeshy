@@ -11,6 +11,7 @@ const itCallDevices = {
   'call.bubble.moveHint': 'Le frecce spostano la bolla',
   'call.bubble.resizeHint': '+ e − ne cambiano la dimensione, come Ctrl + rotellina o il pizzico',
   'call.pip.enter': 'Picture-in-picture',
+  'call.pip.exit': 'Esci da picture-in-picture',
   'call.devices.open': 'Uscita audio',
   'call.devices.title': 'Dispositivi',
   'call.devices.camera': 'Fotocamera',

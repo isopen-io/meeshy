@@ -71,7 +71,6 @@ const ar = {
   'callControls.cameraPicker': 'الكاميرا',
   'callControls.cameraPicker.label': 'اختيار الكاميرا',
   'callControls.cameraPicker.unnamed': 'الكاميرا {n}',
-  'callControls.pip': 'صورة داخل صورة',
   'callControls.camera.options': 'خيارات الكاميرا الخاصة بي',
   'callControls.selfTile.small': 'صورتي المصغرة: صغيرة',
   'callControls.selfTile.medium': 'صورتي المصغرة: متوسطة',

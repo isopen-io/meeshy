@@ -168,8 +168,12 @@ final class BringCenter: ObservableObject {
     private func manageAlarm(for ring: BringRing, name: String?, deadline: Date) {
         let alarms = self.alarms
         let bringId = ring.bringId
-        guard alarms.enabled else { return }
+        guard alarms.enabled else {
+            BringAlarmLog.note("app : Bring \(bringId) reçu, essai AlarmKit fermé")
+            return
+        }
         let active = isAppActive()
+        BringAlarmLog.note("app : Bring \(bringId) reçu, app active \(active)")
         guard BringAlarmPlan.appShouldRingAlarm(enabled: alarms.enabled, appIsActive: active) else {
             Task {
                 await alarms.cancel(bringId: bringId)

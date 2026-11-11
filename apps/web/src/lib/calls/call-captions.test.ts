@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  TRANSLATION_WAIT_MS,
   captionLanguageLabel,
+  captionOrigin,
+  isAwaitingTranslation,
   captionText,
   captureAction,
   decodeChannelMessage,
@@ -54,6 +57,65 @@ describe('l’étiquette de langue d’une ligne traduite (#8393)', () => {
 
   test('un tag régional se lit par sa langue : pt-BR → PT', () => {
     expect(captionLanguageLabel(caption({ translated: 'Olá', pair: { from: 'en-US', to: 'pt-BR' } }), 'translated')).toBe('EN → PT');
+  });
+});
+
+/**
+ * LA PHRASE DIT SA LANGUE (planche P3-P5, miroir de `CallCaptionLine.make` d'iOS) : l'original
+ * part tout de suite, étiqueté de sa langue quand elle est hors du Prisme du lecteur, avec
+ * trois points tant qu'une traduction est attendue — au plus `TRANSLATION_WAIT_MS`.
+ */
+describe('la langue d’origine d’une phrase', () => {
+  const prism = ['fr', 'en'];
+  const origin = (overrides: Partial<Parameters<typeof captionOrigin>[0]> = {}) => captionOrigin({ language: 'es', isFinal: true, translated: null, prism, now: 10_000, ...overrides });
+
+  test('une langue hors du Prisme est étrangère, et une traduction y est attendue jusqu’à l’échéance', () => {
+    expect(origin()).toEqual({ language: 'es', foreign: true, awaitingUntil: 10_000 + TRANSLATION_WAIT_MS });
+  });
+
+  test('une langue du Prisme n’attend rien et ne s’étiquette pas ; un tag régional se lit par sa langue', () => {
+    expect(origin({ language: 'en' })).toEqual({ language: 'en', foreign: false, awaitingUntil: null });
+    expect(origin({ language: 'EN-US' })).toMatchObject({ foreign: false });
+  });
+
+  test('une phrase non finale, ou déjà traduite, n’attend pas ; un Prisme vide non plus', () => {
+    expect(origin({ isFinal: false })).toMatchObject({ foreign: true, awaitingUntil: null });
+    expect(origin({ translated: 'Hola' })).toMatchObject({ awaitingUntil: null });
+    expect(origin({ prism: [] })).toMatchObject({ awaitingUntil: null });
+  });
+
+  test('sans langue connue, rien', () => {
+    expect(origin({ language: null })).toBeNull();
+  });
+
+  test('l’attente retombe à son échéance', () => {
+    const line = caption({ origin: { language: 'es', foreign: true, awaitingUntil: 5_000 } });
+    expect(isAwaitingTranslation(line, 4_999)).toBe(true);
+    expect(isAwaitingTranslation(line, 5_000)).toBe(false);
+    expect(isAwaitingTranslation({ ...line, translated: 'Hola' }, 4_999)).toBe(false);
+    expect(isAwaitingTranslation(caption(), 0)).toBe(false);
+  });
+
+  test('l’original d’une langue étrangère porte sa langue seule : « ES » ; la mienne, ou une langue du Prisme, rien', () => {
+    expect(captionLanguageLabel(caption({ origin: { language: 'es', foreign: true, awaitingUntil: null } }), 'translated')).toBe('ES');
+    expect(captionLanguageLabel(caption({ origin: { language: 'es', foreign: true, awaitingUntil: null } }), 'original')).toBe('ES');
+    expect(captionLanguageLabel(caption({ origin: { language: 'en', foreign: false, awaitingUntil: null } }), 'translated')).toBeNull();
+    expect(captionLanguageLabel(caption({ mine: true, origin: { language: 'es', foreign: true, awaitingUntil: null } }), 'translated')).toBeNull();
+  });
+
+  test('la traduction arrivée met fin à l’attente, et une répétition ne la prolonge pas', () => {
+    const waiting = caption({ origin: { language: 'es', foreign: true, awaitingUntil: 18_000 } });
+    const again = mergeCaption(mergeCaption([], waiting), caption({ origin: { language: 'es', foreign: true, awaitingUntil: 40_000 } }));
+    expect(again[0]?.origin).toEqual({ language: 'es', foreign: true, awaitingUntil: 18_000 });
+    const served = mergeCaption(again, caption({ translated: 'Hola', pair: { from: 'es', to: 'fr' }, origin: { language: 'es', foreign: true, awaitingUntil: null } }));
+    expect(served[0]?.origin).toEqual({ language: 'es', foreign: true, awaitingUntil: null });
+    expect(served[0] && captionLanguageLabel(served[0], 'translated')).toBe('ES → FR');
+  });
+
+  test('le final d’une phrase d’abord partielle prend l’attente du final', () => {
+    const partial = mergeCaption([], caption({ isFinal: false, origin: { language: 'es', foreign: true, awaitingUntil: null } }));
+    const final = mergeCaption(partial, caption({ origin: { language: 'es', foreign: true, awaitingUntil: 18_000 } }));
+    expect(final[0]?.origin?.awaitingUntil).toBe(18_000);
   });
 });
 
@@ -153,9 +215,10 @@ describe('les formes du fil (#8048)', () => {
       callId: 'call-1',
       segment: { id: 'w-9', text: 'Hello', translatedText: 'Bonjour', speakerId: 'u-peer', speakerDisplayName: 'Nadia', startMs: 0, endMs: 900, isFinal: true, sourceLanguage: 'en', targetLanguage: 'fr', confidence: 0.9, capturedAtMs: 42 },
     });
-    expect(decoded).toEqual({ callId: 'call-1', speakerName: 'Nadia', caption: { id: 'w-9', speakerId: 'u-peer', speakerName: 'Nadia', original: 'Hello', translated: 'Bonjour', pair: { from: 'en', to: 'fr' }, isFinal: true, at: 42 } });
+    expect(decoded).toEqual({ callId: 'call-1', speakerName: 'Nadia', language: 'en', caption: { id: 'w-9', speakerId: 'u-peer', speakerName: 'Nadia', original: 'Hello', translated: 'Bonjour', pair: { from: 'en', to: 'fr' }, isFinal: true, at: 42 } });
     const same = decodeTranslatedSegment({ callId: 'call-1', segment: { text: 'Salut', speakerId: 'u-peer', startMs: 7, endMs: 9, isFinal: false, sourceLanguage: 'fr', targetLanguage: 'fr' } });
     expect(same?.caption).toMatchObject({ id: 'u-peer:7', translated: null, pair: null, isFinal: false });
+    expect(same?.language).toBe('fr');
     expect(decodeTranslatedSegment({ callId: 'call-1', segment: { speakerId: 'u-peer' } })).toBeNull();
   });
 
@@ -166,7 +229,7 @@ describe('les formes du fil (#8048)', () => {
 
   test('le canal de données : bye, transcript-entry, et le bruit ignoré', () => {
     expect(decodeChannelMessage('{"type":"bye","reason":"completed"}')).toEqual({ kind: 'bye' });
-    expect(decodeChannelMessage(JSON.stringify(transcriptEntryMessage(utterance())))).toEqual({ kind: 'entry', id: 'w-1', callId: 'call-1', text: 'Bonjour à tous', speakerName: 'Moi', at: 1_700_000_000_000, isFinal: true });
+    expect(decodeChannelMessage(JSON.stringify(transcriptEntryMessage(utterance())))).toEqual({ kind: 'entry', id: 'w-1', callId: 'call-1', text: 'Bonjour à tous', speakerName: 'Moi', language: 'fr', at: 1_700_000_000_000, isFinal: true });
     expect(decodeChannelMessage('{"type":"ping"}')).toBeNull();
     expect(decodeChannelMessage('pas du json')).toBeNull();
   });

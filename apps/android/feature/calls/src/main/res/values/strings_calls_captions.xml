@@ -17,4 +17,13 @@
     <string name="call_captions_unavailable">Captions are not available yet for this call.</string>
     <string name="call_captions_local_unsupported">Your words are not captioned on this device: it needs Android 13 and on-device speech recognition. You still read the other side\'s captions.</string>
     <string name="call_captions_local_language_missing">Your words are not captioned: this device has no speech model for your language. You still read the other side\'s captions.</string>
+    <string name="call_captions_region">Call captions</string>
+    <string name="call_captions_translating">Translating</string>
+    <string name="call_captions_hide_original_hint">Hide original text</string>
+    <string name="call_captions_me">Me</string>
+    <string name="call_captions_footer_translating">%1$s · translating</string>
+    <plurals name="call_captions_footer_translated_languages">
+        <item quantity="one">Translated · %1$d language</item>
+        <item quantity="other">Translated · %1$d languages</item>
+    </plurals>
 </resources>

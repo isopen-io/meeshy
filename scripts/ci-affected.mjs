@@ -83,12 +83,23 @@ export const DOMAINES = {
     'apps/ios/decisions.md',
     'scripts/check-web-api-literals.mjs',
     'scripts/lib/',
+    '.claude/workflows/meeshy-kit-planche.lots.json',
+    'docs/product/composer-vue-finale/planche.html',
+    'docs/product/kit/',
   ],
   // Les suites unitaires (#12558) : chacune ne lit que sa zone, ses tests qui lisent ailleurs
   // (Swift, Kotlin, infrastructure, l'autre suite…) étant rejoués à chaque poussée par la voie
   // de parité (`scripts/ci/voie-parite.mjs`). Le script de la voie est dans les deux zones :
   // le changer peut retirer un test de la voie, la suite entière doit alors le prouver.
-  tests_web: ['apps/web/', 'packages/shared/', 'packages/design-tokens/', 'scripts/ci/voie-parite.mjs'],
+  tests_web: [
+    'apps/web/',
+    'packages/shared/',
+    'packages/design-tokens/',
+    'scripts/ci/voie-parite.mjs',
+    '.claude/workflows/meeshy-kit-planche.lots.json',
+    'docs/product/composer-vue-finale/planche.html',
+    'docs/product/kit/',
+  ],
   tests_gateway: ['services/gateway/', 'packages/shared/', 'scripts/ci/voie-parite.mjs', 'scripts/ci/merge-jest-coverage.mjs'],
 };
 

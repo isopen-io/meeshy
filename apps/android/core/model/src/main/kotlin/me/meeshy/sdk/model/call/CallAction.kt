@@ -43,7 +43,6 @@ enum class CallAction(val id: String, val family: CallActionFamily) {
 
     Captions("captions", CallActionFamily.TheCall),
     Recording("recording", CallActionFamily.TheCall),
-    PictureInPicture("pictureInPicture", CallActionFamily.TheCall),
     AddPeople("addPeople", CallActionFamily.TheCall),
     React("react", CallActionFamily.TheCall),
     Capture("capture", CallActionFamily.TheCall),

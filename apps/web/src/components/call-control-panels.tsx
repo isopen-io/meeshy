@@ -3,9 +3,10 @@ import type { ReactNode } from 'react';
 import { CALL_REACTION_EMOJIS, type CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
 import type { CallRecordingKind } from '@meeshy/shared/types/call-recording';
 
-import { CallPanelFrame, PanelRow, type PanelBack, type RowKeyDown, type RowWheel } from '@/components/call-panel-frame';
+import { CallPanelFrame, PanelRow, type PanelBack } from '@/components/call-panel-frame';
 import { callActions } from '@/lib/calls/call-actions';
 import { callRecording } from '@/lib/calls/call-recording-live';
+import { onRowKeyDown, onRowWheel } from '@/lib/calls/call-row-keys';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -24,8 +25,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  *
  * Chunk à part (`budgets.json` › `call_control_panels`), chargé au premier
  * appui : il n'importe RIEN de l'écran d'appel (`call_overlay`,
- * `dynamic_only`) — son identifiant, le glyphe de Fermer et les flèches d'une
- * rangée lui sont remis.
+ * `dynamic_only`) — son identifiant et le glyphe de Fermer lui sont remis, et il
+ * lit lui-même les flèches d'une rangée (`call-row-keys.ts`).
  */
 
 type PanelBase = {
@@ -33,8 +34,6 @@ type PanelBase = {
   readonly closeGlyph: ReactNode;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
-  readonly onRowKeyDown: RowKeyDown;
-  readonly onRowWheel?: RowWheel | undefined;
   readonly back?: PanelBack | undefined;
 };
 
@@ -44,7 +43,7 @@ export function CallReactionPalette({ react = callActions.react, ...base }: Pane
   const title = t(base.language, 'callControls.react.palette');
   return (
     <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} back={base.back} data={{ 'data-call-react-panel': '' }}>
-      <PanelRow title={title} role="toolbar" onRowKeyDown={base.onRowKeyDown} onRowWheel={base.onRowWheel}>
+      <PanelRow title={title} role="toolbar" onRowKeyDown={onRowKeyDown} onRowWheel={onRowWheel}>
         {CALL_REACTION_EMOJIS.map((emoji, index) => (
           <button
             key={emoji}
@@ -76,7 +75,7 @@ export function CallRecordChoice({ request = (kind) => void callRecording.reques
   const title = t(base.language, 'callControls.record.title');
   return (
     <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} back={base.back} data={{ 'data-call-record-choice': '' }}>
-      <PanelRow title={title} role="toolbar" onRowKeyDown={base.onRowKeyDown} onRowWheel={base.onRowWheel}>
+      <PanelRow title={title} role="toolbar" onRowKeyDown={onRowKeyDown} onRowWheel={onRowWheel}>
         {CHOICES.map((choice, index) => {
           const disabled = choice.kind === 'video' && !videoAvailable;
           return (

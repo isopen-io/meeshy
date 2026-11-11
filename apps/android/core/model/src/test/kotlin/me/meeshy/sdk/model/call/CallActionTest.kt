@@ -13,7 +13,7 @@ class CallActionTest {
 
     private val iosPillActions = listOf(
         "camera", "flipCamera", "cameraPicker", "effects", "screenShare",
-        "captions", "recording", "pictureInPicture", "addPeople", "react", "capture", "journal",
+        "captions", "recording", "addPeople", "react", "capture", "journal",
     )
 
     @Test
@@ -63,7 +63,7 @@ class CallActionTest {
         assertThat(idsOf(CallActionFamily.MyImage))
             .containsExactly("camera", "flipCamera", "cameraPicker", "effects", "screenShare")
         assertThat(idsOf(CallActionFamily.TheCall))
-            .containsExactly("captions", "recording", "pictureInPicture", "addPeople", "react", "capture", "journal")
+            .containsExactly("captions", "recording", "addPeople", "react", "capture", "journal")
     }
 
     @Test
