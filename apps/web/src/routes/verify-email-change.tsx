@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone } from '@/components/info-hint';
 import { apiDeps } from '@/lib/api/deps';
 import { emailChangeFailureOf, verifyEmailChange, type EmailChangeFailure, type EmailChangeResult } from '@/lib/api/email-change';
 import type { ApiResult } from '@/lib/api/http';
@@ -138,13 +140,23 @@ function EmailChangeRefused({ language, message }: { readonly language: Interfac
       glyph="warningCircle"
       tone="danger"
       title={translate(language, 'emailChange.failed.title')}
-      body={<LinkText>{translate(language, REFUSAL_COPY[message])}</LinkText>}
+      body={
+        <>
+          <LinkText>{translate(language, REFUSAL_COPY[message])}</LinkText>
+          {message === 'missing' ? (
+            <InfoAlone
+              hint={{
+                label: translate(language, 'emailChange.missing.question'),
+                text: translate(language, 'emailChange.missing.hint'),
+                glyph: SETTINGS_GLYPHS.info,
+              }}
+            />
+          ) : null}
+        </>
+      }
     >
-      <ActionLink to="settings" tone="primary">
+      <ActionLink to="settings" tone="secondary">
         {translate(language, 'linkPage.settings')}
-      </ActionLink>
-      <ActionLink to="list" tone="secondary">
-        {translate(language, 'linkPage.home')}
       </ActionLink>
     </LinkPage>
   );

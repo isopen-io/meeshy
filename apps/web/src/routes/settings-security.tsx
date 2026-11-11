@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -265,6 +265,9 @@ export function SettingsSecurityScreen({
   );
 }
 
+/** Ce qu'une session dit au repos : d'où et depuis quand. Le reste vit derrière « Plus ». */
+const SESSION_REST_FIELDS: ReadonlySet<string> = new Set(['place', 'lastActive']);
+
 function SessionCard({
   session,
   language,
@@ -300,11 +303,12 @@ function SessionCard({
         {session.isCurrent ? <Badge tint="var(--color-success)">{t('sessions.current')}</Badge> : null}
         {session.isTrusted ? <Badge tint="var(--color-ios-brand)">{t('sessions.trusted')}</Badge> : null}
       </div>
-      <dl className="grid gap-1 text-caption" style={{ gridTemplateColumns: 'auto 1fr', columnGap: 12 }}>
-        {sessionFields(session, { language, now, t, approximate }).map((field) => (
-          <FieldRow key={field.key} field={field} note={field.key === 'place' ? placeNote : undefined} />
-        ))}
-      </dl>
+      <MoreFields
+        fields={sessionFields(session, { language, now, t, approximate })}
+        rest={SESSION_REST_FIELDS}
+        moreLabel={t('sessions.more')}
+        rowOf={(field) => <FieldRow key={field.key} field={field} note={field.key === 'place' ? placeNote : undefined} />}
+      />
       {session.isCurrent ? null : (
         <button
           type="button"
@@ -378,5 +382,48 @@ function SessionsError({ t, failure, onRetry }: { readonly t: SessionsText; read
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * **L'ESSENTIEL AU REPOS, LE RARE DERRIÈRE « PLUS »** (épure #17584, règle 6) —
+ * la fiche d'une session ou d'un appareil chiffré. Au repos, seuls les champs
+ * de `rest` ; « Plus » (un bouton, `aria-expanded`, `aria-controls`) déroule les
+ * autres. Rien n'est retiré : tout champ servi reste atteignable en un geste.
+ */
+export function MoreFields<F extends { readonly key: string }>({
+  fields,
+  rest,
+  moreLabel,
+  rowOf,
+}: {
+  readonly fields: readonly F[];
+  readonly rest: ReadonlySet<string>;
+  readonly moreLabel: string;
+  readonly rowOf: (field: F) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const shown = fields.filter((field) => rest.has(field.key));
+  const hidden = fields.filter((field) => !rest.has(field.key));
+  return (
+    <>
+      <dl id={id} className="grid gap-1 text-caption" style={{ gridTemplateColumns: 'auto 1fr', columnGap: 12 }}>
+        {shown.map(rowOf)}
+        {open ? hidden.map(rowOf) : null}
+      </dl>
+      {hidden.length === 0 ? null : (
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={() => setOpen((current) => !current)}
+          className="inline-flex items-center rounded-chip px-3 text-caption font-semibold focus-visible:outline-2"
+          style={{ minHeight: 44, justifySelf: 'start', color: SECTION_INK_2, outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {moreLabel}
+        </button>
+      )}
+    </>
   );
 }

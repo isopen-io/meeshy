@@ -105,8 +105,10 @@ describe('la liste', () => {
     const host = await mount(element);
     await settle();
     const card = host.querySelector('[data-session="autre"]');
-    const fields = [...(card?.querySelectorAll('[data-session-field]') ?? [])].map((field) => field.getAttribute('data-session-field'));
-    expect(fields).toEqual(['app', 'platform', 'system', 'browser', 'ip', 'place', 'timezone', 'opened', 'lastActive', 'method']);
+    const keys = () => [...(card?.querySelectorAll('[data-session-field]') ?? [])].map((field) => field.getAttribute('data-session-field'));
+    expect(keys()).toEqual(['place', 'lastActive']);
+    await click([...(card?.querySelectorAll('button') ?? [])].find((button) => button.textContent === 'Plus') ?? null);
+    expect([...keys()].sort()).toEqual(['app', 'browser', 'ip', 'lastActive', 'method', 'opened', 'place', 'platform', 'system', 'timezone']);
     expect(card?.querySelector('[data-session-field="place"]')?.textContent).toContain('approximatif');
     expect(card?.querySelector('[data-session-field="ip"] dd')?.getAttribute('dir')).toBe('ltr');
   });

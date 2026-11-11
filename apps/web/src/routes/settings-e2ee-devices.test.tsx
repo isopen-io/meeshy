@@ -88,7 +88,9 @@ describe('la liste', () => {
     const fields = [...(host.querySelector('[data-e2ee-device="1"]')?.querySelectorAll('[data-e2ee-device-field]') ?? [])].map((field) =>
       field.getAttribute('data-e2ee-device-field'),
     );
-    expect(fields).toEqual(['platform', 'number', 'enrolled', 'lastSeen']);
+    expect(fields).toEqual(['enrolled', 'lastSeen']);
+    const more = [...(host.querySelector('[data-e2ee-device="1"]')?.querySelectorAll('button') ?? [])].find((button) => button.textContent === 'Plus');
+    await click(more ?? null);
     expect(host.querySelector('[data-e2ee-device="1"] [data-e2ee-device-field="platform"]')?.textContent).toContain('iPhone ou iPad');
   });
 

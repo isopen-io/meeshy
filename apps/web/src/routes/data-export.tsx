@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone } from '@/components/info-hint';
 import { apiDeps } from '@/lib/api/deps';
 import { deliverJsonFile, exportFileName, requestDataExport, type DataExportResult } from '@/lib/api/data-export';
 import type { ApiResult } from '@/lib/api/http';
@@ -125,7 +127,7 @@ export function DataExportPage({
         body={<LinkText>{translate(language, 'dataExport.done.body')}</LinkText>}
       >
         <ActionButton disabled={!online} onClick={() => void runExport()}>
-          {translate(language, 'dataExport.action.again')}
+          {translate(language, 'dataExport.action.start')}
         </ActionButton>
         <ActionLink to="settings" tone="secondary">
           {translate(language, 'linkPage.settings')}
@@ -142,8 +144,14 @@ export function DataExportPage({
       busy={exporting}
       body={
         <>
-          <LinkText>{translate(language, 'dataExport.info.body')}</LinkText>
-          {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.body')}</LinkAlert>}
+          <InfoAlone
+            hint={{
+              label: translate(language, 'dataExport.info.question'),
+              text: translate(language, 'dataExport.info.body'),
+              glyph: SETTINGS_GLYPHS.info,
+            }}
+          />
+          {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.title')}</LinkAlert>}
         </>
       }
     >

@@ -105,9 +105,9 @@ describe('PackShop — fiche et plein écran', () => {
     expect(shop.querySelector('[data-inspector]')?.getAttribute('data-inspector-preview')).toBe('');
   });
 
-  test('un pack que l’adaptateur n’ouvre pas garde sa rangée d’avant', async () => {
+  test('un pack que l’adaptateur n’ouvre pas n’a ni plein écran ni fiche d’éditeur, mais sa fiche de détails', async () => {
     const shop = await mount(adapterOf(async () => ({ ok: true, data: null })), [{ slug: 'b', installed: false, openable: false }]);
-    expect(shop.querySelector('[data-shop-open="b"]')).toBeNull();
+    expect(shop.querySelector('[data-shop-open="b"]')).not.toBeNull();
     expect(shop.querySelector('[data-shop-preview="b"]')).toBeNull();
   });
 

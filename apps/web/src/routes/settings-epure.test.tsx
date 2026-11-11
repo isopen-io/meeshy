@@ -234,7 +234,6 @@ describe('mes appareils chiffrés', () => {
     expect(text(host)).not.toContain('ne lit pas les conversations');
     expect(noteOf(host, infoButton(host, 'Où lire mes conversations chiffrées ?')).textContent).toContain('application Meeshy');
     expect(noteOf(host, infoButton(host, 'Comment ajouter un appareil ?')).textContent).toContain('Activez le chiffrement');
-    expect(noteOf(host, infoButton(host, 'Comment approuver un appareil ?')).textContent).toContain('code');
-    noteOf(host, infoButton(host, 'À quoi sert cette liste ?'));
+    expect(noteOf(host, infoButton(host, 'À quoi sert cette liste ?')).textContent).toContain('code');
   });
 });

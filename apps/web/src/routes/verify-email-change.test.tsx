@@ -60,7 +60,7 @@ describe('/settings/verify-email-change — le jeton, sous session', () => {
     expect(script.verified).toEqual(['tok']);
     expect(host.querySelector('h1')?.textContent).toBe('Adresse e-mail modifiée');
     expect(host.textContent).toContain('Vous vous connectez désormais avec awa@nouveau.example.');
-    expect(host.querySelector('a[href="/settings"]')?.textContent).toBe('Ouvrir les réglages');
+    expect(host.querySelector('a[href="/settings"]')?.textContent).toBe('Réglages');
   });
 
   test('sans jeton : aucun appel, un motif', async () => {
@@ -68,7 +68,7 @@ describe('/settings/verify-email-change — le jeton, sous session', () => {
     const host = await mount(<VerifyEmailChangePage token={null} signedIn language="fr" deps={script.deps} />);
 
     expect(script.verified).toEqual([]);
-    expect(host.textContent).toContain('Ce lien ne porte pas de code de confirmation.');
+    expect(host.textContent).toContain('Lien incomplet.');
   });
 });
 
@@ -78,7 +78,7 @@ describe('/settings/verify-email-change — un refus motivé', () => {
       <VerifyEmailChangePage token="tok" signedIn language="fr" deps={scripted(refused(400, 'Verification token has expired')).deps} />,
     );
     expect(host.querySelector('h1')?.textContent).toBe('Adresse non modifiée');
-    expect(host.textContent).toContain('Ce lien a expiré.');
+    expect(host.textContent).toContain('Lien expiré');
   });
 
   test('une adresse prise entre-temps', async () => {

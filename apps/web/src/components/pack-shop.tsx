@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
+import { PackDetailsSheet } from '@/components/pack-details-sheet';
 import { ApiError } from '@/lib/api/client';
 import type { ApiResult } from '@/lib/api/http';
 import { createPackGestureGuard, newPurchaseRequestId } from '@/lib/api/packs';
@@ -67,6 +68,8 @@ export type PackShopAdapter<P extends ShopPack> = {
   title(pack: P): string;
   description(pack: P): string;
   meta(pack: P): readonly string[];
+  /** Ce que la rangée garde de `meta` au repos ; le reste (auteur, genres) vit dans la fiche. Absent : toute la méta. */
+  rowMeta?(pack: P): readonly string[];
   cover(pack: P): ReactNode;
   /** Ce qui MONTRE le pack sans l'installer, sous sa rangée (l'atlas des vignettes d'un pack de cadres, #10275) ; `null` ou absent : rien. */
   preview?(pack: P): ReactNode;
@@ -275,6 +278,7 @@ export function PackShop<P extends ShopPack>({
           notice,
         };
   const openable = (pack: P): boolean => adapter.inspector !== undefined && adapter.inspectable?.(pack) === true;
+  const detailsPack = sheetPack !== null && !openable(sheetPack) ? sheetPack : null;
 
   return (
     <div data-pack-shop={adapter.domain} className="flex flex-col gap-4">
@@ -343,32 +347,25 @@ export function PackShop<P extends ShopPack>({
                   )}
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <h3 className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                      {openable(pack) ? (
-                        /* La rangée entière s'ouvre : le bouton du titre s'étend sur elle (`after:inset-0`), sous la couverture et le geste. */
-                        <button
-                          type="button"
-                          data-shop-open={pack.slug}
-                          aria-label={translateStickerPacks(language, 'packs.sheet.open', { name: title })}
-                          onClick={() => setInspected({ sheet: pack.slug, preview: null })}
-                          className="text-start after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2"
-                          style={{ outlineColor: 'var(--color-ios-brand)' }}
-                        >
-                          {title}
-                        </button>
-                      ) : (
-                        title
-                      )}
+                      {/* La rangée entière s'ouvre : le bouton du titre s'étend sur elle (`after:inset-0`), sous la couverture et le geste. */}
+                      <button
+                        type="button"
+                        data-shop-open={pack.slug}
+                        aria-label={translateStickerPacks(language, 'packs.sheet.open', { name: title })}
+                        onClick={() => setInspected({ sheet: pack.slug, preview: null })}
+                        className="text-start after:absolute after:inset-0 after:rounded-2xl after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2"
+                        style={{ outlineColor: 'var(--color-ios-brand)' }}
+                      >
+                        {title}
+                      </button>
                     </h3>
-                    <p className="line-clamp-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-                      {adapter.description(pack)}
-                    </p>
                     {unlockOf(pack) === null ? null : (
                       <p data-shop-unlock className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
                         {unlockOf(pack)}
                       </p>
                     )}
                     <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-                      {[...adapter.meta(pack), ...(price === null ? [] : [adapter.owned?.(pack) === false ? translateStickerPacks(language, 'packs.price', { price: String(price) }) : translateStickerPacks(language, 'packs.owned')])].join(' · ')}
+                      {[...(adapter.rowMeta ?? adapter.meta)(pack), ...(price === null ? [] : [adapter.owned?.(pack) === false ? translateStickerPacks(language, 'packs.price', { price: String(price) }) : translateStickerPacks(language, 'packs.owned')])].join(' · ')}
                     </p>
                   </div>
                   {action.kind === 'locked' ? (
@@ -418,6 +415,22 @@ export function PackShop<P extends ShopPack>({
       )}
       {footer}
       {inspection === null ? null : adapter.inspector?.(inspection)}
+      {detailsPack === null ? null : (
+        <PackDetailsSheet
+          slug={detailsPack.slug}
+          title={adapter.title(detailsPack)}
+          cover={adapter.cover(detailsPack)}
+          description={adapter.description(detailsPack)}
+          facts={adapter.meta(detailsPack)}
+          unlock={unlockOf(detailsPack)}
+          action={actionOf(detailsPack)}
+          busy={flying.has(detailsPack.slug)}
+          pressed={detailsPack.installed}
+          notice={notice}
+          onAction={() => void toggle(detailsPack)}
+          onClose={() => setInspected(NOTHING_INSPECTED)}
+        />
+      )}
     </div>
   );
 }

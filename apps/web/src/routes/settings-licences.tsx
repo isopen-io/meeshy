@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { InfoAlone } from '@/components/info-hint';
 import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
 import { SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import { translate } from '@/lib/i18n-catalog';
@@ -140,9 +141,9 @@ function AgplSections({ language, engine }: { readonly language: InterfaceLangua
         </details>
       </LicenceSection>
       <LicenceSection id="licences-libsignal" title={t('licences.libsignal.title')} language={language}>
-        <p className="px-3.5 pt-3 text-caption" style={{ color: SECTION_INK_2 }}>
-          {t('licences.libsignal.body')}
-        </p>
+        <InfoAlone
+          hint={{ label: t('licences.libsignal.question'), text: t('licences.libsignal.body'), glyph: SETTINGS_GLYPHS.info }}
+        />
         <a
           href={engine.acknowledgmentsUrl}
           target="_blank"

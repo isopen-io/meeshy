@@ -26,6 +26,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { e2eeDeviceFields, e2eeDeviceTitle } from '@/lib/view/e2ee-devices';
 import { Link } from '@/routes/route-table';
+import { MoreFields } from '@/routes/settings-security';
 import { SECURITY_PANEL, SECURITY_PANEL_PARAM } from '@/routes/settings-sections';
 import { sessionsHint } from '@/routes/settings-sessions-hint';
 
@@ -86,6 +87,8 @@ export function SettingsE2eeDevicesScreen({
   readonly now?: () => Date;
 }) {
   const t = sessionsTextOf(language);
+  const introHint: InfoHint = { ...sessionsHint(t, 'sessions.intro.question', 'e2eeDevices.intro'), text: `${t('e2eeDevices.intro')} ${t('e2eeDevices.approval')}` };
+  const introState = useInfoHint();
   const online = useOnline();
   const [pending, setPending] = useState<E2eeDevice | null>(null);
   const [announce, setAnnounce] = useState('');
@@ -151,10 +154,12 @@ export function SettingsE2eeDevicesScreen({
         <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: SECTION_INK }}>
           {t('e2eeDevices.title')}
         </h1>
+        <InfoHintButton hint={introHint} state={introState} />
       </header>
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
         <InfoHintScope>
           <div className="mx-auto grid max-w-xl gap-4 pb-24" style={{ paddingTop: 8 }}>
+            <InfoHintText hint={introHint} state={introState} />
             {online ? null : (
               <div role="status" data-e2ee-devices-offline className="flex items-center rounded-card px-3.5 py-1 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
                 <InfoNoted note={sessionsHint(t, 'sessions.offline.question', 'e2eeDevices.offline.info')}>{t('e2eeDevices.offline')}</InfoNoted>
@@ -166,7 +171,6 @@ export function SettingsE2eeDevicesScreen({
               </InfoNoted>
             </div>
             <section aria-label={t('e2eeDevices.title')} className="grid gap-2">
-              <ExplainedBy note={sessionsHint(t, 'sessions.intro.question', 'e2eeDevices.intro')} />
               {devices === undefined ? (
                 failure === null ? (
                   <DevicesSkeleton label={t('e2eeDevices.loading')} />
@@ -192,7 +196,6 @@ export function SettingsE2eeDevicesScreen({
                   ))}
                 </ul>
               )}
-              <ExplainedBy note={sessionsHint(t, 'e2eeDevices.approval.question', 'e2eeDevices.approval')} />
             </section>
           </div>
         </InfoHintScope>
@@ -222,18 +225,8 @@ export function SettingsE2eeDevicesScreen({
   );
 }
 
-/** Un (i) posé seul, qui dit sa question : l'explication reste lue repliée. */
-function ExplainedBy({ note }: { readonly note: InfoHint }) {
-  const state = useInfoHint();
-  return (
-    <div className="grid ps-1">
-      <span>
-        <InfoHintButton hint={note} state={state} showsLabel />
-      </span>
-      <InfoHintText hint={note} state={state} />
-    </div>
-  );
-}
+/** Ce qu'un appareil dit au repos : le titre nomme déjà la plateforme ; restent l'activation et la dernière activité. */
+const E2EE_DEVICE_REST_FIELDS: ReadonlySet<string> = new Set(['enrolled', 'lastSeen']);
 
 function DeviceCard({
   device,
@@ -271,16 +264,19 @@ function DeviceCard({
           </span>
         ) : null}
       </div>
-      <dl className="grid gap-1 text-caption" style={{ gridTemplateColumns: 'auto 1fr', columnGap: 12 }}>
-        {e2eeDeviceFields(device, { language, now, t }).map((field) => (
+      <MoreFields
+        fields={e2eeDeviceFields(device, { language, now, t })}
+        rest={E2EE_DEVICE_REST_FIELDS}
+        moreLabel={t('sessions.more')}
+        rowOf={(field) => (
           <div key={field.key} data-e2ee-device-field={field.key} style={{ display: 'contents' }}>
             <dt style={{ color: SECTION_INK_2 }}>{field.label}</dt>
             <dd className="min-w-0 break-words" style={{ color: SECTION_INK }} {...(field.ltr ? { dir: 'ltr' } : {})}>
               {field.value}
             </dd>
           </div>
-        ))}
-      </dl>
+        )}
+      />
       {device.current || device.registrationId === null ? null : (
         <button
           type="button"

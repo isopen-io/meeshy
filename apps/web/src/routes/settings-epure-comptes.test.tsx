@@ -38,7 +38,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 const { mount, unmountAll, click, settle } = createActMounter();
 
 beforeAll(async () => {
-  ensureHappyDomRegistered({ url: 'http://localhost/settings' });
+  ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await Promise.all([loadInterfaceCatalog('fr'), loadSessionsCatalog('fr'), loadStickerPacksCatalog('fr'), loadLicencesCatalog('fr')]);
 });
@@ -132,7 +132,7 @@ describe('une session ouverte', () => {
     const card = host.querySelector<HTMLElement>('[data-session="autre"]');
     const more = moreButton(card as HTMLElement);
     expect(more.getAttribute('aria-expanded')).toBe('false');
-    click(more);
+    await click(more);
     expect(more.getAttribute('aria-expanded')).toBe('true');
     const keys = fieldKeys(card, 'data-session-field');
     for (const key of ['app', 'platform', 'system', 'browser', 'ip', 'timezone', 'opened', 'method']) expect(keys).toContain(key);
@@ -176,7 +176,7 @@ describe('un appareil chiffré', () => {
     await settle();
     const card = host.querySelector<HTMLElement>('[data-e2ee-device="7"]');
     expect(fieldKeys(card, 'data-e2ee-device-field')).toEqual(['enrolled', 'lastSeen']);
-    click(moreButton(card as HTMLElement));
+    await click(moreButton(card as HTMLElement));
     const keys = fieldKeys(card, 'data-e2ee-device-field');
     expect(keys).toContain('number');
     expect(keys).toContain('platform');
@@ -233,8 +233,8 @@ describe('la rangée d’un pack', () => {
     await settle();
     const open = host.querySelector<HTMLButtonElement>('[data-shop-open="colibri"]');
     expect(open).not.toBeNull();
-    click(open as HTMLButtonElement);
-    const sheet = document.querySelector('[role="dialog"]');
+    await click(open as HTMLButtonElement);
+    const sheet = document.querySelector('[data-pack-details="colibri"]');
     expect(sheet?.textContent).toContain('Le colibri de Meeshy : ses humeurs, ses gestes et ses instants, du plus calme au plus déchaîné.');
     expect(sheet?.textContent).toContain('Par Meeshy');
     expect(sheet?.textContent).toContain('Animés');
@@ -242,7 +242,7 @@ describe('la rangée d’un pack', () => {
 });
 
 describe('les pages de lien', () => {
-  const pageDeps = { load: async () => ({ ok: true as const, data: true, status: 200 }), save: async () => ({ ok: true as const, data: true, status: 200 }) };
+  const pageDeps = { load: async () => ({ ok: true as const, data: true, status: 200 }), save: async (enabled: boolean) => ({ ok: true as const, data: enabled, status: 200 }) };
 
   test('sans session : un titre et « Se connecter », aucune consigne', async () => {
     const host = await mount(<DataExportPage signedIn={false} online language="fr" deps={{ request: async () => ({ ok: false, status: 0, error: '' }), download: async () => 'delivered' }} />);
@@ -277,7 +277,7 @@ describe('les pages de lien', () => {
     expect(host.textContent).toContain('Vous recevez les e-mails de Meeshy.');
     const toggle = [...host.querySelectorAll('button')].find((button) => button.textContent === 'Désactiver');
     expect(toggle).toBeDefined();
-    click(toggle as HTMLButtonElement);
+    await click(toggle as HTMLButtonElement);
     await settle();
     expect([...host.querySelectorAll('button')].some((button) => button.textContent === 'Réactiver')).toBe(true);
   });
@@ -349,18 +349,19 @@ describe('sept langues, aucune copie du français', () => {
         } as Record<string, string>,
       })),
     );
+    const problems: string[] = [];
     for (const [key, french] of shortLabels) {
-      expect(catalogs[0]?.entries[key]).toBe(french);
+      if (catalogs[0]?.entries[key] !== french) problems.push(`fr ${key}`);
       for (const { language, entries } of catalogs.slice(1)) {
-        expect(entries[key], `${language} ${key}`).toBeDefined();
-        expect(entries[key], `${language} ${key}`).not.toBe(french);
-        expect((entries[key] ?? '').split(' ').length, `${language} ${key}`).toBeLessThanOrEqual(2);
+        const value = entries[key];
+        if (value === undefined || value === french || value.split(' ').length > 2) problems.push(`${language} ${key}`);
       }
     }
     for (const { language, entries } of catalogs) {
-      for (const dead of ['linkPage.signedOut.body', 'linkPage.offline.body', 'linkPage.unavailable.body']) {
-        expect(entries[dead], `${language} ${dead}`).toBeUndefined();
+      for (const dead of ['linkPage.signedOut.body', 'linkPage.offline.body', 'linkPage.unavailable.body', 'dataExport.action.again']) {
+        if (entries[dead] !== undefined) problems.push(`${language} ${dead}`);
       }
     }
+    expect(problems).toEqual([]);
   });
 });

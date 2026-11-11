@@ -191,10 +191,11 @@ export function ActionLink({
   );
 }
 
-export const REACH_FAILURE_BODY = {
-  offline: 'linkPage.offline.body',
+/** La ligne qui DIT l'échec — le titre de la page : « Hors ligne » se comprend seul, aucune phrase ne le paraphrase. */
+export const REACH_FAILURE_LINE = {
+  offline: 'linkPage.offline.title',
   'rate-limited': 'linkPage.rateLimited',
-  unavailable: 'linkPage.unavailable.body',
+  unavailable: 'linkPage.unavailable.title',
 } as const satisfies Readonly<Record<ReachFailure, string>>;
 
 const REACH_FAILURE_TITLE = {
@@ -222,7 +223,7 @@ export function ReachFailurePage({
       glyph="warningCircle"
       tone="brand"
       title={translate(language, REACH_FAILURE_TITLE[failure])}
-      body={<LinkText>{translate(language, REACH_FAILURE_BODY[failure])}</LinkText>}
+      body={failure === 'rate-limited' ? <LinkText>{translate(language, REACH_FAILURE_LINE[failure])}</LinkText> : undefined}
     >
       <ActionButton onClick={onRetry}>{translate(language, 'linkPage.retry')}</ActionButton>
       <ActionLink to="list" tone="secondary">
@@ -243,7 +244,6 @@ export function SignedOutPage({ language }: { readonly language: InterfaceLangua
       glyph="lock"
       tone="brand"
       title={translate(language, 'linkPage.signedOut.title')}
-      body={<LinkText>{translate(language, 'linkPage.signedOut.body')}</LinkText>}
     >
       <ActionLink to="login" tone="primary">
         {translate(language, 'linkPage.signIn')}
