@@ -35,6 +35,11 @@ struct EncryptedDeviceRow: View, Equatable {
                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundStyle(theme.textSecondary)
                 }
+                if let lastUsed = row.lastUsed {
+                    Text(lastUsed)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                        .foregroundStyle(theme.textSecondary)
+                }
             }
 
             Spacer(minLength: 0)
@@ -97,13 +102,13 @@ enum EncryptedDeviceNoticeText {
         case .noMatch:
             String(
                 localized: "e2ee.devices.notice.noMatch.message",
-                defaultValue: "Ce code ne correspond à aucun de vos appareils. Rien n’a été approuvé. Lisez le code affiché dans « Mes appareils chiffrés » sur votre autre appareil.",
+                defaultValue: "Ce code n’est celui d’aucun de vos appareils. Rien n’a été approuvé.",
                 bundle: .main
             )
         case .otherDevice:
             String(
                 localized: "e2ee.devices.notice.otherDevice.message",
-                defaultValue: "Ce code est celui d’un autre de vos appareils. Rien n’a été approuvé. Lisez le code affiché par l’appareil que vous approuvez.",
+                defaultValue: "C’est le code d’un autre de vos appareils. Rien n’a été approuvé.",
                 bundle: .main
             )
         case .approved:
@@ -115,7 +120,7 @@ enum EncryptedDeviceNoticeText {
         case .deviceChanged:
             String(
                 localized: "e2ee.devices.notice.deviceChanged.message",
-                defaultValue: "Un autre appareil a pris cette place depuis l’affichage de la liste. Rien n’a été retiré. Vérifiez la liste à jour avant de retirer un appareil.",
+                defaultValue: "La liste a changé. Rien n’a été retiré : vérifiez-la d’abord.",
                 bundle: .main
             )
         case .actionFailed, nil:

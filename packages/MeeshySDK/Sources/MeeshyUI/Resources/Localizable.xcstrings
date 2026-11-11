@@ -37782,43 +37782,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التفاعلات جزء من المحتوى الذي يحملها وليس لها مدخل خاص بها."
+            "value": "مضمَّنة في المحتوى الذي يحملها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reaktionen sind Teil des Inhalts, der sie trägt, und haben keinen eigenen Eintrag."
+            "value": "Im Inhalt enthalten, der sie trägt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reactions are part of the content that carries them and have no entry of their own."
+            "value": "Included in the content that carries them."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Las reacciones forman parte del contenido que las contiene y no ocupan una entrada propia."
+            "value": "Incluidas en el contenido que las contiene."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les réactions font partie du contenu qui les porte et n'occupent pas d'entrée propre."
+            "value": "Incluses dans le contenu qui les porte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le reazioni fanno parte del contenuto che le contiene e non occupano una voce propria."
+            "value": "Incluse nel contenuto che le contiene."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As reações fazem parte do conteúdo que as contém e não ocupam uma entrada própria."
+            "value": "Incluídas no conteúdo que as contém."
           }
         }
       }
@@ -37829,43 +37829,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تشترك بيانات الريلز والمنشورات في نفس التخزين: أفرغ صف المنشورات."
+            "value": "نفس تخزين المنشورات: أفرغ صف المنشورات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Daten von Reels und Beiträgen teilen sich denselben Speicher – leeren Sie die Zeile Beiträge."
+            "value": "Gleicher Speicher wie Beiträge: leere die Zeile Beiträge."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reels and posts data share the same storage — clear the Posts row."
+            "value": "Same storage as Posts: clear the Posts row."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los datos de los reels y las publicaciones comparten el mismo almacenamiento: vacía la fila Publicaciones."
+            "value": "Mismo almacenamiento que Publicaciones: vacía la fila Publicaciones."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les données des réels et des publications partagent le même stockage : videz la ligne Publications."
+            "value": "Même stockage que Publications : videz la ligne Publications."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I dati di reel e post condividono lo stesso archivio: svuota la riga Post."
+            "value": "Stesso archivio dei Post: svuota la riga Post."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Os dados dos reels e das publicações compartilham o mesmo armazenamento: limpe a linha Publicações."
+            "value": "Mesmo armazenamento que Publicações: limpe a linha Publicações."
           }
         }
       }
@@ -38383,6 +38383,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Arquivos ainda no aparelho cuja publicação, story ou conversa de origem não está mais em cache. Não é possível vinculá-los a um domínio."
+          }
+        }
+      }
+    },
+    "settings.cache.purge.unattributed.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لماذا «غير منسوب»؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum „nicht zugeordnet“?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why “unattributed”?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Por qué «sin atribuir»?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pourquoi « non attribué » ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perché «non attribuito»?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por que “não atribuído”?"
           }
         }
       }

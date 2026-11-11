@@ -19,6 +19,7 @@ struct SecurityTwoFactorSection: View {
                 icon: "shield.lefthalf.filled",
                 color: tfaColor
             )
+            SettingsSentence(text: String(localized: "2fa_section_summary", defaultValue: "Un code en plus du mot de passe à chaque connexion."))
 
             VStack(spacing: 0) {
                 statusRow
@@ -61,15 +62,6 @@ struct SecurityTwoFactorSection: View {
             }
 
             Spacer()
-
-            if viewModel.isEnabled {
-                Text(String(localized: "2fa_badge_active", defaultValue: "Actif"))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, MeeshySpacing.xsPlus)
-                    .padding(.vertical, MeeshySpacing.xxs)
-                    .background(Capsule().fill(MeeshyColors.success))
-            }
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)

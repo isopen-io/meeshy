@@ -73,10 +73,10 @@
       "explanations": 5
     },
     "android:feature/settings": {
-      "labels": 648,
-      "words": 2750,
-      "long": 28,
-      "explanations": 59
+      "labels": 680,
+      "words": 2804,
+      "long": 36,
+      "explanations": 72
     },
     "android:feature/stories": {
       "labels": 818,
@@ -116,8 +116,8 @@
     },
     "ios:Meeshy/about": {
       "labels": 45,
-      "words": 194,
-      "long": 3,
+      "words": 177,
+      "long": 2,
       "explanations": 14
     },
     "ios:Meeshy/accessibility": {
@@ -187,8 +187,8 @@
       "explanations": 0
     },
     "ios:Meeshy/auth": {
-      "labels": 101,
-      "words": 527,
+      "labels": 100,
+      "words": 524,
       "long": 6,
       "explanations": 11
     },
@@ -199,10 +199,10 @@
       "explanations": 0
     },
     "ios:Meeshy/blocked": {
-      "labels": 8,
-      "words": 23,
+      "labels": 7,
+      "words": 16,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/bookmarks": {
       "labels": 7,
@@ -254,8 +254,8 @@
     },
     "ios:Meeshy/circleNotify": {
       "labels": 32,
-      "words": 103,
-      "long": 3,
+      "words": 92,
+      "long": 0,
       "explanations": 3
     },
     "ios:Meeshy/circles": {
@@ -428,8 +428,8 @@
     },
     "ios:Meeshy/e2ee": {
       "labels": 76,
-      "words": 631,
-      "long": 16,
+      "words": 546,
+      "long": 7,
       "explanations": 5
     },
     "ios:Meeshy/effect": {
@@ -608,8 +608,8 @@
     },
     "ios:Meeshy/location": {
       "labels": 24,
-      "words": 78,
-      "long": 1,
+      "words": 76,
+      "long": 0,
       "explanations": 1
     },
     "ios:Meeshy/magicLink": {
@@ -892,7 +892,7 @@
       "labels": 233,
       "words": 984,
       "long": 14,
-      "explanations": 50
+      "explanations": 45
     },
     "ios:Meeshy/share": {
       "labels": 157,
@@ -1088,8 +1088,8 @@
     },
     "ios:Meeshy/voice": {
       "labels": 62,
-      "words": 318,
-      "long": 5,
+      "words": 301,
+      "long": 3,
       "explanations": 12
     },
     "ios:Meeshy/welcome": {
@@ -1334,8 +1334,8 @@
     },
     "ios:MeeshyUI/settings": {
       "labels": 27,
-      "words": 142,
-      "long": 5,
+      "words": 131,
+      "long": 3,
       "explanations": 4
     },
     "ios:MeeshyUI/shop": {

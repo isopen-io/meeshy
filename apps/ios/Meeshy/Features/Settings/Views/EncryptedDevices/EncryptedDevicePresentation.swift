@@ -14,6 +14,9 @@ struct EncryptedDevicePresentation: Equatable {
     /// La date d'inscription et le NUMÉRO : deux « iPhone » se distinguent, et
     /// le numéro est le seul repère que l'empreinte garantit.
     let detail: String?
+    /// Le dernier usage de l'appareil (`lastSeenAt`), quand l'annuaire le sert :
+    /// avec la date d'inscription, ce qui permet de reconnaître un appareil.
+    let lastUsed: String?
     let trust: EndToEndOwnDevice.Trust
 
     init(_ device: EndToEndOwnDevice) {
@@ -31,10 +34,16 @@ struct EncryptedDevicePresentation: Equatable {
             },
             number,
         ].compactMap { $0 }.joined(separator: " · ")
+        lastUsed = device.lastSeenAt.map {
+            String(
+                format: String(localized: "e2ee.devices.lastUsed", defaultValue: "Dernier usage %@", bundle: .main),
+                $0.formatted(date: .abbreviated, time: .omitted)
+            )
+        }
     }
 
     var accessibilityLabel: String {
-        [title, status, detail].compactMap { $0 }.joined(separator: ", ")
+        [title, status, detail, lastUsed].compactMap { $0 }.joined(separator: ", ")
     }
 
     var tint: Color {

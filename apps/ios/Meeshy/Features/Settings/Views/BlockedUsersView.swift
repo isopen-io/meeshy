@@ -133,7 +133,7 @@ struct BlockedUsersView: View {
             EmptyStateView(
                 icon: "person.crop.circle.badge.checkmark",
                 title: String(localized: "blocked.users.empty.title", defaultValue: "Aucun utilisateur bloqué", bundle: .main),
-                subtitle: String(localized: "blocked.users.empty.subtitle", defaultValue: "Les utilisateurs que vous bloquez apparaîtront ici", bundle: .main)
+                subtitle: ""
             )
             Spacer()
         }
