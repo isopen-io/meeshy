@@ -56,6 +56,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallSafeInsets
+import me.meeshy.sdk.model.call.CallSelfTileCorner
 import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
@@ -185,10 +186,8 @@ internal fun CallSelfTile(
             },
         )
 
-        val shape = RoundedCornerShape(CallSelfTileLaw.counterScaled(MeeshyRadius.smPlus.value, stowFactor).dp)
         val rim = CallTileRim.selfTileBorder(paused, rimHex, MeeshyTheme.tokens.warning)
-        val anchor = CallSelfTileLaw.anchor(corner)
-        val pivot = TransformOrigin(if (rtl) 1f - anchor.xDp else anchor.xDp, anchor.yDp)
+        val pivot = CallSelfTileLaw.anchor(corner).transformOrigin(rtl)
         val abs = absolutePx(center, container, rtl, density)
         val widthPx = size.widthDp * density.density
         val heightPx = size.heightDp * density.density
@@ -204,14 +203,7 @@ internal fun CallSelfTile(
             modifier = Modifier
                 .offset { IntOffset((abs.x - widthPx / 2 + drag.x).roundToInt(), (abs.y - heightPx / 2 + drag.y).roundToInt()) }
                 .size(size.widthDp.dp, size.heightDp.dp)
-                .graphicsLayer {
-                    scaleX = stowFactor
-                    scaleY = stowFactor
-                    transformOrigin = pivot
-                }
-                .shadow(CallSelfTileLaw.counterScaled(TileShadow.value, stowFactor).dp, shape)
-                .clip(shape)
-                .border(BorderStroke(CallSelfTileLaw.counterScaled(rim.width.value, stowFactor).dp, rim.brush), shape)
+                .callSelfTileStowed(stowFactor, pivot, rim)
                 .callSelfTileGestures(handlers)
                 .semantics(mergeDescendants = true) {
                     contentDescription = if (paused) "$swapLabel, $pausedName. $pausedHint" else swapLabel
@@ -232,6 +224,39 @@ internal fun CallSelfTile(
             content()
             overlay(stowFactor)
         }
+    }
+}
+
+/**
+ * G1.11 — ma vignette rangée par une échelle ancrée à [pivot], jamais relayoutée ; ses coins, son ombre et son liseré
+ * (loi 4) gardent ceux d'une petite vignette.
+ */
+private fun Modifier.callSelfTileStowed(stowFactor: Float, pivot: TransformOrigin, rim: BorderStroke): Modifier {
+    val shape = RoundedCornerShape(CallSelfTileLaw.counterScaled(MeeshyRadius.smPlus.value, stowFactor).dp)
+    return graphicsLayer {
+        scaleX = stowFactor
+        scaleY = stowFactor
+        transformOrigin = pivot
+    }
+        .shadow(CallSelfTileLaw.counterScaled(TileShadow.value, stowFactor).dp, shape)
+        .clip(shape)
+        .border(BorderStroke(CallSelfTileLaw.counterScaled(rim.width.value, stowFactor).dp, rim.brush), shape)
+}
+
+/** Le pivot d'une ancre de la vignette : ses fractions vont du début de lecture vers la fin, miroitées en RTL. */
+internal fun CallTilePoint.transformOrigin(rtl: Boolean): TransformOrigin = TransformOrigin(if (rtl) 1f - xDp else xDp, yDp)
+
+/**
+ * Ce qui garde, sur ma vignette rangée, sa taille de petite vignette (le badge du micro coupé, loi 11) : contre-mis à
+ * l'échelle depuis son [corner] de vignette, miroité en RTL (iOS `scaleEffect(anchor: .bottomLeading)`).
+ */
+internal fun Modifier.callKeepsSmallTileSize(stowFactor: Float, corner: CallSelfTileCorner, rtl: Boolean): Modifier {
+    val pivot = CallSelfTileLaw.anchor(corner).transformOrigin(rtl)
+    val keep = CallSelfTileLaw.counterScaled(1f, stowFactor)
+    return graphicsLayer {
+        scaleX = keep
+        scaleY = keep
+        transformOrigin = pivot
     }
 }
 

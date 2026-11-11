@@ -18,7 +18,10 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
+import androidx.compose.ui.graphics.TransformOrigin
 import me.meeshy.sdk.model.call.CallDuoStageLayout
+import me.meeshy.sdk.model.call.CallSelfTileCorner
+import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
 import me.meeshy.sdk.model.call.CallState
@@ -243,5 +246,13 @@ class CallStageSemanticsTest {
         visible = false
         rule.waitForIdle()
         assertThat(rule.onNodeWithContentDescription("Swap videos").fetchSemanticsNode().size).isEqualTo(shown)
+    }
+
+    @Test
+    fun `what keeps the size of a small tile grows from its own corner, mirrored right to left (G1_11)`() {
+        val bottomStart = CallSelfTileLaw.anchor(CallSelfTileCorner.BottomStart)
+        assertThat(bottomStart.transformOrigin(rtl = false)).isEqualTo(TransformOrigin(0f, 1f))
+        assertThat(bottomStart.transformOrigin(rtl = true)).isEqualTo(TransformOrigin(1f, 1f))
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.TopEnd).transformOrigin(rtl = true)).isEqualTo(TransformOrigin(0f, 0f))
     }
 }

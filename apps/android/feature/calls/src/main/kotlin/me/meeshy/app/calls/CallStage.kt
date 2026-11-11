@@ -25,19 +25,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallDuoStageLayout
-import me.meeshy.sdk.model.call.CallSelfTileLaw
+import me.meeshy.sdk.model.call.CallSelfTileCorner
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.ScreenShareCapturePolicy
 import me.meeshy.ui.theme.MeeshySpacing
@@ -166,17 +166,11 @@ internal fun CallDuoVideoStage(
                     overlay = { stowFactor ->
                         if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)
                         if (state.isPeerMuted && featuresLocal) {
+                            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
                             CallPeerMutedBadge(
                                 compact = true,
-                                modifier = Modifier
-                                    .align(Alignment.BottomStart)
-                                    .padding(MeeshySpacing.xs)
-                                    .graphicsLayer {
-                                        val keep = CallSelfTileLaw.counterScaled(1f, stowFactor)
-                                        scaleX = keep
-                                        scaleY = keep
-                                        transformOrigin = TransformOrigin(0f, 1f)
-                                    },
+                                modifier = Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.xs)
+                                    .callKeepsSmallTileSize(stowFactor, CallSelfTileCorner.BottomStart, rtl),
                             )
                         }
                     },

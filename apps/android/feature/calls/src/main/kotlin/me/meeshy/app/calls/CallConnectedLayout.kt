@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
@@ -118,8 +120,8 @@ internal fun Modifier.callReviveOnTouch(isHidden: Boolean, onRevive: () -> Unit)
 /**
  * Stows [content] in [CallChromeStow.fadeMillis] and takes it out of the composition once stowed (it no longer captures a
  * touch nor TalkBack), leaving the room it took. Toward [stowsToward] it LEAVES BY ITS EDGE, its whole measured height
- * plus [edgeMargin], and comes back by the same way (G1.11, G2.8); under « Reduce animations » it only fades, shortly.
- * Only the transform and the opacity move, read at draw time. A touch received DURING the stow relights it ([onRevive]).
+ * plus [edgeMargin] and the system bar of that edge, and comes back by the same way (G1.11, G2.8); under « Reduce
+ * animations » it only fades, shortly. Only the transform and the opacity move, read at draw time. A touch received DURING the stow relights it ([onRevive]).
  */
 @Composable
 internal fun CallChromeFade(
@@ -135,7 +137,14 @@ internal fun CallChromeFade(
     val fadeAlpha = animateFloatAsState(if (isVisible) 1f else 0f, tween(fade), label = "callChromeFade")
     var settledHidden by remember { mutableStateOf(!isVisible) }
     var heightPx by remember { mutableIntStateOf(0) }
-    val marginPx = with(LocalDensity.current) { edgeMargin.toPx() }
+    val density = LocalDensity.current
+    val bars = WindowInsets.systemBars
+    val barPx = when (stowsToward) {
+        CallVerticalEdge.Top -> bars.getTop(density)
+        CallVerticalEdge.Bottom -> bars.getBottom(density)
+        null -> 0
+    }
+    val marginPx = with(density) { edgeMargin.toPx() } + barPx
     val travelsAway = stowsToward != null && CallChromeStow.leavesByItsEdge(isVisible, reduceMotion)
     val travel = if (travelsAway && stowsToward != null) CallChromeStow.travel(stowsToward, heightPx.toFloat(), marginPx) else 0f
     val stowOffset = animateFloatAsState(travel, tween(fade), label = "callChromeStow")

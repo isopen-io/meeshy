@@ -120,4 +120,27 @@ class CallRailsGuardTest {
         assertThat(code("CallActionRails.kt")).contains("callReviveOnTouch(")
         assertThat(code("CallConnectedLayout.kt")).contains("onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) }")
     }
+
+    @Test
+    fun `l'en-tete et la pilule rangés quittent l'écran, barre système comprise (G1_11, G2_8)`() {
+        val fade = code("CallConnectedLayout.kt")
+        assertThat(fade).contains("WindowInsets.systemBars")
+        assertThat(fade).contains("bars.getTop(density)")
+        assertThat(fade).contains("bars.getBottom(density)")
+    }
+
+    @Test
+    fun `le badge de ma vignette rangée garde son coin, droite à gauche compris (G1_11)`() {
+        val stage = code("CallStage.kt")
+        assertThat(stage).doesNotContain("TransformOrigin(0f, 1f)")
+        assertThat(stage).contains("callKeepsSmallTileSize(stowFactor, CallSelfTileCorner.BottomStart, rtl)")
+        assertThat(code("CallSelfTile.kt")).contains("CallSelfTileLaw.anchor(corner).transformOrigin(rtl)")
+    }
+
+    @Test
+    fun `le filet sous les sous-titres part en fondu avec eux ou avec la rangée de base, jamais d'un coup (G1_3)`() {
+        val pill = code("CallControlsPill.kt")
+        assertThat(pill).doesNotContain("rowText")
+        assertThat(pill).contains("visible = pillText == CallPillText.Captions")
+    }
 }

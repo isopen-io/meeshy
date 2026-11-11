@@ -92,7 +92,6 @@ internal fun CallControlsPill(
     val panel = layer.pillPanel
     val held = remember { HeldLayer() }
     if (expanded) held.layer = layer
-    if (pillText.hasBaseRow) held.rowText = pillText
     CallControlsGlass(modifier = modifier.widthIn(max = CallPillWidth.maxWidthDp(pillText).dp).fillMaxWidth()) {
         AnimatedVisibility(
             visible = expanded,
@@ -122,16 +121,18 @@ internal fun CallControlsPill(
             enter = fadeIn(tween(UNFOLD_MILLIS)) + grow,
             exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink,
         ) { captions() }
+        // The line between the captions and the base row fades out with whichever of the two leaves, never at once.
+        AnimatedVisibility(
+            visible = pillText == CallPillText.Captions,
+            enter = fadeIn(tween(UNFOLD_MILLIS)) + grow,
+            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink,
+        ) { CallPillHairline() }
         AnimatedVisibility(
             visible = pillText.hasBaseRow,
             enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale + grow,
             exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink + foldScale,
         ) {
-            Column {
-                // The line between the captions and the base row leaves with the base row, never before it.
-                if (held.rowText == CallPillText.Captions) CallPillHairline()
-                BaseRow(state, captioned = expanded && panel != CallScreenPanel.Journal, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
-            }
+            BaseRow(state, captioned = expanded && panel != CallScreenPanel.Journal, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
         }
     }
 }
@@ -167,9 +168,6 @@ private fun FamilyRows(
 /** The layer the pill last drew unfolded: what a folding pill keeps showing while it fades (not state, never recomposes). */
 private class HeldLayer {
     var layer: CallScreenLayer = CallScreenLayer.Idle
-
-    /** The text the pill carried while it had a base row: what a folding base row keeps showing (its hairline). */
-    var rowText: CallPillText = CallPillText.None
 }
 
 @Composable
