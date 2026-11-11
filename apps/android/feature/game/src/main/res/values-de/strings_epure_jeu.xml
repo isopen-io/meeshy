@@ -27,7 +27,7 @@
     <string name="game_notebook_empty">Jedes Zeichen deiner Ahnen kann hier zu einem Foto werden.</string>
     <string name="game_error_league_pseudonym_invalid">Ungültig.</string>
     <string name="game2_league_pseudonym_hint_change">3 bis 20 Zeichen (Buchstaben, Ziffern, . - _). Weder dein Name noch dein Benutzername.</string>
-    <string name="game_concept_level_what">Dein Level ist die Zahl in der Mitte deines Rings: Es ergibt sich aus deinem Licht.</string>
+    <string name="game_concept_level_what">Dein Level ist die Zahl in der Mitte deines Rings: Es kommt aus deinem Licht.</string>
     <string name="game_concept_flame_use">Eine Hüterin hält sie einen Tag deiner Abwesenheit am Brennen.</string>
     <string name="game_concept_missions_use">Öffne einen Akt, um zu sehen, wo du stehst. Einen pro Tag kannst du mit einer Meesh tauschen.</string>
     <string name="game2_prestige_confirm_access">Dein Turnier und dein Bündnis bleiben offen.</string>

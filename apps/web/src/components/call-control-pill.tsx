@@ -70,7 +70,7 @@ type PillProps = {
   readonly prominent: boolean;
   /** Ce que la pilule porte de texte au-dessus de sa rangée de base. */
   readonly text: CallPillText;
-  /** Les sous-titres allumés, posés dans le verre de la pilule au repos (`text === 'captions'`) ; ils y repartent en fondu d'eux-mêmes (#17406). */
+  /** Les sous-titres allumés, posés dans le verre de la pilule au repos (`text === 'captions'`), en tête, au-dessus de ce que la pilule déplie : quand (…) ou le journal les remplacent, en duo comme en groupe, ils y repartent en fondu d'eux-mêmes (#17406, #17700), jamais d'un coup. */
   readonly captions: ReactNode;
   readonly panels: CallPanels;
   /** Ce que les rangées, chargées à part, reçoivent de l'écran d'appel. */
@@ -99,12 +99,12 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
         data-call-chrome-keep=""
       >
         <span ref={skin} aria-hidden="true" className={`${prominent ? 'glass-call-prominent' : 'glass-call'} absolute inset-0 -z-10 rounded-sheet`} data-call-pill-skin="" />
+        {captions}
         {grown ? (
           <Suspense fallback={null}>
             <Deck call={call} language={language} rows={rows} panels={panels} kit={kit} panel={panel} text={text} box={box} away={away} compact={compact} />
           </Suspense>
         ) : null}
-        {grown && !stowed ? null : captions}
         <div className="flex items-center justify-center gap-2" {...away}>
           <CallButton
             label={translate(language, expanded ? 'call.more.hide' : 'call.more.show')}

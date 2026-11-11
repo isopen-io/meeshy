@@ -6,8 +6,9 @@ import { TypingDots } from '@/components/typing-dots';
 import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
-import { PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
+import { CAPTIONS_EXIT, PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
+import { useRailFade } from '@/lib/calls/use-mode-motion';
 import { useRailPresence } from '@/lib/calls/use-rail-presence';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -184,20 +185,22 @@ export type CaptionsSlot = 'captions' | 'captionsAlone';
 
 /**
  * Les sous-titres à leur place, et leur sortie : `shown` faux, ils restent le temps
- * du fondu (`PILL_TEXT_EXIT`), puis ne laissent rien. Revenus pendant le fondu,
- * ce sont les mêmes, aussitôt.
+ * du fondu (`CAPTIONS_EXIT`), puis ne laissent rien. Revenus pendant le fondu,
+ * ce sont les mêmes, aussitôt. Sous « Réduire les animations », le moteur joue
+ * l'arrivée et le départ en fondu court (`useRailFade`), là où la feuille ne peut plus.
  */
 export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'surface'> & { readonly slot: CaptionsSlot; readonly shown: boolean }) {
-  const present = useRailPresence(shown, PILL_TEXT_EXIT).mounted;
+  const present = useRailPresence(shown, CAPTIONS_EXIT).mounted;
+  const fade = useRailFade<HTMLDivElement>(shown);
   if (!present) return null;
   const leaving = shown ? {} : PILL_TEXT_LEAVING;
   return slot === 'captions' ? (
-    <div className="pt-1" data-call-pill-text="captions" {...leaving}>
+    <div ref={fade} className="pt-1" data-call-pill-text="captions" {...leaving}>
       <CallCaptionsPanel {...panel} surface="inset" />
       <hr className="mx-2 my-1 border-0 border-t border-media-hairline" />
     </div>
   ) : (
-    <div data-call-pill-text="captionsAlone" {...leaving}>
+    <div ref={fade} data-call-pill-text="captionsAlone" {...leaving}>
       <CallCaptionsPanel {...panel} surface="glass" />
     </div>
   );
