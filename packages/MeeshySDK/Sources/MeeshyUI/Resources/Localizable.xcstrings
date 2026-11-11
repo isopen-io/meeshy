@@ -1516,6 +1516,198 @@
         }
       }
     },
+    "kit.anchored_sheet.close": {
+      "comment": "K15 — nom du ✕ d'une feuille ancrée.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fermer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiudi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fechar"
+          }
+        }
+      }
+    },
+    "kit.anchored_sheet.height": {
+      "comment": "K15 — nom de la poignée réglable d'une feuille ancrée à crans.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ارتفاع اللوحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höhe des Blatts"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sheet height"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altura de la hoja"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hauteur de la feuille"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altezza del foglio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altura da folha"
+          }
+        }
+      }
+    },
+    "kit.anchored_sheet.height.reduced": {
+      "comment": "K15 — valeur de la poignée au cran le plus bas.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مصغّرة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verkleinert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "collapsed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "reducida"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "réduite"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ridotta"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "reduzida"
+          }
+        }
+      }
+    },
+    "kit.anchored_sheet.height.expanded": {
+      "comment": "K15 — valeur de la poignée à un cran plus haut.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موسّعة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vergrößert"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "expanded"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ampliada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "agrandie"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ingrandita"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ampliada"
+          }
+        }
+      }
+    },
     "kit.color_dots.position": {
       "comment": "K07 — nom dit d'une pastille de couleur sans nom : sa position (rang, total), nombres déjà localisés.",
       "extractionState": "manual",
@@ -1560,6 +1752,198 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cor %1$@ de %2$@"
+          }
+        }
+      }
+    },
+    "kit.field.busy": {
+      "comment": "K08 — nom dit de la roue d'occupation d'un champ de feuille.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قيد التنفيذ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Bearbeitung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In progress"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En curso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En cours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In corso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Em andamento"
+          }
+        }
+      }
+    },
+    "kit.field.clear": {
+      "comment": "K08 — nom dit de la croix qui vide un champ de recherche.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مسح"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löschen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Effacer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancella"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limpar"
+          }
+        }
+      }
+    },
+    "kit.field.count": {
+      "comment": "K08 — compteur d'un champ dit au lecteur d'écran : caractères tapés, plafond ; nombres déjà localisés.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ من %2$@ حرف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ von %2$@ Zeichen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ characters of %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ caracteres de %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ caractères sur %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ caratteri su %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ caracteres de %2$@"
+          }
+        }
+      }
+    },
+    "kit.field.limit_reached": {
+      "comment": "K08 — annonce, une fois, qu'un champ a atteint son plafond de caractères.",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم بلوغ الحد الأقصى للأحرف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeichenlimit erreicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Character limit reached"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Límite de caracteres alcanzado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limite de caractères atteinte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limite di caratteri raggiunto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limite de caracteres atingido"
           }
         }
       }
@@ -37398,43 +37782,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التفاعلات جزء من المحتوى الذي يحملها وليس لها مدخل خاص بها."
+            "value": "مضمَّنة في المحتوى الذي يحملها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reaktionen sind Teil des Inhalts, der sie trägt, und haben keinen eigenen Eintrag."
+            "value": "Im Inhalt enthalten, der sie trägt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reactions are part of the content that carries them and have no entry of their own."
+            "value": "Included in the content that carries them."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Las reacciones forman parte del contenido que las contiene y no ocupan una entrada propia."
+            "value": "Incluidas en el contenido que las contiene."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les réactions font partie du contenu qui les porte et n'occupent pas d'entrée propre."
+            "value": "Incluses dans le contenu qui les porte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le reazioni fanno parte del contenuto che le contiene e non occupano una voce propria."
+            "value": "Incluse nel contenuto che le contiene."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As reações fazem parte do conteúdo que as contém e não ocupam uma entrada própria."
+            "value": "Incluídas no conteúdo que as contém."
           }
         }
       }
@@ -37445,43 +37829,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تشترك بيانات الريلز والمنشورات في نفس التخزين: أفرغ صف المنشورات."
+            "value": "نفس تخزين المنشورات: أفرغ صف المنشورات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Daten von Reels und Beiträgen teilen sich denselben Speicher – leeren Sie die Zeile Beiträge."
+            "value": "Gleicher Speicher wie Beiträge: leere die Zeile Beiträge."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reels and posts data share the same storage — clear the Posts row."
+            "value": "Same storage as Posts: clear the Posts row."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los datos de los reels y las publicaciones comparten el mismo almacenamiento: vacía la fila Publicaciones."
+            "value": "Mismo almacenamiento que Publicaciones: vacía la fila Publicaciones."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les données des réels et des publications partagent le même stockage : videz la ligne Publications."
+            "value": "Même stockage que Publications : videz la ligne Publications."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I dati di reel e post condividono lo stesso archivio: svuota la riga Post."
+            "value": "Stesso archivio dei Post: svuota la riga Post."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Os dados dos reels e das publicações compartilham o mesmo armazenamento: limpe a linha Publicações."
+            "value": "Mesmo armazenamento que Publicações: limpe a linha Publicações."
           }
         }
       }
@@ -37999,6 +38383,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Arquivos ainda no aparelho cuja publicação, story ou conversa de origem não está mais em cache. Não é possível vinculá-los a um domínio."
+          }
+        }
+      }
+    },
+    "settings.cache.purge.unattributed.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لماذا «غير منسوب»؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum „nicht zugeordnet“?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why “unattributed”?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Por qué «sin atribuir»?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pourquoi « non attribué » ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perché «non attribuito»?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por que “não atribuído”?"
           }
         }
       }
@@ -84751,6 +85182,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "Adicionar uma legenda…"
+          }
+        }
+      }
+    },
+    "kit.progress_ring.busy": {
+      "comment": "K09 — valeur dite d'un anneau de progression sans pourcentage (indéterminé) : « En cours ».",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قيد التنفيذ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Bearbeitung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In progress"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En curso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En cours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In corso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Em andamento"
           }
         }
       }

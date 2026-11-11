@@ -126,4 +126,62 @@ final class GroupCallSpotlightTests: XCTestCase {
         let focus = GroupCallSpotlight.focus(tiles: tiles(), choice: .tile(GroupCallStage.localTileId))
         XCTAssertTrue(GroupCallSpotlight.featuresLocal(focus))
     }
+
+    // MARK: - P14.10 — le mouvement grille ↔ à la une
+
+    func test_motion_movesTheTiles_unlessReduceMotion() {
+        XCTAssertTrue(GroupCallStageMotion.movesTiles(reduceMotion: false))
+        XCTAssertFalse(GroupCallStageMotion.movesTiles(reduceMotion: true), "Réduire les animations ne déplace rien : un fondu court")
+    }
+
+    func test_motion_followsTheSharedFade_underReduceMotion() {
+        XCTAssertEqual(GroupCallStageMotion.fadeDuration, CallRemoteVideoFade.duration(reduceMotion: true))
+        XCTAssertGreaterThan(GroupCallStageMotion.fadeDuration, 0, "jamais une bascule sèche")
+    }
+
+    func test_stage_growsTheChosenTileFromItsCell_andSlidesTheOthersToTheStrip() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        XCTAssertTrue(stage.contains("@Namespace private var tileSpace"))
+        XCTAssertTrue(stage.contains(".matchedGeometryEffect(id: tile.id, in: tileSpace)"), "une identité par personne, la même dans la grille, à la une et dans le bandeau")
+        XCTAssertTrue(stage.contains("GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion)"))
+        XCTAssertTrue(stage.contains("value: focus"), "le mouvement suit aussi une mise à la une automatique (partage d'écran)")
+        let choose = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func choose(", in: stage))
+        XCTAssertTrue(choose.contains("withAnimation(stageAnimation)"))
+        XCTAssertFalse(choose.contains("reduceMotion ? nil"), "Réduire les animations donne un fondu court, jamais une bascule sèche")
+    }
+
+    // MARK: - P11.5 / P14.4 — qui parle s'illumine de sa couleur
+
+    func test_tile_speakerHalo_wearsThePersonsColour_fadesWithTheSharedDuration_andLeavesTheTreeNever() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        let tile = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct GroupCallTileView: View", in: stage))
+        XCTAssertTrue(tile.contains("CallPeerSpeech.colorHex(forPeer: tile.colorKey)"), "la couleur de la personne, la même que ses sous-titres")
+        XCTAssertTrue(tile.contains(".modifier(CallSpeakerHalo("), "le halo du duo, la même loi, jamais une copie")
+        XCTAssertTrue(tile.contains("isSpeaking: tile.isSpeaking"), "le halo existe en opacité 0 au repos")
+        XCTAssertFalse(tile.contains(".blur("), "aucun halo dessiné à la main dans la vignette")
+        XCTAssertTrue(tile.contains("CallRemoteVideoFade.duration(reduceMotion: reduceMotion)"))
+        XCTAssertTrue(tile.contains("value: tile.isSpeaking"))
+        XCTAssertFalse(tile.contains("animation(reduceMotion ? nil"), "sous Réduire les animations, un fondu court")
+    }
+
+    // MARK: - P12.8 / P14.9 — une rangée qui défile s'efface à ses deux bords
+
+    func test_pillRow_andFilmstrip_fadeAtBothEdges_withTheAppsOneMask() throws {
+        let row = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallPillRow.swift"))
+        XCTAssertTrue(row.contains(".mask { ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true) }"))
+        XCTAssertFalse(row.contains("EdgeFadeMask: View"), "le masque des rangées qui défilent existe déjà : il se réutilise, il ne se recopie pas")
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        let strip = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func filmstrip(", in: stage))
+        XCTAssertTrue(strip.contains(".mask { ScrollEdgeFadeMask(axis: axis, start: true, end: true) }"), "portrait à l'horizontale, paysage à la verticale")
+    }
+
+    func test_edgeFadeMask_followsTheScreensEdges_sameInRightToLeft() throws {
+        let cue = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerScrollEdgeCue.swift"))
+        let mask = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct ScrollEdgeFadeMask: View", in: cue))
+        XCTAssertTrue(mask.contains(".environment(\\.layoutDirection, .leftToRight)"),
+                      "en droite à gauche, la pile retournerait l'ordre des rampes sans retourner leurs dégradés")
+        XCTAssertEqual(mask.components(separatedBy: "ramp(from:").count - 1, 3, "une déclaration et deux rampes, opposées")
+        XCTAssertTrue(mask.contains(".allowsHitTesting(false)"), "le fondu ne prend aucun toucher")
+        XCTAssertTrue(cue.contains("ScrollEdgeFadeMask(axis: .vertical, start: edges.top, end: edges.bottom"), "le rail du composer garde son fondu")
+    }
 }

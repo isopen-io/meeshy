@@ -333,7 +333,7 @@
     "Meeshy::StoryViewModel": 3483,
     "Meeshy::StoryViewerView": 2057,
     "Meeshy::UniversalComposerBar": 3151,
-    "Meeshy::View": 1656,
+    "Meeshy::View": 1650,
     "MeeshySDK::AuthManager": 1890,
     "MeeshySDK::ConversationSyncEngine": 2864,
     "MeeshySDK::MessagePersistenceActor": 2297,

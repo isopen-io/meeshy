@@ -33,13 +33,13 @@ private struct VoiceTranscriptionSetupView: View {
         NavigationStack {
             List {
                 Section {
-                    Toggle(String(localized: "settings.transcription.mine", defaultValue: "Transcrire mes messages vocaux", bundle: .main), isOn: Binding(
+                    Toggle(String(localized: "settings.transcription.mine", defaultValue: "Mes messages vocaux", bundle: .main), isOn: Binding(
                         get: { prefs.audio.transcriptionEnabled },
                         set: { value in prefs.updateAudio { $0.transcriptionEnabled = value } }
                     ))
                     .tint(MeeshyColors.brandPrimary)
                 } footer: {
-                    Text(String(localized: "settings.transcription.mine.footer", defaultValue: "Vos messages vocaux sont transcrits pour être traduits dans la langue de chaque destinataire.", bundle: .main))
+                    Text(String(localized: "settings.transcription.mine.footer", defaultValue: "Transcrits pour être traduits dans la langue de chaque destinataire.", bundle: .main))
                 }
             }
             .navigationTitle(String(localized: "settings.section.transcription", bundle: .main))

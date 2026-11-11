@@ -135,8 +135,7 @@ struct ActiveSessionsView: View {
     private var emptyState: some View {
         AdaptiveContentUnavailableView(
             String(localized: "sessions_empty", defaultValue: "Aucune session active", bundle: .main),
-            systemImage: "laptopcomputer.and.iphone",
-            description: Text(String(localized: "sessions_empty_subtitle", defaultValue: "Vos appareils connectés apparaîtront ici.", bundle: .main))
+            systemImage: "laptopcomputer.and.iphone"
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -192,6 +191,8 @@ struct ActiveSessionsView: View {
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
+                SettingsSentence(text: String(localized: "sessions.summary", defaultValue: "Vos appareils connectés : déconnectez ceux que vous ne reconnaissez pas.", bundle: .main))
+
                 statusBanner
 
                 if let current = viewModel.currentSession {
@@ -289,7 +290,7 @@ struct ActiveSessionsView: View {
                             .fixedSize(horizontal: false, vertical: true)
 
                         if row.isCurrent {
-                            Text(String(localized: "sessions_current_badge", defaultValue: "Actuelle", bundle: .main))
+                            Text(String(localized: "sessions_current_badge", defaultValue: "Cet appareil", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                                 .foregroundStyle(Color.white)
                                 .padding(.horizontal, MeeshySpacing.xsPlus)

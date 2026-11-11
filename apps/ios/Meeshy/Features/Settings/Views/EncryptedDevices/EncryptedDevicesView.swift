@@ -86,7 +86,7 @@ struct EncryptedDevicesView: View {
     private var explanation: some View {
         Text(String(
             localized: "e2ee.devices.explanation",
-            defaultValue: "Vos messages chiffrés de bout en bout ne parviennent qu’aux appareils que vous avez approuvés. Pour approuver un appareil, lisez son code depuis celui-ci, puis faites l’inverse.",
+            defaultValue: "Vos messages chiffrés n’arrivent qu’aux appareils approuvés. Pour en approuver un, lisez son code ici, puis faites l’inverse.",
             bundle: .main
         ))
         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
@@ -164,7 +164,7 @@ struct EncryptedDevicesView: View {
             if model.otherDevices.isEmpty {
                 Text(String(
                     localized: "e2ee.devices.others.empty",
-                    defaultValue: "Aucun autre appareil chiffré. Ouvrez Meeshy sur votre autre appareil : il apparaîtra ici.",
+                    defaultValue: "Aucun autre appareil. Ouvrez Meeshy sur l’autre pour l’ajouter.",
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))

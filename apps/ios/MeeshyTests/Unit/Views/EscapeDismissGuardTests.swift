@@ -11,8 +11,14 @@ final class EscapeDismissGuardTests: XCTestCase {
             .appendingPathComponent("Meeshy")
     }
 
+    /// Le modificateur vit dans MeeshyUI (K15) : la feuille ancrée du kit le monte aussi.
+    private var modifierSource: URL {
+        appRoot.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Compatibility/EscapeDismiss.swift")
+    }
+
     func test_theModifier_bindsTheKeyboardAndVoiceOver() throws {
-        let code = AppSourceGuard.stripComments(try AppSourceGuard.text(at: appRoot.appendingPathComponent("Features/Main/Components/EscapeDismiss.swift")))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.text(at: modifierSource))
         XCTAssertTrue(code.contains(".keyboardShortcut(.cancelAction)"))
         XCTAssertTrue(code.contains(".accessibilityAction(.escape, action)"))
     }
