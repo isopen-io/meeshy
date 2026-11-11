@@ -37,7 +37,6 @@ public enum class PrivacyToggle {
 public enum class PrivacyInfoTopic {
     ONLINE_STATUS,
     NOTIFY_CONTACTS_ON_RETURN,
-    READ_RECEIPTS,
     HIDE_FROM_CONTACT_SEARCH,
     CALLS_NON_CONTACTS,
     ANALYTICS,
@@ -128,7 +127,7 @@ public object PrivacyCatalog {
 
     /**
      * Toggles with no effect yet, neither client-side nor gateway-side (iOS
-     * `comingSoonPrivacyKeyPaths`). They are rendered greyed-out and inert, and [set] stays pure:
+     * `comingSoonPrivacyKeyPaths`). They are not drawn ([visibleToggles]), and [set] stays pure:
      * the refusal to write lives in [isWritable] so the persisted value is never touched.
      */
     public val comingSoon: Set<PrivacyToggle> = setOf(
@@ -144,11 +143,14 @@ public object PrivacyCatalog {
     /** Whether a user write on [toggle] is accepted — false for every coming-soon toggle. */
     public fun isWritable(toggle: PrivacyToggle): Boolean = toggle !in comingSoon
 
+    /** The toggles of [category] that are drawn: a row that writes nothing ([comingSoon]) is not shown. */
+    public fun visibleToggles(category: PrivacyCategory): List<PrivacyToggle> =
+        descriptors.filter { it.category == category && it.toggle !in comingSoon }.map { it.toggle }
+
     /** The "(i)" explanation attached to [toggle], or null when the row has none. */
     public fun infoTopic(toggle: PrivacyToggle): PrivacyInfoTopic? = when (toggle) {
         PrivacyToggle.SHOW_ONLINE_STATUS -> PrivacyInfoTopic.ONLINE_STATUS
         PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN -> PrivacyInfoTopic.NOTIFY_CONTACTS_ON_RETURN
-        PrivacyToggle.SHOW_READ_RECEIPTS -> PrivacyInfoTopic.READ_RECEIPTS
         PrivacyToggle.HIDE_PROFILE_FROM_SEARCH -> PrivacyInfoTopic.HIDE_FROM_CONTACT_SEARCH
         PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS -> PrivacyInfoTopic.CALLS_NON_CONTACTS
         PrivacyToggle.ALLOW_ANALYTICS -> PrivacyInfoTopic.ANALYTICS

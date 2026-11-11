@@ -104,7 +104,7 @@ internal fun ActiveSessionRow(
 @Composable
 private fun CurrentBadge() {
     Text(
-        text = stringResource(R.string.sessions_current_badge),
+        text = stringResource(R.string.sessions_current),
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
         color = MeeshyPalette.White,
