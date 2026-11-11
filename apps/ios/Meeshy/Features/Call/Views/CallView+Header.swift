@@ -77,9 +77,7 @@ extension CallView {
         }
     }
 
-    /// PiP système : visible seulement si l'appel y est éligible (vidéo, piste
-    /// distante, caméra distante allumée, appareil compatible) — ou déjà actif,
-    /// pour pouvoir en sortir (`CallHeaderRule`).
+    /// PiP système : offert si l'appel y est éligible, ou pour en sortir (`CallHeaderRule`).
     func pictureInPictureHeaderButton() -> some View {
         let isActive = callManager.isSystemPiPActive
         return headerGlassButton(
@@ -99,8 +97,7 @@ extension CallView {
         }
     }
 
-    /// Doctrine 82i : glyphe de chrome dans un cadre glass fixe (diameter 40) →
-    /// taille figée, sans déborder du cercle ; la cible tactile reste HIG 44×44.
+    /// Doctrine 82i : cercle de verre de 40 pt, glyphe figé, cible tactile HIG 44×44.
     private func headerGlassButton(
         symbol: String,
         glyphSize: CGFloat,
@@ -123,8 +120,7 @@ extension CallView {
 
     // MARK: - La capsule de droite (#17341)
 
-    /// Les noms que la conversation en cache donne à la capsule — cache-first,
-    /// aucune requête ne part d'ici.
+    /// Les noms de la capsule, lus dans la conversation en cache : aucune requête.
     @MainActor
     func refreshHeaderNames() async {
         let conversationId = callManager.conversationId
@@ -137,9 +133,7 @@ extension CallView {
         headerNames = CallHeaderNames.resolve(conversation: conversation, knownGroupTitle: mesh.groupTitle(for: conversationId))
     }
 
-    /// La capsule n'a de sens que sur un appel établi dont le layout n'a pas
-    /// déjà sa propre ligne de statut : l'audio a le nom et la durée sous
-    /// l'avatar, la capsule n'y porte que le réseau dégradé.
+    /// En audio, le nom et la durée sont sous l'avatar : la capsule n'y porte que le réseau dégradé.
     var headerCapsule: CallHeaderCapsule? {
         let isEstablished: Bool
         switch callManager.callState {
@@ -156,99 +150,6 @@ extension CallView {
             groupName: headerNames.groupName ?? mesh.groupTitle(for: callManager.conversationId),
             participantCount: callParticipantCount
         ))
-    }
-
-    @ViewBuilder
-    private var durationChip: some View {
-        if let capsule = headerCapsule {
-            chip(capsule)
-        }
-    }
-
-    private func chip(_ capsule: CallHeaderCapsule) -> some View {
-        Group {
-            if capsule.showsDuration {
-                CallDurationClock { chipContent(capsule) }
-            } else {
-                chipContent(capsule)
-            }
-        }
-        .callQualityDetailTrigger(isPresented: $showQualityDetail)
-    }
-
-    private func chipContent(_ capsule: CallHeaderCapsule) -> some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            if capsule.showsDuration {
-                TransientCallSignalGlyph(strength: signalStrength)
-            } else {
-                CallSignalGlyph(strength: signalStrength)
-            }
-            chipIdentity(capsule)
-            if capsule.showsDuration {
-                Text(callManager.formattedDuration)
-                    .font(.caption2.weight(.medium).monospacedDigit())
-                    .foregroundStyle(Color.white)
-                    .fixedSize()
-            }
-            chipWarnings(capsule)
-        }
-        // Un seul élément VoiceOver : la phrase de `videoDurationBadgeAccessibilityLabel`.
-        .accessibilityElement(children: .ignore)
-        .padding(.horizontal, MeeshySpacing.smPlus)
-        .padding(.vertical, MeeshySpacing.xs)
-        // Verre adaptatif à fond sombre (#8394) : lisible sur un flux clair.
-        // #17323 — la capsule s'ouvre au toucher (détail de la qualité) :
-        // un verre interactif, comme les boutons voisins.
-        .modifier(CallInteractiveChromeCapsule())
-        .clipShape(Capsule())
-        .frame(height: 44)
-        .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
-        .accessibilityValue(capsule.showsDuration ? callManager.spokenDuration : "")
-        .accessibilityAddTraits(.updatesFrequently)
-    }
-
-    @ViewBuilder
-    private func chipIdentity(_ capsule: CallHeaderCapsule) -> some View {
-        if let title = capsule.title {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            chipSeparator
-        }
-        if let count = capsule.participantCount {
-            Image(systemName: "person.2.fill")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.white)
-            Text(count, format: .number)
-                .font(.caption2.weight(.medium).monospacedDigit())
-                .foregroundStyle(Color.white)
-                .fixedSize()
-            chipSeparator
-        }
-    }
-
-    /// En audio, la reconnexion a déjà sa pill sous l'avatar : la capsule ne la répète pas.
-    @ViewBuilder
-    private func chipWarnings(_ capsule: CallHeaderCapsule) -> some View {
-        if capsule.showsNetwork && callManager.isRemoteQualityDegraded {
-            Image(systemName: "wifi.exclamationmark")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(MeeshyColors.warning)
-        }
-        if capsule.showsDuration, case .reconnecting = callManager.callState {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(MeeshyColors.warning)
-                .accessibilityHidden(true)
-        }
-    }
-
-    private var chipSeparator: some View {
-        MetaSeparator()
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(Color.white.opacity(MeeshyOpacity.heavy))
     }
 
     // MARK: - Open Conversation During Call

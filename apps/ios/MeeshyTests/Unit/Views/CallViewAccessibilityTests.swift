@@ -639,6 +639,22 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    func test_compactAudioCallHeader_durationCapsule_hasLabelledAccessibilityValue() throws {
+        let source = try callViewSource()
+        let vicinity = try audioDurationCapsuleVicinity(source, layout: "var compactAudioCallHeader: some View {")
+        XCTAssertTrue(
+            vicinity.contains("accessibilityLabel(String(localized: \"call.duration.a11y.label\"))"),
+            "compactAudioCallHeader's duration Text must carry the same explicit " +
+            "call.duration.a11y.label — this caption-mode header has no status-pill row, so the " +
+            "labelled value is the only place the timer gains meaning for VoiceOver."
+        )
+        XCTAssertTrue(
+            vicinity.contains("accessibilityValue(callManager.spokenDuration)"),
+            "compactAudioCallHeader's duration Text must expose the timer via .accessibilityValue, " +
+            "in its spoken form (247i)."
+        )
+    }
+
     /// Doctrine 206i/210i/211i: the capsule now collapses to `.ignore` (not
     /// `.combine`) — combining previously let the signal glyph's own label
     /// leak through and announce a naked "0:34" with no context when the
@@ -648,7 +664,7 @@ final class CallViewAccessibilityTests: XCTestCase {
     /// call-duration-only element causes no information loss.
     func test_audioDurationCapsules_collapseToIgnoreForNakedReadoutFix() throws {
         let source = try callViewSource()
-        for marker in ["var audioCallLayout: some View {"] {
+        for marker in ["var audioCallLayout: some View {", "var compactAudioCallHeader: some View {"] {
             let vicinity = try audioDurationCapsuleVicinity(source, layout: marker)
             XCTAssertTrue(
                 vicinity.contains(".accessibilityElement(children: .ignore)"),

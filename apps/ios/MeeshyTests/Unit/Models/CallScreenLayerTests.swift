@@ -36,40 +36,6 @@ final class CallScreenLayerTests: XCTestCase {
 
     func test_togglingMenu_openPanel_closesEverything() {
         XCTAssertEqual(CallScreenLayer.panel(.react).togglingMenu(), .idle)
-        XCTAssertEqual(CallScreenLayer.panel(.record).togglingMenu(), .idle)
-    }
-
-    /// #17343 — (…) sur un journal ouvert le RANGE : il ne ferme rien.
-    func test_togglingMenu_openJournal_stowsItBehindTheMenu() {
-        XCTAssertEqual(CallScreenLayer.panel(.journal).togglingMenu(), .menuOverJournal)
-    }
-
-    /// #17343 — refermer les actions rend le journal.
-    func test_togglingMenu_menuOverJournal_givesTheJournalBack() {
-        XCTAssertEqual(CallScreenLayer.menuOverJournal.togglingMenu(), .panel(.journal))
-    }
-
-    func test_menuOverJournal_isAMenu_theRailsAndRowsComeOut_nothingIsOpenYet() {
-        let layer = CallScreenLayer.menuOverJournal
-        XCTAssertTrue(layer.isExpanded)
-        XCTAssertTrue(layer.showsFamilyRows)
-        XCTAssertNil(layer.openPanel)
-        XCTAssertNil(layer.pillPanel)
-        XCTAssertTrue(layer.mayAutoHide)
-        XCTAssertFalse(layer.freesTheScreen)
-    }
-
-    func test_opening_fromTheMenuOverAJournal_opensThePanelAsked() {
-        XCTAssertEqual(CallScreenLayer.menuOverJournal.opening(.journal), .panel(.journal))
-        XCTAssertEqual(CallScreenLayer.menuOverJournal.opening(.react), .panel(.react))
-    }
-
-    func test_backToMenu_menuOverJournal_changesNothing() {
-        XCTAssertEqual(CallScreenLayer.menuOverJournal.backToMenu(), .menuOverJournal)
-    }
-
-    func test_closed_menuOverJournal_returnsToIdle() {
-        XCTAssertEqual(CallScreenLayer.menuOverJournal.closed(), .idle)
     }
 
     func test_togglingMenu_mode_isIgnored() {
@@ -108,26 +74,17 @@ final class CallScreenLayerTests: XCTestCase {
         XCTAssertTrue(layers.allSatisfy { $0.closed() == .idle })
     }
 
-    func test_pillPanel_reactRecordAndJournal_areDrawnInThePill_insteadOfTheRows() {
+    func test_pillPanel_reactAndRecord_areDrawnInThePill_insteadOfTheRows() {
         XCTAssertEqual(CallScreenLayer.panel(.react).pillPanel, .react)
         XCTAssertEqual(CallScreenLayer.panel(.record).pillPanel, .record)
-        XCTAssertEqual(CallScreenLayer.panel(.journal).pillPanel, .journal)
         XCTAssertFalse(CallScreenLayer.panel(.react).showsFamilyRows)
         XCTAssertFalse(CallScreenLayer.panel(.record).showsFamilyRows)
-        XCTAssertFalse(CallScreenLayer.panel(.journal).showsFamilyRows)
     }
 
-    /// #17343 — le journal n'est plus une feuille : il se dessine dans la pilule.
-    /// Seul « Ajouter » (la liste d'amis) reste une feuille, sous les rangées.
-    func test_pillPanel_people_staysASheetOverTheRows() {
+    func test_pillPanel_peopleAndJournal_openAboveTheRows_notInThePill() {
         XCTAssertNil(CallScreenLayer.panel(.people).pillPanel)
-        XCTAssertTrue(CallScreenLayer.panel(.people).showsFamilyRows)
-    }
-
-    /// Ma vignette reste pendant que le journal est ouvert : il ne libère pas l'écran.
-    func test_openJournal_doesNotFreeTheScreen_myTileStays() {
-        XCTAssertFalse(CallScreenLayer.panel(.journal).freesTheScreen)
-        XCTAssertTrue(CallChromeVisibility(isModeActive: CallScreenLayer.panel(.journal).freesTheScreen).isVisible(.selfView))
+        XCTAssertNil(CallScreenLayer.panel(.journal).pillPanel)
+        XCTAssertTrue(CallScreenLayer.panel(.journal).showsFamilyRows)
     }
 
     func test_showsFamilyRows_onlyInTheMenuOrUnderASheet() {
@@ -190,10 +147,6 @@ final class CallScreenLayerTests: XCTestCase {
     func test_reconciled_panelWhoseActionVanished_returnsToTheMenu() {
         let notConnected = actions(isConnected: false)
         XCTAssertEqual(CallScreenLayer.panel(.react).reconciled(with: notConnected), .menu)
-    }
-
-    func test_reconciled_menuOverJournal_keepsTheLayer() {
-        XCTAssertEqual(CallScreenLayer.menuOverJournal.reconciled(with: actions()), .menuOverJournal)
     }
 
     func test_reconciled_stillOffered_keepsTheLayer() {

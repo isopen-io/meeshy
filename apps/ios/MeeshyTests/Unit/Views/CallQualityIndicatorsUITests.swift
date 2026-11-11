@@ -91,7 +91,7 @@ final class CallQualityIndicatorsUITests: XCTestCase {
     /// déjà sa pill sous l'avatar, la capsule ne la répète ni à l'œil ni à VoiceOver.
     func test_audioCapsule_doesNotRepeatTheReconnectingPill() throws {
         let view = AppSourceGuard.stripComments(try callViewSource())
-        XCTAssertTrue(view.contains("if capsule.showsDuration, case .reconnecting = callManager.callState {"))
+        XCTAssertTrue(view.contains("if capsule.showsDuration && isReconnecting {"))
         XCTAssertTrue(view.contains("reconnecting: reconnecting && capsule?.showsDuration != false"))
     }
 

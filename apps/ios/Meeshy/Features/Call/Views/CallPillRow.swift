@@ -9,28 +9,20 @@ struct CallPanelHeader: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.xs) {
-            CallPanelHeaderButton(symbol: "chevron.backward", label: CallControlsCopy.backToMenu, action: onBack)
+            headerButton(symbol: "chevron.backward", label: CallControlsCopy.backToMenu, action: onBack)
             Text(title)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
-            CallPanelHeaderButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
+            headerButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
         }
         .padding(.horizontal, MeeshySpacing.xsPlus)
         .padding(.top, MeeshySpacing.xxs)
     }
-}
 
-/// Un bouton de 44 pt de l'en-tête d'un panneau de la pilule (Retour, Fermer) : le
-/// verre de l'atome, la cible tactile pleine. Le journal y trouve aussi son Fermer.
-struct CallPanelHeaderButton: View {
-    let symbol: String
-    let label: String
-    let action: () -> Void
-
-    var body: some View {
+    private func headerButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.footnote.weight(.bold))
