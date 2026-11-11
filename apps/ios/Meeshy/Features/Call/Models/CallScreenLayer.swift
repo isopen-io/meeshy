@@ -15,12 +15,10 @@ enum CallScreenPanel: String, CaseIterable, Sendable {
         }
     }
 
-    /// #17343 — Enregistrer, Réagir ET le Journal s'ouvrent dans la pilule ; Ajouter,
-    /// qui présente la liste des amis, reste une feuille sous les rangées.
     var isDrawnInThePill: Bool {
         switch self {
-        case .react, .record, .journal: return true
-        case .people: return false
+        case .react, .record: return true
+        case .people, .journal: return false
         }
     }
 }
@@ -40,9 +38,6 @@ enum CallScreenMode: String, CaseIterable, Sendable {
 enum CallScreenLayer: Equatable, Sendable {
     case idle
     case menu
-    /// #17343 — le (…) ouvert PAR-DESSUS un journal : le journal est rangé, pas fermé ;
-    /// refermer les actions le rend.
-    case menuOverJournal
     case panel(CallScreenPanel)
     case mode(CallScreenMode)
 
@@ -58,7 +53,7 @@ enum CallScreenLayer: Equatable, Sendable {
 
     var isExpanded: Bool {
         switch self {
-        case .menu, .menuOverJournal, .panel: return true
+        case .menu, .panel: return true
         case .idle, .mode: return false
         }
     }
@@ -70,7 +65,7 @@ enum CallScreenLayer: Equatable, Sendable {
 
     var showsFamilyRows: Bool {
         switch self {
-        case .menu, .menuOverJournal: return true
+        case .menu: return true
         case .panel(let panel): return !panel.isDrawnInThePill
         case .idle, .mode: return false
         }
@@ -82,7 +77,7 @@ enum CallScreenLayer: Equatable, Sendable {
 
     var mayAutoHide: Bool {
         switch self {
-        case .idle, .menu, .menuOverJournal: return true
+        case .idle, .menu: return true
         case .panel, .mode: return false
         }
     }
@@ -90,10 +85,7 @@ enum CallScreenLayer: Equatable, Sendable {
     func togglingMenu() -> CallScreenLayer {
         switch self {
         case .idle: return .menu
-        case .menu: return .idle
-        case .panel(.journal): return .menuOverJournal
-        case .menuOverJournal: return .panel(.journal)
-        case .panel: return .idle
+        case .menu, .panel: return .idle
         case .mode: return self
         }
     }
@@ -102,7 +94,7 @@ enum CallScreenLayer: Equatable, Sendable {
         switch self {
         case .mode: return self
         case .panel(let current) where current == panel: return .menu
-        case .idle, .menu, .menuOverJournal, .panel: return .panel(panel)
+        case .idle, .menu, .panel: return .panel(panel)
         }
     }
 
@@ -127,7 +119,7 @@ enum CallScreenLayer: Equatable, Sendable {
         switch self {
         case .panel(let panel) where !actions.contains(panel.action): return .menu
         case .mode(let mode) where !actions.contains(mode.action): return .idle
-        case .idle, .menu, .menuOverJournal, .panel, .mode: return self
+        case .idle, .menu, .panel, .mode: return self
         }
     }
 }
