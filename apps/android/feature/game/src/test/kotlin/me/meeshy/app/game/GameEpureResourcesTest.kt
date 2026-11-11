@@ -57,7 +57,8 @@ class GameEpureResourcesTest {
         "game_mint_offline",
         "game2_door_prestige",
     ) + listOf("level", "points", "meesh", "glory", "flame", "missions", "league", "season", "prestige")
-        .map { "game_rules_concept_${it}_body" }
+        .map { "game_rules_concept_${it}_body" } +
+        listOf("welcome", "first_points", "levels", "missions", "flame", "mint", "rank").map { "game_guide_step_${it}_next" }
 
     private val retiredLanguages = listOf("values", "values-fr", "values-es", "values-pt", "values-de", "values-it", "values-ar")
 
@@ -196,5 +197,85 @@ class GameEpureResourcesTest {
     @Test
     fun `la renaissance garde ce qui reste dans sa confirmation`() {
         assertThat(text(R.string.game2_prestige_confirm_keeps)).startsWith("Ce qui reste")
+    }
+
+    private fun valueIn(folder: String, name: String): String =
+        resDir().resolve(folder).listFiles { f -> f.extension == "xml" }.orEmpty()
+            .firstNotNullOf { Regex("""<string\s+name="$name"[^>]*>([^<]*)</string>""").find(it.readText())?.groupValues?.get(1) }
+
+    private val shortened = mapOf(
+        "game_concept_level_what" to 80,
+        "game_concept_flame_use" to 70,
+        "game_concept_missions_use" to 120,
+        "game2_prestige_confirm_access" to 60,
+        "game2_league_pseudonym_drawn" to 80,
+        "game2_league_snapshot" to 80,
+        "game_progression_empty" to 70,
+        "game_photo_camera_denied" to 70,
+        "game_photo_camera_unsupported" to 60,
+        "game_photo_camera_unavailable" to 45,
+    )
+
+    @Test
+    fun `chaque libelle raccourci l est dans les sept langues et n est pas recopie du francais`() {
+        shortened.forEach { (name, max) ->
+            retiredLanguages.forEach { folder ->
+                val value = valueIn(folder, name)
+                assertThat(value.length).isAtMost(max)
+                if (folder != "values-fr") assertThat(value).isNotEqualTo(valueIn("values-fr", name))
+            }
+        }
+    }
+
+    @Test
+    fun `la fiche niveau nomme son chiffre et laisse les seuils au i`() {
+        assertThat(text(R.string.game_concept_level_what)).isEqualTo("Ton niveau est le chiffre au centre de ton anneau : il se lit sur ta lumière.")
+        assertThat(text(R.string.game_concept_level_use)).contains("fait baisser ton niveau")
+    }
+
+    @Test
+    fun `la fiche flamme ne garde que la veilleuse et la fiche reve que ses deux gestes`() {
+        assertThat(text(R.string.game_concept_flame_use)).isEqualTo("Une Veilleuse la garde un jour d’absence.")
+        assertThat(text(R.string.game_concept_missions_use))
+            .isEqualTo("Ouvre un acte pour voir où tu en es. Tu peux en changer un par jour avec une Meesh.")
+    }
+
+    @Test
+    fun `la renaissance et la joute ne redisent pas ce que la ligne voisine dit`() {
+        assertThat(text(R.string.game2_prestige_confirm_access)).isEqualTo("Ta joute et ton alliance restent ouvertes.")
+        assertThat(text(R.string.game2_prestige_confirm_consent)).isEqualTo("Ton accord pour la joute publique reste enregistré.")
+        assertThat(text(R.string.game2_league_pseudonym_drawn)).isEqualTo("Ton nom de joute est tiré au sort et change à chaque voyage.")
+        assertThat(text(R.string.game2_league_snapshot)).isEqualTo("Classement figé chaque jour à 4 h ; seule ta ligne est en direct.")
+        assertThat(text(R.string.game2_season_how)).isEqualTo("Les actes et les alliances te font avancer de quelques pas.")
+    }
+
+    @Test
+    fun `les rangees sont des noms et le guide s ouvre sur son titre du lexique`() {
+        assertThat(text(R.string.game2_settings_celebrations_switch)).isEqualTo("Signes des aïeux")
+        assertThat(text(R.string.game_guide_step_welcome_what)).isEqualTo("Le jeu en sept cartes")
+    }
+
+    @Test
+    fun `le i de la carte courte a pour nom la question que la carte deployee repond`() {
+        assertThat(text(R.string.game_guide_more)).isEqualTo("Que veut dire ce moment ?")
+    }
+
+    @Test
+    fun `l etat vide et les cameras indisponibles tiennent en un etat sans l action des boutons`() {
+        assertThat(text(R.string.game_progression_empty)).isEqualTo("Ta première médaille s’allume dès le premier geste.")
+        assertThat(text(R.string.game_photo_camera_denied)).isEqualTo("La caméra est refusée : autorise-la dans les réglages.")
+        assertThat(text(R.string.game_photo_camera_unsupported)).isEqualTo("Cet appareil ne permet pas la caméra ici.")
+        assertThat(text(R.string.game_photo_camera_unavailable)).isEqualTo("La caméra n’est pas disponible.")
+    }
+
+    @Test
+    fun `la frappe bloquee par une ombre dit la meme chose que sa jumelle chiffree`() {
+        assertThat(text(R.string.game_mint_blocked_debt_plain))
+            .isEqualTo("Une ombre voile ta lumière : tes prochaines étincelles la dissiperont, puis tu pourras frapper.")
+    }
+
+    @Test
+    fun `la tete de la fiche niveau garde les deux valeurs sans legende qui tronque`() {
+        assertThat(text(R.string.game_sparks_cumul_record)).isEqualTo("%1\$s · %2\$s en tout")
     }
 }

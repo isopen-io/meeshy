@@ -1,6 +1,9 @@
 package me.meeshy.app.game.progression
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -164,4 +167,13 @@ class ProgressionGuideComposeTest {
         conversations = { opened += GuideDestination.Conversations },
         photo = { opened += GuideDestination.Photo },
     )
+
+    @Test
+    fun `le i de la carte courte est nomme par une question`() {
+        val card = flameOut().copy(presentation = GuidePresentation.Short)
+        compose.setContent { MeeshyTheme { GameGuideCardView(card, onAction = {}, onDismiss = {}) } }
+
+        compose.onNodeWithTag(GUIDE_MORE_TAG).assertContentDescriptionEquals("Que veut dire ce moment ?")
+        compose.onNodeWithTag(GUIDE_MORE_TAG).assertHeightIsAtLeast(48.dp)
+    }
 }

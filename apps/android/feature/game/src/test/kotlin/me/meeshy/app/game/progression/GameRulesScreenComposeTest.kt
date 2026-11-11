@@ -71,4 +71,13 @@ class GameRulesScreenComposeTest {
         compose.waitUntil(timeoutMillis = 5_000) { rule.isDisplayed() }
         compose.onNodeWithText(context.getString(R.string.game_rules_intro)).assertIsNotDisplayed()
     }
+
+    @Test
+    @Config(qualifiers = "fr")
+    fun `les cartes des sept etapes ne portent plus la ligne Ensuite du guide en cours`() {
+        show(focused = null)
+        listOf("Fais ton premier geste", "Regarde ton anneau se remplir", "Immortalisons ton départ en photo").forEach { invite ->
+            compose.onNodeWithText(invite, substring = true).assertDoesNotExist()
+        }
+    }
 }
