@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -128,6 +129,10 @@ private fun PulseRing(index: Int, avatarSize: Dp, reduceMotion: Boolean) {
 }
 
 private const val HALO_ALPHA = 0.5f
+internal const val CALL_SPEAKING_RING_TAG = "call-speaking-ring"
+
+/** La place réservée autour du disque pour l'anneau et son halo : l'hôte la retranche pour garder ses ancrages. */
+internal fun callSpeakingReach(compact: Boolean): Dp = if (compact) 6.dp else 14.dp
 private const val HALO_CORE_STOP = 0.72f
 
 /**
@@ -146,10 +151,12 @@ internal fun CallSpeakingAvatar(
     reduceMotion: Boolean,
     compact: Boolean,
     modifier: Modifier = Modifier,
+    /** Le contour équipé par la personne (duo audio) ; `null` = disque nu. */
+    ring: AvatarRingDesign? = null,
 ) {
     val color = colorHex?.let { hexColor(it) }?.takeIf { it != Color.Unspecified } ?: CallPalette.Brand
     val ringWidth = if (compact) 2.dp else 3.dp
-    val reach = if (compact) 6.dp else 14.dp
+    val reach = callSpeakingReach(compact)
     val strength by animateFloatAsState(
         targetValue = if (speaking) 1f else 0f,
         animationSpec = tween(CallRemoteVideoFade.durationMillis(reduceMotion), easing = LinearEasing),
@@ -169,8 +176,9 @@ internal fun CallSpeakingAvatar(
             Modifier
                 .size(size + ringWidth * 2)
                 .graphicsLayer { alpha = strength }
+                .testTag(CALL_SPEAKING_RING_TAG)
                 .border(ringWidth, color, CircleShape),
         )
-        CallAvatarDisc(name = name, size = size, avatarUrl = avatarUrl, faceHex = colorHex)
+        CallAvatarDisc(name = name, size = size, avatarUrl = avatarUrl, ring = ring, faceHex = colorHex)
     }
 }
