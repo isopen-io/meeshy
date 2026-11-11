@@ -391,12 +391,16 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// Audio | Vidéo côte à côte qui lancent la demande ; aucune rangée défilante.
     func test_recordingPanel_isCenteredTitle_consentLine_andTwoWideChoices() throws {
         let recording = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Recording.swift"))
-        let panel = try block("var recordingPanelRows: some View {", until: "\n    }\n", in: recording)
+        let launch = try block("var recordingPanelRows: some View {", until: "\n    }\n", in: recording)
+        XCTAssertTrue(launch.contains("callManager.recording.request(kind: kind)"), "Un choix lance aussitôt la demande d'accord")
+        XCTAssertTrue(launch.contains("closePanel()"))
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
+        let panel = try block("struct CallRecordingPanel: View {", until: "/// La couche d'enregistrement", in: try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
         XCTAssertFalse(panel.contains("CallPillRow"), "Deux puces larges côte à côte, pas une rangée défilante de 68 pt")
         XCTAssertFalse(panel.contains("CallPillChip"))
         XCTAssertTrue(panel.contains("CallRecordingCopy.consent"), "Tout le monde doit accepter : la phrase est écrite")
         XCTAssertTrue(panel.contains("CallRecordingChoiceChip("))
-        XCTAssertTrue(panel.contains("callManager.recording.request(kind: kind)"))
+        XCTAssertTrue(controls.contains("callChipGlass("), "La puce est le verre adaptatif, jamais un verre dessiné")
         let row = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallPillRow.swift"))
         let header = try block("struct CallPanelHeader: View {", until: "struct CallPanelHeaderButton", in: row)
         XCTAssertFalse(header.contains("Spacer(minLength: 0)"), "Le titre est centré, il ne suit pas le Retour")

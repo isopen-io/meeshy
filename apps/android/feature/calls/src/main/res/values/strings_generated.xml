@@ -222,9 +222,9 @@
     <string name="call_recording_caption">Record</string>
     <string name="call_recording_close">Close</string>
     <string name="call_recording_hint">Asks every participant for consent before recording</string>
-    <string name="call_recording_kind_audio">Audio only</string>
+    <string name="call_recording_kind_audio">Audio</string>
     <string name="call_recording_kind_hint">Choose what will be recorded; each participant must then agree</string>
-    <string name="call_recording_kind_video">Audio and video</string>
+    <string name="call_recording_kind_video">Video</string>
     <string name="call_recording_refuse">Decline</string>
     <string name="call_recording_saveFailed">The recording could not be added</string>
     <string name="call_recording_saved">The recording was added to the conversation</string>
