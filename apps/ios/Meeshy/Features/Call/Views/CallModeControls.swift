@@ -21,7 +21,10 @@ struct CallEffectsModeControls: View {
 
     var body: some View {
         VStack(spacing: MeeshySpacing.mdPlus) {
-            if !showsSettings {
+            if showsSettings {
+                settingsPanel
+                    .transition(settingsPanelTransition)
+            } else {
                 carousel
                     .transition(.opacity)
             }
@@ -30,8 +33,7 @@ struct CallEffectsModeControls: View {
                 onBack: goBack,
                 onSettings: toggleSettings,
                 onAddLook: addLook,
-                looks: { categoryPicker },
-                settings: { settingsPanel }
+                looks: { categoryPicker }
             )
             .padding(.horizontal, MeeshySpacing.lg)
         }
@@ -76,6 +78,13 @@ struct CallEffectsModeControls: View {
 
     private var settingsAnimation: Animation {
         .easeInOut(duration: CallEffectsSettingsMotion.duration(reduceMotion: reduceMotion))
+    }
+
+    /// P8b.6 — le panneau monte depuis la barre en fondu et y redescend ; sous « Réduire les
+    /// animations », la montée tombe à zéro et seul le fondu reste.
+    private var settingsPanelTransition: AnyTransition {
+        AnyTransition.opacity
+            .combined(with: .offset(y: CallEffectsSettingsMotion.panelRise(reduceMotion: reduceMotion)))
     }
 
     private var categoryPicker: some View {
@@ -227,16 +236,24 @@ struct CallEffectsModeControls: View {
         }
     }
 
-    /// P8b — le panneau prend la place des looks, dans la barre de verre : Luminosité, un
-    /// titre et son curseur ; Flou du fond, une ligne titrée à interrupteur.
+    private static var settingsPanelShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
+    }
+
+    /// P8b — un verre SÉPARÉ, posé au-dessus de la barre à la place de la bande de looks :
+    /// Luminosité, un titre et son curseur ; Flou du fond, une ligne titrée à interrupteur.
     private var settingsPanel: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             smoothingRow
             brightnessRow
             blurRow
         }
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.top, MeeshySpacing.xs)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .callChromeGlass(in: Self.settingsPanelShape)
+        .accessibilityElement(children: .contain)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private var brightnessRow: some View {

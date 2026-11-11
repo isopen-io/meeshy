@@ -152,11 +152,18 @@ enum CallEffectsModeRule {
     }
 }
 
-/// P8b.6 — Réglages et la bande de looks se croisent dans la même barre, ≈ 200 ms.
-/// « Réduire les animations » garde un fondu court : l'écran ne change jamais d'un coup.
+/// P8b.6 — Réglages ouvert, la bande de looks et les puces partent en fondu pendant que le
+/// panneau monte depuis la barre resserrée, ≈ 200 ms ; il y redescend au retour.
+/// « Réduire les animations » garde un fondu court, sans montée : l'écran ne change jamais d'un coup.
 nonisolated enum CallEffectsSettingsMotion {
+    static let rise: CGFloat = 20
+
     static func duration(reduceMotion: Bool) -> Double {
         reduceMotion ? 0.15 : 0.2
+    }
+
+    static func panelRise(reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : rise
     }
 }
 

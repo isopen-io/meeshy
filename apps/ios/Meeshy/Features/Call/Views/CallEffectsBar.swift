@@ -2,17 +2,17 @@ import SwiftUI
 import MeeshyUI
 
 /// P8 · P8b — la barre du mode Effets : UN verre d'une pièce (l'atome partagé de la pilule),
-/// qui parle la langue du composer. En haut, les looks (puces et filet) OU le panneau de
-/// Réglages ; en bas, la rangée de base ‹ · Réglages · (+). Réglages ouvert, la MÊME barre
-/// s'ajuste et le panneau prend la place des looks, les contenus se croisant en fondu ;
-/// retoucher Réglages (disque blanc) rend les looks par le chemin inverse.
-struct CallEffectsBar<Looks: View, Settings: View>: View {
+/// qui parle la langue du composer. En haut, la rangée de puces des looks et son filet ; en
+/// bas, la rangée de base ‹ · Réglages · (+). Réglages ouvert, la MÊME barre perd sa rangée
+/// de puces, en fondu, et se resserre par morphisme sur ‹ · Réglages · (+) ; le panneau de
+/// réglages vit au-dessus d'elle, dans son propre verre. Retoucher Réglages (disque blanc)
+/// rend les puces par le chemin inverse.
+struct CallEffectsBar<Looks: View>: View {
     let showsSettings: Bool
     let onBack: () -> Void
     let onSettings: () -> Void
     let onAddLook: () -> Void
     @ViewBuilder let looks: () -> Looks
-    @ViewBuilder let settings: () -> Settings
 
     private static var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
@@ -21,7 +21,10 @@ struct CallEffectsBar<Looks: View, Settings: View>: View {
     var body: some View {
         AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
             VStack(spacing: MeeshySpacing.sm) {
-                topZone
+                if !showsSettings {
+                    lookChips
+                        .transition(.opacity)
+                }
                 baseRow
             }
             .padding(MeeshySpacing.sm)
@@ -31,22 +34,13 @@ struct CallEffectsBar<Looks: View, Settings: View>: View {
         .accessibilityElement(children: .contain)
     }
 
-    @ViewBuilder
-    private var topZone: some View {
-        ZStack {
-            if showsSettings {
-                settings()
-                    .transition(.opacity)
-            } else {
-                VStack(spacing: MeeshySpacing.sm) {
-                    looks()
-                    Rectangle()
-                        .fill(Color.white.opacity(MeeshyOpacity.light))
-                        .frame(height: 1)
-                        .accessibilityHidden(true)
-                }
-                .transition(.opacity)
-            }
+    private var lookChips: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            looks()
+            Rectangle()
+                .fill(Color.white.opacity(MeeshyOpacity.light))
+                .frame(height: 1)
+                .accessibilityHidden(true)
         }
     }
 
