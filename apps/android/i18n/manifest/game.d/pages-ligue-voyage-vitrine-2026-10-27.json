@@ -6,11 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "game2.door.prestige",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.offline.action",
           "status": "adopted"
         },
@@ -81,11 +76,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.season.how",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.season.to_next",
           "status": "adopted"
         },
@@ -147,11 +137,6 @@
         {
           "catalog": "app",
           "iosKey": "game2.season.seal.title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.season.seal.body",
           "status": "adopted"
         },
         {
@@ -276,11 +261,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.prestige.meo",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.settings.title",
           "status": "adopted"
         },
@@ -336,16 +316,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.settings.notifications.body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.settings.notifications.switch",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.settings.visibility.title",
           "status": "adopted"
         },
@@ -372,11 +342,6 @@
         {
           "catalog": "app",
           "iosKey": "game2.settings.friends_league.title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.settings.friends_league.body",
           "status": "adopted"
         },
         {

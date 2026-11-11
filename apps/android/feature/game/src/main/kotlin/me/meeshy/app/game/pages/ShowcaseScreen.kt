@@ -84,7 +84,7 @@ private fun ShowcaseContent(game: GameBlock, state: GameArrangementUiState, arra
         if (GameAgreement.isSingular(shown.size, locale.language)) R.string.game2_door_showcase_count_one else R.string.game2_door_showcase_count_other,
         count(shown.size),
     )
-    GameCard(title = stringResource(R.string.game2_showcase_title) + " · " + countLabel) {
+    GameCard(title = countLabel) {
         if (shown.isEmpty()) {
             GameNote(stringResource(R.string.game2_showcase_empty))
         } else {

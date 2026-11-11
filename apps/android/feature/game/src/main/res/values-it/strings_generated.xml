@@ -62,7 +62,6 @@
     <string name="game2_banner_top">in cima</string>
     <string name="game2_door_league_locked">Dal livello %1$s</string>
     <string name="game2_door_league_open">Il torneo della settimana</string>
-    <string name="game2_door_prestige">Rinascita</string>
     <string name="game2_door_prestige_locked">Al livello 100</string>
     <string name="game2_door_prestige_ready">La tua luce può rinascere</string>
     <string name="game2_door_season">Viaggio %1$s</string>
@@ -170,7 +169,6 @@
     <string name="game2_league_name_saphir">Zaffiro</string>
     <string name="game2_league_pseudonym_current">Giochi con il nome %1$s.</string>
     <string name="game2_league_pseudonym_drawn">Il tuo nome di torneo è estratto a sorte: né il tuo nome né il tuo nome utente. Cambia a ogni viaggio.</string>
-    <string name="game2_league_pseudonym_hint_change">Da 3 a 20 caratteri. Né il tuo nome né il tuo nome utente.</string>
     <string name="game2_league_pseudonym_new">Nuovo nome di torneo</string>
     <string name="game2_league_pseudonym_save">Cambia nome di torneo</string>
     <string name="game2_league_pseudonym_title">Il tuo nome di torneo</string>
@@ -197,7 +195,6 @@
     <string name="game2_prestige_locked">La Rinascita si apre al livello 100. Sei al livello %1$s.</string>
     <string name="game2_prestige_max">La tua leggenda ha vissuto le sue cinque rinascite: la vetta della vetta.</string>
     <string name="game2_prestige_mee">Livello 100: la tua luce può rinascere, o crescere ancora.</string>
-    <string name="game2_prestige_meo">Rinascendo, la tua luce torna Scintilla: il tuo livello riparte da 1 e le tue scintille da 0. Ciò che hai ricevuto da sempre e la tua luce più alta restano incisi. I tuoi antenati ti offrono una nuova Era, un trofeo numerato e %1$s di gloria. Il tuo rango non arretra mai.</string>
     <string name="game2_prestige_stars">Rinascite: %1$s su %2$s</string>
     <string name="game2_prestige_stay">Continuare a brillare</string>
     <string name="game2_prestige_title">Rinascita</string>
@@ -213,13 +210,11 @@
     <string name="game2_season_claim">Riscatta la sosta %1$s</string>
     <string name="game2_season_completed">Viaggio compiuto: una coppa, una medaglia datata e %1$s di gloria.</string>
     <string name="game2_season_heading">Viaggio %1$s · settimana %2$s su %3$s</string>
-    <string name="game2_season_how">Ogni atto compiuto e ogni alleanza ti fanno avanzare di qualche passo: %1$s passi portano alla sosta successiva. Tutto il viaggio è gratuito.</string>
     <string name="game2_season_none">Nessun viaggio è in corso per ora. Il prossimo parte presto.</string>
     <string name="game2_season_path">Cammino gratuito</string>
     <string name="game2_season_reward_fragment">Un frammento di stella</string>
     <string name="game2_season_reward_freeze">Una Lucerna per la tua Fiamma</string>
     <string name="game2_season_reward_season_cup">La coppa del viaggio</string>
-    <string name="game2_season_seal_body">Il Sigillo è puramente decorativo: un oggetto da collezione ogni %1$s soste, che non cambia nulla nel gioco.</string>
     <string name="game2_season_seal_buy">Prendi il Sigillo · %1$s</string>
     <string name="game2_season_seal_cosmetic">Oggetto del Sigillo</string>
     <string name="game2_season_seal_owned">Hai il Sigillo di questo viaggio.</string>
@@ -238,7 +233,6 @@
     <string name="game2_settings_celebrations_body">Le carte di Mee e Meo e i segni degli antenati che compaiono in Progressi. Questa impostazione vale solo per questo dispositivo.</string>
     <string name="game2_settings_celebrations_switch">Mostra i segni degli antenati</string>
     <string name="game2_settings_celebrations_title">Mee e Meo</string>
-    <string name="game2_settings_friends_league_body">I tuoi amici accettati ti vedono nella loro classifica settimanale, e tu loro nella tua. Puoi uscirne con un tocco: non compari più nella loro e non vedi più la loro.</string>
     <string name="game2_settings_friends_league_switch">Non partecipare più al Torneo degli amici</string>
     <string name="game2_settings_friends_league_title">Torneo degli amici</string>
     <string name="game2_settings_hidden_body">Nasconde il gioco ovunque su questo dispositivo, chiude i tuoi trofei, il tuo rango, la tua Eredità e il tuo Atlante a tutti gli altri, e ti toglie dal torneo pubblico. Le tue scintille e i tuoi trofei restano custoditi.</string>
@@ -251,8 +245,6 @@
     <string name="game2_settings_league_on">Sei nel torneo pubblico con il nome %1$s.</string>
     <string name="game2_settings_league_on_unnamed">Sei nel torneo pubblico.</string>
     <string name="game2_settings_league_title">Torneo pubblico</string>
-    <string name="game2_settings_notifications_body">Una proposta di alleanza, un risultato del torneo, una sosta del viaggio: al massimo una notifica del gioco al giorno. Questa impostazione vale per il tuo account, su tutti i tuoi dispositivi.</string>
-    <string name="game2_settings_notifications_switch">Ricevi le notifiche del gioco</string>
     <string name="game2_settings_notifications_title">Notifiche del gioco</string>
     <string name="game2_settings_title">Impostazioni del gioco</string>
     <string name="game2_settings_visibility_title">Chi vede cosa</string>
@@ -421,7 +413,6 @@
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_name">La Fiamma</string>
     <string name="game_concept_flame_tip_1">Fai almeno un gesto ogni giorno.</string>
-    <string name="game_concept_flame_tip_2">Tieni una Lucerna per i giorni senza.</string>
     <string name="game_concept_flame_use" formatted="false">Ogni giorno di Fiamma aggiunge il 2 % alle scintille dei tuoi sogni, fino al 50 %. Una Lucerna la custodisce per un giorno di assenza. Spenta, si riaccende con le Meesh entro 48 ore.</string>
     <string name="game_concept_flame_what">La tua Fiamma è il fuoco che i tuoi antenati ti affidano: cresce ogni giorno in cui fai almeno un gesto, e cambia forma crescendo, dalla Brace al Sole.</string>
     <string name="game_concept_glory_name">Il Rango</string>
@@ -449,13 +440,10 @@
     <string name="game_concept_link_showcase">Sistemare i miei trofei</string>
     <string name="game_concept_link_succes">Tutte le imprese</string>
     <string name="game_concept_meesh_name">L’Eredità</string>
-    <string name="game_concept_meesh_tip_1">Custodisci le tue Meesh: la tua eredità passa da una custodia alla successiva.</string>
-    <string name="game_concept_meesh_tip_2">Spendile per vegliare sulla tua Fiamma o cambiare un atto del tuo sogno.</string>
     <string name="game_concept_meesh_use">Custodisci le tue Meesh: riempiono la tua eredità, dalla Borsa alla Riserva, visibile sul tuo profilo. Oppure spendile: una Lucerna per la tua Fiamma, un atto da cambiare, il Sigillo del viaggio. Ogni conio fa anche crescere la tua gloria.</string>
     <string name="game_concept_meesh_what">Una Meesh è la tua luce fissata in una moneta numerata, che coni tu stesso. Una su cento è d’oro, una su mille di prisma.</string>
     <string name="game_concept_missions_name">Il Sogno</string>
     <string name="game_concept_missions_tip_1">Comincia dall’atto più facile.</string>
-    <string name="game_concept_missions_tip_2">Un atto non ti piace? Cambialo, una volta al giorno.</string>
     <string name="game_concept_missions_use">Apri un atto per vedere a che punto sei. Puoi cambiarne uno al giorno con una Meesh. Compiuti tutti e tre, apri l’Offerta: scintille, gloria, a volte un premio, un frammento di stella o una Lucerna.</string>
     <string name="game_concept_missions_what">Ogni notte, un sogno in tre atti: piccoli obiettivi da compiere in giornata, sempre più ricchi di gloria. L’Offerta lo accompagna.</string>
     <string name="game_concept_photo_offer">Immortala questo momento</string>
@@ -466,13 +454,10 @@
     <string name="game_concept_points_what">Ogni vero scambio fa scaturire scintille: insieme, formano la tua luce. Più cresce, più brilla, e il suo splendore è il tuo livello.</string>
     <string name="game_concept_prestige_name">La Rinascita</string>
     <string name="game_concept_prestige_tip_1">Porta la tua luce fino al livello 100.</string>
-    <string name="game_concept_prestige_tip_2">Rinasci quando vuoi: niente ti obbliga.</string>
     <string name="game_concept_prestige_use">Al livello 100, scegli: rinascere, o continuare a brillare. Rinascere riporta il tuo livello a 1 e la tua luce a zero. Tieni le tue scintille ricevute da sempre, la tua luce più alta, il tuo rango, la tua gloria, le tue Meesh, la tua Fiamma e i tuoi trofei; il tuo torneo e la tua alleanza restano aperti.</string>
     <string name="game_concept_prestige_what">La rinascita apre una nuova Era della tua leggenda, offerta al livello 100, quando la tua luce è diventata Galassia. È facoltativa: cinque rinascite al massimo portano alla Sesta Era.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">Il Viaggio</string>
-    <string name="game_concept_season_tip_1">Compi gli atti del tuo sogno per avanzare di qualche passo.</string>
-    <string name="game_concept_season_tip_2">Stringi un’alleanza con un amico: la ricompensa raddoppia.</string>
     <string name="game_concept_season_use">Avanza di qualche passo, poi riscatta ogni sosta raggiunta: scintille, un frammento di stella, una Lucerna. Il viaggio compiuto dà la coppa del viaggio. Il Sigillo del viaggio è un oggetto da collezione, preso con le Meesh.</string>
     <string name="game_concept_season_what">Un viaggio dura otto settimane, in una terra di lingua, con quaranta soste e i loro doni gratuiti.</string>
     <string name="game_concept_section_act">Tocca a te</string>
@@ -497,7 +482,6 @@
     <string name="game_detail_chest_what">L’Offerta appare quando i tre atti del sogno sono compiuti.</string>
     <string name="game_detail_close">Chiudi</string>
     <string name="game_detail_coin_how">Coniala con la tua luce appena basta: una parte vi si fissa.</string>
-    <string name="game_detail_coin_what">La Meesh è la tua luce fissata in una moneta numerata. Ogni moneta porta il suo numero.</string>
     <string name="game_detail_defi_how">Raggiungi il numero richiesto: si apre il gradino successivo.</string>
     <string name="game_detail_defi_what">Una sfida è un gradino da superare in una famiglia di gesti.</string>
     <string name="game_detail_earned">Ottenuto</string>
@@ -529,7 +513,6 @@
     <string name="game_detail_fact_level_required">È il livello da raggiungere per aprirlo.</string>
     <string name="game_detail_fact_mint_glory">Ogni conio fa crescere la tua gloria di altrettanto.</string>
     <string name="game_detail_fact_mint_missing">Sono le scintille che mancano alla tua luce per coniare la tua prossima Meesh.</string>
-    <string name="game_detail_fact_mint_next">Ogni Meesh porta il suo numero. Una su cento è d’oro, una su mille di prisma.</string>
     <string name="game_detail_fact_mint_price">È la parte della tua luce che la tua prossima Meesh fisserà. Le regole dicono come si calcola.</string>
     <string name="game_detail_fact_minted">Sono tutte le Meesh che hai coniato da sempre.</string>
     <string name="game_detail_fact_missions_done">Tre atti per sogno. Una volta compiuti, fanno apparire l’Offerta.</string>
@@ -610,7 +593,6 @@
     <string name="game_error_league_locked">Il torneo si apre al livello 10.</string>
     <string name="game_error_league_minor">Il torneo pubblico è riservato agli account con maggiore età verificata.</string>
     <string name="game_error_league_pseudonym_forbidden">Questo nome di torneo non è consentito: scegline uno che non ti identifichi.</string>
-    <string name="game_error_league_pseudonym_invalid">Questo nome di torneo non è valido: da 3 a 20 caratteri, lettere, cifre, punto, trattino, trattino basso.</string>
     <string name="game_error_league_pseudonym_taken">Questo nome di torneo è già in uso.</string>
     <string name="game_error_mission_not_found">Questo atto non esiste più: la schermata si aggiorna.</string>
     <string name="game_error_mission_reroll_exhausted">Hai già cambiato un atto oggi.</string>
@@ -669,9 +651,7 @@
     <string name="game_flame_no_streak">Fiamma da accendere</string>
     <string name="game_flame_panel_bonus">Ogni giorno di Fiamma nutre i tuoi sogni: +%1$s %% di scintille per atto, fino a +%2$s %%.</string>
     <string name="game_flame_panel_freeze_buy">Prendi una Lucerna · %1$s</string>
-    <string name="game_flame_panel_freeze_full">Le tue Lucerne sono al completo: una Lucerna tiene accesa la tua Fiamma per un giorno di assenza, non te ne serve un’altra.</string>
     <string name="game_flame_panel_freezes">Lucerne: %1$s / %2$s</string>
-    <string name="game_flame_panel_offline">Offline: le Lucerne e la riaccensione riprenderanno con la connessione.</string>
     <string name="game_flame_panel_relight">Riaccendi la Fiamma · %1$s</string>
     <string name="game_flame_panel_relight_closed">Questa Fiamma non può più essere riaccesa. Una nuova Fiamma inizia con il tuo prossimo gesto.</string>
     <string name="game_flame_panel_relight_intro">La tua Fiamma si è spenta: riaccendila adesso, riparte da dove si era fermata.</string>
@@ -843,7 +823,6 @@
     <string name="game_mint_minted_line">Meesh n. %1$s coniata, %2$s.</string>
     <string name="game_mint_minting">Conio in corso…</string>
     <string name="game_mint_next_title">La Meesh n. %1$s</string>
-    <string name="game_mint_offline">Offline: il conio riprenderà con la connessione.</string>
     <string name="game_mint_tchak">Clac!</string>
     <string name="game_mission_comment_stranger_post_one">Commentare il post pubblico di qualcuno che non conosci</string>
     <string name="game_mission_comment_stranger_post_other">Commentare %1$s post pubblici di persone che non conosci</string>
@@ -912,14 +891,12 @@
     <string name="game_mission_write_someone_new_one">Scrivere a qualcuno per la prima volta</string>
     <string name="game_mission_write_someone_new_other">Scrivere a %1$s persone per la prima volta</string>
     <string name="game_missions_locked">Al livello 5, i tuoi antenati ti mandano ogni notte un sogno in tre atti, e un’Offerta. Sei al livello %1$s.</string>
-    <string name="game_missions_offline">Offline: cambiare un atto o aprire l’Offerta riprenderà online.</string>
     <string name="game_missions_prism_day">Giorno del Prisma: uno degli atti si gioca in una lingua diversa dalla tua.</string>
     <string name="game_missions_prism_hour">Ora del Prisma: %1$s – %2$s — ogni atto conta doppio.</string>
     <string name="game_missions_title">Il sogno di stanotte</string>
     <string name="game_notebook_catch_up">Da recuperare</string>
     <string name="game_notebook_catch_up_locked">Prima scatta: %1$s</string>
     <string name="game_notebook_device_only">Le tue foto vivono su questo dispositivo.</string>
-    <string name="game_notebook_empty">La tua Cronaca aspetta la sua prima pagina. A ogni segno dei tuoi antenati (un rango, una prima Meesh, una Fiamma di 7 giorni), Mee e Meo ti invitano a immortalare il momento, e la foto resta sul tuo dispositivo.</string>
     <string name="game_notebook_kept">Foto conservate</string>
     <string name="game_notebook_page_title">La Cronaca</string>
     <string name="game_notebook_pending">In attesa</string>
@@ -1005,13 +982,9 @@
     <string name="game_rules_2_title">Le scintille formano la tua luce</string>
     <string name="game_rules_3_body" formatted="false">Una Meesh si conia a mano: una parte della tua luce vi si fissa. Questa parte dipende dal numero della moneta e dal tuo livello attuale: più piccola quando il tuo livello è basso, intera dal livello 100. Cresce del 30 % ogni dieci coni.</string>
     <string name="game_rules_3_title">Si coniano Meesh</string>
-    <string name="game_rules_4_body">La parte fissata lascia la tua luce, e solo lei: il tuo livello scende di altrettanto. Il tuo rango e le tue medaglie non scendono. Ciò che hai ricevuto resta ricevuto.</string>
     <string name="game_rules_4_title">Coniare fissa la tua luce</string>
-    <string name="game_rules_5_body">Ogni conio, ogni livello raggiunto per la prima volta, ogni impresa fa crescere la tua gloria. La gloria ti dà il tuo rango.</string>
     <string name="game_rules_5_title">Il rango non arretra mai</string>
-    <string name="game_rules_6_body">Custodire le proprie Meesh fa crescere l’eredità, dalla Borsa alla Riserva. Spenderle veglia sulla Fiamma od offre ornamenti.</string>
     <string name="game_rules_6_title">L’Eredità si custodisce o si spende</string>
-    <string name="game_rules_7_body">Un sogno in tre atti ogni notte, un’Offerta, una Fiamma che cresce finché si torna.</string>
     <string name="game_rules_7_title">Ogni giorno conta</string>
     <string name="game_rules_8_body">A ogni evoluzione, i tuoi antenati si manifestano: ogni segno si immortala in foto con Mee e Meo nella tua Cronaca.</string>
     <string name="game_rules_8_title">Gli antenati si manifestano</string>
@@ -1028,15 +1001,6 @@
     <string name="game_rules_concept_duo_body">Una volta a settimana, un’alleanza con un amico accettato, aperta dal livello 20 per entrambi. Se ciascuno compie la sua parte, la ricompensa raddoppia. Fa anche avanzare il tuo viaggio di qualche passo.</string>
     <string name="game_rules_concept_duo_name">L’Alleanza</string>
     <string name="game_rules_concept_elans_body">Un moltiplicatore di scintille. Si accende quando sei attivo in più famiglie di gesti in questi giorni: contenuti, commenti, conversazioni, strumenti, legame sociale. Finché regge, ogni gesto fa scaturire più scintille.</string>
-    <string name="game_rules_concept_flame_body" formatted="false">Il fuoco che i tuoi antenati ti affidano, alimentato ogni giorno da almeno un gesto. Ogni giorno di Fiamma aggiunge il 2 % alle scintille dei tuoi sogni, fino al 50 %. Una Lucerna la custodisce per un giorno di assenza; spenta, si riaccende con le Meesh entro 48 ore.</string>
-    <string name="game_rules_concept_glory_body">La tua gloria cresce e non arretra mai: ti dà il tuo rango. Cresce quando conii, quando la tua luce raggiunge un livello per la prima volta, quando compi un’impresa, quando sali un cerchio del torneo, quando porti a termine un viaggio. Il tuo rango apre la tua luce oltre il livello 499.</string>
-    <string name="game_rules_concept_league_body">La sfida della settimana, aperta dal livello 10: trenta eroi vi si misurano con il loro nome di torneo. Le tue scintille della settimana fanno il tuo posto: i primi 7 salgono al cerchio successivo, gli ultimi 5 riscendono, e tutto riparte da zero il lunedì. Il Torneo degli amici resta sempre aperto.</string>
-    <string name="game_rules_concept_level_body">Il numero del tuo anello, letto sulla tua luce. Apre il sogno (livello 5), il torneo (10), l’alleanza (20) e la rinascita (100). Sale quando la tua luce raggiunge la soglia successiva, e scende quando un conio ne fissa una parte. La rinascita lo riporta a 1.</string>
-    <string name="game_rules_concept_meesh_body" formatted="false">La moneta rara di Meeshy, numerata: una parte della tua luce vi si fissa quando la conii. Custodiscila per la tua eredità, oppure spendila: una Lucerna per la tua Fiamma, un atto da cambiare, il Sigillo del viaggio. La parte fissata cresce del 30 % ogni dieci coni.</string>
-    <string name="game_rules_concept_missions_body">Ogni notte, i tuoi antenati ti mandano un sogno in tre atti, aperto dal livello 5. Ogni atto compiuto fa scaturire scintille; tutti e tre compiuti fanno apparire l’Offerta. Puoi cambiare un atto al giorno con una Meesh.</string>
-    <string name="game_rules_concept_points_body">Ogni vero scambio fa scaturire scintille; insieme, formano la tua luce. La tua luce fa il tuo livello e conia le Meesh. Le scintille ricevute da sempre restano ricevute.</string>
-    <string name="game_rules_concept_prestige_body">Una rinascita facoltativa, offerta al livello 100, cinque volte al massimo. Il tuo livello riparte da 1 e la tua luce da zero: torna Scintilla, e la tua leggenda entra in una nuova Era. Le tue scintille ricevute da sempre e la tua luce più alta restano, e il torneo come l’alleanza restano aperti. I tuoi antenati ti offrono un trofeo numerato e gloria. Il tuo rango, le tue Meesh e la tua Fiamma restano.</string>
-    <string name="game_rules_concept_season_body">Un viaggio di otto settimane in terra di lingua, con 40 soste gratuite. Gli atti del tuo sogno e l’alleanza ti fanno avanzare di qualche passo; quattro passi portano alla sosta successiva, che riscatti una a una. Il viaggio compiuto dà la coppa del viaggio.</string>
     <string name="game_rules_concept_showcase_body">Lo scaffale dei tuoi trofei: coppe del torneo e del viaggio, trofei di rinascita e della Fiamma. Un trofeo non porta nulla: si custodisce e si mostra. Scegli tu l’ordine e chi li vede.</string>
     <string name="game_rules_concept_steps_body">Da 10 a 100, ogni dieci livelli, i tuoi antenati chiedono una prova semplice: coniare una Meesh, compiere sogni, tenere una Fiamma, raggiungere un rango. Finché non è superata, la tua luce aspetta; superata, il livello sale di colpo.</string>
     <string name="game_rules_concept_steps_name">Le prove</string>
@@ -1047,8 +1011,6 @@
     <string name="game_rules_concept_treasury_name">L’Eredità</string>
     <string name="game_rules_intro">Otto regole, e tutto il gioco ci sta dentro. Meo le spiega, Mee ti mostra il gesto.</string>
     <string name="game_rules_page_title">Come funziona</string>
-    <string name="game_rules_section_concepts">Ogni concetto, in chiaro</string>
-    <string name="game_rules_section_rules">Le regole in una pagina</string>
     <string name="game_rules_section_steps">Le sette tappe</string>
     <plurals name="game_sparks_convertible_count">
         <item quantity="one">%1$d scintilla della tua luce</item>

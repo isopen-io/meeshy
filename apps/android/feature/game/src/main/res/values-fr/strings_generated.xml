@@ -62,7 +62,6 @@
     <string name="game2_banner_top">au sommet</string>
     <string name="game2_door_league_locked">Dès le niveau %1$s</string>
     <string name="game2_door_league_open">La joute de la semaine</string>
-    <string name="game2_door_prestige">Renaissance</string>
     <string name="game2_door_prestige_locked">Au niveau 100</string>
     <string name="game2_door_prestige_ready">Ta lumière peut renaître</string>
     <string name="game2_door_season">Voyage %1$s</string>
@@ -170,7 +169,6 @@
     <string name="game2_league_name_saphir">Saphir</string>
     <string name="game2_league_pseudonym_current">Tu joues sous le nom %1$s.</string>
     <string name="game2_league_pseudonym_drawn">Ton nom de joute est tiré au sort : ni ton nom, ni ton identifiant. Il change à chaque voyage.</string>
-    <string name="game2_league_pseudonym_hint_change">3 à 20 caractères. Ni ton nom, ni ton identifiant.</string>
     <string name="game2_league_pseudonym_new">Nouveau nom de joute</string>
     <string name="game2_league_pseudonym_save">Changer de nom de joute</string>
     <string name="game2_league_pseudonym_title">Ton nom de joute</string>
@@ -197,7 +195,6 @@
     <string name="game2_prestige_locked">La Renaissance s’ouvre au niveau 100. Tu es au niveau %1$s.</string>
     <string name="game2_prestige_max">Ta légende a vécu ses cinq renaissances : le sommet du sommet.</string>
     <string name="game2_prestige_mee">Niveau 100 : ta lumière peut renaître, ou grandir encore.</string>
-    <string name="game2_prestige_meo">En renaissant, ta lumière redevient Étincelle : ton niveau repart à 1 et tes étincelles à 0. Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés. Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %1$s de gloire. Ton rang ne recule jamais.</string>
     <string name="game2_prestige_stars">Renaissances : %1$s sur %2$s</string>
     <string name="game2_prestige_stay">Continuer à briller</string>
     <string name="game2_prestige_title">Renaissance</string>
@@ -213,13 +210,11 @@
     <string name="game2_season_claim">Réclamer la halte %1$s</string>
     <string name="game2_season_completed">Voyage accompli : une coupe, une médaille datée et %1$s de gloire.</string>
     <string name="game2_season_heading">Voyage %1$s · semaine %2$s sur %3$s</string>
-    <string name="game2_season_how">Chaque acte réalisé et chaque alliance te font avancer de quelques pas : %1$s pas mènent à la halte suivante. Tout le voyage est gratuit.</string>
     <string name="game2_season_none">Aucun voyage n’est en cours pour l’instant. Le prochain part bientôt.</string>
     <string name="game2_season_path">Chemin gratuit</string>
     <string name="game2_season_reward_fragment">Un fragment d’étoile</string>
     <string name="game2_season_reward_freeze">Une Veilleuse pour ta Flamme</string>
     <string name="game2_season_reward_season_cup">La coupe du voyage</string>
-    <string name="game2_season_seal_body">Le Sceau est purement décoratif : un objet à collectionner toutes les %1$s haltes, qui ne change rien au jeu.</string>
     <string name="game2_season_seal_buy">Prendre le Sceau · %1$s</string>
     <string name="game2_season_seal_cosmetic">Objet du Sceau</string>
     <string name="game2_season_seal_owned">Tu as le Sceau de ce voyage.</string>
@@ -238,7 +233,6 @@
     <string name="game2_settings_celebrations_body">Les cartes de Mee et Meo et les signes des aïeux qui apparaissent sur Progression. Ce réglage vaut pour cet appareil seulement.</string>
     <string name="game2_settings_celebrations_switch">Afficher les signes des aïeux</string>
     <string name="game2_settings_celebrations_title">Mee et Meo</string>
-    <string name="game2_settings_friends_league_body">Tes amis acceptés te voient dans leur classement de la semaine, et toi dans le tien. Tu peux t’en retirer d’un geste : tu n’apparais plus dans le leur, et tu ne vois plus le leur.</string>
     <string name="game2_settings_friends_league_switch">Ne plus participer à la joute des amis</string>
     <string name="game2_settings_friends_league_title">Joute des amis</string>
     <string name="game2_settings_hidden_body">Masque le jeu partout sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas à tous les autres, et te retire de la joute publique. Tes étincelles et tes trophées sont gardés.</string>
@@ -251,8 +245,6 @@
     <string name="game2_settings_league_on">Tu es dans la joute publique sous le nom %1$s.</string>
     <string name="game2_settings_league_on_unnamed">Tu es dans la joute publique.</string>
     <string name="game2_settings_league_title">Joute publique</string>
-    <string name="game2_settings_notifications_body">Une proposition d’alliance, un résultat de joute, une halte de voyage : au plus une notification du jeu par jour. Ce réglage vaut pour ton compte, sur tous tes appareils.</string>
-    <string name="game2_settings_notifications_switch">Recevoir les notifications du jeu</string>
     <string name="game2_settings_notifications_title">Notifications du jeu</string>
     <string name="game2_settings_title">Réglages du jeu</string>
     <string name="game2_settings_visibility_title">Qui voit quoi</string>
@@ -421,7 +413,6 @@
     <string name="game_concept_fact_zone">Zone</string>
     <string name="game_concept_flame_name">La Flamme</string>
     <string name="game_concept_flame_tip_1">Fais au moins un geste chaque jour.</string>
-    <string name="game_concept_flame_tip_2">Garde une Veilleuse pour les jours sans.</string>
     <string name="game_concept_flame_use" formatted="false">Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Une Veilleuse la garde un jour d’absence. Éteinte, elle se rallume avec des Meeshes pendant 48 h.</string>
     <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant, de la Braise au Soleil.</string>
     <string name="game_concept_glory_name">Le Rang</string>
@@ -449,13 +440,10 @@
     <string name="game_concept_link_showcase">Ranger mes trophées</string>
     <string name="game_concept_link_succes">Tous les hauts faits</string>
     <string name="game_concept_meesh_name">L’Héritage</string>
-    <string name="game_concept_meesh_tip_1">Garde tes Meeshes : ton héritage passe d’un contenant au suivant.</string>
-    <string name="game_concept_meesh_tip_2">Dépense-les pour veiller sur ta Flamme ou changer un acte de ton rêve.</string>
     <string name="game_concept_meesh_use">Garde tes Meeshes : elles remplissent ton héritage, de la Bourse à la Réserve, visible sur ton profil. Ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage. Chaque frappe fait aussi grandir ta gloire.</string>
     <string name="game_concept_meesh_what">Une Meesh, c’est ta lumière figée dans une pièce numérotée, que tu frappes toi-même. Une sur cent est d’or, une sur mille de prisme.</string>
     <string name="game_concept_missions_name">Le Rêve</string>
     <string name="game_concept_missions_tip_1">Commence par l’acte le plus facile.</string>
-    <string name="game_concept_missions_tip_2">Un acte ne te plaît pas ? Change-le, une fois par jour.</string>
     <string name="game_concept_missions_use">Ouvre un acte pour voir où tu en es. Tu peux en changer un par jour avec une Meesh. Les trois réalisés, ouvre l’Offrande : des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.</string>
     <string name="game_concept_missions_what">Chaque nuit, un rêve en trois actes : de petits buts à réaliser dans la journée, de plus en plus riches en gloire. L’Offrande l’accompagne.</string>
     <string name="game_concept_photo_offer">Immortaliser ce moment</string>
@@ -466,13 +454,10 @@
     <string name="game_concept_points_what">Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière. Plus elle grandit, plus elle brille, et son éclat, c’est ton niveau.</string>
     <string name="game_concept_prestige_name">La Renaissance</string>
     <string name="game_concept_prestige_tip_1">Porte ta lumière jusqu’au niveau 100.</string>
-    <string name="game_concept_prestige_tip_2">Renais quand tu veux : rien ne t’y oblige.</string>
     <string name="game_concept_prestige_use">Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro. Tu gardes tes étincelles reçues depuis toujours, ta plus haute lumière, ton rang, ta gloire, tes Meeshes, ta Flamme et tes trophées ; ta joute et ton alliance restent ouvertes.</string>
     <string name="game_concept_prestige_what">La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative : cinq renaissances au plus mènent au Sixième Âge.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">Le Voyage</string>
-    <string name="game_concept_season_tip_1">Réalise les actes de ton rêve pour avancer de quelques pas.</string>
-    <string name="game_concept_season_tip_2">Fais alliance avec un ami : la récompense double.</string>
     <string name="game_concept_season_use">Avance de quelques pas, puis réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.</string>
     <string name="game_concept_season_what">Un voyage dure huit semaines, dans une terre de langue, avec quarante haltes et leurs présents gratuits.</string>
     <string name="game_concept_section_act">À toi de jouer</string>
@@ -497,7 +482,6 @@
     <string name="game_detail_chest_what">L’Offrande apparaît quand les trois actes du rêve sont réalisés.</string>
     <string name="game_detail_close">Fermer</string>
     <string name="game_detail_coin_how">Frappe-la avec ta lumière dès qu’elle suffit : une part s’y fige.</string>
-    <string name="game_detail_coin_what">La Meesh, c’est ta lumière figée dans une pièce numérotée. Chaque pièce porte son numéro.</string>
     <string name="game_detail_defi_how">Atteins le nombre demandé : le palier suivant s’ouvre.</string>
     <string name="game_detail_defi_what">Un défi est un palier à franchir dans une famille de gestes.</string>
     <string name="game_detail_earned">Obtenu</string>
@@ -529,7 +513,6 @@
     <string name="game_detail_fact_level_required">C’est le niveau qu’il faut atteindre pour l’ouvrir.</string>
     <string name="game_detail_fact_mint_glory">Chaque frappe fait grandir ta gloire d’autant.</string>
     <string name="game_detail_fact_mint_missing">Ce sont les étincelles qui manquent à ta lumière pour frapper ta prochaine Meesh.</string>
-    <string name="game_detail_fact_mint_next">Chaque Meesh porte son numéro. Une sur cent est en or, une sur mille en prisme.</string>
     <string name="game_detail_fact_mint_price">C’est la part de ta lumière que ta prochaine Meesh figera. Les règles disent comment elle se calcule.</string>
     <string name="game_detail_fact_minted">Ce sont toutes les Meeshes que tu as frappées depuis toujours.</string>
     <string name="game_detail_fact_missions_done">Trois actes par rêve. Une fois réalisés, ils font apparaître l’Offrande.</string>
@@ -610,7 +593,6 @@
     <string name="game_error_league_locked">La joute s’ouvre au niveau 10.</string>
     <string name="game_error_league_minor">La joute publique est réservée aux comptes dont la majorité est vérifiée.</string>
     <string name="game_error_league_pseudonym_forbidden">Ce nom de joute n’est pas permis : choisis-en un qui ne te désigne pas.</string>
-    <string name="game_error_league_pseudonym_invalid">Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas.</string>
     <string name="game_error_league_pseudonym_taken">Ce nom de joute est déjà pris.</string>
     <string name="game_error_mission_not_found">Cet acte n’existe plus : l’écran se remet à jour.</string>
     <string name="game_error_mission_reroll_exhausted">Tu as déjà changé un acte aujourd’hui.</string>
@@ -669,9 +651,7 @@
     <string name="game_flame_no_streak">Flamme à allumer</string>
     <string name="game_flame_panel_bonus">Chaque jour de Flamme nourrit tes rêves : +%1$s %% d’étincelles par acte, jusqu’à +%2$s %%.</string>
     <string name="game_flame_panel_freeze_buy">Prendre une Veilleuse · %1$s</string>
-    <string name="game_flame_panel_freeze_full">Tes Veilleuses sont au complet : une Veilleuse garde ta Flamme allumée un jour d’absence, tu n’en as pas besoin d’une de plus.</string>
     <string name="game_flame_panel_freezes">Veilleuses : %1$s / %2$s</string>
-    <string name="game_flame_panel_offline">Hors ligne : les Veilleuses et le rallumage reprendront avec la connexion.</string>
     <string name="game_flame_panel_relight">Rallumer la Flamme · %1$s</string>
     <string name="game_flame_panel_relight_closed">Cette Flamme ne peut plus être rallumée. Une nouvelle Flamme commence dès ton prochain geste.</string>
     <string name="game_flame_panel_relight_intro">Ta Flamme s’est éteinte : rallume-la maintenant, elle repart là où elle s’était arrêtée.</string>
@@ -843,7 +823,6 @@
     <string name="game_mint_minted_line">Meesh n° %1$s frappée, %2$s.</string>
     <string name="game_mint_minting">Frappe en cours…</string>
     <string name="game_mint_next_title">La Meesh n° %1$s</string>
-    <string name="game_mint_offline">Hors ligne : la frappe reprendra avec la connexion.</string>
     <string name="game_mint_tchak">Tchak !</string>
     <string name="game_mission_comment_stranger_post_one">Commenter le post public de quelqu’un que tu ne connais pas</string>
     <string name="game_mission_comment_stranger_post_other">Commenter %1$s posts publics de personnes que tu ne connais pas</string>
@@ -912,14 +891,12 @@
     <string name="game_mission_write_someone_new_one">Écrire à quelqu’un pour la première fois</string>
     <string name="game_mission_write_someone_new_other">Écrire à %1$s personnes pour la première fois</string>
     <string name="game_missions_locked">Au niveau 5, tes aïeux t’envoient chaque nuit un rêve en trois actes, et une Offrande. Tu es au niveau %1$s.</string>
-    <string name="game_missions_offline">Hors ligne : changer un acte ou ouvrir l’Offrande reprendra en ligne.</string>
     <string name="game_missions_prism_day">Jour du Prisme : un des actes se joue dans une autre langue que la tienne.</string>
     <string name="game_missions_prism_hour">Heure du Prisme : %1$s – %2$s — chaque acte compte double.</string>
     <string name="game_missions_title">Le rêve de cette nuit</string>
     <string name="game_notebook_catch_up">À rattraper</string>
     <string name="game_notebook_catch_up_locked">Prends d’abord : %1$s</string>
     <string name="game_notebook_device_only">Tes photos vivent sur cet appareil.</string>
-    <string name="game_notebook_empty">Ta Chronique attend sa première page. À chaque signe de tes aïeux (un rang, une première Meesh, une Flamme de 7 jours), Mee et Meo t’invitent à immortaliser le moment, et la photo reste sur ton appareil.</string>
     <string name="game_notebook_kept">Photos gardées</string>
     <string name="game_notebook_page_title">La Chronique</string>
     <string name="game_notebook_pending">En attente</string>
@@ -1005,13 +982,9 @@
     <string name="game_rules_2_title">Les étincelles forment ta lumière</string>
     <string name="game_rules_3_body" formatted="false">Une Meesh se frappe à la main : une part de ta lumière s’y fige. Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.</string>
     <string name="game_rules_3_title">On frappe des Meeshes</string>
-    <string name="game_rules_4_body">La part figée quitte ta lumière, et seulement elle : ton niveau baisse d’autant. Ton rang et tes médailles ne baissent pas. Ce que tu as reçu reste reçu.</string>
     <string name="game_rules_4_title">Frapper fige ta lumière</string>
-    <string name="game_rules_5_body">Chaque frappe, chaque niveau atteint pour la première fois, chaque haut fait fait grandir ta gloire. La gloire te donne ton rang.</string>
     <string name="game_rules_5_title">Le rang ne recule jamais</string>
-    <string name="game_rules_6_body">Garder ses Meeshes fait grandir l’héritage, de la Bourse à la Réserve. Les dépenser veille sur la Flamme ou offre des parures.</string>
     <string name="game_rules_6_title">L’Héritage se garde ou se dépense</string>
-    <string name="game_rules_7_body">Un rêve en trois actes chaque nuit, une Offrande, une Flamme qui grandit tant qu’on revient.</string>
     <string name="game_rules_7_title">Chaque jour compte</string>
     <string name="game_rules_8_body">À chaque évolution, tes aïeux se manifestent : chaque signe s’immortalise en photo avec Mee et Meo dans ta Chronique.</string>
     <string name="game_rules_8_title">Les aïeux se manifestent</string>
@@ -1028,15 +1001,6 @@
     <string name="game_rules_concept_duo_body">Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas.</string>
     <string name="game_rules_concept_duo_name">L’Alliance</string>
     <string name="game_rules_concept_elans_body">Un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci : contenu, commentaires, conversations, outils, lien social. Tant qu’il tient, chaque geste fait jaillir plus d’étincelles.</string>
-    <string name="game_rules_concept_flame_body" formatted="false">Le feu que tes aïeux te confient, entretenu chaque jour par au moins un geste. Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Une Veilleuse la garde un jour d’absence ; éteinte, elle se rallume avec des Meeshes pendant 48 h.</string>
-    <string name="game_rules_concept_glory_body">Ta gloire grandit et ne recule jamais : elle te donne ton rang. Elle grandit quand tu frappes, quand ta lumière atteint un niveau pour la première fois, quand tu accomplis un haut fait, quand tu gravis un cercle de joute, quand tu achèves un voyage. Ton rang ouvre ta lumière au-delà du niveau 499.</string>
-    <string name="game_rules_concept_league_body">Le classement de la semaine, ouvert au niveau 10 : trente héros s’y mesurent sous leur nom de joute. Tes étincelles de la semaine font ta place : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent, et tout repart de zéro le lundi. La Joute des amis reste toujours ouverte.</string>
-    <string name="game_rules_concept_level_body">Le chiffre de ton anneau, lu sur ta lumière. Il ouvre le rêve (niveau 5), la joute (10), l’alliance (20) et la renaissance (100). Il monte quand ta lumière atteint le seuil suivant, et baisse quand une frappe en fige une part. La renaissance le remet à 1.</string>
-    <string name="game_rules_concept_meesh_body" formatted="false">La pièce rare de Meeshy, numérotée : une part de ta lumière s’y fige quand tu la frappes. Garde-la pour ton héritage, ou dépense-la : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage. La part figée grandit de 30 % toutes les dix frappes.</string>
-    <string name="game_rules_concept_missions_body">Chaque nuit, tes aïeux t’envoient un rêve en trois actes, ouvert au niveau 5. Chaque acte réalisé fait jaillir des étincelles ; les trois réalisés font apparaître l’Offrande. Tu peux changer un acte par jour avec une Meesh.</string>
-    <string name="game_rules_concept_points_body">Chaque vrai échange fait jaillir des étincelles ; ensemble, elles forment ta lumière. Ta lumière fait ton niveau et frappe les Meeshes. Les étincelles reçues depuis toujours restent reçues.</string>
-    <string name="game_rules_concept_prestige_body">Une renaissance facultative, offerte au niveau 100, cinq fois au plus. Ton niveau repart à 1 et ta lumière à zéro : elle redevient Étincelle, et ta légende entre dans un nouvel Âge. Tes étincelles reçues depuis toujours et ta plus haute lumière restent, et la joute comme l’alliance restent ouvertes. Tes aïeux t’offrent un trophée numéroté et de la gloire. Ton rang, tes Meeshes et ta Flamme restent.</string>
-    <string name="game_rules_concept_season_body">Un voyage de huit semaines en terre de langue, avec 40 haltes gratuites. Les actes de ton rêve et l’alliance te font avancer de quelques pas ; quatre pas mènent à la halte suivante, que tu réclames une à une. Le voyage fini donne la coupe du voyage.</string>
     <string name="game_rules_concept_showcase_body">L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme. Un trophée ne rapporte rien : il se garde et se montre. Tu choisis l’ordre et qui les voit.</string>
     <string name="game_rules_concept_steps_body">De 10 à 100, tous les dix niveaux, tes aïeux demandent une épreuve simple : frapper une Meesh, réaliser des rêves, tenir une Flamme, atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend ; réussie, le niveau monte d’un coup.</string>
     <string name="game_rules_concept_steps_name">Les épreuves</string>
@@ -1047,8 +1011,6 @@
     <string name="game_rules_concept_treasury_name">L’Héritage</string>
     <string name="game_rules_intro">Huit règles, et tout le jeu tient dedans. Meo les explique, Mee te montre le geste.</string>
     <string name="game_rules_page_title">Comment ça marche</string>
-    <string name="game_rules_section_concepts">Chaque concept, en clair</string>
-    <string name="game_rules_section_rules">Les règles en une page</string>
     <string name="game_rules_section_steps">Les sept étapes</string>
     <plurals name="game_sparks_convertible_count">
         <item quantity="one">%1$d étincelle de ta lumière</item>

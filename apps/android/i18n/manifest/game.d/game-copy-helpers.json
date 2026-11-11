@@ -830,11 +830,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.error.league_pseudonym_invalid",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.error.league_pseudonym_taken",
           "status": "adopted"
         },

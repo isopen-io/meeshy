@@ -62,7 +62,6 @@
     <string name="game2_banner_top">en la cima</string>
     <string name="game2_door_league_locked">Desde el nivel %1$s</string>
     <string name="game2_door_league_open">La justa de la semana</string>
-    <string name="game2_door_prestige">Renacimiento</string>
     <string name="game2_door_prestige_locked">En el nivel 100</string>
     <string name="game2_door_prestige_ready">Tu luz puede renacer</string>
     <string name="game2_door_season">Viaje %1$s</string>
@@ -170,7 +169,6 @@
     <string name="game2_league_name_saphir">Zafiro</string>
     <string name="game2_league_pseudonym_current">Juegas con el nombre %1$s.</string>
     <string name="game2_league_pseudonym_drawn">Tu nombre de justa se sortea: ni tu nombre ni tu usuario. Cambia con cada viaje.</string>
-    <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres. Ni tu nombre ni tu usuario.</string>
     <string name="game2_league_pseudonym_new">Nuevo nombre de justa</string>
     <string name="game2_league_pseudonym_save">Cambiar de nombre de justa</string>
     <string name="game2_league_pseudonym_title">Tu nombre de justa</string>
@@ -197,7 +195,6 @@
     <string name="game2_prestige_locked">El Renacimiento se abre en el nivel 100. Estás en el nivel %1$s.</string>
     <string name="game2_prestige_max">Tu leyenda ha vivido sus cinco renacimientos: la cima de la cima.</string>
     <string name="game2_prestige_mee">Nivel 100: tu luz puede renacer, o crecer todavía.</string>
-    <string name="game2_prestige_meo">Al renacer, tu luz vuelve a ser Chispa: tu nivel vuelve a 1 y tus chispas a 0. Lo que has recibido desde siempre y tu luz más alta quedan grabados. Tus ancestros te ofrecen una nueva Edad, un trofeo numerado y %1$s de gloria. Tu rango nunca retrocede.</string>
     <string name="game2_prestige_stars">Renacimientos: %1$s de %2$s</string>
     <string name="game2_prestige_stay">Seguir brillando</string>
     <string name="game2_prestige_title">Renacimiento</string>
@@ -213,13 +210,11 @@
     <string name="game2_season_claim">Reclamar la parada %1$s</string>
     <string name="game2_season_completed">Viaje cumplido: una copa, una medalla fechada y %1$s de gloria.</string>
     <string name="game2_season_heading">Viaje %1$s · semana %2$s de %3$s</string>
-    <string name="game2_season_how">Cada acto hecho realidad y cada alianza te hacen avanzar unos pasos: %1$s pasos llevan a la parada siguiente. Todo el viaje es gratis.</string>
     <string name="game2_season_none">No hay ningún viaje en curso por ahora. El próximo sale pronto.</string>
     <string name="game2_season_path">Camino gratuito</string>
     <string name="game2_season_reward_fragment">Un fragmento de estrella</string>
     <string name="game2_season_reward_freeze">Una Vela para tu Llama</string>
     <string name="game2_season_reward_season_cup">La copa del viaje</string>
-    <string name="game2_season_seal_body">El Sello es puramente decorativo: un objeto de colección cada %1$s paradas, que no cambia nada del juego.</string>
     <string name="game2_season_seal_buy">Conseguir el Sello · %1$s</string>
     <string name="game2_season_seal_cosmetic">Objeto del Sello</string>
     <string name="game2_season_seal_owned">Tienes el Sello de este viaje.</string>
@@ -238,7 +233,6 @@
     <string name="game2_settings_celebrations_body">Las tarjetas de Mee y Meo y las señales de los ancestros que aparecen en Progreso. Este ajuste vale solo para este dispositivo.</string>
     <string name="game2_settings_celebrations_switch">Mostrar las señales de los ancestros</string>
     <string name="game2_settings_celebrations_title">Mee y Meo</string>
-    <string name="game2_settings_friends_league_body">Tus amigos aceptados te ven en su clasificación semanal, y tú los ves en la tuya. Puedes salir con un toque: ya no apareces en la suya y dejas de ver la suya.</string>
     <string name="game2_settings_friends_league_switch">Dejar de participar en la Justa de los amigos</string>
     <string name="game2_settings_friends_league_title">Justa de los amigos</string>
     <string name="game2_settings_hidden_body">Oculta el juego en todas partes de este dispositivo, cierra tus trofeos, tu rango, tu Legado y tu Atlas a todos los demás, y te saca de la justa pública. Tus chispas y tus trofeos se conservan.</string>
@@ -251,8 +245,6 @@
     <string name="game2_settings_league_on">Estás en la justa pública con el nombre %1$s.</string>
     <string name="game2_settings_league_on_unnamed">Estás en la justa pública.</string>
     <string name="game2_settings_league_title">Justa pública</string>
-    <string name="game2_settings_notifications_body">Una propuesta de alianza, un resultado de justa, una parada del viaje: como máximo una notificación del juego al día. Este ajuste vale para tu cuenta, en todos tus dispositivos.</string>
-    <string name="game2_settings_notifications_switch">Recibir las notificaciones del juego</string>
     <string name="game2_settings_notifications_title">Notificaciones del juego</string>
     <string name="game2_settings_title">Ajustes del juego</string>
     <string name="game2_settings_visibility_title">Quién ve qué</string>
@@ -421,7 +413,6 @@
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_name">La Llama</string>
     <string name="game_concept_flame_tip_1">Haz al menos un gesto cada día.</string>
-    <string name="game_concept_flame_tip_2">Guarda una Vela para los días sin gestos.</string>
     <string name="game_concept_flame_use" formatted="false">Cada día de Llama añade un 2 % a las chispas de tus sueños, hasta un 50 %. Una Vela la guarda un día de ausencia. Apagada, se vuelve a encender con Meeshes durante 48 h.</string>
     <string name="game_concept_flame_what">Tu Llama es el fuego que tus ancestros te confían: crece cada día en que haces al menos un gesto, y cambia de forma al crecer, de la Brasa al Sol.</string>
     <string name="game_concept_glory_name">El Rango</string>
@@ -449,13 +440,10 @@
     <string name="game_concept_link_showcase">Ordenar mis trofeos</string>
     <string name="game_concept_link_succes">Todas las hazañas</string>
     <string name="game_concept_meesh_name">El Legado</string>
-    <string name="game_concept_meesh_tip_1">Guarda tus Meeshes: tu legado pasa de un recipiente al siguiente.</string>
-    <string name="game_concept_meesh_tip_2">Gástalas para velar por tu Llama o cambiar un acto de tu sueño.</string>
     <string name="game_concept_meesh_use">Guarda tus Meeshes: llenan tu legado, del Monedero a la Reserva, visible en tu perfil. O gástalas: una Vela para tu Llama, un acto que cambiar, el Sello del viaje. Cada acuñación hace crecer además tu gloria.</string>
     <string name="game_concept_meesh_what">Una Meesh es tu luz fijada en una moneda numerada, que acuñas tú. Una de cada cien es de oro, una de cada mil de prisma.</string>
     <string name="game_concept_missions_name">El Sueño</string>
     <string name="game_concept_missions_tip_1">Empieza por el acto más fácil.</string>
-    <string name="game_concept_missions_tip_2">¿No te gusta un acto? Cámbialo, una vez al día.</string>
     <string name="game_concept_missions_use">Abre un acto para ver por dónde vas. Puedes cambiar uno al día con una Meesh. Con los tres hechos realidad, abre la Ofrenda: chispas, gloria y, a veces, una prima, un fragmento de estrella o una Vela.</string>
     <string name="game_concept_missions_what">Cada noche, un sueño en tres actos: pequeñas metas que hacer realidad durante el día, cada vez más ricas en gloria. La Ofrenda lo acompaña.</string>
     <string name="game_concept_photo_offer">Inmortalizar este momento</string>
@@ -466,13 +454,10 @@
     <string name="game_concept_points_what">Cada intercambio de verdad hace brotar chispas: juntas forman tu luz. Cuanto más crece, más brilla, y su brillo es tu nivel.</string>
     <string name="game_concept_prestige_name">El Renacimiento</string>
     <string name="game_concept_prestige_tip_1">Lleva tu luz hasta el nivel 100.</string>
-    <string name="game_concept_prestige_tip_2">Renace cuando quieras: nada te obliga.</string>
     <string name="game_concept_prestige_use">En el nivel 100, elige: renacer o seguir brillando. Renacer devuelve tu nivel a 1 y tu luz a cero. Conservas tus chispas recibidas desde siempre, tu luz más alta, tu rango, tu gloria, tus Meeshes, tu Llama y tus trofeos; tu justa y tu alianza siguen abiertas.</string>
     <string name="game_concept_prestige_what">El renacimiento abre una nueva Edad de tu leyenda, ofrecida en el nivel 100, cuando tu luz se ha vuelto Galaxia. Es opcional: cinco renacimientos como máximo llevan a la Sexta Edad.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">El Viaje</string>
-    <string name="game_concept_season_tip_1">Haz realidad los actos de tu sueño para avanzar unos pasos.</string>
-    <string name="game_concept_season_tip_2">Sella una alianza con un amigo: la recompensa se duplica.</string>
     <string name="game_concept_season_use">Avanza unos pasos y reclama cada parada a la que llegues: chispas, un fragmento de estrella, una Vela. El viaje terminado da la copa del viaje. El Sello del viaje es un objeto de colección, que se consigue con Meeshes.</string>
     <string name="game_concept_season_what">Un viaje dura ocho semanas, en una tierra de idioma, con cuarenta paradas y sus regalos gratuitos.</string>
     <string name="game_concept_section_act">Te toca</string>
@@ -497,7 +482,6 @@
     <string name="game_detail_chest_what">La Ofrenda aparece cuando los tres actos del sueño se han hecho realidad.</string>
     <string name="game_detail_close">Cerrar</string>
     <string name="game_detail_coin_how">Acúñala con tu luz en cuanto alcance: una parte se fija en ella.</string>
-    <string name="game_detail_coin_what">La Meesh es tu luz fijada en una moneda numerada. Cada moneda lleva su número.</string>
     <string name="game_detail_defi_how">Alcanza el número pedido: se abre el escalón siguiente.</string>
     <string name="game_detail_defi_what">Un desafío es un escalón que superar en una familia de gestos.</string>
     <string name="game_detail_earned">Conseguido</string>
@@ -529,7 +513,6 @@
     <string name="game_detail_fact_level_required">Es el nivel que debes alcanzar para abrirlo.</string>
     <string name="game_detail_fact_mint_glory">Cada acuñación hace crecer tu gloria otro tanto.</string>
     <string name="game_detail_fact_mint_missing">Son las chispas que le faltan a tu luz para acuñar tu próxima Meesh.</string>
-    <string name="game_detail_fact_mint_next">Cada Meesh lleva su número. Una de cada cien es de oro, una de cada mil de prisma.</string>
     <string name="game_detail_fact_mint_price">Es la parte de tu luz que fijará tu próxima Meesh. Las reglas dicen cómo se calcula.</string>
     <string name="game_detail_fact_minted">Son todas las Meeshes que has acuñado desde siempre.</string>
     <string name="game_detail_fact_missions_done">Tres actos por sueño. Una vez hechos realidad, hacen aparecer la Ofrenda.</string>
@@ -610,7 +593,6 @@
     <string name="game_error_league_locked">La justa se abre en el nivel 10.</string>
     <string name="game_error_league_minor">La justa pública es solo para cuentas con mayoría de edad verificada.</string>
     <string name="game_error_league_pseudonym_forbidden">Este nombre de justa no está permitido: elige uno que no te identifique.</string>
-    <string name="game_error_league_pseudonym_invalid">Este nombre de justa no es válido: de 3 a 20 caracteres, letras, números, punto, guion, guion bajo.</string>
     <string name="game_error_league_pseudonym_taken">Este nombre de justa ya está en uso.</string>
     <string name="game_error_mission_not_found">Este acto ya no existe: la pantalla se actualiza.</string>
     <string name="game_error_mission_reroll_exhausted">Ya has cambiado un acto hoy.</string>
@@ -669,9 +651,7 @@
     <string name="game_flame_no_streak">Llama por encender</string>
     <string name="game_flame_panel_bonus">Cada día de Llama alimenta tus sueños: +%1$s %% de chispas por acto, hasta +%2$s %%.</string>
     <string name="game_flame_panel_freeze_buy">Tomar una Vela · %1$s</string>
-    <string name="game_flame_panel_freeze_full">Tus Velas están completas: una Vela mantiene tu Llama encendida un día de ausencia, no necesitas otra.</string>
     <string name="game_flame_panel_freezes">Velas: %1$s / %2$s</string>
-    <string name="game_flame_panel_offline">Sin conexión: las Velas y el reencendido se reanudarán con la conexión.</string>
     <string name="game_flame_panel_relight">Volver a encender la Llama · %1$s</string>
     <string name="game_flame_panel_relight_closed">Esta Llama ya no se puede volver a encender. Una nueva Llama empieza con tu próximo gesto.</string>
     <string name="game_flame_panel_relight_intro">Tu Llama se apagó: vuelve a encenderla ahora, continúa donde se quedó.</string>
@@ -843,7 +823,6 @@
     <string name="game_mint_minted_line">Meesh n.º %1$s acuñada, %2$s.</string>
     <string name="game_mint_minting">Acuñando…</string>
     <string name="game_mint_next_title">La Meesh n.º %1$s</string>
-    <string name="game_mint_offline">Sin conexión: la acuñación se reanudará con la conexión.</string>
     <string name="game_mint_tchak">¡Clac!</string>
     <string name="game_mission_comment_stranger_post_one">Comentar la publicación pública de alguien que no conoces</string>
     <string name="game_mission_comment_stranger_post_other">Comentar %1$s publicaciones públicas de personas que no conoces</string>
@@ -912,14 +891,12 @@
     <string name="game_mission_write_someone_new_one">Escribir a alguien por primera vez</string>
     <string name="game_mission_write_someone_new_other">Escribir a %1$s personas por primera vez</string>
     <string name="game_missions_locked">En el nivel 5, tus ancestros te envían cada noche un sueño en tres actos, y una Ofrenda. Estás en el nivel %1$s.</string>
-    <string name="game_missions_offline">Sin conexión: cambiar un acto o abrir la Ofrenda se reanudará en línea.</string>
     <string name="game_missions_prism_day">Día del Prisma: uno de los actos se juega en un idioma distinto al tuyo.</string>
     <string name="game_missions_prism_hour">Hora del Prisma: %1$s – %2$s — cada acto cuenta doble.</string>
     <string name="game_missions_title">El sueño de esta noche</string>
     <string name="game_notebook_catch_up">Para recuperar</string>
     <string name="game_notebook_catch_up_locked">Haz primero: %1$s</string>
     <string name="game_notebook_device_only">Tus fotos viven en este dispositivo.</string>
-    <string name="game_notebook_empty">Tu Crónica espera su primera página. Con cada señal de tus ancestros (un rango, una primera Meesh, una Llama de 7 días), Mee y Meo te invitan a inmortalizar el momento, y la foto se queda en tu dispositivo.</string>
     <string name="game_notebook_kept">Fotos guardadas</string>
     <string name="game_notebook_page_title">La Crónica</string>
     <string name="game_notebook_pending">Pendientes</string>
@@ -1005,13 +982,9 @@
     <string name="game_rules_2_title">Las chispas forman tu luz</string>
     <string name="game_rules_3_body" formatted="false">Una Meesh se acuña a mano: una parte de tu luz se fija en ella. Esa parte depende del número de la pieza y de tu nivel actual: más pequeña con un nivel bajo, entera desde el nivel 100. Crece un 30 % cada diez acuñaciones.</string>
     <string name="game_rules_3_title">Se acuñan Meeshes</string>
-    <string name="game_rules_4_body">La parte fijada sale de tu luz, y solo de ella: tu nivel baja otro tanto. Tu rango y tus medallas no bajan. Lo recibido sigue recibido.</string>
     <string name="game_rules_4_title">Acuñar fija tu luz</string>
-    <string name="game_rules_5_body">Cada acuñación, cada nivel alcanzado por primera vez, cada hazaña hace crecer tu gloria. La gloria te da tu rango.</string>
     <string name="game_rules_5_title">El rango nunca retrocede</string>
-    <string name="game_rules_6_body">Guardar tus Meeshes hace crecer el legado, del Monedero a la Reserva. Gastarlas vela por la Llama u ofrece adornos.</string>
     <string name="game_rules_6_title">El Legado se guarda o se gasta</string>
-    <string name="game_rules_7_body">Un sueño en tres actos cada noche, una Ofrenda, una Llama que crece mientras vuelvas.</string>
     <string name="game_rules_7_title">Cada día cuenta</string>
     <string name="game_rules_8_body">Con cada evolución, tus ancestros se manifiestan: cada señal se inmortaliza en foto con Mee y Meo en tu Crónica.</string>
     <string name="game_rules_8_title">Los ancestros se manifiestan</string>
@@ -1028,15 +1001,6 @@
     <string name="game_rules_concept_duo_body">Una vez por semana, una alianza con un amigo aceptado, abierta desde el nivel 20 para los dos. Si cada uno hace realidad su parte, la recompensa se duplica. También hace avanzar tu viaje unos pasos.</string>
     <string name="game_rules_concept_duo_name">La Alianza</string>
     <string name="game_rules_concept_elans_body">Un multiplicador de chispas. Se enciende cuando estás activo en varias familias de gestos estos días: contenido, comentarios, conversaciones, herramientas, vínculo social. Mientras dure, cada gesto hace brotar más chispas.</string>
-    <string name="game_rules_concept_flame_body" formatted="false">El fuego que tus ancestros te confían, mantenido cada día con al menos un gesto. Cada día de Llama añade un 2 % a las chispas de tus sueños, hasta un 50 %. Una Vela la guarda un día de ausencia; apagada, se vuelve a encender con Meeshes durante 48 h.</string>
-    <string name="game_rules_concept_glory_body">Tu gloria crece y nunca retrocede: te da tu rango. Crece cuando acuñas, cuando tu luz alcanza un nivel por primera vez, cuando logras una hazaña, cuando subes un círculo de justa, cuando terminas un viaje. Tu rango abre tu luz más allá del nivel 499.</string>
-    <string name="game_rules_concept_league_body">La clasificación de la semana, abierta desde el nivel 10: treinta héroes se miden en ella con su nombre de justa. Tus chispas de la semana marcan tu puesto: los 7 primeros suben al círculo siguiente, los 5 últimos bajan, y todo vuelve a cero el lunes. La Justa de los amigos siempre está abierta.</string>
-    <string name="game_rules_concept_level_body">La cifra de tu anillo, leída en tu luz. Abre el sueño (nivel 5), la justa (10), la alianza (20) y el renacimiento (100). Sube cuando tu luz alcanza el umbral siguiente, y baja cuando acuñar fija una parte de ella. El renacimiento lo devuelve a 1.</string>
-    <string name="game_rules_concept_meesh_body" formatted="false">La moneda rara de Meeshy, numerada: una parte de tu luz se fija en ella cuando la acuñas. Guárdala para tu legado, o gástala: una Vela para tu Llama, un acto que cambiar, el Sello del viaje. La parte fijada crece un 30 % cada diez acuñaciones.</string>
-    <string name="game_rules_concept_missions_body">Cada noche, tus ancestros te envían un sueño en tres actos, abierto desde el nivel 5. Cada acto hecho realidad hace brotar chispas; los tres hechos realidad hacen aparecer la Ofrenda. Puedes cambiar un acto al día con una Meesh.</string>
-    <string name="game_rules_concept_points_body">Cada intercambio de verdad hace brotar chispas; juntas forman tu luz. Tu luz hace tu nivel y acuña las Meeshes. Las chispas recibidas desde siempre siguen recibidas.</string>
-    <string name="game_rules_concept_prestige_body">Un renacimiento opcional, que se ofrece en el nivel 100, cinco veces como máximo. Tu nivel vuelve a 1 y tu luz a cero: vuelve a ser Chispa, y tu leyenda entra en una nueva Edad. Tus chispas recibidas desde siempre y tu luz más alta se quedan, y la justa y la alianza siguen abiertas. Tus ancestros te ofrecen un trofeo numerado y gloria. Tu rango, tus Meeshes y tu Llama se quedan.</string>
-    <string name="game_rules_concept_season_body">Un viaje de ocho semanas en tierra de idioma, con 40 paradas gratuitas. Los actos de tu sueño y la alianza te hacen avanzar unos pasos; cuatro pasos llevan a la parada siguiente, que reclamas una a una. El viaje terminado da la copa del viaje.</string>
     <string name="game_rules_concept_showcase_body">El estante de tus trofeos: copas de justa y de viaje, trofeos de renacimiento y de Llama. Un trofeo no da nada: se guarda y se muestra. Tú eliges el orden y quién los ve.</string>
     <string name="game_rules_concept_steps_body">De 10 a 100, cada diez niveles, tus ancestros piden una prueba sencilla: acuñar una Meesh, hacer realidad sueños, mantener una Llama, alcanzar un rango. Mientras no se supere, tu luz espera; superada, el nivel sube de golpe.</string>
     <string name="game_rules_concept_steps_name">Las pruebas</string>
@@ -1047,8 +1011,6 @@
     <string name="game_rules_concept_treasury_name">El Legado</string>
     <string name="game_rules_intro">Ocho reglas, y todo el juego cabe en ellas. Meo las explica, Mee te muestra el gesto.</string>
     <string name="game_rules_page_title">Cómo funciona</string>
-    <string name="game_rules_section_concepts">Cada concepto, en claro</string>
-    <string name="game_rules_section_rules">Las reglas en una página</string>
     <string name="game_rules_section_steps">Las siete etapas</string>
     <plurals name="game_sparks_convertible_count">
         <item quantity="one">%1$d chispa de tu luz</item>

@@ -49,9 +49,9 @@
       "explanations": 30
     },
     "android:feature/game": {
-      "labels": 1289,
-      "words": 9546,
-      "long": 154,
+      "labels": 1269,
+      "words": 8778,
+      "long": 136,
       "explanations": 116
     },
     "android:feature/notifications": {

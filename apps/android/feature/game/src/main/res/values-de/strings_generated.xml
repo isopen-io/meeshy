@@ -62,7 +62,6 @@
     <string name="game2_banner_top">ganz oben</string>
     <string name="game2_door_league_locked">Ab Level %1$s</string>
     <string name="game2_door_league_open">Das Turnier der Woche</string>
-    <string name="game2_door_prestige">Wiedergeburt</string>
     <string name="game2_door_prestige_locked">Bei Level 100</string>
     <string name="game2_door_prestige_ready">Dein Licht kann wiedergeboren werden</string>
     <string name="game2_door_season">Reise %1$s</string>
@@ -170,7 +169,6 @@
     <string name="game2_league_name_saphir">Saphir</string>
     <string name="game2_league_pseudonym_current">Du spielst unter dem Namen %1$s.</string>
     <string name="game2_league_pseudonym_drawn">Dein Turniername wird zugelost: weder dein Name noch dein Benutzername. Er wechselt mit jeder Reise.</string>
-    <string name="game2_league_pseudonym_hint_change">3 bis 20 Zeichen. Weder dein Name noch dein Benutzername.</string>
     <string name="game2_league_pseudonym_new">Neuer Turniername</string>
     <string name="game2_league_pseudonym_save">Turniernamen ändern</string>
     <string name="game2_league_pseudonym_title">Dein Turniername</string>
@@ -197,7 +195,6 @@
     <string name="game2_prestige_locked">Die Wiedergeburt öffnet sich bei Level 100. Du bist auf Level %1$s.</string>
     <string name="game2_prestige_max">Deine Legende hat ihre fünf Wiedergeburten erlebt: der Gipfel der Gipfel.</string>
     <string name="game2_prestige_mee">Level 100: Dein Licht kann wiedergeboren werden, oder weiter wachsen.</string>
-    <string name="game2_prestige_meo">Bei der Wiedergeburt wird dein Licht wieder zum Funken: Dein Level beginnt wieder bei 1 und deine Funken bei 0. Was du seit jeher empfangen hast und dein hellstes Licht bleiben eingraviert. Deine Ahnen schenken dir ein neues Zeitalter, eine nummerierte Trophäe und %1$s Ruhm. Dein Rang weicht nie zurück.</string>
     <string name="game2_prestige_stars">Wiedergeburten: %1$s von %2$s</string>
     <string name="game2_prestige_stay">Weiter strahlen</string>
     <string name="game2_prestige_title">Wiedergeburt</string>
@@ -213,13 +210,11 @@
     <string name="game2_season_claim">Rast %1$s abholen</string>
     <string name="game2_season_completed">Reise vollbracht: ein Pokal, eine datierte Medaille und %1$s Ruhm.</string>
     <string name="game2_season_heading">Reise %1$s · Woche %2$s von %3$s</string>
-    <string name="game2_season_how">Jeder erfüllte Akt und jedes Bündnis bringen dich ein paar Schritte voran: %1$s Schritte führen zur nächsten Rast. Die ganze Reise ist kostenlos.</string>
     <string name="game2_season_none">Gerade ist keine Reise unterwegs. Die nächste bricht bald auf.</string>
     <string name="game2_season_path">Kostenloser Weg</string>
     <string name="game2_season_reward_fragment">Ein Sternfragment</string>
     <string name="game2_season_reward_freeze">Eine Hüterin für deine Flamme</string>
     <string name="game2_season_reward_season_cup">Der Reisepokal</string>
-    <string name="game2_season_seal_body">Das Siegel ist rein dekorativ: alle %1$s Rasten ein Sammelobjekt, ohne Einfluss auf das Spiel.</string>
     <string name="game2_season_seal_buy">Siegel holen · %1$s</string>
     <string name="game2_season_seal_cosmetic">Siegel-Objekt</string>
     <string name="game2_season_seal_owned">Du hast das Siegel dieser Reise.</string>
@@ -238,7 +233,6 @@
     <string name="game2_settings_celebrations_body">Die Karten von Mee und Meo und die Zeichen der Ahnen, die unter Fortschritt erscheinen. Diese Einstellung gilt nur für dieses Gerät.</string>
     <string name="game2_settings_celebrations_switch">Zeichen der Ahnen anzeigen</string>
     <string name="game2_settings_celebrations_title">Mee und Meo</string>
-    <string name="game2_settings_friends_league_body">Deine bestätigten Freunde sehen dich in ihrer Wochenwertung, und du siehst sie in deiner. Du kannst mit einem Tipp aussteigen: Du erscheinst nicht mehr in ihrer und siehst ihre nicht mehr.</string>
     <string name="game2_settings_friends_league_switch">Nicht mehr am Turnier der Freunde teilnehmen</string>
     <string name="game2_settings_friends_league_title">Turnier der Freunde</string>
     <string name="game2_settings_hidden_body">Blendet das Spiel überall auf diesem Gerät aus, verbirgt deine Trophäen, deinen Rang, dein Erbe und deinen Atlas vor allen anderen und nimmt dich aus dem öffentlichen Turnier. Deine Funken und Trophäen bleiben erhalten.</string>
@@ -251,8 +245,6 @@
     <string name="game2_settings_league_on">Du bist unter dem Namen %1$s im öffentlichen Turnier.</string>
     <string name="game2_settings_league_on_unnamed">Du bist im öffentlichen Turnier.</string>
     <string name="game2_settings_league_title">Öffentliches Turnier</string>
-    <string name="game2_settings_notifications_body">Ein Bündnis-Angebot, ein Turnierergebnis, eine Rast auf der Reise: höchstens eine Spielbenachrichtigung pro Tag. Diese Einstellung gilt für dein Konto, auf allen deinen Geräten.</string>
-    <string name="game2_settings_notifications_switch">Spielbenachrichtigungen erhalten</string>
     <string name="game2_settings_notifications_title">Spielbenachrichtigungen</string>
     <string name="game2_settings_title">Spieleinstellungen</string>
     <string name="game2_settings_visibility_title">Wer was sieht</string>
@@ -421,7 +413,6 @@
     <string name="game_concept_fact_zone">Bereich</string>
     <string name="game_concept_flame_name">Die Flamme</string>
     <string name="game_concept_flame_tip_1">Mach jeden Tag mindestens eine Aktion.</string>
-    <string name="game_concept_flame_tip_2">Halte eine Hüterin bereit für Tage ohne.</string>
     <string name="game_concept_flame_use" formatted="false">Jeder Tag deiner Flamme schenkt den Funken deiner Träume 2 % mehr, bis zu 50 %. Eine Hüterin hält sie einen Tag deiner Abwesenheit am Brennen. Ist sie erloschen, entzündest du sie 48 Stunden lang mit Meeshes neu.</string>
     <string name="game_concept_flame_what">Deine Flamme ist das Feuer, das dir deine Ahnen anvertrauen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst, und wechselt dabei ihre Form, von der Glut bis zur Sonne.</string>
     <string name="game_concept_glory_name">Der Rang</string>
@@ -449,13 +440,10 @@
     <string name="game_concept_link_showcase">Meine Trophäen ordnen</string>
     <string name="game_concept_link_succes">Alle Heldentaten</string>
     <string name="game_concept_meesh_name">Das Erbe</string>
-    <string name="game_concept_meesh_tip_1">Behalte deine Meeshes: Dein Erbe wandert von einem Behältnis ins nächste.</string>
-    <string name="game_concept_meesh_tip_2">Gib sie aus, um über deine Flamme zu wachen oder einen Akt deines Traums zu tauschen.</string>
     <string name="game_concept_meesh_use">Behalte deine Meeshes: Sie füllen dein Erbe, von der Börse bis zur Reserve, sichtbar auf deinem Profil. Oder gib sie aus: eine Hüterin für deine Flamme, einen Akt zum Tauschen, das Siegel der Reise. Jede Prägung lässt außerdem deinen Ruhm wachsen.</string>
     <string name="game_concept_meesh_what">Eine Meesh ist dein Licht, gebannt in eine nummerierte Münze, die du selbst prägst. Jede hundertste ist aus Gold, jede tausendste aus Prisma.</string>
     <string name="game_concept_missions_name">Der Traum</string>
     <string name="game_concept_missions_tip_1">Beginne mit dem leichtesten Akt.</string>
-    <string name="game_concept_missions_tip_2">Ein Akt gefällt dir nicht? Tausche ihn, einmal pro Tag.</string>
     <string name="game_concept_missions_use">Öffne einen Akt, um zu sehen, wo du stehst. Einen pro Tag kannst du mit einer Meesh tauschen. Sind alle drei erfüllt, öffne die Gabe: Funken, Ruhm, manchmal ein Bonus, ein Sternfragment oder eine Hüterin.</string>
     <string name="game_concept_missions_what">Jede Nacht ein Traum in drei Akten: kleine Ziele für den Tag, die immer mehr Ruhm bringen. Die Gabe begleitet ihn.</string>
     <string name="game_concept_photo_offer">Diesen Moment festhalten</string>
@@ -466,13 +454,10 @@
     <string name="game_concept_points_what">Jeder echte Austausch lässt Funken sprühen: Zusammen bilden sie dein Licht. Je mehr es wächst, desto heller strahlt es, und sein Glanz ist dein Level.</string>
     <string name="game_concept_prestige_name">Die Wiedergeburt</string>
     <string name="game_concept_prestige_tip_1">Trag dein Licht bis Level 100.</string>
-    <string name="game_concept_prestige_tip_2">Werde wiedergeboren, wann du willst: Nichts zwingt dich.</string>
     <string name="game_concept_prestige_use">Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null. Du behältst deine seit jeher empfangenen Funken, dein hellstes Licht, deinen Rang, deinen Ruhm, deine Meeshes, deine Flamme und deine Trophäen; dein Turnier und dein Bündnis bleiben offen.</string>
     <string name="game_concept_prestige_what">Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100, wenn dein Licht zur Galaxie geworden ist. Sie ist freiwillig: Höchstens fünf Wiedergeburten führen ins Sechste Zeitalter.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">Die Reise</string>
-    <string name="game_concept_season_tip_1">Erfülle die Akte deines Traums, um ein paar Schritte voranzukommen.</string>
-    <string name="game_concept_season_tip_2">Schließ ein Bündnis mit einem Freund: Die Belohnung verdoppelt sich.</string>
     <string name="game_concept_season_use">Komm ein paar Schritte voran, dann hol dir jede erreichte Rast: Funken, ein Sternfragment, eine Hüterin. Die vollendete Reise bringt den Reisepokal. Das Siegel der Reise ist ein Sammelobjekt, das du mit Meeshes holst.</string>
     <string name="game_concept_season_what">Eine Reise dauert acht Wochen in einem Sprachland, mit vierzig Rasten und ihren kostenlosen Geschenken.</string>
     <string name="game_concept_section_act">Du bist dran</string>
@@ -497,7 +482,6 @@
     <string name="game_detail_chest_what">Die Gabe erscheint, wenn die drei Akte des Traums erfüllt sind.</string>
     <string name="game_detail_close">Schließen</string>
     <string name="game_detail_coin_how">Präge sie mit deinem Licht, sobald es reicht: Ein Teil davon wird darin gebannt.</string>
-    <string name="game_detail_coin_what">Die Meesh ist dein Licht, gebannt in eine nummerierte Münze. Jede Münze trägt ihre Nummer.</string>
     <string name="game_detail_defi_how">Erreiche die verlangte Zahl: Die nächste Stufe öffnet sich.</string>
     <string name="game_detail_defi_what">Eine Herausforderung ist eine Stufe in einer Familie von Aktionen.</string>
     <string name="game_detail_earned">Erhalten</string>
@@ -529,7 +513,6 @@
     <string name="game_detail_fact_level_required">Dieses Level brauchst du, um es freizuschalten.</string>
     <string name="game_detail_fact_mint_glory">Jede Prägung lässt deinen Ruhm um so viel wachsen.</string>
     <string name="game_detail_fact_mint_missing">Das sind die Funken, die deinem Licht für deine nächste Meesh fehlen.</string>
-    <string name="game_detail_fact_mint_next">Jede Meesh trägt ihre Nummer. Jede hundertste ist aus Gold, jede tausendste aus Prisma.</string>
     <string name="game_detail_fact_mint_price">Das ist der Teil deines Lichts, den deine nächste Meesh bannt. Die Regeln erklären die Rechnung.</string>
     <string name="game_detail_fact_minted">Das sind alle Meeshes, die du seit jeher geprägt hast.</string>
     <string name="game_detail_fact_missions_done">Drei Akte pro Traum. Sind sie erfüllt, erscheint die Gabe.</string>
@@ -610,7 +593,6 @@
     <string name="game_error_league_locked">Das Turnier öffnet bei Level 10.</string>
     <string name="game_error_league_minor">Das öffentliche Turnier steht nur Konten mit bestätigter Volljährigkeit offen.</string>
     <string name="game_error_league_pseudonym_forbidden">Dieser Turniername ist nicht erlaubt: Wähle einen, der dich nicht verrät.</string>
-    <string name="game_error_league_pseudonym_invalid">Dieser Turniername ist ungültig: 3 bis 20 Zeichen, Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich.</string>
     <string name="game_error_league_pseudonym_taken">Dieser Turniername ist bereits vergeben.</string>
     <string name="game_error_mission_not_found">Diesen Akt gibt es nicht mehr: Der Bildschirm wird aktualisiert.</string>
     <string name="game_error_mission_reroll_exhausted">Du hast heute schon einen Akt getauscht.</string>
@@ -669,9 +651,7 @@
     <string name="game_flame_no_streak">Flamme noch zu entzünden</string>
     <string name="game_flame_panel_bonus">Jeder Tag deiner Flamme nährt deine Träume: +%1$s %% Funken pro Akt, bis zu +%2$s %%.</string>
     <string name="game_flame_panel_freeze_buy">Eine Hüterin rufen · %1$s</string>
-    <string name="game_flame_panel_freeze_full">Deine Hüterinnen sind vollzählig: Eine Hüterin hält deine Flamme einen Tag deiner Abwesenheit am Brennen, eine weitere brauchst du nicht.</string>
     <string name="game_flame_panel_freezes">Hüterinnen: %1$s / %2$s</string>
-    <string name="game_flame_panel_offline">Offline: Hüterinnen und Neuentzünden gehen mit der Verbindung weiter.</string>
     <string name="game_flame_panel_relight">Flamme neu entzünden · %1$s</string>
     <string name="game_flame_panel_relight_closed">Diese Flamme kann nicht mehr neu entzündet werden. Eine neue Flamme beginnt mit deiner nächsten Aktion.</string>
     <string name="game_flame_panel_relight_intro">Deine Flamme ist erloschen: entzünde sie jetzt neu, sie macht dort weiter, wo sie aufgehört hat.</string>
@@ -843,7 +823,6 @@
     <string name="game_mint_minted_line">Meesh Nr. %1$s geprägt, %2$s.</string>
     <string name="game_mint_minting">Prägung läuft…</string>
     <string name="game_mint_next_title">Die Meesh Nr. %1$s</string>
-    <string name="game_mint_offline">Offline: Das Prägen geht mit der Verbindung weiter.</string>
     <string name="game_mint_tchak">Klack!</string>
     <string name="game_mission_comment_stranger_post_one">Den öffentlichen Beitrag einer unbekannten Person kommentieren</string>
     <string name="game_mission_comment_stranger_post_other">%1$s öffentliche Beiträge unbekannter Personen kommentieren</string>
@@ -912,14 +891,12 @@
     <string name="game_mission_write_someone_new_one">Jemandem zum ersten Mal schreiben</string>
     <string name="game_mission_write_someone_new_other">%1$s Personen zum ersten Mal schreiben</string>
     <string name="game_missions_locked">Ab Level 5 schicken dir deine Ahnen jede Nacht einen Traum in drei Akten, und eine Gabe. Du bist auf Level %1$s.</string>
-    <string name="game_missions_offline">Offline: Einen Akt tauschen oder die Gabe öffnen geht mit der Verbindung weiter.</string>
     <string name="game_missions_prism_day">Prisma-Tag: Einer der Akte spielt in einer anderen Sprache als deiner.</string>
     <string name="game_missions_prism_hour">Prisma-Stunde: %1$s – %2$s — jeder Akt zählt doppelt.</string>
     <string name="game_missions_title">Der Traum dieser Nacht</string>
     <string name="game_notebook_catch_up">Nachzuholen</string>
     <string name="game_notebook_catch_up_locked">Zuerst: %1$s</string>
     <string name="game_notebook_device_only">Deine Fotos leben auf diesem Gerät.</string>
-    <string name="game_notebook_empty">Deine Chronik wartet auf ihre erste Seite. Bei jedem Zeichen deiner Ahnen (ein Rang, eine erste Meesh, eine Flamme von 7 Tagen) laden dich Mee und Meo ein, den Moment zu verewigen, und das Foto bleibt auf deinem Gerät.</string>
     <string name="game_notebook_kept">Gespeicherte Fotos</string>
     <string name="game_notebook_page_title">Die Chronik</string>
     <string name="game_notebook_pending">Ausstehend</string>
@@ -1005,13 +982,9 @@
     <string name="game_rules_2_title">Die Funken bilden dein Licht</string>
     <string name="game_rules_3_body" formatted="false">Eine Meesh prägst du von Hand: Ein Teil deines Lichts wird darin gebannt. Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %.</string>
     <string name="game_rules_3_title">Man prägt Meeshes</string>
-    <string name="game_rules_4_body">Der gebannte Teil verlässt dein Licht, und nur dieses: Dein Level sinkt um ebenso viel. Dein Rang und deine Medaillen sinken nicht. Was du empfangen hast, bleibt empfangen.</string>
     <string name="game_rules_4_title">Prägen bannt dein Licht</string>
-    <string name="game_rules_5_body">Jede Prägung, jedes zum ersten Mal erreichte Level, jede Heldentat lässt deinen Ruhm wachsen. Der Ruhm gibt dir deinen Rang.</string>
     <string name="game_rules_5_title">Der Rang weicht nie zurück</string>
-    <string name="game_rules_6_body">Wer seine Meeshes behält, lässt das Erbe wachsen, von der Börse bis zur Reserve. Wer sie ausgibt, wacht über die Flamme oder bekommt Schmuck.</string>
     <string name="game_rules_6_title">Das Erbe wird bewahrt oder ausgegeben</string>
-    <string name="game_rules_7_body">Jede Nacht ein Traum in drei Akten, eine Gabe, eine Flamme, die wächst, solange du wiederkommst.</string>
     <string name="game_rules_7_title">Jeder Tag zählt</string>
     <string name="game_rules_8_body">Bei jeder Entwicklung zeigen sich deine Ahnen: Jedes Zeichen wird mit Mee und Meo als Foto in deiner Chronik verewigt.</string>
     <string name="game_rules_8_title">Die Ahnen zeigen sich</string>
@@ -1028,15 +1001,6 @@
     <string name="game_rules_concept_duo_body">Einmal pro Woche ein Bündnis mit einem bestätigten Freund, offen ab Level 20 für euch beide. Erfüllt jeder seinen Teil, verdoppelt sich die Belohnung. Es bringt deine Reise auch ein paar Schritte voran.</string>
     <string name="game_rules_concept_duo_name">Das Bündnis</string>
     <string name="game_rules_concept_elans_body">Ein Funken-Multiplikator. Er springt an, wenn du in diesen Tagen in mehreren Aktionsfamilien aktiv bist: Inhalte, Kommentare, Unterhaltungen, Werkzeuge, soziale Bindung. Solange er hält, lässt jede Aktion mehr Funken sprühen.</string>
-    <string name="game_rules_concept_flame_body" formatted="false">Das Feuer, das dir deine Ahnen anvertrauen, jeden Tag mit mindestens einer Aktion genährt. Jeder Tag deiner Flamme schenkt den Funken deiner Träume 2 % mehr, bis zu 50 %. Eine Hüterin hält sie einen Tag deiner Abwesenheit am Brennen; ist sie erloschen, entzündest du sie 48 Stunden lang mit Meeshes neu.</string>
-    <string name="game_rules_concept_glory_body">Dein Ruhm wächst und weicht nie zurück: Er gibt dir deinen Rang. Er wächst, wenn du prägst, wenn dein Licht ein Level zum ersten Mal erreicht, wenn du eine Heldentat vollbringst, wenn du einen Kreis des Turniers erklimmst, wenn du eine Reise vollendest. Dein Rang öffnet dein Licht über Level 499 hinaus.</string>
-    <string name="game_rules_concept_league_body">Die Wertung der Woche, offen ab Level 10: Dreißig Helden messen sich dort unter ihrem Turniernamen. Deine Funken der Woche bestimmen deinen Platz: Die ersten 7 steigen in den nächsten Kreis auf, die letzten 5 steigen ab, und am Montag beginnt alles bei null. Das Turnier der Freunde ist immer offen.</string>
-    <string name="game_rules_concept_level_body">Die Zahl auf deinem Ring, abgelesen an deinem Licht. Es öffnet den Traum (Level 5), das Turnier (10), das Bündnis (20) und die Wiedergeburt (100). Es steigt, wenn dein Licht die nächste Schwelle erreicht, und sinkt, wenn eine Prägung einen Teil davon bannt. Die Wiedergeburt setzt es auf 1 zurück.</string>
-    <string name="game_rules_concept_meesh_body" formatted="false">Die seltene, nummerierte Münze von Meeshy: Ein Teil deines Lichts wird darin gebannt, wenn du sie prägst. Behalte sie für dein Erbe, oder gib sie aus: eine Hüterin für deine Flamme, einen Akt zum Tauschen, das Siegel der Reise. Alle zehn Prägungen wächst der gebannte Teil um 30 %.</string>
-    <string name="game_rules_concept_missions_body">Jede Nacht schicken dir deine Ahnen einen Traum in drei Akten, offen ab Level 5. Jeder erfüllte Akt lässt Funken sprühen; sind alle drei erfüllt, erscheint die Gabe. Einen Akt pro Tag kannst du mit einer Meesh tauschen.</string>
-    <string name="game_rules_concept_points_body">Jeder echte Austausch lässt Funken sprühen; zusammen bilden sie dein Licht. Dein Licht macht dein Level und prägt die Meeshes. Die seit jeher empfangenen Funken bleiben empfangen.</string>
-    <string name="game_rules_concept_prestige_body">Eine freiwillige Wiedergeburt, ab Level 100, höchstens fünfmal. Dein Level beginnt wieder bei 1 und dein Licht bei null: Es wird wieder zum Funken, und deine Legende tritt in ein neues Zeitalter. Deine seit jeher empfangenen Funken und dein hellstes Licht bleiben, und Turnier wie Bündnis bleiben offen. Deine Ahnen schenken dir eine nummerierte Trophäe und Ruhm. Dein Rang, deine Meeshes und deine Flamme bleiben.</string>
-    <string name="game_rules_concept_season_body">Eine Reise über acht Wochen in einem Sprachland, mit 40 kostenlosen Rasten. Die Akte deines Traums und das Bündnis bringen dich ein paar Schritte voran; vier Schritte führen zur nächsten Rast, die du dir einzeln holst. Die vollendete Reise bringt den Reisepokal.</string>
     <string name="game_rules_concept_showcase_body">Das Regal deiner Trophäen: Pokale aus Turnier und Reise, Trophäen der Wiedergeburt und der Flamme. Eine Trophäe bringt nichts ein: Du bewahrst und zeigst sie. Du bestimmst die Reihenfolge und wer sie sieht.</string>
     <string name="game_rules_concept_steps_body">Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine einfache Prüfung: eine Meesh prägen, Träume erfüllen, eine Flamme halten, einen Rang erreichen. Solange sie nicht bestanden ist, wartet dein Licht; ist sie bestanden, steigt das Level sofort.</string>
     <string name="game_rules_concept_steps_name">Die Prüfungen</string>
@@ -1047,8 +1011,6 @@
     <string name="game_rules_concept_treasury_name">Das Erbe</string>
     <string name="game_rules_intro">Acht Regeln, und das ganze Spiel passt hinein. Meo erklärt sie, Mee zeigt dir die Aktion.</string>
     <string name="game_rules_page_title">So funktioniert es</string>
-    <string name="game_rules_section_concepts">Jeder Begriff, im Klartext</string>
-    <string name="game_rules_section_rules">Die Regeln auf einer Seite</string>
     <string name="game_rules_section_steps">Die sieben Etappen</string>
     <plurals name="game_sparks_convertible_count">
         <item quantity="one">%1$d Funke deines Lichts</item>

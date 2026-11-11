@@ -21,11 +21,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.league.pseudonym.hint_change",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.league.pseudonym.save",
           "status": "adopted"
         }

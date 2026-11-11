@@ -62,7 +62,6 @@
     <string name="game2_banner_top">at the top</string>
     <string name="game2_door_league_locked">From level %1$s</string>
     <string name="game2_door_league_open">This week’s joust</string>
-    <string name="game2_door_prestige">Rebirth</string>
     <string name="game2_door_prestige_locked">At level 100</string>
     <string name="game2_door_prestige_ready">Your light can be reborn</string>
     <string name="game2_door_season">Journey %1$s</string>
@@ -170,7 +169,6 @@
     <string name="game2_league_name_saphir">Sapphire</string>
     <string name="game2_league_pseudonym_current">You play under the name %1$s.</string>
     <string name="game2_league_pseudonym_drawn">Your joust name is drawn at random: not your name, not your username. It changes with every journey.</string>
-    <string name="game2_league_pseudonym_hint_change">3 to 20 characters. Not your name or your username.</string>
     <string name="game2_league_pseudonym_new">New joust name</string>
     <string name="game2_league_pseudonym_save">Change joust name</string>
     <string name="game2_league_pseudonym_title">Your joust name</string>
@@ -197,7 +195,6 @@
     <string name="game2_prestige_locked">Rebirth opens at level 100. You are at level %1$s.</string>
     <string name="game2_prestige_max">Your legend has lived its five rebirths: the summit of summits.</string>
     <string name="game2_prestige_mee">Level 100: your light can be reborn, or keep growing.</string>
-    <string name="game2_prestige_meo">When you are reborn, your light becomes a Spark again: your level starts over at 1 and your sparks at 0. What you have received since the beginning and your highest light stay engraved. Your ancestors offer you a new Age, a numbered trophy and %1$s glory. Your rank never goes back.</string>
     <string name="game2_prestige_stars">Rebirths: %1$s of %2$s</string>
     <string name="game2_prestige_stay">Keep shining</string>
     <string name="game2_prestige_title">Rebirth</string>
@@ -213,13 +210,11 @@
     <string name="game2_season_claim">Claim stop %1$s</string>
     <string name="game2_season_completed">Journey accomplished: a cup, a dated medal and %1$s glory.</string>
     <string name="game2_season_heading">Journey %1$s · week %2$s of %3$s</string>
-    <string name="game2_season_how">Each act you complete and each alliance carry you a few strides: %1$s strides lead to the next stop. The whole journey is free.</string>
     <string name="game2_season_none">No journey is under way right now. The next one sets off soon.</string>
     <string name="game2_season_path">Free path</string>
     <string name="game2_season_reward_fragment">A star fragment</string>
     <string name="game2_season_reward_freeze">A Vigil for your Flame</string>
     <string name="game2_season_reward_season_cup">The journey cup</string>
-    <string name="game2_season_seal_body">The Seal is purely decorative: a collectible every %1$s stops, which changes nothing in the game.</string>
     <string name="game2_season_seal_buy">Get the Seal · %1$s</string>
     <string name="game2_season_seal_cosmetic">Seal item</string>
     <string name="game2_season_seal_owned">You have this journey’s Seal.</string>
@@ -238,7 +233,6 @@
     <string name="game2_settings_celebrations_body">Mee and Meo’s cards and the signs from your ancestors that appear on Progress. This setting applies to this device only.</string>
     <string name="game2_settings_celebrations_switch">Show the signs from your ancestors</string>
     <string name="game2_settings_celebrations_title">Mee and Meo</string>
-    <string name="game2_settings_friends_league_body">Your accepted friends see you in their weekly ranking, and you see them in yours. You can opt out in one tap: you no longer appear in theirs, and you no longer see theirs.</string>
     <string name="game2_settings_friends_league_switch">Stop taking part in the Friends’ Joust</string>
     <string name="game2_settings_friends_league_title">Friends’ Joust</string>
     <string name="game2_settings_hidden_body">Hides the game everywhere on this device, closes your trophies, your rank, your Legacy and your Atlas to everyone else, and takes you out of the public joust. Your sparks and your trophies are kept.</string>
@@ -251,8 +245,6 @@
     <string name="game2_settings_league_on">You are in the public joust under the name %1$s.</string>
     <string name="game2_settings_league_on_unnamed">You are in the public joust.</string>
     <string name="game2_settings_league_title">Public joust</string>
-    <string name="game2_settings_notifications_body">An alliance offer, a joust result, a journey stop: at most one game notification a day. This setting applies to your account, on all your devices.</string>
-    <string name="game2_settings_notifications_switch">Receive game notifications</string>
     <string name="game2_settings_notifications_title">Game notifications</string>
     <string name="game2_settings_title">Game settings</string>
     <string name="game2_settings_visibility_title">Who sees what</string>
@@ -421,7 +413,6 @@
     <string name="game_concept_fact_zone">Zone</string>
     <string name="game_concept_flame_name">The Flame</string>
     <string name="game_concept_flame_tip_1">Do at least one action every day.</string>
-    <string name="game_concept_flame_tip_2">Keep a Vigil for the days off.</string>
     <string name="game_concept_flame_use" formatted="false">Each day of Flame adds 2 % to the sparks of your dreams, up to 50 %. A Vigil guards it for one day away. Once out, it can be relit with Meeshes for 48 hours.</string>
     <string name="game_concept_flame_what">Your Flame is the fire your ancestors entrust to you: it grows every day you make at least one move, and changes form as it grows, from Ember to Sun.</string>
     <string name="game_concept_glory_name">Rank</string>
@@ -449,13 +440,10 @@
     <string name="game_concept_link_showcase">Arrange my trophies</string>
     <string name="game_concept_link_succes">All great deeds</string>
     <string name="game_concept_meesh_name">The Legacy</string>
-    <string name="game_concept_meesh_tip_1">Keep your Meeshes: your legacy moves from one container to the next.</string>
-    <string name="game_concept_meesh_tip_2">Spend them to watch over your Flame or to change an act of your dream.</string>
     <string name="game_concept_meesh_use">Keep your Meeshes: they fill your legacy, from the Purse to the Reserve, shown on your profile. Or spend them: a Vigil for your Flame, an act to change, the Journey Seal. Every mint also makes your glory grow.</string>
     <string name="game_concept_meesh_what">A Meesh is your light bound into a numbered coin, which you mint yourself. One in a hundred is gold, one in a thousand is prism.</string>
     <string name="game_concept_missions_name">The Dream</string>
     <string name="game_concept_missions_tip_1">Start with the easiest act.</string>
-    <string name="game_concept_missions_tip_2">Don’t like an act? Change it, once a day.</string>
     <string name="game_concept_missions_use">Open an act to see where you stand. You can change one a day with a Meesh. Once all three are complete, open the Offering: sparks, glory, sometimes a bonus, a star fragment or a Vigil.</string>
     <string name="game_concept_missions_what">Each night, a dream in three acts: small goals to fulfill during the day, richer and richer in glory. The Offering comes with it.</string>
     <string name="game_concept_photo_offer">Capture this moment</string>
@@ -466,13 +454,10 @@
     <string name="game_concept_points_what">Every real exchange makes sparks fly: together, they form your light. The more it grows, the brighter it shines, and how bright it shines is your level.</string>
     <string name="game_concept_prestige_name">Rebirth</string>
     <string name="game_concept_prestige_tip_1">Carry your light all the way to level 100.</string>
-    <string name="game_concept_prestige_tip_2">Be reborn whenever you like: nothing forces you to.</string>
     <string name="game_concept_prestige_use">At level 100, choose: be reborn, or keep shining. Being reborn sets your level back to 1 and your light to zero. You keep the sparks received since the beginning, your highest light, your rank, your glory, your Meeshes, your Flame and your trophies; your joust and your alliance stay open.</string>
     <string name="game_concept_prestige_what">Rebirth opens a new Age of your legend, offered at level 100, when your light has become a Galaxy. It is optional: five rebirths at most lead to the Sixth Age.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">The Journey</string>
-    <string name="game_concept_season_tip_1">Complete the acts of your dream to move a few strides.</string>
-    <string name="game_concept_season_tip_2">Form an alliance with a friend: the reward doubles.</string>
     <string name="game_concept_season_use">Move a few strides, then claim each stop you reach: sparks, a star fragment, a Vigil. The finished journey gives the journey cup. The Journey Seal is a collectible, taken with Meeshes.</string>
     <string name="game_concept_season_what">A journey lasts eight weeks, in the land of a language, with forty stops and their free gifts.</string>
     <string name="game_concept_section_act">Your move</string>
@@ -497,7 +482,6 @@
     <string name="game_detail_chest_what">The Offering appears when the dream’s three acts are complete.</string>
     <string name="game_detail_close">Close</string>
     <string name="game_detail_coin_how">Mint it with your light as soon as there’s enough: a part of it is bound inside.</string>
-    <string name="game_detail_coin_what">The Meesh is your light bound into a numbered coin. Each coin carries its number.</string>
     <string name="game_detail_defi_how">Reach the number it asks for: the next tier opens.</string>
     <string name="game_detail_defi_what">A challenge is a tier to clear in a family of actions.</string>
     <string name="game_detail_earned">Earned</string>
@@ -529,7 +513,6 @@
     <string name="game_detail_fact_level_required">This is the level you need to reach to open it.</string>
     <string name="game_detail_fact_mint_glory">Each mint makes your glory grow by this much.</string>
     <string name="game_detail_fact_mint_missing">These are the sparks your light still lacks to mint your next Meesh.</string>
-    <string name="game_detail_fact_mint_next">Each Meesh carries its number. One in a hundred is gold, one in a thousand prism.</string>
     <string name="game_detail_fact_mint_price">This is the part of your light your next Meesh will bind. The rules say how it’s worked out.</string>
     <string name="game_detail_fact_minted">These are all the Meeshes you have minted since the beginning.</string>
     <string name="game_detail_fact_missions_done">Three acts per dream. Once complete, they make the Offering appear.</string>
@@ -610,7 +593,6 @@
     <string name="game_error_league_locked">The joust opens at level 10.</string>
     <string name="game_error_league_minor">The public joust is only open to accounts whose adulthood is verified.</string>
     <string name="game_error_league_pseudonym_forbidden">This joust name isn’t allowed: choose one that doesn’t point to you.</string>
-    <string name="game_error_league_pseudonym_invalid">This joust name isn’t valid: 3 to 20 characters, letters, digits, dot, dash, underscore.</string>
     <string name="game_error_league_pseudonym_taken">This joust name is already taken.</string>
     <string name="game_error_mission_not_found">This act no longer exists: the screen is refreshing.</string>
     <string name="game_error_mission_reroll_exhausted">You already changed an act today.</string>
@@ -669,9 +651,7 @@
     <string name="game_flame_no_streak">A Flame to light</string>
     <string name="game_flame_panel_bonus">Each day of Flame feeds your dreams: +%1$s %% sparks per act, up to +%2$s %%.</string>
     <string name="game_flame_panel_freeze_buy">Take a Vigil · %1$s</string>
-    <string name="game_flame_panel_freeze_full">Your Vigils are all here: a Vigil keeps your Flame lit for one day away, and you don’t need another.</string>
     <string name="game_flame_panel_freezes">Vigils: %1$s / %2$s</string>
-    <string name="game_flame_panel_offline">Offline: Vigils and relighting will resume once you’re connected.</string>
     <string name="game_flame_panel_relight">Relight the Flame · %1$s</string>
     <string name="game_flame_panel_relight_closed">This Flame can no longer be relit. A new Flame starts with your next action.</string>
     <string name="game_flame_panel_relight_intro">Your Flame went out: relight it now, it picks up where it stopped.</string>
@@ -843,7 +823,6 @@
     <string name="game_mint_minted_line">Meesh no. %1$s minted, %2$s.</string>
     <string name="game_mint_minting">Minting…</string>
     <string name="game_mint_next_title">Meesh no. %1$s</string>
-    <string name="game_mint_offline">Offline: minting will resume when you are back online.</string>
     <string name="game_mint_tchak">Clack!</string>
     <string name="game_mission_comment_stranger_post_one">Comment on a public post by someone you don’t know</string>
     <string name="game_mission_comment_stranger_post_other">Comment on %1$s public posts by people you don’t know</string>
@@ -912,14 +891,12 @@
     <string name="game_mission_write_someone_new_one">Write to someone for the first time</string>
     <string name="game_mission_write_someone_new_other">Write to %1$s people for the first time</string>
     <string name="game_missions_locked">At level 5, your ancestors send you a dream in three acts each night, and an Offering. You are at level %1$s.</string>
-    <string name="game_missions_offline">Offline: changing an act or opening the Offering will resume online.</string>
     <string name="game_missions_prism_day">Prism Day: one of the acts is played in a language other than yours.</string>
     <string name="game_missions_prism_hour">Prism Hour: %1$s – %2$s — every act counts double.</string>
     <string name="game_missions_title">Tonight’s dream</string>
     <string name="game_notebook_catch_up">To catch up</string>
     <string name="game_notebook_catch_up_locked">Take %1$s first</string>
     <string name="game_notebook_device_only">Your photos live on this device.</string>
-    <string name="game_notebook_empty">Your Chronicle is waiting for its first page. At each sign from your ancestors (a rank, a first Meesh, a 7-day Flame), Mee and Meo invite you to immortalize the moment, and the photo stays on your device.</string>
     <string name="game_notebook_kept">Kept photos</string>
     <string name="game_notebook_page_title">The Chronicle</string>
     <string name="game_notebook_pending">Pending</string>
@@ -1005,13 +982,9 @@
     <string name="game_rules_2_title">Sparks form your light</string>
     <string name="game_rules_3_body" formatted="false">A Meesh is minted by hand: part of your light is bound into it. That part depends on the coin’s number and on your current level: smaller when your level is low, whole from level 100. It grows by 30 % every ten mints.</string>
     <string name="game_rules_3_title">We mint Meeshes</string>
-    <string name="game_rules_4_body">The bound part leaves your light, and only that part: your level drops by as much. Your rank and your medals don’t drop. What you received stays received.</string>
     <string name="game_rules_4_title">Minting binds your light</string>
-    <string name="game_rules_5_body">Every mint, every level reached for the first time, every great deed makes your glory grow. Glory gives you your rank.</string>
     <string name="game_rules_5_title">Your rank never goes back</string>
-    <string name="game_rules_6_body">Keeping your Meeshes makes your legacy grow, from the Purse to the Reserve. Spending them watches over the Flame or offers adornments.</string>
     <string name="game_rules_6_title">The Legacy is kept or spent</string>
-    <string name="game_rules_7_body">A dream in three acts each night, an Offering, a Flame that grows as long as you come back.</string>
     <string name="game_rules_7_title">Every day counts</string>
     <string name="game_rules_8_body">At each evolution, your ancestors send you a sign: each sign is immortalized in a photo with Mee and Meo in your Chronicle.</string>
     <string name="game_rules_8_title">Your ancestors send signs</string>
@@ -1028,15 +1001,6 @@
     <string name="game_rules_concept_duo_body">Once a week, an alliance with an accepted friend, open from level 20 for both of you. If each of you does your part, the reward doubles. It also carries your journey a few strides further.</string>
     <string name="game_rules_concept_duo_name">The Alliance</string>
     <string name="game_rules_concept_elans_body">A spark multiplier. It lights up when you’re active in several families of moves these days: content, comments, conversations, tools, social ties. While it holds, every move makes more sparks fly.</string>
-    <string name="game_rules_concept_flame_body" formatted="false">The fire your ancestors entrust to you, tended each day by at least one move. Each day of Flame adds 2 % to the sparks of your dreams, up to 50 %. A Vigil guards it for one day away; once out, it can be relit with Meeshes for 48 hours.</string>
-    <string name="game_rules_concept_glory_body">Your glory grows and never goes back: it gives you your rank. It grows when you mint, when your light reaches a level for the first time, when you do a great deed, when you climb a joust circle, when you complete a journey. Your rank opens your light beyond level 499.</string>
-    <string name="game_rules_concept_league_body">The week’s contest, open from level 10: thirty heroes measure themselves there under their joust names. Your sparks of the week set your place: the top 7 climb to the next circle, the bottom 5 go back down, and everything starts again from zero on Monday. The Friends’ Joust is always open.</string>
-    <string name="game_rules_concept_level_body">The number on your ring, read from your light. It opens the dream (level 5), the joust (10), the alliance (20) and rebirth (100). It rises when your light reaches the next threshold, and drops when a mint binds part of it. Rebirth sets it back to 1.</string>
-    <string name="game_rules_concept_meesh_body" formatted="false">Meeshy’s rare, numbered coin: part of your light is bound into it when you mint it. Keep it for your legacy, or spend it: a Vigil for your Flame, an act to change, the Journey Seal. The bound part grows by 30 % every ten mints.</string>
-    <string name="game_rules_concept_missions_body">Each night, your ancestors send you a dream in three acts, open from level 5. Each act you complete makes sparks fly; all three complete make the Offering appear. You can change one act a day with a Meesh.</string>
-    <string name="game_rules_concept_points_body">Every real exchange makes sparks fly; together, they form your light. Your light makes your level and mints the Meeshes. The sparks received since the beginning stay received.</string>
-    <string name="game_rules_concept_prestige_body">An optional rebirth, offered at level 100, five times at most. Your level starts over at 1 and your light at zero: it becomes a Spark again, and your legend enters a new Age. The sparks you received since the beginning and your highest light stay, and the joust and the alliance stay open. Your ancestors offer you a numbered trophy and glory. Your rank, your Meeshes and your Flame stay.</string>
-    <string name="game_rules_concept_season_body">An eight-week journey in the land of a language, with 40 free stops. The acts of your dream and the alliance carry you a few strides; four strides lead to the next stop, which you claim one by one. The finished journey gives the journey cup.</string>
     <string name="game_rules_concept_showcase_body">The shelf of your trophies: joust and journey cups, rebirth and Flame trophies. A trophy brings nothing: it is kept and shown. You choose the order and who sees them.</string>
     <string name="game_rules_concept_steps_body">From 10 to 100, every ten levels, your ancestors ask for a simple trial: mint a Meesh, fulfill dreams, hold a Flame, reach a rank. Until it is passed, your light waits; once passed, the level rises at once.</string>
     <string name="game_rules_concept_steps_name">The Trials</string>
@@ -1047,8 +1011,6 @@
     <string name="game_rules_concept_treasury_name">The Legacy</string>
     <string name="game_rules_intro">Eight rules, and the whole game fits inside. Meo explains them, Mee shows you the move.</string>
     <string name="game_rules_page_title">How it works</string>
-    <string name="game_rules_section_concepts">Every concept, in plain words</string>
-    <string name="game_rules_section_rules">The rules on one page</string>
     <string name="game_rules_section_steps">The seven steps</string>
     <plurals name="game_sparks_convertible_count">
         <item quantity="one">%1$d spark of your light</item>

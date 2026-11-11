@@ -39,6 +39,78 @@
         {
           "androidName": "game_concept_use_question",
           "status": "android-only"
+        },
+        {
+          "androidName": "game2_prestige_meo",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_season_how",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_season_seal_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_notifications_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_notifications_switch",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_friends_league_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_section_rules",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_section_concepts",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_4_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_5_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_6_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_7_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_detail_coin_what",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_detail_fact_mint_next",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_flame_panel_freeze_full",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_notebook_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_error_league_pseudonym_invalid",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_league_pseudonym_hint_change",
+          "status": "android-only"
         }
       ]
     }

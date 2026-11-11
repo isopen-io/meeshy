@@ -62,7 +62,6 @@
     <string name="game2_banner_top">no topo</string>
     <string name="game2_door_league_locked">A partir do nível %1$s</string>
     <string name="game2_door_league_open">O torneio da semana</string>
-    <string name="game2_door_prestige">Renascimento</string>
     <string name="game2_door_prestige_locked">No nível 100</string>
     <string name="game2_door_prestige_ready">Sua luz pode renascer</string>
     <string name="game2_door_season">Viagem %1$s</string>
@@ -170,7 +169,6 @@
     <string name="game2_league_name_saphir">Safira</string>
     <string name="game2_league_pseudonym_current">Você joga com o nome %1$s.</string>
     <string name="game2_league_pseudonym_drawn">Seu nome de torneio é sorteado: nem o seu nome, nem o seu usuário. Ele muda a cada viagem.</string>
-    <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres. Nem seu nome, nem seu usuário.</string>
     <string name="game2_league_pseudonym_new">Novo nome de torneio</string>
     <string name="game2_league_pseudonym_save">Mudar de nome de torneio</string>
     <string name="game2_league_pseudonym_title">Seu nome de torneio</string>
@@ -197,7 +195,6 @@
     <string name="game2_prestige_locked">O Renascimento se abre no nível 100. Você está no nível %1$s.</string>
     <string name="game2_prestige_max">Sua lenda viveu os seus cinco renascimentos: o topo do topo.</string>
     <string name="game2_prestige_mee">Nível 100: sua luz pode renascer, ou crescer mais.</string>
-    <string name="game2_prestige_meo">Ao renascer, sua luz volta a ser Faísca: seu nível recomeça em 1 e suas faíscas em 0. O que você recebeu desde sempre e o auge da sua luz ficam gravados. Seus ancestrais oferecem a você uma nova Era, um troféu numerado e %1$s de glória. Seu título nunca recua.</string>
     <string name="game2_prestige_stars">Renascimentos: %1$s de %2$s</string>
     <string name="game2_prestige_stay">Continuar a brilhar</string>
     <string name="game2_prestige_title">Renascimento</string>
@@ -213,13 +210,11 @@
     <string name="game2_season_claim">Resgatar a parada %1$s</string>
     <string name="game2_season_completed">Viagem cumprida: uma taça, uma medalha datada e %1$s de glória.</string>
     <string name="game2_season_heading">Viagem %1$s · semana %2$s de %3$s</string>
-    <string name="game2_season_how">Cada ato realizado e cada aliança fazem você avançar alguns passos: %1$s passos levam à parada seguinte. A viagem inteira é gratuita.</string>
     <string name="game2_season_none">Nenhuma viagem está em andamento agora. A próxima parte em breve.</string>
     <string name="game2_season_path">Caminho gratuito</string>
     <string name="game2_season_reward_fragment">Um fragmento de estrela</string>
     <string name="game2_season_reward_freeze">Uma Lamparina para a sua Chama</string>
     <string name="game2_season_reward_season_cup">A taça da viagem</string>
-    <string name="game2_season_seal_body">O Selo é puramente decorativo: um objeto de coleção a cada %1$s paradas, que não muda nada no jogo.</string>
     <string name="game2_season_seal_buy">Pegar o Selo · %1$s</string>
     <string name="game2_season_seal_cosmetic">Item do Selo</string>
     <string name="game2_season_seal_owned">Você tem o Selo desta viagem.</string>
@@ -238,7 +233,6 @@
     <string name="game2_settings_celebrations_body">Os cartões de Mee e Meo e os sinais dos ancestrais que aparecem em Progresso. Este ajuste vale só para este aparelho.</string>
     <string name="game2_settings_celebrations_switch">Mostrar os sinais dos ancestrais</string>
     <string name="game2_settings_celebrations_title">Mee e Meo</string>
-    <string name="game2_settings_friends_league_body">Seus amigos aceitos veem você na classificação semanal deles, e você os vê na sua. Você pode sair com um toque: deixa de aparecer na deles e deixa de ver a deles.</string>
     <string name="game2_settings_friends_league_switch">Deixar de participar do Torneio dos amigos</string>
     <string name="game2_settings_friends_league_title">Torneio dos amigos</string>
     <string name="game2_settings_hidden_body">Esconde o jogo em todo este aparelho, fecha seus troféus, seu título, sua Herança e seu Atlas para todos os outros, e tira você do torneio público. Suas faíscas e seus troféus são guardados.</string>
@@ -251,8 +245,6 @@
     <string name="game2_settings_league_on">Você está no torneio público com o nome %1$s.</string>
     <string name="game2_settings_league_on_unnamed">Você está no torneio público.</string>
     <string name="game2_settings_league_title">Torneio público</string>
-    <string name="game2_settings_notifications_body">Uma proposta de aliança, um resultado de torneio, uma parada de viagem: no máximo uma notificação do jogo por dia. Este ajuste vale para a sua conta, em todos os seus aparelhos.</string>
-    <string name="game2_settings_notifications_switch">Receber as notificações do jogo</string>
     <string name="game2_settings_notifications_title">Notificações do jogo</string>
     <string name="game2_settings_title">Ajustes do jogo</string>
     <string name="game2_settings_visibility_title">Quem vê o quê</string>
@@ -421,7 +413,6 @@
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_name">A Chama</string>
     <string name="game_concept_flame_tip_1">Faça pelo menos um gesto todos os dias.</string>
-    <string name="game_concept_flame_tip_2">Guarde uma Lamparina para os dias sem.</string>
     <string name="game_concept_flame_use" formatted="false">Cada dia de Chama soma 2% às faíscas dos seus sonhos, até 50%. Uma Lamparina cuida dela num dia de ausência. Apagada, ela se reacende com Meeshes durante 48 h.</string>
     <string name="game_concept_flame_what">Sua Chama é o fogo que seus ancestrais confiam a você: ela cresce a cada dia em que você faz pelo menos um gesto, e muda de forma ao crescer, da Brasa ao Sol.</string>
     <string name="game_concept_glory_name">O Título</string>
@@ -449,13 +440,10 @@
     <string name="game_concept_link_showcase">Arrumar meus troféus</string>
     <string name="game_concept_link_succes">Todas as façanhas</string>
     <string name="game_concept_meesh_name">A Herança</string>
-    <string name="game_concept_meesh_tip_1">Guarde suas Meeshes: sua herança passa de um recipiente ao seguinte.</string>
-    <string name="game_concept_meesh_tip_2">Gaste-as para cuidar da sua Chama ou trocar um ato do seu sonho.</string>
     <string name="game_concept_meesh_use">Guarde suas Meeshes: elas enchem a sua herança, da Bolsa à Reserva, visível no seu perfil. Ou gaste-as: uma Lamparina para a sua Chama, um ato para trocar, o Selo da viagem. Cada cunhagem também faz a sua glória crescer.</string>
     <string name="game_concept_meesh_what">Uma Meesh é a sua luz cristalizada numa moeda numerada, que você mesmo cunha. Uma em cem é de ouro, uma em mil é de prisma.</string>
     <string name="game_concept_missions_name">O Sonho</string>
     <string name="game_concept_missions_tip_1">Comece pelo ato mais fácil.</string>
-    <string name="game_concept_missions_tip_2">Não gostou de um ato? Troque-o, uma vez por dia.</string>
     <string name="game_concept_missions_use">Abra um ato para ver onde você está. Você pode trocar um por dia com uma Meesh. Com os três realizados, abra a Oferenda: faíscas, glória, às vezes um prêmio, um fragmento de estrela ou uma Lamparina.</string>
     <string name="game_concept_missions_what">Toda noite, um sonho em três atos: pequenas metas para realizar durante o dia, cada vez mais ricas em glória. A Oferenda o acompanha.</string>
     <string name="game_concept_photo_offer">Eternizar este momento</string>
@@ -466,13 +454,10 @@
     <string name="game_concept_points_what">Cada troca de verdade faz saltar faíscas: juntas, elas formam a sua luz. Quanto mais ela cresce, mais ela brilha, e o brilho dela é o seu nível.</string>
     <string name="game_concept_prestige_name">O Renascimento</string>
     <string name="game_concept_prestige_tip_1">Leve sua luz até o nível 100.</string>
-    <string name="game_concept_prestige_tip_2">Renasça quando quiser: nada obriga você.</string>
     <string name="game_concept_prestige_use">No nível 100, escolha: renascer, ou continuar a brilhar. Renascer leva o seu nível a 1 e a sua luz a zero. Você guarda as faíscas recebidas desde sempre, o auge da sua luz, seu título, sua glória, suas Meeshes, sua Chama e seus troféus; seu torneio e sua aliança continuam abertos.</string>
     <string name="game_concept_prestige_what">O renascimento abre uma nova Era da sua lenda, oferecida no nível 100, quando a sua luz se tornou Galáxia. Ele é opcional: cinco renascimentos no máximo levam à Sexta Era.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
     <string name="game_concept_season_name">A Viagem</string>
-    <string name="game_concept_season_tip_1">Realize os atos do seu sonho para avançar alguns passos.</string>
-    <string name="game_concept_season_tip_2">Faça aliança com um amigo: a recompensa dobra.</string>
     <string name="game_concept_season_use">Avance alguns passos, depois resgate cada parada alcançada: faíscas, um fragmento de estrela, uma Lamparina. A viagem concluída dá a taça da viagem. O Selo da viagem é um objeto de coleção, obtido com Meeshes.</string>
     <string name="game_concept_season_what">Uma viagem dura oito semanas, numa terra de idioma, com quarenta paradas e os seus presentes gratuitos.</string>
     <string name="game_concept_section_act">Sua vez</string>
@@ -497,7 +482,6 @@
     <string name="game_detail_chest_what">A Oferenda aparece quando os três atos do sonho estão realizados.</string>
     <string name="game_detail_close">Fechar</string>
     <string name="game_detail_coin_how">Cunhe-a com a sua luz assim que ela bastar: uma parte se cristaliza nela.</string>
-    <string name="game_detail_coin_what">A Meesh é a sua luz cristalizada numa moeda numerada. Cada moeda traz o seu número.</string>
     <string name="game_detail_defi_how">Alcance o número pedido: o patamar seguinte se abre.</string>
     <string name="game_detail_defi_what">Um desafio é um patamar a vencer numa família de gestos.</string>
     <string name="game_detail_earned">Obtido</string>
@@ -529,7 +513,6 @@
     <string name="game_detail_fact_level_required">É o nível que você precisa alcançar para abrir.</string>
     <string name="game_detail_fact_mint_glory">Cada cunhagem faz a sua glória crescer nessa medida.</string>
     <string name="game_detail_fact_mint_missing">São as faíscas que faltam à sua luz para cunhar a sua próxima Meesh.</string>
-    <string name="game_detail_fact_mint_next">Cada Meesh tem o seu número. Uma em cem é de ouro, uma em mil de prisma.</string>
     <string name="game_detail_fact_mint_price">É a parte da sua luz que a sua próxima Meesh vai cristalizar. As regras dizem como ela se calcula.</string>
     <string name="game_detail_fact_minted">São todas as Meeshes que você cunhou desde sempre.</string>
     <string name="game_detail_fact_missions_done">Três atos por sonho. Uma vez realizados, eles fazem aparecer a Oferenda.</string>
@@ -610,7 +593,6 @@
     <string name="game_error_league_locked">O torneio se abre no nível 10.</string>
     <string name="game_error_league_minor">O torneio público é reservado a contas com maioridade verificada.</string>
     <string name="game_error_league_pseudonym_forbidden">Este nome de torneio não é permitido: escolha um que não identifique você.</string>
-    <string name="game_error_league_pseudonym_invalid">Este nome de torneio não é válido: de 3 a 20 caracteres, letras, números, ponto, hífen, sublinhado.</string>
     <string name="game_error_league_pseudonym_taken">Este nome de torneio já está em uso.</string>
     <string name="game_error_mission_not_found">Este ato não existe mais: a tela está se atualizando.</string>
     <string name="game_error_mission_reroll_exhausted">Você já trocou um ato hoje.</string>
@@ -669,9 +651,7 @@
     <string name="game_flame_no_streak">Chama a acender</string>
     <string name="game_flame_panel_bonus">Cada dia de Chama alimenta seus sonhos: +%1$s%% de faíscas por ato, até +%2$s%%.</string>
     <string name="game_flame_panel_freeze_buy">Pegar uma Lamparina · %1$s</string>
-    <string name="game_flame_panel_freeze_full">Suas Lamparinas estão completas: uma Lamparina mantém sua Chama acesa num dia de ausência, você não precisa de mais uma.</string>
     <string name="game_flame_panel_freezes">Lamparinas: %1$s / %2$s</string>
-    <string name="game_flame_panel_offline">Sem conexão: as Lamparinas e o reacendimento voltam com a conexão.</string>
     <string name="game_flame_panel_relight">Reacender a Chama · %1$s</string>
     <string name="game_flame_panel_relight_closed">Esta Chama não pode mais ser reacendida. Uma nova Chama começa com a sua próxima ação.</string>
     <string name="game_flame_panel_relight_intro">Sua Chama se apagou: reacenda-a agora, ela recomeça de onde parou.</string>
@@ -843,7 +823,6 @@
     <string name="game_mint_minted_line">Meesh n.º %1$s cunhada, %2$s.</string>
     <string name="game_mint_minting">Cunhando…</string>
     <string name="game_mint_next_title">A Meesh n.º %1$s</string>
-    <string name="game_mint_offline">Sem conexão: a cunhagem volta com a conexão.</string>
     <string name="game_mint_tchak">Tchac!</string>
     <string name="game_mission_comment_stranger_post_one">Comentar a publicação pública de alguém que você não conhece</string>
     <string name="game_mission_comment_stranger_post_other">Comentar %1$s publicações públicas de pessoas que você não conhece</string>
@@ -912,14 +891,12 @@
     <string name="game_mission_write_someone_new_one">Escrever para alguém pela primeira vez</string>
     <string name="game_mission_write_someone_new_other">Escrever para %1$s pessoas pela primeira vez</string>
     <string name="game_missions_locked">No nível 5, seus ancestrais enviam toda noite um sonho em três atos, e uma Oferenda. Você está no nível %1$s.</string>
-    <string name="game_missions_offline">Sem conexão: trocar um ato ou abrir a Oferenda volta com a conexão.</string>
     <string name="game_missions_prism_day">Dia do Prisma: um dos atos se passa num idioma diferente do seu.</string>
     <string name="game_missions_prism_hour">Hora do Prisma: %1$s – %2$s — cada ato conta em dobro.</string>
     <string name="game_missions_title">O sonho desta noite</string>
     <string name="game_notebook_catch_up">Para recuperar</string>
     <string name="game_notebook_catch_up_locked">Tire antes: %1$s</string>
     <string name="game_notebook_device_only">Suas fotos ficam neste aparelho.</string>
-    <string name="game_notebook_empty">Sua Crônica espera a primeira página. A cada sinal dos seus ancestrais (um título, uma primeira Meesh, uma Chama de 7 dias), Mee e Meo convidam você a eternizar o momento, e a foto fica no seu aparelho.</string>
     <string name="game_notebook_kept">Fotos guardadas</string>
     <string name="game_notebook_page_title">A Crônica</string>
     <string name="game_notebook_pending">Pendentes</string>
@@ -1005,13 +982,9 @@
     <string name="game_rules_2_title">As faíscas formam a sua luz</string>
     <string name="game_rules_3_body" formatted="false">Uma Meesh se cunha à mão: uma parte da sua luz se cristaliza nela. Essa parte depende do número da moeda e do seu nível atual: menor quando o seu nível é baixo, inteira a partir do nível 100. Ela cresce 30% a cada dez cunhagens.</string>
     <string name="game_rules_3_title">Cunham-se Meeshes</string>
-    <string name="game_rules_4_body">A parte cristalizada sai da sua luz, e só ela: seu nível baixa na mesma medida. Seu título e suas medalhas não baixam. O que você recebeu continua recebido.</string>
     <string name="game_rules_4_title">Cunhar cristaliza a sua luz</string>
-    <string name="game_rules_5_body">Cada cunhagem, cada nível alcançado pela primeira vez, cada façanha faz a sua glória crescer. A glória dá o seu título.</string>
     <string name="game_rules_5_title">O título nunca recua</string>
-    <string name="game_rules_6_body">Guardar as suas Meeshes faz a herança crescer, da Bolsa à Reserva. Gastá-las cuida da Chama ou oferece adornos.</string>
     <string name="game_rules_6_title">A Herança se guarda ou se gasta</string>
-    <string name="game_rules_7_body">Um sonho em três atos toda noite, uma Oferenda, uma Chama que cresce enquanto você volta.</string>
     <string name="game_rules_7_title">Cada dia conta</string>
     <string name="game_rules_8_body">A cada evolução, seus ancestrais se manifestam: cada sinal fica eternizado numa foto com Mee e Meo na sua Crônica.</string>
     <string name="game_rules_8_title">Os ancestrais se manifestam</string>
@@ -1028,15 +1001,6 @@
     <string name="game_rules_concept_duo_body">Uma vez por semana, uma aliança com um amigo aceito, aberta a partir do nível 20 para vocês dois. Se cada um realizar a sua parte, a recompensa dobra. Ela também faz a sua viagem avançar alguns passos.</string>
     <string name="game_rules_concept_duo_name">A Aliança</string>
     <string name="game_rules_concept_elans_body">Um multiplicador de faíscas. Ele se acende quando você está ativo em várias famílias de gestos nestes dias: conteúdo, comentários, conversas, ferramentas, laço social. Enquanto ele durar, cada gesto faz saltar mais faíscas.</string>
-    <string name="game_rules_concept_flame_body" formatted="false">O fogo que seus ancestrais confiam a você, mantido todo dia por pelo menos um gesto. Cada dia de Chama soma 2% às faíscas dos seus sonhos, até 50%. Uma Lamparina cuida dela num dia de ausência; apagada, ela se reacende com Meeshes durante 48 h.</string>
-    <string name="game_rules_concept_glory_body">Sua glória cresce e nunca recua: ela dá o seu título. Ela cresce quando você cunha, quando a sua luz alcança um nível pela primeira vez, quando você cumpre uma façanha, quando você sobe um círculo de torneio, quando você completa uma viagem. Seu título abre a sua luz além do nível 499.</string>
-    <string name="game_rules_concept_league_body">A classificação da semana, aberta a partir do nível 10: trinta heróis se medem nela sob o seu nome de torneio. Suas faíscas da semana fazem o seu lugar: os 7 primeiros sobem para o círculo seguinte, os 5 últimos voltam a descer, e tudo recomeça do zero na segunda-feira. O Torneio dos amigos continua sempre aberto.</string>
-    <string name="game_rules_concept_level_body">O número do seu anel, lido na sua luz. Ele abre o sonho (nível 5), o torneio (10), a aliança (20) e o renascimento (100). Ele sobe quando a sua luz alcança o limiar seguinte, e baixa quando uma cunhagem cristaliza uma parte dela. O renascimento o leva de volta a 1.</string>
-    <string name="game_rules_concept_meesh_body" formatted="false">A moeda rara do Meeshy, numerada: uma parte da sua luz se cristaliza nela quando você a cunha. Guarde-a para a sua herança, ou gaste-a: uma Lamparina para a sua Chama, um ato para trocar, o Selo da viagem. A parte cristalizada cresce 30% a cada dez cunhagens.</string>
-    <string name="game_rules_concept_missions_body">Toda noite, seus ancestrais enviam um sonho em três atos, aberto a partir do nível 5. Cada ato realizado faz saltar faíscas; os três realizados fazem aparecer a Oferenda. Você pode trocar um ato por dia com uma Meesh.</string>
-    <string name="game_rules_concept_points_body">Cada troca de verdade faz saltar faíscas; juntas, elas formam a sua luz. Sua luz faz o seu nível e cunha as Meeshes. As faíscas recebidas desde sempre continuam recebidas.</string>
-    <string name="game_rules_concept_prestige_body">Um renascimento opcional, oferecido no nível 100, no máximo cinco vezes. Seu nível recomeça em 1 e a sua luz em zero: ela volta a ser Faísca, e a sua lenda entra numa nova Era. Suas faíscas recebidas desde sempre e o auge da sua luz ficam, e o torneio como a aliança continuam abertos. Seus ancestrais oferecem a você um troféu numerado e glória. Seu título, suas Meeshes e sua Chama ficam.</string>
-    <string name="game_rules_concept_season_body">Uma viagem de oito semanas em terra de idioma, com 40 paradas gratuitas. Os atos do seu sonho e a aliança fazem você avançar alguns passos; quatro passos levam à parada seguinte, que você resgata uma a uma. A viagem concluída dá a taça da viagem.</string>
     <string name="game_rules_concept_showcase_body">A prateleira dos seus troféus: taças de torneio e de viagem, troféus de renascimento e de Chama. Um troféu não rende nada: ele se guarda e se mostra. Você escolhe a ordem e quem os vê.</string>
     <string name="game_rules_concept_steps_body">De 10 a 100, a cada dez níveis, seus ancestrais pedem uma prova simples: cunhar uma Meesh, realizar sonhos, manter uma Chama, alcançar um título. Enquanto ela não for vencida, a sua luz espera; vencida, o nível sobe de uma vez.</string>
     <string name="game_rules_concept_steps_name">As provas</string>
@@ -1047,8 +1011,6 @@
     <string name="game_rules_concept_treasury_name">A Herança</string>
     <string name="game_rules_intro">Oito regras, e o jogo inteiro cabe nelas. O Meo as explica, a Mee mostra a ação.</string>
     <string name="game_rules_page_title">Como funciona</string>
-    <string name="game_rules_section_concepts">Cada conceito, com clareza</string>
-    <string name="game_rules_section_rules">As regras em uma página</string>
     <string name="game_rules_section_steps">As sete etapas</string>
     <plurals name="game_sparks_convertible_count">
         <item quantity="one">%1$d faísca da sua luz</item>

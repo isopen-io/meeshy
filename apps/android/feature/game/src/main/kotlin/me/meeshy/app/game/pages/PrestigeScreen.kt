@@ -74,9 +74,9 @@ private fun PrestigeContent(game: GameBlock, gestures: GameGesturesUiState, onPa
     PrestigeSummary(prestige, level = game.level.shown.level, passed = gestures.prestigePassed)
     if (prestige.canPrestige && prestige.stars < prestige.max) {
         var confirming by rememberSaveable { mutableStateOf(false) }
-        GameCard(title = stringResource(R.string.game2_door_prestige)) {
+        GameCard {
             GameNote(stringResource(R.string.game2_prestige_mee), tone = MeeshyTheme.tokens.textPrimary)
-            GameNote(stringResource(R.string.game2_prestige_meo, count(prestige.gloryOnPass)))
+            GameNote(stringResource(R.string.game2_prestige_meo))
             if (confirming) {
                 PrestigeConfirmation(
                     next = prestige.stars + 1,
@@ -149,7 +149,7 @@ private fun PrestigeSummary(prestige: GamePrestigeBlock, level: Int, passed: Int
         pulse.animateTo(1f, spring(dampingRatio = PULSE_DAMPING, stiffness = PULSE_STIFFNESS))
     }
     val line = stringResource(R.string.game2_prestige_stars, count(prestige.stars), count(prestige.max))
-    GameCard(title = stringResource(R.string.game2_prestige_title), tint = MeeshyPalette.Indigo500) {
+    GameCard(tint = MeeshyPalette.Indigo500) {
         Row(
             Modifier.fillMaxWidth().clearAndSetSemantics { },
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.CenterHorizontally),

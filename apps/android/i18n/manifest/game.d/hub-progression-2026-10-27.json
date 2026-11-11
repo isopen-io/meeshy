@@ -369,16 +369,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.meesh.tip.1",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.meesh.tip.2",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.meesh.what",
           "status": "adopted"
         },
@@ -424,11 +414,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.flame.tip.2",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.flame.what",
           "status": "adopted"
         },
@@ -445,11 +430,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.missions.tip.1",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.missions.tip.2",
           "status": "adopted"
         },
         {
@@ -494,16 +474,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.season.tip.1",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.season.tip.2",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.season.what",
           "status": "adopted"
         },
@@ -520,11 +490,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.prestige.tip.1",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.prestige.tip.2",
           "status": "adopted"
         },
         {
