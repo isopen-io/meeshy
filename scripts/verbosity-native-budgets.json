@@ -1,0 +1,1373 @@
+{
+  "growth": {},
+  "families": {
+    "android:app": {
+      "labels": 320,
+      "words": 972,
+      "long": 6,
+      "explanations": 26
+    },
+    "android:feature/auth": {
+      "labels": 474,
+      "words": 2751,
+      "long": 42,
+      "explanations": 25
+    },
+    "android:feature/calls": {
+      "labels": 519,
+      "words": 1801,
+      "long": 15,
+      "explanations": 91
+    },
+    "android:feature/chat": {
+      "labels": 1136,
+      "words": 4434,
+      "long": 60,
+      "explanations": 114
+    },
+    "android:feature/community": {
+      "labels": 118,
+      "words": 313,
+      "long": 2,
+      "explanations": 32
+    },
+    "android:feature/contacts": {
+      "labels": 160,
+      "words": 775,
+      "long": 11,
+      "explanations": 14
+    },
+    "android:feature/conversations": {
+      "labels": 652,
+      "words": 1999,
+      "long": 11,
+      "explanations": 163
+    },
+    "android:feature/feed": {
+      "labels": 341,
+      "words": 1063,
+      "long": 5,
+      "explanations": 30
+    },
+    "android:feature/game": {
+      "labels": 1335,
+      "words": 10107,
+      "long": 165,
+      "explanations": 117
+    },
+    "android:feature/notifications": {
+      "labels": 65,
+      "words": 164,
+      "long": 0,
+      "explanations": 9
+    },
+    "android:feature/profile": {
+      "labels": 188,
+      "words": 509,
+      "long": 1,
+      "explanations": 18
+    },
+    "android:feature/reels": {
+      "labels": 55,
+      "words": 126,
+      "long": 0,
+      "explanations": 5
+    },
+    "android:feature/settings": {
+      "labels": 680,
+      "words": 2883,
+      "long": 41,
+      "explanations": 72
+    },
+    "android:feature/stories": {
+      "labels": 818,
+      "words": 2755,
+      "long": 17,
+      "explanations": 48
+    },
+    "android:sdk-core": {
+      "labels": 4,
+      "words": 23,
+      "long": 0,
+      "explanations": 0
+    },
+    "android:sdk-ui": {
+      "labels": 937,
+      "words": 3384,
+      "long": 32,
+      "explanations": 73
+    },
+    "ios:Meeshy/(phrases)": {
+      "labels": 407,
+      "words": 1439,
+      "long": 14,
+      "explanations": 4
+    },
+    "ios:Meeshy/2fa": {
+      "labels": 32,
+      "words": 140,
+      "long": 2,
+      "explanations": 0
+    },
+    "ios:Meeshy/a11y": {
+      "labels": 138,
+      "words": 437,
+      "long": 0,
+      "explanations": 31
+    },
+    "ios:Meeshy/about": {
+      "labels": 45,
+      "words": 194,
+      "long": 3,
+      "explanations": 14
+    },
+    "ios:Meeshy/accessibility": {
+      "labels": 37,
+      "words": 122,
+      "long": 0,
+      "explanations": 6
+    },
+    "ios:Meeshy/account": {
+      "labels": 25,
+      "words": 118,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:Meeshy/accounts": {
+      "labels": 4,
+      "words": 11,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/achievement": {
+      "labels": 53,
+      "words": 142,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/action": {
+      "labels": 21,
+      "words": 32,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/activation": {
+      "labels": 20,
+      "words": 151,
+      "long": 6,
+      "explanations": 0
+    },
+    "ios:Meeshy/affiliate": {
+      "labels": 22,
+      "words": 66,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/ageGate": {
+      "labels": 1,
+      "words": 16,
+      "long": 1,
+      "explanations": 0
+    },
+    "ios:Meeshy/arrival": {
+      "labels": 4,
+      "words": 12,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/attachment": {
+      "labels": 34,
+      "words": 58,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/audio": {
+      "labels": 11,
+      "words": 38,
+      "long": 1,
+      "explanations": 0
+    },
+    "ios:Meeshy/auth": {
+      "labels": 101,
+      "words": 527,
+      "long": 6,
+      "explanations": 11
+    },
+    "ios:Meeshy/block": {
+      "labels": 2,
+      "words": 16,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/blocked": {
+      "labels": 8,
+      "words": 23,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/bookmarks": {
+      "labels": 7,
+      "words": 20,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/brand": {
+      "labels": 2,
+      "words": 12,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/bring": {
+      "labels": 19,
+      "words": 120,
+      "long": 2,
+      "explanations": 1
+    },
+    "ios:Meeshy/bubble": {
+      "labels": 87,
+      "words": 281,
+      "long": 0,
+      "explanations": 16
+    },
+    "ios:Meeshy/call": {
+      "labels": 445,
+      "words": 1665,
+      "long": 11,
+      "explanations": 88
+    },
+    "ios:Meeshy/calls": {
+      "labels": 50,
+      "words": 132,
+      "long": 0,
+      "explanations": 12
+    },
+    "ios:Meeshy/camera": {
+      "labels": 13,
+      "words": 67,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/Chargement": {
+      "labels": 1,
+      "words": 1,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/circleNotify": {
+      "labels": 32,
+      "words": 103,
+      "long": 3,
+      "explanations": 3
+    },
+    "ios:Meeshy/circles": {
+      "labels": 94,
+      "words": 670,
+      "long": 13,
+      "explanations": 8
+    },
+    "ios:Meeshy/commands": {
+      "labels": 8,
+      "words": 13,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/comment": {
+      "labels": 15,
+      "words": 41,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/comments": {
+      "labels": 12,
+      "words": 45,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/common": {
+      "labels": 47,
+      "words": 57,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/communities": {
+      "labels": 1,
+      "words": 1,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/community": {
+      "labels": 19,
+      "words": 71,
+      "long": 0,
+      "explanations": 6
+    },
+    "ios:Meeshy/communityLink": {
+      "labels": 7,
+      "words": 9,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/components": {
+      "labels": 1,
+      "words": 4,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/composer": {
+      "labels": 545,
+      "words": 1712,
+      "long": 5,
+      "explanations": 34
+    },
+    "ios:Meeshy/connection": {
+      "labels": 5,
+      "words": 11,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/Connexion": {
+      "labels": 1,
+      "words": 1,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/contact-card": {
+      "labels": 35,
+      "words": 85,
+      "long": 0,
+      "explanations": 3
+    },
+    "ios:Meeshy/contacts": {
+      "labels": 95,
+      "words": 347,
+      "long": 1,
+      "explanations": 5
+    },
+    "ios:Meeshy/content": {
+      "labels": 8,
+      "words": 8,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/context": {
+      "labels": 30,
+      "words": 57,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/conversation": {
+      "labels": 338,
+      "words": 2168,
+      "long": 47,
+      "explanations": 83
+    },
+    "ios:Meeshy/conversationCard": {
+      "labels": 23,
+      "words": 75,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:Meeshy/conversations": {
+      "labels": 24,
+      "words": 92,
+      "long": 0,
+      "explanations": 3
+    },
+    "ios:Meeshy/conversationType": {
+      "labels": 8,
+      "words": 9,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/crash": {
+      "labels": 8,
+      "words": 15,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/dashboard": {
+      "labels": 32,
+      "words": 48,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/date": {
+      "labels": 3,
+      "words": 3,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/deeplink": {
+      "labels": 1,
+      "words": 4,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/deepLink": {
+      "labels": 1,
+      "words": 7,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/detail": {
+      "labels": 2,
+      "words": 4,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:Meeshy/discovery": {
+      "labels": 4,
+      "words": 4,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/draft": {
+      "labels": 2,
+      "words": 3,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/e2ee": {
+      "labels": 76,
+      "words": 631,
+      "long": 16,
+      "explanations": 5
+    },
+    "ios:Meeshy/effect": {
+      "labels": 11,
+      "words": 13,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/effects": {
+      "labels": 15,
+      "words": 19,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/emailProof": {
+      "labels": 2,
+      "words": 34,
+      "long": 2,
+      "explanations": 0
+    },
+    "ios:Meeshy/emailVerification": {
+      "labels": 25,
+      "words": 160,
+      "long": 2,
+      "explanations": 4
+    },
+    "ios:Meeshy/emoji": {
+      "labels": 14,
+      "words": 18,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/exit": {
+      "labels": 1,
+      "words": 2,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/export": {
+      "labels": 131,
+      "words": 349,
+      "long": 0,
+      "explanations": 5
+    },
+    "ios:Meeshy/feed": {
+      "labels": 234,
+      "words": 878,
+      "long": 7,
+      "explanations": 45
+    },
+    "ios:Meeshy/focal": {
+      "labels": 23,
+      "words": 70,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:Meeshy/forward": {
+      "labels": 21,
+      "words": 110,
+      "long": 2,
+      "explanations": 0
+    },
+    "ios:Meeshy/friends": {
+      "labels": 5,
+      "words": 15,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/gallery": {
+      "labels": 8,
+      "words": 34,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/game": {
+      "labels": 963,
+      "words": 7758,
+      "long": 126,
+      "explanations": 105
+    },
+    "ios:Meeshy/game2": {
+      "labels": 287,
+      "words": 1996,
+      "long": 37,
+      "explanations": 7
+    },
+    "ios:Meeshy/guest": {
+      "labels": 9,
+      "words": 67,
+      "long": 2,
+      "explanations": 0
+    },
+    "ios:Meeshy/guestAttach": {
+      "labels": 17,
+      "words": 78,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/hashtag": {
+      "labels": 1,
+      "words": 4,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/invite": {
+      "labels": 37,
+      "words": 83,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/keypad": {
+      "labels": 10,
+      "words": 43,
+      "long": 0,
+      "explanations": 3
+    },
+    "ios:Meeshy/language-picker": {
+      "labels": 3,
+      "words": 7,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/legal": {
+      "labels": 14,
+      "words": 49,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/lentille": {
+      "labels": 30,
+      "words": 73,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/line": {
+      "labels": 1,
+      "words": 3,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/link": {
+      "labels": 5,
+      "words": 20,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/linkpreview": {
+      "labels": 4,
+      "words": 22,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/links": {
+      "labels": 14,
+      "words": 64,
+      "long": 0,
+      "explanations": 5
+    },
+    "ios:Meeshy/listening": {
+      "labels": 5,
+      "words": 26,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/liveActivity": {
+      "labels": 5,
+      "words": 14,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/loading": {
+      "labels": 1,
+      "words": 1,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/location": {
+      "labels": 24,
+      "words": 78,
+      "long": 1,
+      "explanations": 1
+    },
+    "ios:Meeshy/magicLink": {
+      "labels": 2,
+      "words": 7,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/media": {
+      "labels": 48,
+      "words": 172,
+      "long": 0,
+      "explanations": 8
+    },
+    "ios:Meeshy/media_hub": {
+      "labels": 26,
+      "words": 85,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/meeshy": {
+      "labels": 1,
+      "words": 1,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/member-management": {
+      "labels": 13,
+      "words": 27,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/menu": {
+      "labels": 1,
+      "words": 5,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/message": {
+      "labels": 34,
+      "words": 144,
+      "long": 3,
+      "explanations": 1
+    },
+    "ios:Meeshy/Message": {
+      "labels": 1,
+      "words": 1,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/message-detail": {
+      "labels": 82,
+      "words": 187,
+      "long": 0,
+      "explanations": 82
+    },
+    "ios:Meeshy/message-more": {
+      "labels": 5,
+      "words": 28,
+      "long": 1,
+      "explanations": 1
+    },
+    "ios:Meeshy/mini_player": {
+      "labels": 6,
+      "words": 16,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/moderation": {
+      "labels": 23,
+      "words": 84,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/mood": {
+      "labels": 10,
+      "words": 29,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/new_conversation": {
+      "labels": 7,
+      "words": 26,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/notification": {
+      "labels": 29,
+      "words": 120,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:Meeshy/notifications": {
+      "labels": 24,
+      "words": 71,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/offline": {
+      "labels": 1,
+      "words": 10,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/onboarding": {
+      "labels": 129,
+      "words": 885,
+      "long": 12,
+      "explanations": 6
+    },
+    "ios:Meeshy/outbox": {
+      "labels": 1,
+      "words": 9,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/participantProfile": {
+      "labels": 42,
+      "words": 133,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/participants": {
+      "labels": 33,
+      "words": 96,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/permission": {
+      "labels": 5,
+      "words": 43,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/post": {
+      "labels": 22,
+      "words": 141,
+      "long": 5,
+      "explanations": 3
+    },
+    "ios:Meeshy/preview": {
+      "labels": 8,
+      "words": 26,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/profile": {
+      "labels": 73,
+      "words": 202,
+      "long": 0,
+      "explanations": 10
+    },
+    "ios:Meeshy/progression": {
+      "labels": 118,
+      "words": 576,
+      "long": 2,
+      "explanations": 4
+    },
+    "ios:Meeshy/protection": {
+      "labels": 11,
+      "words": 47,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/quote": {
+      "labels": 1,
+      "words": 3,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/reaction": {
+      "labels": 6,
+      "words": 34,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/reactions": {
+      "labels": 1,
+      "words": 3,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/reading_mode": {
+      "labels": 17,
+      "words": 66,
+      "long": 0,
+      "explanations": 6
+    },
+    "ios:Meeshy/recentMedia": {
+      "labels": 2,
+      "words": 26,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/Rechercher": {
+      "labels": 1,
+      "words": 1,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/reel": {
+      "labels": 3,
+      "words": 16,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/reels": {
+      "labels": 13,
+      "words": 36,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/report": {
+      "labels": 34,
+      "words": 89,
+      "long": 0,
+      "explanations": 12
+    },
+    "ios:Meeshy/reveal": {
+      "labels": 15,
+      "words": 63,
+      "long": 0,
+      "explanations": 4
+    },
+    "ios:Meeshy/riviere": {
+      "labels": 7,
+      "words": 24,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/root": {
+      "labels": 18,
+      "words": 48,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/route": {
+      "labels": 26,
+      "words": 41,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/scene": {
+      "labels": 2,
+      "words": 6,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/search": {
+      "labels": 15,
+      "words": 35,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/security": {
+      "labels": 9,
+      "words": 73,
+      "long": 2,
+      "explanations": 2
+    },
+    "ios:Meeshy/sentiment": {
+      "labels": 2,
+      "words": 4,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/sessionClosed": {
+      "labels": 15,
+      "words": 134,
+      "long": 5,
+      "explanations": 0
+    },
+    "ios:Meeshy/sessions": {
+      "labels": 45,
+      "words": 168,
+      "long": 0,
+      "explanations": 3
+    },
+    "ios:Meeshy/settings": {
+      "labels": 233,
+      "words": 984,
+      "long": 14,
+      "explanations": 50
+    },
+    "ios:Meeshy/share": {
+      "labels": 157,
+      "words": 751,
+      "long": 8,
+      "explanations": 25
+    },
+    "ios:Meeshy/shareLink": {
+      "labels": 61,
+      "words": 184,
+      "long": 0,
+      "explanations": 48
+    },
+    "ios:Meeshy/signInLink": {
+      "labels": 10,
+      "words": 142,
+      "long": 4,
+      "explanations": 0
+    },
+    "ios:Meeshy/siri": {
+      "labels": 2,
+      "words": 6,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/skeleton": {
+      "labels": 4,
+      "words": 12,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/splash": {
+      "labels": 1,
+      "words": 6,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/starred": {
+      "labels": 7,
+      "words": 31,
+      "long": 1,
+      "explanations": 2
+    },
+    "ios:Meeshy/stats": {
+      "labels": 5,
+      "words": 28,
+      "long": 1,
+      "explanations": 0
+    },
+    "ios:Meeshy/status": {
+      "labels": 20,
+      "words": 72,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:Meeshy/sticker": {
+      "labels": 2,
+      "words": 6,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/story": {
+      "labels": 192,
+      "words": 812,
+      "long": 8,
+      "explanations": 22
+    },
+    "ios:Meeshy/streak": {
+      "labels": 3,
+      "words": 34,
+      "long": 1,
+      "explanations": 0
+    },
+    "ios:Meeshy/support": {
+      "labels": 16,
+      "words": 34,
+      "long": 0,
+      "explanations": 8
+    },
+    "ios:Meeshy/swipe": {
+      "labels": 6,
+      "words": 7,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/sync": {
+      "labels": 63,
+      "words": 204,
+      "long": 0,
+      "explanations": 3
+    },
+    "ios:Meeshy/system": {
+      "labels": 14,
+      "words": 80,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/tab": {
+      "labels": 4,
+      "words": 4,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/talkie": {
+      "labels": 29,
+      "words": 214,
+      "long": 3,
+      "explanations": 4
+    },
+    "ios:Meeshy/thread": {
+      "labels": 5,
+      "words": 8,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/time": {
+      "labels": 14,
+      "words": 31,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/together": {
+      "labels": 27,
+      "words": 129,
+      "long": 1,
+      "explanations": 1
+    },
+    "ios:Meeshy/tracking": {
+      "labels": 50,
+      "words": 129,
+      "long": 0,
+      "explanations": 23
+    },
+    "ios:Meeshy/translation": {
+      "labels": 2,
+      "words": 11,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/twofactor": {
+      "labels": 5,
+      "words": 29,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/typing": {
+      "labels": 7,
+      "words": 22,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/unit": {
+      "labels": 5,
+      "words": 9,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/upgradeGate": {
+      "labels": 4,
+      "words": 28,
+      "long": 1,
+      "explanations": 0
+    },
+    "ios:Meeshy/upload": {
+      "labels": 3,
+      "words": 12,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/user": {
+      "labels": 9,
+      "words": 9,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/video": {
+      "labels": 12,
+      "words": 15,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:Meeshy/viewer": {
+      "labels": 23,
+      "words": 81,
+      "long": 0,
+      "explanations": 4
+    },
+    "ios:Meeshy/visitor": {
+      "labels": 11,
+      "words": 77,
+      "long": 2,
+      "explanations": 0
+    },
+    "ios:Meeshy/voice": {
+      "labels": 62,
+      "words": 318,
+      "long": 5,
+      "explanations": 12
+    },
+    "ios:Meeshy/welcome": {
+      "labels": 5,
+      "words": 25,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:Meeshy/widget": {
+      "labels": 52,
+      "words": 129,
+      "long": 0,
+      "explanations": 5
+    },
+    "ios:Meeshy/window": {
+      "labels": 9,
+      "words": 57,
+      "long": 1,
+      "explanations": 0
+    },
+    "ios:Meeshy/worldEntry": {
+      "labels": 16,
+      "words": 66,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:MeeshyUI/(phrases)": {
+      "labels": 142,
+      "words": 343,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/accessibility": {
+      "labels": 2,
+      "words": 7,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/audience": {
+      "labels": 3,
+      "words": 8,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/audio": {
+      "labels": 60,
+      "words": 149,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:MeeshyUI/auth": {
+      "labels": 105,
+      "words": 529,
+      "long": 10,
+      "explanations": 12
+    },
+    "ios:MeeshyUI/avatar": {
+      "labels": 4,
+      "words": 11,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:MeeshyUI/capture_shield": {
+      "labels": 1,
+      "words": 2,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/category": {
+      "labels": 6,
+      "words": 21,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/common": {
+      "labels": 14,
+      "words": 19,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/community": {
+      "labels": 116,
+      "words": 337,
+      "long": 2,
+      "explanations": 40
+    },
+    "ios:MeeshyUI/composer": {
+      "labels": 7,
+      "words": 15,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:MeeshyUI/connection": {
+      "labels": 15,
+      "words": 29,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/conversation": {
+      "labels": 64,
+      "words": 170,
+      "long": 2,
+      "explanations": 4
+    },
+    "ios:MeeshyUI/emailSent": {
+      "labels": 1,
+      "words": 11,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/emoji": {
+      "labels": 7,
+      "words": 7,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/error": {
+      "labels": 1,
+      "words": 4,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:MeeshyUI/frame": {
+      "labels": 12,
+      "words": 42,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/inviteLanding": {
+      "labels": 43,
+      "words": 138,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:MeeshyUI/joinFlow": {
+      "labels": 37,
+      "words": 89,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/languagePicker": {
+      "labels": 2,
+      "words": 6,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/location": {
+      "labels": 10,
+      "words": 30,
+      "long": 0,
+      "explanations": 1
+    },
+    "ios:MeeshyUI/media": {
+      "labels": 103,
+      "words": 264,
+      "long": 0,
+      "explanations": 10
+    },
+    "ios:MeeshyUI/mention": {
+      "labels": 2,
+      "words": 4,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/mshy": {
+      "labels": 1,
+      "words": 1,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/notifications": {
+      "labels": 43,
+      "words": 101,
+      "long": 0,
+      "explanations": 3
+    },
+    "ios:MeeshyUI/pack": {
+      "labels": 2,
+      "words": 21,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/password": {
+      "labels": 4,
+      "words": 12,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/post": {
+      "labels": 9,
+      "words": 9,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/presence": {
+      "labels": 12,
+      "words": 41,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/profile": {
+      "labels": 59,
+      "words": 158,
+      "long": 0,
+      "explanations": 3
+    },
+    "ios:MeeshyUI/protection": {
+      "labels": 14,
+      "words": 60,
+      "long": 0,
+      "explanations": 2
+    },
+    "ios:MeeshyUI/pull_refresh": {
+      "labels": 3,
+      "words": 7,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/reaction": {
+      "labels": 1,
+      "words": 3,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/reference": {
+      "labels": 12,
+      "words": 34,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/report": {
+      "labels": 8,
+      "words": 12,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/settings": {
+      "labels": 27,
+      "words": 142,
+      "long": 5,
+      "explanations": 4
+    },
+    "ios:MeeshyUI/shop": {
+      "labels": 57,
+      "words": 195,
+      "long": 0,
+      "explanations": 13
+    },
+    "ios:MeeshyUI/sticker": {
+      "labels": 316,
+      "words": 629,
+      "long": 0,
+      "explanations": 41
+    },
+    "ios:MeeshyUI/story": {
+      "labels": 576,
+      "words": 1672,
+      "long": 13,
+      "explanations": 42
+    },
+    "ios:MeeshyUI/tag": {
+      "labels": 4,
+      "words": 15,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/userIdentity": {
+      "labels": 3,
+      "words": 6,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/voiceProfile": {
+      "labels": 58,
+      "words": 288,
+      "long": 5,
+      "explanations": 12
+    }
+  }
+}

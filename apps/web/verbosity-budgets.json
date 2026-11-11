@@ -1,0 +1,388 @@
+{
+  "views": {
+    "about": {
+      "total": 1223,
+      "firstScreen": 137
+    },
+    "account-deletion": {
+      "total": 276,
+      "firstScreen": 110
+    },
+    "admin": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-agent": {
+      "total": 12,
+      "firstScreen": 12
+    },
+    "admin-analytics": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-anonymous": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-audit": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-broadcasts": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-communities": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-conversations": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-engagement-scale": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-invitations": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-languages": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-monitoring": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-operations": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-posts": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-ranking": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-reports": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-settings": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-share-links": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-tracking-links": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "admin-users": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "auth-magic-link": {
+      "total": 14,
+      "firstScreen": 14
+    },
+    "auth-magic-link-validate": {
+      "total": 26,
+      "firstScreen": 26
+    },
+    "auth-revoke-sessions": {
+      "total": 22,
+      "firstScreen": 22
+    },
+    "auth-verify-email": {
+      "total": 29,
+      "firstScreen": 29
+    },
+    "c-conversation": {
+      "total": 136,
+      "firstScreen": 103
+    },
+    "calls": {
+      "total": 79,
+      "firstScreen": 79
+    },
+    "calls-keypad": {
+      "total": 37,
+      "firstScreen": 37
+    },
+    "chats": {
+      "total": 329,
+      "firstScreen": 137
+    },
+    "child-safety": {
+      "total": 707,
+      "firstScreen": 137
+    },
+    "communities": {
+      "total": 70,
+      "firstScreen": 70
+    },
+    "communities-new": {
+      "total": 23,
+      "firstScreen": 23
+    },
+    "contact": {
+      "total": 171,
+      "firstScreen": 63
+    },
+    "conversations-new": {
+      "total": 83,
+      "firstScreen": 83
+    },
+    "discover": {
+      "total": 70,
+      "firstScreen": 70
+    },
+    "download": {
+      "total": 74,
+      "firstScreen": 32
+    },
+    "faq": {
+      "total": 875,
+      "firstScreen": 107
+    },
+    "feed": {
+      "total": 468,
+      "firstScreen": 66
+    },
+    "forgot-password": {
+      "total": 31,
+      "firstScreen": 31
+    },
+    "help": {
+      "total": 757,
+      "firstScreen": 111
+    },
+    "home": {
+      "total": 294,
+      "firstScreen": 69
+    },
+    "links": {
+      "total": 86,
+      "firstScreen": 86
+    },
+    "links-affiliate": {
+      "total": 38,
+      "firstScreen": 38
+    },
+    "links-affiliate-new": {
+      "total": 27,
+      "firstScreen": 27
+    },
+    "links-communities": {
+      "total": 27,
+      "firstScreen": 27
+    },
+    "links-share": {
+      "total": 61,
+      "firstScreen": 61
+    },
+    "links-share-new": {
+      "total": 125,
+      "firstScreen": 79
+    },
+    "links-tracking": {
+      "total": 38,
+      "firstScreen": 38
+    },
+    "links-tracking-new": {
+      "total": 37,
+      "firstScreen": 37
+    },
+    "login": {
+      "total": 37,
+      "firstScreen": 37
+    },
+    "me": {
+      "total": 122,
+      "firstScreen": 69
+    },
+    "me-bookmarks": {
+      "total": 98,
+      "firstScreen": 39
+    },
+    "me-progression": {
+      "total": 178,
+      "firstScreen": 108
+    },
+    "me-progression-atlas": {
+      "total": 136,
+      "firstScreen": 78
+    },
+    "me-progression-badges": {
+      "total": 475,
+      "firstScreen": 122
+    },
+    "me-progression-carnet": {
+      "total": 45,
+      "firstScreen": 45
+    },
+    "me-progression-defis": {
+      "total": 189,
+      "firstScreen": 86
+    },
+    "me-progression-ligue": {
+      "total": 222,
+      "firstScreen": 71
+    },
+    "me-progression-prestige": {
+      "total": 33,
+      "firstScreen": 33
+    },
+    "me-progression-reglages": {
+      "total": 304,
+      "firstScreen": 119
+    },
+    "me-progression-regles": {
+      "total": 2917,
+      "firstScreen": 167
+    },
+    "me-progression-saison": {
+      "total": 169,
+      "firstScreen": 110
+    },
+    "me-progression-succes": {
+      "total": 50,
+      "firstScreen": 50
+    },
+    "me-progression-tableau-de-bord": {
+      "total": 170,
+      "firstScreen": 100
+    },
+    "me-progression-vitrine": {
+      "total": 105,
+      "firstScreen": 105
+    },
+    "me-sounds": {
+      "total": 21,
+      "firstScreen": 21
+    },
+    "me-starred-messages": {
+      "total": 62,
+      "firstScreen": 62
+    },
+    "notifications": {
+      "total": 156,
+      "firstScreen": 133
+    },
+    "onboarding": {
+      "total": 65,
+      "firstScreen": 65
+    },
+    "partners": {
+      "total": 283,
+      "firstScreen": 74
+    },
+    "post-post": {
+      "total": 74,
+      "firstScreen": 74
+    },
+    "privacy": {
+      "total": 1725,
+      "firstScreen": 76
+    },
+    "reels": {
+      "total": 127,
+      "firstScreen": 18
+    },
+    "reset-password": {
+      "total": 27,
+      "firstScreen": 27
+    },
+    "settings": {
+      "total": 387,
+      "firstScreen": 106
+    },
+    "settings-data-export": {
+      "total": 16,
+      "firstScreen": 16
+    },
+    "settings-notifications": {
+      "total": 16,
+      "firstScreen": 16
+    },
+    "settings-verify-email-change": {
+      "total": 25,
+      "firstScreen": 25
+    },
+    "share": {
+      "total": 329,
+      "firstScreen": 137
+    },
+    "signup": {
+      "total": 61,
+      "firstScreen": 61
+    },
+    "stories": {
+      "total": 20,
+      "firstScreen": 20
+    },
+    "stories-mine": {
+      "total": 8,
+      "firstScreen": 8
+    },
+    "story-post": {
+      "total": 13,
+      "firstScreen": 13
+    },
+    "terms": {
+      "total": 587,
+      "firstScreen": 97
+    },
+    "welcome": {
+      "total": 23,
+      "firstScreen": 23
+    },
+    "world": {
+      "total": 25,
+      "firstScreen": 25
+    }
+  },
+  "uncovered": {
+    "admin-anonymous-participant": "route paramétrée sans identifiant de fixture désigné",
+    "admin-broadcasts-broadcast": "route paramétrée sans identifiant de fixture désigné",
+    "admin-communities-community": "route paramétrée sans identifiant de fixture désigné",
+    "admin-conversations-conversation": "route paramétrée sans identifiant de fixture désigné",
+    "admin-invitations-invitation": "route paramétrée sans identifiant de fixture désigné",
+    "admin-posts-post": "route paramétrée sans identifiant de fixture désigné",
+    "admin-reports-report": "route paramétrée sans identifiant de fixture désigné",
+    "admin-share-links-link": "route paramétrée sans identifiant de fixture désigné",
+    "admin-tracking-links-link": "route paramétrée sans identifiant de fixture désigné",
+    "admin-users-user": "route paramétrée sans identifiant de fixture désigné",
+    "call-callId": "hors périmètre de l’épure : écran d’appel en cours",
+    "chat-link": "route paramétrée sans identifiant de fixture désigné",
+    "communities-community": "route paramétrée sans identifiant de fixture désigné",
+    "communities-community-members": "route paramétrée sans identifiant de fixture désigné",
+    "communities-community-settings": "route paramétrée sans identifiant de fixture désigné",
+    "feeds-post-post": "route paramétrée sans identifiant de fixture désigné",
+    "hashtag-tag": "route paramétrée sans identifiant de fixture désigné",
+    "l-token": "route paramétrée sans identifiant de fixture désigné",
+    "l-token-expired": "route paramétrée sans identifiant de fixture désigné",
+    "links-communities-community": "route paramétrée sans identifiant de fixture désigné",
+    "links-share-link": "route paramétrée sans identifiant de fixture désigné",
+    "links-share-link-arrivals": "route paramétrée sans identifiant de fixture désigné",
+    "links-tracking-token": "route paramétrée sans identifiant de fixture désigné",
+    "me-progression-concept-concept": "route paramétrée sans identifiant de fixture désigné",
+    "me-progression-ligue-semaine": "route paramétrée sans identifiant de fixture désigné",
+    "me-progression-saison-saison": "route paramétrée sans identifiant de fixture désigné",
+    "mood-post": "route paramétrée sans identifiant de fixture désigné",
+    "posts-new": "hors périmètre de l’épure : studio de publication (planche du composer)",
+    "posts-post-edit": "hors périmètre de l’épure : studio de publication (planche du composer)",
+    "reel-post": "route paramétrée sans identifiant de fixture désigné",
+    "signup-affiliate-token": "route paramétrée sans identifiant de fixture désigné",
+    "status-new": "hors périmètre de l’épure : studio de publication (planche du composer)",
+    "stories-new": "hors périmètre de l’épure : studio de publication (planche du composer)",
+    "u-username": "route paramétrée sans identifiant de fixture désigné"
+  }
+}

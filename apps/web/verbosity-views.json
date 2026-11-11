@@ -1,26 +1,526 @@
 {
-  "viewport": { "width": 390, "height": 844 },
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
   "views": [
-    { "name": "chats", "path": "/chats" },
-    { "name": "community-new", "path": "/communities/new" },
-    { "name": "discover", "path": "/discover" },
-    { "name": "download", "path": "/download" },
-    { "name": "feed", "path": "/feed" },
-    { "name": "forgot-password", "path": "/forgot-password" },
-    { "name": "keypad", "path": "/calls/keypad" },
-    { "name": "link-share-new", "path": "/links/share/new" },
-    { "name": "links", "path": "/links" },
-    { "name": "login", "path": "/login" },
-    { "name": "magic-link", "path": "/auth/magic-link" },
-    { "name": "notifications", "path": "/notifications" },
-    { "name": "profile-me", "path": "/me" },
-    { "name": "prog-reglages", "path": "/me/progression/reglages" },
-    { "name": "prog-saison", "path": "/me/progression/saison" },
-    { "name": "progression", "path": "/me/progression" },
-    { "name": "settings", "path": "/settings" },
-    { "name": "signup", "path": "/signup" },
-    { "name": "sounds", "path": "/me/sounds" },
-    { "name": "thread", "path": "/c/c-deploiement" },
-    { "name": "welcome", "path": "/welcome" }
+    {
+      "name": "home",
+      "path": "/"
+    },
+    {
+      "name": "about",
+      "path": "/about"
+    },
+    {
+      "name": "account-deletion",
+      "path": "/account/deletion"
+    },
+    {
+      "name": "admin",
+      "path": "/admin"
+    },
+    {
+      "name": "admin-agent",
+      "path": "/admin/agent"
+    },
+    {
+      "name": "admin-analytics",
+      "path": "/admin/analytics"
+    },
+    {
+      "name": "admin-anonymous",
+      "path": "/admin/anonymous"
+    },
+    {
+      "name": "admin-anonymous-participant",
+      "path": "/admin/anonymous/:participant",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "admin-audit",
+      "path": "/admin/audit"
+    },
+    {
+      "name": "admin-broadcasts",
+      "path": "/admin/broadcasts"
+    },
+    {
+      "name": "admin-broadcasts-broadcast",
+      "path": "/admin/broadcasts/:broadcast",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "admin-communities",
+      "path": "/admin/communities"
+    },
+    {
+      "name": "admin-communities-community",
+      "path": "/admin/communities/:community",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "admin-conversations",
+      "path": "/admin/conversations"
+    },
+    {
+      "name": "admin-conversations-conversation",
+      "path": "/admin/conversations/:conversation",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "admin-engagement-scale",
+      "path": "/admin/engagement-scale"
+    },
+    {
+      "name": "admin-invitations",
+      "path": "/admin/invitations"
+    },
+    {
+      "name": "admin-invitations-invitation",
+      "path": "/admin/invitations/:invitation",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "admin-languages",
+      "path": "/admin/languages"
+    },
+    {
+      "name": "admin-monitoring",
+      "path": "/admin/monitoring"
+    },
+    {
+      "name": "admin-operations",
+      "path": "/admin/operations"
+    },
+    {
+      "name": "admin-posts",
+      "path": "/admin/posts"
+    },
+    {
+      "name": "admin-posts-post",
+      "path": "/admin/posts/:post",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "admin-ranking",
+      "path": "/admin/ranking"
+    },
+    {
+      "name": "admin-reports",
+      "path": "/admin/reports"
+    },
+    {
+      "name": "admin-reports-report",
+      "path": "/admin/reports/:report",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "admin-settings",
+      "path": "/admin/settings"
+    },
+    {
+      "name": "admin-share-links",
+      "path": "/admin/share-links"
+    },
+    {
+      "name": "admin-share-links-link",
+      "path": "/admin/share-links/:link",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "admin-tracking-links",
+      "path": "/admin/tracking-links"
+    },
+    {
+      "name": "admin-tracking-links-link",
+      "path": "/admin/tracking-links/:link",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "admin-users",
+      "path": "/admin/users"
+    },
+    {
+      "name": "admin-users-user",
+      "path": "/admin/users/:user",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "auth-magic-link",
+      "path": "/auth/magic-link"
+    },
+    {
+      "name": "auth-magic-link-validate",
+      "path": "/auth/magic-link/validate"
+    },
+    {
+      "name": "auth-revoke-sessions",
+      "path": "/auth/revoke-sessions"
+    },
+    {
+      "name": "auth-verify-email",
+      "path": "/auth/verify-email"
+    },
+    {
+      "name": "c-conversation",
+      "path": "/c/c-deploiement"
+    },
+    {
+      "name": "call-callId",
+      "path": "/call/:callId",
+      "uncovered": "hors périmètre de l’épure : écran d’appel en cours"
+    },
+    {
+      "name": "calls",
+      "path": "/calls"
+    },
+    {
+      "name": "calls-keypad",
+      "path": "/calls/keypad"
+    },
+    {
+      "name": "chat-link",
+      "path": "/chat/:link",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "chats",
+      "path": "/chats"
+    },
+    {
+      "name": "child-safety",
+      "path": "/child-safety"
+    },
+    {
+      "name": "communities",
+      "path": "/communities"
+    },
+    {
+      "name": "communities-community",
+      "path": "/communities/:community",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "communities-community-members",
+      "path": "/communities/:community/members",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "communities-community-settings",
+      "path": "/communities/:community/settings",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "communities-new",
+      "path": "/communities/new"
+    },
+    {
+      "name": "contact",
+      "path": "/contact"
+    },
+    {
+      "name": "conversations-new",
+      "path": "/conversations/new"
+    },
+    {
+      "name": "discover",
+      "path": "/discover"
+    },
+    {
+      "name": "download",
+      "path": "/download"
+    },
+    {
+      "name": "faq",
+      "path": "/faq"
+    },
+    {
+      "name": "feed",
+      "path": "/feed"
+    },
+    {
+      "name": "feeds-post-post",
+      "path": "/feeds/post/:post",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "forgot-password",
+      "path": "/forgot-password"
+    },
+    {
+      "name": "hashtag-tag",
+      "path": "/hashtag/:tag",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "help",
+      "path": "/help"
+    },
+    {
+      "name": "l-token",
+      "path": "/l/:token",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "l-token-expired",
+      "path": "/l/:token/expired",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "links",
+      "path": "/links"
+    },
+    {
+      "name": "links-affiliate",
+      "path": "/links/affiliate"
+    },
+    {
+      "name": "links-affiliate-new",
+      "path": "/links/affiliate/new"
+    },
+    {
+      "name": "links-communities",
+      "path": "/links/communities"
+    },
+    {
+      "name": "links-communities-community",
+      "path": "/links/communities/:community",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "links-share",
+      "path": "/links/share"
+    },
+    {
+      "name": "links-share-link",
+      "path": "/links/share/:link",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "links-share-link-arrivals",
+      "path": "/links/share/:link/arrivals",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "links-share-new",
+      "path": "/links/share/new"
+    },
+    {
+      "name": "links-tracking",
+      "path": "/links/tracking"
+    },
+    {
+      "name": "links-tracking-token",
+      "path": "/links/tracking/:token",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "links-tracking-new",
+      "path": "/links/tracking/new"
+    },
+    {
+      "name": "login",
+      "path": "/login"
+    },
+    {
+      "name": "me",
+      "path": "/me"
+    },
+    {
+      "name": "me-bookmarks",
+      "path": "/me/bookmarks"
+    },
+    {
+      "name": "me-progression",
+      "path": "/me/progression"
+    },
+    {
+      "name": "me-progression-atlas",
+      "path": "/me/progression/atlas"
+    },
+    {
+      "name": "me-progression-badges",
+      "path": "/me/progression/badges"
+    },
+    {
+      "name": "me-progression-carnet",
+      "path": "/me/progression/carnet"
+    },
+    {
+      "name": "me-progression-concept-concept",
+      "path": "/me/progression/concept/:concept",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "me-progression-defis",
+      "path": "/me/progression/defis"
+    },
+    {
+      "name": "me-progression-ligue",
+      "path": "/me/progression/ligue"
+    },
+    {
+      "name": "me-progression-ligue-semaine",
+      "path": "/me/progression/ligue/:semaine",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "me-progression-prestige",
+      "path": "/me/progression/prestige"
+    },
+    {
+      "name": "me-progression-reglages",
+      "path": "/me/progression/reglages"
+    },
+    {
+      "name": "me-progression-regles",
+      "path": "/me/progression/regles"
+    },
+    {
+      "name": "me-progression-saison",
+      "path": "/me/progression/saison"
+    },
+    {
+      "name": "me-progression-saison-saison",
+      "path": "/me/progression/saison/:saison",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "me-progression-succes",
+      "path": "/me/progression/succes"
+    },
+    {
+      "name": "me-progression-tableau-de-bord",
+      "path": "/me/progression/tableau-de-bord"
+    },
+    {
+      "name": "me-progression-vitrine",
+      "path": "/me/progression/vitrine"
+    },
+    {
+      "name": "me-sounds",
+      "path": "/me/sounds"
+    },
+    {
+      "name": "me-starred-messages",
+      "path": "/me/starred-messages"
+    },
+    {
+      "name": "mood-post",
+      "path": "/mood/:post",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "notifications",
+      "path": "/notifications"
+    },
+    {
+      "name": "onboarding",
+      "path": "/onboarding"
+    },
+    {
+      "name": "partners",
+      "path": "/partners"
+    },
+    {
+      "name": "post-post",
+      "path": "/post/post-text-rank2"
+    },
+    {
+      "name": "posts-post-edit",
+      "path": "/posts/:post/edit",
+      "uncovered": "hors périmètre de l’épure : studio de publication (planche du composer)"
+    },
+    {
+      "name": "posts-new",
+      "path": "/posts/new",
+      "uncovered": "hors périmètre de l’épure : studio de publication (planche du composer)"
+    },
+    {
+      "name": "privacy",
+      "path": "/privacy"
+    },
+    {
+      "name": "reel-post",
+      "path": "/reel/:post",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "reels",
+      "path": "/reels"
+    },
+    {
+      "name": "reset-password",
+      "path": "/reset-password"
+    },
+    {
+      "name": "settings",
+      "path": "/settings"
+    },
+    {
+      "name": "settings-data-export",
+      "path": "/settings/data-export"
+    },
+    {
+      "name": "settings-notifications",
+      "path": "/settings/notifications"
+    },
+    {
+      "name": "settings-verify-email-change",
+      "path": "/settings/verify-email-change"
+    },
+    {
+      "name": "share",
+      "path": "/share"
+    },
+    {
+      "name": "signup",
+      "path": "/signup"
+    },
+    {
+      "name": "signup-affiliate-token",
+      "path": "/signup/affiliate/:token",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "status-new",
+      "path": "/status/new",
+      "uncovered": "hors périmètre de l’épure : studio de publication (planche du composer)"
+    },
+    {
+      "name": "stories",
+      "path": "/stories"
+    },
+    {
+      "name": "stories-mine",
+      "path": "/stories/mine"
+    },
+    {
+      "name": "stories-new",
+      "path": "/stories/new",
+      "uncovered": "hors périmètre de l’épure : studio de publication (planche du composer)"
+    },
+    {
+      "name": "story-post",
+      "path": "/story/st-amie-1"
+    },
+    {
+      "name": "terms",
+      "path": "/terms"
+    },
+    {
+      "name": "u-username",
+      "path": "/u/:username",
+      "uncovered": "route paramétrée sans identifiant de fixture désigné"
+    },
+    {
+      "name": "welcome",
+      "path": "/welcome"
+    },
+    {
+      "name": "world",
+      "path": "/world"
+    }
   ]
 }
