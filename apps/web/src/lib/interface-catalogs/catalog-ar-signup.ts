@@ -31,7 +31,7 @@ const arSignup = {
   'signup.phone.country': 'البلد: {country}، {dialCode}',
   'signup.email.label': 'البريد الإلكتروني',
   'signup.email.placeholder': 'you@example.com',
-  'signup.email.verificationNotice': 'سنرسل لك رابطًا ورمزًا من 6 أرقام: يكفي أحدهما.',
+  'signup.email.verificationNotice': 'سنرسل لك رابطًا ورمزًا من 6 أرقام: يكفي أحدهما لتفعيل حسابك.',
   'signup.identity.title': 'هويتك',
   'signup.identity.displayName': 'الاسم المعروض',
   'signup.identity.username': 'اسم المستخدم',

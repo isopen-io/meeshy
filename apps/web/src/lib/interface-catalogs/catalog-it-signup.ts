@@ -31,7 +31,7 @@ const itSignup = {
   'signup.phone.country': 'Paese: {country}, {dialCode}',
   'signup.email.label': 'Indirizzo email',
   'signup.email.placeholder': 'tu@esempio.com',
-  'signup.email.verificationNotice': 'Ti invieremo un link e un codice di 6 cifre: basta l’uno o l’altro.',
+  'signup.email.verificationNotice': 'Ti invieremo un link e un codice di 6 cifre: l’uno o l’altro basta a convalidare il tuo account.',
   'signup.identity.title': 'La tua identità',
   'signup.identity.displayName': 'Nome visualizzato',
   'signup.identity.username': 'Nome utente',

@@ -31,7 +31,7 @@ const ptSignup = {
   'signup.phone.country': 'País: {country}, {dialCode}',
   'signup.email.label': 'E-mail',
   'signup.email.placeholder': 'voce@exemplo.com',
-  'signup.email.verificationNotice': 'Enviaremos um link e um código de 6 dígitos: um ou outro basta.',
+  'signup.email.verificationNotice': 'Enviaremos um link e um código de 6 dígitos: qualquer um deles valida sua conta.',
   'signup.identity.title': 'Sua identidade',
   'signup.identity.displayName': 'Nome de exibição',
   'signup.identity.username': 'Usuário',

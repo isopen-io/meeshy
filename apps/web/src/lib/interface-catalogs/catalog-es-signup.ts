@@ -31,7 +31,7 @@ const esSignup = {
   'signup.phone.country': 'País: {country}, {dialCode}',
   'signup.email.label': 'Correo electrónico',
   'signup.email.placeholder': 'tu@ejemplo.com',
-  'signup.email.verificationNotice': 'Te enviaremos un enlace y un código de 6 dígitos: basta con uno de los dos.',
+  'signup.email.verificationNotice': 'Te enviaremos un enlace y un código de 6 dígitos: cualquiera de los dos valida tu cuenta.',
   'signup.identity.title': 'Tu identidad',
   'signup.identity.displayName': 'Nombre visible',
   'signup.identity.username': 'Usuario',

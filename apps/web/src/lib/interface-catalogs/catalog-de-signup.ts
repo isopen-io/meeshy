@@ -31,7 +31,7 @@ const deSignup = {
   'signup.phone.country': 'Land: {country}, {dialCode}',
   'signup.email.label': 'E-Mail-Adresse',
   'signup.email.placeholder': 'du@beispiel.com',
-  'signup.email.verificationNotice': 'Wir senden dir einen Link und einen 6-stelligen Code: Eins von beiden genügt.',
+  'signup.email.verificationNotice': 'Wir senden dir einen Link und einen 6-stelligen Code: Eins von beiden bestätigt dein Konto.',
   'signup.identity.title': 'Deine Identität',
   'signup.identity.displayName': 'Anzeigename',
   'signup.identity.username': 'Benutzername',

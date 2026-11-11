@@ -32,7 +32,7 @@ const frSignup = {
   'signup.phone.country': 'Pays : {country}, {dialCode}',
   'signup.email.label': 'Adresse e-mail',
   'signup.email.placeholder': 'vous@exemple.com',
-  'signup.email.verificationNotice': 'Un lien et un code à 6 chiffres vous seront envoyés : l’un ou l’autre suffit.',
+  'signup.email.verificationNotice': 'Un lien et un code à 6 chiffres vous seront envoyés : l’un ou l’autre suffit à valider votre compte.',
   'signup.identity.title': 'Votre identité',
   'signup.identity.displayName': 'Nom affiché',
   'signup.identity.username': 'Pseudo',

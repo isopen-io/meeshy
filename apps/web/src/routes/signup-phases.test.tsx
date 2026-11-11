@@ -264,10 +264,10 @@ describe('l’adresse parue porte son (i)', () => {
     return harness.el;
   }
 
-  test('UNE seule phrase, lisible sous le champ : lien ET code, l’un ou l’autre suffit — plus de (i) qui la contredit (épure #17666)', async () => {
+  test('UNE seule phrase, lisible sous le champ : lien ET code, et ce qu’ils valident — plus de (i) qui la contredit (épure #17666)', async () => {
     const el = await emailShown();
     const lead = el.querySelector('[data-field-note]') as HTMLElement;
-    expect(lead.textContent).toBe('Un lien et un code à 6 chiffres vous seront envoyés : l’un ou l’autre suffit.');
+    expect(lead.textContent).toBe('Un lien et un code à 6 chiffres vous seront envoyés : l’un ou l’autre suffit à valider votre compte.');
     expect(lead.classList.contains('sr-only')).toBe(false);
     expect(el.querySelector('button[aria-label="Un lien ou un code ?"]')).toBeNull();
     expect(el.querySelector('#signup-email')?.getAttribute('aria-describedby')).toBe(lead.id);

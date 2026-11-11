@@ -31,7 +31,7 @@ const enSignup = {
   'signup.phone.country': 'Country: {country}, {dialCode}',
   'signup.email.label': 'Email address',
   'signup.email.placeholder': 'you@example.com',
-  'signup.email.verificationNotice': 'A link and a 6-digit code will be sent to you: either one is enough.',
+  'signup.email.verificationNotice': 'A link and a 6-digit code will be sent to you: either one confirms your account.',
   'signup.identity.title': 'Your identity',
   'signup.identity.displayName': 'Display name',
   'signup.identity.username': 'Username',
