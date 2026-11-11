@@ -406,7 +406,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-corner-frame] [data-call-control]')).toBeNull();
     view.press('[data-call-more]');
     await frame();
-    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma caméra', 'Partager l’écran']);
     expect(view.host.querySelectorAll('[data-call-control="camera"]')).toHaveLength(1);
     expect(view.host.querySelectorAll('[data-call-screen-share]')).toHaveLength(1);
     expect(view.find('[data-call-rail="mine"] [data-call-control="camera"]')?.getAttribute('aria-pressed')).toBe('true');
@@ -593,7 +593,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-corner-frame] [data-call-control]')).toBeNull();
     view.press('[data-call-more]');
     await frame();
-    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma caméra', 'Partager l’écran']);
     view.press('[data-call-rail="mine"] [data-call-control="effects"]');
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     await settle(() => import('./call-effects-mode'));
