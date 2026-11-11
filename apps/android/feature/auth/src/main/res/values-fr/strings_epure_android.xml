@@ -9,12 +9,12 @@
     <string name="auth_magic_subtitle">Pas de mot de passe : nous envoyons un lien par e-mail.</string>
     <string name="email_gate_invite">Votre invitation partira dès le code validé.</string>
     <string name="email_gate_link">Votre lien sera créé dès le code validé.</string>
-    <string name="email_gate_more_links">Au-delà de 5 liens actifs, un code est demandé. Votre lien sera créé dès qu\'il est validé.</string>
+    <string name="email_gate_more_links">Au-delà de 5 liens actifs, un code est demandé avant de créer le lien.</string>
     <string name="email_gate_publish">Votre publication est conservée et partira dès le code validé.</string>
     <string name="email_gate_sent">Code envoyé à %1$s.</string>
     <string name="email_verification_code_a11y_hint">Entrez le code à 6 chiffres reçu par e-mail</string>
     <string name="email_verification_subtitle_account_created">Compte créé. Code et lien envoyés à <b>%1$s</b>.</string>
-    <string name="email_verification_subtitle_activation_required">Activez votre compte : un code a été envoyé à <b>%1$s</b> pour prouver cette adresse.</string>
+    <string name="email_verification_subtitle_activation_required">Activez votre compte avec le code envoyé à <b>%1$s</b>.</string>
     <string name="email_verification_success">E-mail vérifié !</string>
     <string name="email_verification_title">Vérifiez votre e-mail</string>
     <string name="link_signin_message">Ce lien n\'a pas été demandé depuis cet appareil. Il ouvre %1$s : continuez seulement s\'il vous appartient.</string>

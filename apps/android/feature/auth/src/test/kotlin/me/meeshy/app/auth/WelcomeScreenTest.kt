@@ -32,7 +32,7 @@ class WelcomeScreenTest {
         show()
 
         compose.onNodeWithText("Meeshy").assertIsDisplayed()
-        compose.onNodeWithText("Write in your language. Everyone reads you in theirs.").assertIsDisplayed()
+        compose.onNodeWithText("Every message, in your language.").assertIsDisplayed()
         compose.onNodeWithText("Create account").assertIsDisplayed()
         compose.onNodeWithText("Sign in").assertIsDisplayed()
     }
