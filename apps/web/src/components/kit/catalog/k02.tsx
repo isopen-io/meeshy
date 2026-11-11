@@ -93,12 +93,12 @@ const ownGlyphs = (isPressed: boolean) => (
     {isPressed ? (
       <>
         <MeeshyGlassButtonFace glyph="Aa" pressed />
-        <MeeshyGlassButtonFace glyph={<span aria-hidden="true" style={{ inlineSize: 'var(--ios-space-lg)', blockSize: 'var(--ios-space-lg)', borderRadius: 'var(--radius-pill)', background: 'var(--accent)' }} />} pressed />
+        <MeeshyGlassButtonFace glyph={<span aria-hidden="true" style={{ inlineSize: 'var(--ios-space-lg)', blockSize: 'var(--ios-space-lg)', borderRadius: 'var(--radius-pill)', background: 'var(--ios-indigo-500)' }} />} pressed />
       </>
     ) : (
       <>
         <MeeshyGlassButton label="Style du texte" glyph="Aa" onPress={() => {}} />
-        <MeeshyGlassButton label="Couleur" glyph={<span aria-hidden="true" style={{ inlineSize: 'var(--ios-space-lg)', blockSize: 'var(--ios-space-lg)', borderRadius: 'var(--radius-pill)', background: 'var(--accent)' }} />} onPress={() => {}} />
+        <MeeshyGlassButton label="Couleur" glyph={<span aria-hidden="true" style={{ inlineSize: 'var(--ios-space-lg)', blockSize: 'var(--ios-space-lg)', borderRadius: 'var(--radius-pill)', background: 'var(--ios-indigo-500)' }} />} onPress={() => {}} />
       </>
     )}
   </Row>

@@ -5,7 +5,7 @@ import type { MeeshyGlassMaterial, MeeshyGlassTone } from './meeshy-glass-recipe
 export type MeeshyGlassButtonKind = 'normal' | 'active' | 'destructive' | 'soft';
 export type MeeshyGlassButtonSize = 36 | 40 | 44 | 48;
 export type MeeshyGlassButtonHaptic = 'light' | 'none';
-export type MeeshyGlassButtonFill = 'clear' | 'white' | 'red' | 'veil' | 'themeInk';
+export type MeeshyGlassButtonFill = 'clear' | 'light' | 'red' | 'veil' | 'themeInk';
 export type MeeshyGlassButtonGlassRequest = 'none' | 'neutral';
 export type MeeshyGlassButtonInk = 'onMedia' | 'onSolid' | 'themeInk' | 'themeInverse' | 'custom';
 export type MeeshyGlassButtonPopup = true | 'menu' | 'listbox' | 'dialog';
@@ -87,7 +87,7 @@ export const impliedMeeshyGlassButtonKind = (activation: MeeshyGlassButtonActiva
 
 const solidFill = (kind: MeeshyGlassButtonKind, tone: MeeshyGlassTone): MeeshyGlassButtonFill => {
   if (kind === 'normal') return 'clear';
-  if (kind === 'active') return tone === 'theme' ? 'themeInk' : 'white';
+  if (kind === 'active') return tone === 'theme' ? 'themeInk' : 'light';
   return kind === 'destructive' ? 'red' : 'veil';
 };
 
@@ -163,7 +163,7 @@ const INK_TOKEN: Readonly<Record<Exclude<MeeshyGlassButtonInk, 'custom'>, string
 };
 
 const FILL_TOKEN: Readonly<Record<Exclude<MeeshyGlassButtonFill, 'clear'>, string>> = {
-  white: 'var(--color-on-media)',
+  light: 'var(--color-on-media)',
   veil: 'var(--color-on-media)',
   red: 'var(--ios-error-strong)',
   themeInk: 'var(--color-ios-ink)',

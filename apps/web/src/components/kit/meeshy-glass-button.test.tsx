@@ -136,7 +136,8 @@ const tap = (target: HTMLElement): void => {
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const materialsOfTheWeb = vectors.matter.filter((row) => row.material !== 'liquid');
-const fillOf = (name: MatterVector['fill']): string => (name === 'none' ? 'clear' : name);
+const FILL_NAMES: Readonly<Record<MatterVector['fill'], string>> = { none: 'clear', white: 'light', red: 'red', veil: 'veil' };
+const fillOf = (name: MatterVector['fill']): string => FILL_NAMES[name];
 
 describe('la recette, lue comme des valeurs (vecteurs de parité)', () => {
   materialsOfTheWeb.forEach((row) =>
@@ -171,8 +172,8 @@ describe('la recette, lue comme des valeurs (vecteurs de parité)', () => {
     (['normal', 'destructive', 'soft'] as const).forEach((kind) => expect(meeshyGlassButtonRecipe({ kind, size: 44 }).shadow).toBeNull());
   });
 
-  test('le fond de l’actif suit le ton : blanc partout, encre du thème sous le ton theme', () => {
-    expect(meeshyGlassButtonRecipe({ kind: 'active', size: 44, tone: 'deep' }).fill).toBe('white');
+  test('le fond de l’actif suit le ton : clair partout, encre du thème sous le ton theme', () => {
+    expect(meeshyGlassButtonRecipe({ kind: 'active', size: 44, tone: 'deep' }).fill).toBe('light');
     expect(meeshyGlassButtonRecipe({ kind: 'active', size: 44, tone: 'theme' }).fill).toBe(vectors.activeThemeFill);
   });
 
@@ -497,8 +498,8 @@ describe('le bouton, monté', () => {
   });
 
   test('l’hôte place le bouton par sa classe et lit ses sondes data-*', () => {
-    const node = button(mount(<MeeshyGlassButton label="Fermer" glyph={<Glyph />} className="host-slot" data={{ 'data-probe': 'k02' }} onPress={() => {}} />));
-    expect(node.className.split(' ')).toContain('host-slot');
+    const node = button(mount(<MeeshyGlassButton label="Fermer" glyph={<Glyph />} className="absolute" data={{ 'data-probe': 'k02' }} onPress={() => {}} />));
+    expect(node.className.split(' ')).toContain('absolute');
     expect(node.getAttribute('data-probe')).toBe('k02');
   });
 
