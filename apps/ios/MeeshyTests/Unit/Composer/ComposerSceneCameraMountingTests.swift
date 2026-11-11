@@ -181,9 +181,11 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// noir légitime.
     func test_leMeuble_nePeintLeViseur_queSiLeStageEstArmé() throws {
         let code = compact(try source("ComposerCaptureMount.swift"))
-        XCTAssertEqual(code.components(separatedBy: "session.stage != .off"
+        XCTAssertEqual(code.components(separatedBy: "ComposerCaptureSurfaceRule.showsViewfinder(stage: session.stage"
             .replacingOccurrences(of: " ", with: "")).count - 1, 2,
                        "les DEUX couches doivent porter le gate — une seule laisserait un chrome orphelin")
+        XCTAssertFalse(ComposerCaptureSurfaceRule.showsViewfinder(stage: .off, yieldsToScene: false),
+                       "le gate refuse un stage éteint")
     }
 
     /// **Le geste n'ouvre plus de PORTAIL.** C'est la moitié qui se voit à

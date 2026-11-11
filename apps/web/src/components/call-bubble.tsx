@@ -47,7 +47,7 @@ import { initialsOf } from '@/lib/view/conversation';
  *
  * #8145 — trois tailles, au pincement, à Ctrl + molette et aux touches + / −.
  * #8164 — un écran partagé s'y voit ENTIER, sur le fond neutre de la bulle.
- * #9097 — « Choisir les périphériques » (la sortie audio) y est aussi, là où
+ * #9097 — « Sortie audio » y est aussi, là où
  * le choix de sortie existe, comme le bouton haut-parleur de la bulle iOS.
  */
 
