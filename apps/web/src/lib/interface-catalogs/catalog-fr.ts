@@ -696,7 +696,6 @@ const fr = {
   'links.detail.activate': 'Activer',
   'links.detail.stats': 'Statistiques',
   'links.detail.info': 'Informations',
-  'links.detail.identifier': 'Identifiant',
   'links.detail.createdAt': 'Créé le',
   'links.detail.expiresAt': 'Expire le',
   'links.detail.reason.closed': 'La conversation est fermée : ce lien ne permet plus d’entrer.',

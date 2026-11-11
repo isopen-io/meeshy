@@ -233,10 +233,10 @@ describe('le formulaire « Modifier le lien »', () => {
   const mountForm = () =>
     mount(<EditLinkForm language="fr" link={shareLink()} policy={POLICY} now={() => new Date('2026-09-24T12:00:00Z')} onSave={async () => 'done'} onToggleActive={noop} onDelete={noop} />);
 
-  test('les champs se nomment en un mot : « Nom du lien », « Message »', async () => {
+  test('les champs se nomment en un mot : « Nom », « Message »', async () => {
     const host = await mountForm();
     const text = seen(host);
-    expect(text).toContain('Nom du lien');
+    expect(text).toContain('Nom');
     expect(text).toContain('Message');
     const joined = text.join(' | ');
     expect(joined).not.toContain('visible par toi seul');

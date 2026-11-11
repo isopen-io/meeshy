@@ -689,7 +689,6 @@ const ar = {
   'links.detail.activate': 'تفعيل',
   'links.detail.stats': 'الإحصاءات',
   'links.detail.info': 'المعلومات',
-  'links.detail.identifier': 'المعرّف',
   'links.detail.createdAt': 'تاريخ الإنشاء',
   'links.detail.expiresAt': 'تاريخ الانتهاء',
   'links.detail.reason.closed': 'المحادثة مغلقة: لم يعد هذا الرابط يسمح بالدخول.',

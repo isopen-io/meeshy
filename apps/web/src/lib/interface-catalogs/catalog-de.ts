@@ -691,7 +691,6 @@ const de = {
   'links.detail.activate': 'Aktivieren',
   'links.detail.stats': 'Statistiken',
   'links.detail.info': 'Informationen',
-  'links.detail.identifier': 'Kennung',
   'links.detail.createdAt': 'Erstellt am',
   'links.detail.expiresAt': 'Läuft ab am',
   'links.detail.reason.closed': 'Die Unterhaltung ist geschlossen: Über diesen Link kommt niemand mehr herein.',

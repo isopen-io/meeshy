@@ -19,20 +19,16 @@ import { href, navigate } from '@/routes/route-table';
 /**
  * **LE LIEN D'UNE COMMUNAUTÉ** (#6410) — miroir `CommunityLinkDetailView.swift` :
  * carte d'en-tête, barre d'actions (copier, partager, ouvrir la communauté),
- * puis les informations : identifiant, adresse, membres, rôle, visibilité.
+ * puis les informations que l'en-tête ne porte pas déjà : membres, création.
  *
  * **La communauté se lit dans la liste de SES communautés administrées** :
  * une communauté dont il n'est que membre, ou celle d'un autre, rend le refus —
  * aucune lecture par identifiant n'est faite ici.
  */
 
-export function communityInfoRows(language: InterfaceLanguage, link: CommunityLink, url: string): readonly InfoRow[] {
+export function communityInfoRows(language: InterfaceLanguage, link: CommunityLink): readonly InfoRow[] {
   return [
-    { key: 'identifier', label: translate(language, 'links.detail.identifier'), value: link.identifier, ltr: true },
-    { key: 'fullLink', label: translateLinkFamilies(language, 'linkFamilies.community.fullLink'), value: url, ltr: true },
     ...(link.memberCount === null ? [] : [{ key: 'members', label: translateLinkFamilies(language, 'linkFamilies.community.stats.members'), value: new Intl.NumberFormat(language).format(link.memberCount) }]),
-    { key: 'role', label: translateLinkFamilies(language, 'linkFamilies.community.role'), value: roleLabel(language, link) },
-    { key: 'visibility', label: translateLinkFamilies(language, 'linkFamilies.community.visibility'), value: visibilityLabel(language, link) },
     ...(link.createdAt === null
       ? []
       : [{ key: 'createdAt', label: translate(language, 'links.detail.createdAt'), value: new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(link.createdAt)) }]),
@@ -52,6 +48,7 @@ export default function CommunityLinkScreen() {
   const content = (() => {
     if (link !== undefined) {
       const url = communityLinkUrl(sharing.origin, link.identifier);
+      const infoRows = communityInfoRows(language, link);
       return (
         <>
           <DetailHero
@@ -82,9 +79,11 @@ export default function CommunityLinkScreen() {
               },
             ]}
           />
-          <FamilySection id="community-info-title" title={translate(language, 'links.detail.info')}>
-            <InfoList rows={communityInfoRows(language, link, url)} />
-          </FamilySection>
+          {infoRows.length === 0 ? null : (
+            <FamilySection id="community-info-title" title={translate(language, 'links.detail.info')}>
+              <InfoList rows={infoRows} />
+            </FamilySection>
+          )}
         </>
       );
     }

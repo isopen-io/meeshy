@@ -214,10 +214,10 @@ describe('la création d’un lien de suivi', () => {
 });
 
 describe('la création d’un lien de parrainage', () => {
-  test('« Nom du lien » et « Limiter les inscriptions » s’affichent chacun une seule fois', async () => {
+  test('« Nom » et « Limiter les inscriptions » s’affichent chacun une seule fois', async () => {
     const host = await mount(<AffiliateLinkNewScreen />);
     const text = seen(host);
-    expect(text.filter((line) => line === 'Nom du lien')).toHaveLength(1);
+    expect(text.filter((line) => line === 'Nom')).toHaveLength(1);
     expect(text.filter((line) => line === 'Limiter les inscriptions')).toHaveLength(1);
     expect(text).toContain('Créer le lien');
     expect(text.join(' | ')).not.toContain('Au-delà');
@@ -273,7 +273,7 @@ describe('la page d’un lien de partage', () => {
   test('sans arrivée, la rubrique « Langues des arrivants » est absente et une seule ligne dit le vide', () => {
     expect(renderToStaticMarkup(<ArrivalLanguages language="fr" stats={noArrival} />)).toBe('');
     const recent = renderToStaticMarkup(<RecentArrivals language="fr" linkId="mshy_l1" stats={noArrival} now={new Date('2026-09-10T10:00:00Z')} />);
-    expect(recent).toContain('Personne n’est encore arrivé par ce lien.');
+    expect(recent).toContain('Aucune arrivée');
     expect(recent).not.toContain('Aucune arrivée pour l’instant.');
   });
 });

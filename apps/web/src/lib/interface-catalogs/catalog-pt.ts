@@ -695,7 +695,6 @@ const pt = {
   'links.detail.activate': 'Ativar',
   'links.detail.stats': 'Estatísticas',
   'links.detail.info': 'Informações',
-  'links.detail.identifier': 'Identificador',
   'links.detail.createdAt': 'Criado em',
   'links.detail.expiresAt': 'Expira em',
   'links.detail.reason.closed': 'A conversa está encerrada: este link não permite mais entrar.',

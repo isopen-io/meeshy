@@ -691,7 +691,6 @@ const en = {
   'links.detail.activate': 'Activate',
   'links.detail.stats': 'Statistics',
   'links.detail.info': 'Information',
-  'links.detail.identifier': 'Identifier',
   'links.detail.createdAt': 'Created',
   'links.detail.expiresAt': 'Expires',
   'links.detail.reason.closed': 'The conversation is closed: this link no longer lets anyone in.',

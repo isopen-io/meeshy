@@ -123,9 +123,9 @@ describe('les liens de suivi', () => {
     expect(renderToStaticMarkup(<TrackingLinkRow language="fr" link={trackingLink({ name: null })} copied={false} onCopy={noop} />)).toContain('>rentree<');
   });
 
-  test('la configuration UTM ne montre que les paramètres posés', () => {
+  test('la section ne répète pas les paramètres déjà en pastilles d’en-tête', () => {
     const keys = utmRows('fr', trackingLink()).map((row) => row.key);
-    expect(keys).toEqual(['campaign', 'source', 'destination', 'createdAt']);
+    expect(keys).toEqual(['destination', 'createdAt']);
   });
 
   test('une ventilation vide le dit, une pleine montre ses parts', () => {
@@ -186,8 +186,8 @@ describe('les liens communauté', () => {
     expect(html).toContain('Modérateur');
   });
 
-  test('le détail montre l’adresse complète, et pas de date qu’on n’a pas', () => {
-    const rows = communityInfoRows('fr', community(), 'https://meeshy.me/communities/mshy_meeshy-paris');
-    expect(rows.map((row) => row.key)).toEqual(['identifier', 'fullLink', 'members', 'role', 'visibility']);
+  test('le détail ne répète ni l’adresse, ni le rôle, ni la visibilité déjà en en-tête, et pas de date qu’on n’a pas', () => {
+    const rows = communityInfoRows('fr', community());
+    expect(rows.map((row) => row.key)).toEqual(['members']);
   });
 });
