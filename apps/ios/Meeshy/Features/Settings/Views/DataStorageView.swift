@@ -8,8 +8,6 @@ struct DataStorageView: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var cacheSize: Int = 0
-    /// Le (i) ouvert : un seul à la fois sur l'écran.
-    @State private var openNoteID: String?
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -56,11 +54,9 @@ struct DataStorageView: View {
                 HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("folder.fill", color: accentColor)
 
-                    MeeshyInfoNoted(note: SettingsInfoNotes.cacheUse, openNoteID: $openNoteID, tint: theme.textMuted) {
-                        Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Chargé plus vite, vidé après 7 jours.", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-                            .foregroundStyle(theme.textMuted)
-                    }
+                    Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Chargé plus vite, vidé après 7 jours.", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
+                        .foregroundStyle(theme.textMuted)
 
                     Spacer()
 

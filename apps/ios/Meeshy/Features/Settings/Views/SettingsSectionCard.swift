@@ -9,6 +9,7 @@ struct SettingsSectionCard<Content: View>: View {
     let title: String
     let icon: String
     let color: String
+    var sentence: String? = nil
     let content: Content
 
     var body: some View {
@@ -32,6 +33,10 @@ struct SettingsSectionCard<Content: View>: View {
             }
             .padding(.leading, MeeshySpacing.xs)
 
+            if let sentence {
+                SettingsSentence(text: sentence)
+            }
+
             VStack(spacing: 0) {
                 content
             }
@@ -47,11 +52,24 @@ struct SettingsRowLabel<Trailing: View>: View {
     let icon: String
     let title: String
     let color: String
+    var note: MeeshyInfoNote? = nil
+    var openNoteID: Binding<String?> = .constant(nil)
     let trailing: Trailing
 
     private var theme: ThemeManager { ThemeManager.shared }
 
+    @ViewBuilder
     var body: some View {
+        if note != nil {
+            rowContent
+        } else {
+            rowContent
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(title)
+        }
+    }
+
+    private var rowContent: some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
@@ -63,9 +81,11 @@ struct SettingsRowLabel<Trailing: View>: View {
                 )
                 .accessibilityHidden(true)
 
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundStyle(theme.textPrimary)
+            MeeshyInfoNoted(note: note, openNoteID: openNoteID, tint: theme.textMuted) {
+                Text(title)
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+            }
 
             Spacer()
 
@@ -73,8 +93,70 @@ struct SettingsRowLabel<Trailing: View>: View {
         }
         .padding(.horizontal, MeeshySpacing.md + 2)
         .padding(.vertical, MeeshySpacing.sm + 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
+    }
+}
+
+/// **La phrase d'une rangée**, lisible au repos sous elle : ce qu'un nom propre
+/// à Meeshy veut dire (règle 7 de l'épure). VoiceOver la lit à la suite de la
+/// rangée, sans `accessibilityHint` qui la répéterait.
+struct SettingsRowSentence: View {
+    let text: String
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        Text(text)
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
+            .foregroundStyle(theme.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, MeeshySpacing.md + 2)
+            .padding(.bottom, MeeshySpacing.sm + 2)
+    }
+}
+
+/// **Les phrases d'orientation des réglages** : une par bloc ou par rangée
+/// propre à Meeshy. Une seule source, que les écrans citent et que les témoins
+/// parcourent par `all`.
+enum SettingsOrientation {
+    static var voice: String {
+        String(localized: "settings.voice.orientation", defaultValue: "Gardez votre voix dans vos messages traduits.", bundle: .main)
+    }
+
+    static var transcription: String {
+        String(localized: "settings.transcription.orientation", defaultValue: "La transcription d'un vocal s'affiche dans votre langue.", bundle: .main)
+    }
+
+    static var packs: String {
+        String(localized: "settings.packs.hint", defaultValue: "Stickers et cadres du jeu : installez ou retirez des packs.", bundle: .main)
+    }
+
+    static var progression: String {
+        String(localized: "settings.tools.progression.hint", defaultValue: "Vos badges, votre niveau et votre série de jours actifs", bundle: .main)
+    }
+
+    static var affiliate: String {
+        String(localized: "settings.tools.affiliate.hint", defaultValue: "Inviter des amis et gagner des récompenses", bundle: .main)
+    }
+
+    static var lentilleList: String {
+        String(localized: "settings.interface.lentille_list.hint", defaultValue: "Chaque conversation de la liste se lit dans votre langue, d'un coup d'œil.", bundle: .main)
+    }
+
+    static var riviereMode: String {
+        String(localized: "settings.interface.riviere_mode.summary", defaultValue: "Les messages défilent comme un flux continu, sans bulles séparées.", bundle: .main)
+    }
+
+    static var riviereUnavailable: String {
+        String(localized: "settings.interface.riviere_mode.hint", defaultValue: "Disponible quand le mode de lecture est activé.", bundle: .main)
+    }
+
+    static var encryption: String {
+        String(localized: "settings.privacy.encryption.summary", defaultValue: "Le chiffrement de bout en bout se choisit par conversation et ne se défait pas.", bundle: .main)
+    }
+
+    static var all: [String] {
+        [voice, transcription, packs, progression, affiliate, lentilleList, riviereMode, riviereUnavailable, encryption]
     }
 }
 
@@ -130,10 +212,17 @@ enum SettingsInfoNotes {
         )
     }
 
-    static var cacheUse: MeeshyInfoNote {
+    static var transcriptionAuto: MeeshyInfoNote {
         MeeshyInfoNote(
-            question: String(localized: "settings.data.storage.cache.note.question", defaultValue: "À quoi sert le cache ?", bundle: .main),
-            text: String(localized: "settings.data.storage.cache.note", defaultValue: "Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours.", bundle: .main)
+            question: String(localized: "settings.transcription.auto.question", defaultValue: "Quand transcrit-on ?", bundle: .main),
+            text: String(localized: "settings.transcription.auto.note", defaultValue: "Activé, les vocaux reçus sont transcrits à leur arrivée ; sinon, à la demande.", bundle: .main)
+        )
+    }
+
+    static var encryption: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "settings.privacy.encryption.question", defaultValue: "Qu'est-ce qui change quand une conversation est chiffrée ?", bundle: .main),
+            text: String(localized: "settings.privacy.encryption.note", defaultValue: "Le serveur ne voit jamais le clair : la traduction se fait sur votre appareil, et les fonctions qui exigent de lire le message sont absentes. Un message en clair y est refusé.", bundle: .main)
         )
     }
 
@@ -147,7 +236,7 @@ enum SettingsInfoNotes {
     static var returnAnnouncement: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "settings.privacy.notify_contacts_on_return.question", defaultValue: "Qui est prévenu de mon retour ?", bundle: .main),
-            text: String(localized: "settings.privacy.notify_contacts_on_return.info", defaultValue: "Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué.", bundle: .main)
+            text: String(localized: "settings.privacy.notify_contacts_on_return.info", defaultValue: "Vos amis et les porteurs de votre numéro ou e-mail. Jamais si votre statut en ligne est masqué.", bundle: .main)
         )
     }
 
@@ -187,7 +276,7 @@ enum SettingsInfoNotes {
     }
 
     static var all: [MeeshyInfoNote] {
-        [galleryAutosave, renderedCapture, cameraArming, compression, cacheUse,
+        [galleryAutosave, renderedCapture, cameraArming, compression, transcriptionAuto, encryption,
          onlineStatus, returnAnnouncement, readReceipts, contactSearch, callsFromNonContacts, analytics, hiddenCallAddress]
     }
 }

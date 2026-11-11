@@ -12,6 +12,7 @@ struct PrivacySettingsView: View {
     }
     /// Le (i) ouvert : sa note se déplie sous la rangée, une seule à la fois.
     @State private var openNoteID: String?
+    @State private var showsEncryptedDevices = false
     /// Réglage de l'APPAREIL (#11296) : l'adresse IP à masquer est la sienne.
     @AppStorage(CallAddressPrivacySetting.key) private var hidesCallAddress = false
 
@@ -207,36 +208,41 @@ struct PrivacySettingsView: View {
         }
     }
 
-    // MARK: - Chiffrement (bientôt disponible)
+    // MARK: - Chiffrement
 
-    /// Le chiffrement E2EE n'est pas encore opérationnel : la section est
-    /// affichée GRISÉE et NON interactive avec un statut explicite « Désactivé /
-    /// Bientôt disponible ». Aucune préférence de
-    /// chiffrement n'est éditable tant que la fonctionnalité n'est pas livrée —
-    /// éviter de laisser croire qu'un chiffrement optionnel/actif existe.
+    /// Le chiffrement de bout en bout existe : optionnel, choisi conversation par
+    /// conversation, irréversible. La phrase le dit au repos (règle 7 de l'épure),
+    /// le détail passe derrière un (i), et « Mes appareils chiffrés » est à un geste.
     private var encryptionSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             SettingsSectionHeader(
                 title: String(localized: "settings.privacy.encryption", defaultValue: "Chiffrement", bundle: .main),
                 icon: "lock.shield.fill",
-                color: "3498DB"
+                color: MeeshyColors.tileBlueHex
             )
+            MeeshyInfoNoted(note: SettingsInfoNotes.encryption, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                SettingsSentence(text: SettingsOrientation.encryption)
+            }
             SettingsCard(tint: MeeshyColors.tileBlueHex) {
-                SettingsRow(
-                    icon: "hourglass",
-                    title: String(localized: "settings.privacy.encryption.coming_soon", defaultValue: "Bientôt disponible", bundle: .main),
-                    color: "3498DB"
-                ) {
-                    Text(String(localized: "settings.privacy.encryption.status_disabled", defaultValue: "Désactivé", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundStyle(theme.textSecondary)
+                Button {
+                    HapticFeedback.light()
+                    showsEncryptedDevices = true
+                } label: {
+                    SettingsRow(
+                        icon: "iphone.and.arrow.forward",
+                        title: String(localized: "e2ee.devices.title", defaultValue: "Mes appareils chiffrés", bundle: .main),
+                        color: MeeshyColors.tileBlueHex
+                    ) {
+                        Image(systemName: "chevron.forward")
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                            .foregroundStyle(theme.textMuted)
+                            .accessibilityHidden(true)
+                    }
                 }
+                .accessibilityIdentifier("privacy.encryptedDevices")
             }
         }
-        .opacity(0.55)
-        .allowsHitTesting(false)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "settings.privacy.encryption.coming_soon.a11y", defaultValue: "Chiffrement — bientôt disponible, actuellement désactivé", bundle: .main))
+        .sheet(isPresented: $showsEncryptedDevices) { EncryptedDevicesView() }
     }
 
     // MARK: - Assemblage

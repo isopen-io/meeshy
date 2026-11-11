@@ -177831,100 +177831,6 @@
         }
       }
     },
-    "settings.data.storage.cache.note": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تسرّع الذاكرة المؤقتة تحميل الوسائط وتقلّل استهلاك البيانات. تُحذف الملفات المخزّنة تلقائيًا بعد 7 أيام."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Cache lädt Medien schneller und spart Datenvolumen. Zwischengespeicherte Dateien werden nach 7 Tagen automatisch gelöscht."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The cache loads media faster and reduces data usage. Cached files are deleted automatically after 7 days."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La caché carga los archivos más rápido y reduce el consumo de datos. Los archivos en caché se eliminan automáticamente al cabo de 7 días."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La cache carica i contenuti più rapidamente e riduce il consumo di dati. I file memorizzati vengono eliminati automaticamente dopo 7 giorni."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O cache carrega as mídias mais rápido e reduz o consumo de dados. Os arquivos em cache são apagados automaticamente após 7 dias."
-          }
-        }
-      }
-    },
-    "settings.data.storage.cache.note.question": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ما فائدة الذاكرة المؤقتة؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wofür ist der Cache?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "What is the cache for?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Para qué sirve la caché?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "À quoi sert le cache ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A cosa serve la cache?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Para que serve o cache?"
-          }
-        }
-      }
-    },
     "settings.data.storage.cache.subtitle": {
       "extractionState": "manual",
       "localizations": {
@@ -182772,43 +182678,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ثبّت أو أزِل حزم الملصقات وإطارات اللعبة"
+            "value": "ملصقات وإطارات اللعبة: ثبّت الحزم أو أزِلها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sticker- und Spielrahmen-Pakete installieren oder entfernen"
+            "value": "Sticker und Spielrahmen: Pakete installieren oder entfernen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Install or remove sticker packs and game frame packs"
+            "value": "Game stickers and frames: install or remove packs."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Instala o quita paquetes de stickers y de marcos del juego"
+            "value": "Stickers y marcos del juego: instala o quita packs."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Installe ou retire des packs de stickers et de cadres du jeu"
+            "value": "Stickers et cadres du jeu : installez ou retirez des packs."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Installa o rimuovi pacchetti di sticker e di cornici del gioco"
+            "value": "Sticker e cornici del gioco: installa o rimuovi pacchetti."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Instale ou remova pacotes de figurinhas e de molduras do jogo"
+            "value": "Figurinhas e molduras do jogo: instale ou remova pacotes."
           }
         }
       }
@@ -183796,53 +183702,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Criptografia — em breve, atualmente desativada"
-          }
-        }
-      }
-    },
-    "settings.privacy.encryption.status_disabled": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مُعطَّل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aus"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Off"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desactivado"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Désactivé"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disattivo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desativado"
           }
         }
       }
@@ -237071,46 +236930,46 @@
     "settings.privacy.notify_contacts_on_return.info": {
       "extractionState": "manual",
       "localizations": {
-        "fr": {
+        "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your friends and people who have your number or email see “was on Meeshy recently”, at most once every 3 hours. Never if your online status is hidden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus amigos y quienes tienen tu número o tu correo ven «estuvo en Meeshy hace poco», como máximo una vez cada 3 horas. Nunca si tu estado en línea está oculto."
+            "value": "أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Freunde und alle, die deine Nummer oder E-Mail haben, sehen „war vor Kurzem auf Meeshy“ – höchstens einmal alle 3 Stunden. Nie, wenn dein Online-Status verborgen ist."
+            "value": "Deine Freunde und alle, die deine Nummer oder E-Mail haben. Nie, wenn dein Online-Status verborgen ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your friends and anyone who has your number or email. Never if your online status is hidden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus amigos y quienes tienen tu número o correo. Nunca si tu estado en línea está oculto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos amis et les porteurs de votre numéro ou e-mail. Jamais si votre statut en ligne est masqué."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi amici e chi ha il tuo numero o la tua e-mail vedono «è stato su Meeshy di recente», al massimo una volta ogni 3 ore. Mai se il tuo stato online è nascosto."
+            "value": "I tuoi amici e chi ha il tuo numero o la tua e-mail. Mai se il tuo stato online è nascosto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus amigos e quem tem seu número ou e-mail veem “esteve no Meeshy recentemente”, no máximo uma vez a cada 3 horas. Nunca se seu status online estiver oculto."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يرى أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني «كان على Meeshy مؤخرًا»، مرة واحدة على الأكثر كل 3 ساعات. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية."
+            "value": "Seus amigos e quem tem seu número ou e-mail. Nunca se seu status online estiver oculto."
           }
         }
       }
@@ -334113,53 +333972,6 @@
         }
       }
     },
-    "settings.packs.mine.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الحزم التي ثبّتها، مرتبة حسب الفئة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine installierten Pakete, nach Kategorie geordnet"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The packs you installed, sorted by category"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los packs que instalaste, ordenados por categoría"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les packs que tu as installés, rangés par catégorie"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I pack che hai installato, ordinati per categoria"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os pacotes que você instalou, organizados por categoria"
-          }
-        }
-      }
-    },
     "profile.packs.shop": {
       "extractionState": "manual",
       "localizations": {
@@ -337484,6 +337296,429 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "settings.voice.orientation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "احتفظ بصوتك في رسائلك المترجمة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behalten Sie Ihre Stimme in Ihren übersetzten Nachrichten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep your own voice in your translated messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conserva tu voz en tus mensajes traducidos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gardez votre voix dans vos messages traduits."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantieni la tua voce nei messaggi tradotti."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantenha sua voz nas suas mensagens traduzidas."
+          }
+        }
+      }
+    },
+    "settings.transcription.orientation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تظهر نسخة الرسالة الصوتية بلغتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Transkription einer Sprachnachricht erscheint in Ihrer Sprache."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A voice message's transcript appears in your language."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transcripción de un audio se muestra en tu idioma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La transcription d'un vocal s'affiche dans votre langue."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La trascrizione di un vocale appare nella tua lingua."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A transcrição de um áudio aparece no seu idioma."
+          }
+        }
+      }
+    },
+    "settings.interface.lentille_list.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تتضخم البطاقة في وسط القائمة أثناء التمرير."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Karte in der Mitte der Liste wächst beim Scrollen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The card at the centre of the list grows as you scroll."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tarjeta del centro de la lista se agranda al desplazarte."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La carte au centre de la liste s'agrandit quand vous défilez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La scheda al centro dell'elenco si ingrandisce mentre scorri."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O cartão no centro da lista cresce enquanto você rola."
+          }
+        }
+      }
+    },
+    "settings.interface.riviere_mode.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "في المجموعات النشطة تُقرأ المحادثة في مسارات، مسار لكل صوت."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In aktiven Gruppen liest sich die Unterhaltung in Spuren, eine pro Stimme."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In active groups, the conversation reads in lanes, one per voice."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En los grupos activos, la conversación se lee en carriles, uno por voz."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dans les groupes actifs, la conversation se lit en couloirs, un par voix."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nei gruppi attivi la conversazione si legge in corsie, una per voce."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Em grupos ativos, a conversa se lê em faixas, uma por voz."
+          }
+        }
+      }
+    },
+    "settings.privacy.encryption.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يُختار التشفير من طرف إلى طرف لكل محادثة ولا يمكن التراجع عنه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ende-zu-Ende-Verschlüsselung wählen Sie pro Unterhaltung, unwiderruflich."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encryption is chosen per conversation and can't be undone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cifrado de extremo a extremo se elige por conversación y no se deshace."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le chiffrement de bout en bout se choisit par conversation et ne se défait pas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La cifratura end-to-end si sceglie per conversazione e non si annulla."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A criptografia de ponta a ponta é escolhida por conversa e não se desfaz."
+          }
+        }
+      }
+    },
+    "settings.privacy.encryption.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يتغير عندما تكون المحادثة مشفّرة؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ändert sich, wenn eine Unterhaltung verschlüsselt ist?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What changes when a conversation is encrypted?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué cambia cuando una conversación está cifrada?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qu'est-ce qui change quand une conversation est chiffrée ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa cambia quando una conversazione è cifrata?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que muda quando uma conversa é criptografada?"
+          }
+        }
+      }
+    },
+    "settings.privacy.encryption.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يرى الخادم النص الصريح أبدًا: تتم الترجمة على جهازك، وتغيب الميزات التي تتطلب قراءة الرسالة. تُرفض الرسالة غير المشفّرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Server sieht den Klartext nie: Die Übersetzung erfolgt auf Ihrem Gerät, und Funktionen, die die Nachricht lesen müssten, fehlen. Eine Nachricht im Klartext wird abgelehnt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server never sees the plain text: translation happens on your device, and features that need to read the message are absent. A plain message is refused there."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servidor nunca ve el texto en claro: la traducción se hace en tu dispositivo y faltan las funciones que exigen leer el mensaje. Un mensaje en claro se rechaza."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le serveur ne voit jamais le clair : la traduction se fait sur votre appareil, et les fonctions qui exigent de lire le message sont absentes. Un message en clair y est refusé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il server non vede mai il testo in chiaro: la traduzione avviene sul tuo dispositivo e le funzioni che richiedono di leggere il messaggio non ci sono. Un messaggio in chiaro viene rifiutato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O servidor nunca vê o texto em claro: a tradução é feita no seu aparelho e os recursos que exigem ler a mensagem não existem. Uma mensagem em claro é recusada."
+          }
+        }
+      }
+    },
+    "settings.transcription.auto.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متى تتم النسخ؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wann wird transkribiert?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When is it transcribed?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuándo se transcribe?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand transcrit-on ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando si trascrive?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando é transcrito?"
+          }
+        }
+      }
+    },
+    "settings.transcription.auto.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عند التفعيل تُنسخ الرسائل الصوتية الواردة فور وصولها، وإلا فعند الطلب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktiviert, werden empfangene Sprachnachrichten sofort transkribiert, sonst auf Abruf."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On, received voice messages are transcribed on arrival; otherwise, on demand."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activado, los audios recibidos se transcriben al llegar; si no, a petición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activé, les vocaux reçus sont transcrits à leur arrivée ; sinon, à la demande."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attivo, i vocali ricevuti si trascrivono all'arrivo; altrimenti, su richiesta."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativado, os áudios recebidos são transcritos ao chegar; senão, sob demanda."
           }
         }
       }
