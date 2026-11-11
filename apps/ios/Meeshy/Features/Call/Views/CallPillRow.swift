@@ -79,6 +79,8 @@ struct CallPillRow<Content: View>: View {
             }
             .callRowScrollTargetBehavior()
             .modifier(CallRowScrollInteraction())
+            // P12.8 — une rangée qui défile s'efface en fondu à ses deux bords.
+            .mask { ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true) }
         }
         .padding(.vertical, MeeshySpacing.sm)
         .accessibilityElement(children: .contain)

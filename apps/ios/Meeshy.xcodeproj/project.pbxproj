@@ -4202,7 +4202,6 @@
 		E987ACC4642CAFF8F7FBEC21 /* PublishIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E8A4AF802F77371FC851480 /* PublishIntent.swift */; };
 		E98ADC54A3FA2DDFCFF7DC90 /* AttachmentDownloadCenterProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE14ADE846899854DEF68EA /* AttachmentDownloadCenterProfileTests.swift */; };
 		E98C9229669A294A93F9B3CC /* SessionTransitionPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 852FFB98C458F99504FBB8F1 /* SessionTransitionPlanTests.swift */; };
-		E990B343C214927F016D5E01 /* EscapeDismiss.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4E040B71D5FE6225BF005E1 /* EscapeDismiss.swift */; };
 		E9A747E8407D363A6BF86766 /* OnboardingProfileModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 845C87CF88CC9854F845A84D /* OnboardingProfileModel.swift */; };
 		E9B8D30C6142B2DE4F46B93A /* PostEditRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = D154139B4EEC041C5E799851 /* PostEditRoute.swift */; };
 		E9BF1AACF763F06A313F5987 /* ConversationIncomingMessageReconciler.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3014A26B84E373C37AEFD87 /* ConversationIncomingMessageReconciler.swift */; };
@@ -8960,7 +8959,6 @@
 		F4B39D20BB08C6CEB5323EB4 /* MeeshyComposerHostGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyComposerHostGuardTests.swift; sourceTree = "<group>"; };
 		F4BB7B7A1F5C0177DDDB8408 /* GameMintPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameMintPreviewView.swift; sourceTree = "<group>"; };
 		F4D50CC2AAD1A71B64317392 /* NotificationCallBackActionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCallBackActionTests.swift; sourceTree = "<group>"; };
-		F4E040B71D5FE6225BF005E1 /* EscapeDismiss.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EscapeDismiss.swift; sourceTree = "<group>"; };
 		F50DD48945D4A1622E2D3AAA /* BloodRitualViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BloodRitualViewModel.swift; sourceTree = "<group>"; };
 		F512A2744039F3A95B7E4D4B /* OutboxStickerPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxStickerPayloadTests.swift; sourceTree = "<group>"; };
 		F51696D84621EB4E098942CC /* ConversationViewModelTranslationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelTranslationTests.swift; sourceTree = "<group>"; };
@@ -10331,7 +10329,6 @@
 				37D70C0D508C7C4BB6DD67BF /* EmojiUsageTracker.swift */,
 				28E849FF21255D5320323463 /* EndToEndDeviceLimitSheet.swift */,
 				F57D37D83A3BA32741A1AEF2 /* EphemeralChoiceCopy.swift */,
-				F4E040B71D5FE6225BF005E1 /* EscapeDismiss.swift */,
 				6DAC63F7BAFCA89D2F02EF3E /* FeedbackToastOverlay.swift */,
 				6834C2BE376B2B08DEEEA67F /* InviteFriendsSheet.swift */,
 				1AD0AF6FB243AA63DCF30A2E /* LanguageFlagChip.swift */,
@@ -16801,7 +16798,6 @@
 				C9849C873E679EC18F3BAF3C /* EpisodeListView.swift in Sources */,
 				8377E8582A43877AAFDB1049 /* EpisodeSegmenter.swift in Sources */,
 				E6185ADD5DC81DD72B653A83 /* EquatableFocalRow.swift in Sources */,
-				E990B343C214927F016D5E01 /* EscapeDismiss.swift in Sources */,
 				11B24A49E6AB9AC804E4F197 /* ExpiredEphemeralRow.swift in Sources */,
 				330662BAF18F68E9A86F73AE /* ExpiringClipboard.swift in Sources */,
 				DADBB2DD35CCF17C55514967 /* ExplicitUnreadMarks.swift in Sources */,

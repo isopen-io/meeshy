@@ -43,6 +43,7 @@ const countVisibleWords = (screenHeight) => {
     const text = node.textContent.trim();
     const element = node.parentElement;
     if (text === '' || element === null) continue;
+    if (element.closest('[data-player-banner]') !== null) continue;
     const box = element.getBoundingClientRect();
     const style = getComputedStyle(element);
     if (box.width < 2 || box.height < 2 || style.visibility === 'hidden' || style.opacity === '0') continue;
@@ -63,6 +64,7 @@ const measureView = async ({ name, path }) => {
     await page.clock.setFixedTime(INSTANT);
     await page.goto(`${served.base}${path}`, { waitUntil: 'networkidle' });
     await page.waitForFunction(() => document.body.innerText.trim().split(/\s+/).length > 12, null, { timeout: 8000 }).catch(() => {});
+    await page.evaluate(() => document.fonts.ready);
     const counted = await waitForValueSettled(page, countVisibleWords, viewport.height, { stepMs: 250, attempts: 40, pret: (value) => value.total > 0 });
     if (counted !== undefined) await page.screenshot({ path: `${OUTPUT}${name}.png` });
     await page.close();
