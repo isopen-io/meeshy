@@ -35,9 +35,13 @@ export function controlsDisposition({ participantCount, showsGroupGrid = false }
   return showsGroupGrid || participantCount > MAX_PARTICIPANTS_ON_RAILS ? 'rows' : 'rails';
 }
 
-/** Les participants de l'appel, moi compris : la grille compte ses pairs, tout le reste est un duo. */
+/**
+ * Les participants de l'appel, moi compris (`callParticipantCount` d'iOS) : la
+ * grille compte ses pairs arrivés — un invité qui sonne encore n'en est pas un,
+ * comme `GroupCallRoster` qui n'admet que les arrivées —, tout le reste est un duo.
+ */
 export function participantCountOf(call: Pick<ActiveCall, 'members'>, layout: CallLayout): number {
-  return layout === 'grid' ? Object.keys(call.members).length + 1 : 2;
+  return layout === 'grid' ? Object.values(call.members).filter((member) => member.link !== 'ringing').length + 1 : 2;
 }
 
 export type CallFamily = 'mine' | 'call';

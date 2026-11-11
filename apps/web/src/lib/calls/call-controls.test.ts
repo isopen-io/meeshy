@@ -20,7 +20,6 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
   canShare: true,
   canEffect: true,
   cameraSwitch: 'flip' as const,
-  canPip: false,
   videoScene: false,
   ...overrides,
 });
@@ -96,13 +95,9 @@ describe('se retourner, ou choisir sa caméra (#8432, #9094)', () => {
   });
 });
 
-describe('l’image dans l’image rejoint la rangée « l’appel » (#9095, `CallView+Pill.swift`)', () => {
-  test('offerte, elle ferme la rangée, après Ajouter et Réagir — comme iOS', () => {
-    expect(callControlSet(context({ canPip: true })).call).toEqual(['captions', 'record', 'invite', 'journal', 'react', 'pip']);
-  });
-
-  test('non offerte, elle n’y est pas', () => {
-    expect(callControlSet(context({ canPip: false })).call).not.toContain('pip');
+describe('l’image dans l’image a quitté la liste « l’appel » (#17329, elle vit dans l’en-tête)', () => {
+  test('la rangée « l’appel » ne la porte jamais', () => {
+    expect(callControlSet(context({ videoScene: true })).call).not.toContain('pip');
   });
 });
 

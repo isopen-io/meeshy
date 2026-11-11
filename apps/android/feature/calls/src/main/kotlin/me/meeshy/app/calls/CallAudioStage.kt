@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -122,9 +121,6 @@ private fun CallStagePills(state: CallUiState, signalingDegraded: Boolean) {
         }
         if (state.isPeerMuted) {
             CallStatusPill(Icons.Filled.MicOff, stringResource(R.string.call_stage_peer_muted), CallPalette.InkSecondary)
-        }
-        if (state.isPeerQualityDegraded) {
-            CallStatusPill(Icons.Filled.WifiOff, stringResource(R.string.call_stage_peer_network), warning)
         }
         if (signalingDegraded) {
             CallStatusPill(Icons.Filled.CloudOff, stringResource(R.string.call_stage_signaling), warning)

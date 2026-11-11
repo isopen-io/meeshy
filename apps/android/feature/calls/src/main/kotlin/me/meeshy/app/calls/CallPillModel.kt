@@ -41,7 +41,6 @@ internal object CallPillModel {
             hasSelectableCameras = hasSelectableCameras,
             isConnected = state.status == CallStatus.CONNECTED,
             mayRecord = isRegistered(CallAction.Recording),
-            canPictureInPicture = isRegistered(CallAction.PictureInPicture),
             showsVideo = state.isVideoCall && state.showsConnectedLayout,
         )
 

@@ -149,6 +149,71 @@
   --glass-disc-veil: 22%;
 }
 
+/* LE TEXTE DE LA PILULE ARRIVE D'OÙ IL VIENT (#17343, #17406) — les sous-titres
+   qui entrent dans le verre de la pilule, le journal qui s'ouvre à leur place, les
+   sous-titres qui restent quand la pilule se range : ils MONTENT depuis la rangée
+   de base, jamais d'un coup. Seules la transformation et l'opacité bougent, la
+   règle de « Réduire les animations » (`app.css`, règle 32) les ramène à un
+   instant, et un toucher pendant le mouvement répond (rien n'est bloqué).
+   CE QUI PARAÎT DANS L'EN-TÊTE ARRIVE DE MÊME (#17329, `CallView+Header` d'iOS) :
+   le bouton Image dans l'image quand l'appel y devient éligible, la capsule quand
+   l'appel s'établit, les barres quand le réseau se dégrade. La capsule s'anime par
+   son emplacement, stable : le premier relevé de qualité, qui en fait un bouton,
+   ne la rejoue pas. Une seule règle, une seule image clé : la première peinture
+   ne paie que leurs sélecteurs. L'arrivée ne se prolonge pas (`backwards`) : une
+   transformation tenue ferait de la capsule le bloc conteneur de son détail
+   `fixed`, qui s'y écraserait. */
+[data-call-pill-text],
+[data-call-pip],
+[data-call-capsule],
+[data-call-signal] {
+  animation: call-pill-text-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+}
+
+@keyframes call-pill-text-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+/* ET IL REPART COMME IL EST VENU (#17406) — le texte qui quitte la pilule reste à
+   sa place le temps de ce fondu (`PILL_TEXT_EXIT`, `call-pill-text-exit.ts`), redescend
+   vers la rangée de base et ne prend plus le doigt : un bouton touché pendant la
+   sortie répond. Sous « Réduire les animations », la pilule ne l'attend pas. */
+[data-call-pill-text][data-leaving] {
+  animation: call-pill-text-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+/* La pilule ne se resserre pas sous les sous-titres qui repartent : ils gardent la
+   largeur du verre qui porte du texte (`PILL_TEXT_WIDTH_CLASS`, moins son liseré
+   intérieur), et elle ne reprend sa forme qu'une fois qu'ils sont partis. */
+[data-call-pill-text="captions"][data-leaving] {
+  width: min(calc(100vw - 2.25rem), calc(560px - 0.75rem));
+}
+
+@keyframes call-pill-text-out {
+  to {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes call-pill-text-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes call-pill-text-out {
+    to {
+      opacity: 0;
+    }
+  }
+}
+
 /* RÉDUIRE LA TRANSPARENCE — le verre d'appel cesse de laisser passer l'image :
    la pilule ne floute plus et se densifie, le disque devient un plein indigo
    (le glyphe blanc y tient bien au-delà de AA) et garde son liseré. */

@@ -118,6 +118,16 @@ export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' 
   ];
 }
 
+/**
+ * Les pastilles que la disposition MONTRE : « Micro coupé » reste à l'appel
+ * audio À DEUX (`audioCallLayout` d'iOS, que la scène de groupe ne monte pas) —
+ * en vidéo comme dans la grille, le bouton Micro porte déjà l'état et la planche
+ * ne dessine aucune pastille au-dessus de la scène (P7.4).
+ */
+export function visibleStatusPills(call: Parameters<typeof statusPills>[0], layout: CallLayout): readonly StatusPill[] {
+  return statusPills(call).filter((pill) => layout === 'portrait' || pill !== 'mic-muted');
+}
+
 /** L'ordre des tuiles d'une grille : les pairs connectés d'abord, par nom. */
 export function orderedMembers(members: Readonly<Record<string, CallMember>>): readonly CallMember[] {
   const rank = (member: CallMember): number => (member.link === 'connected' ? 0 : member.link === 'reconnecting' ? 1 : 2);
