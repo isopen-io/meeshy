@@ -60945,53 +60945,6 @@
         }
       }
     },
-    "auth.password.change.new.placeholder": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "8 أحرف على الأقل"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mindestens 8 Zeichen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "At least 8 characters"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mínimo 8 caracteres"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Minimum 8 caractères"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Almeno 8 caratteri"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No mínimo 8 caracteres"
-          }
-        }
-      }
-    },
     "auth.password.change.new.section": {
       "extractionState": "manual",
       "localizations": {
@@ -177549,53 +177502,6 @@
         }
       }
     },
-    "settings.data.export.info.body": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "صدّر بياناتك الشخصية (GDPR)."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exportiere deine personenbezogenen Daten (DSGVO)."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Export your personal data (GDPR)."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exporta tus datos personales (RGPD)."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exportez vos données personnelles (RGPD)."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esporta i tuoi dati personali (GDPR)."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exporte seus dados pessoais (RGPD)."
-          }
-        }
-      }
-    },
     "settings.data.export.info.title": {
       "extractionState": "manual",
       "localizations": {
@@ -178442,6 +178348,100 @@
         }
       }
     },
+    "settings.interface.reading_modes.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يغيّر وضع القراءة؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ändert der Lesemodus?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does the reading mode change?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué cambia el modo de lectura?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que change le mode de lecture ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa cambia la modalità di lettura?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que muda o modo de leitura?"
+          }
+        }
+      }
+    },
+    "settings.interface.reading_modes.orientation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اقرأ المحادثة بوضع فقاعات أو سكريبت أو الملخص أو فوكال أو النهر."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lesen Sie eine Unterhaltung als Blasen, Skript, Zusammenfassung, Focal oder Fluss."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read a conversation as Bubbles, Script, Summary, Focal or River."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lee una conversación en Burbujas, Script, Resumen, Focal o Río."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lisez une conversation en Bulles, Script, Résumé, Focal ou Rivière."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leggi una conversazione in Bolle, Script, Riepilogo, Focal o Fiume."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leia uma conversa em Bolhas, Script, Resumo, Focal ou Rio."
+          }
+        }
+      }
+    },
     "settings.interface.riviere_mode": {
       "extractionState": "manual",
       "localizations": {
@@ -179147,6 +179147,53 @@
         }
       }
     },
+    "settings.media.capture.original.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا تحتوي النسخة الأصلية؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was enthält das Original?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does the original contain?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué contiene el original?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que contient l'original ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa contiene l'originale?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que contém o original?"
+          }
+        }
+      }
+    },
     "settings.media.capture.original.title": {
       "extractionState": "manual",
       "localizations": {
@@ -179617,7 +179664,7 @@
         }
       }
     },
-    "settings.media.opening.library.subtitle": {
+    "settings.media.opening.library.note": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -179660,6 +179707,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Suas fotos aparecem na metade da tela, com a câmera visível atrás."
+          }
+        }
+      }
+    },
+    "settings.media.opening.library.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يفعل «فتح مكتبة الصور»؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was bewirkt „Fotomediathek öffnen“?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does “Open the photo library” do?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué hace «Abrir la fototeca»?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que fait « Ouvrir la photothèque » ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa fa «Apri la libreria foto»?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que faz “Abrir a fototeca”?"
           }
         }
       }
@@ -179707,53 +179801,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abrir a fototeca"
-          }
-        }
-      }
-    },
-    "settings.media.outgoing.compress.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يوفّر البيانات."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Spart Daten."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Saves data."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ahorra datos."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Économise des données."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Risparmia dati."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Economiza dados."
           }
         }
       }

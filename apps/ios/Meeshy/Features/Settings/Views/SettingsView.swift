@@ -519,15 +519,10 @@ struct SettingsView: View {
         }
 
         VStack(alignment: .leading, spacing: 0) {
-            settingsRow(icon: "text.book.closed.fill", title: readingModesTitle, color: MeeshyColors.indigo400Hex) {
+            settingsRow(icon: "text.book.closed.fill", title: readingModesTitle, color: MeeshyColors.indigo400Hex, note: SettingsInfoNotes.readingModes) {
                 featureToggle(.readingModes, title: readingModesTitle, isOn: $readingModesEnabled)
             }
-            Text(String(localized: "settings.interface.reading_modes.subtitle",
-                        defaultValue: "Désactivé, les conversations s'ouvrent en Script.", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textSecondary)
-                .padding(.horizontal, MeeshySpacing.md + 2)
-                .padding(.bottom, MeeshySpacing.sm + 2)
+            SettingsRowSentence(text: SettingsOrientation.readingModes)
         }
 
         VStack(alignment: .leading, spacing: 0) {

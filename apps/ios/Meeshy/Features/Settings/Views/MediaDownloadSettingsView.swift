@@ -91,9 +91,6 @@ struct MediaDownloadSettingsView: View {
                                         set: { enregistre in preferences.updatePrivacy { $0.saveMediaToGallery = enregistre } }),
                           icon: "square.and.arrow.down.on.square.fill", iconColor: accentColor,
                           title: String(localized: "settings.media.autosave.title", defaultValue: "Enregistrer dans Photos", bundle: .main),
-                          subtitle: String(localized: "settings.media.autosave.subtitle",
-                                           defaultValue: "Les médias reçus rejoignent l'album Meeshy.",
-                                           bundle: .main),
                           note: SettingsInfoNotes.galleryAutosave)
             .background(SettingsSectionBackground(tint: accentColor))
         }
@@ -109,9 +106,7 @@ struct MediaDownloadSettingsView: View {
                 captureToggle(isOn: $captureSavesOriginal, icon: "photo",
                               title: String(localized: "settings.media.capture.original.title",
                                             defaultValue: "Enregistrer l'original", bundle: .main),
-                              subtitle: String(localized: "settings.media.capture.original.subtitle",
-                                               defaultValue: "La photo ou la vidéo brute, sans effet ni cadre, rejoint Photos à chaque prise.",
-                                               bundle: .main))
+                              note: SettingsInfoNotes.captureOriginal)
                 Divider().padding(.leading, Self.separatorInset)
                 captureToggle(isOn: Binding(get: { captureRenderedMode == .automatic },
                                             set: { captureRenderedMode = $0 ? .automatic : .manual }),
@@ -140,9 +135,7 @@ struct MediaDownloadSettingsView: View {
                 captureToggle(isOn: $openingOpensLibrary, icon: "photo.on.rectangle",
                               title: String(localized: "settings.media.opening.library.title",
                                             defaultValue: "Ouvrir la photothèque", bundle: .main),
-                              subtitle: String(localized: "settings.media.opening.library.subtitle",
-                                               defaultValue: "Vos photos s'ouvrent à mi-hauteur, la caméra visible derrière.",
-                                               bundle: .main))
+                              note: SettingsInfoNotes.libraryOpening)
             }
             .background(SettingsSectionBackground(tint: MeeshyColors.indigo600Hex))
         }
@@ -160,9 +153,6 @@ struct MediaDownloadSettingsView: View {
                               icon: "arrow.down.right.and.arrow.up.left",
                               title: String(localized: "settings.media.outgoing.compress.title",
                                             defaultValue: "Compression forte", bundle: .main),
-                              subtitle: String(localized: "settings.media.outgoing.compress.subtitle",
-                                               defaultValue: "Économise des données.",
-                                               bundle: .main),
                               note: SettingsInfoNotes.compression)
                 Divider().padding(.leading, Self.separatorInset)
                 captureToggle(isOn: $keepsPhotoLocation, icon: "location",

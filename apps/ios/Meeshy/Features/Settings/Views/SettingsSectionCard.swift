@@ -155,8 +155,12 @@ enum SettingsOrientation {
         String(localized: "settings.privacy.encryption.summary", defaultValue: "Le chiffrement de bout en bout se choisit par conversation et ne se défait pas.", bundle: .main)
     }
 
+    static var readingModes: String {
+        String(localized: "settings.interface.reading_modes.orientation", defaultValue: "Lisez une conversation en Bulles, Script, Résumé, Focal ou Rivière.", bundle: .main)
+    }
+
     static var all: [String] {
-        [voice, transcription, packs, progression, affiliate, lentilleList, riviereMode, riviereUnavailable, encryption]
+        [voice, transcription, packs, progression, affiliate, lentilleList, readingModes, riviereMode, riviereUnavailable, encryption]
     }
 }
 
@@ -202,6 +206,27 @@ enum SettingsInfoNotes {
         MeeshyInfoNote(
             question: String(localized: "settings.media.opening.camera.note.question", defaultValue: "Que fait « Armer la caméra » ?", bundle: .main),
             text: String(localized: "settings.media.opening.camera.note", defaultValue: "La caméra s'ouvre derrière la scène dès l'ouverture du composer. Maintenez la scène pour filmer.", bundle: .main)
+        )
+    }
+
+    static var captureOriginal: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "settings.media.capture.original.note.question", defaultValue: "Que contient l'original ?", bundle: .main),
+            text: String(localized: "settings.media.capture.original.subtitle", defaultValue: "La photo ou la vidéo brute, sans effet ni cadre, rejoint Photos à chaque prise.", bundle: .main)
+        )
+    }
+
+    static var libraryOpening: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "settings.media.opening.library.note.question", defaultValue: "Que fait « Ouvrir la photothèque » ?", bundle: .main),
+            text: String(localized: "settings.media.opening.library.note", defaultValue: "Vos photos s'ouvrent à mi-hauteur, la caméra visible derrière.", bundle: .main)
+        )
+    }
+
+    static var readingModes: MeeshyInfoNote {
+        MeeshyInfoNote(
+            question: String(localized: "settings.interface.reading_modes.note.question", defaultValue: "Que change le mode de lecture ?", bundle: .main),
+            text: String(localized: "settings.interface.reading_modes.subtitle", defaultValue: "Désactivé, les conversations s'ouvrent en Script.", bundle: .main)
         )
     }
 
@@ -276,7 +301,7 @@ enum SettingsInfoNotes {
     }
 
     static var all: [MeeshyInfoNote] {
-        [galleryAutosave, renderedCapture, cameraArming, compression, transcriptionAuto, encryption,
+        [galleryAutosave, renderedCapture, captureOriginal, cameraArming, libraryOpening, readingModes, compression, transcriptionAuto, encryption,
          onlineStatus, returnAnnouncement, readReceipts, contactSearch, callsFromNonContacts, analytics, hiddenCallAddress]
     }
 }

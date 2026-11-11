@@ -78,7 +78,6 @@ struct DataExportView: View {
 
     private var exportContent: some View {
         VStack(spacing: MeeshySpacing.xl) {
-            infoCard
             formatSection
             optionsSection
             if let error = exportError {
@@ -89,31 +88,6 @@ struct DataExportView: View {
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.sm)
-    }
-
-    private var infoCard: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            Image(systemName: "shield.checkered")
-                .font(MeeshyFont.relative(24, weight: .semibold))
-                .foregroundStyle(Color(hex: accentColor))
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                Text(String(localized: "settings.data.export.info.body", defaultValue: "Exportez vos données personnelles (RGPD).", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundStyle(theme.textPrimary)
-            }
-        }
-        .padding(MeeshySpacing.mdPlus)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.surfaceGradient(tint: accentColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.border(tint: accentColor), lineWidth: 1)
-                )
-        )
-        .accessibilityElement(children: .combine)
     }
 
     private var formatSection: some View {
