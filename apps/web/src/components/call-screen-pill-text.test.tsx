@@ -7,6 +7,8 @@ import { callJournalHeight } from '@/lib/calls/call-journal-height';
 import { PILL_TEXT_EXIT } from '@/lib/calls/call-pill-text-exit';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { STOW_REDUCED_MS } from '@/lib/calls/call-pill-motion';
+import { loadModeMotion } from '@/lib/calls/use-mode-motion';
 import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -105,6 +107,34 @@ const tapStage = (view: View) => act(() => view.find('[data-call-stage-surface]'
 /** Le temps de la sortie du texte, et un peu plus (#17406). */
 const outlast = () => act(() => new Promise((resolve) => setTimeout(resolve, PILL_TEXT_EXIT.exitMs + 40)));
 
+/** « Réduire les animations » allumé, le temps d'un témoin. */
+const reducedMotion = () => {
+  const original = window.matchMedia;
+  window.matchMedia = ((query: string) => ({ ...original.call(window, query), matches: query.includes('reduce') })) as typeof window.matchMedia;
+  return { restore: () => void (window.matchMedia = original) };
+};
+
+/**
+ * Les fondus joués par le moteur (Web Animations) : la règle générale de « Réduire les
+ * animations » (`app.css`, durées CSS ramenées à zéro) n'éteint qu'une animation de la
+ * feuille ; le témoin tient chaque animation demandée — sa cible, ses images, sa durée.
+ */
+const spyAnimate = () => {
+  const runs: { readonly target: Element; readonly frames: readonly Keyframe[]; readonly duration: number }[] = [];
+  const saved = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+  Object.defineProperty(HTMLElement.prototype, 'animate', {
+    configurable: true,
+    value(this: Element, frames: Keyframe[], options: KeyframeAnimationOptions) {
+      runs.push({ target: this, frames, duration: Number(options.duration) });
+      return { finished: new Promise(() => undefined), cancel: () => undefined, effect: null };
+    },
+  });
+  return {
+    of: (selector: string) => runs.filter((run) => run.target.matches(selector)),
+    restore: () => (saved === undefined ? Reflect.deleteProperty(HTMLElement.prototype, 'animate') : Object.defineProperty(HTMLElement.prototype, 'animate', saved)),
+  };
+};
+
 /** Un texte qui repart : marqué sortant, INERTE (ni focus, ni clic) et caché au lecteur d'écran. */
 const leavingOf = (node: Element | null | undefined) => {
   const leaving = node?.closest('[data-leaving]');
@@ -191,19 +221,55 @@ describe('(…) les range et les rend (P6.12)', () => {
     view.done();
   });
 
-  test('#17406 — sous « Réduire les animations », rien ne se joue : les sous-titres partent tout de suite', async () => {
-    const original = window.matchMedia;
-    window.matchMedia = ((query: string) => ({ ...original.call(window, query), matches: query.includes('reduce') })) as typeof window.matchMedia;
+  for (const [shape, overrides] of [
+    ['en duo', {}],
+    ['en groupe', group],
+  ] as const) {
+    test(`#17700 — ${shape}, sous « Réduire les animations », (…) ne les coupe pas net : ils partent en fondu COURT, opacité seule, joué par le moteur — puis reviennent de même`, async () => {
+      await loadModeMotion();
+      const reduced = reducedMotion();
+      const animations = spyAnimate();
+      try {
+        const view = mount(overrides);
+        await view.settle();
+        view.press('[data-call-more]');
+        await view.settle();
+        const leaving = view.find('[data-call-pill-text="captions"]');
+        expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+        expect(leavingOf(leaving?.querySelector('[data-call-captions-panel]'))).toEqual({ inert: true, hidden: true });
+        const out = animations.of('[data-call-pill-text="captions"]').at(-1);
+        expect(out?.frames).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+        expect(out?.duration).toBe(STOW_REDUCED_MS);
+        await act(() => new Promise((resolve) => setTimeout(resolve, STOW_REDUCED_MS + 40)));
+        expect(view.find('[data-call-captions-panel]')).toBeNull();
+        view.press('[data-call-more]');
+        await view.settle();
+        expect(animations.of('[data-call-pill-text="captions"]').at(-1)?.frames).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+        view.done();
+      } finally {
+        animations.restore();
+        reduced.restore();
+      }
+    });
+  }
+
+  test('#17700 — en duo, « Journal » ne coupe pas net les sous-titres sous « Réduire les animations » : ils lui cèdent la place en fondu court', async () => {
+    await loadModeMotion();
+    const reduced = reducedMotion();
+    const animations = spyAnimate();
     try {
       const view = mount();
       await view.settle();
-      view.press('[data-call-more]');
+      view.press('[data-call-captions-journal]');
       await view.settle();
-      await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+      expect(view.find('[data-call-pill-text="captions"]')?.hasAttribute('data-leaving')).toBe(true);
+      expect(animations.of('[data-call-pill-text="captions"]').at(-1)?.frames).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+      await act(() => new Promise((resolve) => setTimeout(resolve, STOW_REDUCED_MS + 40)));
       expect(view.find('[data-call-captions-panel]')).toBeNull();
       view.done();
     } finally {
-      window.matchMedia = original;
+      animations.restore();
+      reduced.restore();
     }
   });
 

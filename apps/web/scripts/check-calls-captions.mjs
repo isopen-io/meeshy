@@ -342,6 +342,28 @@ try {
       await page.click('[data-panel-close]');
       check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : ✕ rend les sous-titres`);
 
+      // ---- 4 ter. sous « Réduire les animations », (…) ne les coupe pas net (#17700) :
+      // la règle générale de la feuille éteint leur fondu CSS, le moteur le rejoue court.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.click('[data-call-control-pill] [data-call-more]');
+      const reducedOut = await page
+        .waitForFunction(
+          () => {
+            const leaving = document.querySelector('[data-call-pill-text^="captions"][data-leaving]');
+            const fade = leaving?.getAnimations().find((animation) => !('animationName' in animation));
+            const frames = fade?.effect?.getKeyframes() ?? [];
+            return fade === undefined ? null : { duration: fade.effect?.getTiming().duration, opacity: frames.map((frame) => Number(frame.opacity)), moves: frames.some((frame) => frame.transform !== undefined) };
+          },
+          undefined,
+          { timeout: 2000 },
+        )
+        .then((handle) => handle.jsonValue(), () => null);
+      check(reducedOut !== null && reducedOut.opacity.join() === '1,0' && !reducedOut.moves && Number(reducedOut.duration) > 0 && Number(reducedOut.duration) <= 200, `${label} : sous « Réduire les animations », (…) range les sous-titres en fondu COURT, opacité seule (${JSON.stringify(reducedOut)})`);
+      check(await vanishes(page, '[data-call-captions-panel]'), `${label} : puis ils ne laissent rien`);
+      await page.click('[data-call-control-pill] [data-call-more]');
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : refermer les actions les rend`);
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+
       await openActions(page);
       await cc.click();
       await openActions(page);
