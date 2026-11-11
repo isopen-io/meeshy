@@ -6,7 +6,8 @@
  *
  * 1. LE CLIQUET DU VERRE. Hors de `components/kit/`, le nombre de classes de
  *    `glass.css` posées dans les `.tsx` (et celui des fichiers qui les portent,
- *    et des verres ronds) ne fait que descendre : le plafond est dans
+ *    des verres ronds, et des verres sans réponse au toucher dessinée — ni
+ *    `active:` ni disque d'appel) ne fait que descendre : le plafond est dans
  *    `scripts/kit-glass-baseline.json` et s'abaisse dans le commit qui fait
  *    baisser. Un verre neuf passe par le kit.
  * 2. LE REGISTRE FACE AU CATALOGUE LU DANS LE NAVIGATEUR. Un composant dont la
@@ -76,7 +77,7 @@ console.log('\n  le cliquet du verre hors du kit');
   const measured = measureKitGlass(sources);
   const ceiling = JSON.parse(readFileSync(join(APP, 'scripts', 'kit-glass-baseline.json'), 'utf8'));
   const problems = ratchetProblems({ measured, ceiling });
-  expect(problems.length === 0, `verre hors du kit : ${measured.calls} classes, ${measured.files} fichiers, ${measured.rounds} ronds${problems.length === 0 ? '' : ` — ${problems.join(' ; ')}`}`);
+  expect(problems.length === 0, `verre hors du kit : ${measured.calls} classes, ${measured.files} fichiers, ${measured.rounds} ronds, ${measured.untouched} sans réponse au toucher${problems.length === 0 ? '' : ` — ${problems.join(' ; ')}`}`);
 }
 
 const served = await startDistServer(DIST, { serviceWorker: false });
@@ -166,7 +167,7 @@ for (const row of rows) {
   for (const scheme of SCHEMES) {
     for (const width of KIT_WIDTHS) {
       await page.setViewportSize({ width, height: HEIGHT });
-      const dark = (await page.getAttribute('[data-kit-setting="dark"]', 'aria-checked')) === 'true';
+      const dark = await page.isChecked('[data-kit-setting="dark"]');
       if (dark !== (scheme === 'sombre')) await page.click('[data-kit-setting="dark"]');
       for (const state of states) {
         const stage = page.locator(`[data-kit-tile="${state.id}"] [data-kit-stage]`);

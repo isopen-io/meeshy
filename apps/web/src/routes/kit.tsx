@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 
 import { MeeshyKitCatalog } from '@/components/kit/catalog';
 import { MeeshyKitCatalogEmptyState } from '@/components/kit/catalog/empty-state';
@@ -71,8 +71,10 @@ function KitCatalogList({ entries }: { readonly entries: readonly MeeshyKitCatal
   );
 }
 
+const PRESSED_LEGEND = 'isPressed';
+
 const legendOf = (tile: MeeshyKitCatalogTile): string =>
-  tile.state.boardView === null ? tileId(tile) : `${tileId(tile)} · ${tile.state.boardView}`;
+  [tile.state.id, tile.state.boardView, tile.isPressed ? PRESSED_LEGEND : null].filter((part) => part !== null).join(' · ');
 
 const FROZEN = { inert: true } as const;
 
@@ -96,10 +98,10 @@ const KitTile = memo(function KitTile({
       aria-labelledby={`${id}-title`}
       className="grid gap-2"
     >
-      <h2 id={`${id}-title`} className="text-caption font-semibold text-ink-muted">
+      <h2 id={`${id}-title`} className="font-code text-caption text-ink-muted">
         {legendOf(tile)}
       </h2>
-      <div {...(tile.isPressed ? { 'data-kit-frozen': '', ...FROZEN } : {})} className="overflow-hidden rounded-card" style={{ inlineSize: 'fit-content', maxInlineSize: '100%' }}>
+      <div {...(tile.isPressed ? { 'data-kit-frozen': '', ...FROZEN } : {})} className="overflow-hidden" style={{ inlineSize: 'fit-content', maxInlineSize: '100%', borderRadius: 'var(--ios-radius-md)' }}>
         <MeeshyKitCatalogStage state={tile.state} isPressed={tile.isPressed}>
           {content(entryKey, tile.state, tile.isPressed)}
         </MeeshyKitCatalogStage>
@@ -108,30 +110,28 @@ const KitTile = memo(function KitTile({
   );
 });
 
-function KitSwitch({ name, label, checked, onToggle }: { readonly name: string; readonly label: string; readonly checked: boolean; readonly onToggle: () => void }) {
+const KitSetting = memo(function KitSetting({ name, label, checked, onToggle }: { readonly name: string; readonly label: string; readonly checked: boolean; readonly onToggle: () => void }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      data-kit-setting={name}
-      onClick={onToggle}
-      className="rounded-chip px-4 text-body font-semibold text-ink"
-      style={{ minBlockSize: TARGET, background: checked ? 'var(--color-ios-brand)' : 'var(--ios-surface-card)', color: checked ? 'var(--color-ios-on-brand)' : undefined }}
-    >
+    <label className="flex items-center gap-2 px-2 font-code text-body text-ink" style={{ minBlockSize: TARGET }}>
+      <input type="checkbox" role="switch" data-kit-setting={name} checked={checked} onChange={onToggle} />
       {label}
-    </button>
+    </label>
   );
-}
+});
+
+const useToggle = (initial: boolean): readonly [boolean, () => void] => {
+  const [value, setValue] = useState(initial);
+  return [value, useCallback(() => setValue((current) => !current), [])];
+};
 
 function useHeldScheme(): readonly [boolean, () => void] {
   const [original] = useState(currentScheme);
-  const [dark, setDark] = useState(original === 'dark');
+  const [dark, toggleDark] = useToggle(original === 'dark');
   useLayoutEffect(() => {
     applyScheme(dark ? 'dark' : 'light');
   }, [dark]);
   useLayoutEffect(() => () => applyScheme(original), [original]);
-  return [dark, () => setDark((current) => !current)];
+  return [dark, toggleDark];
 }
 
 function useHashScroll(key: string): void {
@@ -144,8 +144,9 @@ function useHashScroll(key: string): void {
 
 function KitCatalogDetail({ entry, content }: { readonly entry: MeeshyKitCatalogEntry; readonly content: KitContent }) {
   const [dark, toggleDark] = useHeldScheme();
-  const [rtl, setRtl] = useState(false);
-  const [largeFont, setLargeFont] = useState(false);
+  const [rtl, toggleRtl] = useToggle(false);
+  const [largeFont, toggleLargeFont] = useToggle(false);
+  const tiles = useMemo(() => tilesOf(entry), [entry]);
   useHashScroll(entry.key);
   return (
     <main className="mx-auto grid w-full max-w-5xl content-start gap-4 px-4 py-6">
@@ -156,12 +157,12 @@ function KitCatalogDetail({ entry, content }: { readonly entry: MeeshyKitCatalog
         {accessibilityName(entry)}
       </h1>
       <div role="group" aria-label="Réglages" className="flex flex-wrap gap-2">
-        <KitSwitch name="dark" label="Sombre" checked={dark} onToggle={toggleDark} />
-        <KitSwitch name="rtl" label="RTL" checked={rtl} onToggle={() => setRtl((current) => !current)} />
-        <KitSwitch name="large-font" label="Grande police" checked={largeFont} onToggle={() => setLargeFont((current) => !current)} />
+        <KitSetting name="dark" label="dark" checked={dark} onToggle={toggleDark} />
+        <KitSetting name="rtl" label="rtl" checked={rtl} onToggle={toggleRtl} />
+        <KitSetting name="large-font" label={`zoom ${LARGE_FONT_ZOOM}`} checked={largeFont} onToggle={toggleLargeFont} />
       </div>
       <div data-kit-tiles="" dir={rtl ? 'rtl' : 'ltr'} className="grid content-start gap-4" style={largeFont ? { zoom: LARGE_FONT_ZOOM } : undefined}>
-        {tilesOf(entry).map((tile) => (
+        {tiles.map((tile) => (
           <KitTile key={tileId(tile)} entryKey={entry.key} tile={tile} content={content} />
         ))}
       </div>
@@ -179,7 +180,7 @@ export function KitCatalogScreen({
   readonly content?: KitContent;
 }) {
   const entry = composant === undefined ? null : listedEntry(composant, entries);
-  return entry === null ? <KitCatalogList entries={entries} /> : <KitCatalogDetail entry={entry} content={content} />;
+  return entry === null ? <KitCatalogList entries={entries} /> : <KitCatalogDetail key={entry.key} entry={entry} content={content} />;
 }
 
 export default function KitCatalogRoute() {

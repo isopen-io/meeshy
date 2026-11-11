@@ -1,6 +1,7 @@
 export const KIT_GLASS_CLASSES = ['glass', 'glass-prominent', 'glass-card', 'glass-accent', 'glass-call', 'glass-call-prominent'];
 
 const ROUND_CLASSES = ['rounded-full', 'glass-call-disc'];
+const TOUCH_RESPONSE = (token) => /(^|-)active:|:active\]/.test(token) || token === 'glass-call-disc';
 const LITERAL = /(["'`])((?:\\.|(?!\1)[^\\])*)\1/gs;
 
 const stripComments = (text) =>
@@ -14,6 +15,7 @@ const measureSource = (text) => {
   return {
     calls: glassLiterals.reduce((sum, tokens) => sum + tokens.filter((token) => KIT_GLASS_CLASSES.includes(token)).length, 0),
     rounds: glassLiterals.filter((tokens) => tokens.some((token) => ROUND_CLASSES.includes(token))).length,
+    untouched: glassLiterals.filter((tokens) => !tokens.some(TOUCH_RESPONSE)).length,
   };
 };
 
@@ -25,6 +27,7 @@ export const measureKitGlass = (sources) => {
     calls: perFile.reduce((sum, file) => sum + file.calls, 0),
     files: perFile.filter((file) => file.calls > 0).length,
     rounds: perFile.reduce((sum, file) => sum + file.rounds, 0),
+    untouched: perFile.reduce((sum, file) => sum + file.untouched, 0),
   };
 };
 
@@ -32,6 +35,7 @@ const LABELS = {
   calls: 'classes de verre hors du kit',
   files: 'fichiers qui portent du verre hors du kit',
   rounds: 'verres ronds hors du kit',
+  untouched: 'verres sans réponse au toucher dessinée hors du kit',
 };
 
 export const ratchetProblems = ({ measured, ceiling }) =>

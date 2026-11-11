@@ -96,12 +96,12 @@ describe('le catalogue, la liste', () => {
 });
 
 describe('le catalogue, le détail', () => {
-  test('une tuile par état, la pressée juste après la vivante, légendées par leur id et leur vue', () => {
+  test('une tuile par état, la pressée juste après la vivante, légendées par leur id, leur vue et isPressed', () => {
     const container = mount(<KitCatalogScreen composant="K02" entries={ENTRIES} content={content} />);
     const tiles = [...container.querySelectorAll<HTMLElement>('[data-kit-tile]')];
     expect(tiles.map((tile) => tile.getAttribute('data-kit-tile'))).toEqual(['repos', 'actif', 'actif-presse']);
     const headings = tiles.map((tile) => tile.querySelector('h2'));
-    expect(headings.map((heading) => heading?.textContent)).toEqual(['repos · R1', 'actif · R3', 'actif-presse · R3']);
+    expect(headings.map((heading) => heading?.textContent)).toEqual(['repos · R1', 'actif · R3', 'actif · R3 · isPressed']);
     expect(tiles.map((tile) => tile.id)).toEqual(['repos', 'actif', 'actif-presse']);
     expect(tiles.map((tile) => tile.querySelector('[data-probe]')?.getAttribute('data-probe'))).toEqual([
       'K02:repos:vivant',
@@ -136,19 +136,21 @@ describe('le catalogue, le détail', () => {
 });
 
 describe('le catalogue, les réglages du détail', () => {
-  const setting = (container: HTMLElement, name: string): HTMLElement => {
-    const control = container.querySelector<HTMLElement>(`[data-kit-setting="${name}"]`);
+  const setting = (container: HTMLElement, name: string): HTMLInputElement => {
+    const control = container.querySelector<HTMLInputElement>(`[data-kit-setting="${name}"]`);
     if (control === null) throw new Error(`réglage ${name} absent`);
     return control;
   };
 
-  test('trois réglages, des interrupteurs nommés, éteints à l’ouverture d’un document clair', () => {
+  test('trois réglages, des cases du système nommées par leur identifiant technique, éteintes à l’ouverture d’un document clair', () => {
     document.documentElement.classList.remove('dark');
     document.documentElement.classList.add('light');
     const container = mount(<KitCatalogScreen composant="k02" entries={ENTRIES} content={content} />);
-    const controls = [...container.querySelectorAll<HTMLElement>('[data-kit-setting]')];
+    const controls = [...container.querySelectorAll<HTMLInputElement>('[data-kit-setting]')];
     expect(controls.map((control) => control.getAttribute('data-kit-setting'))).toEqual(['dark', 'rtl', 'large-font']);
-    expect(controls.every((control) => control.getAttribute('role') === 'switch' && control.getAttribute('aria-checked') === 'false')).toBe(true);
+    expect(controls.map((control) => control.closest('label')?.textContent)).toEqual(['dark', 'rtl', 'zoom 2']);
+    expect(controls.every((control) => control.type === 'checkbox' && control.getAttribute('role') === 'switch' && !control.checked)).toBe(true);
+    expect(container.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Réglages');
   });
 
   test('le sombre pose le schéma sur le document et le rend en quittant le détail', () => {
@@ -158,7 +160,7 @@ describe('le catalogue, les réglages du détail', () => {
     click(setting(container, 'dark'));
     expect(document.documentElement.classList.contains('dark')).toBe(true);
     expect(document.documentElement.classList.contains('light')).toBe(false);
-    expect(setting(container, 'dark').getAttribute('aria-checked')).toBe('true');
+    expect(setting(container, 'dark').checked).toBe(true);
     act(() => mounted?.root.unmount());
     mounted?.container.remove();
     mounted = null;
@@ -174,6 +176,28 @@ describe('le catalogue, les réglages du détail', () => {
     expect(tiles?.getAttribute('dir')).toBe('rtl');
     expect(tiles?.style.zoom).toBe('2');
     expect(document.documentElement.getAttribute('dir')).not.toBe('rtl');
+  });
+
+  test('un réglage ne re-rend pas les composants des tuiles', () => {
+    const calls: string[] = [];
+    const counted = (key: string, state: MeeshyKitCatalogState, isPressed: boolean): ReactNode => {
+      calls.push(`${state.id}:${isPressed}`);
+      return content(key, state, isPressed);
+    };
+    const container = mount(<KitCatalogScreen composant="k02" entries={ENTRIES} content={counted} />);
+    expect(calls).toHaveLength(3);
+    click(setting(container, 'rtl'));
+    click(setting(container, 'large-font'));
+    click(setting(container, 'dark'));
+    expect(calls).toHaveLength(3);
+  });
+
+  test('ouvrir un autre composant repart des réglages par défaut', () => {
+    const container = mount(<KitCatalogScreen composant="k02" entries={ENTRIES} content={content} />);
+    click(setting(container, 'rtl'));
+    act(() => mounted?.root.render(<KitCatalogScreen composant="k03" entries={ENTRIES} content={content} />));
+    expect(container.querySelector('[data-kit-tiles]')?.getAttribute('dir')).toBe('ltr');
+    expect(setting(container, 'rtl').checked).toBe(false);
   });
 
   test('un réglage ne remonte pas jusqu’à la liste', () => {
@@ -205,5 +229,25 @@ describe('le catalogue, accessibilité', () => {
     const container = mount(<KitCatalogScreen entries={ENTRIES} content={content} />);
     const rows = [...container.querySelectorAll<HTMLElement>('[data-kit-row]')];
     expect(rows.every((row) => row.style.minBlockSize === '44px')).toBe(true);
+    act(() => mounted?.root.unmount());
+    mounted?.container.remove();
+    mounted = null;
+    const detail = mount(<KitCatalogScreen composant="k02" entries={ENTRIES} content={content} />);
+    const labels = [...detail.querySelectorAll<HTMLInputElement>('[data-kit-setting]')].map((control) => control.closest('label'));
+    expect(labels).toHaveLength(3);
+    expect(labels.every((label) => label?.style.minBlockSize === '44px')).toBe(true);
+    expect(detail.querySelector<HTMLElement>('[data-kit-back]')?.style.minBlockSize).toBe('44px');
+  });
+
+  test('au clavier, Tab atteint chaque ligne et la tuile pressée ne prend pas le focus', () => {
+    const list = mount(<KitCatalogScreen entries={ENTRIES} content={content} />);
+    const rows = [...list.querySelectorAll<HTMLAnchorElement>('[data-kit-row]')];
+    expect(rows.every((row) => row.tagName === 'A' && row.tabIndex >= 0)).toBe(true);
+    act(() => mounted?.root.unmount());
+    mounted?.container.remove();
+    mounted = null;
+    const detail = mount(<KitCatalogScreen composant="k02" entries={ENTRIES} content={content} />);
+    expect(detail.querySelector('[data-kit-tile="actif-presse"] [inert] [data-probe]')).not.toBeNull();
+    expect(detail.querySelector('[data-kit-tile="actif"] [inert]')).toBeNull();
   });
 });

@@ -5945,10 +5945,11 @@ Les deux voiles lisent ces jetons et importent la feuille eux-mêmes (`@import '
 
 **Décision.**
 - `/kit` et `/kit/$composant` sont déclarées dans `KIT_ROUTES` (`routes/route-table.tsx`), fusionnées au routeur sous `__FIXTURES__` seulement. Elles restent HORS de `ROUTES` : le miroir de `nginx.conf` (`nginx-app-routes.test.ts`), `isAppPath` et la garde de session ne les connaissent pas, et une image de production ou de staging (construite en `gateway`) ne les sert ni ne les livre (`FIXTURE_MARKERS`).
-- Le réglage « Sombre » du détail pose le schéma du document par `applyScheme` (exporté, sans persistance) et le rend en quittant l'écran : les jetons de couleur sont posés sur `:root.dark` et `:root.light`, pas sur un sous-arbre. Les fonds `dark` et `light` des états suivent donc ce schéma (#17482).
-- « Grande police » est `zoom: 2` sur les tuiles : le zoom du navigateur à 200 %, seul équivalent web du Dynamic Type `accessibility3`. « RTL » est `dir="rtl"` sur les tuiles ; les composants du kit n'emploient que des propriétés logiques.
+- Le réglage « dark » du détail pose le schéma du document par `applyScheme` (exporté, sans persistance) et le rend en quittant l'écran : les jetons de couleur sont posés sur `:root.dark` et `:root.light`, pas sur un sous-arbre. Les fonds `dark` et `light` des états suivent donc ce schéma (#17482).
+- « zoom 2 » (la grande police) est `zoom: 2` sur les tuiles : le zoom du navigateur à 200 %, seul équivalent web du Dynamic Type `accessibility3`. « rtl » est `dir="rtl"` sur les tuiles ; les composants du kit n'emploient que des propriétés logiques.
 - L'instantané web est une image de référence produite par `check-kit.mjs` (`CAPTURE_DIR`) et exigée par sa présence ; les comportements se mesurent dans Chromium à chaque passage. Pas de comparaison au pixel : les polices du système diffèrent entre le poste et la CI (#17483).
-- Le cliquet du verre hors du kit (`kit-glass-baseline.json`) ne fait que descendre ; un verre neuf passe par le kit.
+- Le cliquet du verre hors du kit (`kit-glass-baseline.json`) ne fait que descendre, sur quatre mesures : classes, fichiers, ronds, et littéraux sans réponse au toucher dessinée (le second cliquet du contrat, miroir de `kit-glass-no-touch`) ; un verre neuf passe par le kit.
+- Les réglages sont des cases du système (`<input type="checkbox" role="switch">`) aux libellés techniques (« dark », « rtl », « zoom 2 »), comme le `Menu` iOS et le menu Android : le chrome du catalogue existe avant le verre du kit.
 
 **Écart assumé.** Aucun composant web n'est livré par ce lot : le catalogue est vide, son premier instantané est l'état vide (`Catalogue/vide.*`), et le détail se prouve par les témoins de l'écran sous happy-dom jusqu'à K01.
 
