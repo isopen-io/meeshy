@@ -186,6 +186,7 @@ struct AboutView: View {
                 // « /contact », pas « /contacts » : seule la première a une page
                 // (`apps/web/app/contact/page.tsx`) ; `/contacts` n'a aucun
                 // `page.tsx` et donnerait un lien mort.
+                linkRow(icon: "info.circle", title: String(localized: "about.link.about", defaultValue: "À propos de Meeshy", bundle: .main), url: "https://meeshy.me/about", color: MeeshyColors.infoHex)
                 linkRow(icon: "doc.text", title: String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main), url: "https://meeshy.me/terms", color: MeeshyColors.infoHex)
                 linkRow(icon: "hand.raised", title: String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialité", bundle: .main), url: "https://meeshy.me/privacy", color: MeeshyColors.infoHex)
                 linkRow(icon: "envelope", title: String(localized: "about.link.contact", defaultValue: "Nous contacter", bundle: .main), url: "https://meeshy.me/contact", color: MeeshyColors.infoHex)
