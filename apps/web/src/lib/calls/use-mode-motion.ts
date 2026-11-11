@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
+
 import { STOW_REDUCED_MS, SWAP_MS } from './call-pill-motion';
 import { useRailPresence } from './use-rail-presence';
 
@@ -61,4 +63,22 @@ export function useSwapPresence<E extends HTMLElement>(open: boolean): { readonl
     painted.current = true;
   }, [open]);
   return { mounted, ref };
+}
+
+/**
+ * Un rail latéral, sous « Réduire les animations » (#17643) : la feuille de l'application coupe
+ * toute transition CSS (`transition-duration: 0s !important`), le rail ne pourrait que paraître
+ * et disparaître d'un coup ; le moteur le fait fondre (opacité seule, 150 ms), interruptible.
+ * Hors de ce régime, la transition du rail (translation + opacité) est la sienne : rien ici.
+ */
+export function useRailFade<E extends HTMLElement>(shown: boolean): RefObject<E | null> {
+  const engine = useEngine();
+  const ref = useRef<E | null>(null);
+  const running = useRef<Animation | null>(null);
+  const painted = useRef(false);
+  useLayoutEffect(() => {
+    if (painted.current && ref.current !== null && prefersReducedMotion()) running.current = engine?.playSwap(ref.current, shown, running.current) ?? null;
+    painted.current = true;
+  }, [shown]);
+  return ref;
 }
