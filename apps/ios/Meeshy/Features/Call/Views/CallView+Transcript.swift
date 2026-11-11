@@ -10,24 +10,22 @@ import os
 extension CallView {
     // MARK: - Caption lines (#8396)
 
-    /// Les phrases de l'appel, résolues pour l'affichage : Prisme, couleur de
-    /// la personne, étiquette « EN → FR ». Le réglage Traduit/Original du
-    /// bouton Sous-titres (`showOriginalText`) vaut pour toutes les lignes ;
-    /// un toucher sur une phrase l'inverse pour elle seule.
-    func captionLine(for segment: CallTranscriptionSegment) -> CallCaptionLine {
+    /// Les phrases de l'appel, résolues pour l'affichage (Prisme, couleur, « EN → FR »). Traduit/Original :
+    /// la bande suit le bouton Sous-titres, le journal sa propre bascule (#17678) ; un toucher inverse une phrase.
+    func captionLine(for segment: CallTranscriptionSegment, on surface: CallCaptionsSurface = .band) -> CallCaptionLine {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
         return CallCaptionLine.make(
             segment: segment,
             isLocal: segment.speakerId == localUserId,
             speakerName: speakerName(for: segment, localUserId: localUserId),
-            prefersOriginal: showOriginalText,
-            isRevealed: revealedCaptionIds.contains(segment.id),
+            prefersOriginal: surface.prefersOriginal(bandOriginal: showOriginalText, journalOriginal: journalShowsOriginal),
+            isRevealed: revealedCaptions.isRevealed(segment.id, on: surface),
             readerPrism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         )
     }
 
-    var journal: CallJournalComposer {
-        CallJournalComposer(segments: transcriptionService.displayedSegments, captures: transcriptionService.captureJournal.marks, callStartedAt: callManager.callStartDate, speechLine: captionLine)
+    func journal(on surface: CallCaptionsSurface) -> CallJournalComposer {
+        CallJournalComposer(segments: transcriptionService.displayedSegments, captures: transcriptionService.captureJournal.marks, callStartedAt: callManager.callStartDate, speechLine: { captionLine(for: $0, on: surface) })
     }
 
     /// Le nom du locuteur : le mien, puis le roster du groupe (source de
@@ -46,22 +44,20 @@ extension CallView {
             ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main)
     }
 
-    private func toggleOriginal(of lineId: UUID) {
-        if revealedCaptionIds.contains(lineId) {
-            revealedCaptionIds.remove(lineId)
-        } else {
-            revealedCaptionIds.insert(lineId)
-        }
+    /// Loi 7 — la phrase touchée se déplie dans la surface touchée seule (#17678).
+    private func toggleOriginal(of lineId: UUID, on surface: CallCaptionsSurface) {
+        revealedCaptions = revealedCaptions.toggling(lineId, on: surface)
     }
 
     /// Les sous-titres : les deux dernières phrases, puis leur pied. Ils vivent dans
     /// la pilule (`hasOwnGlass: false`, #17343), rangée ou non (le même verre se resserre,
     /// #17532) ; seuls ceux d'un mode (Effets, Montage) ont un verre à eux.
     func captionsBand(hasOwnGlass: Bool, opensJournal: Bool = true) -> some View {
-        CallCaptionsBand(
-            lines: journal.items.suffix(2).map(journal.line),
+        let band = journal(on: .band)
+        return CallCaptionsBand(
+            lines: band.items.suffix(2).map(band.line),
             hasOwnGlass: hasOwnGlass,
-            onToggleOriginal: { toggleOriginal(of: $0) },
+            onToggleOriginal: { toggleOriginal(of: $0, on: .band) },
             onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil
         )
     }
@@ -87,12 +83,12 @@ extension CallView {
     /// #17343 — le journal s'ouvre DANS la pilule, à la place des sous-titres, et y
     /// défile ; sa hauteur est une part de la fenêtre (`CallJournalSizing`).
     var journalPanelRows: some View {
-        let composed = journal
+        let composed = journal(on: .journal)
         return CallJournalPanel(
             items: composed.items, line: composed.line,
-            showsOriginal: $showOriginalText,
+            showsOriginal: $journalShowsOriginal,
             height: CallJournalSizing.height(windowHeight: DeviceLayout.windowSize.height),
-            onToggleOriginal: { toggleOriginal(of: $0) },
+            onToggleOriginal: { toggleOriginal(of: $0, on: .journal) },
             onClose: closePanel
         )
     }
@@ -153,7 +149,7 @@ extension CallView {
         case .off:
             showOriginalText = false
             showTranscript = false
-            revealedCaptionIds = []
+            revealedCaptions = CallCaptionsReveals()
             transcriptionService.isShowingOverlay = false
             callManager.toggleTranscription()
         }

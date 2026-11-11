@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalPayload
 import me.meeshy.sdk.model.call.CallVideoBudget
 import me.meeshy.sdk.model.call.SocketIceServer
+import me.meeshy.sdk.model.call.group.CallAudioLevels
 import org.webrtc.IceCandidate
 import org.webrtc.SessionDescription
 
@@ -75,6 +76,8 @@ internal class Harness(
     val opened = mutableListOf<FakePort>()
     val sent = mutableListOf<Sent>()
     var primaryLevel: Double? = null
+    var localLevel: Double? = null
+    var micMuted = false
     var primaryReconnecting = false
     val ceilings = mutableListOf<CallVideoBudget?>()
     val mesh = GroupCallMesh(
@@ -86,7 +89,8 @@ internal class Harness(
         },
         sender = { _, to, from, signal -> sent += Sent(to, from, signal) },
         names = names,
-        primaryAudioLevel = { primaryLevel },
+        primaryAudioLevels = { CallAudioLevels(inbound = primaryLevel, outbound = localLevel) },
+        isLocalMicMuted = { micMuted },
         samplingIntervalMillis = samplingMillis,
         clock = clock,
         isPrimaryReconnecting = { primaryReconnecting },
