@@ -12,6 +12,7 @@
     <string name="call_actions_label">إجراءات المكالمة</string>
     <string name="call_actions_my_image">صورتي</string>
     <string name="call_actions_the_call">المكالمة</string>
+    <string name="call_captions_journal">السجل</string>
     <string name="call_capture_faces">كل وجه</string>
     <string name="call_capture_faces_saved">تم حفظ %1$d وجوه</string>
     <string name="call_capture_failed">تعذّر حفظ اللقطة</string>
@@ -40,7 +41,6 @@
     <string name="call_control_add_people">إضافة أشخاص إلى المكالمة</string>
     <string name="call_control_add_people_caption">إضافة</string>
     <string name="call_control_camera">اختيار الكاميرا</string>
-    <string name="call_control_camera_caption">الكاميرا</string>
     <string name="call_control_camera_off">إيقاف الكاميرا</string>
     <string name="call_control_camera_on">تشغيل الكاميرا</string>
     <string name="call_control_camera_rail">خيارات الكاميرا الخاصة بي</string>
@@ -61,7 +61,6 @@
     <string name="call_control_output_a11y">إخراج الصوت</string>
     <string name="call_control_pip">التصغير إلى صورة داخل صورة</string>
     <string name="call_control_react">إرسال تفاعل</string>
-    <string name="call_control_react_caption">تفاعل</string>
     <string name="call_control_unmute_label">إعادة تشغيل الميكروفون</string>
     <string name="call_decline_cancel">إلغاء</string>
     <string name="call_decline_custom_label">رسالتك</string>

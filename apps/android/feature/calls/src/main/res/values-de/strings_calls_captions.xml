@@ -5,7 +5,6 @@
     <string name="call_captions_state_translated">Übersetzung</string>
     <string name="call_captions_state_original">Originaltext</string>
     <string name="call_captions_peer_active">Dein Gesprächspartner hat die Transkription aktiviert</string>
-    <string name="call_captions_journal">Verlauf</string>
     <string name="call_captions_journal_title">Anrufprotokoll</string>
     <string name="call_captions_journal_hint">Öffnet alle Sätze des Anrufs</string>
     <string name="call_captions_waiting">Untertitel erscheinen hier, sobald jemand spricht.</string>

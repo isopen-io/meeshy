@@ -16,7 +16,6 @@
         {"catalog": "app", "iosKey": "call.control.more.hint", "androidName": "call_control_more_hint", "status": "adopted"},
         {"catalog": "app", "iosKey": "call.control.mute.hint", "androidName": "call_control_mute_hint", "status": "adopted"},
         {"androidName": "call_control_output_hint", "status": "android-only"},
-        {"androidName": "call_control_video_caption", "status": "android-only"},
         {"catalog": "app", "iosKey": "call.control.video.paused", "androidName": "call_control_video_paused", "status": "candidate"},
         {"androidName": "call_control_video_paused_caption", "status": "android-only"},
         {"androidName": "call_control_video_paused_hint", "status": "android-only"},

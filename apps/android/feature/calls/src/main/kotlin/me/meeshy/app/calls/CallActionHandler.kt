@@ -18,7 +18,7 @@ data class CallActionPresentation(
     @StringRes val hintRes: Int? = null,
     /** The short word under the button in the unfolded rows; the label when `null`. */
     @StringRes val captionRes: Int? = null,
-    /** An [isActive] toggle that is a state to stop, not a mode to leave (iOS `.destructive`): drawn red, not as a white disc. */
+    /** An [isActive] toggle that is a state to stop, not a mode to leave (iOS `.destructive`): red, no white disc. */
     val isDestructive: Boolean = false,
 )
 

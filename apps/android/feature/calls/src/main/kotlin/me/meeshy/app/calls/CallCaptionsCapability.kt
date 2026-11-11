@@ -246,8 +246,6 @@ class CallCaptionsController internal constructor(
 
     fun toggleReveal(key: String) = _state.update { it.togglingReveal(key) }
 
-    fun setShowsOriginal(showsOriginal: Boolean) = _state.update { it.copy(showsOriginal = showsOriginal) }
-
     fun openJournal() {
         _journalRequests.tryEmit(Unit)
     }

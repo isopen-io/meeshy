@@ -12,6 +12,7 @@
     <string name="call_actions_label">Anrufaktionen</string>
     <string name="call_actions_my_image">Mein Bild</string>
     <string name="call_actions_the_call">Der Anruf</string>
+    <string name="call_captions_journal">Verlauf</string>
     <string name="call_capture_faces">Jedes Gesicht</string>
     <string name="call_capture_faces_saved">%1$d Gesichter gespeichert</string>
     <string name="call_capture_failed">Die Aufnahme konnte nicht gespeichert werden</string>
@@ -40,7 +41,6 @@
     <string name="call_control_add_people">Personen zum Anruf hinzufügen</string>
     <string name="call_control_add_people_caption">Hinzufügen</string>
     <string name="call_control_camera">Kamera auswählen</string>
-    <string name="call_control_camera_caption">Kamera</string>
     <string name="call_control_camera_off">Kamera ausschalten</string>
     <string name="call_control_camera_on">Kamera einschalten</string>
     <string name="call_control_camera_rail">Optionen meiner Kamera</string>
@@ -61,7 +61,6 @@
     <string name="call_control_output_a11y">Audioausgabe</string>
     <string name="call_control_pip">Bild-in-Bild</string>
     <string name="call_control_react">Eine Reaktion senden</string>
-    <string name="call_control_react_caption">Reagieren</string>
     <string name="call_control_unmute_label">Mikrofon aktivieren</string>
     <string name="call_decline_cancel">Abbrechen</string>
     <string name="call_decline_custom_label">Deine Nachricht</string>

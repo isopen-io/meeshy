@@ -65,7 +65,9 @@ private val BASE_ROW_HEIGHT = 96.dp
  */
 internal fun callPillRowsMaxHeight(stageHeight: Dp, hasGrid: Boolean): Dp =
     if (!hasGrid) ROWS_MAX_HEIGHT
-    else CallGroupStageSizing.rowsCeilingDp(stageHeight.value, (MeeshySpacing.xl * 4 + MeeshySpacing.md * 2 + BASE_ROW_HEIGHT).value).dp
+    else CallGroupStageSizing.rowsCeilingDp(stageHeight.value, STAGE_RESERVED_HEIGHT.value).dp
+
+private val STAGE_RESERVED_HEIGHT = MeeshySpacing.xl * 4 + MeeshySpacing.md * 2 + BASE_ROW_HEIGHT
 
 /**
  * The pill at the bottom of the call, the same in audio, video and group: (…) · Mic · Output · End.
@@ -101,7 +103,7 @@ internal fun CallControlsPill(
 ) {
     val reduceMotion = rememberCallReduceMotion()
     val expanded = disposition.unfoldsPill(layer) && pillText.hasBaseRow
-    // Loi 17 : le verre ne change jamais de taille d'un coup. Réduire les animations ne garde que le fondu court de 0,2 s.
+    // Loi 17 : le verre ne change jamais de taille d'un coup ; Réduire les animations garde un fondu de 0,2 s.
     val millis = CallPillMotion.millis(reduceMotion)
     val unfoldScale = if (!CallPillMotion.scalesOnUnfold(reduceMotion)) EnterTransition.None else
         scaleIn(initialScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
@@ -159,7 +161,8 @@ internal fun CallControlsPill(
 /**
  * G3.2 — what the unfolded pill holds above its base row: an option drawn in the pill, the journal, or (on a group) the
  * family rows. They swap in the SAME glass by a cross-fade while the glass resizes, never at once; « reduce animations »
- * keeps a 0.2 s fade and the glass follows over the same 0.2 s, never with a jump (P13.12). Mirrors iOS `callControlsPill` (`.animation(_, value: layer)`).
+ * keeps a 0.2 s fade and the glass follows over the same 0.2 s, never with a jump (P13.12). Mirrors iOS
+ * `callControlsPill` (`.animation(_, value: layer)`).
  */
 @Composable
 private fun UnfoldedContent(
@@ -183,7 +186,7 @@ private fun UnfoldedContent(
         label = "callPillContent",
     ) { shown ->
         when (shown) {
-            null -> FamilyRows(rows = rows, items = items, isOnHold = isOnHold, maxHeight = rowsMaxHeight, onAction = onAction)
+            null -> FamilyRows(rows, items, isOnHold = isOnHold, maxHeight = rowsMaxHeight, onAction = onAction)
             CallScreenPanel.Journal -> panelContent(CallScreenPanel.Journal)
             else -> CallPillPanel(
                 title = items[shown.action]?.let { stringResource(it.labelRes) }.orEmpty(),
@@ -194,7 +197,10 @@ private fun UnfoldedContent(
     }
 }
 
-/** On a group, one titled row per family, stacked above the base row; it scrolls past [maxHeight], which the stage lowers to keep the grid its 140 dp (P12.7). */
+/**
+ * On a group, one titled row per family, stacked above the base row; it scrolls past [maxHeight], which the stage
+ * lowers to keep the grid its 140 dp (P12.7). Each button keeps its 48 dp: the rows scroll, they never squeeze.
+ */
 @Composable
 private fun FamilyRows(
     rows: List<CallPillRowContent>,

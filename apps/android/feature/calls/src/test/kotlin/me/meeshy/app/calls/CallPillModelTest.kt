@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.call.CallControlsDisposition
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallScreenLayer
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.ui.R as UiR
 import org.junit.Test
 
 class CallPillModelTest {
@@ -116,15 +117,15 @@ class CallPillModelTest {
 
     @Test
     fun `the camera carries iOS's short legend, Camera, not Video (P12_2)`() {
-        assertThat(CallPillModel.cameraItem(state()).captionRes).isEqualTo(R.string.call_control_camera_caption)
-        assertThat(CallPillModel.cameraItem(state(camera = false)).captionRes).isEqualTo(R.string.call_control_camera_caption)
+        assertThat(CallPillModel.cameraItem(state()).captionRes).isEqualTo(R.string.call_action_camera)
+        assertThat(CallPillModel.cameraItem(state(camera = false)).captionRes).isEqualTo(R.string.call_action_camera)
     }
 
     @Test
     fun `the call's journal and reactions carry their short legends (P12_3)`() {
         val connected = state()
         assertThat(CallCaptionsPresenter.journal(CallCaptionsChip(gate = CallCaptionsGate.Open))!!.captionRes).isEqualTo(R.string.call_captions_journal)
-        assertThat(CallReactionsActionHandler().present(connected)!!.captionRes).isEqualTo(R.string.call_control_react_caption)
+        assertThat(CallReactionsActionHandler().present(connected)!!.captionRes).isEqualTo(UiR.string.fullscreen_react)
     }
 
     @Test

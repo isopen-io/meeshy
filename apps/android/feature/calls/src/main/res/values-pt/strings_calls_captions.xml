@@ -5,7 +5,6 @@
     <string name="call_captions_state_translated">Tradução</string>
     <string name="call_captions_state_original">Texto original</string>
     <string name="call_captions_peer_active">O seu interlocutor ativou a transcrição</string>
-    <string name="call_captions_journal">Registro</string>
     <string name="call_captions_journal_title">Registo da chamada</string>
     <string name="call_captions_journal_hint">Abre todas as frases da chamada</string>
     <string name="call_captions_waiting">As legendas aparecerão aqui assim que alguém falar.</string>

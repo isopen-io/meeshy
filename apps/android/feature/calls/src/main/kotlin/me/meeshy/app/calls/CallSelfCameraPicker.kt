@@ -90,7 +90,7 @@ class CallCameraPickerActionHandler internal constructor(
 
     override fun present(state: CallUiState): CallActionPresentation? =
         if (state.isVideoCall && state.isCameraOn && CameraPickerLaw.hasSelectableCameras(choices.current())) {
-            CallActionPresentation(MeeshyIcons.Camera, R.string.call_control_camera, captionRes = R.string.call_control_camera_caption)
+            CallActionPresentation(MeeshyIcons.Camera, R.string.call_control_camera, captionRes = R.string.call_action_camera)
         } else {
             null
         }

@@ -6,12 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "call.control.react.caption",
-          "androidName": "call_control_react_caption",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "call.control.react",
           "androidName": "call_control_react",
           "status": "adopted"

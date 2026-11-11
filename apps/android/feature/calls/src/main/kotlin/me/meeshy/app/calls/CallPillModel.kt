@@ -60,7 +60,7 @@ internal object CallPillModel {
                 state.isCameraOn -> CallPillKind.Active
                 else -> CallPillKind.Normal
             },
-            captionRes = if (paused) R.string.call_control_video_paused_caption else R.string.call_control_camera_caption,
+            captionRes = if (paused) R.string.call_control_video_paused_caption else R.string.call_action_camera,
             hintRes = if (paused) R.string.call_control_video_paused_hint else null,
             isToggle = true,
         )

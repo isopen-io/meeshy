@@ -6,12 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "call.control.camera.caption",
-          "androidName": "call_control_camera_caption",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "call.zoom.cycle.hint",
           "androidName": "call_zoom_cycle_hint",
           "status": "adopted"
