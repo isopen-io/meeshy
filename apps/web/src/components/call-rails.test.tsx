@@ -1,11 +1,12 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { RAILS_BESIDE_PILL_WIDTH, RAILS_PILL_CLEARANCE, RAILS_TOP, railLength, railsClearance } from '@/lib/calls/call-rails-clearance';
 import { callViewport, DEFAULT_SELF_TILE, selfTileFootprint, selfTileStore, setSelfTileCorner, type SelfTileCorner } from '@/lib/calls/call-self-tile';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
+import { loadModeMotion } from '@/lib/calls/use-mode-motion';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -196,5 +197,81 @@ describe('CallScreen — tourner l’écran replace le rail (#17429)', () => {
     expect(view.host.querySelector<HTMLElement>('[data-call-corner-frame]')?.style.height).toBe(`${selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right', scale: DEFAULT_SELF_TILE, viewport: { width: 568, height: 320 }, topInset: 0 })?.height}px`);
     view.done();
     resize(real.width, real.height);
+  });
+});
+
+describe('CallScreen — sous « Réduire les animations », les rails entrent et sortent en fondu, et répondent jusqu’au bout (#17643)', () => {
+  const proto = (): { animate?: unknown } => HTMLElement.prototype as unknown as { animate?: unknown };
+  const played: Array<{ rail: string | null; keyframes: Keyframe[]; duration: unknown }> = [];
+  let before: PropertyDescriptor | undefined;
+  let media: PropertyDescriptor | undefined;
+
+  beforeAll(async () => {
+    await loadModeMotion();
+  });
+  beforeEach(() => {
+    before = Object.getOwnPropertyDescriptor(proto(), 'animate');
+    media = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+    played.length = 0;
+    Object.defineProperty(proto(), 'animate', {
+      configurable: true,
+      writable: true,
+      value: function (this: HTMLElement, keyframes: Keyframe[], options: { duration: number }) {
+        played.push({ rail: this.getAttribute('data-call-rail-side'), keyframes, duration: options.duration });
+        return { cancel: () => undefined, finished: Promise.resolve(), onfinish: null };
+      },
+    });
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: true }) });
+  });
+  afterEach(() => {
+    if (before === undefined) Reflect.deleteProperty(proto(), 'animate');
+    else Object.defineProperty(proto(), 'animate', before);
+    if (media === undefined) Reflect.deleteProperty(window, 'matchMedia');
+    else Object.defineProperty(window, 'matchMedia', media);
+  });
+
+  const fades = () => played.filter((entry) => entry.rail !== null);
+
+  test('ranger (…) joue, sur chaque rail, un fondu court d’opacité seule — la règle générale qui coupe les transitions CSS ne l’éteint pas', async () => {
+    const view = mount();
+    played.length = 0;
+    act(() => (view.host.querySelector('[data-call-more]') as HTMLElement).click());
+    expect(fades().map((entry) => [entry.rail, entry.duration, entry.keyframes.map((frame) => frame.opacity)])).toEqual([
+      ['leading', 150, [1, 0]],
+      ['trailing', 150, [1, 0]],
+    ]);
+    expect(fades().every((entry) => entry.keyframes.every((frame) => frame.transform === undefined))).toBe(true);
+    view.done();
+  });
+
+  test('rouvrir (…) les ramène par le fondu inverse, toujours sans déplacement', async () => {
+    const view = mount();
+    act(() => (view.host.querySelector('[data-call-more]') as HTMLElement).click());
+    played.length = 0;
+    act(() => (view.host.querySelector('[data-call-more]') as HTMLElement).click());
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+    expect(fades().map((entry) => [entry.rail, entry.duration, entry.keyframes.map((frame) => frame.opacity)])).toEqual([
+      ['leading', 150, [0, 1]],
+      ['trailing', 150, [0, 1]],
+    ]);
+    expect(fades().every((entry) => entry.keyframes.every((frame) => frame.transform === undefined))).toBe(true);
+    view.done();
+  });
+
+  test('un bouton touché pendant la sortie du rail répond : « Journal » ouvre le journal', async () => {
+    const view = mount();
+    act(() => (view.host.querySelector('[data-call-more]') as HTMLElement).click());
+    const journal = view.host.querySelector<HTMLElement>('[data-call-rail-side="trailing"] [data-call-control="journal"]');
+    expect(journal).not.toBeNull();
+    expect(journal?.closest('[inert], [aria-hidden="true"]')).toBeNull();
+    expect(view.host.querySelector('[data-call-journal-panel]')).toBeNull();
+    await act(async () => {
+      journal?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(view.host.querySelector('[data-call-journal-panel]')).not.toBeNull();
+    view.done();
   });
 });
