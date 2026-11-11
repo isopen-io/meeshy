@@ -86,6 +86,13 @@ import type { EffectsCompanion } from './call-effects-companions';
  *
  * L'appel entrant vit dans `call-incoming-answer.tsx` (P17, #16944) ; l'écran
  * de fin, la pastille, la bulle et la fenêtre PiP ne changent pas.
+ *
+ * LE TEXTE VIT DANS LA PILULE (#17343, `call-pill-text.ts`) : les sous-titres
+ * au repos dans son verre, au-dessus de sa rangée de base, avec « Journal » à
+ * leur pied (#17346) ; le journal s'ouvre à leur place ; `(…)` les range tous
+ * deux et refermer les actions les rend ; la pilule rangée d'un toucher laisse
+ * les sous-titres dans un verre à eux. Sur grand écran, la colonne du journal
+ * (W1) reste ouverte quand `(…)` s'ouvre (porteur, 2026-11-10).
  */
 
 const INK = 'var(--color-on-media)';
@@ -526,7 +533,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   );
   const standaloneCaptions = (stowed: boolean): ReactNode => (
     <div
-      className={`${PILL_TEXT_WIDTH_CLASS} ${stowed ? 'absolute bottom-0 left-1/2 z-10 -translate-x-1/2' : 'relative z-10 mx-auto'}`}
+      className={`${PILL_TEXT_WIDTH_CLASS} ${stowed ? 'absolute inset-x-0 bottom-0 z-10 mx-auto' : 'relative z-10 mx-auto'}`}
       data-call-captions-band=""
       data-call-pill-text={stowed ? 'captionsAlone' : undefined}
     >
@@ -656,7 +663,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           <div className="relative z-20 flex flex-col gap-3 pb-6" style={reserveEnd} data-call-plane="" {...reserve}>
             {mode !== null && text === 'captionsAlone' ? standaloneCaptions(false) : null}
             {mode === null ? (
-              <div className="relative" data-call-controls-block="">
+              <div className="relative">
                 <div className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
                   <CallControlPill
                     call={call}

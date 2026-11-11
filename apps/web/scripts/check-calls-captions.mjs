@@ -160,6 +160,17 @@ const openActions = async (page) => {
   await railsSettled(page);
 };
 
+/**
+ * (…) RANGE les sous-titres, les refermer les rend (#17343) : pour les LIRE, on
+ * referme les actions. Un témoin qui les cherche menu ouvert ne mesurerait rien.
+ */
+const closeActions = async (page) => {
+  const more = page.locator('[data-call-more]');
+  if ((await more.getAttribute('aria-expanded')) === 'true') await more.click();
+  await appears(page, '[data-call-controls]');
+  await page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAttribute('data-call-layer') === 'idle', undefined, { timeout: 3000 }).catch(() => undefined);
+};
+
 const startConnectedCall = async (page) => {
   await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await page.waitForSelector('[data-row] a');
@@ -225,20 +236,25 @@ try {
       await peer(page, 'speak', { id: 'n-1', text: PEER_SAID, translatedText: PEER_TRANSLATED });
       await openActions(page);
       await cc.click();
-      check(await appears(page, '[data-call-captions-panel="translated"]'), `${label} : un toucher ouvre les sous-titres TRADUITS`);
+      check((await page.$('[data-call-captions-panel]')) === null, `${label} : (…) ouvert, les sous-titres sont rangés`);
+      await closeActions(page);
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel="translated"]'), `${label} : un toucher ouvre les sous-titres TRADUITS, DANS la pilule`);
       check(await until(async () => (await lineTexts(page)).some((line) => line.includes(PEER_TRANSLATED))), `${label} : la parole du pair s'affiche TRADUITE (${JSON.stringify(await lineTexts(page))})`);
       check((await page.$('[data-call-caption-lines][aria-live="polite"]')) !== null, `${label} : les sous-titres sont une région aria-live POLIE`);
       check((await page.$eval('[data-call-caption="peer"] [dir="auto"]', (el) => el.getAttribute('dir')).catch(() => null)) === 'auto', `${label} : le texte d'une ligne porte dir="auto" (RTL)`);
       await capture(page, `traduits-${width}x${height}`);
       await openActions(page);
       await cc.click();
+      await closeActions(page);
       check(await appears(page, '[data-call-captions-panel="original"]'), `${label} : un second toucher passe en langue d'ORIGINE`);
       check(await until(async () => (await lineTexts(page)).some((line) => line.includes(PEER_SAID))), `${label} : le mode original rend ce qui a été dit (${JSON.stringify(await lineTexts(page))})`);
       await openActions(page);
       await cc.click();
+      await closeActions(page);
       check(await vanishes(page, '[data-call-captions-panel]'), `${label} : un troisième toucher les masque`);
       await openActions(page);
       await cc.click();
+      await closeActions(page);
       check(await appears(page, '[data-call-captions-panel="translated"]'), `${label} : un quatrième les rouvre, traduits`);
       const actives = (await peerTranscripts(page, 'call:transcription-active')).filter((payload) => payload?.callId === callId).map((payload) => payload.active);
       check(JSON.stringify(actives) === JSON.stringify([true, false, true]), `${label} : call:transcription-active part à chaque bascule on/off (${JSON.stringify(actives)})`);
@@ -293,10 +309,28 @@ try {
       check(await appears(page, '[data-call-rails="shown"] [data-call-rail="call"]'), `${label} : ‹ revient aux rails`);
       check(await page.evaluate(() => document.activeElement?.getAttribute('data-call-control') === 'journal'), `${label} : le focus revient à « Journal »`);
 
+      // ---- 4 bis. le journal DANS la pilule, depuis le pied des sous-titres (#17343, #17346)
+      await closeActions(page);
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel] [data-call-captions-journal]'), `${label} : les sous-titres sont dans la pilule, avec « Journal » à leur pied`);
+      const footJournal = await tapSize(page.locator('[data-call-captions-journal]'));
+      check(footJournal.ok, `${label} : « Journal » du pied fait au moins ${TAP_FLOOR} (${JSON.stringify(footJournal.size)})`);
+      await page.click('[data-call-captions-journal]');
+      check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : « Journal » ouvre tout l'appel DANS la pilule`);
+      check((await page.$('[data-call-captions-panel]')) === null, `${label} : à la place des sous-titres`);
+      check(await page.$eval('[data-call-control-pill] [data-call-more]', (more) => more.getBoundingClientRect().bottom > (document.querySelector('[data-call-journal]')?.getBoundingClientRect().bottom ?? 0)), `${label} : au-dessus de la rangée de base, qui reste là`);
+      await page.click('[data-call-control-pill] [data-call-more]');
+      check(await vanishes(page, '[data-call-journal-panel]'), `${label} : (…) range le journal`);
+      check(await appears(page, '[data-call-rails="shown"] [data-call-rail="call"]'), `${label} : les rails sortent`);
+      await page.click('[data-call-control-pill] [data-call-more]');
+      check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : refermer les actions rend le journal`);
+      await page.click('[data-panel-close]');
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : ✕ rend les sous-titres`);
+
       await openActions(page);
       await cc.click();
       await openActions(page);
       await cc.click();
+      await closeActions(page);
       check(await vanishes(page, '[data-call-captions-panel]'), `${label} : les sous-titres coupés`);
       check(await openJournal(), `${label} : le journal s'ouvre, sous-titres coupés`);
       check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : il a gardé tout l'appel, sous-titres coupés (${JSON.stringify(await journalEntries())})`);

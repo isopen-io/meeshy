@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { callCaptionsFooter, callJournalHeight, callPillText, JOURNAL_HEIGHT_MAX, JOURNAL_HEIGHT_MIN, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS } from './call-pill-text';
+import { callPillText, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS } from './call-pill-text';
 import { IDLE, nextLayer, type CallScreenLayer } from './call-screen-layer';
 
 /**
@@ -87,39 +87,5 @@ describe('une seule largeur pour le verre (P3.10)', () => {
   test('le verre qui porte du texte, et le verre des sous-titres rangés, tiennent en 560 px — sans condition de fenêtre', () => {
     expect(PILL_TEXT_MAX_WIDTH).toBe(560);
     expect(PILL_TEXT_WIDTH_CLASS).toContain(`${PILL_TEXT_MAX_WIDTH}px`);
-  });
-});
-
-describe('la hauteur du journal dans la pilule', () => {
-  test('une part de la fenêtre, jamais sous un plancher lisible', () => {
-    expect(callJournalHeight(844)).toBeCloseTo(844 * 0.45, 5);
-    expect(callJournalHeight(320)).toBe(JOURNAL_HEIGHT_MIN);
-    expect(callJournalHeight(0)).toBe(JOURNAL_HEIGHT_MIN);
-  });
-
-  test('et jamais au-dessus d’un plafond : la grille de groupe garde sa place', () => {
-    expect(callJournalHeight(1366)).toBe(JOURNAL_HEIGHT_MAX);
-    expect([JOURNAL_HEIGHT_MIN, JOURNAL_HEIGHT_MAX]).toEqual([160, 440]);
-  });
-});
-
-describe('le pied des sous-titres : « EN → FR · toucher = original »', () => {
-  const line = (languages: string | null, event = false) => ({ languages, event });
-
-  test('la dernière phrase traduite dit sa paire', () => {
-    expect(callCaptionsFooter([line('EN → FR')])).toBe('EN → FR');
-  });
-
-  test('la plus récente traduite décide de la paire', () => {
-    expect(callCaptionsFooter([line('ES → FR'), line('EN → FR'), line(null)])).toBe('EN → FR');
-  });
-
-  test('des originaux seuls, ou rien, ne disent rien', () => {
-    expect(callCaptionsFooter([line(null), line(null)])).toBeNull();
-    expect(callCaptionsFooter([])).toBeNull();
-  });
-
-  test('une capture n’est pas une parole : elle ne parle jamais pour le pied', () => {
-    expect(callCaptionsFooter([line('EN → FR', true)])).toBeNull();
   });
 });

@@ -5,7 +5,7 @@ import { CallJournalViewSwitch, type JournalView } from '@/components/call-journ
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
 import { captionLanguageLabel, captionText, type CallCaption } from '@/lib/calls/call-captions';
 import { journalEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
-import { callJournalHeight } from '@/lib/calls/call-pill-text';
+import { callJournalHeight } from '@/lib/calls/call-journal-height';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';

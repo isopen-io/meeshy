@@ -67,8 +67,8 @@ const JOURNAL_PANEL: CallScreenLayer = { kind: 'panel', panel: 'journal' };
 /** `(…)` : ouvre le menu, le referme — et RANGE le journal ouvert au lieu de le fermer, puis le rend (#17343). */
 function toggledMenu(layer: CallScreenLayer): CallScreenLayer {
   if (layer.kind === 'idle') return MENU;
-  if (layer.kind === 'panel' && layer.panel === 'journal') return MENU_OVER_JOURNAL;
-  return layer.kind === 'menu' && layer.stowed === 'journal' ? JOURNAL_PANEL : IDLE;
+  if (layer.kind === 'panel') return layer.panel === 'journal' ? MENU_OVER_JOURNAL : IDLE;
+  return layer.kind === 'menu' && layer.stowed !== undefined ? JOURNAL_PANEL : IDLE;
 }
 
 export function nextLayer(layer: CallScreenLayer, event: CallLayerEvent): CallScreenLayer {

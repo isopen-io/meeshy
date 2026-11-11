@@ -36,21 +36,3 @@ export const PILL_TEXT_MAX_WIDTH = 560;
 
 /** La largeur du verre qui porte du texte : toute la place moins une gouttière, jamais plus de 560 px (`PILL_TEXT_MAX_WIDTH`, écrit en toutes lettres : Tailwind lit les classes dans le source). */
 export const PILL_TEXT_WIDTH_CLASS = 'w-[min(calc(100%-1.5rem),560px)]';
-
-export const JOURNAL_HEIGHT_SHARE = 0.45;
-
-export const JOURNAL_HEIGHT_MIN = 160;
-
-export const JOURNAL_HEIGHT_MAX = 440;
-
-/** La hauteur du journal dans la pilule : une part de la fenêtre, jamais sous un plancher lisible ni au-dessus d'un plafond (la grille de groupe garde sa place). */
-export function callJournalHeight(windowHeight: number): number {
-  return Math.min(Math.max(windowHeight * JOURNAL_HEIGHT_SHARE, JOURNAL_HEIGHT_MIN), JOURNAL_HEIGHT_MAX);
-}
-
-export type FooterLine = { readonly languages: string | null; readonly event: boolean };
-
-/** Le pied des sous-titres : la paire de langues de la dernière phrase TRADUITE, qui dit comment voir l'original. Une capture n'est pas une parole. */
-export function callCaptionsFooter(lines: readonly FooterLine[]): string | null {
-  return lines.findLast((line) => !line.event && line.languages !== null)?.languages ?? null;
-}

@@ -84,14 +84,14 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
                   <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} />
                 </Suspense>
               ) : (
-                <div data-call-pill-text={text === 'journal' ? 'journal' : undefined}>{panel}</div>
+                <div data-call-pill-text={text}>{panel}</div>
               )}
             </div>
             <hr className="mx-2 my-2 border-0 border-t border-media-hairline" />
           </>
         ) : text === 'captions' ? (
           <>
-            <div className="pt-1" data-call-pill-text="captions" data-call-pill-captions="">
+            <div className="pt-1" data-call-pill-text="captions">
               {captions}
             </div>
             <hr className="mx-2 my-1 border-0 border-t border-media-hairline" />
