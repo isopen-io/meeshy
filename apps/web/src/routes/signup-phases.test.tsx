@@ -458,25 +458,27 @@ describe('l’inscription ne dit rien deux fois', () => {
     expect(has(el, '[data-auth-site-link="contact"]')).toBe(true);
   });
 
-  test('le mot de passe facultatif se dit en UNE phrase lisible au repos, sans déroulant ni « maintenant » (épure #17666)', () => {
+  test('ce que fait l’absence de mot de passe se dit en UNE phrase lisible au repos, sans déroulant ni « facultatif » (#6582, épure #17666)', () => {
     const { el } = mount();
     toCard(el);
     const block = el.querySelector('[data-signup-password-block]') as HTMLElement;
-    const phrase = [...block.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Facultatif'));
-    expect(phrase?.textContent).toBe('Facultatif : sans mot de passe, vous vous connectez par un lien reçu par e-mail.');
+    const phrase = [...block.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Sans mot de passe'));
+    expect(phrase?.textContent).toBe('Sans mot de passe, vous vous connectez par un lien reçu par e-mail.');
     expect(phrase?.classList.contains('sr-only')).toBe(false);
     expect(phrase?.hasAttribute('hidden')).toBe(false);
+    expect(block.textContent).not.toMatch(/Facultatif/u);
     expect(has(el, '#signup-password-why')).toBe(false);
     expect(has(block, 'button[aria-expanded]')).toBe(false);
     expect(el.textContent).not.toMatch(/Pourquoi mettre un mot de passe/u);
   });
 
-  test('un mot de passe valable ne ressert pas « Votre compte sera actif immédiatement » : le bord le dit', () => {
+  test('un mot de passe valable se DIT, pas seulement par la couleur du bord (règle 17) — et la phrase « sans mot de passe » se retire', () => {
     const { el } = mount();
     toCard(el);
     type(el, '#signup-password', 'Un-mot-de-passe-solide-2026!');
-    expect(el.textContent).not.toMatch(/Votre compte sera actif immédiatement/u);
-    expect(has(el, '[data-signup-password-block] [role="status"]')).toBe(false);
+    const status = el.querySelector('[data-signup-password-block] [role="status"]');
+    expect(status?.textContent).toBe('Votre compte sera actif immédiatement.');
+    expect(el.querySelector('[data-signup-password-block]')?.textContent).not.toMatch(/Sans mot de passe/u);
   });
 
   test('le consentement légal garde ses deux liens DANS la phrase, sans rangée de liens à côté', () => {

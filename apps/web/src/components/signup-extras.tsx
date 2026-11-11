@@ -35,7 +35,8 @@ export const INDIGO_TINT = 'var(--ios-indigo-500)';
  * LE MOT DE PASSE — il s'active quand l'identité est définie (#7897) et ne
  * s'annonce pas « facultatif » (#6582) : le bouton actif sans lui le prouve.
  * Le bord vert d'un mot de passe qui tient la borne garde sa phrase (règle 17 :
- * jamais la couleur seule).
+ * jamais la couleur seule) : elle REMPLACE celle qui dit ce que fait l'absence
+ * de mot de passe, si bien que l'écran ne porte jamais les deux.
  */
 export function SignupPasswordBlock({
   language,
@@ -73,9 +74,15 @@ export function SignupPasswordBlock({
           />
         )}
       </Field>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'signup.password.optional')}
-      </p>
+      {isStrong ? (
+        <p role="status" className="text-caption" style={{ color: 'var(--color-success)' }}>
+          {translate(language, 'signup.password.active')}
+        </p>
+      ) : (
+        <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translate(language, 'signup.password.without')}
+        </p>
+      )}
     </div>
   );
 }
