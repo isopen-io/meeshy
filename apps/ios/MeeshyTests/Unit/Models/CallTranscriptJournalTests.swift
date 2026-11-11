@@ -92,56 +92,18 @@ final class CallTranscriptJournalTests: XCTestCase {
 
     // MARK: - Les surfaces
 
-    /// Le journal de la pilule est UNE liste paresseuse (#17343 : plus de feuille, plus de
-    /// panneau audio) ; les sous-titres ne résolvent que leurs deux dernières phrases.
+    /// Le journal, le panneau audio et la feuille partagent UNE liste
+    /// paresseuse ; le bandeau ne résout que ses deux dernières phrases.
     func test_journalSurfaces_shareOneLazyList_andTheBandResolvesTwoLines() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
         let list = try XCTUnwrap(code.range(of: "struct CallJournalList: View {"))
         let body = String(code[list.upperBound...].prefix(2500))
         XCTAssertTrue(body.contains("LazyVStack("))
         XCTAssertTrue(body.contains("CallJournalFollow"))
-        XCTAssertTrue(code.contains("CallJournalList(items: items"), "Le panneau du journal, dans la pilule, monte la liste commune")
-        XCTAssertFalse(code.contains("CallCaptionsJournalSheet"), "Le journal n'est plus une feuille modale (#17343)")
-        XCTAssertFalse(code.contains("transcriptPanel"), "Plus de panneau audio hors de la pilule (#17343)")
+        XCTAssertTrue(code.contains("CallJournalList(items: items"), "La feuille du journal monte la liste commune")
+        XCTAssertTrue(code.contains("CallJournalList(\n            items: journal.items"), "Le panneau audio aussi")
         XCTAssertTrue(code.contains("journal.items.suffix(2).map(journal.line)"), "#16665 — le bandeau lit les mêmes lignes, captures comprises")
         let service = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         XCTAssertFalse(service.contains("segmentRetentionLimit"), "Plus de plafond de 50 phrases sur le journal")
-    }
-
-    // MARK: - Le journal dans la pilule défile sans image perdue (#17343)
-
-    private func captionLine(_ text: String, id: UUID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!) -> CallCaptionLine {
-        CallCaptionLine(
-            id: id, speakerId: "peer", speakerName: "Awa", text: text, languageTag: nil, isFinal: true,
-            capturedAt: Date(timeIntervalSince1970: 0), isShowingOriginal: true, canRevealOriginal: false
-        )
-    }
-
-    /// Une phrase qui arrive ne redessine pas les lignes déjà lues : une ligne se compare
-    /// par ce qu'elle MONTRE, jamais par l'action qu'elle porte.
-    func test_captionRow_isEqualWhenItShowsTheSameLine_whateverItsAction() {
-        let same = captionLine("Salut")
-        XCTAssertTrue(CallCaptionRow(line: same, onToggleOriginal: {}) == CallCaptionRow(line: same, onToggleOriginal: { _ = same.id }))
-        XCTAssertFalse(CallCaptionRow(line: same, onToggleOriginal: {}) == CallCaptionRow(line: captionLine("Salut !"), onToggleOriginal: {}))
-        XCTAssertFalse(CallCaptionRow(line: same, onToggleOriginal: {}) == CallCaptionRow(line: same, showsTime: true, onToggleOriginal: {}))
-    }
-
-    func test_journalAndCaptions_redrawOnlyTheRowThatChanged() throws {
-        let code = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
-        let list = try XCTUnwrap(code.range(of: "struct CallJournalList: View {"))
-        XCTAssertTrue(String(code[list.upperBound...].prefix(2500)).contains(".equatable()"), "Le journal")
-        let band = try XCTUnwrap(code.range(of: "struct CallCaptionsBand: View {"))
-        XCTAssertTrue(String(code[band.upperBound...].prefix(2000)).contains(".equatable()"), "Les sous-titres")
-    }
-
-    /// La feuille d'avant prenait le focus d'elle-même ; le journal posé DANS la pilule y
-    /// conduit VoiceOver, sur son titre, à chaque ouverture.
-    func test_journalPanel_leadsVoiceOverToItsTitle_whenItOpens() throws {
-        let code = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
-        let panel = try XCTUnwrap(code.range(of: "struct CallJournalPanel: View {"))
-        let body = String(code[panel.upperBound...].prefix(2500))
-        XCTAssertTrue(body.contains("@AccessibilityFocusState"))
-        XCTAssertTrue(body.contains(".accessibilityFocused("))
-        XCTAssertTrue(body.contains(".onAppear"))
     }
 }
