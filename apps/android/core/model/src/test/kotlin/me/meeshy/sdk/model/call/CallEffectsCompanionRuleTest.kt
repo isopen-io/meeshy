@@ -102,4 +102,23 @@ class CallEffectsCompanionRuleTest {
         assertThat(tiles[1].showsVideo).isFalse()
         assertThat(tiles[1].isMicMuted).isTrue()
     }
+
+    @Test
+    fun `the other keeps his own colour key and his photo, and so do I`() {
+        val tiles = CallEffectsCompanionRule.duoTiles(
+            CallEffectsDuoPeer("u-me", "Moi", null, isVideoOn = true, isMicMuted = false),
+            CallEffectsDuoPeer("u-zoe", "Zoe", "https://cdn/zoe.png", isVideoOn = false, isMicMuted = false),
+        )
+        assertThat(tiles.map { it.colorKey }).containsExactly("u-me", "u-zoe").inOrder()
+        assertThat(tiles[1].avatarUrl).isEqualTo("https://cdn/zoe.png")
+    }
+
+    @Test
+    fun `an other without identity falls on the duo key, which is no author colour`() {
+        val tiles = CallEffectsCompanionRule.duoTiles(
+            CallEffectsDuoPeer(null, "Moi", null, isVideoOn = true, isMicMuted = false),
+            CallEffectsDuoPeer(null, "Zoe", null, isVideoOn = true, isMicMuted = false),
+        )
+        assertThat(tiles[1].colorKey).isEqualTo(CallEffectsCompanionRule.DUO_REMOTE_TILE_ID)
+    }
 }
