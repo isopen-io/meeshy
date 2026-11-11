@@ -71,7 +71,6 @@ final class EntryScreensEpureTests: XCTestCase {
         "sessionClosed.userRevoke.message": "Fermée depuis un autre de vos appareils. Pas vous ? Changez votre mot de passe.",
         "sessionClosed.password.message": "Pas vous à l'origine du changement ? Réinitialisez-le tout de suite.",
         "sessionClosed.allSignedOut.message": "Toutes les sessions du compte sont fermées.",
-        "sessionClosed.signedOut.message": "Cette session a été fermée.",
         "sessionClosed.activation.message": "Reconnectez-vous puis saisissez le code reçu par e-mail.",
         "activation.invite.daysLeft": "Encore %lld jours : ensuite, la connexion demandera un code.",
         "activation.invite.daysLeft.one": "Encore 1 jour : ensuite, la connexion demandera un code.",
@@ -87,6 +86,12 @@ final class EntryScreensEpureTests: XCTestCase {
         "signInLink.deviceConfirm.messageReplacing": "Ce lien n'a pas été demandé depuis cet appareil. Il ouvre %1$@ à la place de %2$@ (qui reste au sélecteur de comptes) : continuez seulement s'il vous appartient.",
         "onboarding.email.body": "Touche le lien reçu pour confirmer ton compte.",
         "onboarding.profile.body": "Un visage et une bannière : on te reconnaît partout.",
+        "auth.signup.card.verified.lead": "Vos proches vous lisent dans votre langue.",
+        "emailVerification.title": "Confirmez votre adresse e-mail",
+        "emailVerification.success": "Adresse confirmée ✓",
+        "emailVerification.code.a11yHint": "Entrez le code à 6 chiffres reçu par e-mail",
+        "auth.magiclink.email.a11yLabel": "Adresse e-mail",
+        "onboarding.story.verify": "Confirme ton adresse e-mail pour publier",
         "onboarding.friends.lead": "Ajoute 3 personnes qui te ressemblent.",
         "onboarding.global.body": "Meeshy Global, le salon où tout le monde traîne.",
         "onboarding.story.body": "Une photo, un mot : une story.",
@@ -241,12 +246,17 @@ final class EntryScreensEpureTests: XCTestCase {
     }
 
     func test_sessionClosed_everyOtherReason_keepsAShortMessage_thatDoesNotRepeatTheTitle() {
-        for reason in SessionRevocationReason.allCases where reason != .sessionExpired {
+        for reason in SessionRevocationReason.allCases where ![.sessionExpired, .logout, .unknown].contains(reason) {
             let copy = SessionClosedNoticeCopy(reason: reason)
             let message = copy.message ?? ""
             XCTAssertFalse(message.isEmpty, "\(reason)")
             XCTAssertNotEqual(message, copy.title, "\(reason)")
         }
+    }
+
+    func test_sessionClosed_simpleLogout_saysItsTitleOnly_theButtonSaysTheRest() {
+        XCTAssertNil(SessionClosedNoticeCopy(reason: .logout).message)
+        XCTAssertNil(SessionClosedNoticeCopy(reason: .unknown).message)
     }
 
     func test_sessionClosed_view_rendersNoMessageWhenThereIsNone() throws {
@@ -304,5 +314,37 @@ final class EntryScreensEpureTests: XCTestCase {
         XCTAssertTrue(view.contains("auth.forgotPassword.verifyIdentityPrompt"))
         let sdk = try Self.catalog(Self.sdkCatalogPath)
         XCTAssertFalse(sdk["auth.forgotPassword.verifyIdentityPrompt"]?["fr"]?.contains("Pour vérifier votre identité") ?? true)
+    }
+
+    // MARK: - Épure 2/3 : un état tient en une ligne, un mot pour une idée
+
+    func test_onboarding_profileCard_hasNoBenefitChips_theOrientationSentenceStays() throws {
+        let card = try appCode("Meeshy/Features/Onboarding/OnboardingProfileCard.swift")
+        XCTAssertFalse(card.contains("onboarding.profile.benefit"), "les pastilles redisent la phrase d'orientation")
+        XCTAssertTrue(card.contains("onboarding.profile.body"), "la phrase d'orientation reste visible")
+    }
+
+    func test_onboarding_storyStates_areOneLine_theButtonCarriesTheAction() throws {
+        let cards = try appCode("Meeshy/Features/Onboarding/OnboardingCards.swift")
+        XCTAssertFalse(cards.contains("onboarding.story.sending.detail"))
+        XCTAssertFalse(cards.contains("onboarding.story.failed.detail"))
+        XCTAssertTrue(cards.contains("onboarding.story.retry"), "le bouton Réessayer porte l'action")
+    }
+
+    func test_catalog_failedDetailAndProfileChips_areGoneFromEveryLanguage() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        for key in ["onboarding.story.failed.detail", "onboarding.profile.benefit.visibility", "onboarding.profile.benefit.contacts"] {
+            XCTAssertNil(app[key], key)
+        }
+    }
+
+    func test_catalog_entryScreens_sayEmailTheSameWay_inFrench() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        for key in ["emailVerification.title", "emailVerification.success", "emailVerification.code.a11yHint",
+                    "auth.magiclink.email.a11yLabel", "onboarding.story.verify"] {
+            let french = try XCTUnwrap(app[key]?["fr"], key)
+            XCTAssertFalse(french.contains("email"), "« e-mail » partout : \(key)")
+            XCTAssertFalse(french.contains("courriel"), key)
+        }
     }
 }
