@@ -9,7 +9,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { CallRow } from '@/routes/calls-parts';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { Portrait } from './call-grid';
+import { Portrait } from './call-portrait';
 
 /**
  * **LA PRÉSENCE SERVIE SE PEINT DANS LES APPELS** (#10956, décision #10955 —
