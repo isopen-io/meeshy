@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { callJournalHeight } from '@/lib/calls/call-journal-height';
+import { PILL_TEXT_EXIT } from '@/lib/calls/call-pill-text-exit';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -98,6 +99,15 @@ const inPill = (view: View, selector: string) => view.find(`[data-call-control-p
 
 const tapStage = (view: View) => act(() => view.find('[data-call-stage-surface]')?.click());
 
+/** Le temps de la sortie du texte, et un peu plus (#17406). */
+const outlast = () => act(() => new Promise((resolve) => setTimeout(resolve, PILL_TEXT_EXIT.exitMs + 40)));
+
+/** Un texte qui repart : marqué sortant, INERTE (ni focus, ni clic) et caché au lecteur d'écran. */
+const leavingOf = (node: Element | null | undefined) => {
+  const leaving = node?.closest('[data-leaving]');
+  return leaving === null || leaving === undefined ? null : { inert: leaving.hasAttribute('inert'), hidden: leaving.getAttribute('aria-hidden') === 'true' };
+};
+
 describe('les sous-titres, dans le verre de la pilule (P3.1)', () => {
   for (const [shape, overrides] of [
     ['en duo', {}],
@@ -108,7 +118,7 @@ describe('les sous-titres, dans le verre de la pilule (P3.1)', () => {
       await view.settle();
       const panel = inPill(view, '[data-call-captions-panel]');
       expect(panel?.getAttribute('data-call-captions-surface')).toBe('inset');
-      expect(view.find('[data-call-captions-band]')).toBeNull();
+      expect(view.find('[data-call-captions-band] [data-call-captions-panel]')).toBeNull();
       const pill = view.find('[data-call-control-pill]');
       expect(pill?.getAttribute('data-call-control-pill')).toBe('pill');
       const order = [...(pill?.querySelectorAll('[data-call-captions-panel], [data-call-more]') ?? [])].map((node) => (node.hasAttribute('data-call-more') ? 'base' : 'captions'));
@@ -140,11 +150,58 @@ describe('(…) les range et les rend (P6.12)', () => {
     await view.settle();
     view.press('[data-call-more]');
     await view.settle();
+    await outlast();
     expect(view.find('[data-call-captions-panel]')).toBeNull();
     view.press('[data-call-more]');
     await view.settle();
     expect(inPill(view, '[data-call-captions-panel]')).not.toBeNull();
+    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toBeNull();
     view.done();
+  });
+
+  test('#17406 — en duo, (…) ne les retire pas d’un coup : ils repartent en fondu, à leur place et dans le même verre, puis la pilule reprend sa forme', async () => {
+    const view = mount();
+    await view.settle();
+    view.press('[data-call-more]');
+    await view.settle();
+    const leaving = inPill(view, '[data-call-captions-panel]');
+    expect(leaving?.getAttribute('data-call-captions-surface')).toBe('inset');
+    expect(leavingOf(leaving)).toEqual({ inert: true, hidden: true });
+    expect(leaving?.closest('[data-call-pill-text="captions"][data-leaving]')).not.toBeNull();
+    await outlast();
+    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    expect(view.find('[data-call-control-pill]')?.className.split(' ')).toContain('w-fit');
+    view.done();
+  });
+
+  test('#17406 — la sortie est interruptible : (…) retouché pendant le fondu rend les mêmes sous-titres, aussitôt', async () => {
+    const view = mount();
+    await view.settle();
+    view.press('[data-call-more]');
+    await view.settle();
+    view.press('[data-call-more]');
+    await view.settle();
+    expect(view.host.querySelectorAll('[data-call-captions-panel]')).toHaveLength(1);
+    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toBeNull();
+    await outlast();
+    expect(inPill(view, '[data-call-captions-panel]')).not.toBeNull();
+    view.done();
+  });
+
+  test('#17406 — sous « Réduire les animations », rien ne se joue : les sous-titres partent tout de suite', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ ...original.call(window, query), matches: query.includes('reduce') })) as typeof window.matchMedia;
+    try {
+      const view = mount();
+      await view.settle();
+      view.press('[data-call-more]');
+      await view.settle();
+      await act(() => new Promise((resolve) => setTimeout(resolve, 5)));
+      expect(view.find('[data-call-captions-panel]')).toBeNull();
+      view.done();
+    } finally {
+      window.matchMedia = original;
+    }
   });
 
   test('en groupe, les rangées prennent leur place dans le cadre de la pilule, les sous-titres sont rangés', async () => {
@@ -247,7 +304,8 @@ describe('un toucher qui range la pilule laisse les sous-titres seuls (loi 11)',
     tapStage(view);
     await view.settle();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
-    const panel = view.find('[data-call-captions-panel]');
+    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toEqual({ inert: true, hidden: true });
+    const panel = view.find('[data-call-captions-band] [data-call-captions-panel]');
     expect(panel?.getAttribute('data-call-captions-surface')).toBe('glass');
     expect(panel?.closest('[data-call-control-pill]')).toBeNull();
     expect(panel?.closest('[aria-hidden="true"]')).toBeNull();
@@ -256,6 +314,23 @@ describe('un toucher qui range la pilule laisse les sous-titres seuls (loi 11)',
     tapStage(view);
     await view.settle();
     expect(inPill(view, '[data-call-captions-panel]')).not.toBeNull();
+    view.done();
+  });
+
+  test('#17406 — la pilule revenue, les sous-titres seuls repartent en fondu à sa place, puis s’effacent', async () => {
+    const view = mount();
+    await view.settle();
+    tapStage(view);
+    await view.settle();
+    await outlast();
+    expect(inPill(view, '[data-call-captions-panel]')).toBeNull();
+    tapStage(view);
+    await view.settle();
+    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toBeNull();
+    expect(leavingOf(view.find('[data-call-captions-band] [data-call-captions-panel]'))).toEqual({ inert: true, hidden: true });
+    await outlast();
+    expect(view.find('[data-call-captions-band] [data-call-captions-panel]')).toBeNull();
+    expect(view.host.querySelectorAll('[data-call-captions-panel]')).toHaveLength(1);
     view.done();
   });
 

@@ -58,7 +58,7 @@ type PillProps = {
   readonly prominent: boolean;
   /** Ce que la pilule porte de texte au-dessus de sa rangée de base. */
   readonly text: CallPillText;
-  /** Les sous-titres, posés dans le verre de la pilule au repos (`text === 'captions'`). */
+  /** Les sous-titres allumés, posés dans le verre de la pilule au repos (`text === 'captions'`) ; ils y repartent en fondu d'eux-mêmes (#17406). */
   readonly captions: ReactNode;
   readonly panels: CallPanels;
   /** Ce que les rangées, chargées à part, reçoivent de l'écran d'appel. */
@@ -89,14 +89,8 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
             </div>
             <hr className="mx-2 my-2 border-0 border-t border-media-hairline" />
           </>
-        ) : text === 'captions' ? (
-          <>
-            <div className="pt-1" data-call-pill-text="captions">
-              {captions}
-            </div>
-            <hr className="mx-2 my-1 border-0 border-t border-media-hairline" />
-          </>
         ) : null}
+        {grown ? null : captions}
         <div className="flex items-center justify-center gap-2">
           <CallButton
             label={translate(language, 'call.more')}

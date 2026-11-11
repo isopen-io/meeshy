@@ -11,8 +11,6 @@ const itCallCaptions = {
   'callCaptions.footer.touchForOriginal': '{pair} · tocca = originale',
   'callCaptions.region': 'Sottotitoli',
   'callCaptions.waiting': 'I sottotitoli compaiono qui appena qualcuno parla',
-  'callCaptions.mode.translated': 'Tradotti nella tua lingua',
-  'callCaptions.mode.original': 'Nella lingua originale',
   'callCaptions.listening': 'La tua voce viene trascritta',
   'callCaptions.unsupported': 'La tua voce non viene trascritta su questo dispositivo: leggi gli altri',
   'callCaptions.denied': 'Riconoscimento vocale negato: leggi gli altri',

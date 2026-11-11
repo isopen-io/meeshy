@@ -115,7 +115,7 @@ function once<T>(load: () => Promise<T>): () => Promise<T> {
 }
 
 const loadCaptions = once(() => import('./call-captions-panel'));
-const CallCaptionsPanel = lazy(() => loadCaptions().then((module) => ({ default: module.CallCaptionsPanel })));
+const CallCaptionsSlot = lazy(() => loadCaptions().then((module) => ({ default: module.CallCaptionsSlot })));
 
 const loadActions = once(() => import('./call-control-actions'));
 
@@ -526,18 +526,17 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
      avec les commandes : la pilule rangée d'un toucher les laisse dans un verre à
      eux, à sa place, lus (et annoncés) comme avant. */
   const text: CallPillText = live ? callPillText({ captionsOn: call.captionsMode !== 'off', layer: shown, chromeShown: !hidden }) : 'none';
-  const captionsOf = (surface: 'inset' | 'glass'): ReactNode => (
+  /* Toujours montés : c'est `CallCaptionsSlot`, dans son chunk, qui les pose quand
+     `visible` et les fait repartir en fondu sinon (#17406) — rangés par (…),
+     éteints, ou laissés seuls quand la pilule revient. */
+  const captionsOf = (slot: 'captions' | 'captionsAlone', visible: boolean): ReactNode => (
     <Suspense fallback={null}>
-      <CallCaptionsPanel call={call} language={language} colorOf={colorOf} surface={surface} onOpenJournal={joined ? () => panels.toggle('journal') : undefined} />
+      <CallCaptionsSlot slot={slot} shown={visible} call={call} language={language} colorOf={colorOf} onOpenJournal={joined ? () => panels.toggle('journal') : undefined} />
     </Suspense>
   );
   const standaloneCaptions = (stowed: boolean): ReactNode => (
-    <div
-      className={`${PILL_TEXT_WIDTH_CLASS} ${stowed ? 'absolute inset-x-0 bottom-0 z-10 mx-auto' : 'relative z-10 mx-auto'}`}
-      data-call-captions-band=""
-      data-call-pill-text={stowed ? 'captionsAlone' : undefined}
-    >
-      {captionsOf('glass')}
+    <div className={`${PILL_TEXT_WIDTH_CLASS} ${stowed ? 'absolute inset-x-0 bottom-0 z-10 mx-auto' : 'relative z-10 mx-auto'}`} data-call-captions-band="">
+      {captionsOf('captionsAlone', !stowed || text === 'captionsAlone')}
     </div>
   );
   const panelOf = (open: CallPanelKind): ReactNode => {
@@ -674,13 +673,13 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                     onToggle={() => send({ type: 'toggle-menu' })}
                     prominent={sharedScreenShown}
                     text={text}
-                    captions={text === 'captions' ? captionsOf('inset') : null}
+                    captions={captionsOf('captions', text === 'captions')}
                     panels={panels}
                     kit={ROWS_KIT}
                     panel={chrome.panel === null ? null : <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense>}
                   />
                 </div>
-                {text === 'captionsAlone' ? standaloneCaptions(true) : null}
+                {standaloneCaptions(true)}
               </div>
             ) : (
               <Suspense fallback={<CallModePending label={t('call.close')} glyph={closeGlyph} onExit={exitMode} />}>{mode}</Suspense>

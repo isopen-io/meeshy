@@ -25,7 +25,13 @@ export const REDUCED_EXIT_MS = 150;
 
 export type RailPresence = { readonly mounted: boolean; readonly shown: boolean };
 
-export function useRailPresence(open: boolean): RailPresence {
+/** Combien de temps une sortie attend avant de démonter, en mouvement et sous « Réduire les animations ». */
+export type ExitTiming = { readonly exitMs: number; readonly reducedExitMs: number };
+
+export const RAIL_EXIT: ExitTiming = { exitMs: EXIT_MS, reducedExitMs: REDUCED_EXIT_MS };
+
+/** Un rail par défaut ; tout ce qui entre et repart à sa place (le texte de la pilule, #17406) passe sa propre durée. */
+export function useRailPresence(open: boolean, { exitMs, reducedExitMs }: ExitTiming = RAIL_EXIT): RailPresence {
   const [shown, setShown] = useState(open);
   const [exited, setExited] = useState(!open);
   useEffect(() => {
@@ -35,8 +41,8 @@ export function useRailPresence(open: boolean): RailPresence {
       return () => cancelAnimationFrame(frame);
     }
     setShown(false);
-    const timer = setTimeout(() => setExited(true), prefersReducedMotion() ? REDUCED_EXIT_MS : EXIT_MS);
+    const timer = setTimeout(() => setExited(true), prefersReducedMotion() ? reducedExitMs : exitMs);
     return () => clearTimeout(timer);
-  }, [open]);
+  }, [open, exitMs, reducedExitMs]);
   return { mounted: open || !exited, shown: open && shown };
 }

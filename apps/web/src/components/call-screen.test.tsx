@@ -729,16 +729,18 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(panel()?.getAttribute('data-call-captions-surface')).toBe('inset');
     expect(panel()?.closest('[data-call-control-pill]')).not.toBeNull();
     view.press('[data-call-more]');
-    expect(panel()).toBeNull();
+    expect(panel()?.closest('[data-leaving][inert]')).not.toBeNull();
     view.press('[data-call-more]');
     expect(panel()?.getAttribute('data-call-captions-surface')).toBe('inset');
+    expect(panel()?.closest('[data-leaving]')).toBeNull();
     tapStage(view);
     await act(async () => {});
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
-    expect(panel()).not.toBeNull();
-    expect(panel()?.closest('[aria-hidden="true"]')).toBeNull();
-    expect(panel()?.closest('[data-call-control-pill]')).toBeNull();
-    expect(panel()?.getAttribute('data-call-captions-surface')).toBe('glass');
+    const alone = view.find('[data-call-captions-band] [data-call-captions-panel]');
+    expect(alone).not.toBeNull();
+    expect(alone?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(alone?.closest('[data-call-control-pill]')).toBeNull();
+    expect(alone?.getAttribute('data-call-captions-surface')).toBe('glass');
     view.done();
   });
 

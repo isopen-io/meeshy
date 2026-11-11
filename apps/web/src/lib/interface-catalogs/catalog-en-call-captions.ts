@@ -11,8 +11,6 @@ const enCallCaptions = {
   'callCaptions.footer.touchForOriginal': '{pair} · tap = original',
   'callCaptions.region': 'Captions',
   'callCaptions.waiting': 'Captions appear here as soon as someone speaks',
-  'callCaptions.mode.translated': 'Translated into your language',
-  'callCaptions.mode.original': 'In the original language',
   'callCaptions.listening': 'Your voice is being transcribed',
   'callCaptions.unsupported': 'Your voice can’t be transcribed on this device: you can read the others',
   'callCaptions.denied': 'Speech recognition denied: you can read the others',

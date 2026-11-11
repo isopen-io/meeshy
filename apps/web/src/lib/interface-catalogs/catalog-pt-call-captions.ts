@@ -11,8 +11,6 @@ const ptCallCaptions = {
   'callCaptions.footer.touchForOriginal': '{pair} · toque = original',
   'callCaptions.region': 'Legendas',
   'callCaptions.waiting': 'As legendas aparecem aqui assim que alguém fala',
-  'callCaptions.mode.translated': 'Traduzidas para o seu idioma',
-  'callCaptions.mode.original': 'No idioma original',
   'callCaptions.listening': 'A sua voz está a ser transcrita',
   'callCaptions.unsupported': 'A sua voz não é transcrita neste dispositivo: você lê os outros',
   'callCaptions.denied': 'Reconhecimento de voz recusado: você lê os outros',

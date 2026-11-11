@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 
 import { callPillText, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS } from './call-pill-text';
+import { PILL_TEXT_EXIT } from './call-pill-text-exit';
 import { IDLE, nextLayer, type CallScreenLayer } from './call-screen-layer';
 
 /**
@@ -87,5 +89,45 @@ describe('une seule largeur pour le verre (P3.10)', () => {
   test('le verre qui porte du texte, et le verre des sous-titres rangés, tiennent en 560 px — sans condition de fenêtre', () => {
     expect(PILL_TEXT_MAX_WIDTH).toBe(560);
     expect(PILL_TEXT_WIDTH_CLASS).toContain(`${PILL_TEXT_MAX_WIDTH}px`);
+  });
+});
+
+/**
+ * #17406 — RIEN NE DISPARAÎT D'UN COUP : les sous-titres repartent comme ils sont
+ * venus, vers la rangée de base, en fondu. Ils se retiennent le temps de la
+ * sortie ; la feuille la joue sur la même durée, par la transformation et
+ * l'opacité seulement ; sous « Réduire les animations », rien ne se joue.
+ */
+describe('le texte repart comme il est venu (#17406)', () => {
+  const css = readFileSync(new URL('../../styles/glass.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const block = (selector: string): string => {
+    const start = css.indexOf(selector);
+    return start < 0 ? '' : css.slice(start, css.indexOf('}', start));
+  };
+  const keyframes = (name: string): string => {
+    const start = css.indexOf(`@keyframes ${name}`);
+    return start < 0 ? '' : css.slice(start, css.indexOf('}\n}', start));
+  };
+
+  test('un fondu de 200 ms au plus, et aucune attente sous « Réduire les animations »', () => {
+    expect(PILL_TEXT_EXIT.exitMs).toBeGreaterThan(0);
+    expect(PILL_TEXT_EXIT.exitMs).toBeLessThanOrEqual(200);
+    expect(PILL_TEXT_EXIT.reducedExitMs).toBe(0);
+  });
+
+  test('la feuille joue la sortie sur la durée que la pilule attend, et le texte qui part ne prend plus le doigt', () => {
+    const leaving = block('[data-call-pill-text][data-leaving]');
+    expect(leaving).toContain(`call-pill-text-out ${PILL_TEXT_EXIT.exitMs}ms`);
+    expect(leaving).toMatch(/pointer-events:\s*none/);
+  });
+
+  test('les sous-titres qui repartent gardent la largeur du verre qui porte du texte : la pilule ne se resserre pas sous eux', () => {
+    expect(block('[data-call-pill-text="captions"][data-leaving]')).toContain(`${PILL_TEXT_MAX_WIDTH}px`);
+  });
+
+  test('la sortie ne bouge que la transformation et l’opacité', () => {
+    const out = keyframes('call-pill-text-out');
+    expect(out).toContain('opacity: 0');
+    expect([...out.matchAll(/([a-z-]+):/g)].map((match) => match[1]).filter((property) => property !== 'opacity' && property !== 'transform')).toEqual([]);
   });
 });
