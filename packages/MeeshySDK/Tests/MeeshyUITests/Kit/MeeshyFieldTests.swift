@@ -17,7 +17,7 @@ struct MeeshyFieldTests {
     @Test("chaque input fixe clavier, Retour, correction, majuscule, lignes, marges et valeur du tableau")
     func recipe_input_followsTheVectors() throws {
         for row in try Self.rows("inputs") {
-            let input = try #require(MeeshyFieldInput(rawValue: try #require(row["input"] as? String)))
+            let input = try #require(MeeshyFieldInput(rawValue: try kitRequired(row["input"] as? String)))
             let recipe = MeeshyFieldRecipe.resolve(input: input, hasCaption: true, tone: nil, isEnabled: true, increasedContrast: false)
             let lines = try #require(row["lines"] as? [Int])
             let padding = try #require(row["padding"] as? [String: Any])
@@ -92,7 +92,7 @@ struct MeeshyFieldTests {
     func visibility_clear_followsTheVectors() throws {
         for row in try Self.rows("clear") {
             let shown = MeeshyFieldRecipe.showsClear(
-                input: try #require(MeeshyFieldInput(rawValue: try #require(row["input"] as? String))),
+                input: try #require(MeeshyFieldInput(rawValue: try kitRequired(row["input"] as? String))),
                 text: try #require(row["text"] as? String),
                 isBusy: try #require(row["busy"] as? Bool),
                 isEnabled: try #require(row["enabled"] as? Bool)
@@ -107,7 +107,7 @@ struct MeeshyFieldTests {
             let shown = MeeshyFieldRecipe.showsInlineCounter(
                 limit: row["limit"] as? Int,
                 text: try #require(row["text"] as? String),
-                placement: try #require(MeeshyFieldCounterPlacement(rawValue: try #require(row["placement"] as? String)))
+                placement: try #require(MeeshyFieldCounterPlacement(rawValue: try kitRequired(row["placement"] as? String)))
             )
             #expect(shown == row["shows"] as? Bool, "\(row)")
         }

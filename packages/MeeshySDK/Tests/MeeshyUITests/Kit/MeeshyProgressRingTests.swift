@@ -131,7 +131,7 @@ struct MeeshyProgressRingTests {
     @Test("l'encre suit le ton : celle du média, celle du thème sous le ton theme")
     func ink_followsTheTone() throws {
         for row in try Self.rows("encre") {
-            let tone = try #require(MeeshyGlassTone(rawValue: try #require(row["ton"] as? String)))
+            let tone = try #require(MeeshyGlassTone(rawValue: try kitRequired(row["ton"] as? String)))
             let ink = Self.recipe(progress: 0.5, tone: tone).ink
             #expect("\(ink)" == row["encre"] as? String, "\(row)")
         }

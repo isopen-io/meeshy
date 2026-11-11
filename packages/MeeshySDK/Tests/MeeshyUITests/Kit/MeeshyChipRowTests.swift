@@ -15,8 +15,8 @@ struct MeeshyChipRowTests {
     @Test("next suit les vecteurs pour chaque mode et chaque genre de puce")
     func rule_next_followsTheVectors() throws {
         for row in try Self.rows("next") {
-            let mode = try #require(MeeshyChipRowMode(rawValue: try #require(row["mode"] as? String)))
-            let kind = try #require(MeeshyChipKind(rawValue: try #require(row["kind"] as? String)))
+            let mode = try #require(MeeshyChipRowMode(rawValue: try kitRequired(row["mode"] as? String)))
+            let kind = try #require(MeeshyChipKind(rawValue: try kitRequired(row["kind"] as? String)))
             let selection = Set(try #require(row["selection"] as? [String]))
             let tapped = try #require(row["tapped"] as? String)
             let expected = Set(try #require(row["next"] as? [String]))
@@ -171,7 +171,7 @@ struct MeeshyChipRowTests {
     @Test("fond, voile et encre suivent les vecteurs, par état, surface et teinte")
     func recipe_followsTheVectors() throws {
         for row in try Self.rows("recipe") {
-            let surface = try #require(MeeshyChipRowSurface(rawValue: try #require(row["surface"] as? String)))
+            let surface = try #require(MeeshyChipRowSurface(rawValue: try kitRequired(row["surface"] as? String)))
             let recipe = MeeshyChipRecipe.resolve(
                 surface: surface,
                 isSelected: try #require(row["selected"] as? Bool),
