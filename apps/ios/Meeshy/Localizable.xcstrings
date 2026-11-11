@@ -70218,53 +70218,6 @@
         }
       }
     },
-    "call.control.pip.caption": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "صورة داخل صورة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PiP"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PiP"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PiP"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PiP"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PiP"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PiP"
-          }
-        }
-      }
-    },
     "call.control.pip.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -75807,53 +75760,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alto-falante"
-          }
-        }
-      }
-    },
-    "call.status.unstable": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اتصال غير مستقر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Instabile Verbindung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unstable connection"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conexión inestable"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connexion instable"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connessione instabile"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conexão instável"
           }
         }
       }
@@ -232421,43 +232327,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الصوت فقط"
+            "value": "الصوت"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur Audio"
+            "value": "Audio"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio only"
+            "value": "Audio"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo audio"
+            "value": "Audio"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio seulement"
+            "value": "Audio"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo audio"
+            "value": "Audio"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Somente áudio"
+            "value": "Áudio"
           }
         }
       }
@@ -232468,43 +232374,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الصوت والفيديو"
+            "value": "الفيديو"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio und Video"
+            "value": "Video"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio and video"
+            "value": "Video"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio y vídeo"
+            "value": "Vídeo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio et vidéo"
+            "value": "Vidéo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio e video"
+            "value": "Video"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Áudio e vídeo"
+            "value": "Vídeo"
+          }
+        }
+      }
+    },
+    "call.recording.consent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يجب أن يوافق الجميع. يتوقف التسجيل إذا انضم أحد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle müssen zustimmen. Die Aufnahme endet, sobald jemand beitritt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everyone must accept. Recording stops if someone joins."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos deben aceptar. La grabación se detiene si alguien se une."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout le monde doit accepter. L’enregistrement s’arrête si quelqu’un rejoint."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutti devono accettare. La registrazione si interrompe se qualcuno si unisce."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos precisam aceitar. A gravação para se alguém entrar."
           }
         }
       }
@@ -336130,6 +336083,373 @@
           "stringUnit": {
             "state": "translated",
             "value": "Parar"
+          }
+        }
+      }
+    },
+    "call.captions.region": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الترجمة النصية للمكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untertitel des Anrufs"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Call captions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subtítulos de la llamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sous-titres de l'appel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sottotitoli della chiamata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legendas da chamada"
+          }
+        }
+      }
+    },
+    "call.captions.translating": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الترجمة جارية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersetzung läuft"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translating"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduciendo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduction en cours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduzione in corso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traduzindo"
+          }
+        }
+      }
+    },
+    "call.captions.hideOriginal.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إخفاء النص الأصلي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Originaltext ausblenden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide original text"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar el texto original"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer le texte original"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nascondi il testo originale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar o texto original"
+          }
+        }
+      }
+    },
+    "call.captions.footer.translating": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · الترجمة جارية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Übersetzung läuft"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · translating"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · traduciendo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · traduction en cours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · traduzione in corso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · traduzindo"
+          }
+        }
+      }
+    },
+    "call.captions.footer.translatedLanguages": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "تمت الترجمة · %lld لغة"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "تمت الترجمة · لغة واحدة"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "تمت الترجمة · لغتان"
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "تمت الترجمة · %lld لغات"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "تمت الترجمة · %lld لغةً"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "تمت الترجمة · %lld لغة"
+                }
+              }
+            }
+          }
+        },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Übersetzt · %lld Sprache"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Übersetzt · %lld Sprachen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Translated · %lld language"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Translated · %lld languages"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Traducido · %lld idioma"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Traducido · %lld de idiomas"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Traducido · %lld idiomas"
+                }
+              }
+            }
+          }
+        },
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Traduit · %lld langue"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Traduit · %lld de langues"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Traduit · %lld langues"
+                }
+              }
+            }
+          }
+        },
+        "it": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Tradotto · %lld lingua"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Tradotto · %lld di lingue"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Tradotto · %lld lingue"
+                }
+              }
+            }
+          }
+        },
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Traduzido · %lld idioma"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Traduzido · %lld de idiomas"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Traduzido · %lld idiomas"
+                }
+              }
+            }
           }
         }
       }

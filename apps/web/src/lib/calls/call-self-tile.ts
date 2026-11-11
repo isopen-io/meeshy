@@ -33,6 +33,16 @@ export function selfTileSize(scale: SelfTileScale, viewport: TileSize): TileSize
   return { width: Math.round(size.width * fit), height: Math.round(size.height * fit) };
 }
 
+/**
+ * **RANGER MA VIGNETTE EST UNE TRANSFORMATION** (G1.11, #17536 ; `restingFactor` d'iOS) :
+ * son cadre garde la taille du palier choisi, et rangée elle est mise à l'échelle de sa
+ * petite taille — le compositeur seul la porte, la mise en page ne bouge pas.
+ */
+export const selfTileRestingFactor = (chosen: SelfTileScale, chromeVisible: boolean, viewport: TileSize): number => (chromeVisible ? 1 : selfTileSize(1, viewport).width / selfTileSize(chosen, viewport).width);
+
+/** Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins) : divisé par le facteur, dessiné à sa taille de petite vignette. */
+export const selfTileCounterScaled = (length: number, factor: number): number => (Number.isFinite(factor) && factor > 0 ? length / factor : length);
+
 const clampScale = (value: number): SelfTileScale => (value <= 1 ? 1 : value >= 3 ? 3 : 2);
 
 const pinchSteps = (ratio: number): number => {
@@ -56,6 +66,9 @@ export const scaleAfterWheel = (scale: SelfTileScale, deltaY: number): SelfTileS
  * sous 8 px, le geste reste un toucher.
  */
 export type SelfTileCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
+/** L'ancre du rangement et du pincement : le coin où la vignette se tient, qui garde ainsi sa marge. */
+export const selfTileOrigin = (corner: SelfTileCorner): string => corner.replace('-', ' ');
 
 export const SELF_CORNERS: readonly SelfTileCorner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
 

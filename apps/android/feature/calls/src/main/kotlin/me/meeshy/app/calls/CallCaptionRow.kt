@@ -1,6 +1,5 @@
 package me.meeshy.app.calls
 
-import android.text.format.DateFormat
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
@@ -31,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -40,10 +38,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import java.util.Date
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
@@ -61,7 +60,7 @@ private const val WAITING_STEP_MS = 450L
  * the label « EN » / « EN → FR » and the three waiting dots (iOS `CallCaptionRow`). Touching a translated sentence
  * unfolds « Original · … » below it in secondary ink; touching it again folds it. TalkBack stops on FINAL sentences only.
  *
- * In the journal ([showsTime]) the header keeps its place: the name and the hour, the label, then the sentence.
+ * In the journal ([showsTime]) the header keeps its place: the name and the label, the hour in the call on the right, then the sentence.
  */
 @Composable
 internal fun CallCaptionRow(
@@ -95,6 +94,7 @@ internal fun CallCaptionRow(
                 } else {
                     Modifier.semantics(mergeDescendants = true) {
                         contentDescription = a11y.label
+                        if (showsTime) line.timeLabel?.let { stateDescription = it }
                         if (line.canRevealOriginal) onClick(label = hint) { flip(); true }
                         if (a11y.announces) liveRegion = LiveRegionMode.Polite
                     }
@@ -142,32 +142,55 @@ private fun CallCaptionInlinePhrase(line: CallLiveCaptionLine, isWaiting: Boolea
     }
 }
 
-/** The journal keeps its header: the name and the hour, then the label, then the sentence. */
+/**
+ * The journal keeps its header: the name and the label on the left, the hour IN the call (« 01:15 », since its start,
+ * like the capture lines and the journal after the call, [CallJournalClock]) on the right, then the sentence.
+ */
 @Composable
 private fun CallCaptionStackedPhrase(line: CallLiveCaptionLine) {
-    val context = LocalContext.current
-    val heading = "${line.speakerName} (${DateFormat.getTimeFormat(context).format(Date(line.capturedAtMs))})"
     val speakerColor = remember(line.speakerId) { hexColor(CallSpeakerColor.hex(line.speakerId)) }
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
-            Text(
-                text = heading,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = speakerColor,
-                maxLines = 1,
-            )
-            line.languageTag?.let { tag ->
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+            ) {
                 Text(
-                    text = tag,
+                    text = line.speakerName,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = speakerColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                line.languageTag?.let { tag ->
+                    Text(
+                        text = tag,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyMediaChromeColors.ChromeTertiary,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MeeshyMediaChromeColors.MediaFill)
+                            .padding(horizontal = MeeshySpacing.xs, vertical = 1.dp),
+                    )
+                }
+            }
+            line.timeLabel?.let { time ->
+                Text(
+                    text = time,
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
                     color = MeeshyMediaChromeColors.ChromeTertiary,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(MeeshyMediaChromeColors.MediaFill)
-                        .padding(horizontal = MeeshySpacing.xs, vertical = 1.dp),
+                    maxLines = 1,
                 )
             }
         }

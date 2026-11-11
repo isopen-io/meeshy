@@ -70,8 +70,10 @@ type ChromeInput = {
 export type CallChrome = {
   readonly visibility: ChromeVisibility;
   /**
-   * Range ou rend les commandes comme le ferait un toucher de la scène
-   * (#9183) — pour un appelant qui n'en a pas émis un : une tuile de groupe
+   * REND les commandes (#9183, G1.9) — pour un appelant qui n'a pas émis de
+   * toucher de la scène. Rendre, jamais basculer : le focus qu'un doigt donne à
+   * un bouton (Chromium) les a souvent déjà rendues avant le clic, et un
+   * second basculement les rangerait aussitôt. Une tuile de groupe
    * est un `<button>`, donc `tapTogglesChrome` lui laisse toujours son
    * toucher (loi `INTERACTIVE`). Chrome masqué, une tuile appelle `reveal()`
    * au lieu de se mettre à la une ; chrome visible, elle se met à la une
@@ -115,5 +117,5 @@ export function useCallChrome({ videoScene, root, swallowTap }: ChromeInput): Ca
     if (!videoScene) setVisibility('shown');
   }, [videoScene]);
 
-  return { visibility: videoScene ? visibility : 'shown', reveal: () => cue('tap') };
+  return { visibility: videoScene ? visibility : 'shown', reveal: () => setVisibility('shown') };
 }

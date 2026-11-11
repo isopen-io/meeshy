@@ -52,8 +52,8 @@ const WireCapture = z.object({
 
 export type TranscriptCapture = { readonly id: string; readonly kind: CallCaptureEventKind; readonly userId: string | null; readonly name: string | null; readonly offsetMs: number };
 
-/** Une capture du journal d'après l'appel, datée comme les lignes (secondes depuis le début de l'appel). */
-export type TranscriptNote = { readonly id: string; readonly kind: CallCaptureEventKind; readonly userId: string | null; readonly name: string | null; readonly offsetSec: number };
+/** Une capture du journal d'après l'appel, datée comme les lignes (millisecondes depuis le début de l'appel). */
+export type TranscriptNote = { readonly id: string; readonly kind: CallCaptureEventKind; readonly userId: string | null; readonly name: string | null; readonly offsetMs: number };
 
 export type TranscriptSegment = z.infer<typeof WireSegment>;
 
@@ -71,8 +71,8 @@ export type TranscriptLine = {
   readonly speakerId: string;
   readonly speakerName: string | null;
   readonly mine: boolean;
-  /** Secondes depuis le début de l'appel — l'horodatage d'iOS (`formatDuration`). */
-  readonly offsetSec: number;
+  /** Millisecondes depuis le début de l'appel : l'ordre se tranche à la milliseconde (comme iOS et Android), l'heure affichée en tronque les secondes. */
+  readonly offsetMs: number;
   readonly original: string;
   readonly text: string;
   readonly language: string;
@@ -99,7 +99,7 @@ export function decodeCallTranscript(raw: unknown): CallTranscript | null {
 export function transcriptNotes(transcript: CallTranscript): readonly TranscriptNote[] {
   return [...transcript.captures]
     .sort((left, right) => left.offsetMs - right.offsetMs)
-    .map(({ id, kind, userId, name, offsetMs }) => ({ id, kind, userId, name, offsetSec: Math.max(0, Math.floor(offsetMs / 1000)) }));
+    .map(({ id, kind, userId, name, offsetMs }) => ({ id, kind, userId, name, offsetMs: Math.max(0, offsetMs) }));
 }
 
 export function transcriptLines(transcript: CallTranscript, reader: { readonly viewerId: string; readonly languages: readonly string[] }): readonly TranscriptLine[] {
@@ -115,13 +115,23 @@ export function transcriptLines(transcript: CallTranscript, reader: { readonly v
         speakerId: segment.speakerId,
         speakerName: segment.speakerDisplayName ?? null,
         mine,
-        offsetSec: Math.max(0, Math.floor((segment.capturedAtMs - origin) / 1000)),
+        offsetMs: Math.max(0, segment.capturedAtMs - origin),
         original: segment.text,
         text: shown.text,
         language: shown.language,
         translated: shown.translated,
       };
     });
+}
+
+export type TranscriptEntry = { readonly type: 'line'; readonly line: TranscriptLine } | { readonly type: 'note'; readonly note: TranscriptNote };
+
+const offsetOf = (entry: TranscriptEntry): number => (entry.type === 'line' ? entry.line.offsetMs : entry.note.offsetMs);
+
+/** Phrases et captures à leur heure, à la milliseconde ; à heure égale, la phrase d'abord (comme le journal vivant, iOS `CallJournalTimeline` et Android). */
+export function transcriptEntries(lines: readonly TranscriptLine[], notes: readonly TranscriptNote[]): readonly TranscriptEntry[] {
+  const entries: readonly TranscriptEntry[] = [...lines.map((line): TranscriptEntry => ({ type: 'line', line })), ...notes.map((note): TranscriptEntry => ({ type: 'note', note }))];
+  return [...entries].sort((left, right) => offsetOf(left) - offsetOf(right));
 }
 
 const PAGE = 100;

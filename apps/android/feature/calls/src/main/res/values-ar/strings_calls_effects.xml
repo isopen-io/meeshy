@@ -10,11 +10,6 @@
     <string name="call_effects_face_angel">ملاك</string>
     <string name="call_effects_face_demon">شيطان</string>
     <string name="call_effects_face_volcano">ثوران</string>
-    <string name="call_effects_preset_natural">طبيعي</string>
-    <string name="call_effects_preset_warm">دافئ</string>
-    <string name="call_effects_preset_cool">بارد</string>
-    <string name="call_effects_preset_vivid">زاهٍ</string>
-    <string name="call_effects_preset_muted">ناعم</string>
     <string name="call_effects_settings">الإعدادات</string>
     <string name="call_effects_settings_hint">يعرض السطوع وتمويه الخلفية بدلاً من المؤثرات</string>
     <string name="call_effects_validate">تطبيق</string>

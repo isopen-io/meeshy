@@ -431,9 +431,16 @@
     <string name="retouch_family_effects">Effetti</string>
     <string name="retouch_family_filters">Filtri</string>
     <string name="retouch_family_frames">Cornici</string>
+    <string name="retouch_filter_bright">Chiaro</string>
     <string name="retouch_filter_cool">Freddo</string>
+    <string name="retouch_filter_film">Pellicola</string>
+    <string name="retouch_filter_golden">Dorato</string>
+    <string name="retouch_filter_monochrome">Bianco e nero</string>
     <string name="retouch_filter_muted">Morbido</string>
     <string name="retouch_filter_natural">Naturale</string>
+    <string name="retouch_filter_sky">Cielo</string>
+    <string name="retouch_filter_softNight">Notte dolce</string>
+    <string name="retouch_filter_velvet">Velluto</string>
     <string name="retouch_filter_vivid">Vivido</string>
     <string name="retouch_filter_warm">Caldo</string>
     <string name="retouch_no_filter">Nessun filtro</string>

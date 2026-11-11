@@ -31,9 +31,9 @@ class CallCaptionsViewModel @Inject constructor(
     fun bandLines(state: CallCaptionsState, labels: CallCaptionLabels): List<CallLiveCaptionLine> =
         captions.captionLines(state.journal.tail(BAND_LINES), state, labels)
 
-    /** The journal: every sentence of the call. */
+    /** The journal: every sentence of the call, each dated by the time in the call (P6.4). */
     fun journalLines(state: CallCaptionsState, labels: CallCaptionLabels): List<CallLiveCaptionLine> =
-        captions.captionLines(state.journal.segments, state, labels)
+        captions.captionLines(state.journal.segments, state, labels).map { it.dated(state.callStartedAtMs) }
 
     fun toggleReveal(key: String) = captions.toggleReveal(key)
 

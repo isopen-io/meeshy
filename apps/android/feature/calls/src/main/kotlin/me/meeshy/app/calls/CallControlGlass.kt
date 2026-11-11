@@ -1,5 +1,12 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -7,7 +14,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -128,6 +134,8 @@ internal fun CallPillGlyph(icon: ImageVector, kind: CallPillKind, diameter: Dp, 
     }
 }
 
+private const val CAPTION_MILLIS = 250
+
 /** Un bouton refusé pendant une prise ou un film se lit atténué (SwiftUI `.disabled`). */
 private const val DISABLED_ALPHA = 0.4f
 
@@ -148,6 +156,8 @@ internal fun CallPillButton(
     toggleState: Boolean? = null,
     diameter: Dp = 48.dp,
     enabled: Boolean = true,
+    /** The caption fades and folds in or out with the rows around it, never snaps (G3.4). */
+    captionShown: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
@@ -165,7 +175,6 @@ internal fun CallPillButton(
     }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         modifier = modifier
             .defaultMinSize(minWidth = CallButtonFill.MIN_TARGET_DP.dp, minHeight = CallButtonFill.MIN_TARGET_DP.dp)
             .alpha(if (enabled) 1f else DISABLED_ALPHA)
@@ -179,15 +188,21 @@ internal fun CallPillButton(
             CallPillGlyph(icon, kind, diameter, pressed)
         }
         if (caption != null) {
-            Text(
-                text = caption,
-                color = MeeshyMediaChromeColors.OnMediaSecondary,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.clearAndSetSemantics { },
-            )
+            AnimatedVisibility(
+                visible = captionShown,
+                enter = fadeIn(tween(CAPTION_MILLIS)) + if (reduceMotion) EnterTransition.None else expandVertically(tween(CAPTION_MILLIS)),
+                exit = fadeOut(tween(CAPTION_MILLIS)) + if (reduceMotion) ExitTransition.None else shrinkVertically(tween(CAPTION_MILLIS)),
+            ) {
+                Text(
+                    text = caption,
+                    color = MeeshyMediaChromeColors.OnMediaSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = MeeshySpacing.xs).clearAndSetSemantics { },
+                )
+            }
         }
     }
 }

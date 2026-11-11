@@ -14,8 +14,9 @@ struct CallPanelHeader: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
                 .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 0)
             CallPanelHeaderButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
         }
         .padding(.horizontal, MeeshySpacing.xsPlus)

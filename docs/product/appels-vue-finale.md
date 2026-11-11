@@ -43,13 +43,16 @@
    - Ma phrase n'est jamais traduite pour moi.
    - La ligne servie descend le **Prisme** du lecteur (`resolvePrismTranslation` / `served`), jamais `translations[0]`.
    - **Les sous-titres vivent DANS la pilule**, au-dessus de sa rangée de base, dans le même verre, en duo comme en groupe (décision porteur du 2026-11-09, #17343). Ouvrir les actions (…) les range ; refermer les actions les rend.
+   - **La bande et le journal rangent les phrases dans le MÊME ordre : par début de phrase** (l'heure dans l'appel où la phrase a commencé), la plus ancienne en haut, la plus récente en bas, contre la rangée. Une traduction ou une version finale qui arrive plus tard met la ligne à jour sur place, sans la déplacer : en P3 et P4, la phrase d'Awa reste au-dessus de ma réponse même si sa traduction arrive après (compte rendu famille 1, #17329).
 6. **Toucher une phrase montre son original dessous** ; la retoucher le replie. « Journal » ouvre tout l'appel, DANS la pilule, à la place des sous-titres (#17343).
+   - En appel audio, la taille de l'avatar quand le journal est ouvert (garder 120 pt ou passer à 56 pt) attend la décision du porteur, #17529 : la planche ne la fixe pas encore.
 7. **Le journal est FIDÈLE, pendant et après l'appel.**
    - C'est le MÊME journal avant et après la fin de l'appel : mêmes phrases, même ordre, mêmes couleurs, même descente du Prisme.
    - L'original : pendant l'appel, il se déplie sous la phrase qu'on touche, comme dans la bande ; après l'appel, il est sous chaque traduction (décision porteur du 2026-11-09, #17340).
-   - Pendant l'appel, il s'ouvre dans la pilule, au-dessus de la rangée de base, et y défile ; ouvrir les actions (…) le range (#17343). Ma vignette garde sa place pendant qu'il est ouvert (porteur, 2026-11-10). Sur un écran large (web), il se pose en colonne à droite (W1) ; cette colonne ne masque rien et reste ouverte quand on ouvre (…) (porteur, 2026-11-10).
+   - Pendant l'appel, toucher une phrase déplie son original sous elle seule (#17340). La bascule Traduit · Original de la tête du journal fait passer TOUT le journal dans l'autre texte ; elle ne touche pas la bande des sous-titres, qui reste dans la langue du lecteur (Prisme). Après l'appel, l'original se lit sous chaque traduction.
+   - Pendant l'appel, il s'ouvre dans la pilule, au-dessus de la rangée de base, et y défile ; ouvrir les actions (…) le range (#17343). Ma vignette garde sa place, en haut à droite, pendant qu'il est ouvert (porteur, 2026-11-10 ; P6). Sur un écran large (web), il se pose en colonne à droite (W1) ; cette colonne ne masque rien et reste ouverte quand on ouvre (…) (porteur, 2026-11-10).
    - Rien n'est tronqué, et une ligne dont la traduction arrive après la fin de la phrase est mise à jour sur place, pas dupliquée. Les règles de fusion sont web `mergeCaption`, iOS `CallTranscriptMergeRules`, Android `CallLiveJournal.merged`.
-   - Après l'appel, il se déplie sous la bulle d'appel du fil et dans le détail de l'historique. Une bascule Traduit / Original s'applique à tout l'appel.
+   - Après l'appel, il se déplie sous la bulle d'appel du fil et dans le détail de l'historique. Une bascule Traduit / Original s'y applique à tout l'appel.
    - Pendant l'appel :
      - le défilement est libre ;
      - « Revenir au direct » apparaît dès qu'on a remonté ;
@@ -63,7 +66,7 @@
     - Le premier toucher cache l'en-tête, la pilule, les rails et les bandeaux, et ma vignette passe à sa petite taille.
     - Le second toucher fait revenir les contrôles partout, et ma vignette reprend la taille que j'avais choisie.
     - Il n'y a pas de minuterie. Un bouton touché pendant le fondu répond quand même.
-    - Les sous-titres et une carte d'accord (enregistrement, cadre) ne se cachent jamais : quand la pilule se range, les sous-titres restent dans un verre sans sa rangée de base (G1).
+    - Les sous-titres et une carte d'accord (enregistrement, cadre) ne se cachent jamais : quand la pilule se range, les sous-titres restent dans un verre sans sa rangée de base (G1). Il en va de même en mode Effets : les sous-titres restent dans ce verre sans rangée, posé au-dessus des looks (P8).
 12. **Lancer un partage d'écran RÉDUIT l'appel** (#16664).
     - Je quitte Meeshy pour montrer autre chose, et l'appel me suit en capsule : icône d'écran, nom · durée, « Arrêter ».
     - Toucher la capsule rouvre l'appel ; le bandeau « Vous partagez votre écran · Arrêter » y reste sous l'en-tête.
@@ -76,7 +79,7 @@
 14. **Options en surimpression.**
     - Une option à réglages (Enregistrer, Réagir) s'ouvre DANS la pilule, par morphisme : la même barre s'allonge et grandit pour la contenir, avec ‹ Retour et Fermer, puis reprend sa forme (loi 17). C'est la même barre agrandie qui porte les sous-titres et le journal.
     - « Participants » s'ouvre en feuille ; « Journal » s'ouvre dans la pilule (loi 7).
-    - Effets est un mode plein écran qui parle la langue du composer (directive porteur du 2026-11-10, #17409) : ‹ · Réglages · (+). Le look touché s'applique tout de suite, sans « Valider » ; ‹ revient à l'appel ; (+) ajoute un look par-dessus le précédent, pour les cumuler ; « Aucun » rend mon image d'origine. Le choix se fait dans les looks du composer (loi 9).
+    - Effets est un mode plein écran qui parle la langue du composer (directive porteur du 2026-11-10, #17409) : ‹ · Réglages · (+). Réglages porte un engrenage et sa légende « Réglages », pour ne pas se confondre avec le glyphe d'Effets ; il ouvre P8b, où il passe en disque blanc. Le look touché s'applique tout de suite, sans « Valider » ; ‹ revient à l'appel ; (+) ajoute un look par-dessus le précédent, pour les cumuler ; « Aucun » rend mon image d'origine. Le choix se fait dans les looks du composer (loi 9).
     - Montage garde Quitter · Réglages · Valider tant que le porteur ne l'a pas aligné ; « Quitter » rend mon image d'avant. Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
 15. **À la une.**
     - Toucher une vignette la met à la une, choix local jamais imposé. Si les contrôles sont cachés, le toucher les rend d'abord.
@@ -201,17 +204,22 @@ Sur un écran large, la scène reste centrée et le journal se pose en colonne d
 |---|
 | ![W2](appels-vue-finale/vues/W2.png) |
 
-## Où en est chaque plateforme (relevé du 2026-11-08, branche `claude/calls-end-to-end-cvakev` fusionnée avec `dev`)
+## Où en est chaque plateforme (relevé du 2026-11-08, branche `claude/calls-end-to-end-cvakev` fusionnée avec `dev` ; complété le 2026-11-11)
 
-Ce tableau est un compte rendu daté. L'état vivant est dans les issues du milestone « Appels de groupe et appels traduits ». « Livré dans le code » sur iOS et Android veut dire relu et gardé localement, mais pas encore compilé : la preuve est la CI `ios.yml` / `android.yml` de la PR, puis une capture au simulateur ou depuis l'artefact `assembleDebug`.
+Ce tableau est un compte rendu daté. Les lignes du chantier #17329 (Liquid Glass et rails, #17340 à #17343, mode Effets) sont relevées le 2026-11-11 par `gh api` sur ses issues et ses PR, `dev` à `fe780f4b1a` et verrouillé : « prête » veut dire PR ouverte, CI de PR verte, fusion en attente du déverrouillage ; la preuve iOS et Android complète se refait sur `dev` après fusion. Les autres lignes restent celles du 2026-11-08. L'état vivant est dans les issues du milestone « Appels de groupe et appels traduits ». « Livré dans le code » sur iOS et Android veut dire relu et gardé localement, mais pas encore compilé : la preuve est la CI `ios.yml` / `android.yml` de la PR, puis une capture au simulateur ou depuis l'artefact `assembleDebug`.
 
 | Loi / vue | Web | iOS | Android natif |
 |---|---|---|---|
 | Pilule, rails, groupe (lois 1–3) | livré | livré ; le verre qui s'assombrit sur un écran reçu (loi 3) reste à porter, #16972 ; reliquats de mise en page dans `apps/ios/tasks/routine-appels.md` | livré dans le code, verre de la loi 3 compris (#16952) ; à vérifier sur capture |
-| Relevé du 2026-11-09 (#17311) : boutons en Liquid Glass (loi 1) et rails en duo (loi 2) | à vérifier | boutons en disques dessinés, #17323 ; le duo range ses actions en rangées comme le groupe, #17327 | même écart qu'iOS, #17323 et #17327 |
+| Boutons en Liquid Glass (loi 1, #17323) et rails en duo (loi 2, #17327) | fusionné : verre par bouton #17419 (#17418), rails #17445 (#17429), libellés #17470 (#17462) ; rendu à rejouer, #17423 et #17455 | fusionné : Liquid Glass #17403, rails #17431, libellés #17428 (#17417) ; rendu à rejouer, #17422, #17438, #17439 | fusionné : verre #17420, rails #17446, libellés #17472 (#17461) ; rendu à rejouer, #17421 et #17450 |
+| Capsule de l'en-tête : nom donné · durée, réseau seulement dégradé (loi 1, #17341) | fusionné, #17504 (#17499 fermée) | PR #17493 prête (#17491 ouverte) | fusionné, #17501 (#17498 fermée) |
+| Sous-titres et journal DANS la pilule, (…) les range (lois 5–7, #17343) | fusionné, #17486 (#17479) ; phrases et pied Langue · Journal, #17503 (#17496) | fusionné, #17502 (#17456) ; phrases et pied, PR #17494 prête (#17492) ; taille de l'avatar en audio journal ouvert, #17529 | fusionné, #17484 (#17478) ; phrases et pied, #17500 (#17495) |
+| Le journal garde tout l'appel, sous-titres allumés ou non (loi 7, #17342) | gardé avant la décision (constat de #17342) ; heure dans l'appel et ordre, PR #17519 prête (#17517) | PR #17513 prête (#17510) | PR #17518 prête (#17516), le témoin qui jetait ces phrases y est retourné |
+| Original au toucher pendant l'appel, bascule Traduit · Original sur tout le journal (lois 6, 7, #17340) | original seulement sous la phrase touchée, PR #17519 prête (#17517) ; bascule dans la tête du journal (#16942) | PR #17513 prête (#17510) | PR #17518 prête (#17516) |
+| Mode Effets : sous-titres gardés au-dessus des looks, Réglages à l'engrenage légendé (lois 9, 11, 14 ; P8) | PR #17525 prête (#17524) ; engrenage de Réglages non relevé | P8 conforme à l'audit du 2026-11-11 (10/10, glyphe d'Effets alors dessiné sur Réglages) ; engrenage à porter | PR #17512 prête (#17511, sous-titres gardés) ; engrenage non relevé |
 | Sous-titre coloré, original puis traduction (lois 4–5) | livré (#16613, #16614) | livré | livré (`CallSpeakerColor`) |
 | Ma vignette à ma couleur (loi 4) | livré, grille et coin du duo (#16635) | livré en groupe (`GroupCallStage`) ; duo : liseré de 2 pt à la couleur de qui est montré, livré dans le code (`CallSelfTileStroke`), à recouper avec #16973 | livré dans le code, duo compris, celle de l'autre après permutation (#16952) |
-| Journal pendant l'appel coloré (lois 4, 7) | livré, nom et phrase (#16634) ; bascule Traduit / Original dans l'en-tête (#16942) | livré (`CallCaptionRow`) | livré (`CallCaptionRow`) |
+| Journal pendant l'appel coloré (lois 4, 7) : **la couleur seulement** ; sa place, ce qu'il garde et l'original sont aux lignes #17342, #17343 et #17340 | couleur livrée, nom et phrase (#16634) | couleur livrée (`CallCaptionRow`) | couleur livrée (`CallCaptionRow`) |
 | Journal après l'appel coloré (lois 4, 7) | livré, `authorInk` sur le fil (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) | livré, `CallSpeakerColor` adaptée au schéma (#16634) ; avatars de l'historique encore teintés par le nom, #16954 |
 | Couleur : pseudo toujours, phrase seulement traduite (loi 4) | livré (#16662) | livré (#16662) | livré (#16662) |
 | Toucher : tout se range, ma vignette se réduit (loi 11) | livré (#16663) ; la colonne du journal ne s'efface pas encore au toucher | livré (#16663) | livré (#16663) |

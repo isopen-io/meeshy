@@ -19,9 +19,9 @@ beforeAll(async () => {
   await loadCallRecordingCatalog('fr');
 });
 
-const render = (state: CallRecordingState, requesterName = 'Nadia') =>
+const render = (state: CallRecordingState, requesterName = 'Nadia', stowed = false) =>
   renderToStaticMarkup(
-    <CallRecordingPanel state={state} requesterName={requesterName} language="fr" onAnswer={noop} onStop={noop} onDismiss={noop} />,
+    <CallRecordingPanel state={state} requesterName={requesterName} language="fr" onAnswer={noop} onStop={noop} onDismiss={noop} stowed={stowed} />,
   );
 
 const pending = (mine: boolean, mustAnswer: boolean): CallRecordingState => ({
@@ -68,5 +68,32 @@ describe('le panneau d’enregistrement d’appel (#8064)', () => {
 
   test('au repos et sans mot, rien n’est rendu', () => {
     expect(render({ view: { kind: 'idle' }, notice: null })).toBe('');
+  });
+});
+
+/**
+ * G1.1 (#17536) — le premier toucher range tout l'appel, enregistrement compris : l'indicateur
+ * « Enregistrement en cours » et son bouton Arrêter repartent vers le haut avec l'en-tête, et
+ * reviennent avec lui. Seule la carte d'accord, qui attend une réponse, ne se cache jamais (G1.6).
+ */
+describe('un toucher qui range tout range aussi l’indicateur d’enregistrement (G1.1)', () => {
+  const recording: CallRecordingState = { view: { kind: 'recording', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-1', recorderId: 'u-peer', mine: false }, notice: null };
+
+  test('commandes visibles, l’indicateur est là, à sa place, atteignable', () => {
+    const html = render(recording);
+    expect(html).toContain('data-call-recording-indicator="recording"');
+    expect(html).toContain('data-call-stow="top"');
+    expect(html).not.toContain('data-call-stowed');
+  });
+
+  test('commandes rangées, l’indicateur est rangé vers le haut — c’est la même règle que l’en-tête', () => {
+    expect(render(recording, 'Nadia', true)).toContain('data-call-stowed=""');
+    expect(render(pending(true, false), 'Nadia', true)).toContain('data-call-stowed=""');
+  });
+
+  test('la carte d’accord ne se range JAMAIS : elle attend une réponse (G1.6)', () => {
+    const html = render(pending(false, true), 'Nadia', true);
+    expect(html).toContain('role="alertdialog"');
+    expect(html).not.toContain('data-call-stowed');
   });
 });

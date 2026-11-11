@@ -159,7 +159,7 @@ internal fun CallRecordingNoticePill(
     }
 }
 
-/** Les deux choix du panneau « Enregistrer » dans la pilule : Audio seulement, Audio et vidéo. */
+/** Les deux choix du panneau « Enregistrer » dans la pilule : Audio, Vidéo. */
 @Composable
 internal fun CallRecordingKindPanel(
     onPick: (CallRecordingKind) -> Unit,
