@@ -89,7 +89,6 @@ internal fun CallControlsPill(
         scaleOut(targetScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
     val grow = if (reduceMotion) EnterTransition.None else expandVertically(tween(UNFOLD_MILLIS), expandFrom = Alignment.Bottom)
     val shrink = if (reduceMotion) ExitTransition.None else shrinkVertically(tween(UNFOLD_MILLIS), shrinkTowards = Alignment.Bottom)
-    val panel = layer.pillPanel
     val held = remember { HeldLayer() }
     if (expanded) held.layer = layer
     CallControlsGlass(modifier = modifier.widthIn(max = CallPillWidth.maxWidthDp(pillText).dp).fillMaxWidth()) {
@@ -132,7 +131,7 @@ internal fun CallControlsPill(
             enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale + grow,
             exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink + foldScale,
         ) {
-            BaseRow(state, captioned = expanded && panel != CallScreenPanel.Journal, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
+            BaseRow(state, captioned = expanded && layer.captionsBaseRow, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
         }
     }
 }
