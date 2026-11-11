@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, jest, test } from 'bun:test';
@@ -146,7 +147,7 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
       const order = ['Afficher les actions', 'Couper le micro', 'Sortie audio', 'Raccrocher'].map((label) => pill.indexOf(`aria-label="${label}"`));
       expect(order.every((index) => index >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
-      expect(html).toMatch(/class="glass-call[^"]*"[^>]*data-call-control-pill/);
+      expect(html).toMatch(/class="glass-call[^"]*"[^>]*data-call-pill-skin/);
     }
   });
 
@@ -256,7 +257,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     document.body.appendChild(host);
     const root = createRoot(host);
     act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={effectsSupport} />));
-    const find = (selector: string) => host.querySelector(selector);
+    const find = (selector: string) => [...host.querySelectorAll(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
     const rerender = (next: Partial<ActiveCall>) => root.render(<CallScreen call={call(next)} canShare effectsSupport={effectsSupport} />);
     const done = () => {
@@ -751,7 +752,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   const tapStage = (view: ReturnType<typeof mount>) => act(() => (view.find('[data-call-stage-surface]') as HTMLElement | null)?.click());
 
-  test('les sous-titres vivent DANS la pilule, (…) les range, et ils ne s’effacent pas avec les commandes : la pilule rangée les laisse dans un verre à eux (#17343, loi 11)', async () => {
+  test('les sous-titres vivent DANS la pilule, (…) les range, et ils ne s’effacent pas avec les commandes : la pilule rangée les garde dans son verre, qui se resserre (#17343, loi 11, G1.3)', async () => {
     const view = mount({ isGroup: true, cameraOn: true, members: peers, captionsMode: 'translated' });
     await act(async () => {
       await import('./call-captions-panel');
@@ -767,11 +768,12 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     tapStage(view);
     await act(async () => {});
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
-    const alone = view.find('[data-call-captions-band] [data-call-captions-panel]');
-    expect(alone).not.toBeNull();
-    expect(alone?.closest('[aria-hidden="true"]')).toBeNull();
-    expect(alone?.closest('[data-call-control-pill]')).toBeNull();
-    expect(alone?.getAttribute('data-call-captions-surface')).toBe('glass');
+    const kept = view.find('[data-call-control-pill] [data-call-captions-panel]');
+    expect(kept).not.toBeNull();
+    expect(kept?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(kept?.closest('[data-call-control-pill]')?.hasAttribute('data-call-pill-stowed')).toBe(true);
+    expect(kept?.getAttribute('data-call-captions-surface')).toBe('inset');
+    expect(view.find('[data-call-captions-band]')).toBeNull();
     view.done();
   });
 
@@ -816,7 +818,11 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   const chromeOf = (view: ReturnType<typeof mount>) => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
 
-  const controlsClasses = (view: ReturnType<typeof mount>) => (view.find('[data-call-controls]') as HTMLElement | null)?.className.split(' ') ?? [];
+  const CALL_MOTION = readFileSync(new URL('../styles/call-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const stowRule = (selector: string): string => {
+    const start = CALL_MOTION.indexOf(selector);
+    return start < 0 ? '' : CALL_MOTION.slice(start, CALL_MOTION.indexOf('}', start));
+  };
 
   /* AUCUNE MINUTERIE (#8988, directive porteur du 2026-10-01) : les commandes
      d'une vidéo ne disparaissent plus d'elles-mêmes — un toucher sur la scène
@@ -829,7 +835,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       view.press('[data-call-more]');
       act(() => jest.advanceTimersByTime(60_000));
       expect(chromeOf(view)).toBe('shown');
-      expect(controlsClasses(view)).toContain('opacity-100');
+      expect(view.find('[data-call-controls]')?.getAttribute('data-call-stow')).toBe('bottom');
       view.done();
     }));
 
@@ -849,17 +855,27 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
      `pointer-events-none` à l'instant où l'opacité COMMENÇAIT à baisser : un
      bouton encore bien visible laissait passer le doigt à la vidéo, qui ne
      faisait que rendre les commandes — il fallait toucher deux fois. */
-  test('rangées d’un toucher sur la scène, elles laissent passer le doigt — une fois leur fondu fini, jamais pendant (#8735)', () => {
+  test('rangées d’un toucher sur la scène, elles repartent vers leur bord et laissent passer le doigt — une fois le mouvement fini, jamais pendant (#8735, G1.11)', () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-    expect(controlsClasses(view)).toContain('transition-opacity');
+    expect(view.find('[data-call-controls]')?.getAttribute('data-call-stow')).toBe('bottom');
+    expect(view.find('[data-call-plane][data-call-stow]')?.getAttribute('data-call-stow')).toBe('top');
     tapStage(view);
     expect(chromeOf(view)).toBe('hidden');
-    expect(controlsClasses(view)).toContain('invisible');
-    expect(controlsClasses(view)).toContain('transition-[opacity,visibility]');
-    expect(controlsClasses(view)).not.toContain('pointer-events-none');
+    const rule = stowRule("[data-call-chrome='hidden'] [data-call-stow],");
+    expect(rule).toContain('visibility: hidden');
+    expect(rule).toContain('visibility 0s linear 0.3s');
+    expect(rule).not.toContain('pointer-events');
     tapStage(view);
-    expect(controlsClasses(view)).not.toContain('invisible');
+    expect(chromeOf(view)).toBe('shown');
     view.done();
+  });
+
+  test('G1.11 / G2.8 — l’en-tête sort par le haut, la pilule par le bas, mesurés sur leur propre hauteur ; aucun déplacement sous « Réduire les animations »', () => {
+    expect(stowRule("[data-call-chrome='hidden'] [data-call-stow='top'],")).toMatch(/translate: 0 calc\(-100% - env\(safe-area-inset-top\)/);
+    expect(stowRule("[data-call-chrome='hidden'] [data-call-stow='bottom'],")).toMatch(/translate: 0 calc\(100% \+ env\(safe-area-inset-bottom\)/);
+    const reduced = CALL_MOTION.slice(CALL_MOTION.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(reduced).toContain('translate: none');
+    expect(reduced).not.toContain('transition: none');
   });
 
   /* LE GLISSÉ NE REBONDIT PAS (#8736) : `overscroll-x-contain` laisse
@@ -1055,8 +1071,9 @@ describe('CallScreen — le verre : un seul flou par pilule, un disque de verre 
   test('(#17345) un seul flou : la pilule, repliée comme déployée, et aucun de ses disques', async () => {
     for (const expand of [false, true]) {
       const view = await mountPill({ cameraOn: true, members: { 'u-peer': member() } }, expand);
-      expect(view.pill.matches(BLUR)).toBe(true);
-      expect(view.pill.querySelectorAll(BLUR)).toHaveLength(0);
+      expect(view.pill.matches(BLUR)).toBe(false);
+      expect(view.pill.querySelector('[data-call-pill-skin]')?.matches(BLUR)).toBe(true);
+      expect(view.pill.querySelectorAll(BLUR)).toHaveLength(1);
       for (const disc of view.pill.querySelectorAll(`.${DISC}`)) expect(disc.matches(BLUR)).toBe(false);
       view.done();
     }
@@ -1108,7 +1125,7 @@ describe('CallScreen — voir et entendre l’appelant avant de décrocher (#848
     document.body.appendChild(host);
     const root = createRoot(host);
     act(() => root.render(<CallScreen call={call(overrides)} />));
-    const find = (selector: string) => host.querySelector(selector);
+    const find = (selector: string) => [...host.querySelectorAll(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
     const done = () => {
       act(() => root.unmount());

@@ -327,7 +327,6 @@ describe('un toucher range tout : ma vignette passe à sa petite taille (#16663)
 
   test('G1.11 — ranger ou rendre ne passe que par la transformation : le cadre ne change jamais de largeur ni de hauteur', () => {
     fresh();
-    const full = screenOf();
     const view = mount(call(), { chromeVisible: true });
     const before = [view.frame().style.width, view.frame().style.height];
     view.render(false);

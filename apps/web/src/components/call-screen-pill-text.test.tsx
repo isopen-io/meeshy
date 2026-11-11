@@ -82,7 +82,8 @@ const mount = (overrides: Partial<ActiveCall> = {}) => {
   document.body.appendChild(host);
   const root = createRoot(host);
   act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={{ color: false, blur: false }} wide={false} />));
-  const find = (selector: string) => host.querySelector<HTMLElement>(selector);
+  /* Le double d'une sortie (`data-call-pill-ghost`) n'est pas le contenu : il s'efface et part. */
+  const find = (selector: string) => [...host.querySelectorAll<HTMLElement>(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
   const press = (selector: string) => act(() => find(selector)?.click());
   const settle = () => act(async () => {});
   const layer = () => find('[data-call-screen]')?.getAttribute('data-call-layer');
@@ -297,52 +298,81 @@ describe('le journal, DANS la pilule, à la place des sous-titres (P6)', () => {
   });
 });
 
-describe('un toucher qui range la pilule laisse les sous-titres seuls (loi 11)', () => {
-  test('la pilule rangée, les sous-titres restent dans un verre à eux, à sa place, lus et annoncés', async () => {
+describe('un toucher range la pilule : UN SEUL verre se resserre autour des sous-titres (loi 11, G1.3)', () => {
+  test('la pilule rangée ne s’efface pas et ne laisse pas un second verre : le même verre garde les sous-titres, lus et annoncés', async () => {
     const view = mount();
     await view.settle();
+    const pill = view.find('[data-call-control-pill]');
     tapStage(view);
     await view.settle();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
-    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toEqual({ inert: true, hidden: true });
-    const panel = view.find('[data-call-captions-band] [data-call-captions-panel]');
-    expect(panel?.getAttribute('data-call-captions-surface')).toBe('glass');
-    expect(panel?.closest('[data-call-control-pill]')).toBeNull();
+    expect(view.find('[data-call-control-pill]')).toBe(pill);
+    expect(pill?.hasAttribute('data-call-pill-stowed')).toBe(true);
+    const panel = inPill(view, '[data-call-captions-panel]');
+    expect(panel?.getAttribute('data-call-captions-surface')).toBe('inset');
+    expect(leavingOf(panel)).toBeNull();
+    expect(view.find('[data-call-captions-band]')).toBeNull();
+    expect(view.host.querySelectorAll('[data-call-captions-panel]')).toHaveLength(1);
     expect(panel?.closest('[aria-hidden="true"]')).toBeNull();
-    expect(panel?.closest('[data-call-captions-band]')?.className.split(' ')).toContain('w-[min(calc(100%-1.5rem),560px)]');
+    expect(panel?.closest('[data-call-control-pill]')?.className.split(' ')).toContain('w-[min(calc(100%-1.5rem),560px)]');
     expect(panel?.querySelector('[aria-live="polite"]')).not.toBeNull();
-    tapStage(view);
-    await view.settle();
-    expect(inPill(view, '[data-call-captions-panel]')).not.toBeNull();
     view.done();
   });
 
-  test('#17406 — la pilule revenue, les sous-titres seuls repartent en fondu à sa place, puis s’effacent', async () => {
+  test('sa rangée de base est rangée, inerte et muette ; la pilule revenue la rend, le verre reprend sa forme', async () => {
+    const view = mount();
+    await view.settle();
+    tapStage(view);
+    await view.settle();
+    const row = view.find('[data-call-more]')?.closest('[data-call-pill-rest]');
+    expect(row?.hasAttribute('inert')).toBe(true);
+    expect(row?.getAttribute('aria-hidden')).toBe('true');
+    expect(view.find('[data-call-controls]')?.hasAttribute('data-call-stow')).toBe(false);
+    tapStage(view);
+    await view.settle();
+    expect(view.find('[data-call-control-pill]')?.hasAttribute('data-call-pill-stowed')).toBe(false);
+    expect(view.find('[data-call-more]')?.closest('[data-call-pill-rest]')?.hasAttribute('inert')).toBe(false);
+    expect(view.find('[data-call-controls]')?.getAttribute('data-call-stow')).toBe('bottom');
+    view.done();
+  });
+
+  test('#17406 — la pilule revenue, les sous-titres ne repartent pas : ils sont restés dans le même verre', async () => {
     const view = mount();
     await view.settle();
     tapStage(view);
     await view.settle();
     await outlast();
-    expect(inPill(view, '[data-call-captions-panel]')).toBeNull();
+    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toBeNull();
     tapStage(view);
     await view.settle();
-    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toBeNull();
-    expect(leavingOf(view.find('[data-call-captions-band] [data-call-captions-panel]'))).toEqual({ inert: true, hidden: true });
     await outlast();
-    expect(view.find('[data-call-captions-band] [data-call-captions-panel]')).toBeNull();
+    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toBeNull();
     expect(view.host.querySelectorAll('[data-call-captions-panel]')).toHaveLength(1);
     view.done();
   });
 
-  test('pilule rangée, le journal ouvert ne laisse que les sous-titres', async () => {
+  test('sans sous-titres, la pilule rangée repart tout entière vers son bord, d’un seul bloc', async () => {
+    const view = mount({ captionsMode: 'off' });
+    await view.settle();
+    tapStage(view);
+    await view.settle();
+    const controls = view.find('[data-call-controls]');
+    expect(controls?.getAttribute('data-call-stow')).toBe('bottom');
+    expect(controls?.getAttribute('aria-hidden')).toBe('true');
+    expect(view.find('[data-call-control-pill]')?.hasAttribute('data-call-pill-stowed')).toBe(false);
+    view.done();
+  });
+
+  test('pilule rangée, le journal ouvert ne laisse que les sous-titres : ses lignes repartent avec la rangée de base', async () => {
     const view = mount();
     await view.settle();
     view.press('[data-call-captions-journal]');
     await view.settle();
     tapStage(view);
     await view.settle();
-    expect(view.find('[data-call-captions-panel]')?.getAttribute('data-call-captions-surface')).toBe('glass');
+    expect(inPill(view, '[data-call-captions-panel]')?.getAttribute('data-call-captions-surface')).toBe('inset');
     expect(view.find('[data-call-journal-panel]')?.closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(view.find('[data-call-journal-panel]')?.closest('[inert]')).not.toBeNull();
     view.done();
   });
 });

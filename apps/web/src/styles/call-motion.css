@@ -14,6 +14,7 @@
    `fixed`, qui s'y écraserait. */
 [data-call-pill-text],
 [data-call-pip],
+[data-call-deck-content='rows'],
 [data-call-capsule],
 [data-call-signal] {
   animation: call-pill-text-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
@@ -63,3 +64,97 @@
   }
 }
 
+
+/* LE CHROME SE RANGE VERS SES BORDS, ET REVIENT PAR LE MÊME CHEMIN (G1.11, G2.8,
+   #17536 ; `CallChromeStow` d'iOS) — l'en-tête par le haut, la pilule par le bas, les
+   bandeaux en fondu ; rien n'est coupé net. Seules la transformation (`translate`, qui
+   se mesure sur la hauteur de l'élément lui-même) et l'opacité bougent. La visibilité
+   suit le mouvement : un bouton encore visible répond (#8735), et le mouvement est
+   interruptible. Sous « Réduire les animations », aucun déplacement : le fondu court
+   est joué par `useStowFade` (Web Animations, que la règle générale n'éteint pas).
+   `data-call-stowed` est la même règle, posée par un élément qui vit hors de l'écran
+   d'appel (l'indicateur d'enregistrement). */
+[data-call-stow],
+[data-call-pill-rest] {
+  transition:
+    opacity 0.3s ease,
+    translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1),
+    visibility 0s;
+}
+
+[data-call-chrome='hidden'] [data-call-stow],
+[data-call-stow][data-call-stowed] {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.3s ease,
+    translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1),
+    visibility 0s linear 0.3s;
+}
+
+[data-call-chrome='hidden'] [data-call-stow='top'],
+[data-call-stow='top'][data-call-stowed] {
+  translate: 0 calc(-100% - env(safe-area-inset-top) - var(--stow-clearance, 0px) - 1rem);
+}
+
+[data-call-chrome='hidden'] [data-call-stow='bottom'],
+[data-call-stow='bottom'][data-call-stowed] {
+  translate: 0 calc(100% + env(safe-area-inset-bottom) + 1.5rem);
+}
+
+/* UN SEUL VERRE (G1.3) — rangée, la pilule qui porte des sous-titres reste : son verre
+   (`data-call-pill-skin`, seul mis à l'échelle depuis son bord du bas) se resserre
+   autour d'eux, qui descendent d'autant qu'il perd, pendant que sa rangée de base, ses
+   rangées et son séparateur repartent vers le bas en s'effaçant. `--stow-scale` et
+   `--stow-shift` sont mesurés par `use-pill-motion.ts`. Le cadre de la pilule, vide
+   au-dessus du verre resserré, ne prend plus le doigt : seuls les sous-titres le prennent. */
+[data-call-pill-skin] {
+  transform-origin: 50% 100%;
+  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+[data-call-pill-text='captions'] {
+  transition: translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+[data-call-pill-text='captions'] > hr {
+  transition: opacity 0.3s ease;
+}
+
+[data-call-pill-stowed] {
+  pointer-events: none;
+}
+
+[data-call-pill-stowed] [data-call-captions-panel] {
+  pointer-events: auto;
+}
+
+[data-call-pill-stowed] [data-call-pill-skin] {
+  transform: scaleY(var(--stow-scale, 1));
+}
+
+[data-call-pill-stowed] [data-call-pill-text='captions'] {
+  translate: 0 var(--stow-shift, 0px);
+}
+
+[data-call-pill-stowed] [data-call-pill-text='captions'] > hr {
+  opacity: 0;
+}
+
+[data-call-pill-stowed] [data-call-pill-rest] {
+  opacity: 0;
+  visibility: hidden;
+  translate: 0 var(--stow-shift, 0px);
+  transition:
+    opacity 0.3s ease,
+    translate 0.3s cubic-bezier(0.2, 0.9, 0.3, 1),
+    visibility 0s linear 0.3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-call-chrome='hidden'] [data-call-stow],
+  [data-call-stow][data-call-stowed],
+  [data-call-pill-stowed] [data-call-pill-rest] {
+    translate: none;
+  }
+}

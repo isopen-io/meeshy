@@ -1,11 +1,12 @@
-import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import { PILL_TEXT_WIDTH_CLASS, type CallPillText } from '@/lib/calls/call-pill-text';
+import { PILL_TEXT_WIDTH_CLASS, pillStaysWhenChromeStowed, type CallPillText } from '@/lib/calls/call-pill-text';
+import { leaveAsGhost, usePillGlass } from '@/lib/calls/use-pill-motion';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
@@ -29,6 +30,13 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * le journal s'ouvre à leur place, et la rangée de base reste touchable ; `(…)`
  * les range tous deux et refermer les actions les rend. Le verre qui porte du
  * texte tient en 560 px, quelle que soit la fenêtre.
+ *
+ * UN SEUL VERRE, QUI SE DÉFORME (#17536, loi 17) : le verre est un élément à lui
+ * (`data-call-pill-skin`), seul mis à l'échelle (`use-pill-motion.ts`). Il s'allonge et
+ * grandit pour contenir une option, un panneau ou les rangées d'un groupe, puis reprend
+ * sa forme ; ce qui le quitte y repart en fondu depuis sa place. Rangée d'un toucher
+ * (`stowed`), la pilule qui porte des sous-titres NE s'efface PAS et ne laisse pas un
+ * second verre : ce même verre perd sa rangée de base et se resserre autour d'eux.
  *
  * Chaque bouton de la pilule porte son DISQUE de verre dessiné (#17345 —
  * `CallButton`, ton `disc`, `.glass-call-disc`) : un voile et un liseré, sans
@@ -65,33 +73,61 @@ type PillProps = {
   readonly kit: CallRowsKit;
   /** Le panneau ouvert, À LA PLACE des rangées. */
   readonly panel: ReactNode;
+  /** Les commandes sont rangées (un toucher sur la scène) : la pilule qui porte des sous-titres reste, resserrée autour d'eux. */
+  readonly stowed?: boolean;
 };
 
-export function CallControlPill({ call, language, rows, expanded, grown, onToggle, prominent, text, captions, panels, kit, panel }: PillProps) {
+/** Ce que le verre ouvre au-dessus de sa rangée de base ; en partant, il laisse un double qui s'efface depuis sa place. */
+function DeckContent({ kind, box, children }: { readonly kind: 'rows' | 'panel'; readonly box: RefObject<HTMLElement | null>; readonly children: ReactNode }) {
+  const node = useRef<HTMLDivElement>(null);
+  useLayoutEffect(
+    () => () => {
+      if (node.current !== null && box.current !== null) leaveAsGhost(node.current, box.current);
+    },
+    [box],
+  );
+  return (
+    <div ref={node} className="flex flex-col gap-2" data-call-deck-content={kind}>
+      {children}
+    </div>
+  );
+}
+
+export function CallControlPill({ call, language, rows, expanded, grown, onToggle, prominent, text, captions, panels, kit, panel, stowed = false }: PillProps) {
   const [devicesOpen, setDevicesOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const skin = useRef<HTMLSpanElement>(null);
+  const keeps = stowed && pillStaysWhenChromeStowed(text);
+  usePillGlass(box, skin, keeps);
+  const away = keeps ? ({ 'data-call-pill-rest': '', inert: true, 'aria-hidden': true } as const) : { 'data-call-pill-rest': '' };
   return (
     <>
       <div
-        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${text !== 'none' ? PILL_TEXT_WIDTH_CLASS : grown ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        ref={box}
+        className={`relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${text !== 'none' ? PILL_TEXT_WIDTH_CLASS : grown ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
         data-call-control-pill={grown ? 'grown' : 'pill'}
+        data-call-pill-stowed={keeps ? '' : undefined}
         data-call-chrome-keep=""
       >
+        <span ref={skin} aria-hidden="true" className={`${prominent ? 'glass-call-prominent' : 'glass-call'} absolute inset-0 -z-10 rounded-sheet`} data-call-pill-skin="" />
         {grown ? (
           <>
-            <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="">
-              {panel === null ? (
-                <Suspense fallback={null}>
-                  <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} />
-                </Suspense>
-              ) : (
-                <div data-call-pill-text={text}>{panel}</div>
-              )}
+            <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="" {...away}>
+              <DeckContent key={panel === null ? 'rows' : 'panel'} kind={panel === null ? 'rows' : 'panel'} box={box}>
+                {panel === null ? (
+                  <Suspense fallback={null}>
+                    <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} />
+                  </Suspense>
+                ) : (
+                  <div data-call-pill-text={text}>{panel}</div>
+                )}
+              </DeckContent>
             </div>
-            <hr className="mx-2 my-2 border-0 border-t border-media-hairline" />
+            <hr className="mx-2 my-2 border-0 border-t border-media-hairline" {...away} />
           </>
         ) : null}
-        {grown ? null : captions}
-        <div className="flex items-center justify-center gap-2">
+        {grown && !keeps ? null : captions}
+        <div className="flex items-center justify-center gap-2" {...away}>
           <CallButton
             label={translate(language, expanded ? 'call.more.hide' : 'call.more.show')}
             glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.dotsThree} size={24} />}
