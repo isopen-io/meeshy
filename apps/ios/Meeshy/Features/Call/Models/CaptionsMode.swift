@@ -35,6 +35,25 @@ enum CaptionsMode: Equatable, Sendable {
         case .original: return .off
         }
     }
+
+    /// Le glyphe du bouton Sous-titres : la bulle vide, pleine, puis celle du texte original.
+    var symbol: String {
+        switch self {
+        case .off: return "captions.bubble"
+        case .translated: return "captions.bubble.fill"
+        case .original: return "character.bubble.fill"
+        }
+    }
+
+    /// L'état que VoiceOver lit après le nom du bouton (« Sous-titres, Traduction ») :
+    /// un cycle à trois états, jamais une bascule.
+    var stateLabel: String {
+        switch self {
+        case .off: return String(localized: "call.control.captions.state.off", defaultValue: "Désactivés", bundle: .main)
+        case .translated: return String(localized: "call.control.captions.state.translated", defaultValue: "Traduction", bundle: .main)
+        case .original: return String(localized: "call.control.captions.state.original", defaultValue: "Texte original", bundle: .main)
+        }
+    }
 }
 
 

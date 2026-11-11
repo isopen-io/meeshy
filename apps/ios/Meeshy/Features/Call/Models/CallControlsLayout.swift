@@ -183,7 +183,7 @@ enum CallRailsLayout {
     static let buttonSpacing: CGFloat = 8
     static let padding: CGFloat = 8
     static let edgeInset: CGFloat = 8
-    static let pillMaxWidth: CGFloat = 440
+    static let pillMaxWidth: CGFloat = CallPillWidth.resting
     static let pillSidePadding: CGFloat = 16
     static let pillHeight: CGFloat = 68
     static let pillGap: CGFloat = 8
