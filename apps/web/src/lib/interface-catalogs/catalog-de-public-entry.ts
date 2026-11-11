@@ -14,7 +14,6 @@ const dePublicEntry = {
   'login.twoFactor.cancel': 'Abbrechen',
   'login.passwordDoor': 'Mit Benutzername und Passwort anmelden',
   'login.username.label': 'E-Mail, Telefon oder Benutzername',
-  'login.username.placeholder': 'Benutzername, E-Mail oder Telefon',
   'login.password.label': 'Passwort',
   'login.submit': 'Anmelden',
   'login.submit.busy': 'Anmeldung…',

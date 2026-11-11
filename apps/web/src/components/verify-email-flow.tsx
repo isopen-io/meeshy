@@ -338,17 +338,8 @@ export function VerifyEmailFlow({
           <span aria-hidden="true" style={{ color: VERIFY_TINT }}>
             <Glyph name="envelopeOpen" size={48} />
           </span>
-          <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            {translateSignInLink(language, 'verifyEmail.title')}
-          </h2>
           <p style={{ color: 'var(--color-ios-ink-2)' }}>{withStrongEmail(lead, email)}</p>
-          {awaitsActivation ? (
-            <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translateSignInLink(language, 'verifyEmail.subtitle.pending.inbox')}
-            </p>
-          ) : (
-            <SpamFolderHint language={language} />
-          )}
+          <SpamFolderHint language={language} />
 
           <EmailCodeForm
             email={email}
@@ -363,9 +354,6 @@ export function VerifyEmailFlow({
           />
 
           <div className="grid gap-2">
-            <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translateSignInLink(language, 'verifyEmail.resend.prompt')}
-            </p>
             <button
               type="button"
               onClick={handleResend}

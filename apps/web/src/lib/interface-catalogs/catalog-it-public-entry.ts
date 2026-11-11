@@ -14,7 +14,6 @@ const itPublicEntry = {
   'login.twoFactor.cancel': 'Annulla',
   'login.passwordDoor': 'Accedi con nome utente e password',
   'login.username.label': 'E-mail, telefono o nome utente',
-  'login.username.placeholder': 'Nome utente, e-mail o telefono',
   'login.password.label': 'Password',
   'login.submit': 'Accedi',
   'login.submit.busy': 'Accesso…',

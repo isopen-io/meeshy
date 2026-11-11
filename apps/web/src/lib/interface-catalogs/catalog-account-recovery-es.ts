@@ -6,7 +6,6 @@ const es = {
   'recovery.forgot.neverHad': '¿Nunca has tenido contraseña?',
   'recovery.forgot.neverHad.text': 'El mismo enlace te permite crear una.',
   'recovery.reset.newPassword': 'Nueva contraseña',
-  'recovery.reset.lead': 'Elige una nueva contraseña.',
   'recovery.reset.confirm': 'Confirmar contraseña',
   'recovery.reset.tooShort': 'Contraseña demasiado corta (mín. {min} caracteres)',
   'recovery.reset.mismatch': 'Las contraseñas no coinciden',

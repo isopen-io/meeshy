@@ -333,8 +333,8 @@
       "firstScreen": 137
     },
     "signup": {
-      "total": 56,
-      "firstScreen": 56
+      "total": 52,
+      "firstScreen": 52
     },
     "stories": {
       "total": 20,
@@ -357,8 +357,8 @@
       "firstScreen": 23
     },
     "world": {
-      "total": 34,
-      "firstScreen": 34
+      "total": 29,
+      "firstScreen": 29
     }
   },
   "uncovered": {

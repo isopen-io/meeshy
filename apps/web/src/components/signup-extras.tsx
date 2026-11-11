@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { Field } from '@/components/field';
-import { Glyph } from '@/components/glyph';
 import { PasswordInput } from '@/components/password-input';
 import type { InviterHero } from '@/components/signup-inviter-hero';
 import { inviterCardOf, inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
@@ -31,33 +30,6 @@ export const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color
 
 /** Le bord d'un champ AU FOCUS — `indigo500` à 60 %, `SignupView.swift`. */
 export const INDIGO_TINT = 'var(--ios-indigo-500)';
-
-/**
- * « POURQUOI METTRE UN MOT DE PASSE MAINTENANT ? » (#7897) — une ligne
- * discrète qui se déplie. Le détail reste dans le DOM replié (`hidden`) : il
- * ne se lit qu'à la demande, sans surcharger l'écran (#6441).
- */
-function PasswordWhy({ language }: { readonly language: InterfaceLanguage }) {
-  const [isOpen, setOpen] = useState(false);
-  return (
-    <div className="grid" data-signup-password-why>
-      <button
-        type="button"
-        onClick={() => setOpen((open) => !open)}
-        aria-expanded={isOpen}
-        aria-controls="signup-password-why"
-        className={`inline-flex items-center gap-1 justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
-        style={{ minHeight: 44 }}
-      >
-        {translate(language, 'signup.password.why')}
-        <Glyph name="caretDown" size={12} style={{ transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }} />
-      </button>
-      <p id="signup-password-why" hidden={!isOpen} className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'signup.password.why.detail')}
-      </p>
-    </div>
-  );
-}
 
 /**
  * LE MOT DE PASSE — il s'active quand l'identité est définie (#7897) et ne
@@ -101,7 +73,9 @@ export function SignupPasswordBlock({
           />
         )}
       </Field>
-      <PasswordWhy language={language} />
+      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translate(language, 'signup.password.optional')}
+      </p>
     </div>
   );
 }
@@ -261,7 +235,11 @@ export function SignupReferralBlock({
       >
         {status.kind === 'valid'
           ? translate(language, 'signup.referral.valid', { inviter: status.inviter })
-          : translate(language, status.kind === 'invalid' ? 'signup.referral.invalid' : status.kind === 'checking' ? 'signup.referral.checking' : 'signup.referral.optional')}
+          : status.kind === 'invalid'
+            ? translate(language, 'signup.referral.invalid')
+            : status.kind === 'checking'
+              ? translate(language, 'signup.referral.checking')
+              : null}
       </p>
     </div>
   );

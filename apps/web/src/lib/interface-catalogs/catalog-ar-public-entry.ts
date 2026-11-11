@@ -14,7 +14,6 @@ const arPublicEntry = {
   'login.twoFactor.cancel': 'إلغاء',
   'login.passwordDoor': 'تسجيل الدخول باسم المستخدم وكلمة المرور',
   'login.username.label': 'البريد الإلكتروني أو الهاتف أو اسم المستخدم',
-  'login.username.placeholder': 'اسم المستخدم أو البريد الإلكتروني أو الهاتف',
   'login.password.label': 'كلمة المرور',
   'login.submit': 'تسجيل الدخول',
   'login.submit.busy': 'جارٍ تسجيل الدخول…',

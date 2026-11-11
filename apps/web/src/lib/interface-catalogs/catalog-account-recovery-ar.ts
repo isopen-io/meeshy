@@ -6,7 +6,6 @@ const ar = {
   'recovery.forgot.neverHad': 'لم تكن لديك كلمة مرور من قبل؟',
   'recovery.forgot.neverHad.text': 'يتيح لك الرابط نفسه إنشاء واحدة.',
   'recovery.reset.newPassword': 'كلمة مرور جديدة',
-  'recovery.reset.lead': 'اختر كلمة مرور جديدة.',
   'recovery.reset.confirm': 'تأكيد كلمة المرور',
   'recovery.reset.tooShort': 'كلمة المرور قصيرة جدًا ({min} أحرف على الأقل)',
   'recovery.reset.mismatch': 'كلمتا المرور غير متطابقتين',

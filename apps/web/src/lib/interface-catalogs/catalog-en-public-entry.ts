@@ -14,7 +14,6 @@ const enPublicEntry = {
   'login.twoFactor.cancel': 'Cancel',
   'login.passwordDoor': 'Sign in with a username and password',
   'login.username.label': 'Email, phone or username',
-  'login.username.placeholder': 'Username, email or phone',
   'login.password.label': 'Password',
   'login.submit': 'Sign in',
   'login.submit.busy': 'Signing in…',

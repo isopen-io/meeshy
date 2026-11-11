@@ -4,8 +4,6 @@ import type { OnboardingProfileCatalog } from '@/lib/i18n-onboarding-profile-cat
 const ar = {
   'onboarding.profile.title': 'أظهِر نفسك',
   'onboarding.profile.body': 'وجهٌ ولافتة يجعلان ملفك أكثر ظهورًا: يتعرّف عليك الآخرون في الاقتراحات والمحادثات والقصص، وتتلقى طلبات تواصل أكثر.',
-  'onboarding.profile.visibility': 'ظهور أكبر',
-  'onboarding.profile.contacts': 'جهات اتصال أكثر',
   'onboarding.profile.addBanner': 'أضف لافتة',
   'onboarding.profile.pickBanner': 'اختر لافتة',
   'onboarding.profile.pickAvatar': 'اختر صورة الملف الشخصي',

@@ -17,7 +17,6 @@ const frPublicEntry = {
   'login.twoFactor.cancel': 'Annuler',
   'login.passwordDoor': 'Se connecter avec un identifiant et un mot de passe',
   'login.username.label': 'E-mail, téléphone ou pseudo',
-  'login.username.placeholder': 'Identifiant, e-mail ou téléphone',
   'login.password.label': 'Mot de passe',
   'login.submit': 'Se connecter',
   'login.submit.busy': 'Connexion…',

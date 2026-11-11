@@ -249,7 +249,7 @@ describe('ResetPasswordFlow parle la langue d’interface', () => {
     document.documentElement.lang = 'en';
     const el = await mount('abc123', valid());
     expect(el.querySelector('h1')?.textContent).toBe('New password');
-    expect(el.textContent).toContain('Choose a new password.');
+    expect(el.textContent).not.toContain('Choose a new password.');
     expect(el.textContent).toContain('Confirm password');
     expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Save password');
     fill(el, 'reset-password', 'short');

@@ -204,7 +204,6 @@ const fr = {
   'linkDetail.announce.deleteFailed': 'Le lien n’a pas été supprimé.',
   'linkDetail.announce.offline': 'Hors ligne : rien n’a été envoyé.',
   'world.enter': 'Entrer dans {title}',
-  'world.name.prompt': 'Comment doit-on vous appeler ?',
   'world.name.anonymous': 'Entrée sans compte : les autres verront ce nom.',
   'world.name.label': 'Votre nom',
   'world.name.placeholder': 'Ex. Awa',

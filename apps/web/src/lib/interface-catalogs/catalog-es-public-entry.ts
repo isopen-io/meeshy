@@ -14,7 +14,6 @@ const esPublicEntry = {
   'login.twoFactor.cancel': 'Cancelar',
   'login.passwordDoor': 'Iniciar sesión con usuario y contraseña',
   'login.username.label': 'Correo, teléfono o usuario',
-  'login.username.placeholder': 'Usuario, correo o teléfono',
   'login.password.label': 'Contraseña',
   'login.submit': 'Iniciar sesión',
   'login.submit.busy': 'Conectando…',

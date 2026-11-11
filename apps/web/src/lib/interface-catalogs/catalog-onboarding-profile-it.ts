@@ -4,8 +4,6 @@ import type { OnboardingProfileCatalog } from '@/lib/i18n-onboarding-profile-cat
 const it = {
   'onboarding.profile.title': 'Fatti vedere',
   'onboarding.profile.body': 'Un volto e un banner rendono il tuo profilo più visibile: ti riconoscono nei suggerimenti, nelle conversazioni e nelle storie, e ricevi più richieste di contatto.',
-  'onboarding.profile.visibility': 'Più visibilità',
-  'onboarding.profile.contacts': 'Più contatti',
   'onboarding.profile.addBanner': 'Aggiungi un banner',
   'onboarding.profile.pickBanner': 'Scegli un banner',
   'onboarding.profile.pickAvatar': 'Scegli una foto profilo',

@@ -10,8 +10,6 @@ import { DerivedIdentity } from '@/components/derived-identity';
 import { EmailTakenActions } from '@/components/email-taken-actions';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
-import { AUTH_GLYPHS } from '@/components/glyphs-auth';
-import type { InfoHint } from '@/components/info-hint';
 import { LanguageSheet } from '@/components/language-sheet';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
 import { RungReveal } from '@/components/rung-reveal';
@@ -91,13 +89,26 @@ export type { SignupReferralDeps } from '@/components/signup-extras';
  * d'artifice (`arrival-fireworks.tsx`) et l'onboarding existent déjà.
  */
 
-/** L'AVERTISSEMENT DE VALIDATION (#6479) se lit sous le champ (épure #17584, règle 7) ; le (i) ne garde que le détail : lien OU code. */
-function emailVerificationHint(language: InterfaceLanguage): InfoHint {
-  return {
-    label: translate(language, 'signup.email.hintLabel'),
-    text: translate(language, 'signup.email.hintDetail'),
-    glyph: AUTH_GLYPHS.info,
-  };
+/** Le consentement légal : les deux documents sont des liens DANS la phrase, nommés une seule fois (épure #17666). */
+function LegalConsent({ language }: { readonly language: InterfaceLanguage }) {
+  const parts = translate(language, 'signup.legal', { terms: '{terms}', privacy: '{privacy}' }).split(/(\{terms\}|\{privacy\})/u);
+  return (
+    <>
+      {parts.map((part, index) =>
+        part === '{terms}' || part === '{privacy}' ? (
+          <a
+            key={index}
+            href={appInstitutionalHref(part === '{terms}' ? 'terms' : 'privacy')}
+            className={`font-semibold underline ${INDIGO_LINK}`}
+          >
+            {translate(language, part === '{terms}' ? 'signup.legal.terms' : 'signup.legal.privacy')}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
 }
 
 /** « Vous lirez Meeshy en {language} » — le nom de la langue garde son `lang`. */
@@ -388,7 +399,6 @@ export default function SignupScreen({
                 focused={focused === 'email'}
                 error={emailError}
                 note={translate(interfaceLanguage, 'signup.email.verificationNotice')}
-                hint={emailVerificationHint(interfaceLanguage)}
               >
                 {({ id, describedBy }) => (
                   <input
@@ -547,16 +557,8 @@ export default function SignupScreen({
 
           <div className="grid gap-2">
             <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-              {translate(interfaceLanguage, 'signup.legal')}
+              <LegalConsent language={interfaceLanguage} />
             </p>
-            <div className="flex gap-4">
-              <a href={appInstitutionalHref('terms')} className={`text-caption font-semibold ${INDIGO_LINK}`} style={{ minHeight: 44 }}>
-                {translate(interfaceLanguage, 'signup.legal.terms')}
-              </a>
-              <a href={appInstitutionalHref('privacy')} className={`text-caption font-semibold ${INDIGO_LINK}`} style={{ minHeight: 44 }}>
-                {translate(interfaceLanguage, 'signup.legal.privacy')}
-              </a>
-            </div>
           </div>
 
           {/* UNE SORTIE, pas un champ (#6405) : dite dès la première seconde. */}

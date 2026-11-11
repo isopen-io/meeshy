@@ -217,10 +217,6 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
 
       {state === 'form' ? (
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col content-center justify-center gap-4 px-8" noValidate>
-          <p className="text-center text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translateRecovery(language, 'recovery.reset.lead')}
-          </p>
-
           <Field
             id="reset-password"
             label={translateRecovery(language, 'recovery.reset.newPassword')}

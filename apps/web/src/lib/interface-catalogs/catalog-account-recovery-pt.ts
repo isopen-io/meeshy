@@ -6,7 +6,6 @@ const pt = {
   'recovery.forgot.neverHad': 'Nunca teve uma senha?',
   'recovery.forgot.neverHad.text': 'O mesmo link permite criar uma.',
   'recovery.reset.newPassword': 'Nova senha',
-  'recovery.reset.lead': 'Escolha uma nova senha.',
   'recovery.reset.confirm': 'Confirmar senha',
   'recovery.reset.tooShort': 'Senha curta demais (mín. {min} caracteres)',
   'recovery.reset.mismatch': 'As senhas não coincidem',

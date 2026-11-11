@@ -462,7 +462,6 @@ export function LoginDoors({
                   onInput={(e) => setUsername(e.currentTarget.value)}
                   onFocus={() => setFocused('username')}
                   onBlur={() => setFocused(null)}
-                  placeholder={translate(language, 'login.username.placeholder')}
                   className="w-full bg-transparent py-3 text-input outline-none"
                   style={{ color: 'var(--color-ios-ink)' }}
                 />
@@ -478,7 +477,6 @@ export function LoginDoors({
                   onValue={setPassword}
                   onFocus={() => setFocused('password')}
                   onBlur={() => setFocused(null)}
-                  placeholder={translate(language, 'login.password.label')}
                 />
               )}
             </Field>

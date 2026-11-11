@@ -197,7 +197,6 @@ const it = {
   'linkDetail.announce.deleteFailed': 'Il link non è stato eliminato.',
   'linkDetail.announce.offline': 'Offline: non è stato inviato nulla.',
   'world.enter': 'Entra in {title}',
-  'world.name.prompt': 'Come dobbiamo chiamarti?',
   'world.name.anonymous': 'Accesso senza account: gli altri vedranno questo nome.',
   'world.name.label': 'Il tuo nome',
   'world.name.placeholder': 'Es. Awa',

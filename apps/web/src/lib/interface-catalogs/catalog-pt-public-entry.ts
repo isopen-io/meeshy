@@ -14,7 +14,6 @@ const ptPublicEntry = {
   'login.twoFactor.cancel': 'Cancelar',
   'login.passwordDoor': 'Entrar com usuário e senha',
   'login.username.label': 'E-mail, telefone ou usuário',
-  'login.username.placeholder': 'Usuário, e-mail ou telefone',
   'login.password.label': 'Senha',
   'login.submit': 'Entrar',
   'login.submit.busy': 'Entrando…',

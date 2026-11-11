@@ -9,7 +9,6 @@ const fr = {
   'recovery.forgot.neverHad': 'Jamais eu de mot de passe ?',
   'recovery.forgot.neverHad.text': 'Ce même lien vous permet d’en créer un.',
   'recovery.reset.newPassword': 'Nouveau mot de passe',
-  'recovery.reset.lead': 'Choisissez un nouveau mot de passe.',
   'recovery.reset.confirm': 'Confirmer le mot de passe',
   'recovery.reset.tooShort': 'Mot de passe trop court (min {min} caractères)',
   'recovery.reset.mismatch': 'Les mots de passe ne correspondent pas',
