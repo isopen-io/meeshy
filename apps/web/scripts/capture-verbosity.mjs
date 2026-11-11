@@ -4,7 +4,9 @@
  *
  * Ouvre le `dist` (source fixtures) à 390 × 844, l'horloge figée comme
  * `capture.mjs`, pour chaque vue de `verbosity-views.json` ; attend que l'écran
- * soit peint (reprise tant qu'il rend 0 mot) ; compte les mots des nœuds texte
+ * soit peint et que le compte se soit STABILISÉ (deux relevés égaux à
+ * 250 ms d'écart, `lib/settle-value.mjs` — jamais un délai fixe suivi d'une
+ * lecture) ; reprise tant qu'il rend 0 mot ; compte les mots des nœuds texte
  * VISIBLES — au total et dans le premier écran — et capture la vue dans
  * `render/verbosity/`. Le relevé part dans `render/verbosity-measure.json`, que
  * `check-verbosity.mjs` confronte aux budgets.
@@ -20,6 +22,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { waitForValueSettled } from './lib/settle-value.mjs';
 import { budgetsFromMeasure } from './lib/verbosity-budgets.mjs';
 
 const ROOT = new URL('../', import.meta.url).pathname;
@@ -59,11 +62,10 @@ const measureView = async ({ name, path }) => {
     await page.clock.setFixedTime(INSTANT);
     await page.goto(`${served.base}${path}`, { waitUntil: 'networkidle' });
     await page.waitForFunction(() => document.body.innerText.trim().split(/\s+/).length > 12, null, { timeout: 8000 }).catch(() => {});
-    await page.waitForTimeout(700);
-    const counted = await page.evaluate(countVisibleWords, viewport.height);
-    if (counted.total > 0) await page.screenshot({ path: `${OUTPUT}${name}.png` });
+    const counted = await waitForValueSettled(page, countVisibleWords, viewport.height, { stepMs: 250, attempts: 40, pret: (value) => value.total > 0 });
+    if (counted !== undefined) await page.screenshot({ path: `${OUTPUT}${name}.png` });
     await page.close();
-    if (counted.total > 0) return { counted };
+    if (counted !== undefined) return { counted };
   }
   return { reason: `0 mot visible après ${ATTEMPTS} essais sur ${path}` };
 };
