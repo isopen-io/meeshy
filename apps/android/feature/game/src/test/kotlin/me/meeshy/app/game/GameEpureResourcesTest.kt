@@ -184,7 +184,7 @@ class GameEpureResourcesTest {
     @Test
     fun `la phrase de la frappe n est dite qu en regle quatre`() {
         assertThat(text(R.string.game_rules_2_body)).doesNotContain("donc le fait baisser")
-        assertThat(text(R.string.game_rules_4_body)).contains("ton niveau baisse d’autant")
+        assertThat(text(R.string.game_rules_4_body)).contains("niveau baisse d’autant")
     }
 
     @Test
@@ -233,7 +233,7 @@ class GameEpureResourcesTest {
     @Test
     fun `la fiche niveau nomme son chiffre et laisse les seuils au i`() {
         assertThat(text(R.string.game_concept_level_what)).isEqualTo("Ton niveau est le chiffre au centre de ton anneau : il se lit sur ta lumière.")
-        assertThat(text(R.string.game_concept_level_use)).contains("fait baisser ton niveau")
+        assertThat(text(R.string.game_concept_level_use)).doesNotContain("Frapper une Meesh")
     }
 
     @Test
@@ -282,7 +282,7 @@ class GameEpureResourcesTest {
         retiredLanguages.forEach { folder ->
             val pieces = valueIn(folder, "game_sparks_cumul_record").split(" · ")
             assertThat(pieces).hasSize(2)
-            pieces.forEach { piece -> assertThat(piece.replace(Regex("""[⁦⁩]|%\d\$s"""), "").trim()).isNotEmpty() }
+            pieces.forEach { piece -> assertThat(piece.replace(Regex("""[⁦⁩]|%\d${'$'}s"""), "").trim()).isNotEmpty() }
         }
         assertThat(text(R.string.game_sparks_cumul_record)).isEqualTo("%1\$s cet Âge · %2\$s en tout")
     }

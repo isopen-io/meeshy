@@ -86,7 +86,7 @@ class ProgressionGuideComposeTest {
         }
 
         compose.onNodeWithText("Étape 1 sur 7").assertExists()
-        compose.onNodeWithText("Salut, c’est Mee ! Avec Meo, on t’explique le jeu en sept cartes.").assertExists()
+        compose.onNodeWithText("Le jeu en sept cartes").assertExists()
         compose.onNodeWithTag(GUIDE_PHOTO_TAG).assertDoesNotExist()
         compose.onNodeWithTag(GUIDE_MORE_TAG).assertDoesNotExist()
         compose.onNodeWithText("Faire mon premier geste").performClick()
