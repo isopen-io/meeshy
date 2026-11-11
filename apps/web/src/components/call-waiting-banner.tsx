@@ -1,8 +1,10 @@
+import { useEffect } from 'react';
+
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { PeerAvatar } from '@/components/peer-avatar';
 import { callActions } from '@/lib/calls/call-actions';
-import type { WaitingCall } from '@/lib/calls/call-store';
+import { callStore, type WaitingCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
@@ -40,5 +42,33 @@ export function CallWaitingBanner({ waiting }: { readonly waiting: WaitingCall }
         {translate(language, 'call.waiting.answer')}
       </button>
     </div>
+  );
+}
+
+/**
+ * **UN APPEL EST DÉJÀ EN COURS** — le refus d'en composer un second, dit 2,5 s puis retiré. Il vit ici,
+ * avec le bandeau du second appel qui arrive : l'écran d'appel n'en paie que l'`import()`, et l'appel
+ * vivant précharge ce chunk (`call-screen.tsx` › PREFETCH) bien avant qu'on tente un second appel.
+ */
+function CallBusyNotice() {
+  const language = currentInterfaceLanguage();
+  useEffect(() => {
+    const handle = setTimeout(() => callStore.setState({ notice: null }), 2500);
+    return () => clearTimeout(handle);
+  }, []);
+  return (
+    <div role="status" className="fixed inset-x-0 z-[210] mx-auto w-fit rounded-full px-4 py-2 text-body shadow-lg" style={{ background: PILL_BG, color: 'var(--color-on-media)', bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}>
+      {translate(language, 'call.notice.alreadyInCall')}
+    </div>
+  );
+}
+
+/** Le second appel : celui qui sonne pendant le premier, et le refus d'en composer un — montés ensemble par la couche d'appel, une seule attente de chunk. */
+export function SecondCallLayer({ waiting, busy }: { readonly waiting: WaitingCall | null; readonly busy: boolean }) {
+  return (
+    <>
+      {waiting === null ? null : <CallWaitingBanner waiting={waiting} />}
+      {busy ? <CallBusyNotice /> : null}
+    </>
   );
 }

@@ -7,6 +7,7 @@ import { CallButton } from '@/components/call-glass-button';
 import { CallIncomingAnswer } from '@/components/call-incoming-answer';
 import { RoundButton } from '@/components/call-round-button';
 import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveFrameShown, useLiveFrameState } from '@/components/call-live-frame-slots';
+import { PeerSpeechRing } from '@/components/call-camera-off';
 import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
 import { CALL_CAPTURE_ROW_CLEARANCE, CallCaptureAlerts, CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
@@ -344,6 +345,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const sharedScreenShown = layout === 'screen' || spotlight?.screen === true;
   const [immersive, toggleImmersive] = useImmersive(stageRef, layout === 'screen' || spotlight !== null);
   const videoScene = live && isVideoScene(call);
+  /* P9.5, P9.6 : le duo audio dessine l'autre à SA couleur (l'identifiant primant) et l'allume à sa parole — mesurée sur son flux, jamais lue dans les sous-titres. Le portrait n'est monté que dans la disposition `portrait` : la mesure ne court que là. */
+  const peerTint = call.peerKey == null ? undefined : speakerColor(call.peerKey, call.title);
   const sharer = layout === 'screen' ? screenSharer(call.members) : null;
   const support = useEffectsSupport(call.localStream, effectsSupport);
   const cameraSwitch = useCameraSwitch(call.cameraOn);
@@ -413,12 +416,15 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
 
   useEscapeFolds({ live, panelOpen: chrome.panel !== null, column, send });
 
+  const clock = statusKey === null ? <CallClock call={call} active={joined} /> : endedClock;
   const identity = (
     <div className="flex flex-col items-center gap-3 px-6 text-center">
       {/* P17 (#16944) : la vidéo de l'appelant tient lieu de portrait pendant la sonnerie. */}
       {phase === 'incoming' && hasVideo(call.preview) ? null : (
         <span data-call-incoming-portrait="">
-          <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} />
+          <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} tint={peerTint}>
+            {peerTint === undefined ? null : <PeerSpeechRing color={peerTint} stream={joined ? (call.remoteStreams[call.peerKey ?? ''] ?? null) : null} />}
+          </Portrait>
         </span>
       )}
       <h2 className="text-[1.6rem] font-bold leading-tight" style={{ color: INK }}>
@@ -440,9 +446,17 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           {translate(language, call.media === 'video' ? 'call.preview.seenBy' : 'call.preview.heardBy', { name: call.title })}
         </p>
       ) : null}
-      <p className="text-body" role="status" aria-live="polite" style={{ color: INK_2 }} data-call-status="">
-        {statusKey === null ? <CallClock call={call} active={joined} /> : t(statusKey)}
-        {endedClock === null ? null : ` · ${endedClock}`}
+      <p className="text-body" style={{ color: INK_2 }} data-call-status="">
+        <span role="status" aria-live="polite">
+          {statusKey === null ? null : t(statusKey)}
+        </span>
+        {clock === null ? null : (
+          <span data-call-duration="">
+            {statusKey === null ? null : ' · '}
+            <span className="sr-only">{translateCallControls(language, 'callControls.duration.a11y.label')} </span>
+            {clock}
+          </span>
+        )}
       </p>
     </div>
   );
