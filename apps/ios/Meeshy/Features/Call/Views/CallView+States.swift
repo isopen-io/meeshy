@@ -223,8 +223,7 @@ extension CallView {
     }
 
     func avatarCircle(size: CGFloat) -> some View {
-        avatarFace(size: size, accentHex: MeeshyColors.brandPrimaryHex)
-            .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
+        avatarFace(size: size, accentHex: CallPeerSpeech.colorHex(forPeer: callManager.remoteUserId))
     }
 
     /// Le visage seul, sans halo : l'appelant pose le sien.
@@ -246,7 +245,7 @@ extension CallView {
     /// identifiables d'un coup d'œil, quel que soit le sens de l'appel.
     func callAvatarPair(size: CGFloat) -> some View {
         let badgeSize = max(44, size * 0.4)
-        return avatarCircle(size: size)
+        return CallPeerSpeechRing(callManager: callManager, mesh: mesh) { _ in avatarCircle(size: size) }
             .overlay(alignment: .bottomTrailing) {
                 localAvatarBadge(size: badgeSize)
                     .offset(x: badgeSize * 0.22, y: badgeSize * 0.12)

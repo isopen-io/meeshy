@@ -77,13 +77,44 @@ final class CallRemoteVideoSurfaceTests: XCTestCase {
         XCTAssertEqual(CallPeerSpeech.colorHex(forPeer: nil), MeeshyColors.brandPrimaryHex)
     }
 
-    func test_cameraOffPlaceholder_ringAppearsOnlyWhileSpeaking_aboveTheKeptProfileDecor() throws {
+    func test_speechRing_appearsOnlyWhileSpeaking_fadesWithTheSharedDuration_aboveTheKeptProfileDecor() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
-        let start = try XCTUnwrap(source.range(of: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {"))
-        let body = String(source[start.lowerBound...].prefix(2400))
-        XCTAssertEqual(body.components(separatedBy: ".opacity(isSpeaking ? 1 : 0)").count - 1, 2, "halo et anneau, absents au repos")
-        XCTAssertTrue(body.contains("CallPeerSpeech.colorHex(forPeer: peerUserId)"))
+        let ring = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallPeerSpeechRing<Avatar: View>: View", in: source))
+        XCTAssertEqual(ring.components(separatedBy: ".opacity(isSpeaking ? 1 : 0)").count - 1, 2, "halo et anneau, absents au repos, jamais retirés de l'arbre")
+        XCTAssertTrue(ring.contains("CallPeerSpeech.colorHex(forPeer: peerUserId)"))
+        XCTAssertTrue(ring.contains("CallRemoteVideoFade.duration(reduceMotion: reduceMotion)"), "le fondu de l'anneau suit la loi unique, plus court sous Réduire les animations")
+        XCTAssertTrue(ring.contains("value: isSpeaking"))
         XCTAssertTrue(try AppSourceGuard.callViewSource().contains(".avatarRingWithin(ProfileDecorResolver.ring("), "la décoration de profil reste dans le visage")
+    }
+
+    func test_cameraOffPlaceholder_reusesTheSpeechRing_withoutACopy() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let placeholder = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View", in: source))
+        XCTAssertTrue(placeholder.contains("CallPeerSpeechRing("))
+        XCTAssertFalse(placeholder.contains("isSpeaking"), "la parole ne se dessine qu'à un endroit")
+    }
+
+    // MARK: - P9.5 / P9.6 / P10.11 / P10.12 — le disque de l'autre en duo audio
+
+    func test_audioDuoDisc_wearsThePersonsOwnColour_neverTheBrand_andCastsNoTintedShadow() throws {
+        let states = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let circle = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func avatarCircle(size: CGFloat) -> some View", in: states))
+        XCTAssertTrue(circle.contains("CallPeerSpeech.colorHex(forPeer: callManager.remoteUserId)"))
+        XCTAssertFalse(circle.contains("brandPrimaryHex"), "le disque de l'autre n'est pas à la couleur de marque")
+        XCTAssertFalse(circle.contains(".shadow("), "ni ombre teintée, ni halo au repos")
+    }
+
+    func test_audioDuoPair_ringsOnlyAtSpeech_andOnlyOnceTheAudioIsEstablished() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let pair = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func callAvatarPair(size: CGFloat) -> some View", in: source))
+        XCTAssertTrue(pair.contains("CallPeerSpeechRing("))
+        XCTAssertTrue(pair.contains("CallPeerSpeechRing(callManager: callManager, mesh: mesh)"))
+        let duo = try XCTUnwrap(DeclarationBodyScanner.body(containing: "extension CallPeerSpeechRing", in: source))
+        XCTAssertTrue(duo.contains("CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive"), "un groupe montré en duo relaie le maillage, jamais deux relevés")
+        XCTAssertTrue(duo.contains("case .connected, .reconnecting: established = true"), "pas de relevé pendant la sonnerie")
+        XCTAssertLessThan(try XCTUnwrap(pair.range(of: "CallPeerSpeechRing(")).lowerBound,
+                          try XCTUnwrap(pair.range(of: "localAvatarBadge(")).lowerBound,
+                          "l'anneau entoure le disque de l'autre, pas la pastille locale")
     }
 
     // MARK: - G4.2 — un seul relevé du niveau reçu par appel
@@ -102,9 +133,10 @@ final class CallRemoteVideoSurfaceTests: XCTestCase {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
         let mount = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var remoteCameraOffPlaceholder: some View", in: source))
         XCTAssertTrue(mount.contains("CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds"))
-        let placeholder = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View", in: source))
-        XCTAssertTrue(placeholder.contains(".task(id: relayedSpeaking == nil)"), "le relevé local s'arrête dès que le maillage relaie")
+        let placeholder = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallPeerSpeechRing<Avatar: View>: View", in: source))
+        XCTAssertTrue(placeholder.contains(".task(id: follows && relayedSpeaking == nil)"), "le relevé local s'arrête dès que le maillage relaie")
         XCTAssertTrue(placeholder.contains("relayedSpeaking ?? sampledSpeaking"))
+        XCTAssertTrue(placeholder.contains("@MainActor () async -> Double?"), "un type fonction async stocké porte son isolement (iOS 16-17, #8182)")
     }
 }
 
