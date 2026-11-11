@@ -172,6 +172,17 @@ final class EntryScreensEpureTests: XCTestCase {
         let app = try Self.catalog(Self.appCatalogPath)
         XCTAssertNil(app["auth.login.create_account.hint"], "répétait « Créer un compte »")
 
+        let unread = [
+            "onboarding.friends.body", "onboarding.friends.badge", "onboarding.global.hint",
+            "onboarding.story.sending.detail", "onboarding.email.waiting",
+            "auth.magiclink.email.hintLabel", "auth.magiclink.email.title", "auth.magiclink.sent.codeAndLink",
+            "auth.password.change.current.section", "auth.password.change.new.section",
+            "auth.signup.subtitle", "emailVerification.nav.title", "emailVerification.noCode",
+            "sessionClosed.signedOut.message", "sessionClosed.expired.message",
+        ]
+        let kept = unread.filter { app[$0] != nil }
+        XCTAssertTrue(kept.isEmpty, "clés sans aucun lecteur, à retirer de toutes les langues : \(kept.joined(separator: ", "))")
+
         let sdk = try Self.catalog(Self.sdkCatalogPath)
         let orphans = sdk.keys.filter { $0.hasPrefix("auth.registration.") }.sorted()
         XCTAssertTrue(orphans.isEmpty, "24 clés sans aucun lecteur : \(orphans.joined(separator: ", "))")
