@@ -183,6 +183,13 @@ describe('la création d’un lien de partage', () => {
     expect(controlledBy(button)?.className).toContain('sr-only');
   });
 
+  test('« Choisir » se lit seul à l’écran, mais le lecteur d’écran entend ce qu’on choisit', async () => {
+    const host = await mount(<ShareLinkNewScreen />);
+    const choice = host.querySelector('button[aria-haspopup="dialog"]');
+    expect(choice?.textContent).toBe('Choisir');
+    expect(choice?.getAttribute('aria-label')).toBe('Choisir une conversation');
+  });
+
   test('« Autoriser » dit derrière un (i) à qui s’appliquent ses bascules : aux invités sans compte', async () => {
     const host = await mount(<ShareLinkNewScreen />);
     const button = infoButton(host, 'À qui s’appliquent ces autorisations ?');

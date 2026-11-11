@@ -287,6 +287,7 @@ export function ConversationChoice({
       type="button"
       aria-haspopup="dialog"
       aria-invalid={invalid}
+      {...(conversation === null ? { 'aria-label': translateLinkFamilies(language, 'links.create.picker.title') } : {})}
       data-link-conversation={conversation?.id ?? ''}
       onClick={onOpen}
       className="flex w-full min-w-0 items-center gap-3 px-3.5 py-2.5 text-start focus-visible:outline-2 focus-visible:-outline-offset-2"
