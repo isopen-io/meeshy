@@ -78,4 +78,27 @@ class CallRemoteVideoFadeTest {
         assertThat(CallRemoteVideoFade.showsVeil(veil = 0f)).isFalse()
         assertThat(CallRemoteVideoFade.showsVeil(veil = 0.3f)).isTrue()
     }
+
+    @Test
+    fun `camera coupee sur fond noir opaque, l'attente seulement voilee`() {
+        assertThat(CallRemoteVideoFade.backdropOpacity(CallRemoteVideoSurface.CameraOff)).isEqualTo(1f)
+        assertThat(CallRemoteVideoFade.backdropOpacity(CallRemoteVideoSurface.Connecting)).isEqualTo(0.4f)
+    }
+
+    @Test
+    fun `le fondu croise mene l'image gelee a zero avant qu'elle soit retiree, sans residu`() {
+        assertThat(CallRemoteVideoFade.imageShare(veil = 1f, veiled = CallRemoteVideoSurface.CameraOff)).isEqualTo(0f)
+        assertThat(CallRemoteVideoFade.imageShare(veil = 0.5f, veiled = CallRemoteVideoSurface.CameraOff)).isEqualTo(0.5f)
+        assertThat(CallRemoteVideoFade.imageShare(veil = 0f, veiled = CallRemoteVideoSurface.CameraOff)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `le voile garde ce qu'il montrait pendant que l'image revient, et suit l'etat sinon`() {
+        assertThat(CallRemoteVideoFade.veiled(CallRemoteVideoSurface.Live, previous = CallRemoteVideoSurface.Connecting))
+            .isEqualTo(CallRemoteVideoSurface.Connecting)
+        assertThat(CallRemoteVideoFade.veiled(CallRemoteVideoSurface.CameraOff, previous = CallRemoteVideoSurface.Connecting))
+            .isEqualTo(CallRemoteVideoSurface.CameraOff)
+        assertThat(CallRemoteVideoFade.veiled(CallRemoteVideoSurface.Connecting, previous = CallRemoteVideoSurface.CameraOff))
+            .isEqualTo(CallRemoteVideoSurface.Connecting)
+    }
 }

@@ -51,4 +51,21 @@ object CallRemoteVideoFade {
 
     /** L'avatar reste monté tant que le voile n'est pas retombé à zéro. */
     fun showsVeil(veil: Float): Boolean = veil > 0f
+
+    /**
+     * Le fond de chaque voile : « Caméra désactivée » sur fond NOIR OPAQUE (G4, « Fond noir »), sans quoi l'image
+     * gelée, gardée dessous pendant le fondu, transparaîtrait jusqu'à son retrait puis disparaîtrait d'un coup ;
+     * l'attente n'est que voilée (aucune image n'est montée dessous).
+     */
+    fun backdropOpacity(veiled: CallRemoteVideoSurface): Float =
+        if (veiled == CallRemoteVideoSurface.Connecting) CONNECTING_BACKDROP else 1f
+
+    /** La part de l'image encore visible sous le voile : un fondu croisé propre la mène à 0 avant de la retirer. */
+    fun imageShare(veil: Float, veiled: CallRemoteVideoSurface): Float = 1f - veil * backdropOpacity(veiled)
+
+    /** Ce que montre le voile : l'état courant, ou, pendant que l'image revient, ce qu'il montrait avant elle. */
+    fun veiled(surface: CallRemoteVideoSurface, previous: CallRemoteVideoSurface): CallRemoteVideoSurface =
+        if (surface == CallRemoteVideoSurface.Live) previous else surface
+
+    private const val CONNECTING_BACKDROP = 0.4f
 }

@@ -20,6 +20,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,8 +45,6 @@ import me.meeshy.ui.theme.MeeshySpacing
 import org.webrtc.EglBase
 import org.webrtc.VideoTrack
 
-private const val CAMERA_OFF_SCRIM_ALPHA = 0.85f
-private const val CONNECTING_SCRIM_ALPHA = 0.4f
 private const val AVATAR_FULL_DP = 96
 private const val AVATAR_COMPACT_DP = 36
 
@@ -55,7 +55,9 @@ private const val AVATAR_COMPACT_DP = 36
  *
  * G4.6 : l'image cède la place à l'avatar (et revient) en fondu. L'image reste posée dessous ; c'est le VOILE
  * (l'avatar ou l'attente) dont l'opacité s'anime, au rythme de [CallRemoteVideoFade] — interruptible, plus court
- * sous « Réduire les animations ». L'image n'est retirée qu'une fois couverte.
+ * sous « Réduire les animations ». L'image n'est retirée qu'une fois couverte, par un fond noir opaque : le
+ * fondu croisé la mène à zéro, rien d'elle ne transparaît puis ne disparaît d'un coup. L'opacité ne se lit
+ * qu'au dessin (calque matériel) : le fondu ne recompose rien image par image.
  */
 @Composable
 internal fun CallRemoteVideoSurfaceView(
@@ -71,11 +73,15 @@ internal fun CallRemoteVideoSurfaceView(
     peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     val fade = tween<Float>(CallRemoteVideoFade.durationMillis(rememberCallReduceMotion()), easing = LinearEasing)
-    val veil by animateFloatAsState(CallRemoteVideoFade.veilOpacity(surface, hasTrack = track != null), fade, label = "call-remote-veil")
-    var veiled by remember { mutableStateOf(if (surface == CallRemoteVideoSurface.Connecting) surface else CallRemoteVideoSurface.CameraOff) }
-    LaunchedEffect(surface) { if (surface != CallRemoteVideoSurface.Live) veiled = surface }
+    val hasTrack = track != null
+    val veil = animateFloatAsState(CallRemoteVideoFade.veilOpacity(surface, hasTrack), fade, label = "call-remote-veil")
+    val keepsImage by remember(hasTrack) { derivedStateOf { CallRemoteVideoFade.keepsLiveImage(hasTrack, veil.value) } }
+    val showsVeil by remember { derivedStateOf { CallRemoteVideoFade.showsVeil(veil.value) } }
+    var previousVeiled by remember { mutableStateOf(CallRemoteVideoSurface.CameraOff) }
+    val veiled = CallRemoteVideoFade.veiled(surface, previousVeiled)
+    SideEffect { previousVeiled = veiled }
     Box(modifier) {
-        if (track != null && CallRemoteVideoFade.keepsLiveImage(hasTrack = true, veil = veil)) {
+        if (track != null && keepsImage) {
             val live = stringResource(R.string.call_stage_remote_live)
             VideoRenderer(
                 track = track,
@@ -85,10 +91,10 @@ internal fun CallRemoteVideoSurfaceView(
                 fit = fit,
             )
         }
-        if (CallRemoteVideoFade.showsVeil(veil)) {
+        if (showsVeil) {
             Crossfade(
                 targetState = veiled,
-                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = veil },
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = veil.value },
                 animationSpec = fade,
                 label = "call-remote-veiled",
             ) { kind ->
@@ -156,7 +162,7 @@ internal fun CallRemoteCameraOffPlaceholder(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CallPalette.Veil.copy(alpha = CAMERA_OFF_SCRIM_ALPHA))
+            .background(CallPalette.Veil.copy(alpha = CallRemoteVideoFade.backdropOpacity(CallRemoteVideoSurface.CameraOff)))
             .semantics(mergeDescendants = true) { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
@@ -200,7 +206,7 @@ internal fun CallRemoteConnectingPlaceholder(compact: Boolean) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(CallPalette.Veil.copy(alpha = CONNECTING_SCRIM_ALPHA))
+            .background(CallPalette.Veil.copy(alpha = CallRemoteVideoFade.backdropOpacity(CallRemoteVideoSurface.Connecting)))
             .semantics(mergeDescendants = true) { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
