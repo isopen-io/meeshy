@@ -13,7 +13,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 
-import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, ReachFailurePage, SignedOutPage } from './link-page-parts';
+import { ActionButton, ActionLink, LinkAlert, LinkPage, ReachFailurePage, SignedOutPage } from './link-page-parts';
 
 /**
  * **`/settings/data-export` — EXPORTER SES DONNÉES** (#6725). À la
@@ -103,12 +103,7 @@ export function DataExportPage({
         glyph="archive"
         tone="brand"
         title={translate(language, 'dataExport.ready.title')}
-        body={
-          <>
-            <LinkText>{translate(language, 'dataExport.ready.body')}</LinkText>
-            {state.undelivered ? <LinkAlert>{translate(language, 'dataExport.undelivered.body')}</LinkAlert> : null}
-          </>
-        }
+        body={state.undelivered ? <LinkAlert>{translate(language, 'dataExport.undelivered.body')}</LinkAlert> : undefined}
       >
         <ActionButton onClick={() => void deliver(state.file)}>{translate(language, 'dataExport.action.deliver')}</ActionButton>
         <ActionLink to="settings" tone="secondary">
@@ -124,7 +119,6 @@ export function DataExportPage({
         glyph="check"
         tone="success"
         title={translate(language, 'dataExport.done.title')}
-        body={<LinkText>{translate(language, 'dataExport.done.body')}</LinkText>}
       >
         <ActionButton disabled={!online} onClick={() => void runExport()}>
           {translate(language, 'dataExport.action.start')}

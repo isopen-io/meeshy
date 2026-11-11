@@ -78,15 +78,17 @@ function LicenceSection({
   children,
 }: {
   readonly id: string;
-  readonly title: string;
+  readonly title: string | null;
   readonly language: InterfaceLanguage;
   readonly children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="grid gap-2">
-      <h2 id={id} className={`ps-1 text-check font-bold tracking-wide ${SECTION_BRAND_INK}`}>
-        {title.toLocaleUpperCase(language)}
-      </h2>
+    <section aria-labelledby={title === null ? undefined : id} className="grid gap-2">
+      {title === null ? null : (
+        <h2 id={id} className={`ps-1 text-check font-bold tracking-wide ${SECTION_BRAND_INK}`}>
+          {title.toLocaleUpperCase(language)}
+        </h2>
+      )}
       <div className="grid overflow-hidden rounded-card" style={SECTION_CARD_STYLE}>
         {children}
       </div>
@@ -130,7 +132,7 @@ function AgplSections({ language, engine }: { readonly language: InterfaceLangua
   const t = (key: LicencesCatalogKey) => translateLicences(language, key);
   return (
     <>
-      <LicenceSection id="licences-agpl" title={t('licences.agpl.title')} language={language}>
+      <LicenceSection id="licences-agpl" title={null} language={language}>
         <details data-licences-agpl>
           <summary className="cursor-pointer px-3.5 py-3 text-body font-medium focus-visible:outline-2" style={{ minHeight: 44, color: SECTION_INK, outlineColor: 'var(--color-ios-brand)' }}>
             {t('licences.agpl.title')}

@@ -143,11 +143,11 @@ function EmailChangeRefused({ language, message }: { readonly language: Interfac
       body={
         <>
           <LinkText>{translate(language, REFUSAL_COPY[message])}</LinkText>
-          {message === 'missing' ? (
+          {message === 'missing' || message === 'invalid' ? (
             <InfoAlone
               hint={{
-                label: translate(language, 'emailChange.missing.question'),
-                text: translate(language, 'emailChange.missing.hint'),
+                label: translate(language, `emailChange.${message}.question`),
+                text: translate(language, `emailChange.${message}.hint`),
                 glyph: SETTINGS_GLYPHS.info,
               }}
             />

@@ -86,7 +86,6 @@ describe('/settings/verify-email-change — un refus motivé', () => {
       <VerifyEmailChangePage token="tok" signedIn language="fr" deps={scripted(refused(400, 'No pending email change')).deps} />,
     );
     expect(host.textContent).toContain('Lien expiré ou déjà utilisé');
-    expect(host.textContent).not.toContain('aucun changement en attente');
     const hint = host.querySelector<HTMLButtonElement>('button[aria-label="Pourquoi ce lien ne marche plus ?"]');
     expect(hint).not.toBeNull();
     const noteId = hint?.getAttribute('aria-controls') ?? hint?.getAttribute('aria-describedby') ?? '';
