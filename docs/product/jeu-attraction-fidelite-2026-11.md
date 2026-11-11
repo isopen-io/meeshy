@@ -38,10 +38,11 @@ Les textes du jeu sont écrits pour être lus dès 13 ans. Des mineurs jouent : 
 
 ## 3. Ce qui existe et comment c'est présenté
 
-Onze mécaniques sont codées ; presque toutes vivent à trois niveaux de profondeur, derrière le Profil. Sur iOS, la première page du jeu (« Progression ») est une liste de cartes qui ne porte aucun geste.
+Douze mécaniques sont codées. Une seule vit là où l'on écrit : la flamme de la conversation, sous l'avatar de l'en-tête. Presque toutes les autres vivent à trois niveaux de profondeur, derrière le Profil. Sur iOS, la première page du jeu (« Progression ») est une liste de cartes qui ne porte aucun geste.
 
 | Mécanique | La règle | Où le joueur la rencontre | Ce qui freine |
 | --- | --- | --- | --- |
+| Flamme de la conversation | Par lecteur et par conversation : une série de jours, les points du jour, le cumul. À chaque envoi, une lueur fait le tour de l'avatar, la flamme s'embrase et le compte du jour monte (2 s) | En-tête de la conversation et liste, sur iOS et le web | Rien : c'est le retour le plus direct du jeu, à garder tel quel |
 | Entrée du jeu | Une page « Progression » | Profil (« Badges, niveau et série »), Réglages, notification | Le mot annonce un bilan, pas un jeu |
 | Bandeau du joueur | Niveau, rang, Flamme, Meeshes en une ligne | En haut, 30 secondes à l'ouverture de l'app | Il ne se joue pas |
 | Flamme | Un geste par jour ; +2 % par jour sur les rêves, jusqu'à +50 % | Fiche Flamme | L'alerte « Fais un geste avant minuit » n'est lue que dans la fiche |
@@ -91,7 +92,7 @@ Ces changements ne touchent à aucun nombre de règle. Ils passent avant toute m
 
 | Mécanique | La règle proposée | S'appuie sur |
 | --- | --- | --- |
-| Flamme d'amitié | Une série par conversation à deux : un jour compte quand chacun a répondu à l'autre. Visible dès le 3e jour. Une Veilleuse commune la protège | La Flamme, l'Alliance, les cercles d'amis |
+| Flamme d'amitié | Une série par conversation à deux : un jour compte quand chacun a répondu à l'autre. Visible dès le 3e jour. Une Veilleuse commune la protège | La série par conversation qui existe déjà (propre à chaque lecteur), l'Alliance, les cercles d'amis |
 | Premier rêve dès le premier jour | Sous le niveau 5, un rêve d'un seul acte simple et une Offrande garantie | Le Rêve |
 | Veilleuse offerte, puis en étincelles | Offerte au 3e jour de Flamme ; achetable en étincelles tant que le joueur n'a frappé aucune Meesh | La Veilleuse |
 | Rallumage par l'effort | Dans les 48 h, deux rêves complets rallument la Flamme sans payer | Le rallumage |
@@ -151,7 +152,7 @@ Le jeu fait venir par ce que les joueurs montrent, pas par ce qu'on leur paie po
 
 ## 10. L'esthétique
 
-Le jeu a ses grandes scènes ; il lui manque la beauté des petits moments, ceux qui reviennent vingt fois par jour.
+Le jeu a ses grandes scènes, et un petit moment déjà soigné : la flamme de la conversation, qui répond à chaque envoi. Les autres petits moments restent à dessiner avec le même soin.
 
 Quatre exigences :
 
@@ -162,7 +163,7 @@ Quatre exigences :
 
 | Moment | Ce que le joueur voit, sent, entend |
 | --- | --- |
-| Chaque message qui compte | Une étincelle quitte la bulle et rejoint le bandeau ; vibration légère |
+| Chaque message qui part | L'effet existant, gardé : une lueur fait le tour de l'avatar, la flamme s'embrase, le compte du jour monte |
 | La Flamme selon son état | Vive, vacillante à risque, sous verre avec une Veilleuse, braise froide éteinte |
 | La fin du jour de jeu | Deux secondes : l'Offrande s'ouvre, la Flamme monte, Mee ou Meo dit une phrase |
 | Les sons | Quatre sons courts : étincelle, acte, Offrande, Flamme. Muets en mode silencieux |
