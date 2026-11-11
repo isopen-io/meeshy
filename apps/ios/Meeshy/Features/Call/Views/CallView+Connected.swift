@@ -116,11 +116,19 @@ extension CallView {
                 if !callManager.isVideoUIActive {
                     // En audio aussi, glisser vers le bas quitte le plein
                     // écran. Les sous-titres vivent dans la pilule (#17343) :
-                    // l'avatar garde sa place, aucun panneau ne le remplace.
+                    // aucun panneau ne remplace l'avatar ; le journal le resserre.
                     VStack(spacing: MeeshySpacing.md) {
-                        Spacer()
-                        audioCallLayout
-                        Spacer()
+                        if pillText.compactsAudioLayout {
+                            CallCompactAudioHeader(avatar: callAvatarPair(size: 56), name: peerDisplayName, signalStrength: signalStrength,
+                                                   durationColor: durationColor, duration: { callManager.formattedDuration },
+                                                   spokenDuration: { callManager.spokenDuration }, showsQualityDetail: $showQualityDetail)
+                                .padding(.top, CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset))
+                            Spacer()
+                        } else {
+                            Spacer()
+                            audioCallLayout
+                            Spacer()
+                        }
                     }
                     .contentShape(Rectangle())
                     .simultaneousGesture(swipeDownToLeaveGesture)
@@ -587,5 +595,51 @@ private nonisolated struct CallGroupStageHeightKey: PreferenceKey {
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+/// #17343 — l'appel audio quand le journal ouvert dans la pilule prend une part de
+/// la fenêtre : l'avatar resserré (120 → 56) en haut, le nom et la durée lisibles ;
+/// aucun panneau ne remplace la personne. La durée se relit sous l'horloge, à 1 Hz.
+struct CallCompactAudioHeader<Avatar: View>: View {
+    let avatar: Avatar
+    let name: String
+    let signalStrength: CallSignalStrength
+    let durationColor: Color
+    let duration: () -> String
+    let spokenDuration: () -> String
+    @Binding var showsQualityDetail: Bool
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.md) {
+            avatar
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(name)
+                    .font(.system(.headline, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Color.white)
+                    .lineLimit(1)
+
+                CallDurationClock {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
+                        TransientCallSignalGlyph(strength: signalStrength)
+                        Text(duration())
+                            .font(.caption.weight(.medium).monospacedDigit())
+                            .foregroundStyle(durationColor)
+                    }
+                    // Aucune rangée d'états ici : la durée s'annonce nommée,
+                    // « Durée de l'appel, 0:34 », jamais un « 0:34 » nu.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(spokenDuration())
+                    .accessibilityAddTraits(.updatesFrequently)
+                }
+                .callQualityDetailTrigger(isPresented: $showsQualityDetail)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 }

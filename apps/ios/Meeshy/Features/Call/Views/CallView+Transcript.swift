@@ -178,20 +178,7 @@ extension CallView {
     /// depuis #8394 — l'ancien bouton flottant a disparu.
     func captionsActionButton(captioned: Bool, diameter: CGFloat) -> some View {
         let mode = captionsMode
-        let icon: String = {
-            switch mode {
-            case .off: return "captions.bubble"
-            case .translated: return "captions.bubble.fill"
-            case .original: return "character.bubble.fill"
-            }
-        }()
-        let stateLabel: String = {
-            switch mode {
-            case .off: return String(localized: "call.control.captions.state.off", defaultValue: "Désactivés", bundle: .main)
-            case .translated: return String(localized: "call.control.captions.state.translated", defaultValue: "Traduction", bundle: .main)
-            case .original: return String(localized: "call.control.captions.state.original", defaultValue: "Texte original", bundle: .main)
-            }
-        }()
+        let stateLabel = mode.stateLabel
 
         // Invitation : le pair transcrit alors que MES sous-titres sont
         // désactivés — point indigo sur l'icône. Statique, pas d'animation
@@ -207,7 +194,7 @@ extension CallView {
 
         return Button(action: advanceCaptionsMode) {
             CallPillButtonLabel(
-                symbol: icon,
+                symbol: mode.symbol,
                 kind: mode == .off ? .normal : .active,
                 caption: captioned ? title : nil,
                 diameter: diameter
