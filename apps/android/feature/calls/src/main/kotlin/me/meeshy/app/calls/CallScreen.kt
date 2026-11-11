@@ -203,6 +203,7 @@ fun CallScreen(
                 CallSelfCameraActions(viewModel.cameraZoom)
             }
             val pill = rememberCallPillActions(state, viewModel, chrome)
+            val peerSpeech = rememberCallPeerSpeechSource(viewModel, config.peerId.ifBlank { viewModel.activeConfig.peerId }, groupMesh)
             if (duo.shown) {
                 CallDuoVideoStage(
                     state = state,
@@ -222,7 +223,7 @@ fun CallScreen(
                     framed = duo.framed,
                     selfUserId = viewModel.selfUserId,
                     peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
-                    peerSpeech = rememberCallPeerSpeechSource(viewModel, config.peerId.ifBlank { viewModel.activeConfig.peerId }, groupMesh),
+                    peerSpeech = peerSpeech,
                 )
             }
 
@@ -249,6 +250,7 @@ fun CallScreen(
                     modifier = content,
                     inPip = inPip,
                     groupVideo = groupVideo,
+                    peerSpeech = peerSpeech,
                     groupStage = if (groupShown) {
                         { stageModifier ->
                             CallGroupStage(
