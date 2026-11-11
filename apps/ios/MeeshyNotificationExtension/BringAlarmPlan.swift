@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyCore
 
 /// L'ALARME d'un Bring (#17442, essai AlarmKit). Sans l'entitlement Critical Alerts, qu'Apple n'a pas accordé, un push
 /// `time-sensitive` ne sonne pas sur un iPhone en silencieux : seule une alarme système (AlarmKit, iOS 26+) le fait,
@@ -114,8 +115,6 @@ nonisolated enum BringAlarmPlan {
     }
 
     private static func parseInstant(_ value: String) -> Date? {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fractional.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+        WireDate.date(from: value)
     }
 }
