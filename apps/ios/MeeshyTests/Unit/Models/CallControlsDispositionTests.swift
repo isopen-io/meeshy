@@ -17,8 +17,7 @@ final class CallControlsDispositionTests: XCTestCase {
             isVideoEnabled: isVideoEnabled,
             hasSelectableCameras: false,
             isConnected: true,
-            mayRecord: true,
-            canPictureInPicture: false
+            mayRecord: true
         ))
     }
 

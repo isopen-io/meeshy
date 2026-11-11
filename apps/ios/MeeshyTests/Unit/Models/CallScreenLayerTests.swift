@@ -20,7 +20,6 @@ final class CallScreenLayerTests: XCTestCase {
             hasSelectableCameras: hasSelectableCameras,
             isConnected: isConnected,
             mayRecord: true,
-            canPictureInPicture: false,
             showsVideo: showsVideo
         ))
     }
