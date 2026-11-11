@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import MeeshyUI
 
 /// Où l'on colle, dans le composer. Deux surfaces, deux intentions.
@@ -79,27 +80,51 @@ nonisolated struct PasteDestination: Equatable {
     }
 }
 
-/// Où va ce que « Coller » apporte dans la vue principale du composer (#17434).
+/// Où va ce que « Coller » apporte dans la vue principale du composer (#17434, #13640).
 nonisolated enum ComposerPasteTarget: Equatable, Sendable {
-    /// Une image devient le FOND de la scène.
+    /// Une image, une vidéo ou un son devient le FOND d'une scène qui n'en a pas.
     case sceneBackground
-    /// Un texte va au champ de contenu de la publication, jamais en objet de scène.
-    case publicationText
-    /// Une vidéo garde son chemin de scène.
-    case sceneMedia
-    /// Un son rejoint la scène comme un son emprunté.
-    case sceneSound
+    /// Sur une scène qui a déjà un fond, le média se pose dessus comme un objet.
+    case sceneObject
+    /// Un texte va au contenu d'un post (ou d'un statut).
+    case publicationContent
+    /// Un texte devient la légende de la slide d'une story ou d'un réel.
+    case slideLegend
 }
 
-/// **La loi du collage de la vue principale** (#17434, directive porteur) : une
-/// image fait le fond, un texte va au contenu.
+/// **La loi du bouton « Coller »** (décision porteur, #13640) : un média
+/// fait le fond d'une scène qui n'en a pas et se pose dessus sinon ; un texte
+/// va au contenu d'un post, à la légende d'une story ou d'un réel. Jamais un
+/// objet texte sur la scène.
 nonisolated enum ComposerPasteRouting {
-    static func target(for item: StoryPastedItem) -> ComposerPasteTarget {
+    static func target(for item: StoryPastedItem, format: ComposerFormat,
+                       sceneHasBackgroundMedia: Bool) -> ComposerPasteTarget {
         switch item {
-        case .image: return .sceneBackground
-        case .text: return .publicationText
-        case .video: return .sceneMedia
-        case .audio: return .sceneSound
+        case .image, .video, .audio:
+            return sceneHasBackgroundMedia ? .sceneObject : .sceneBackground
+        case .text:
+            switch format {
+            case .story, .reel: return .slideLegend
+            case .post, .status: return .publicationContent
+            }
+        }
+    }
+
+    /// Un fond VISUEL (objet de fond, image de slide) ou un SON de fond.
+    static func sceneHasBackgroundMedia(_ effects: StoryEffects, slideImage: Bool) -> Bool {
+        effects.hasVisualBackgroundMedia || effects.resolvedBackgroundAudio != nil || slideImage
+    }
+
+    /// Écrit le texte collé là où `target` l'envoie : la légende de la slide
+    /// courante, ou le contenu de la publication.
+    @MainActor
+    static func paste(_ pasted: String, format: ComposerFormat, documentText: inout String,
+                      scene: StoryComposerViewModel) {
+        switch target(for: .text(pasted), format: format, sceneHasBackgroundMedia: false) {
+        case .slideLegend:
+            scene.applyContentText(publicationText(current: scene.currentSlide.content ?? "", pasted: pasted))
+        default:
+            documentText = publicationText(current: documentText, pasted: pasted)
         }
     }
 

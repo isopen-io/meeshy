@@ -63,35 +63,30 @@ extension MeeshyComposerHost {
     /// image n'a pas de durée, et `ComposerMediaProbe.durationMs` la
     /// classerait `nil` de toute façon — l'appeler ici serait un aller-retour
     /// pour rien.
-    /// **Ce qu'un COLLAGE pose** (#4092, #17434) : la destination vient de
-    /// `ComposerPasteRouting` — une image fait le FOND, un texte va au contenu de
-    /// la publication ; vidéo et son passent par l'ingestion de CE meuble.
+    /// **Ce qu'un COLLAGE pose** : la destination vient de `ComposerPasteRouting`
+    /// — un média fait le fond d'une scène qui n'en a pas et se pose dessus
+    /// sinon ; un texte va au contenu ou à la légende selon le format.
     func handlePastedItems(_ items: [StoryPastedItem]) {
         guard sceneIntakeAllowsAnother else { return }
+        var aUnFond = ComposerPasteRouting.sceneHasBackgroundMedia(
+            viewModel.currentSlide.effects, slideImage: viewModel.slideImages[viewModel.currentSlide.id] != nil)
         for item in items {
-            switch (ComposerPasteRouting.target(for: item), item) {
-            case (.sceneBackground, .image(let image)):
-                pasteAsSceneBackground(image)
-            case (.sceneMedia, .video(let url)):
+            let cible = ComposerPasteRouting.target(for: item, format: selectedFormat, sceneHasBackgroundMedia: aUnFond)
+            if cible == .sceneBackground { aUnFond = true }
+            switch item {
+            case .text(let contenu):
+                ComposerPasteRouting.paste(contenu, format: selectedFormat, documentText: &documentText, scene: viewModel)
+            case .audio(let url):
+                viewModel.attachPastedAudio(url: url, role: cible == .sceneBackground ? .background : .foreground)
+            case .image(let image):
+                railPosesNextMedia = true
+                Task { await ingestCameraCapture(.photo(image, data: nil)) }
+            case .video(let url):
+                railPosesNextMedia = true
                 Task { await ingestCameraCapture(.video(url)) }
-            case (.sceneSound, .audio(let url)):
-                viewModel.attachPastedAudio(url: url)
-            case (.publicationText, .text(let contenu)):
-                documentText = ComposerPasteRouting.publicationText(current: documentText, pasted: contenu)
-            default:
-                break
             }
         }
         HapticFeedback.light()
-    }
-
-    /// Une image collée devient le FOND (#17434), en remplaçant l'ancien comme « Remplacer ».
-    private func pasteAsSceneBackground(_ image: UIImage) {
-        let fondActuel = viewModel.currentSlide.effects.mediaObjects?.first { $0.isBackground }?.id
-        let dejaUnFond = fondActuel != nil || viewModel.slideImages[viewModel.currentSlide.id] != nil
-        if dejaUnFond { backgroundReplacementId = fondActuel ?? viewModel.currentSlide.id }
-        railPosesNextMedia = true
-        Task { await ingestCameraCapture(.photo(image, data: nil)) }
     }
 
     func ingestCameraCapture(_ result: CameraResult) async {

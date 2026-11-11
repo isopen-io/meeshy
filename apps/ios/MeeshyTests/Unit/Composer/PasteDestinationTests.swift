@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
 
@@ -129,21 +130,45 @@ final class PasteDestinationTests: XCTestCase {
         )
     }
 
-    // MARK: - Coller dans la vue principale : une image fait le fond, un texte va au contenu (#17434)
+    // MARK: - Le bouton « Coller » (décision porteur du 2026-11-11, #13640, #17434)
 
-    func test_target_image_becomesTheSceneBackground() {
-        XCTAssertEqual(ComposerPasteRouting.target(for: .image(UIImage())), .sceneBackground)
+    private func cible(_ item: StoryPastedItem, _ format: ComposerFormat = .story,
+                       fond: Bool = false) -> ComposerPasteTarget {
+        ComposerPasteRouting.target(for: item, format: format, sceneHasBackgroundMedia: fond)
     }
 
-    func test_target_text_goesToThePublicationContent_neverOnTheScene() {
-        XCTAssertEqual(ComposerPasteRouting.target(for: .text("Bonjour")), .publicationText)
-        XCTAssertEqual(ComposerPasteRouting.target(for: .text(Array(repeating: "mot", count: 40).joined(separator: " "))),
-                       .publicationText, "un texte long comme un texte court : jamais un objet texte de scène")
+    func test_target_mediaOnASceneWithoutBackground_becomesTheBackground() {
+        XCTAssertEqual(cible(.image(UIImage())), .sceneBackground)
+        XCTAssertEqual(cible(.video(URL(fileURLWithPath: "/tmp/a.mov"))), .sceneBackground)
+        XCTAssertEqual(cible(.audio(URL(fileURLWithPath: "/tmp/a.m4a"))), .sceneBackground)
     }
 
-    func test_target_videoAndSound_keepTheirScenePath() {
-        XCTAssertEqual(ComposerPasteRouting.target(for: .video(URL(fileURLWithPath: "/tmp/a.mov"))), .sceneMedia)
-        XCTAssertEqual(ComposerPasteRouting.target(for: .audio(URL(fileURLWithPath: "/tmp/a.m4a"))), .sceneSound)
+    func test_target_mediaOnASceneWithABackground_isPosedOnTheScene() {
+        XCTAssertEqual(cible(.image(UIImage()), fond: true), .sceneObject, "le fond déjà posé reste")
+        XCTAssertEqual(cible(.video(URL(fileURLWithPath: "/tmp/a.mov")), fond: true), .sceneObject)
+        XCTAssertEqual(cible(.audio(URL(fileURLWithPath: "/tmp/a.m4a")), fond: true), .sceneObject)
+    }
+
+    func test_target_textOnAPost_goesToThePublicationContent() {
+        XCTAssertEqual(cible(.text("Bonjour"), .post), .publicationContent)
+        XCTAssertEqual(cible(.text("Bonjour"), .post, fond: true), .publicationContent)
+        XCTAssertEqual(cible(.text("Bonjour"), .status), .publicationContent)
+    }
+
+    func test_target_textOnAStoryOrAReel_becomesTheSlideLegend() {
+        XCTAssertEqual(cible(.text("Bonjour"), .story), .slideLegend)
+        XCTAssertEqual(cible(.text("Bonjour"), .reel, fond: true), .slideLegend)
+        XCTAssertEqual(cible(.text(Array(repeating: "mot", count: 40).joined(separator: " ")), .story),
+                       .slideLegend, "un texte long comme un texte court : jamais un objet texte de scène")
+    }
+
+    func test_sceneHasBackgroundMedia_countsTheBackgroundSound() {
+        var effets = StoryEffects()
+        XCTAssertFalse(ComposerPasteRouting.sceneHasBackgroundMedia(effets, slideImage: false))
+        XCTAssertTrue(ComposerPasteRouting.sceneHasBackgroundMedia(effets, slideImage: true), "image de slide")
+        effets.audioPlayerObjects = [StoryAudioPlayerObject(postMediaId: "s", placement: "overlay", x: 0.5, y: 0.5,
+                                                            volume: 1, waveformSamples: [], isBackground: true)]
+        XCTAssertTrue(ComposerPasteRouting.sceneHasBackgroundMedia(effets, slideImage: false), "son de fond")
     }
 
     func test_publicationText_emptyContent_takesThePastedText() {
@@ -159,12 +184,52 @@ final class PasteDestinationTests: XCTestCase {
         XCTAssertEqual(ComposerPasteRouting.publicationText(current: "Déjà écrit", pasted: " \n "), "Déjà écrit")
     }
 
-    func test_host_pastedItems_followTheRoutingLaw() throws {
+    @MainActor
+    func test_paste_story_writesTheSlideLegend_andLeavesTheDocumentText() {
+        let scene = StoryComposerViewModel()
+        var texteDuPost = ""
+        ComposerPasteRouting.paste("  Ma légende  ", format: .story, documentText: &texteDuPost, scene: scene)
+        XCTAssertEqual(scene.currentSlide.content, "Ma légende", "la story publie ce texte en légende")
+        XCTAssertEqual(texteDuPost, "", "le texte du post, qu'une story n'envoie pas, reste vide")
+    }
+
+    @MainActor
+    func test_paste_reel_writesTheSlideLegend() {
+        let scene = StoryComposerViewModel()
+        var texteDuPost = ""
+        ComposerPasteRouting.paste("Légende du réel", format: .reel, documentText: &texteDuPost, scene: scene)
+        XCTAssertEqual(scene.currentSlide.content, "Légende du réel")
+        XCTAssertEqual(texteDuPost, "")
+    }
+
+    @MainActor
+    func test_paste_story_existingLegend_appendsOnANewLine() {
+        let scene = StoryComposerViewModel()
+        scene.applyContentText("Déjà écrit")
+        var texteDuPost = ""
+        ComposerPasteRouting.paste("Collé", format: .story, documentText: &texteDuPost, scene: scene)
+        XCTAssertEqual(scene.currentSlide.content, "Déjà écrit\nCollé")
+    }
+
+    @MainActor
+    func test_paste_post_writesTheContent_andLeavesTheSlide() {
+        let scene = StoryComposerViewModel()
+        var texteDuPost = ""
+        ComposerPasteRouting.paste("Bonjour", format: .post, documentText: &texteDuPost, scene: scene)
+        XCTAssertEqual(texteDuPost, "Bonjour")
+        XCTAssertNil(scene.currentSlide.content)
+    }
+
+    func test_host_pastedItems_followThePasteLaw() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
         let debut = try XCTUnwrap(source.range(of: "func handlePastedItems("))
         let corps = String(source[debut.upperBound...].prefix(1800))
-        XCTAssertTrue(corps.contains("ComposerPasteRouting.target(for:"), "la destination vient de la loi")
+        XCTAssertTrue(corps.contains("ComposerPasteRouting.target(for: item, format: selectedFormat"),
+                      "la destination vient de la loi, avec le format choisi")
+        XCTAssertTrue(corps.contains("ComposerPasteRouting.sceneHasBackgroundMedia("), "le fond déjà posé compte")
+        XCTAssertTrue(corps.contains("ComposerPasteRouting.paste(contenu, format: selectedFormat"))
         XCTAssertFalse(corps.contains("StoryPastePolicy.placement"), "le texte ne devient plus un objet de scène")
+        XCTAssertFalse(corps.contains("backgroundReplacementId"), "coller ne remplace jamais un fond déjà posé")
     }
 
     func test_pasteEntry_showsTheGlyphOnly_inTheBrandBlue() throws {
