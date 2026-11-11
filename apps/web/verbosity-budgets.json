@@ -89,8 +89,8 @@
       "firstScreen": 14
     },
     "auth-magic-link": {
-      "total": 29,
-      "firstScreen": 29
+      "total": 14,
+      "firstScreen": 14
     },
     "auth-magic-link-validate": {
       "total": 26,
@@ -201,8 +201,8 @@
       "firstScreen": 37
     },
     "login": {
-      "total": 52,
-      "firstScreen": 52
+      "total": 37,
+      "firstScreen": 37
     },
     "me": {
       "total": 122,
@@ -481,30 +481,6 @@
       },
       "motif": "Une phrase dit ce que fait un lien de suivi ; le rôle des UTM et la consigne du jeton sont visibles",
       "issue": 17641
-    },
-    "login": {
-      "de": {
-        "total": 37,
-        "firstScreen": 37
-      },
-      "a": {
-        "total": 52,
-        "firstScreen": 52
-      },
-      "motif": "La phrase « nous vous envoyons un lien de connexion par e-mail » se lit au repos sous le titre ; le (i) ne garde que la durée du lien",
-      "issue": 17666
-    },
-    "auth-magic-link": {
-      "de": {
-        "total": 14,
-        "firstScreen": 14
-      },
-      "a": {
-        "total": 29,
-        "firstScreen": 29
-      },
-      "motif": "La phrase « nous vous envoyons un lien de connexion par e-mail » se lit au repos sous le titre ; le (i) ne garde que la durée du lien",
-      "issue": 17666
     },
     "forgot-password": {
       "de": {

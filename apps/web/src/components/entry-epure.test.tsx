@@ -44,13 +44,13 @@ function mount(node: React.ReactNode): HTMLDivElement {
 }
 
 describe('/auth/magic-link — le même panneau que /login', () => {
-  test('la phrase qui dit ce que fait la porte est visible au repos ; le (i) ne garde que la durée', () => {
+  test('le titre et « Recevoir le lien » disent la porte ; le (i) répond à « Comment se connecter sans mot de passe ? » (#6626)', () => {
     const el = mount(<MagicLinkPanel />);
-    const lead = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Pas de mot de passe'));
-    expect(lead).toBeDefined();
-    expect(lead?.classList.contains('sr-only')).toBe(false);
-    const info = el.querySelector('button[aria-label="Combien de temps le lien reste valable ?"]');
-    expect(controlledBy(info)?.textContent).toBe('Le lien est valable 10 minutes et ne sert qu’une fois.');
+    expect(el.textContent).toContain('Votre adresse e-mail');
+    expect(el.textContent).toContain('Recevoir le lien');
+    const info = el.querySelector('button[aria-label="Comment se connecter sans mot de passe ?"]');
+    expect(controlledBy(info)?.textContent).toContain('nous vous envoyons un lien par e-mail');
+    expect(controlledBy(info)?.textContent).toContain('valable 10 minutes');
   });
 });
 

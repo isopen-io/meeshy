@@ -17,20 +17,20 @@ describe('sept langues, quatre phrases raccourcies et une ligne neuve', () => {
       SUPPORTED_INTERFACE_LANGUAGES.flatMap((l) => [loadInterfaceCatalog(l), loadInviteCatalog(l), loadOnboardingCatalog(l), loadOnboardingProfileCatalog(l)]),
     );
     const fr = {
-      lead: translate('fr', 'magicLink.lead'),
+      lead: translate('fr', 'magicLink.howItWorks'),
       friends: translateOnboarding('fr', 'onboarding.friends.body'),
       profile: translateOnboardingProfile('fr', 'onboarding.profile.body'),
       age: translateOnboarding('fr', 'onboarding.age.body'),
       about: translateInvite('fr', 'world.about'),
     };
-    expect(fr.lead).toBe('Pas de mot de passe : nous vous envoyons un lien de connexion par e-mail.');
+    expect(fr.lead).toBe('Comment se connecter sans mot de passe ?');
     expect(fr.friends).toBe('Ajoute 3 personnes qui te ressemblent.');
     expect(fr.profile).toBe('Un visage et une bannière : on te reconnaît plus vite.');
     expect(fr.age).toBe('Pour te proposer les bons espaces.');
     expect(fr.about).toBe('La conversation ouverte à tous, traduite dans votre langue.');
     for (const l of SUPPORTED_INTERFACE_LANGUAGES.filter((code) => code !== 'fr')) {
       const served = [
-        [translate(l, 'magicLink.lead'), fr.lead],
+        [translate(l, 'magicLink.howItWorks'), fr.lead],
         [translateOnboarding(l, 'onboarding.friends.body'), fr.friends],
         [translateOnboardingProfile(l, 'onboarding.profile.body'), fr.profile],
         [translateOnboarding(l, 'onboarding.age.body'), fr.age],
