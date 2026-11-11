@@ -222,9 +222,9 @@
     <string name="call_recording_caption">Aufnehmen</string>
     <string name="call_recording_close">Schließen</string>
     <string name="call_recording_hint">Fragt jede teilnehmende Person vor der Aufnahme um Zustimmung</string>
-    <string name="call_recording_kind_audio">Nur Audio</string>
+    <string name="call_recording_kind_audio">Audio</string>
     <string name="call_recording_kind_hint">Wählen Sie, was aufgenommen wird; danach muss jede Person zustimmen</string>
-    <string name="call_recording_kind_video">Audio und Video</string>
+    <string name="call_recording_kind_video">Video</string>
     <string name="call_recording_refuse">Ablehnen</string>
     <string name="call_recording_saveFailed">Die Aufnahme konnte nicht hinzugefügt werden</string>
     <string name="call_recording_saved">Die Aufnahme wurde zur Unterhaltung hinzugefügt</string>

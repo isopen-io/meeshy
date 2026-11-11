@@ -229,4 +229,18 @@ final class CallScreenLayerTests: XCTestCase {
         XCTAssertTrue(CallCameraRail.isMyImageFullScreen(isGroupStage: true, isSelfFeatured: true, isLocalPrimary: false))
         XCTAssertFalse(CallCameraRail.isMyImageFullScreen(isGroupStage: true, isSelfFeatured: false, isLocalPrimary: true))
     }
+
+    // MARK: - G3.2 — la rangée de base d'une option ouverte n'est pas légendée
+
+    func test_captionsBaseRow_anOptionDrawnInThePill_leavesTheBaseRowBare() {
+        XCTAssertFalse(CallScreenLayer.panel(.record).captionsBaseRow)
+        XCTAssertFalse(CallScreenLayer.panel(.react).captionsBaseRow)
+        XCTAssertFalse(CallScreenLayer.panel(.journal).captionsBaseRow)
+    }
+
+    func test_captionsBaseRow_theMenuAndTheSheetOption_keepTheirCaptions() {
+        XCTAssertTrue(CallScreenLayer.menu.captionsBaseRow)
+        XCTAssertTrue(CallScreenLayer.menuOverJournal.captionsBaseRow)
+        XCTAssertTrue(CallScreenLayer.panel(.people).captionsBaseRow)
+    }
 }

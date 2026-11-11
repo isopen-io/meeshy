@@ -222,9 +222,9 @@
     <string name="call_recording_caption">تسجيل</string>
     <string name="call_recording_close">إغلاق</string>
     <string name="call_recording_hint">يطلب موافقة كل مشارك قبل التسجيل</string>
-    <string name="call_recording_kind_audio">الصوت فقط</string>
+    <string name="call_recording_kind_audio">الصوت</string>
     <string name="call_recording_kind_hint">اختر ما سيُسجَّل؛ ثم يجب أن يوافق كل مشارك</string>
-    <string name="call_recording_kind_video">الصوت والفيديو</string>
+    <string name="call_recording_kind_video">الفيديو</string>
     <string name="call_recording_refuse">رفض</string>
     <string name="call_recording_saveFailed">تعذّرت إضافة التسجيل</string>
     <string name="call_recording_saved">أُضيف التسجيل إلى المحادثة</string>

@@ -232327,43 +232327,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الصوت فقط"
+            "value": "الصوت"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur Audio"
+            "value": "Audio"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio only"
+            "value": "Audio"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo audio"
+            "value": "Audio"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio seulement"
+            "value": "Audio"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo audio"
+            "value": "Audio"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Somente áudio"
+            "value": "Áudio"
           }
         }
       }
@@ -232374,43 +232374,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الصوت والفيديو"
+            "value": "الفيديو"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio und Video"
+            "value": "Video"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio and video"
+            "value": "Video"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio y vídeo"
+            "value": "Vídeo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio et vidéo"
+            "value": "Vidéo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Audio e video"
+            "value": "Video"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Áudio e vídeo"
+            "value": "Vídeo"
+          }
+        }
+      }
+    },
+    "call.recording.consent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يجب أن يوافق الجميع. يتوقف التسجيل إذا انضم أحد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle müssen zustimmen. Die Aufnahme endet, sobald jemand beitritt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everyone must accept. Recording stops if someone joins."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos deben aceptar. La grabación se detiene si alguien se une."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout le monde doit accepter. L’enregistrement s’arrête si quelqu’un rejoint."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutti devono accettare. La registrazione si interrompe se qualcuno si unisce."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos precisam aceitar. A gravação para se alguém entrar."
           }
         }
       }

@@ -213,7 +213,7 @@ extension CallView {
     /// Les mêmes quatre boutons partout, légendés dès que les rangées
     /// légendées sont déployées au-dessus d'eux.
     private var baseRow: some View {
-        let captioned = controlsDisposition.unfoldsPill(for: layer) && layer.pillPanel != .journal
+        let captioned = controlsDisposition.unfoldsPill(for: layer) && layer.captionsBaseRow
         return AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
             HStack(alignment: .top, spacing: 0) {
                 moreButton(captioned: captioned)
