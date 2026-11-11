@@ -144,6 +144,7 @@ class CallActionRailsTest {
         }
         rule.mainClock.autoAdvance = false
         rows = emptyList()
+        rule.waitForIdle()
         rule.mainClock.advanceTimeBy(100)
 
         rule.onNodeWithContentDescription("Effects").performClick()
