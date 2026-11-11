@@ -127,6 +127,22 @@ final class StoryComposerPasteStarterTests: XCTestCase {
         )
     }
 
+    /// Porteur (#17434) : le compositeur ne montre que le GLYPHE de « Coller ».
+    /// Le style de libellé le plus PROCHE du bouton gagne : un `.labelStyle`
+    /// posé dans la capsule écrase le `.iconOnly` de l'hôte. La mesure ne le
+    /// voit pas (le `PasteButton` système ne se dimensionne pas hors fenêtre),
+    /// d'où la lecture de la source.
+    func test_theStarter_imposesNoLabelStyle_soTheHostIconOnlyWins() throws {
+        let source = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Story/StoryPasteStarter.swift")
+        let code = try String(contentsOf: source, encoding: .utf8)
+        let capsule = try XCTUnwrap(code.range(of: "public struct BlankCanvasPasteStarter"))
+        XCTAssertFalse(code[capsule.upperBound...].contains(".labelStyle("),
+                       "la capsule laisse l'hôte choisir : « Coller » ne s'écrit pas à côté du glyphe")
+    }
+
     /// Le plafond média passe par une entrée PRIMITIVE : la feuille ne s'abonne
     /// à aucun graphe global (« Zero Unnecessary Re-render »). Si elle cessait
     /// de l'honorer, elle offrirait un collage qui n'insère rien.
