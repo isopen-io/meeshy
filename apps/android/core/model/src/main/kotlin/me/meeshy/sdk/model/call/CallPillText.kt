@@ -35,6 +35,12 @@ enum class CallPillText {
      */
     val staysWhenChromeStowed: Boolean get() = this == CaptionsAlone
 
+    /**
+     * #17529 — the journal takes a share of the window ([CallJournalSizing]): on an audio call the avatar then shrinks
+     * into a compact header to leave it the room ([CallAudioStageLayout]). Mirrors iOS `compactsAudioLayout`.
+     */
+    val compactsAudioLayout: Boolean get() = this == Journal
+
     companion object {
         /**
          * [isCaptionsEnabled]: the « Captions » setting of the user. The journal keeps the whole call, captions on or
