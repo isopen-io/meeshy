@@ -415,8 +415,8 @@ final class CallViewAccessibilityTests: XCTestCase {
         XCTAssertFalse(effects.contains("if showsConnectedLayout"), "Les commandes d'effets ne dépendent pas de l'appel établi")
 
         let controls = try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
-        XCTAssertTrue(controls.contains("config = config.withBackgroundBlur(!config.backgroundBlurEnabled)"), "Le flou du fond se règle dans le mode Effets")
-        XCTAssertTrue(controls.contains("caption: CallEffectsCopy.blur"))
+        XCTAssertTrue(controls.contains("config = config.withBackgroundBlur(blurs)"), "Le flou du fond se règle dans le mode Effets")
+        XCTAssertTrue(controls.contains("Text(CallEffectsCopy.blur)"), "Une ligne titrée « Flou du fond »")
     }
 
     // MARK: - Video toggle accessibility value (audit fix — inverted state, 2026-08-13)

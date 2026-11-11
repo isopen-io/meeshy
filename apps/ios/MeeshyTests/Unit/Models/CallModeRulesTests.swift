@@ -192,16 +192,38 @@ final class CallModeRulesTests: XCTestCase {
         XCTAssertEqual(cool.activeFaceEffect, .toad)
     }
 
-    func test_exiting_validated_keepsWhatWasChosen() {
-        let original = VideoFilterConfig()
-        let chosen = original.selectingFaceEffect(.angel)
-        XCTAssertEqual(CallEffectsModeRule.exiting(validated: true, current: chosen, original: original), chosen)
+    /// P8b · loi 14 — « (+) Ajouter un autre look » pose, par-dessus ce qu'on a, un look d'un
+    /// AUTRE genre : Visage et Couleur se cumulent dans la même configuration.
+    func test_addingALook_fromFace_opensTheColorLooks() {
+        XCTAssertEqual(CallEffectsModeRule.addingLook(from: .face), .color)
     }
 
-    func test_exiting_quit_restoresTheImageAsItWas() {
-        let original = VideoFilterConfig().applyingPreset(.vivid)
-        let tried = original.selectingFaceEffect(.demon)
-        XCTAssertEqual(CallEffectsModeRule.exiting(validated: false, current: tried, original: original), original)
+    func test_addingALook_fromColor_opensTheFaceLooks() {
+        XCTAssertEqual(CallEffectsModeRule.addingLook(from: .color), .face)
+    }
+
+    func test_addingALook_keepsTheLookAlreadyChosen() {
+        let toad = VideoFilterConfig().selectingFaceEffect(.toad)
+        let cumulated = CallEffectsModeRule.applying(color: .golden, to: toad)
+        XCTAssertEqual(cumulated.activeFaceEffect, .toad)
+        XCTAssertEqual(cumulated.activePreset, .golden)
+    }
+
+    /// P8b.6 — le panneau de Réglages monte depuis la barre en ≈ 200 ms et y redescend ;
+    /// « Réduire les animations » garde un fondu court, sans montée, et ne supprime
+    /// jamais le mouvement d'un coup.
+    func test_settingsPanel_risesFromTheBar_andOnlyFadesUnderReduceMotion() {
+        XCTAssertGreaterThan(CallEffectsSettingsMotion.panelRise(reduceMotion: false), 0)
+        XCTAssertEqual(CallEffectsSettingsMotion.panelRise(reduceMotion: true), 0)
+    }
+
+    /// P8b.6 — la bande et le panneau se croisent en ≈ 200 ms ; « Réduire les
+    /// animations » garde un fondu court, elle ne supprime jamais le mouvement d'un coup.
+    func test_settingsMotion_isAShortCrossfade_neverInstant() {
+        XCTAssertEqual(CallEffectsSettingsMotion.duration(reduceMotion: false), 0.2)
+        XCTAssertGreaterThan(CallEffectsSettingsMotion.duration(reduceMotion: true), 0)
+        XCTAssertLessThan(CallEffectsSettingsMotion.duration(reduceMotion: true),
+                          CallEffectsSettingsMotion.duration(reduceMotion: false))
     }
 
     // MARK: - Les gestes sur le style choisi (#8625)
