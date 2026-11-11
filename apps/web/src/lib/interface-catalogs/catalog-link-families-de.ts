@@ -60,6 +60,8 @@ const de = {
   'linkFamilies.tracking.create.url.placeholder': 'https://beispiel.de/seite',
   'linkFamilies.tracking.create.url.invalid': 'Gib eine gültige Webadresse ein.',
   'linkFamilies.tracking.create.name': 'Name',
+  'linkFamilies.tracking.create.name.question': 'Wer sieht diesen Namen?',
+  'linkFamilies.tracking.create.name.note': 'Nur du: Er ordnet deine Links, die Öffentlichkeit sieht ihn nicht.',
   'linkFamilies.tracking.create.name.placeholder': 'z. B. Kampagne zum Schulstart',
   'linkFamilies.tracking.create.name.invalid': 'Höchstens 32 Zeichen.',
   'linkFamilies.tracking.create.section.utm': 'UTM-Parameter',

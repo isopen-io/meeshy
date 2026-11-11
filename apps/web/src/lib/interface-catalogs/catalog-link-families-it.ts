@@ -60,6 +60,8 @@ const it = {
   'linkFamilies.tracking.create.url.placeholder': 'https://esempio.com/pagina',
   'linkFamilies.tracking.create.url.invalid': 'Inserisci un indirizzo web valido.',
   'linkFamilies.tracking.create.name': 'Nome',
+  'linkFamilies.tracking.create.name.question': 'Chi vede questo nome?',
+  'linkFamilies.tracking.create.name.note': 'Solo tu: serve a ordinare i tuoi link, il pubblico non lo vede.',
   'linkFamilies.tracking.create.name.placeholder': 'es.: Campagna di settembre',
   'linkFamilies.tracking.create.name.invalid': 'Massimo 32 caratteri.',
   'linkFamilies.tracking.create.section.utm': 'Parametri UTM',

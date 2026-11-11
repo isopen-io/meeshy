@@ -68,6 +68,8 @@ const fr = {
   'linkFamilies.tracking.create.url.placeholder': 'https://exemple.com/page',
   'linkFamilies.tracking.create.url.invalid': 'Saisissez une adresse web valide.',
   'linkFamilies.tracking.create.name': 'Nom',
+  'linkFamilies.tracking.create.name.question': 'Qui voit ce nom ?',
+  'linkFamilies.tracking.create.name.note': 'Vous seul : il range vos liens, le public ne le voit pas.',
   'linkFamilies.tracking.create.name.placeholder': 'ex. : Campagne de rentrée',
   'linkFamilies.tracking.create.name.invalid': '32 caractères au plus.',
   'linkFamilies.tracking.create.section.utm': 'Paramètres UTM',

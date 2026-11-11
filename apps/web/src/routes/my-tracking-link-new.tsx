@@ -103,6 +103,7 @@ export default function MyTrackingLinkNewScreen() {
                 id="tracking-name"
                 maxLength={TRACKING_NAME_MAX}
                 label={translateLinkFamilies(language, 'linkFamilies.tracking.create.name')}
+                note={linksHint(translateLinkFamilies(language, 'linkFamilies.tracking.create.name.question'), translateLinkFamilies(language, 'linkFamilies.tracking.create.name.note'))}
                 placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.name.placeholder')}
                 value={draft.name}
                 error={errorOf('name')}

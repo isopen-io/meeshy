@@ -215,7 +215,7 @@ describe('la création d’un lien de partage', () => {
 });
 
 describe('la création d’un lien de suivi', () => {
-  test('URL, Nom et Jeton se disent une fois, le détail passe derrière deux (i)', async () => {
+  test('URL, Nom et Jeton se disent une fois, le détail passe derrière trois (i)', async () => {
     const host = await mount(<MyTrackingLinkNewScreen />);
     const text = seen(host);
     for (const wanted of ['URL', 'Nom', 'Jeton', 'Créer le lien']) expect(text).toContain(wanted);
@@ -225,6 +225,13 @@ describe('la création d’un lien de suivi', () => {
     }
     expect(controlledBy(infoButton(host, 'À quoi servent les paramètres UTM ?'))?.textContent).toBe('Pour savoir d’où viennent vos clics');
     expect(controlledBy(infoButton(host, 'Que devient un jeton laissé vide ?'))?.textContent).toBe('Laissez vide pour un jeton aléatoire.');
+  });
+
+  test('« Nom » garde, derrière un (i), ce que disait « Nom interne » : vous seul le voyez', async () => {
+    const host = await mount(<MyTrackingLinkNewScreen />);
+    const name = infoButton(host, 'Qui voit ce nom ?');
+    expect(controlledBy(name)?.textContent).toBe('Vous seul : il range vos liens, le public ne le voit pas.');
+    expect(host.querySelector('#tracking-name')?.getAttribute('aria-describedby')).toContain(name.getAttribute('aria-controls') ?? '?');
   });
 });
 

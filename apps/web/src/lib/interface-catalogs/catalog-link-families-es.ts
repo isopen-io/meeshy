@@ -60,6 +60,8 @@ const es = {
   'linkFamilies.tracking.create.url.placeholder': 'https://ejemplo.com/pagina',
   'linkFamilies.tracking.create.url.invalid': 'Introduce una dirección web válida.',
   'linkFamilies.tracking.create.name': 'Nombre',
+  'linkFamilies.tracking.create.name.question': '¿Quién ve este nombre?',
+  'linkFamilies.tracking.create.name.note': 'Solo tú: ordena tus enlaces, el público no lo ve.',
   'linkFamilies.tracking.create.name.placeholder': 'p. ej.: Campaña de vuelta al cole',
   'linkFamilies.tracking.create.name.invalid': 'Máximo 32 caracteres.',
   'linkFamilies.tracking.create.section.utm': 'Parámetros UTM',

@@ -60,6 +60,8 @@ const ar = {
   'linkFamilies.tracking.create.url.placeholder': 'https://example.com/page',
   'linkFamilies.tracking.create.url.invalid': 'أدخل عنوان ويب صالحًا.',
   'linkFamilies.tracking.create.name': 'الاسم',
+  'linkFamilies.tracking.create.name.question': 'من يرى هذا الاسم؟',
+  'linkFamilies.tracking.create.name.note': 'أنت فقط: ينظّم روابطك، ولا يراه الجمهور.',
   'linkFamilies.tracking.create.name.placeholder': 'مثال: حملة العودة إلى المدارس',
   'linkFamilies.tracking.create.name.invalid': '32 حرفًا كحد أقصى.',
   'linkFamilies.tracking.create.section.utm': 'معلمات UTM',

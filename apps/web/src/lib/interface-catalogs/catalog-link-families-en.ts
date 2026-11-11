@@ -60,6 +60,8 @@ const en = {
   'linkFamilies.tracking.create.url.placeholder': 'https://example.com/page',
   'linkFamilies.tracking.create.url.invalid': 'Enter a valid web address.',
   'linkFamilies.tracking.create.name': 'Name',
+  'linkFamilies.tracking.create.name.question': 'Who sees this name?',
+  'linkFamilies.tracking.create.name.note': 'Only you: it organises your links, the public never sees it.',
   'linkFamilies.tracking.create.name.placeholder': 'e.g. Back-to-school campaign',
   'linkFamilies.tracking.create.name.invalid': '32 characters at most.',
   'linkFamilies.tracking.create.section.utm': 'UTM parameters',
