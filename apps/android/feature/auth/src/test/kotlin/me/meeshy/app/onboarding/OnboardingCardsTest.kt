@@ -99,6 +99,7 @@ class OnboardingCardsTest {
         )
 
         compose.onNodeWithText(context.getString(R.string.onboarding_story_verify)).assertExists()
+        compose.onAllNodesWithText("Tap the link we emailed you.").assertCountEquals(0)
         compose.onNodeWithTag("onboarding.email.resend").performClick()
         assertThat(resent).isEqualTo(1)
     }

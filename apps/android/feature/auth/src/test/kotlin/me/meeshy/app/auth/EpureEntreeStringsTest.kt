@@ -39,6 +39,11 @@ class EpureEntreeStringsTest {
         "share_link_choose_subtitle", "share_link_choose_subtitle_generic",
         "guest_join_username_optional", "guest_join_email_optional", "guest_join_optional_section",
         "onboarding_email_waiting", "onboarding_friends_pending", "onboarding_global_hint", "onboarding_story_sending_detail",
+        "signup_card_title", "signup_password_why", "onboarding_story_verify_detail",
+        "login_welcome_back", "signup_choose_country", "signup_submit", "auth_magic_countdown",
+        "auth_login_two_factor_description", "email_verification_nav_title", "onboarding_languages_failed", "signup_back",
+        "signup_display_name_label", "signup_email_label", "signup_error_generic", "signup_password_hide",
+        "signup_password_label", "signup_password_show", "world_entry_name_label",
     )
 
     private fun specifiers(text: String) = Regex("""%(\d+)\$[sd]""").findAll(text).map { it.value }.sorted().toList()
@@ -98,7 +103,14 @@ class EpureEntreeStringsTest {
         assertThat(fr["auth_magic_subtitle"]).isEqualTo("Pas de mot de passe : nous envoyons un lien par e-mail.")
         assertThat(fr["auth_magic_sent_title"]).isEqualTo("Code et lien envoyés")
         assertThat(fr["auth_forgot_sent_title"]).isEqualTo("Lien envoyé")
-        assertThat(fr["signup_password_why_detail"]).isEqualTo("Sans mot de passe, vous vous connectez toujours par un lien reçu par e-mail.")
+        assertThat(fr["signup_password_why_detail"]).isEqualTo("Sans mot de passe, vous vous connectez par un lien reçu par e-mail.")
+        assertThat(fr["onboarding_story_verify"]).isEqualTo("Confirme ton e-mail pour publier ta story")
+        assertThat(fr["email_verification_title"]).isEqualTo("Vérifiez votre e-mail")
+        assertThat(fr["email_verification_success"]).isEqualTo("E-mail vérifié !")
+        assertThat(fr["email_verification_code_a11y_hint"]).isEqualTo("Entrez le code à 6 chiffres reçu par e-mail")
+        assertThat(fr["link_signin_message_replacing"]).isEqualTo(
+            "Ce lien n'a pas été demandé depuis cet appareil. Il remplace %2\$s, qui reste au sélecteur de comptes. Continuez seulement s'il vous appartient.",
+        )
         assertThat(fr["signup_phone_conflict"]).isEqualTo("Numéro déjà rattaché à un compte : laissez-le vide pour continuer.")
         assertThat(fr["signup_display_name_invalid_characters"]).isEqualTo("Lettres, espaces, apostrophes, points et tirets uniquement.")
         assertThat(fr["email_verification_subtitle_account_created"]).isEqualTo("Compte créé. Code et lien envoyés à <b>%1\$s</b>.")
@@ -123,5 +135,25 @@ class EpureEntreeStringsTest {
         assertThat(fr["onboarding_profile_benefit_contacts"]).isEqualTo("Plus de contacts")
         assertThat(fr["onboarding_age_picker_hint"]).isNotEmpty()
         assertThat(fr["signup_language_pill"]).isNotEmpty()
+    }
+
+    @Test
+    fun `the e-mail is spelled the lexicon way in French and Italian`() {
+        val banned = Regex("""(?i)(?<![-\p{L}])(email|courriel)(?![\p{L}])""")
+        listOf("values-fr", "values-it").forEach { folder ->
+            val offenders = all(folder).filter { (key, text) -> key.startsWith("email_verification") || key == "onboarding_story_verify" }
+                .filter { banned.containsMatchIn(it.value) }.keys
+            assertWithMessage("$folder").that(offenders).isEmpty()
+        }
+    }
+
+    @Test
+    fun `the unused app label is gone as well`() {
+        val appRes = File(resDir.parentFile.parentFile.parentFile.parentFile, "app/src/main/res")
+        folders.forEach { folder ->
+            val dir = File(appRes, folder)
+            val keys = dir.listFiles { f -> f.extension == "xml" }.orEmpty().flatMap { pattern.findAll(it.readText()).map { m -> m.groupValues[1] }.toList() }
+            assertThat(keys).doesNotContain("login_welcome_back")
+        }
     }
 }
