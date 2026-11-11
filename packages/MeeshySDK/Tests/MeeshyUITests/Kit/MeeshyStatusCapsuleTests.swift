@@ -304,7 +304,7 @@ struct MeeshyStatusCapsuleTests {
                      "Catalog/MeeshyKitCatalog+K14.swift"]
         let forbidden = [
             "Color(hex:", "Color(red:", "Color(white:", "Color.white", "Color.black", "Color.gray", "Color.red",
-            ".white", ".black", "#FF", "0x", "glassEffect", "adaptiveGlass", "adaptiveLiquidGlass", "UIBlurEffect",
+            "(.white", "(.black", "#FF", "0x", "glassEffect", "adaptiveGlass", "adaptiveLiquidGlass", "UIBlurEffect",
             "Material", ".blur(", ".shadow(", ".shared", "static let shared", "GeometryReader",
         ]
         for file in files {

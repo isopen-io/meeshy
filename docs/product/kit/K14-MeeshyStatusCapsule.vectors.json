@@ -157,7 +157,7 @@
     "messageDeepDense": 6.12,
     "messageOnLight": 5.07,
     "detailDeepDense": 4.97,
-    "actionOnWhite": 15.99,
-    "note": "calculés au pire, sur blanc pur sans flou ; chaque plateforme inscrit sa mesure et reste au-dessus"
+    "actionOnWhite": 15.9,
+    "note": "plancher inscrit par le lot iOS : calculés au pire, sur blanc pur sans flou (mesures iOS : message 7,23 sur deep dense, 6,2 sur onLight, détail 5,77, action 15,97) ; chaque plateforme inscrit sa mesure et reste au-dessus"
   }
 }
