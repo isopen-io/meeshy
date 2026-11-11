@@ -244,13 +244,34 @@ describe('CallScreen — sous « Réduire les animations », les rails entrent e
     view.done();
   });
 
-  test('un bouton touché pendant la sortie du rail répond, comme avant qu’il ne reparte', async () => {
+  test('rouvrir (…) les ramène par le fondu inverse, toujours sans déplacement', async () => {
     const view = mount();
     act(() => (view.host.querySelector('[data-call-more]') as HTMLElement).click());
-    const leaving = view.host.querySelector<HTMLElement>('[data-call-rail-side="trailing"]');
-    expect(leaving).not.toBeNull();
-    expect(leaving?.hasAttribute('inert')).toBe(false);
-    expect(leaving?.closest('[inert]')).toBeNull();
+    played.length = 0;
+    act(() => (view.host.querySelector('[data-call-more]') as HTMLElement).click());
+    await act(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+    });
+    expect(fades().map((entry) => [entry.rail, entry.duration, entry.keyframes.map((frame) => frame.opacity)])).toEqual([
+      ['leading', 150, [0, 1]],
+      ['trailing', 150, [0, 1]],
+    ]);
+    expect(fades().every((entry) => entry.keyframes.every((frame) => frame.transform === undefined))).toBe(true);
+    view.done();
+  });
+
+  test('un bouton touché pendant la sortie du rail répond : « Journal » ouvre le journal', async () => {
+    const view = mount();
+    act(() => (view.host.querySelector('[data-call-more]') as HTMLElement).click());
+    const journal = view.host.querySelector<HTMLElement>('[data-call-rail-side="trailing"] [data-call-control="journal"]');
+    expect(journal).not.toBeNull();
+    expect(journal?.closest('[inert], [aria-hidden="true"]')).toBeNull();
+    expect(view.host.querySelector('[data-call-journal-panel]')).toBeNull();
+    await act(async () => {
+      journal?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(view.host.querySelector('[data-call-journal-panel]')).not.toBeNull();
     view.done();
   });
 });
