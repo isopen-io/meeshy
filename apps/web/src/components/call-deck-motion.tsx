@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
+import { lazy, Suspense, useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 
-import { CallActionRows, type CallRowsKit } from '@/components/call-control-actions';
+import type { CallRowsKit } from '@/components/call-control-actions';
 import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
 import type { CallPillText } from '@/lib/calls/call-pill-text';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
@@ -37,6 +37,9 @@ function leaveAsGhost(node: HTMLElement, box: HTMLElement): void {
   const leaving = ghost.animate(frames, { duration: reduced ? STOW_REDUCED_MS : PILL_TEXT_EXIT.exitMs, easing: 'ease-in', fill: 'forwards' });
   leaving.onfinish = () => ghost.remove();
 }
+
+/* Les rangées restent un chunk à la demande (`call_action_rows`, `dynamic_only`), préchargé avec l'appel vivant (`call-screen.tsx`). */
+const CallActionRows = lazy(() => import('./call-control-actions').then((module) => ({ default: module.CallActionRows })));
 
 function DeckContent({ kind, box, children }: { readonly kind: 'rows' | 'panel'; readonly box: RefObject<HTMLElement | null>; readonly children: ReactNode }) {
   const node = useRef<HTMLDivElement>(null);
@@ -79,7 +82,13 @@ export function Deck({ call, language, rows, panels, kit, panel, text, box, away
     <>
       <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="" {...away}>
         <DeckContent key={kind} kind={kind} box={box}>
-          {panel === null ? <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} /> : <div data-call-pill-text={text}>{panel}</div>}
+          {panel === null ? (
+            <Suspense fallback={null}>
+              <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} />
+            </Suspense>
+          ) : (
+            <div data-call-pill-text={text}>{panel}</div>
+          )}
         </DeckContent>
       </div>
       <hr className="mx-2 my-2 border-0 border-t border-media-hairline" {...away} />
