@@ -56,16 +56,16 @@ describe('les célébrations', () => {
   });
 
   test('le texte dit que le réglage vaut pour cet appareil seulement', () => {
-    expect(text(renderToStaticMarkup(<GameSettings {...props()} />))).toContain('cet appareil seulement');
+    expect(text(renderToStaticMarkup(<GameSettings {...props()} />))).toContain('Cet appareil seulement');
   });
 });
 
 describe('« Jeu masqué »', () => {
   test('le texte dit tout ce que le geste fait : appareil, visibilités, ligue — et ce qui est gardé', () => {
     const t = text(renderToStaticMarkup(<GameSettings {...props()} />));
-    expect(t).toContain('Masque le jeu partout sur cet appareil');
+    expect(t).toContain('Masque le jeu sur cet appareil');
     expect(t).toContain('te retire de la joute publique');
-    expect(t).toContain('Tes étincelles et tes trophées sont gardés');
+    expect(t).toContain('Étincelles et trophées gardés');
   });
 
   test('l’interrupteur envoie son nouvel état ; masqué, il rappelle que réafficher ne rouvre rien', async () => {
@@ -103,7 +103,7 @@ describe('les notifications du jeu', () => {
   test('le texte dit « au plus une par jour »', () => {
     const html = renderToStaticMarkup(<GameSettings {...props({ gameNotifications: true, onGameNotifications: () => undefined })} />);
     expect(text(html)).toContain('Notifications du jeu');
-    expect(text(html)).toContain('au plus une notification du jeu par jour');
+    expect(text(html)).toContain('au plus une par jour');
   });
 
   test('réglage du compte éteint : l’interrupteur est décoché', () => {
