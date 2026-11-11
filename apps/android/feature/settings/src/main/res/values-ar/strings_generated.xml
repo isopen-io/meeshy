@@ -3,7 +3,7 @@
     <string name="about_app_name">Meeshy</string>
     <string name="about_copy">نسخ</string>
     <string name="about_copyright">‏2024-2026 Meeshy. جميع الحقوق محفوظة.</string>
-    <string name="about_description_body">مراسلة فورية، مترجمة إلى لغتك، ومشفّرة من طرف إلى طرف.</string>
+    <string name="about_description_body">مراسلة مترجمة إلى لغتك، وصوت مستنسخ، وتشفير اختياري.</string>
     <string name="about_feature_cloud_sync">المزامنة السحابية</string>
     <string name="about_feature_encryption">التشفير التام بين الطرفين</string>
     <string name="about_feature_themes">سمات قابلة للتخصيص</string>
@@ -123,7 +123,7 @@
     <string name="licenses_meeshy_body_mit">يُنشر الكود المصدري لـ Meeshy بموجب ترخيص MIT.</string>
     <string name="licenses_meeshy_title">ترخيص Meeshy</string>
     <string name="licenses_section_open_source">مفتوح المصدر</string>
-    <string name="licenses_source_body">الكود المصدري لهذا الإصدار، مجاني.</string>
+    <string name="licenses_source_body">الكود المصدري المقابل لهذا الإصدار، بما في ذلك سكربتات البناء، متاح مجانًا.</string>
     <string name="licenses_source_commit">المراجعة %1$s</string>
     <string name="licenses_source_open">فتح الكود المصدري</string>
     <string name="licenses_source_title">الكود المصدري</string>
@@ -211,7 +211,7 @@
     <string name="purge_kind_reactions">التفاعلات</string>
     <string name="purge_kind_videos">مقاطع الفيديو</string>
     <string name="purge_limitation_embedded">مضمَّنة في المحتوى الذي يحملها.</string>
-    <string name="purge_limitation_indivisible">نفس تخزين المنشورات: أفرغ الصف هناك.</string>
+    <string name="purge_limitation_indivisible">نفس تخزين المنشورات: أفرغ صف المنشورات.</string>
     <string name="purge_limitation_no_store">لا يتم الاحتفاظ بالمستندات في ذاكرة التخزين المؤقت: لا يوجد ما يمكن تحريره.</string>
     <string name="purge_limitation_not_applicable">لا ينطبق على هذا المجال.</string>
     <string name="purge_select_all">تحديد الكل</string>
@@ -315,7 +315,7 @@
     <string name="settings_logout_hint">تسجيل الخروج من حسابك</string>
     <string name="settings_logout_in_progress">جارٍ تسجيل الخروج...</string>
     <string name="settings_media_autosave_header">المعرض</string>
-    <string name="settings_media_autosave_subtitle">تنضم الوسائط المستلمة إلى ألبوم Meeshy.</string>
+    <string name="settings_media_autosave_subtitle">تنضم الصور ومقاطع الفيديو المستلمة إلى ألبوم Meeshy مرة واحدة. لا تُحفظ أبدًا الوسائط المؤقتة أو الضبابية أو ذات العرض الواحد.</string>
     <string name="settings_media_autosave_title">الحفظ في الصور</string>
     <string name="settings_media_capture_header">عند التصوير</string>
     <string name="settings_media_capture_original_subtitle">تُحفظ الصورة أو الفيديو الخام، دون تأثيرات أو إطار، في الصور مع كل لقطة.</string>
@@ -364,7 +364,7 @@
     <string name="settings_privacy_hide_from_contact_search_info">عند التفعيل، لن يظهر ملفك الشخصي في البحث برقم الهاتف أو البريد الإلكتروني، ولن يتم إخطار جهات اتصالك بانضمامك إلى Meeshy.</string>
     <string name="settings_privacy_notify_contacts_on_return">الإعلان عن عودتي</string>
     <string name="settings_privacy_notify_contacts_on_return_info">يرى أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني «كان على Meeshy مؤخرًا»، مرة واحدة على الأكثر كل 3 ساعات. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية.</string>
-    <string name="settings_privacy_online_status_info">عند إيقافها لا يراها أحد، لكن الكتابة في محادثة تظل دليلاً على نشاطك.</string>
+    <string name="settings_privacy_online_status_info">النقطة الخضراء على صورتك تعني أنك نشط. عند إيقافها لا يراها أحد، لكن الكتابة في محادثة تظل دليلاً على نشاطك.</string>
     <string name="settings_privacy_policy">سياسة الخصوصية</string>
     <string name="settings_privacy_read_receipts_info">الأمر متبادل: إن لم تُرسل إشعارات القراءة، فلن ترى أيضًا ما إذا قُرئت رسائلك.</string>
     <string name="settings_privacy_title">الخصوصية</string>
@@ -398,7 +398,7 @@
     <string name="settings_tools_progression_hint">شاراتك ومستواك وسلسلة أيامك النشطة</string>
     <string name="settings_tools_stats">الإحصائيات</string>
     <string name="settings_transcription_auto">تلقائي</string>
-    <string name="settings_transcription_engine">المحرك</string>
+    <string name="settings_transcription_engine">محرك النسخ النصي</string>
     <string name="settings_transcription_engine_a11y">محرك النسخ النصي</string>
     <string name="settings_version_label">الإصدار</string>
     <string name="settings_voice_create">إنشاء</string>

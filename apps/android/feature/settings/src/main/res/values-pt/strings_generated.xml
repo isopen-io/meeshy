@@ -3,7 +3,7 @@
     <string name="about_app_name">Meeshy</string>
     <string name="about_copy">Copiar</string>
     <string name="about_copyright">2024-2026 Meeshy. Todos os direitos reservados.</string>
-    <string name="about_description_body">Mensagens em tempo real, traduzidas no seu idioma, criptografadas de ponta a ponta.</string>
+    <string name="about_description_body">Mensagens traduzidas no seu idioma, voz clonada, criptografia opcional.</string>
     <string name="about_feature_cloud_sync">Sincronização na nuvem</string>
     <string name="about_feature_encryption">Criptografia de ponta a ponta</string>
     <string name="about_feature_themes">Temas personalizáveis</string>
@@ -123,7 +123,7 @@
     <string name="licenses_meeshy_body_mit">O código-fonte do Meeshy é publicado sob a licença MIT.</string>
     <string name="licenses_meeshy_title">Licença do Meeshy</string>
     <string name="licenses_section_open_source">Código aberto</string>
-    <string name="licenses_source_body">Código-fonte desta versão, gratuito.</string>
+    <string name="licenses_source_body">O código-fonte desta versão, scripts de compilação incluídos, está disponível gratuitamente.</string>
     <string name="licenses_source_commit">Revisão %1$s</string>
     <string name="licenses_source_open">Abrir o código-fonte</string>
     <string name="licenses_source_title">Código-fonte</string>
@@ -211,7 +211,7 @@
     <string name="purge_kind_reactions">Reações</string>
     <string name="purge_kind_videos">Vídeos</string>
     <string name="purge_limitation_embedded">Incluídas no conteúdo que as contém.</string>
-    <string name="purge_limitation_indivisible">Mesmo armazenamento que Publicações: limpe-a.</string>
+    <string name="purge_limitation_indivisible">Mesmo armazenamento que Publicações: limpe a linha Publicações.</string>
     <string name="purge_limitation_no_store">Os documentos não são mantidos em cache: não há nada a liberar.</string>
     <string name="purge_limitation_not_applicable">Não se aplica a este domínio.</string>
     <string name="purge_select_all">Selecionar tudo</string>
@@ -315,7 +315,7 @@
     <string name="settings_logout_hint">Sair da sua conta</string>
     <string name="settings_logout_in_progress">Saindo...</string>
     <string name="settings_media_autosave_header">Galeria</string>
-    <string name="settings_media_autosave_subtitle">As mídias recebidas vão para o álbum Meeshy.</string>
+    <string name="settings_media_autosave_subtitle">As imagens e vídeos recebidos vão para o álbum Meeshy, uma única vez. Nunca uma mídia efêmera, desfocada ou de visualização única.</string>
     <string name="settings_media_autosave_title">Salvar em Fotos</string>
     <string name="settings_media_capture_header">Ao capturar</string>
     <string name="settings_media_capture_original_subtitle">A foto ou o vídeo bruto, sem efeito nem moldura, é salvo no Fotos a cada captura.</string>
@@ -364,7 +364,7 @@
     <string name="settings_privacy_hide_from_contact_search_info">Ativado, seu perfil não aparece mais em buscas por número ou e-mail, e seus contatos não são avisados da sua chegada ao Meeshy.</string>
     <string name="settings_privacy_notify_contacts_on_return">Anunciar meu retorno</string>
     <string name="settings_privacy_notify_contacts_on_return_info">Seus amigos e quem tem seu número ou e-mail veem “esteve no Meeshy recentemente”, no máximo uma vez a cada 3 horas. Nunca se seu status online estiver oculto.</string>
-    <string name="settings_privacy_online_status_info">Desativado, ninguém vê o ponto, mas escrever em uma conversa continua revelando sua atividade.</string>
+    <string name="settings_privacy_online_status_info">O ponto verde no seu avatar indica que você está ativo. Desativado, ninguém o vê — mas escrever em uma conversa continua revelando sua atividade.</string>
     <string name="settings_privacy_policy">Política de privacidade</string>
     <string name="settings_privacy_read_receipts_info">É recíproco: se você não enviar confirmações de leitura, também não verá se suas mensagens foram lidas.</string>
     <string name="settings_privacy_title">Privacidade</string>
@@ -398,7 +398,7 @@
     <string name="settings_tools_progression_hint">Seus emblemas, seu nível e sua sequência de dias ativos</string>
     <string name="settings_tools_stats">Estatísticas</string>
     <string name="settings_transcription_auto">Automática</string>
-    <string name="settings_transcription_engine">Motor</string>
+    <string name="settings_transcription_engine">Motor de transcrição</string>
     <string name="settings_transcription_engine_a11y">Motor de transcrição</string>
     <string name="settings_version_label">Versão</string>
     <string name="settings_voice_create">Criar</string>

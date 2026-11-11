@@ -179241,53 +179241,6 @@
         }
       }
     },
-    "settings.media.capture.rendered.note": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تلقائيًا عند تأكيد التعديل. وإلا فإن سهم التعديل يحفظها عند الطلب."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatisch beim Bestätigen der Bearbeitung. Sonst sichert sie der Pfeil der Bearbeitung auf Wunsch."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatically when you confirm the edit. Otherwise, the arrow in the edit view saves it on demand."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automáticamente al validar la edición. Si no, la flecha de la edición la guarda cuando quieras."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automaticamente quando confermi la modifica. Altrimenti, la freccia della modifica la salva su richiesta."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automaticamente ao confirmar a edição. Caso contrário, a seta da edição a salva quando você quiser."
-          }
-        }
-      }
-    },
     "settings.media.capture.rendered.note.question": {
       "extractionState": "manual",
       "localizations": {
@@ -183947,43 +183900,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عند إيقافها لا يراها أحد، لكن الكتابة في محادثة تظل دليلاً على نشاطك."
+            "value": "النقطة الخضراء على صورتك تعني أنك نشط. عند إيقافها لا يراها أحد، لكن الكتابة في محادثة تظل دليلاً على نشاطك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deaktiviert sieht niemand den Punkt – wer in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem."
+            "value": "Der grüne Punkt auf deinem Avatar zeigt, dass du aktiv bist. Deaktiviert sieht ihn niemand — wer aber in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Turned off, nobody sees the dot. Typing in a conversation still shows you're around."
+            "value": "The green dot on your avatar means you're active. Turned off, nobody sees it — but typing in a conversation still proves you're around."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Desactivado, nadie ve el punto, pero escribir en una conversación sigue delatando tu actividad."
+            "value": "El punto verde en tu avatar indica que estás activo. Desactivado, nadie lo ve, pero escribir en una conversación sigue delatando tu actividad."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Désactivée, personne ne voit ce point. Écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs."
+            "value": "La pastille verte sur votre avatar indique que vous êtes actif. Désactivée, personne ne voit ce point — mais écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Disattivato, nessuno vede il punto, ma scrivere in una conversazione rivela comunque la tua presenza."
+            "value": "Il punto verde sul tuo avatar indica che sei attivo. Disattivato, nessuno lo vede, ma scrivere in una conversazione rivela comunque la tua presenza."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Desativado, ninguém vê o ponto, mas escrever em uma conversa continua revelando sua atividade."
+            "value": "O ponto verde no seu avatar indica que você está ativo. Desativado, ninguém o vê — mas escrever em uma conversa continua revelando sua atividade."
+          }
+        }
+      }
+    },
+    "settings.privacy.online_status.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عند إيقافها لا يرى أحد النقطة. تظل الكتابة دليلًا على نشاطك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deaktiviert sieht niemand den Punkt. Schreiben verrät deine Aktivität trotzdem."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turned off, nobody sees the dot. Typing still shows you're active."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivado, nadie ve el punto. Escribir sigue mostrando tu actividad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Désactivée, personne ne voit ce point. Écrire reste une preuve d'activité."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disattivato, nessuno vede il punto. Scrivere mostra comunque la tua attività."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desativado, ninguém vê o ponto. Escrever ainda mostra sua atividade."
           }
         }
       }
@@ -187425,43 +187425,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المحرك"
+            "value": "محرك النسخ النصي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Engine"
+            "value": "Transkriptions-Engine"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Engine"
+            "value": "Transcription engine"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Motor"
+            "value": "Motor de transcripción"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Moteur"
+            "value": "Moteur de transcription"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Motore"
+            "value": "Motore di trascrizione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Motor"
+            "value": "Motor de transcrição"
           }
         }
       }
@@ -236930,6 +236930,53 @@
     "settings.privacy.notify_contacts_on_return.info": {
       "extractionState": "manual",
       "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your friends and people who have your number or email see “was on Meeshy recently”, at most once every 3 hours. Never if your online status is hidden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus amigos y quienes tienen tu número o tu correo ven «estuvo en Meeshy hace poco», como máximo una vez cada 3 horas. Nunca si tu estado en línea está oculto."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Freunde und alle, die deine Nummer oder E-Mail haben, sehen „war vor Kurzem auf Meeshy“ – höchstens einmal alle 3 Stunden. Nie, wenn dein Online-Status verborgen ist."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi amici e chi ha il tuo numero o la tua e-mail vedono «è stato su Meeshy di recente», al massimo una volta ogni 3 ore. Mai se il tuo stato online è nascosto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus amigos e quem tem seu número ou e-mail veem “esteve no Meeshy recentemente”, no máximo uma vez a cada 3 horas. Nunca se seu status online estiver oculto."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يرى أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني «كان على Meeshy مؤخرًا»، مرة واحدة على الأكثر كل 3 ساعات. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية."
+          }
+        }
+      }
+    },
+    "settings.privacy.notify_contacts_on_return.note": {
+      "extractionState": "manual",
+      "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
@@ -240547,53 +240594,6 @@
       }
     },
     "settings.media.autosave.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تنضم الوسائط المستلمة إلى ألبوم Meeshy."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Empfangene Medien landen im Meeshy-Album."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Received media join the Meeshy album."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los archivos recibidos se guardan en el álbum Meeshy."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les médias reçus rejoignent l'album Meeshy."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I contenuti ricevuti finiscono nell'album Meeshy."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "As mídias recebidas vão para o álbum Meeshy."
-          }
-        }
-      }
-    },
-    "settings.media.autosave.note": {
       "extractionState": "manual",
       "localizations": {
         "ar": {

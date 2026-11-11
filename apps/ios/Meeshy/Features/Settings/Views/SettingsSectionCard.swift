@@ -191,14 +191,14 @@ enum SettingsInfoNotes {
     static var galleryAutosave: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "settings.media.autosave.note.question", defaultValue: "Quels médias sont enregistrés ?", bundle: .main),
-            text: String(localized: "settings.media.autosave.note", defaultValue: "Les images et vidéos reçues rejoignent l'album Meeshy, une seule fois. Jamais un média éphémère, flouté ou à vue unique.", bundle: .main)
+            text: String(localized: "settings.media.autosave.subtitle", defaultValue: "Les images et vidéos reçues rejoignent l'album Meeshy, une seule fois. Jamais un média éphémère, flouté ou à vue unique.", bundle: .main)
         )
     }
 
     static var renderedCapture: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "settings.media.capture.rendered.note.question", defaultValue: "Quand la version avec effets est-elle enregistrée ?", bundle: .main),
-            text: String(localized: "settings.media.capture.rendered.note", defaultValue: "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande.", bundle: .main)
+            text: String(localized: "settings.media.capture.rendered.subtitle", defaultValue: "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande.", bundle: .main)
         )
     }
 
@@ -254,14 +254,14 @@ enum SettingsInfoNotes {
     static var onlineStatus: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "settings.privacy.online_status.question", defaultValue: "Qui voit que je suis en ligne ?", bundle: .main),
-            text: String(localized: "settings.privacy.online_status.info", defaultValue: "Désactivée, personne ne voit ce point. Écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs.", bundle: .main)
+            text: String(localized: "settings.privacy.online_status.note", defaultValue: "Désactivée, personne ne voit ce point. Écrire reste une preuve d'activité.", bundle: .main)
         )
     }
 
     static var returnAnnouncement: MeeshyInfoNote {
         MeeshyInfoNote(
             question: String(localized: "settings.privacy.notify_contacts_on_return.question", defaultValue: "Qui est prévenu de mon retour ?", bundle: .main),
-            text: String(localized: "settings.privacy.notify_contacts_on_return.info", defaultValue: "Vos amis et les porteurs de votre numéro ou e-mail. Jamais si votre statut en ligne est masqué.", bundle: .main)
+            text: String(localized: "settings.privacy.notify_contacts_on_return.note", defaultValue: "Vos amis et les porteurs de votre numéro ou e-mail. Jamais si votre statut en ligne est masqué.", bundle: .main)
         )
     }
 

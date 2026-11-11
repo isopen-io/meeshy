@@ -3,7 +3,7 @@
     <string name="about_app_name">Meeshy</string>
     <string name="about_copy">Kopieren</string>
     <string name="about_copyright">2024-2026 Meeshy. Alle Rechte vorbehalten.</string>
-    <string name="about_description_body">Echtzeit-Messaging, in deine Sprache übersetzt, Ende-zu-Ende-verschlüsselt.</string>
+    <string name="about_description_body">Messaging in deiner Sprache, geklonte Stimme, Verschlüsselung nach Wahl.</string>
     <string name="about_feature_cloud_sync">Cloud-Synchronisierung</string>
     <string name="about_feature_encryption">Ende-zu-Ende-Verschlüsselung</string>
     <string name="about_feature_themes">Anpassbare Themes</string>
@@ -123,7 +123,7 @@
     <string name="licenses_meeshy_body_mit">Der Quellcode von Meeshy wird unter der MIT-Lizenz veröffentlicht.</string>
     <string name="licenses_meeshy_title">Lizenz von Meeshy</string>
     <string name="licenses_section_open_source">Open Source</string>
-    <string name="licenses_source_body">Quellcode dieser Version, kostenlos.</string>
+    <string name="licenses_source_body">Der Quellcode dieser Version, einschließlich der Build-Skripte, ist kostenlos verfügbar.</string>
     <string name="licenses_source_commit">Revision %1$s</string>
     <string name="licenses_source_open">Quellcode öffnen</string>
     <string name="licenses_source_title">Quellcode</string>
@@ -211,7 +211,7 @@
     <string name="purge_kind_reactions">Reaktionen</string>
     <string name="purge_kind_videos">Videos</string>
     <string name="purge_limitation_embedded">Im Inhalt enthalten, der sie trägt.</string>
-    <string name="purge_limitation_indivisible">Gleicher Speicher wie Beiträge: dort leeren.</string>
+    <string name="purge_limitation_indivisible">Gleicher Speicher wie Beiträge: leere die Zeile Beiträge.</string>
     <string name="purge_limitation_no_store">Dokumente werden nicht im Cache gespeichert – es gibt nichts freizugeben.</string>
     <string name="purge_limitation_not_applicable">Für diesen Bereich nicht zutreffend.</string>
     <string name="purge_select_all">Alle auswählen</string>
@@ -315,7 +315,7 @@
     <string name="settings_logout_hint">Von deinem Konto abmelden</string>
     <string name="settings_logout_in_progress">Abmeldung läuft...</string>
     <string name="settings_media_autosave_header">Galerie</string>
-    <string name="settings_media_autosave_subtitle">Empfangene Medien landen im Meeshy-Album.</string>
+    <string name="settings_media_autosave_subtitle">Empfangene Bilder und Videos landen einmalig im Meeshy-Album. Nie ein flüchtiges, verschwommenes oder Einmal-Medium.</string>
     <string name="settings_media_autosave_title">In Fotos sichern</string>
     <string name="settings_media_capture_header">Bei der Aufnahme</string>
     <string name="settings_media_capture_original_subtitle">Das unbearbeitete Foto oder Video, ohne Effekt oder Rahmen, wird bei jeder Aufnahme in Fotos gesichert.</string>
@@ -364,7 +364,7 @@
     <string name="settings_privacy_hide_from_contact_search_info">Wenn aktiviert, erscheint dein Profil nicht mehr bei einer Suche nach Telefonnummer oder E-Mail, und deine Kontakte werden nicht benachrichtigt, wenn du zu Meeshy kommst.</string>
     <string name="settings_privacy_notify_contacts_on_return">Meine Rückkehr ankündigen</string>
     <string name="settings_privacy_notify_contacts_on_return_info">Deine Freunde und alle, die deine Nummer oder E-Mail haben, sehen „war vor Kurzem auf Meeshy“ – höchstens einmal alle 3 Stunden. Nie, wenn dein Online-Status verborgen ist.</string>
-    <string name="settings_privacy_online_status_info">Deaktiviert sieht niemand den Punkt – wer in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem.</string>
+    <string name="settings_privacy_online_status_info">Der grüne Punkt auf deinem Avatar zeigt, dass du aktiv bist. Deaktiviert sieht ihn niemand — wer aber in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem.</string>
     <string name="settings_privacy_policy">Datenschutzrichtlinie</string>
     <string name="settings_privacy_read_receipts_info">Gilt in beide Richtungen: Wer keine Lesebestätigungen sendet, sieht auch nicht, ob die eigenen Nachrichten gelesen wurden.</string>
     <string name="settings_privacy_title">Datenschutz</string>
@@ -398,7 +398,7 @@
     <string name="settings_tools_progression_hint">Ihre Abzeichen, Ihr Level und Ihre Serie aktiver Tage</string>
     <string name="settings_tools_stats">Statistiken</string>
     <string name="settings_transcription_auto">Automatisch</string>
-    <string name="settings_transcription_engine">Engine</string>
+    <string name="settings_transcription_engine">Transkriptions-Engine</string>
     <string name="settings_transcription_engine_a11y">Transkriptions-Engine</string>
     <string name="settings_version_label">Version</string>
     <string name="settings_voice_create">Erstellen</string>
