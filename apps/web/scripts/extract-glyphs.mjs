@@ -1004,6 +1004,7 @@ const LINKS = [
   'browser',
   'arrow-square-out',
   'share-network',
+  'info',
 ];
 
 emit({

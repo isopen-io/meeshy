@@ -1,11 +1,9 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense } from 'react';
 import { useStore } from 'zustand/react';
 
 import { StreamAudio } from '@/components/call-media-elements';
 import { CallScreen } from '@/components/call-screen';
 import { callStore, type ActiveCall } from '@/lib/calls/call-store';
-import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **CE QUE LA COUCHE D'APPEL PEINT** (#6382) — l'écran plein, OU la pastille
@@ -22,26 +20,11 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * bulle ne couvrent l'application : on navigue et on écrit dessous.
  */
 
-const PILL_BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
-
-/* Le bandeau d'un second appel (#17499) : son chunk, préchargé par l'appel vivant (`call-screen.tsx` › PREFETCH). */
-const CallWaitingBanner = lazy(() => import('./call-waiting-banner').then((module) => ({ default: module.CallWaitingBanner })));
+/* Le SECOND appel (#17499) : le bandeau de celui qui arrive et le refus « un appel est déjà en cours » d'en composer un, dans un chunk préchargé par l'appel vivant (`call-screen.tsx` › PREFETCH). */
+const SecondCallLayer = lazy(() => import('./call-waiting-banner').then((module) => ({ default: module.SecondCallLayer })));
 
 /* La pastille de l'appel réduit (`FloatingCallPillView.swift`) : son chunk, chargé dès que l'appel vit (`call-screen.tsx`), si bien que réduire ne l'attend pas. */
 const CallPill = lazy(() => import('./call-floating-pill').then((module) => ({ default: module.CallPill })));
-
-function Notice() {
-  const language = currentInterfaceLanguage();
-  useEffect(() => {
-    const handle = setTimeout(() => callStore.setState({ notice: null }), 2500);
-    return () => clearTimeout(handle);
-  }, []);
-  return (
-    <div role="status" className="fixed inset-x-0 z-[210] mx-auto w-fit rounded-full px-4 py-2 text-body shadow-lg" style={{ background: PILL_BG, color: 'var(--color-on-media)', bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}>
-      {translate(language, 'call.notice.alreadyInCall')}
-    </div>
-  );
-}
 
 /** L'écran plein ou la pastille — la bulle est un chunk frère (`call-layer.tsx`) ; la sonnerie et la fin reprennent toujours l'écran plein. */
 export function ActiveCallView({ call }: { readonly call: ActiveCall }) {
@@ -67,12 +50,11 @@ export function CallOverlay() {
         <StreamAudio key={userId} stream={stream} />
       ))}
       {call === null ? null : <ActiveCallView call={call} />}
-      {waiting === null ? null : (
+      {waiting === null && notice === null ? null : (
         <Suspense fallback={null}>
-          <CallWaitingBanner waiting={waiting} />
+          <SecondCallLayer waiting={waiting} busy={notice !== null} />
         </Suspense>
       )}
-      {notice === null ? null : <Notice />}
     </>
   );
 }

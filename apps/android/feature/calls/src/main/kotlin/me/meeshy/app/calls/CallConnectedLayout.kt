@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import me.meeshy.sdk.model.call.CallAudioStageLayout
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeStow
@@ -235,7 +236,15 @@ internal fun CallConnectedColumn(
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; la capture, dans la capsule ci-dessous.
                 Spacer(Modifier.weight(1f).fillMaxWidth())
             } else {
-                CallAudioStage(state = state, peer = peer, signalingDegraded = signalingDegraded, peerSpeech = peerSpeech)
+                // #17529 : le journal ouvert dans la pilule resserre l'avatar en en-tête compact (P9b).
+                CallAudioStageSwitch(
+                    compact = CallAudioStageLayout.compacts(pillText, isVideoStage = videoStage),
+                    state = state,
+                    peer = peer,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    signalingDegraded = signalingDegraded,
+                    peerSpeech = peerSpeech,
+                )
             }
 
             state.captionText?.let { caption -> CallCaption(caption) }
