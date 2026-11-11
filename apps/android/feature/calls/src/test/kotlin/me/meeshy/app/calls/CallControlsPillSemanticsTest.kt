@@ -323,6 +323,7 @@ class CallControlsPillSemanticsTest {
 
         rule.mainClock.autoAdvance = false
         layer = CallScreenLayer.Idle
+        rule.waitForIdle()
         rule.mainClock.advanceTimeBy(100)
         val folding = rule.onNodeWithTag("pill").fetchSemanticsNode().size.height
         rule.mainClock.advanceTimeBy(1_000)
