@@ -258,6 +258,7 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
         return stack(layout: layout)
             .modifier(MeeshyAnchoredSheetFrame(height: height, layoutHeight: layout.layoutHeight, ceiling: ceiling))
             .frame(maxWidth: maxWidth ?? .infinity)
+            .contentShape(Rectangle())
             .background(alignment: .top) { surfaceShape }
             .modifier(MeeshyAnchoredSheetOffset(restOffset: layout.restOffset, drag: drag))
             .environment(\.meeshySheetClose, onDismiss)
