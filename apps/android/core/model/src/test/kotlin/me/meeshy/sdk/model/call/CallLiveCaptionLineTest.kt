@@ -128,12 +128,21 @@ class CallLiveCaptionLineTest {
     }
 
     @Test
-    fun `reception is tied to the open panel and the open gate`() {
+    fun `the journal keeps the whole call, my captions on or off, and only a closed gate drops it (#17342)`() {
         val segment = seg()
 
-        assertThat(CallCaptionsState(gate = CallCaptionsGate.Open).receiving(segment).journal.isEmpty).isTrue()
+        assertThat(CallCaptionsState(gate = CallCaptionsGate.Open).receiving(segment).journal.isEmpty).isFalse()
         assertThat(CallCaptionsState(gate = CallCaptionsGate.Open).advanced().receiving(segment).journal.isEmpty).isFalse()
         assertThat(CallCaptionsState(gate = CallCaptionsGate.Open, isPanelOpen = true).gated(CallCaptionsGate.EndToEnd).receiving(segment).journal.isEmpty).isTrue()
+        assertThat(CallCaptionsState().receiving(segment).journal.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `what was gathered while my captions were off is still in the journal once I turn them on`() {
+        val gathered = CallCaptionsState(gate = CallCaptionsGate.Open).receiving(seg())
+
+        assertThat(gathered.advanced().journal.segments).hasSize(1)
+        assertThat(gathered.advanced().advanced().advanced().journal.segments).hasSize(1)
     }
 
     @Test
