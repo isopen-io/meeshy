@@ -119,9 +119,6 @@ export function RecentClicks({ language, clicks }: { readonly language: Interfac
 
 export function utmRows(language: InterfaceLanguage, link: MyTrackingLink): readonly InfoRow[] {
   return [
-    ...(link.campaign === null ? [] : [{ key: 'campaign', label: translateLinkFamilies(language, 'linkFamilies.tracking.campaign'), value: link.campaign }]),
-    ...(link.source === null ? [] : [{ key: 'source', label: translateLinkFamilies(language, 'linkFamilies.tracking.source'), value: link.source }]),
-    ...(link.medium === null ? [] : [{ key: 'medium', label: translateLinkFamilies(language, 'linkFamilies.tracking.medium'), value: link.medium }]),
     { key: 'destination', label: translateLinkFamilies(language, 'linkFamilies.tracking.destination'), value: link.originalUrl, ltr: true },
     { key: 'createdAt', label: translate(language, 'links.detail.createdAt'), value: formatDate(language, link.createdAt) },
     ...(link.expiresAt === null ? [] : [{ key: 'expiresAt', label: translate(language, 'links.detail.expiresAt'), value: formatDate(language, link.expiresAt) }]),
