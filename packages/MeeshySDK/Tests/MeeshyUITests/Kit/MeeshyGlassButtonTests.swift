@@ -382,6 +382,21 @@ struct MeeshyGlassButtonTests {
         #expect(!code.contains("sensoryFeedback"))
     }
 
+    @Test("l'appui long offert au lecteur d'écran passe par le déclencheur : désactivé, ni action ni haptique")
+    func source_namedLongPress_goesThroughTheTrigger() throws {
+        let code = try Self.code("MeeshyGlassButton.swift")
+        #expect(!code.contains("perform: onLongPress\n"))
+        #expect(code.contains("perform: onLongPress == nil ? nil : performNamedLongPress"))
+        let body = try #require(code.range(of: "private func performNamedLongPress()"))
+        #expect(code[body.upperBound...].prefix(260).contains("MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled"))
+    }
+
+    @Test("le voile d'appui part au toucher : aucune animation de l'hôte ni de K01 ne le retarde")
+    func source_pressVeil_isNeverAnimated() throws {
+        let code = try Self.code("MeeshyGlassButton.swift")
+        #expect(code.contains(".animation(nil, value: recipe.pressVeilOpacity)"))
+    }
+
     // MARK: - Aides
 
     private static var repositoryRoot: URL {

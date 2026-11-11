@@ -189,8 +189,9 @@ extension MeeshyGlassButtonFace: Equatable where Glyph: Equatable, Badge: Equata
 
 /// Le fond plein du disque : blanc de l'actif, rouge du destructif, voile doux,
 /// plus le voile d'appui là où K01 ne pose pas de matière. Seul le fond s'anime
-/// à un changement de tenue ; l'appui est immédiat et l'ombre de l'actif ne
-/// bouge jamais.
+/// à un changement de tenue ; le voile d'appui part au toucher (le ressort de
+/// K01, posé au-dessus, ne le retarde pas) et l'ombre de l'actif ne bouge
+/// jamais.
 private struct MeeshyGlassButtonFillLayer: View {
     let recipe: MeeshyGlassButtonRecipe
     let isDark: Bool
@@ -198,7 +199,11 @@ private struct MeeshyGlassButtonFillLayer: View {
     var body: some View {
         Circle()
             .fill(recipe.fillColor(isDark: isDark).opacity(recipe.fillOpacity))
-            .overlay { Circle().fill(MeeshyColors.onMedia.opacity(recipe.pressVeilOpacity)) }
+            .overlay {
+                Circle()
+                    .fill(MeeshyColors.onMedia.opacity(recipe.pressVeilOpacity))
+                    .animation(nil, value: recipe.pressVeilOpacity)
+            }
             .meeshyAnimation(.easeInOut(duration: MeeshyGlassButtonRecipe.toneFadeDuration), value: recipe.kind)
             .shadow(color: shadowColor, radius: recipe.shadow?.radius ?? 0, x: 0, y: recipe.shadow?.y ?? 0)
             .animation(nil, value: recipe.kind)
@@ -336,7 +341,7 @@ public struct MeeshyGlassButton<Glyph: View, Badge: View>: View {
                 name: MeeshyGlassButtonAccessibilityState.longPressActionName(
                     longPressLabel: spec.longPressLabel, label: spec.label
                 ),
-                perform: onLongPress
+                perform: onLongPress == nil ? nil : performNamedLongPress
             ))
             .accessibilityShowsLargeContentViewer {
                 Label { Text(spec.label) } icon: { glyph }
@@ -357,6 +362,14 @@ public struct MeeshyGlassButton<Glyph: View, Badge: View>: View {
             return
         }
         MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled, haptic: spec.haptic, action: action)
+    }
+
+    /// L'appui long offert au lecteur d'écran : la même loi que le doigt
+    /// (désactivé, rien ; sinon un impact puis l'action), sans lever le drapeau
+    /// du geste, qui avalerait la prochaine activation.
+    private func performNamedLongPress() {
+        guard let onLongPress else { return }
+        MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled, haptic: spec.haptic, action: onLongPress)
     }
 
     private func fireLongPress() {
