@@ -7,6 +7,7 @@
 const itDownload = {
   'download.title': 'Scarica Meeshy',
   'download.body': 'Scrivi nella tua lingua e leggi nella tua: Meeshy traduce ogni messaggio lungo la strada.',
+  'download.free': 'Gratis',
   'download.appStore': 'Scarica su App Store',
   'download.web': 'Apri Meeshy nel browser',
   'download.badge.appStore.caption': 'Scarica su',

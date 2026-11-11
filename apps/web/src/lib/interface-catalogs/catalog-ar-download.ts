@@ -7,6 +7,7 @@
 const arDownload = {
   'download.title': 'نزّل Meeshy',
   'download.body': 'اكتب بلغتك واقرأ بلغتك: يترجم Meeshy كل رسالة في الطريق.',
+  'download.free': 'مجاني',
   'download.appStore': 'التنزيل من App Store',
   'download.web': 'افتح Meeshy في المتصفح',
   'download.badge.appStore.caption': 'حمّله من',

@@ -7,6 +7,7 @@
 const deDownload = {
   'download.title': 'Meeshy holen',
   'download.body': 'Schreibe in deiner Sprache und lies in deiner: Meeshy übersetzt jede Nachricht unterwegs.',
+  'download.free': 'Kostenlos',
   'download.appStore': 'Laden im App Store',
   'download.web': 'Meeshy im Browser öffnen',
   'download.badge.appStore.caption': 'Laden im',

@@ -7,6 +7,7 @@
 const enDownload = {
   'download.title': 'Get Meeshy',
   'download.body': 'Write in your language, read in yours: Meeshy translates every message on the way.',
+  'download.free': 'Free',
   'download.appStore': 'Download on the App Store',
   'download.web': 'Open Meeshy in your browser',
   'download.badge.appStore.caption': 'Download on the',

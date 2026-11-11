@@ -7,6 +7,7 @@
 const frDownload = {
   'download.title': 'Téléchargez Meeshy',
   'download.body': 'Écrivez dans votre langue, lisez dans la vôtre : Meeshy traduit chaque message au passage.',
+  'download.free': 'Gratuit',
   'download.appStore': 'Télécharger dans l’App Store',
   'download.web': 'Ouvrir Meeshy dans le navigateur',
   'download.badge.appStore.caption': 'Télécharger dans',

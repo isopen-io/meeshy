@@ -184,6 +184,9 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
           <p className="max-w-md" style={{ color: 'var(--color-ios-ink-2)' }}>
             {t('download.body')}
           </p>
+          <p data-download-free className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {t('download.free')}
+          </p>
         </header>
 
         <div className="grid gap-5 md:grid-cols-2">

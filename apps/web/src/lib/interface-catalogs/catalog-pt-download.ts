@@ -7,6 +7,7 @@
 const ptDownload = {
   'download.title': 'Baixe o Meeshy',
   'download.body': 'Escreva no seu idioma e leia no seu: o Meeshy traduz cada mensagem no caminho.',
+  'download.free': 'Grátis',
   'download.appStore': 'Baixar na App Store',
   'download.web': 'Abrir o Meeshy no navegador',
   'download.badge.appStore.caption': 'Baixar na',

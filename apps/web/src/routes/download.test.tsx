@@ -161,12 +161,14 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     expect(html).not.toContain('قريبًا');
   });
 
-  test('chaque information est dite une fois : ni « Gratuit sur… » sous les badges, ni phrase sur l’ordinateur, le bouton reste (épure #17584, règle 2)', () => {
+  test('chaque information est dite une fois : « Gratuit » UNE fois sous le titre, plus sous chaque badge ; ni phrase sur l’ordinateur, le bouton reste (épure #17584, règle 2)', () => {
+    const free = { fr: 'Gratuit', en: 'Free', es: 'Gratis', pt: 'Grátis', de: 'Kostenlos', it: 'Gratis', ar: 'مجاني' } as const;
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       const html = renderToStaticMarkup(<DownloadPage language={language} />);
       expect(html).toContain('data-store="app-store"');
       expect(html).toContain('data-store="google-play"');
-      expect(html).not.toMatch(/<p [^>]*>[^<]*(Gratuit|Free on|Gratis|Grátis|Kostenlos|مجاني)[^<]*<\/p>/u);
+      expect(html.match(new RegExp(`<p [^>]*>[^<]*${free[language]}[^<]*</p>`, 'gu'))?.length).toBe(1);
+      expect(html).toContain(`>${free[language]}</p>`);
     }
     const fr = renderToStaticMarkup(<DownloadPage language="fr" />);
     expect(fr).not.toContain('sans rien installer');
