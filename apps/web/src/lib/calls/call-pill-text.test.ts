@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 
-import { callPillText, pillHasBaseRow, pillShowsCaptionsBand, pillStaysWhenChromeStowed, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS } from './call-pill-text';
+import { callPillText, pillCompactsAudioStage, pillHasBaseRow, pillShowsCaptionsBand, pillStaysWhenChromeStowed, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS } from './call-pill-text';
 import { PILL_TEXT_EXIT } from './call-pill-text-exit';
 import { IDLE, nextLayer, type CallScreenLayer } from './call-screen-layer';
 
@@ -157,5 +157,23 @@ describe('le texte repart comme il est venu (#17406)', () => {
     const out = keyframes('call-pill-text-out');
     expect(out).toContain('opacity: 0');
     expect([...out.matchAll(/([a-z-]+):/g)].map((match) => match[1]).filter((property) => property !== 'opacity' && property !== 'transform')).toEqual([]);
+  });
+});
+
+describe('#17529 — en appel audio, le journal ouvert dans la pilule réduit l’avatar (loi 6, P9b, `compactsAudioLayout` d’iOS)', () => {
+  test('seul le journal ouvert dans la pilule resserre la scène audio, sous-titres allumés ou non', () => {
+    expect(pillCompactsAudioStage(text(panel('journal')))).toBe(true);
+    expect(pillCompactsAudioStage(text(panel('journal'), { captionsOn: false }))).toBe(true);
+  });
+
+  test('les sous-titres, (…) ouvert par-dessus le journal et les autres options laissent l’avatar à sa taille', () => {
+    expect(pillCompactsAudioStage(text())).toBe(false);
+    expect(pillCompactsAudioStage(text(menu))).toBe(false);
+    expect(pillCompactsAudioStage(text(nextLayer(panel('journal'), { type: 'toggle-menu' })))).toBe(false);
+    expect(pillCompactsAudioStage(text(panel('react')))).toBe(false);
+  });
+
+  test('la pilule rangée emporte le journal : l’avatar reprend sa taille (loi 11)', () => {
+    expect(pillCompactsAudioStage(text(panel('journal'), { chromeShown: false }))).toBe(false);
   });
 });
