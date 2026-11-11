@@ -221,6 +221,7 @@
     <string name="call_recording_cancel">إلغاء</string>
     <string name="call_recording_caption">تسجيل</string>
     <string name="call_recording_close">إغلاق</string>
+    <string name="call_recording_consent">يجب أن يوافق الجميع. يتوقف التسجيل إذا انضم أحد.</string>
     <string name="call_recording_hint">يطلب موافقة كل مشارك قبل التسجيل</string>
     <string name="call_recording_kind_audio">الصوت</string>
     <string name="call_recording_kind_hint">اختر ما سيُسجَّل؛ ثم يجب أن يوافق كل مشارك</string>

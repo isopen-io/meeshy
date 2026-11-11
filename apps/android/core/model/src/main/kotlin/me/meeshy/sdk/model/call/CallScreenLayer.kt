@@ -37,6 +37,9 @@ sealed interface CallScreenLayer {
 
     val pillPanel: CallScreenPanel? get() = openPanel?.takeIf { it.isDrawnInThePill }
 
+    /** G3.2 — the base row is captioned at the (…) or under a sheet only; an option drawn in the pill leaves it bare, as plate G3 shows it. Mirrors iOS `captionsBaseRow`. */
+    val captionsBaseRow: Boolean get() = pillPanel == null
+
     val showsFamilyRows: Boolean
         get() = when (this) {
             Menu, MenuOverJournal -> true

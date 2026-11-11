@@ -221,6 +221,7 @@
     <string name="call_recording_cancel">Annulla</string>
     <string name="call_recording_caption">Registra</string>
     <string name="call_recording_close">Chiudi</string>
+    <string name="call_recording_consent">Tutti devono accettare. La registrazione si interrompe se qualcuno si unisce.</string>
     <string name="call_recording_hint">Chiede il consenso di ogni partecipante prima di registrare</string>
     <string name="call_recording_kind_audio">Audio</string>
     <string name="call_recording_kind_hint">Scegli cosa registrare; poi ogni partecipante deve accettare</string>
