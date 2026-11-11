@@ -62,7 +62,9 @@ enum CallCaptionsCopy {
 
 /// Une phrase : le nom du locuteur ET son texte dans SA couleur d'auteur (la
 /// même que le liseré de sa vignette, #16614), l'étiquette « EN → FR » quand
-/// la ligne est traduite. Toucher une phrase traduite montre son original, et inversement.
+/// la ligne est traduite. Dans le journal (`showsTime`), l'heure DANS l'appel
+/// (mm:ss depuis son début) ferme la ligne méta, à droite, comme dans le journal
+/// d'après l'appel. Toucher une phrase traduite montre son original, et inversement.
 struct CallCaptionRow: View {
     let line: CallCaptionLine
     var showsTime: Bool = false
@@ -100,7 +102,7 @@ struct CallCaptionRow: View {
         } label: {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack(spacing: MeeshySpacing.xsPlus) {
-                    Text(speakerHeading)
+                    Text(line.speakerName)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(speakerColor)
                         .lineLimit(1)
@@ -111,6 +113,12 @@ struct CallCaptionRow: View {
                             .padding(.horizontal, MeeshySpacing.xs)
                             .padding(.vertical, 1)
                             .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.light)))
+                    }
+                    Spacer(minLength: 0)
+                    if showsTime, let time = line.timeLabel {
+                        Text(time)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                     }
                 }
                 // Seule une phrase TRADUITE prend la couleur de son auteur ;
@@ -128,14 +136,10 @@ struct CallCaptionRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(line.speakerName) : \(line.text)")
         .optionalAccessibilityHint(accessibilityHint)
+        .accessibilityValue(showsTime ? (line.timeLabel ?? "") : "")
         // VoiceOver ne s'arrête que sur les phrases FINALES : une révision
         // partielle est remplacée avant d'avoir fini d'être lue.
         .accessibilityHidden(!line.isFinal)
-    }
-
-    private var speakerHeading: String {
-        guard showsTime else { return line.speakerName }
-        return "\(line.speakerName) (\(line.capturedAt.formatted(date: .omitted, time: .shortened)))"
     }
 
     private var accessibilityHint: String? {
@@ -391,9 +395,11 @@ private nonisolated struct CallJournalScrollKey: PreferenceKey {
 }
 
 /// Tout l'appel, DANS la pilule, à la place des sous-titres (#17343) : un en-tête
-/// (le titre, la bascule Traduit / Original, Fermer), puis la liste, qui défile
-/// et offre « Revenir au direct ». Le réglage Traduit / Original est celui du bouton
-/// Sous-titres (`showOriginalText`), un toucher par phrase l'inverse.
+/// (« Journal » à gauche, la bascule Traduit / Original à droite — la planche P6 n'y
+/// dessine rien d'autre), puis la liste, qui défile et offre « Revenir au direct ».
+/// Le réglage Traduit / Original est celui du bouton Sous-titres (`showOriginalText`),
+/// un toucher par phrase l'inverse. On le range par le (…) ou par le bouton Journal ;
+/// Échap (clavier, geste d'échappement de VoiceOver) le ferme aussi.
 struct CallJournalPanel: View {
     let items: [CallJournalItem<CallTranscriptionSegment>]
     let line: (CallJournalItem<CallTranscriptionSegment>) -> CallCaptionLine
@@ -412,6 +418,7 @@ struct CallJournalPanel: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallCaptionsCopy.journalTitle)
+        .dismissOnEscape(onClose)
         .onAppear { titleHasFocus = true }
     }
 
@@ -430,10 +437,8 @@ struct CallJournalPanel: View {
             }
             .pickerStyle(.segmented)
             .frame(maxWidth: 200)
-            CallPanelHeaderButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
         }
-        .padding(.leading, MeeshySpacing.mdPlus)
-        .padding(.trailing, MeeshySpacing.xsPlus)
-        .padding(.top, MeeshySpacing.xxs)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.top, MeeshySpacing.xsPlus)
     }
 }

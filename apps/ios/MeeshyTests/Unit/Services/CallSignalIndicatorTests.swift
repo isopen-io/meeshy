@@ -384,7 +384,7 @@ final class CallHangupFastPathTests: XCTestCase {
             "La phrase ne prend la couleur que traduite ; l'original reste à l'encre de l'appel (#16662)."
         )
         XCTAssertTrue(
-            row.contains("Text(speakerHeading)"),
+            row.contains("Text(line.speakerName)"),
             "Le nom du locuteur est du texte VISIBLE, pas seulement une pastille."
         )
         XCTAssertTrue(

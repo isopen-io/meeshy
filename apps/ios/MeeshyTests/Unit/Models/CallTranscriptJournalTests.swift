@@ -174,6 +174,38 @@ final class CallTranscriptJournalTests: XCTestCase {
         XCTAssertTrue(String(code[band.upperBound...].prefix(2000)).contains(".equatable()"), "Les sous-titres")
     }
 
+    /// P6.3 — la tête du journal dit « Journal » à gauche et porte la bascule Traduit /
+    /// Original à droite ; la planche n'y dessine ni titre de feuille ni « Fermer ».
+    /// On range le journal par le (…) ou le bouton Journal, et Échap (VoiceOver,
+    /// clavier) le ferme sans rien afficher de plus.
+    func test_journalPanelHeader_isJournalThenTheToggle_withoutACloseButton() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let panel = try XCTUnwrap(code.range(of: "struct CallJournalPanel: View {"))
+        let header = String(code[panel.upperBound...].prefix(2500))
+        let title = try XCTUnwrap(header.range(of: "Text(CallCaptionsCopy.journal)"))
+        let picker = try XCTUnwrap(header.range(of: "Picker(CallCaptionsCopy.journalTitle"))
+        XCTAssertLessThan(title.lowerBound, picker.lowerBound, "« Journal » à gauche, la bascule à sa droite")
+        XCTAssertFalse(header.contains("closePanel"), "Pas de « Fermer » dans la tête du journal (P6.3)")
+        XCTAssertFalse(header.contains("CallPanelHeaderButton"))
+        XCTAssertTrue(header.contains(".dismissOnEscape(onClose)"), "Échap ferme le journal, sans bouton de plus")
+    }
+
+    /// P6.4 — la ligne méta d'une phrase du journal : pseudo (et étiquette) à gauche, heure DANS
+    /// l'appel à droite ; plus d'heure murale entre parenthèses collée au pseudo.
+    func test_captionRow_timeOfTheCall_endsTheMetaLine() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let row = try XCTUnwrap(code.range(of: "struct CallCaptionRow: View {"))
+        let end = try XCTUnwrap(code.range(of: "struct CallCaptionsBand: View {", range: row.upperBound ..< code.endIndex))
+        let body = String(code[row.upperBound ..< end.lowerBound])
+        let name = try XCTUnwrap(body.range(of: "Text(line.speakerName)"))
+        let spacer = try XCTUnwrap(body.range(of: "Spacer(minLength: 0)"))
+        let time = try XCTUnwrap(body.range(of: "Text(time)"))
+        XCTAssertLessThan(name.lowerBound, spacer.lowerBound)
+        XCTAssertLessThan(spacer.lowerBound, time.lowerBound, "L'heure va à droite du pseudo")
+        XCTAssertFalse(body.contains("speakerHeading"))
+        XCTAssertFalse(body.contains("time: .shortened"), "Plus d'heure murale")
+    }
+
     /// La feuille d'avant prenait le focus d'elle-même ; le journal posé DANS la pilule y
     /// conduit VoiceOver, sur son titre, à chaque ouverture.
     func test_journalPanel_leadsVoiceOverToItsTitle_whenItOpens() throws {
