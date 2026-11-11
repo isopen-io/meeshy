@@ -52,6 +52,28 @@ class CallEffectsControllerTest {
     }
 
     @Test
+    fun `a mode that disappears by itself gives my image back, as Quit does`() {
+        val start = VideoFilterConfig().applyingPreset(VideoFilterPreset.Cool)
+        val rig = Rig(start)
+        rig.controller.change { it.selecting(CallFaceEffect.Angel) }
+        rig.controller.change { it.selecting(VideoFilterPreset.Monochrome) }
+        rig.controller.finish(validated = false)
+        assertThat(rig.effects.config.value).isEqualTo(start)
+        assertThat(rig.successes).isEqualTo(0)
+    }
+
+    @Test
+    fun `a mode that disappears after Validate keeps the validated image`() {
+        val rig = Rig()
+        rig.controller.change { it.selecting(VideoFilterPreset.Golden) }
+        rig.controller.finish(validated = true)
+        val kept = rig.effects.config.value
+        rig.controller.finish(validated = false)
+        assertThat(rig.effects.config.value).isEqualTo(kept)
+        assertThat(rig.successes).isEqualTo(1)
+    }
+
+    @Test
     fun `nothing changes once the session is over`() {
         val rig = Rig()
         rig.controller.finish(validated = false)

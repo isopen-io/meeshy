@@ -431,9 +431,16 @@
     <string name="retouch_family_effects">Efeitos</string>
     <string name="retouch_family_filters">Filtros</string>
     <string name="retouch_family_frames">Molduras</string>
+    <string name="retouch_filter_bright">Claro</string>
     <string name="retouch_filter_cool">Frio</string>
+    <string name="retouch_filter_film">Filme</string>
+    <string name="retouch_filter_golden">Dourado</string>
+    <string name="retouch_filter_monochrome">Preto e branco</string>
     <string name="retouch_filter_muted">Suave</string>
     <string name="retouch_filter_natural">Natural</string>
+    <string name="retouch_filter_sky">Céu</string>
+    <string name="retouch_filter_softNight">Noite suave</string>
+    <string name="retouch_filter_velvet">Veludo</string>
     <string name="retouch_filter_vivid">Vívido</string>
     <string name="retouch_filter_warm">Quente</string>
     <string name="retouch_no_filter">Sem filtro</string>

@@ -309,14 +309,19 @@ internal class CallEffectsGlRenderer(private val handler: Handler) {
     /**
      * The look's strip, uploaded; `null` while it is still baking. The bake (15 625 grades) runs off the
      * capture thread, once per look and per call: the frames meanwhile go out without the look, never late.
+     * The first look asked also bakes the rest of the catalogue behind it, so that a flick through the
+     * carousel of the Effects mode finds every mood ready instead of sending a frame without its look.
      */
     private fun lutReady(preset: VideoFilterPreset): VideoFilterPreset? {
         if (lutPreset == preset && lutTexture != 0) return preset
         val strip = strips[preset]
         if (strip == null) {
-            if (baking.add(preset)) {
+            val toBake = (listOf(preset) + VideoFilterPreset.catalog).distinct().filter { baking.add(it) }
+            if (toBake.isNotEmpty()) {
                 Thread({
-                    CallColorLook.recipe(preset)?.let { strips[preset] = ByteBuffer.wrap(CallColorLook.lutStrip(it)) }
+                    toBake.forEach { next ->
+                        CallColorLook.recipe(next)?.let { strips[next] = ByteBuffer.wrap(CallColorLook.lutStrip(it)) }
+                    }
                 }, "MeeshyCallLook").start()
             }
             return null

@@ -121,4 +121,28 @@ class CallEffectsCompanionRuleTest {
         )
         assertThat(tiles[1].colorKey).isEqualTo(CallEffectsCompanionRule.DUO_REMOTE_TILE_ID)
     }
+
+    @Test
+    fun `a duo in the Effects mode shows the other, alone beside my image, with his own colour key and his photo`() {
+        val companions = CallEffectsCompanionRule.duoCompanions(
+            peerUserId = "u-zoe", peerName = "Zoe", peerAvatarUrl = "https://cdn/zoe.png",
+            isCameraOn = true, isMuted = false, isPeerCameraOff = true, isPeerMuted = false,
+        )
+        assertThat(companions).hasSize(1)
+        assertThat(companions[0].isLocal).isFalse()
+        assertThat(companions[0].colorKey).isEqualTo("u-zoe")
+        assertThat(companions[0].avatarUrl).isEqualTo("https://cdn/zoe.png")
+        assertThat(companions[0].showsVideo).isFalse()
+        assertThat(companions[0].displayName).isEqualTo("Zoe")
+    }
+
+    @Test
+    fun `an empty identifier is unknown, never a colour of its own`() {
+        val companions = CallEffectsCompanionRule.duoCompanions(
+            peerUserId = "  ", peerName = "Zoe", peerAvatarUrl = null,
+            isCameraOn = true, isMuted = false, isPeerCameraOff = false, isPeerMuted = true,
+        )
+        assertThat(companions.single().colorKey).isEqualTo(CallEffectsCompanionRule.DUO_REMOTE_TILE_ID)
+        assertThat(companions.single().isMicMuted).isTrue()
+    }
 }
