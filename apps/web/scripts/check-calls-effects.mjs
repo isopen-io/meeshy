@@ -331,6 +331,11 @@ try {
       await page.click('[data-call-effects-category="color"]');
       const presets = await page.$$eval('[data-call-mode="effects"] [data-carousel-item]', (chips) => chips.map((chip) => chip.getAttribute('data-carousel-item')));
       check(JSON.stringify(presets) === JSON.stringify(['natural', 'golden', 'film', 'softNight', 'bright', 'velvet', 'sky', 'monochrome']), `${label} : « Couleur » : huit ambiances (${presets.join(' · ')})`);
+      const edgeFade = await page.$eval('[data-call-mode="effects"] [data-call-mode-carousel] [data-call-row-scroll]', (row) => {
+        const computed = getComputedStyle(row);
+        return computed.maskImage || computed.webkitMaskImage || 'none';
+      });
+      check(/^linear-gradient\(/.test(edgeFade) && (edgeFade.match(/transparent|rgba\(0, 0, 0, 0\)/g) ?? []).length === 2, `${label} : le carrousel s'efface en fondu à ses deux bords (#17409) — ${edgeFade}`);
       await page.click('[data-carousel-item="golden"]');
       check((await page.getAttribute('[data-carousel-item="golden"]', 'aria-checked')) === 'true', `${label} : « Doré » est coché`);
       await centered(page, 'golden');
