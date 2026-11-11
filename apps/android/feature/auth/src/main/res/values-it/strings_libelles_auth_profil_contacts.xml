@@ -11,11 +11,8 @@
     <string name="guest_join_requires_account">Questo link richiede un account.</string>
     <string name="share_link_entry_resolving">Apertura del link…</string>
     <string name="share_link_choose_title">Come vuoi partecipare?</string>
-    <string name="share_link_choose_subtitle">Partecipa a %1$s con il tuo account o come ospite.</string>
-    <string name="share_link_choose_subtitle_generic">Partecipa con il tuo account o come ospite.</string>
     <string name="share_link_continue_with_account">Continua con il mio account</string>
     <string name="auth_back_to_login">Torna all\'accesso</string>
-    <string name="auth_magic_sent">Apri il link inviato a %1$s</string>
     <string name="auth_magic_countdown">Link valido per %1$s</string>
     <string name="auth_magic_validating">Accesso in corso…</string>
     <string name="signup_display_name_required">Inserisci almeno una lettera.</string>
@@ -23,11 +20,9 @@
     <string name="signup_display_name_taken">Questo nome è già in uso. Provane un altro.</string>
     <string name="signup_email_invalid">Questo indirizzo e-mail sembra incompleto.</string>
     <string name="signup_phone_invalid">Impossibile chiamare questo numero.</string>
-    <string name="signup_phone_conflict">Questo numero è già collegato a un account. Lascia il campo vuoto per continuare.</string>
     <string name="signup_choose_country">Scegli il paese</string>
     <string name="signup_country_picker_title">Scegli un paese</string>
     <string name="signup_password_too_short">Almeno 6 caratteri.</string>
     <string name="signup_submit">Crea il mio account</string>
-    <string name="signup_display_name_invalid_characters">Il nome può contenere solo lettere, spazi, apostrofi, punti e trattini.</string>
     <string name="signup_error_invalid_field">Questo valore è stato rifiutato.</string>
 </resources>

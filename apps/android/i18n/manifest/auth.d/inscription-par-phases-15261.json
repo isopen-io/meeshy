@@ -42,12 +42,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "auth.signup.password.why.detail",
-          "androidName": "signup_password_why_detail",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "auth.signup.phone.benefit",
           "androidName": "signup_phone_benefit",
           "status": "adopted"

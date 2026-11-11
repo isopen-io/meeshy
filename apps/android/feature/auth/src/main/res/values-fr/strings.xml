@@ -13,13 +13,10 @@
     <string name="guest_join_requires_account">Ce lien nécessite un compte.</string>
     <string name="share_link_entry_resolving">Ouverture du lien…</string>
     <string name="share_link_choose_title">Comment souhaitez-vous rejoindre ?</string>
-    <string name="share_link_choose_subtitle">Rejoignez %1$s avec votre compte, ou en tant qu\'invité.</string>
-    <string name="share_link_choose_subtitle_generic">Rejoignez avec votre compte, ou en tant qu\'invité.</string>
     <string name="share_link_continue_with_account">Continuer avec mon compte</string>
 
     <!-- Account recovery -->
     <string name="auth_back_to_login">Retour à la connexion</string>
-    <string name="auth_magic_sent">Ouvrez le lien reçu à %1$s</string>
     <string name="auth_magic_countdown">Lien valide pendant %1$s</string>
     <string name="auth_magic_validating">Connexion en cours…</string>
 
@@ -29,11 +26,9 @@
     <string name="signup_display_name_taken">Ce nom est déjà pris. Essayez-en un autre.</string>
     <string name="signup_email_invalid">Cette adresse e-mail semble incomplète.</string>
     <string name="signup_phone_invalid">Ce numéro n\'est pas composable.</string>
-    <string name="signup_phone_conflict">Ce numéro est déjà rattaché à un compte. Laissez-le vide pour continuer.</string>
     <string name="signup_choose_country">Choisir le pays</string>
     <string name="signup_country_picker_title">Choisir un pays</string>
     <string name="signup_password_too_short">6 caractères minimum.</string>
     <string name="signup_submit">Créer mon compte</string>
-    <string name="signup_display_name_invalid_characters">Le nom ne peut contenir que des lettres, des espaces, des apostrophes, des points et des tirets.</string>
     <string name="signup_error_invalid_field">Cette valeur a été refusée.</string>
 </resources>

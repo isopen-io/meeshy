@@ -42,7 +42,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 /** Ce que dit l'avis pour un motif (iOS `SessionClosedNoticeCopy`) : l'administrateur n'est JAMAIS nommé. */
 internal data class SessionClosedNoticeCopy(
     @StringRes val title: Int,
-    @StringRes val message: Int,
+    @StringRes val message: Int?,
     val icon: ImageVector,
     val offersContact: Boolean,
 ) {
@@ -61,7 +61,7 @@ internal data class SessionClosedNoticeCopy(
                 R.string.session_closed_signed_out_title, R.string.session_closed_all_signed_out_message, MeeshyIcons.SignOut, reason.offersContact,
             )
             SessionRevocationReason.SESSION_EXPIRED -> SessionClosedNoticeCopy(
-                R.string.session_closed_expired_title, R.string.session_closed_expired_message, MeeshyIcons.Schedule, reason.offersContact,
+                R.string.session_closed_expired_title, null, MeeshyIcons.Schedule, reason.offersContact,
             )
             SessionRevocationReason.ACTIVATION_REQUIRED -> SessionClosedNoticeCopy(
                 R.string.session_closed_activation_title, R.string.session_closed_activation_message, MeeshyIcons.Mail, reason.offersContact,
@@ -128,13 +128,15 @@ internal fun SessionClosedNoticeContent(
             textAlign = TextAlign.Center,
             modifier = Modifier.testTag(SESSION_CLOSED_TITLE_TAG).semantics { heading() },
         )
-        Text(
-            text = stringResource(copy.message),
-            style = MaterialTheme.typography.bodyLarge,
-            color = tokens.textSecondary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.testTag(SESSION_CLOSED_MESSAGE_TAG),
-        )
+        copy.message?.let { message ->
+            Text(
+                text = stringResource(message),
+                style = MaterialTheme.typography.bodyLarge,
+                color = tokens.textSecondary,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.testTag(SESSION_CLOSED_MESSAGE_TAG),
+            )
+        }
         MeeshyPrimaryButton(
             text = stringResource(R.string.session_closed_continue),
             onClick = onContinue,

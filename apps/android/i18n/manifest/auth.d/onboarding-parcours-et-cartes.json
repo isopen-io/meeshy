@@ -56,11 +56,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.email.body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.email.address",
           "status": "adopted"
         },
@@ -81,17 +76,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.email.waiting",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.age.title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.age.body",
           "status": "adopted"
         },
         {
@@ -146,11 +131,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.global.body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.global.send",
           "status": "adopted"
         },
@@ -162,11 +142,6 @@
         {
           "catalog": "app",
           "iosKey": "onboarding.global.placeholder",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.global.hint",
           "status": "adopted"
         },
         {
@@ -191,11 +166,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.story.body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.story.create",
           "status": "adopted"
         },
@@ -206,22 +176,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.story.audience.friends",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.story.audience.public",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.story.sending",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.story.sending.detail",
           "status": "adopted"
         },
         {
@@ -231,17 +186,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.story.verify.detail",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.friends.title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.friends.body",
           "status": "adopted"
         },
         {
@@ -271,11 +216,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.friends.pending",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.friends.failed",
           "status": "adopted"
         },
@@ -287,11 +227,6 @@
         {
           "catalog": "app",
           "iosKey": "onboarding.contacts.offer.title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.contacts.offer.body",
           "status": "adopted"
         },
         {
@@ -311,17 +246,7 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.contacts.found.body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.contacts.none.title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.contacts.none.body",
           "status": "adopted"
         },
         {
@@ -367,21 +292,6 @@
         {
           "catalog": "app",
           "iosKey": "onboarding.recap.title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.recap.body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.recap.empty",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.recap.tomorrow",
           "status": "adopted"
         },
         {

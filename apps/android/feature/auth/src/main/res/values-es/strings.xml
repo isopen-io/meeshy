@@ -13,13 +13,10 @@
     <string name="guest_join_requires_account">Este enlace requiere una cuenta.</string>
     <string name="share_link_entry_resolving">Abriendo el enlace…</string>
     <string name="share_link_choose_title">¿Cómo quieres unirte?</string>
-    <string name="share_link_choose_subtitle">Únete a %1$s con tu cuenta o como invitado.</string>
-    <string name="share_link_choose_subtitle_generic">Únete con tu cuenta o como invitado.</string>
     <string name="share_link_continue_with_account">Continuar con mi cuenta</string>
 
     <!-- Account recovery -->
     <string name="auth_back_to_login">Volver al inicio de sesión</string>
-    <string name="auth_magic_sent">Abre el enlace enviado a %1$s</string>
     <string name="auth_magic_countdown">Enlace válido durante %1$s</string>
     <string name="auth_magic_validating">Iniciando sesión…</string>
 
@@ -29,11 +26,9 @@
     <string name="signup_display_name_taken">Este nombre ya está ocupado. Prueba con otro.</string>
     <string name="signup_email_invalid">Esta dirección parece incompleta.</string>
     <string name="signup_phone_invalid">Este número no se puede marcar.</string>
-    <string name="signup_phone_conflict">Este número ya está vinculado a una cuenta. Déjalo vacío para continuar.</string>
     <string name="signup_choose_country">Elegir país</string>
     <string name="signup_country_picker_title">Elige un país</string>
     <string name="signup_password_too_short">Mínimo 6 caracteres.</string>
     <string name="signup_submit">Crear mi cuenta</string>
-    <string name="signup_display_name_invalid_characters">El nombre solo puede contener letras, espacios, apóstrofos, puntos y guiones.</string>
     <string name="signup_error_invalid_field">Este valor fue rechazado.</string>
 </resources>

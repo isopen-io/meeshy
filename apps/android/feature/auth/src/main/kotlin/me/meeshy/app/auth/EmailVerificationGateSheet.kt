@@ -105,12 +105,6 @@ fun EmailVerificationGateSheet(
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-                Text(
-                    text = stringResource(R.string.email_gate_label),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = tokens.textPrimary,
-                )
                 AnimatedContent(
                     targetState = state.sent,
                     transitionSpec = { fadeIn(tween(STEP_FADE_MS)) togetherWith fadeOut(tween(STEP_FADE_MS)) },

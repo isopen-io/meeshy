@@ -138,16 +138,15 @@ internal fun GuestJoinFormBody(state: GuestJoinUiState, viewModel: GuestJoinView
     }
 
     if (!form.requireNickname || !form.requireEmail) {
-        SectionTitle(stringResource(R.string.guest_join_optional_section))
         if (!form.requireNickname) {
             GuestTextField(
-                form.username, viewModel::onUsernameChange, stringResource(R.string.guest_join_username_optional), enabled,
+                form.username, viewModel::onUsernameChange, stringResource(R.string.guest_join_username), enabled,
                 isError = form.isUsernameTooShort,
                 supportingText = minimumText(form.isUsernameTooShort, RegistrationIdentity.PSEUDO_MIN),
             )
         }
         if (!form.requireEmail) {
-            EmailField(form, viewModel, stringResource(R.string.guest_join_email_optional), enabled)
+            EmailField(form, viewModel, stringResource(R.string.guest_join_email), enabled)
         }
     }
     LanguageDropdown(form.language, viewModel::onLanguageChange, enabled)
