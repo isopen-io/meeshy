@@ -75,7 +75,8 @@
     <string name="settings_privacy_calls_non_contacts_question">هل يعرف الآخرون أنني أرفض المكالمات؟</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">عند إيقافه، لا يستطيع إلا أصدقاؤك جعل هاتفك يرن.</string>
     <string name="settings_privacy_hide_from_contact_search">إخفاء رقمي وبريدي الإلكتروني</string>
-    <string name="settings_privacy_hide_from_contact_search_question">من يستطيع العثور عليّ برقمي؟</string>
+    <string name="settings_privacy_hide_from_contact_search_info">ولا تُبلَّغ جهات اتصالك أيضًا بانضمامك إلى Meeshy.</string>
+    <string name="settings_privacy_hide_from_contact_search_question">هل تُبلَّغ جهات اتصالي بانضمامي؟</string>
     <string name="settings_privacy_hide_from_contact_search_subtitle">لا يظهر ملفي بعد الآن في البحث برقم الهاتف أو البريد الإلكتروني.</string>
     <string name="settings_privacy_notify_contacts_on_return">الإعلان عن عودتي</string>
     <string name="settings_privacy_notify_contacts_on_return_info">أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية.</string>

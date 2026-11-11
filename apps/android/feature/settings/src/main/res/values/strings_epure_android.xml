@@ -75,7 +75,8 @@
     <string name="settings_privacy_calls_non_contacts_question">Do others know I refuse calls?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">When off, only your friends can make your phone ring.</string>
     <string name="settings_privacy_hide_from_contact_search">Hide my number and email</string>
-    <string name="settings_privacy_hide_from_contact_search_question">Who can find me by my number?</string>
+    <string name="settings_privacy_hide_from_contact_search_info">Neither are your contacts told when you join Meeshy.</string>
+    <string name="settings_privacy_hide_from_contact_search_question">Are my contacts told when I join?</string>
     <string name="settings_privacy_hide_from_contact_search_subtitle">My profile no longer shows up in a search by number or email.</string>
     <string name="settings_privacy_notify_contacts_on_return">Announce my return</string>
     <string name="settings_privacy_notify_contacts_on_return_info">Your friends and people who have your number or email. Never if your online status is hidden.</string>

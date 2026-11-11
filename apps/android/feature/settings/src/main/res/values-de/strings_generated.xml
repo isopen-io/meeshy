@@ -291,7 +291,6 @@
     <string name="settings_open_source_licenses">Open-Source-Lizenzen</string>
     <string name="settings_packs_domain">Pakettyp</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">Verschlüsselung — demnächst verfügbar, derzeit deaktiviert</string>
-    <string name="settings_privacy_hide_from_contact_search_info">Wenn aktiviert, erscheint dein Profil nicht mehr bei einer Suche nach Telefonnummer oder E-Mail, und deine Kontakte werden nicht benachrichtigt, wenn du zu Meeshy kommst.</string>
     <string name="settings_privacy_policy">Datenschutzrichtlinie</string>
     <string name="settings_privacy_title">Datenschutz</string>
     <string name="settings_push_notifications">Push-Benachrichtigungen</string>

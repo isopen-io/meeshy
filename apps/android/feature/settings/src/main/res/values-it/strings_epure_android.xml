@@ -75,7 +75,8 @@
     <string name="settings_privacy_calls_non_contacts_question">Gli altri sanno che rifiuto le chiamate?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">Se disattivato, solo i tuoi amici possono far squillare il tuo telefono.</string>
     <string name="settings_privacy_hide_from_contact_search">Nascondi il mio numero e la mia e-mail</string>
-    <string name="settings_privacy_hide_from_contact_search_question">Chi può trovarmi dal mio numero?</string>
+    <string name="settings_privacy_hide_from_contact_search_info">Nemmeno i tuoi contatti vengono avvisati del tuo arrivo su Meeshy.</string>
+    <string name="settings_privacy_hide_from_contact_search_question">I miei contatti vengono avvisati del mio arrivo?</string>
     <string name="settings_privacy_hide_from_contact_search_subtitle">Il mio profilo non compare più in una ricerca per numero o e-mail.</string>
     <string name="settings_privacy_notify_contacts_on_return">Annuncia il mio ritorno</string>
     <string name="settings_privacy_notify_contacts_on_return_info">I tuoi amici e chi ha il tuo numero o la tua e-mail. Mai se il tuo stato online è nascosto.</string>

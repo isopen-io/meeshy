@@ -291,7 +291,6 @@
     <string name="settings_open_source_licenses">Open source licenses</string>
     <string name="settings_packs_domain">Pack type</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">Encryption — coming soon, currently disabled</string>
-    <string name="settings_privacy_hide_from_contact_search_info">When on, your profile no longer shows up in a search by phone number or email, and your contacts aren\'t notified when you join Meeshy.</string>
     <string name="settings_privacy_policy">Privacy Policy</string>
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_push_notifications">Push notifications</string>

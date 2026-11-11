@@ -83,6 +83,14 @@ class EpureReglagesReperesStringsTest {
     }
 
     @Test
+    fun `hiding my number keeps its rule visible and the info only adds who is not told`() {
+        assertThat(fr("settings_privacy_hide_from_contact_search_question")).isEqualTo("Mes contacts sont-ils prévenus de mon arrivée ?")
+        assertThat(fr("settings_privacy_hide_from_contact_search_info"))
+            .isEqualTo("Vos contacts ne sont pas non plus prévenus de votre arrivée sur Meeshy.")
+        assertThat(fr("settings_privacy_hide_from_contact_search_info")).doesNotContain("recherche")
+    }
+
+    @Test
     fun `every new string exists in all seven locales and the french is never copied`() {
         val names = listOf("settings_privacy_calls_non_contacts_subtitle", "data_storage_cache_size")
         allLocales.forEach { locale ->

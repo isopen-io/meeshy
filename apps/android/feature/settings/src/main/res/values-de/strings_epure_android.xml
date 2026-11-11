@@ -75,7 +75,8 @@
     <string name="settings_privacy_calls_non_contacts_question">Wissen andere, dass ich Anrufe ablehne?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">Deaktiviert können nur deine Freunde dein Telefon klingeln lassen.</string>
     <string name="settings_privacy_hide_from_contact_search">Meine Nummer und E-Mail verbergen</string>
-    <string name="settings_privacy_hide_from_contact_search_question">Wer kann mich über meine Nummer finden?</string>
+    <string name="settings_privacy_hide_from_contact_search_info">Auch Ihre Kontakte werden nicht benachrichtigt, wenn Sie Meeshy beitreten.</string>
+    <string name="settings_privacy_hide_from_contact_search_question">Erfahren meine Kontakte, dass ich beitrete?</string>
     <string name="settings_privacy_hide_from_contact_search_subtitle">Mein Profil erscheint nicht mehr in einer Suche nach Nummer oder E-Mail.</string>
     <string name="settings_privacy_notify_contacts_on_return">Meine Rückkehr ankündigen</string>
     <string name="settings_privacy_notify_contacts_on_return_info">Deine Freunde und alle, die deine Nummer oder E-Mail haben. Nie, wenn dein Online-Status verborgen ist.</string>

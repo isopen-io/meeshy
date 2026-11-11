@@ -291,7 +291,6 @@
     <string name="settings_open_source_licenses">Licenças de código aberto</string>
     <string name="settings_packs_domain">Tipo de pacote</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">Criptografia — em breve, atualmente desativada</string>
-    <string name="settings_privacy_hide_from_contact_search_info">Ativado, seu perfil não aparece mais em buscas por número ou e-mail, e seus contatos não são avisados da sua chegada ao Meeshy.</string>
     <string name="settings_privacy_policy">Política de privacidade</string>
     <string name="settings_privacy_title">Privacidade</string>
     <string name="settings_push_notifications">Notificações push</string>

@@ -6,11 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "settings.privacy.hide_from_contact_search.info",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "settings.privacy.encryption.coming_soon.a11y",
           "status": "adopted"
         }

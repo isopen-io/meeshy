@@ -75,7 +75,8 @@
     <string name="settings_privacy_calls_non_contacts_question">Os outros sabem que recuso chamadas?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">Desativado, só seus amigos podem fazer seu telefone tocar.</string>
     <string name="settings_privacy_hide_from_contact_search">Ocultar meu número e meu e-mail</string>
-    <string name="settings_privacy_hide_from_contact_search_question">Quem pode me encontrar pelo meu número?</string>
+    <string name="settings_privacy_hide_from_contact_search_info">Seus contatos também não são avisados da sua chegada ao Meeshy.</string>
+    <string name="settings_privacy_hide_from_contact_search_question">Meus contatos são avisados da minha chegada?</string>
     <string name="settings_privacy_hide_from_contact_search_subtitle">Meu perfil não aparece mais em uma busca por número ou e-mail.</string>
     <string name="settings_privacy_notify_contacts_on_return">Anunciar meu retorno</string>
     <string name="settings_privacy_notify_contacts_on_return_info">Seus amigos e quem tem seu número ou e-mail. Nunca se seu status online estiver oculto.</string>

@@ -291,7 +291,6 @@
     <string name="settings_open_source_licenses">تراخيص المصدر المفتوح</string>
     <string name="settings_packs_domain">نوع الحزمة</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">التشفير — قريبًا، معطَّل حاليًا</string>
-    <string name="settings_privacy_hide_from_contact_search_info">عند التفعيل، لن يظهر ملفك الشخصي في البحث برقم الهاتف أو البريد الإلكتروني، ولن يتم إخطار جهات اتصالك بانضمامك إلى Meeshy.</string>
     <string name="settings_privacy_policy">سياسة الخصوصية</string>
     <string name="settings_privacy_title">الخصوصية</string>
     <string name="settings_push_notifications">الإشعارات الفورية</string>
