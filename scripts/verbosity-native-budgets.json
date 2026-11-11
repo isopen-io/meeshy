@@ -8,8 +8,8 @@
     },
     "android:feature/auth": {
       "labels": 474,
-      "words": 2751,
-      "long": 42,
+      "words": 2498,
+      "long": 21,
       "explanations": 25
     },
     "android:feature/calls": {
@@ -187,10 +187,10 @@
       "explanations": 0
     },
     "ios:Meeshy/auth": {
-      "labels": 100,
-      "words": 488,
+      "labels": 94,
+      "words": 461,
       "long": 1,
-      "explanations": 10
+      "explanations": 8
     },
     "ios:Meeshy/block": {
       "labels": 2,
@@ -451,8 +451,8 @@
       "explanations": 0
     },
     "ios:Meeshy/emailVerification": {
-      "labels": 25,
-      "words": 139,
+      "labels": 23,
+      "words": 130,
       "long": 0,
       "explanations": 4
     },
@@ -715,10 +715,10 @@
       "explanations": 0
     },
     "ios:Meeshy/onboarding": {
-      "labels": 127,
-      "words": 762,
-      "long": 4,
-      "explanations": 5
+      "labels": 122,
+      "words": 714,
+      "long": 3,
+      "explanations": 3
     },
     "ios:Meeshy/outbox": {
       "labels": 1,
@@ -877,8 +877,8 @@
       "explanations": 0
     },
     "ios:Meeshy/sessionClosed": {
-      "labels": 15,
-      "words": 87,
+      "labels": 13,
+      "words": 79,
       "long": 0,
       "explanations": 0
     },
