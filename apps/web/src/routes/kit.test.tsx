@@ -128,6 +128,38 @@ describe('le catalogue, le détail', () => {
     expect(backdrops).toEqual(['dark', 'media', 'media']);
   });
 
+  test('l’ancre de l’adresse amène sa tuile à l’écran', () => {
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this.id);
+    };
+    window.history.replaceState(null, '', '/kit/k02#actif-presse');
+    try {
+      mount(<KitCatalogScreen composant="k02" entries={ENTRIES} content={content} />);
+      expect(scrolled).toEqual(['actif-presse']);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+      window.history.replaceState(null, '', '/kit');
+    }
+  });
+
+  test('sans ancre, le détail ne fait rien défiler', () => {
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this.id);
+    };
+    window.history.replaceState(null, '', '/kit/k02');
+    try {
+      mount(<KitCatalogScreen composant="k02" entries={ENTRIES} content={content} />);
+      expect(scrolled).toEqual([]);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+      window.history.replaceState(null, '', '/kit');
+    }
+  });
+
   test('le retour vers la liste est un lien', () => {
     const container = mount(<KitCatalogScreen composant="k02" entries={ENTRIES} content={content} />);
     const back = container.querySelector<HTMLAnchorElement>('[data-kit-back]');

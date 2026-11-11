@@ -138,4 +138,9 @@ describe('MeeshyKitCatalogEmptyState', () => {
     expect(container.textContent).toBe('Aucun composant livré');
     expect(container.querySelector('[data-kit-empty]')).not.toBeNull();
   });
+
+  test('porte lui-même le fond du thème, comme la scène qu’il partage avec l’instantané', () => {
+    const container = mount(<MeeshyKitCatalogEmptyState />);
+    expect(container.querySelector<HTMLElement>('[data-kit-empty]')?.style.background).toBe('var(--ios-surface)');
+  });
 });
