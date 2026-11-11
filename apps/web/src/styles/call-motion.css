@@ -6,16 +6,18 @@
    instant, et un toucher pendant le mouvement répond (rien n'est bloqué).
    CE QUI PARAÎT DANS L'EN-TÊTE ARRIVE DE MÊME (#17329, `CallView+Header` d'iOS) :
    le bouton Image dans l'image quand l'appel y devient éligible, la capsule quand
-   l'appel s'établit, les barres quand le réseau se dégrade. La capsule s'anime par
-   son emplacement, stable : le premier relevé de qualité, qui en fait un bouton,
-   ne la rejoue pas. Une seule règle, une seule image clé, chargées avec l'écran
-   d'appel (`call-screen.tsx`) : la première peinture ne les paie pas. L'arrivée ne se prolonge pas (`backwards`) : une
+   l'appel s'établit, les barres quand le réseau se dégrade. Une seule règle, une
+   seule image clé, chargées avec l'écran d'appel (`call-screen.tsx`) : la première
+   peinture ne les paie pas. L'arrivée ne se prolonge pas (`backwards`) : une
    transformation tenue ferait de la capsule le bloc conteneur de son détail
-   `fixed`, qui s'y écraserait. */
+   `fixed`, qui s'y écraserait. La CAPSULE, elle, entre et sort par une mise à
+   l'échelle ancrée à son bord de fin (P9.8, #17509) : jouée par le moteur
+   (`useSwapPresence`, Web Animations), seul à pouvoir en faire un fondu court
+   sous « Réduire les animations » que la règle générale ne coupe pas ; la
+   feuille n'y met que l'ancre. */
 [data-call-pill-text],
 [data-call-pip],
 [data-call-deck-content='rows'],
-[data-call-capsule],
 [data-call-signal] {
   animation: call-pill-text-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
 }
@@ -25,6 +27,18 @@
     opacity: 0;
     transform: translateY(0.5rem);
   }
+}
+
+[data-call-capsule] {
+  transform-origin: 100% 50%;
+}
+
+[data-call-capsule]:dir(rtl) {
+  transform-origin: 0% 50%;
+}
+
+[data-call-capsule][data-leaving] {
+  pointer-events: none;
 }
 
 /* ET IL REPART COMME IL EST VENU (#17406) — le texte qui quitte la pilule reste à

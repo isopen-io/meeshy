@@ -1,6 +1,6 @@
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-import { followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs } from './call-pill-motion';
+import { followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape } from './call-pill-motion';
 
 /**
  * **LE MOTEUR DOM DU MOUVEMENT DU VERRE** (#17536, lois dans `call-pill-motion.ts`) — il mesure
@@ -102,10 +102,10 @@ export function fadeStow(element: HTMLElement, stowed: boolean): void {
  * Interruptible : un mouvement repris en route annule le précédent et part de l'opacité affichée
  * à cet instant. Ce qui repart reste invisible jusqu'à son démontage (`fill`).
  */
-export function playSwap(element: HTMLElement, entering: boolean, previous: Animation | null): Animation | null {
+export function playSwap(element: HTMLElement, entering: boolean, previous: Animation | null, shape: SwapShape = 'rise'): Animation | null {
   if (typeof element.animate !== 'function') return null;
   const reduced = prefersReducedMotion();
-  const [from = {}, to = {}] = swapKeyframes(entering, reduced);
+  const [from = {}, to = {}] = swapKeyframes(entering, reduced, shape);
   const resumed = (previous?.effect as KeyframeEffect | null | undefined)?.target === element;
   const shown = resumed ? { ...from, opacity: getComputedStyle(element).opacity } : from;
   previous?.cancel();
