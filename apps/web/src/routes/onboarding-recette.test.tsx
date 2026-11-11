@@ -151,7 +151,7 @@ describe('#7908 — les points sont ceux du serveur, élan compris', () => {
     expect(text(host, '[data-onb-flight]')).toBe('+28');
     expect(text(host, '[data-onb-announce]')).toBe('Tu fais jaillir 28 étincelles.');
     await landed();
-    expect(text(host, '[data-onb-pill]')).toBe('28');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('data-onb-points')).toBe('28');
   });
 
   test('au retour du studio, la story crédite ce que le serveur a crédité depuis le départ', async () => {
@@ -161,7 +161,7 @@ describe('#7908 — les points sont ceux du serveur, élan compris', () => {
     await settle();
     expect(text(host, '[data-onb-flight]')).toBe('+21');
     await landed();
-    expect(text(host, '[data-onb-pill]')).toBe('49');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('data-onb-points')).toBe('49');
   });
 
   test('le score n’a pas pu être relu : aucun « +N » inventé', async () => {
@@ -172,7 +172,7 @@ describe('#7908 — les points sont ceux du serveur, élan compris', () => {
     await settle();
     expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
     expect(host.querySelector('[data-onb-flight]')).toBeNull();
-    expect(text(host, '[data-onb-pill]')).toBe('0');
+    expect(host.querySelector('[data-onb-pill]')?.getAttribute('data-onb-points')).toBe('0');
   });
 
   test('la carte Amis annonce un plancher, jamais un « +7 » promis', async () => {

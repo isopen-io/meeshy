@@ -184,7 +184,7 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
 
   test('le pied garde visibles ce que les boutiques exigent, et range le reste derrière « Plus », atteignable', () => {
     const html = renderToStaticMarkup(<DownloadPage language="fr" />);
-    const [outside = '', more = ''] = html.split('<details class="ld-footer-more"');
+    const [outside = '', more = ''] = (html.split('<footer')[1] ?? '').split('<details class="ld-footer-more"');
     for (const page of ['privacy', 'terms', 'child-safety']) {
       expect(outside).toContain(`href="/${page}"`);
     }

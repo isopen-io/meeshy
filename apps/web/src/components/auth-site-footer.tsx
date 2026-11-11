@@ -37,7 +37,14 @@ export function googlePlayBadgeSrc(language: InterfaceLanguage): string {
 
 const BADGE_LINK = 'grid place-items-center rounded-[10px]';
 
-export function AuthSiteFooter({ shell = __SHELL__ }: { readonly shell?: boolean }) {
+export function AuthSiteFooter({
+  shell = __SHELL__,
+  omit = [],
+}: {
+  readonly shell?: boolean;
+  /** Les pages que l'écran hôte lie déjà ailleurs — l'inscription lie les conditions et la confidentialité dans sa phrase de consentement (épure #17584, règle 2). */
+  readonly omit?: readonly InstitutionalPage[];
+}) {
   const language = useInterfaceLanguage();
   if (shell) return null;
   return (
@@ -56,7 +63,7 @@ export function AuthSiteFooter({ shell = __SHELL__ }: { readonly shell?: boolean
       </ul>
       <nav aria-label={translate(language, 'authFooter.links')}>
         <ul className="flex flex-wrap justify-center gap-x-1">
-          {LINKS.map(([page, key]) => (
+          {LINKS.filter(([page]) => !omit.includes(page)).map(([page, key]) => (
             <li key={page}>
               <a
                 href={appInstitutionalHref(page)}

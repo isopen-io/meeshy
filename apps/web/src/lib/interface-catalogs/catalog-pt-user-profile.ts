@@ -43,7 +43,6 @@ const ptUserProfile = {
   'userProfile.blocked.title': 'Bloqueou esta pessoa',
   'userProfile.blocked.body': 'As publicações e estatísticas ficam ocultas enquanto o bloqueio durar.',
   'userProfile.signin.title': 'Inicie sessão para se ligar',
-  'userProfile.signin.body': 'Pedidos de ligação e mensagens exigem uma conta.',
   'userProfile.signin.cta': 'Iniciar sessão',
   'userProfile.announce.blocked': 'Pessoa bloqueada',
   'userProfile.announce.blockFailed': 'Não foi possível bloquear',

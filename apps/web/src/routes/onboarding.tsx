@@ -74,6 +74,9 @@ import { RecapCard, type RecapNumbers } from './onboarding-recap';
 import { PointsPill, ProgressSegments } from './onboarding-visuals';
 import { href, navigate } from './route-table';
 
+/** Les cartes qui portent toujours la jauge « n / 10 étincelles » : la pastille du haut n'y redit pas le chiffre (épure #17584, règle 2). */
+const GAUGE_STEPS: ReadonlySet<string> = new Set(['languages', 'story']);
+
 /**
  * **L'ACCUEIL POST-INSCRIPTION** (#7729) — `/onboarding`, les cinq cartes
  * jouées une fois après l'inscription, sur le web ET sur Android (la coque
@@ -551,7 +554,7 @@ export function OnboardingJourney({
             <span />
           ) : (
             <span className="onb-pill-anchor">
-              <PointsPill points={Math.max(0, sessionPoints - travelling)} bump={bump} label={translateOnboarding(lang, 'onboarding.points.announce', { points: String(sessionPoints) })} />
+              <PointsPill points={Math.max(0, sessionPoints - travelling)} bump={bump} showsCount={!GAUGE_STEPS.has(step)} label={translateOnboarding(lang, 'onboarding.points.announce', { points: String(sessionPoints) })} />
               {flight === null ? null : (
                 <span key={flight.key} data-onb-flight className="onb-flight" dir="ltr" aria-hidden="true">
                   {translateOnboarding(lang, 'onboarding.points.gained', { points: String(flight.points) })}

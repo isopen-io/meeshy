@@ -131,12 +131,10 @@ function ShotImage({ src, alt, eager }: { readonly src: string; readonly alt: st
 function PlatformCard({
   heading,
   badge,
-  note,
   children,
 }: {
   readonly heading: string;
   readonly badge: ReactNode;
-  readonly note: string;
   readonly children: ReactNode;
 }) {
   return (
@@ -151,9 +149,6 @@ function PlatformCard({
         {heading}
       </h2>
       <div>{badge}</div>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {note}
-      </p>
       {children}
     </section>
   );
@@ -179,6 +174,7 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
         onLanding={false}
         languageControl={<LanguageSelect language={language} label={copy.languageLabel} onSelect={chooseLanguage} />}
         siteHref={appSiteHref}
+        hideDownload
       />
       <main className="relative mx-auto grid w-full max-w-5xl grow content-start gap-8 px-4 py-10 sm:px-8 md:py-14">
         <header className="grid justify-items-center gap-3 text-center">
@@ -193,7 +189,6 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
         <div className="grid gap-5 md:grid-cols-2">
           <PlatformCard
             heading={t('download.ios.heading')}
-            note={t('download.ios.note')}
             badge={
               <StoreBadge store="app-store" label={t('download.appStore')} caption={t('download.badge.appStore.caption')} />
             }
@@ -209,7 +204,6 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
 
           <PlatformCard
             heading={t('download.android.heading')}
-            note={t('download.android.note')}
             badge={
               <StoreBadge store="google-play" label={t('download.googlePlay')} caption={t('download.badge.googlePlay.caption')} />
             }
@@ -231,13 +225,10 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
           <ActionLink to="home" tone="primary">
             {t('download.web')}
           </ActionLink>
-          <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-            {t('download.otherPlatforms')}
-          </p>
         </div>
 
       </main>
-      <SiteFooter language={language} copy={copy} onLanding={false} pageHref={sitePageHref} languageLinks={false} />
+      <SiteFooter language={language} copy={copy} onLanding={false} pageHref={sitePageHref} languageLinks={false} omit={['download']} more={{ pages: ['about', 'help', 'faq', 'partners'], label: t('download.more') }} />
     </div>
   );
 }

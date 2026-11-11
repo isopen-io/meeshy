@@ -198,6 +198,7 @@ const pt = {
   'linkDetail.announce.offline': 'Sem conexão: nada foi enviado.',
   'world.enter': 'Entrar no {title}',
   'world.name.prompt': 'Como devemos chamar você?',
+  'world.name.anonymous': 'Entrada sem conta: os outros verão este nome.',
   'world.name.label': 'Seu nome',
   'world.name.placeholder': 'Ex.: Awa',
   'world.name.missing': 'Escreva o nome que os outros verão.',

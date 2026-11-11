@@ -101,11 +101,6 @@ export function SignupPasswordBlock({
           />
         )}
       </Field>
-      {isStrong ? (
-        <p role="status" className="text-caption" style={{ color: 'var(--color-success)' }}>
-          {translate(language, 'signup.password.active')}
-        </p>
-      ) : null}
       <PasswordWhy language={language} />
     </div>
   );

@@ -198,6 +198,7 @@ const en = {
   'linkDetail.announce.offline': 'Offline: nothing was sent.',
   'world.enter': 'Enter {title}',
   'world.name.prompt': 'What should we call you?',
+  'world.name.anonymous': 'Joining without an account: others will see this name.',
   'world.name.label': 'Your name',
   'world.name.placeholder': 'e.g. Awa',
   'world.name.missing': 'Type the name others will see.',

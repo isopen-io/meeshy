@@ -198,6 +198,7 @@ const es = {
   'linkDetail.announce.offline': 'Sin conexión: no se envió nada.',
   'world.enter': 'Entrar en {title}',
   'world.name.prompt': '¿Cómo te llamamos?',
+  'world.name.anonymous': 'Entras sin cuenta: los demás verán este nombre.',
   'world.name.label': 'Tu nombre',
   'world.name.placeholder': 'Ej. Awa',
   'world.name.missing': 'Escribe el nombre que verán los demás.',

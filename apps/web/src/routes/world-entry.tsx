@@ -345,6 +345,9 @@ export function WorldGuestEntry({
               style={{ borderColor: 'var(--color-ios-brand)', color: INK }}
             />
           </label>
+          <p data-world-anonymous className="w-full text-start text-caption" style={{ color: INK_2 }}>
+            {translateInvite(language, 'world.name.anonymous')}
+          </p>
           {nameRefusal === null ? null : (
             <p id="world-name-refusal" role="alert" className="w-full text-start text-caption font-semibold" style={{ color: 'var(--ios-error)' }}>
               {nameRefusal}

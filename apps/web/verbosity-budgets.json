@@ -89,8 +89,8 @@
       "firstScreen": 14
     },
     "auth-magic-link": {
-      "total": 14,
-      "firstScreen": 14
+      "total": 34,
+      "firstScreen": 34
     },
     "auth-magic-link-validate": {
       "total": 26,
@@ -145,8 +145,8 @@
       "firstScreen": 70
     },
     "download": {
-      "total": 74,
-      "firstScreen": 32
+      "total": 53,
+      "firstScreen": 28
     },
     "faq": {
       "total": 875,
@@ -157,8 +157,8 @@
       "firstScreen": 66
     },
     "forgot-password": {
-      "total": 31,
-      "firstScreen": 31
+      "total": 35,
+      "firstScreen": 35
     },
     "help": {
       "total": 757,
@@ -201,8 +201,8 @@
       "firstScreen": 37
     },
     "login": {
-      "total": 37,
-      "firstScreen": 37
+      "total": 57,
+      "firstScreen": 57
     },
     "me": {
       "total": 122,
@@ -277,8 +277,8 @@
       "firstScreen": 133
     },
     "onboarding": {
-      "total": 65,
-      "firstScreen": 65
+      "total": 64,
+      "firstScreen": 64
     },
     "partners": {
       "total": 283,
@@ -333,8 +333,8 @@
       "firstScreen": 137
     },
     "signup": {
-      "total": 61,
-      "firstScreen": 61
+      "total": 56,
+      "firstScreen": 56
     },
     "stories": {
       "total": 20,
@@ -357,8 +357,8 @@
       "firstScreen": 23
     },
     "world": {
-      "total": 25,
-      "firstScreen": 25
+      "total": 34,
+      "firstScreen": 34
     }
   },
   "uncovered": {
@@ -481,6 +481,54 @@
       },
       "motif": "Une phrase dit ce que fait un lien de suivi ; le rôle des UTM et la consigne du jeton sont visibles",
       "issue": 17641
+    },
+    "login": {
+      "de": {
+        "total": 37,
+        "firstScreen": 37
+      },
+      "a": {
+        "total": 57,
+        "firstScreen": 57
+      },
+      "motif": "La phrase « nous vous envoyons un lien par e-mail » se lit au repos sous le titre ; le (i) ne garde que la durée du lien",
+      "issue": 17666
+    },
+    "auth-magic-link": {
+      "de": {
+        "total": 14,
+        "firstScreen": 14
+      },
+      "a": {
+        "total": 34,
+        "firstScreen": 34
+      },
+      "motif": "La phrase « nous vous envoyons un lien par e-mail » se lit au repos sous le titre ; le (i) ne garde que la durée du lien",
+      "issue": 17666
+    },
+    "forgot-password": {
+      "de": {
+        "total": 31,
+        "firstScreen": 31
+      },
+      "a": {
+        "total": 35,
+        "firstScreen": 35
+      },
+      "motif": "L’écran retrouve son titre « Mot de passe oublié » au-dessus de la phrase qui dit ce que fait la demande",
+      "issue": 17666
+    },
+    "world": {
+      "de": {
+        "total": 25,
+        "firstScreen": 25
+      },
+      "a": {
+        "total": 34,
+        "firstScreen": 34
+      },
+      "motif": "Une phrase dit que l’entrée se fait sans compte et que les autres verront ce nom",
+      "issue": 17666
     }
   }
 }

@@ -198,6 +198,7 @@ const de = {
   'linkDetail.announce.offline': 'Offline: Es wurde nichts gesendet.',
   'world.enter': '{title} betreten',
   'world.name.prompt': 'Wie sollen wir dich nennen?',
+  'world.name.anonymous': 'Beitritt ohne Konto: Die anderen sehen diesen Namen.',
   'world.name.label': 'Dein Name',
   'world.name.placeholder': 'z. B. Awa',
   'world.name.missing': 'Gib den Namen ein, den die anderen sehen.',

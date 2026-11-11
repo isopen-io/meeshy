@@ -43,7 +43,6 @@ const esUserProfile = {
   'userProfile.blocked.title': 'Has bloqueado a esta persona',
   'userProfile.blocked.body': 'Sus publicaciones y estadísticas quedan ocultas mientras dure el bloqueo.',
   'userProfile.signin.title': 'Inicia sesión para conectar',
-  'userProfile.signin.body': 'Las solicitudes de conexión y los mensajes requieren una cuenta.',
   'userProfile.signin.cta': 'Iniciar sesión',
   'userProfile.announce.blocked': 'Persona bloqueada',
   'userProfile.announce.blockFailed': 'No se pudo bloquear',

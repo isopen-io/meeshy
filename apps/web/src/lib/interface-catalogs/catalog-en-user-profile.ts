@@ -43,7 +43,6 @@ const enUserProfile = {
   'userProfile.blocked.title': 'You blocked this person',
   'userProfile.blocked.body': 'Their posts and statistics stay hidden while the block lasts.',
   'userProfile.signin.title': 'Sign in to connect',
-  'userProfile.signin.body': 'Connection requests and messages need an account.',
   'userProfile.signin.cta': 'Sign in',
   'userProfile.announce.blocked': 'Person blocked',
   'userProfile.announce.blockFailed': 'Could not block',

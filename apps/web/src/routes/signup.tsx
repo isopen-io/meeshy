@@ -91,11 +91,11 @@ export type { SignupReferralDeps } from '@/components/signup-extras';
  * d'artifice (`arrival-fireworks.tsx`) et l'onboarding existent déjà.
  */
 
-/** L'AVERTISSEMENT DE VALIDATION (#6479), derrière un (i) depuis #6626. */
+/** L'AVERTISSEMENT DE VALIDATION (#6479) se lit sous le champ (épure #17584, règle 7) ; le (i) ne garde que le détail : lien OU code. */
 function emailVerificationHint(language: InterfaceLanguage): InfoHint {
   return {
     label: translate(language, 'signup.email.hintLabel'),
-    text: translate(language, 'signup.email.verificationNotice'),
+    text: translate(language, 'signup.email.hintDetail'),
     glyph: AUTH_GLYPHS.info,
   };
 }
@@ -387,6 +387,7 @@ export default function SignupScreen({
                 tint={INDIGO_TINT}
                 focused={focused === 'email'}
                 error={emailError}
+                note={translate(interfaceLanguage, 'signup.email.verificationNotice')}
                 hint={emailVerificationHint(interfaceLanguage)}
               >
                 {({ id, describedBy }) => (
@@ -569,7 +570,7 @@ export default function SignupScreen({
             {translate(interfaceLanguage, 'signup.haveAccount')}&nbsp;<span className={INDIGO_LINK}>{translate(interfaceLanguage, 'signup.signIn')}</span>
           </Link>
         </div>
-        <AuthSiteFooter />
+        <AuthSiteFooter omit={['terms', 'privacy']} />
       </div>
 
       {isShowingCountrySheet ? (

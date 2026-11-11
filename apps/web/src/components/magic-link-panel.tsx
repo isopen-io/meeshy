@@ -66,6 +66,11 @@ const SECTION_GAP = 'clamp(12px, calc(100dvh - 676px), 24px)';
 const MAGIC_LINK_SUBMIT_GRADIENT = 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))';
 
 /**
+ * LA PHRASE D'ORIENTATION EST VISIBLE, LE (i) NE GARDE QUE LE DÉTAIL (épure
+ * #17584, règle 7 ; #17666). « Nous vous envoyons un lien par e-mail » est
+ * propre à Meeshy : elle se lit au repos (`magicLink.lead`). Derrière le (i),
+ * la question « Combien de temps le lien reste valable ? » et sa réponse.
+ *
  * UNE LIGNE VISIBLE PAR ÉTAPE, LE « COMMENT » DERRIÈRE UN (i) (#6626).
  *
  * Directive porteur 2026-09-15 : « L'utilisateur a besoin de savoir qu'il va se
@@ -280,6 +285,9 @@ export function MagicLinkPanel({
           </h2>
           <InfoHintButton hint={hint} state={howItWorksState} style={{ display: 'inline-grid', verticalAlign: 'middle' }} />
         </div>
+        <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translate(language, 'magicLink.lead')}
+        </p>
         <InfoHintText hint={hint} state={howItWorksState} />
       </div>
 

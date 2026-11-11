@@ -198,6 +198,7 @@ const ar = {
   'linkDetail.announce.offline': 'غير متصل: لم يُرسَل شيء.',
   'world.enter': 'ادخل إلى {title}',
   'world.name.prompt': 'بماذا نناديك؟',
+  'world.name.anonymous': 'الدخول بلا حساب: سيرى الآخرون هذا الاسم.',
   'world.name.label': 'اسمك',
   'world.name.placeholder': 'مثال: عوا',
   'world.name.missing': 'اكتب الاسم الذي سيراه الآخرون.',

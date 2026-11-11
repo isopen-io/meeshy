@@ -28,6 +28,7 @@ export function Field({
   valid = false,
   error,
   hint,
+  note,
   children,
 }: {
   id: string;
@@ -84,12 +85,19 @@ export function Field({
    * trouver le bouton.
    */
   hint?: InfoHint | undefined;
+  /**
+   * UNE PHRASE D'ORIENTATION LISIBLE AU REPOS (épure #17584, règle 7) : ce que
+   * le champ déclenche, quand c'est propre à Meeshy. Citée par `aria-describedby`
+   * avant le (i), qui ne garde que le détail secondaire.
+   */
+  note?: string | undefined;
   /** L'`<input>`/`<select>` lui-même — reçoit `id` et `aria-describedby` pour
    * que le refus SOUS le champ soit lu par un lecteur d'écran comme le champ
    * lui-même, jamais un texte à part. */
   children: (ids: { id: string; describedBy: string | undefined }) => ReactNode;
 }) {
   const errorId = `${id}-error`;
+  const noteId = `${id}-note`;
   const hintState = useInfoHint();
   const iconStyle = { color: `color-mix(in srgb, ${tint} 70%, transparent)`, flexShrink: 0 };
   const isValid = valid && error === undefined;
@@ -126,12 +134,17 @@ export function Field({
         {icon === undefined && glyph !== undefined ? <GlyphSvg glyph={glyph} size={20} style={iconStyle} /> : null}
         {children({
           id,
-          describedBy: [error !== undefined ? errorId : undefined, hint !== undefined ? hintState.id : undefined]
+          describedBy: [error !== undefined ? errorId : undefined, note !== undefined ? noteId : undefined, hint !== undefined ? hintState.id : undefined]
             .filter((part): part is string => part !== undefined)
             .join(' ') || undefined,
         })}
         {hint !== undefined ? <InfoHintButton hint={hint} state={hintState} style={{ marginRight: -10 }} /> : null}
       </div>
+      {note !== undefined ? (
+        <p id={noteId} data-field-note className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {note}
+        </p>
+      ) : null}
       {hint !== undefined ? <InfoHintText hint={hint} state={hintState} /> : null}
       {error !== undefined ? (
         <p id={errorId} role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
