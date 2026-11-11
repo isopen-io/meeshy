@@ -159,7 +159,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     func test_lImageIgnoreLesMarges_quandLeChromeLesRespecte() throws {
         // #9351 — le montage a quitté l'hôte pour `ComposerCaptureMount`, que la
         // barre de conversation monte aussi : ce que le témoin garde n'a pas bougé.
-        let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        let hote = compact(try source("ComposerSceneViewfinderMount.swift"))
         XCTAssertTrue(hote.contains("ComposerCaptureMount("), "le composer monte le montage unique")
         let code = compact(try source("ComposerCaptureMount.swift"))
         guard let début = code.range(of: "varbody:someView{"),
@@ -181,9 +181,11 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// noir légitime.
     func test_leMeuble_nePeintLeViseur_queSiLeStageEstArmé() throws {
         let code = compact(try source("ComposerCaptureMount.swift"))
-        XCTAssertEqual(code.components(separatedBy: "session.stage != .off"
+        XCTAssertEqual(code.components(separatedBy: "ComposerCaptureSurfaceRule.showsViewfinder(stage: session.stage"
             .replacingOccurrences(of: " ", with: "")).count - 1, 2,
                        "les DEUX couches doivent porter le gate — une seule laisserait un chrome orphelin")
+        XCTAssertFalse(ComposerCaptureSurfaceRule.showsViewfinder(stage: .off, yieldsToScene: false),
+                       "le gate refuse un stage éteint")
     }
 
     /// **Le geste n'ouvre plus de PORTAIL.** C'est la moitié qui se voit à
@@ -267,7 +269,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
                       "une vidéo de la scène doit rejoindre les segments, pas la scène")
         XCTAssertTrue(code.contains("beginEditing(photo:image,data:camera.capturedPhotoData)"),
                       "une photo s'ouvre en édition sans attendre de ✓ — AVEC ses octets d'origine, qui portent l'EXIF")
-        let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        let hote = compact(try source("ComposerSceneViewfinderMount.swift"))
         XCTAssertTrue(hote.contains("sceneCapture.onDeliver={poseSceneCapture($0)}"),
                       "la prise de la scène se pose par l'hôte")
     }
@@ -301,7 +303,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     /// l'auteur croyait avoir jetés. C'est la fuite qui se voit, pas celle qui
     /// coûte de l'espace.
     func test_désarmer_effaceLesSegmentsEtLeursFichiers() throws {
-        let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        let hote = compact(try source("ComposerSceneViewfinderMount.swift"))
         XCTAssertTrue(hote.contains("sceneCapture.disarm()"))
         let code = compact(try source("ComposerCaptureSession.swift"))
         guard let début = code.range(of: "funcdisarm(){"),
