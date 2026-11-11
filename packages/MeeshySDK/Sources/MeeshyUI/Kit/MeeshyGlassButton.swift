@@ -364,15 +364,15 @@ public struct MeeshyGlassButton<Glyph: View, Badge: View>: View {
         MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled, haptic: spec.haptic, action: action)
     }
 
-    /// L'appui long offert au lecteur d'écran : la même loi que le doigt
-    /// (désactivé, rien ; sinon un impact puis l'action), sans lever le drapeau
-    /// du geste, qui avalerait la prochaine activation.
     /// L'action nommée offerte au lecteur d'écran, absente sans appui long.
     private var namedLongPress: (() -> Void)? {
         guard onLongPress != nil else { return nil }
         return { performNamedLongPress() }
     }
 
+    /// L'appui long offert au lecteur d'écran : la même loi que le doigt
+    /// (désactivé, rien ; sinon un impact puis l'action), sans lever le drapeau
+    /// du geste, qui avalerait la prochaine activation.
     private func performNamedLongPress() {
         guard let onLongPress else { return }
         MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled, haptic: spec.haptic, action: onLongPress)
