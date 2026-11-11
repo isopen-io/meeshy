@@ -1,5 +1,5 @@
 import type { CallAction, CallControlSet, MineAction } from './call-controls';
-import type { CallScreenLayer } from './call-screen-layer';
+import { panelInThePill, type CallScreenLayer } from './call-screen-layer';
 import type { ActiveCall } from './call-store';
 import type { CallLayout } from './call-view';
 
@@ -15,9 +15,9 @@ import type { CallLayout } from './call-view';
  *   Aucun rail ne se pose par-dessus la grille : il masquerait des vignettes.
  *
  * Le passage de deux à trois en cours d'appel change la forme, pas l'état du
- * `(…)` (`call-screen-layer.ts`). Un panneau (Réagir, Enregistrer, Ajouter,
- * Journal) est dessiné DANS la pilule et REMPLACE les actions (#8578), rails
- * compris : seul le menu ouvert les montre. Les règles de l'ordre et de
+ * `(…)` (`call-screen-layer.ts`). Une option (Réagir, Enregistrer, Journal)
+ * est dessinée DANS la pilule et REMPLACE les actions (#8578), rails compris ;
+ * Ajouter s'ouvre en feuille et les laisse en place (G3.5). Les règles de l'ordre et de
  * l'offre sont dans `call-controls.ts`.
  */
 
@@ -64,7 +64,8 @@ const familyRows = (set: CallControlSet): readonly CallFamilyRow[] =>
     { family: 'call', actions: set.call },
   ] as const).filter((row) => row.actions.length > 0);
 
-const showsFamilyRows = (layer: CallScreenLayer): boolean => layer.kind === 'menu';
+/** Le menu ouvert, ou la feuille des personnes (G3.5), montrent les rangées ; une option de la pilule les remplace. */
+const showsFamilyRows = (layer: CallScreenLayer): boolean => layer.kind === 'menu' || (layer.kind === 'panel' && !panelInThePill(layer.panel));
 
 /** Les rails à l'écran : ceux que le `(…)` ouvert fait sortir, à deux seulement. */
 export function railRows(disposition: CallControlsDisposition, set: CallControlSet, layer: CallScreenLayer): readonly CallFamilyRow[] {
@@ -78,5 +79,5 @@ export function pillRows(disposition: CallControlsDisposition, set: CallControlS
 
 /** La pilule grandit pour le panneau qu'elle contient, et, à plusieurs, pour ses rangées. À deux, `(…)` seul ne la fait pas grandir. */
 export function unfoldsPill(disposition: CallControlsDisposition, layer: CallScreenLayer): boolean {
-  return layer.kind === 'panel' || (disposition === 'rows' && showsFamilyRows(layer));
+  return (layer.kind === 'panel' && panelInThePill(layer.panel)) || (disposition === 'rows' && showsFamilyRows(layer));
 }

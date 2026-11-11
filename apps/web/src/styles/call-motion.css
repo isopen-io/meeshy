@@ -50,7 +50,68 @@
   }
 }
 
+/* LA FEUILLE MONTE DU BAS ET Y REDESCEND (G3.5, #17406) — le voile en fondu, la
+   feuille par sa seule transformation ; elle repart pendant `data-leaving` sans
+   prendre le doigt. */
+[data-call-sheet-panel] {
+  animation: call-sheet-in 240ms cubic-bezier(0.2, 0.9, 0.3, 1) backwards;
+}
+
+[data-call-sheet-scrim] {
+  animation: call-sheet-fade-in 240ms ease-out backwards;
+}
+
+[data-call-sheet][data-leaving] {
+  pointer-events: none;
+}
+
+[data-call-sheet][data-leaving] [data-call-sheet-panel] {
+  animation: call-sheet-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+[data-call-sheet][data-leaving] [data-call-sheet-scrim] {
+  animation: call-sheet-fade-out 180ms ease-in both;
+}
+
+@keyframes call-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes call-sheet-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes call-sheet-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes call-sheet-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  @keyframes call-sheet-in {
+    from {
+      opacity: 0;
+      transform: none;
+    }
+  }
+
+  @keyframes call-sheet-out {
+    to {
+      opacity: 0;
+      transform: none;
+    }
+  }
+
   @keyframes call-pill-text-in {
     from {
       opacity: 0;

@@ -3,6 +3,8 @@ import { useStore } from 'zustand/react';
 
 import { callActions } from '@/lib/calls/call-actions';
 import type { CallCaption } from '@/lib/calls/call-captions';
+import type { ActiveCall } from '@/lib/calls/call-store';
+import { callAudioOf, hasVideo } from '@/lib/calls/call-view';
 import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
@@ -13,6 +15,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallEffectsCompanions, type EffectsCompanion } from './call-effects-companions';
+import type { Portrait } from './call-grid';
+import { StreamVideo } from './call-media-elements';
 import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 
 /**
@@ -45,6 +49,31 @@ export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknow
 
 type Category = 'face' | 'color';
 
+/**
+ * LES AUTRES DE L'APPEL (#8737), remis tels quels par l'écran avec ce qui vit
+ * chez lui — le portrait et la couleur d'un locuteur : ce chunk n'importe rien
+ * de `call_overlay`, et c'est lui, chargé à l'entrée du mode, qui en fait des
+ * compagnons — leur vidéo quand elle se montre, leur portrait sinon — et le son
+ * qu'un film emporte (`callAudioOf`).
+ */
+export type CallOthers = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream'> & {
+  readonly Portrait: typeof Portrait;
+  readonly colorOf: (userId: string) => string;
+};
+
+export const companionsOf = ({ members, remoteStreams, Portrait: Face, colorOf }: CallOthers): readonly EffectsCompanion[] =>
+  Object.values(members).map((member) => {
+    const stream = remoteStreams[member.userId] ?? null;
+    const shows = (member.cameraOn || member.screenSharing) && hasVideo(stream);
+    return {
+      id: member.userId,
+      name: member.name,
+      color: colorOf(member.userId),
+      render: (width) =>
+        shows ? <StreamVideo stream={stream} mirrored={false} fit={member.screenSharing ? 'contain' : 'cover'} className="absolute inset-0 size-full" label={member.name} /> : <Face name={member.name} avatar={member.avatar} size={Math.round(width / 2)} pulse={member.link === 'ringing'} presenceKey={member.userId} />,
+    };
+  });
+
 type ModeProps = {
   readonly language: InterfaceLanguage;
   readonly colorAvailable: boolean;
@@ -53,7 +82,8 @@ type ModeProps = {
   readonly preview: ReactNode;
   /** L'élément de MA vidéo (#8737) : la seule source des photos et des films du mode. */
   readonly selfVideo: () => HTMLVideoElement | null;
-  /** Les autres participants, qui accompagnent mon image (#8737). */
+  /** Les autres participants, qui accompagnent mon image (#8737) : remis par l'écran (`others`), ou déjà composés. */
+  readonly others?: CallOthers;
   readonly companions?: readonly EffectsCompanion[];
   /** Les sous-titres de l'appel : qui parle, faute d'un niveau audio (#8737). */
   readonly captions?: readonly CallCaption[];
@@ -81,7 +111,6 @@ const VIDEO_GRAB: FrameGrab = {
   film: (video) => filmedTrack(video, EFFECTS_RECORD_FPS),
 };
 
-const NO_AUDIO = (): readonly MediaStream[] => [];
 
 const applyNow = (patch: Partial<VideoEffects>): void => {
   setVideoEffects(patch);
@@ -216,7 +245,7 @@ const sliders = (
 
 const TEXT_TAB = 'min-h-11 rounded-full px-3 text-mini font-semibold transition-colors motion-reduce:transition-none';
 
-export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, companions = [], captions = [], quitGlyph, onExit, onWheel = onRowWheel, apply = applyNow, audio = NO_AUDIO, grab = VIDEO_GRAB, save, clipEnv }: ModeProps) {
+export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, others, companions = others === undefined ? [] : companionsOf(others), captions = [], quitGlyph, onExit, onWheel = onRowWheel, apply = applyNow, audio = () => callAudioOf(others), grab = VIDEO_GRAB, save, clipEnv }: ModeProps) {
   const effects = useStore(videoEffectsStore, (state) => state.effects);
   const before = useRef(effects);
   const root = useRef<HTMLDivElement>(null);
