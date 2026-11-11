@@ -10,13 +10,9 @@ struct CallEffectsModeControls: View {
     /// OPUS-4 — faux avant la connexion : ni photo ni film de mon image, et
     /// la capture ne s'arme pas.
     var capturesMyImage = true
-    /// OPUS-4 — les réglages à l'ouverture du mode, tenus par l'écran d'appel :
-    /// le mode ouvert avant le décroché renaît dans l'appel établi sans les perdre.
-    @Binding var entryConfig: VideoFilterConfig?
     let onExit: () -> Void
 
     @State private var config = VideoFilterConfig()
-    @State private var original = VideoFilterConfig()
     @State private var category: CallEffectsCategory = .face
     @State private var showsSettings = false
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
@@ -25,45 +21,21 @@ struct CallEffectsModeControls: View {
 
     var body: some View {
         VStack(spacing: MeeshySpacing.mdPlus) {
-            if showsSettings {
-                settingsRow
-                    .transition(.opacity)
-            } else {
-                categoryPicker
+            if !showsSettings {
                 carousel
                     .transition(.opacity)
             }
-            CallModeActionBar(
-                exitHint: CallModeCopy.quitEffectsHint,
-                onExit: { finish(validated: false) },
-                options: [
-                    CallModeOption(
-                        id: "settings",
-                        symbol: "slider.horizontal.3",
-                        label: CallModeCopy.settings,
-                        caption: CallModeCopy.settings,
-                        hint: CallModeCopy.settingsHint,
-                        isOn: showsSettings
-                    ) {
-                        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { showsSettings.toggle() }
-                        HapticFeedback.light()
-                    },
-                    CallModeOption(
-                        id: "validate",
-                        symbol: "checkmark",
-                        label: CallModeCopy.validate,
-                        caption: CallModeCopy.validate,
-                        hint: CallModeCopy.validateHint
-                    ) {
-                        finish(validated: true)
-                    }
-                ]
+            CallEffectsBar(
+                showsSettings: showsSettings,
+                onBack: goBack,
+                onSettings: toggleSettings,
+                onAddLook: addLook,
+                looks: { categoryPicker },
+                settings: { settingsPanel }
             )
+            .padding(.horizontal, MeeshySpacing.lg)
         }
         .onAppear {
-            let entry = entryConfig ?? callManager.videoFilters.config
-            entryConfig = entry
-            original = entry
             config = callManager.videoFilters.config
         }
         .task(id: CallEffectsCaptureKey(source: CallCaptureSourceKey(subjects: subjects, tracks: tracks), isArmed: capturesMyImage)) {
@@ -83,12 +55,27 @@ struct CallEffectsModeControls: View {
         }
     }
 
-    private func finish(validated: Bool) {
-        let kept = CallEffectsModeRule.exiting(validated: validated, current: config, original: original)
-        callManager.videoFilters.config = kept
-        entryConfig = nil
-        if validated { HapticFeedback.success() }
+    /// ‹ revient à l'appel en gardant le look : chaque look touché s'est appliqué tout de suite.
+    private func goBack() {
+        HapticFeedback.light()
         onExit()
+    }
+
+    private func toggleSettings() {
+        withAnimation(settingsAnimation) { showsSettings.toggle() }
+        HapticFeedback.light()
+    }
+
+    private func addLook() {
+        withAnimation(settingsAnimation) {
+            showsSettings = false
+            category = CallEffectsModeRule.addingLook(from: category)
+        }
+        HapticFeedback.light()
+    }
+
+    private var settingsAnimation: Animation {
+        .easeInOut(duration: CallEffectsSettingsMotion.duration(reduceMotion: reduceMotion))
     }
 
     private var categoryPicker: some View {
@@ -101,7 +88,7 @@ struct CallEffectsModeControls: View {
                         .accessibilityHidden(true)
                 }
                 Button {
-                    withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { category = item }
+                    withAnimation(settingsAnimation) { category = item }
                     HapticFeedback.light()
                 } label: {
                     Text(CallModeCopy.categoryName(item))
@@ -211,67 +198,71 @@ struct CallEffectsModeControls: View {
         )
     }
 
+    private var blurBinding: Binding<Bool> {
+        Binding(
+            get: { config.backgroundBlurEnabled },
+            set: { blurs in
+                config = config.withBackgroundBlur(blurs)
+                HapticFeedback.light()
+            }
+        )
+    }
+
     /// #9289 — la Peau lissée choisie se règle ici, au même endroit que la luminosité.
     @ViewBuilder
     private var smoothingRow: some View {
         if config.activeFaceEffect == .smoothing {
             let range = VideoFilterConfig.smoothingIntensityRange
-            HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: "wand.and.rays.inverse")
-                    .font(.footnote)
-                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                Text(CallEffectsCopy.smoothingStrength)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.white)
                     .accessibilityHidden(true)
                 Slider(value: smoothingBinding, in: Double(range.lowerBound) ... Double(range.upperBound))
                     .tint(.white)
+                    .frame(minHeight: 44)
                     .accessibilityLabel(CallEffectsCopy.smoothingStrength)
                     .accessibilityValue(LocalizedNumber.percent(Int((config.skinSmoothingIntensity * 100).rounded())))
-                Image(systemName: "wand.and.rays")
-                    .font(.footnote)
-                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
-                    .accessibilityHidden(true)
             }
-            .frame(minHeight: 44)
-            .padding(.horizontal, MeeshySpacing.xxl)
         }
     }
 
-    private var settingsRow: some View {
-        VStack(spacing: MeeshySpacing.sm) {
+    /// P8b — le panneau prend la place des looks, dans la barre de verre : Luminosité, un
+    /// titre et son curseur ; Flou du fond, une ligne titrée à interrupteur.
+    private var settingsPanel: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             smoothingRow
-            brightnessAndBlurRow
+            brightnessRow
+            blurRow
         }
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.top, MeeshySpacing.xs)
     }
 
-    private var brightnessAndBlurRow: some View {
+    private var brightnessRow: some View {
         let limit = Double(VideoFilterConfig.brightnessLimit)
         let percent = LocalizedNumber.percent(Int((Double(config.brightness) / limit * 100).rounded()))
-        return HStack(spacing: MeeshySpacing.mdPlus) {
-            HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: "sun.min")
-                    .font(.footnote)
-                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
-                    .accessibilityHidden(true)
-                Slider(value: brightnessBinding, in: -limit ... limit)
-                    .tint(.white)
-                    .accessibilityLabel(CallEffectsCopy.brightness)
-                    .accessibilityValue(percent)
-                Image(systemName: "sun.max")
-                    .font(.footnote)
-                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: 44)
-            CallPillChip(
-                art: .symbol("person.and.background.dotted"),
-                caption: CallEffectsCopy.blur,
-                label: CallEffectsCopy.blur,
-                isSelected: config.backgroundBlurEnabled
-            ) {
-                config = config.withBackgroundBlur(!config.backgroundBlurEnabled)
-                HapticFeedback.light()
-            }
+        return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            Text(CallEffectsCopy.brightness)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .accessibilityHidden(true)
+            Slider(value: brightnessBinding, in: -limit ... limit)
+                .tint(.white)
+                .frame(minHeight: 44)
+                .accessibilityLabel(CallEffectsCopy.brightness)
+                .accessibilityValue(percent)
         }
-        .padding(.horizontal, MeeshySpacing.xxl)
+    }
+
+    private var blurRow: some View {
+        Toggle(isOn: blurBinding) {
+            Text(CallEffectsCopy.blur)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Color.white)
+        }
+        .tint(MeeshyColors.success)
+        .frame(minHeight: 44)
     }
 }
 

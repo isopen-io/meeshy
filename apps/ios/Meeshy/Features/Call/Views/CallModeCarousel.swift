@@ -8,10 +8,6 @@ enum CallModeCopy {
         String(localized: "call.mode.quit", defaultValue: "Quitter", bundle: .main)
     }
 
-    static var quitEffectsHint: String {
-        String(localized: "call.mode.quit.effects.hint", defaultValue: "Rend votre image telle qu'elle était et revient à l'appel", bundle: .main)
-    }
-
     static var quitMontageHint: String {
         String(localized: "call.mode.quit.montage.hint", defaultValue: "Revient à l'appel", bundle: .main)
     }
@@ -54,12 +50,20 @@ enum CallModeCopy {
         String(localized: "call.mode.montage.title", defaultValue: "Montage de l'appel", bundle: .main)
     }
 
-    static var validate: String {
-        String(localized: "call.mode.effects.validate", defaultValue: "Valider", bundle: .main)
+    static var backToCall: String {
+        String(localized: "call.mode.effects.back", defaultValue: "Retour à l'appel", bundle: .main)
     }
 
-    static var validateHint: String {
-        String(localized: "call.mode.effects.validate.hint", defaultValue: "Garde cet effet et revient à l'appel", bundle: .main)
+    static var backToCallHint: String {
+        String(localized: "call.mode.effects.back.hint", defaultValue: "Garde votre look et revient à l'appel", bundle: .main)
+    }
+
+    static var addLook: String {
+        String(localized: "call.mode.effects.addLook", defaultValue: "Ajouter un autre look", bundle: .main)
+    }
+
+    static var addLookHint: String {
+        String(localized: "call.mode.effects.addLook.hint", defaultValue: "Passe aux looks d'un autre genre, à cumuler avec le vôtre", bundle: .main)
     }
 
     static var settings: String {
