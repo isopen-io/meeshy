@@ -17,7 +17,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallEffectsCompanions, type EffectsCompanion } from './call-effects-companions';
-import type { Portrait } from './call-grid';
+import type { Portrait } from './call-portrait';
 import { StreamVideo } from './call-media-elements';
 import { CallModeBar, GLASS_WIDTH, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 
