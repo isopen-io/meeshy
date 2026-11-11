@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">Rebirth opens at level 100. You are at level %1$s.</string>
     <string name="game2_prestige_max">Your legend has lived its five rebirths: the summit of summits.</string>
     <string name="game2_prestige_mee">Level 100: your light can be reborn, or keep growing.</string>
-    <string name="game2_prestige_meo">When you are reborn, your light becomes a Spark again: your level starts over at 1 and your sparks at 0. What you have received since the beginning and your highest light stay engraved. Your ancestors offer you a new Age, a numbered trophy and %1$s glory. Your rank never goes back.</string>
+    <string name="game2_prestige_meo">Your ancestors offer you a new Age, a numbered trophy and %1$s glory. Your rank never goes back.</string>
     <string name="game2_prestige_stars">Rebirths: %1$s of %2$s</string>
     <string name="game2_prestige_stay">Keep shining</string>
     <string name="game2_prestige_title">Rebirth</string>
@@ -244,7 +244,7 @@
     <string name="game2_season_title">Journey</string>
     <string name="game2_season_to_next">%1$s to the next stop</string>
     <string name="game2_season_upcoming">Journey %1$s sets off on %2$s.</string>
-    <string name="game2_settings_celebrations_body">Mee and Meo’s cards and the signs from your ancestors that appear on Progress. This setting applies to this device only.</string>
+    <string name="game2_settings_celebrations_body">Mee and Meo’s cards on Progress. This device only.</string>
     <string name="game2_settings_celebrations_switch">Ancestors’ signs</string>
     <string name="game2_settings_celebrations_title">Mee and Meo</string>
     <string name="game2_settings_friends_league_body">Weekly ranking among accepted friends. Opting out hides you from each other.</string>
@@ -487,7 +487,7 @@
     <string name="game_concept_meesh_name">The Legacy</string>
     <string name="game_concept_meesh_tip_1">Keep your Meeshes: your legacy moves from one container to the next.</string>
     <string name="game_concept_meesh_tip_2">Spend them to watch over your Flame or to change an act of your dream.</string>
-    <string name="game_concept_meesh_use">Keep your Meeshes: they fill your legacy, from the Purse to the Reserve, shown on your profile. Or spend them: a Vigil for your Flame, an act to change, the Journey Seal. Every mint also makes your glory grow.</string>
+    <string name="game_concept_meesh_use">Keep your Meeshes for your legacy, or spend them: a Vigil for your Flame, an act to change, the Journey Seal.</string>
     <string name="game_concept_meesh_what">A Meesh is your light bound into a numbered coin, which you mint yourself. One in a hundred is gold, one in a thousand is prism.</string>
     <string name="game_concept_meesh_why">The Meeshes you keep form the legacy you leave to your line.</string>
     <string name="game_concept_missions_how">Three acts per dream. Once they’re complete, the Offering appears.</string>
@@ -509,7 +509,7 @@
     <string name="game_concept_prestige_name">Rebirth</string>
     <string name="game_concept_prestige_tip_1">Carry your light all the way to level 100.</string>
     <string name="game_concept_prestige_tip_2">Be reborn whenever you like: nothing forces you to.</string>
-    <string name="game_concept_prestige_use">At level 100, choose: be reborn, or keep shining. Being reborn sets your level back to 1 and your light to zero. You keep the sparks received since the beginning, your highest light, your rank, your glory, your Meeshes, your Flame and your trophies; your joust and your alliance stay open.</string>
+    <string name="game_concept_prestige_use">At level 100, choose: be reborn, or keep shining. Being reborn sets your level back to 1 and your light to zero; the rest is kept.</string>
     <string name="game_concept_prestige_what">Rebirth opens a new Age of your legend, offered at level 100, when your light has become a Galaxy. It is optional: five rebirths at most lead to the Sixth Age.</string>
     <string name="game_concept_prestige_why">Rebirth is offered to those whose light reaches level 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -1052,7 +1052,7 @@
     <string name="game_rank_voix">Voice</string>
     <string name="game_rules_1_body">Writing, talking, posting, reacting, inviting: every real exchange makes sparks fly. A post makes them fly according to who can see it: public, community or friends. The limits apply to your moves, never to your sparks: momentum, the Flame and events make more fly with each move.</string>
     <string name="game_rules_1_title">Every move makes sparks fly</string>
-    <string name="game_rules_2_body">Together, your sparks form your light, and your level is read from it: a mint binds part of it, so it lowers your level. A million sparks for level 100, and a trial every ten levels: until it is passed, your light waits. Twenty phases. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before.</string>
+    <string name="game_rules_2_body">Together, your sparks form your light, and your level is read from it: a million sparks for level 100. A mint binds part of it, so it lowers your level.</string>
     <string name="game_rules_2_title">Sparks form your light</string>
     <string name="game_rules_3_body" formatted="false">A Meesh is minted by hand: part of your light is bound into it. That part depends on the coin’s number and on your current level: smaller when your level is low, whole from level 100. It grows by 30 % every ten mints.</string>
     <string name="game_rules_3_title">We mint Meeshes</string>
@@ -1067,15 +1067,15 @@
     <string name="game_rules_8_body">At each evolution, your ancestors send you a sign: each sign is immortalized in a photo with Mee and Meo in your Chronicle.</string>
     <string name="game_rules_8_title">Your ancestors send signs</string>
     <string name="game_rules_badges_families">The twenty medals, by family</string>
-    <string name="game_rules_badges_imprint">Minting a Meesh no longer puts any medal out. A medal that went out before stays an imprint showing what is missing to light it again.</string>
-    <string name="game_rules_badges_intro">Each medal follows ONE precise move: a voice message, a story, a friendship made… There are twenty, grouped into five families.</string>
+    <string name="game_rules_badges_imprint">A medal that went out stays an imprint: it says what is missing to light it again.</string>
+    <string name="game_rules_badges_intro">Each medal follows ONE precise move: a voice message, a story, a friendship made…</string>
     <string name="game_rules_badges_ladder">Each medal climbs seven marks. At each threshold crossed, it changes material and lights one more star.</string>
     <string name="game_rules_badges_ribbon">From Gold on, the medal wears a ribbon; at Prism, its enamel turns iridescent.</string>
     <string name="game_rules_badges_sheet">Tap a medal: its card says what it follows, its material and why, and what’s missing for the next star.</string>
     <string name="game_rules_badges_title">Medals</string>
     <string name="game_rules_concept_atlas_body">Your language passport.</string>
     <string name="game_rules_concept_badges_body">Twenty medals, one per precise move.</string>
-    <string name="game_rules_concept_chest_body">It appears when the dream’s three acts are complete. It is a veiled gift: sparks according to your acts, glory, sometimes a spark bonus, a star fragment or a Vigil.</string>
+    <string name="game_rules_concept_chest_body">It appears when the dream’s three acts are complete: a veiled gift.</string>
     <string name="game_rules_concept_chest_name">The Offering</string>
     <string name="game_rules_concept_defis_body">Numbered tiers in every family of actions.</string>
     <string name="game_rules_concept_duo_body">Once a week, an alliance with an accepted friend, open from level 20 for both of you. If each of you does your part, the reward doubles. It also carries your journey a few strides further.</string>
@@ -1091,12 +1091,12 @@
     <string name="game_rules_concept_prestige_body">An optional rebirth, offered at level 100, five times at most.</string>
     <string name="game_rules_concept_season_body">An eight-week journey in the land of a language, with 40 free stops.</string>
     <string name="game_rules_concept_showcase_body">The shelf of your trophies: joust and journey cups, rebirth and Flame trophies.</string>
-    <string name="game_rules_concept_steps_body">From 10 to 100, every ten levels, your ancestors ask for a simple trial: mint a Meesh, fulfill dreams, hold a Flame, reach a rank. Until it is passed, your light waits; once passed, the level rises at once.</string>
+    <string name="game_rules_concept_steps_body">Every ten levels, from 10 to 100: mint a Meesh, fulfill dreams, hold a Flame or reach a rank. Until it is passed, your light waits.</string>
     <string name="game_rules_concept_steps_name">The Trials</string>
     <string name="game_rules_concept_succes_body">Rare distinctions, done in one go when you gather what they ask for.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">+25 % on the sparks of your moves while your level is 7 or more levels below your highest light. It stops as soon as the gap falls back to 6.</string>
     <string name="game_rules_concept_tailwind_name">Tailwind</string>
-    <string name="game_rules_concept_treasury_body">The Meeshes you keep for your line. Six containers, from the Purse to the Reserve, shown on your profile. The legacy grows when you keep your Meeshes and shrinks when you spend them.</string>
+    <string name="game_rules_concept_treasury_body">The Meeshes you keep for your line. Six containers, from the Purse to the Reserve, shown on your profile.</string>
     <string name="game_rules_concept_treasury_name">The Legacy</string>
     <string name="game_rules_concepts_intro">Every element of the game, in plain words.</string>
     <string name="game_rules_intro">Eight rules, and the whole game fits inside. Meo explains them, Mee shows you the move.</string>

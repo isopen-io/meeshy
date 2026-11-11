@@ -7,7 +7,7 @@ extension GameText {
 
     static var settingsCelebrationsTitle: String { String(localized: "game2.settings.celebrations.title", defaultValue: "Mee et Meo", bundle: .main) }
 
-    static var settingsCelebrationsBody: String { String(localized: "game2.settings.celebrations.body", defaultValue: "Les cartes de Mee et Meo et les signes des aïeux qui apparaissent sur Progression. Ce réglage vaut pour cet appareil seulement.", bundle: .main) }
+    static var settingsCelebrationsBody: String { String(localized: "game2.settings.celebrations.body", defaultValue: "Cartes de Mee et Meo sur Progression. Cet appareil seulement.", bundle: .main) }
 
     static var settingsCelebrationsSwitch: String { String(localized: "game2.settings.celebrations.switch", defaultValue: "Signes des aïeux", bundle: .main) }
 

@@ -189,7 +189,7 @@ extension GameText {
     static var prestigeMee: String { String(localized: "game2.prestige.mee", defaultValue: "Niveau 100 : ta lumière peut renaître, ou grandir encore.", bundle: .main) }
 
     static func prestigeMeo(glory: String) -> String {
-        String(localized: "game2.prestige.meo", defaultValue: "En renaissant, ta lumière redevient Étincelle : ton niveau repart à 1 et tes étincelles à 0. Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés. Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et \(glory) de gloire. Ton rang ne recule jamais.", bundle: .main)
+        String(localized: "game2.prestige.meo", defaultValue: "Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et \(glory) de gloire. Ton rang ne recule jamais.", bundle: .main)
     }
 
     static func prestigeConfirmTitle(number: String) -> String {

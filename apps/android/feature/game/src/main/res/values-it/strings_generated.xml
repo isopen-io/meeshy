@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">La Rinascita si apre al livello 100. Sei al livello %1$s.</string>
     <string name="game2_prestige_max">La tua leggenda ha vissuto le sue cinque rinascite: la vetta della vetta.</string>
     <string name="game2_prestige_mee">Livello 100: la tua luce può rinascere, o crescere ancora.</string>
-    <string name="game2_prestige_meo">Rinascendo, la tua luce torna Scintilla: il tuo livello riparte da 1 e le tue scintille da 0. Ciò che hai ricevuto da sempre e la tua luce più alta restano incisi. I tuoi antenati ti offrono una nuova Era, un trofeo numerato e %1$s di gloria. Il tuo rango non arretra mai.</string>
+    <string name="game2_prestige_meo">I tuoi antenati ti offrono una nuova Era, un trofeo numerato e %1$s di gloria. Il tuo rango non arretra mai.</string>
     <string name="game2_prestige_stars">Rinascite: %1$s su %2$s</string>
     <string name="game2_prestige_stay">Continuare a brillare</string>
     <string name="game2_prestige_title">Rinascita</string>
@@ -244,7 +244,7 @@
     <string name="game2_season_title">Viaggio</string>
     <string name="game2_season_to_next">%1$s fino alla sosta successiva</string>
     <string name="game2_season_upcoming">Il viaggio %1$s parte il %2$s.</string>
-    <string name="game2_settings_celebrations_body">Le carte di Mee e Meo e i segni degli antenati che compaiono in Progressi. Questa impostazione vale solo per questo dispositivo.</string>
+    <string name="game2_settings_celebrations_body">Carte di Mee e Meo in Progressi. Solo questo dispositivo.</string>
     <string name="game2_settings_celebrations_switch">Segni degli antenati</string>
     <string name="game2_settings_celebrations_title">Mee e Meo</string>
     <string name="game2_settings_friends_league_body">Classifica settimanale tra amici accettati. Se ti ritiri, non vi vedete più a vicenda.</string>
@@ -487,7 +487,7 @@
     <string name="game_concept_meesh_name">L’Eredità</string>
     <string name="game_concept_meesh_tip_1">Custodisci le tue Meesh: la tua eredità passa da una custodia alla successiva.</string>
     <string name="game_concept_meesh_tip_2">Spendile per vegliare sulla tua Fiamma o cambiare un atto del tuo sogno.</string>
-    <string name="game_concept_meesh_use">Custodisci le tue Meesh: riempiono la tua eredità, dalla Borsa alla Riserva, visibile sul tuo profilo. Oppure spendile: una Lucerna per la tua Fiamma, un atto da cambiare, il Sigillo del viaggio. Ogni conio fa anche crescere la tua gloria.</string>
+    <string name="game_concept_meesh_use">Custodisci le tue Meesh per la tua eredità, oppure spendile: una Lucerna per la tua Fiamma, un atto da cambiare, il Sigillo del viaggio.</string>
     <string name="game_concept_meesh_what">Una Meesh è la tua luce fissata in una moneta numerata, che coni tu stesso. Una su cento è d’oro, una su mille di prisma.</string>
     <string name="game_concept_meesh_why">Le Meesh che custodisci formano l’eredità che lasci alla tua stirpe.</string>
     <string name="game_concept_missions_how">Tre atti per sogno. Quando sono compiuti, appare l’Offerta.</string>
@@ -509,7 +509,7 @@
     <string name="game_concept_prestige_name">La Rinascita</string>
     <string name="game_concept_prestige_tip_1">Porta la tua luce fino al livello 100.</string>
     <string name="game_concept_prestige_tip_2">Rinasci quando vuoi: niente ti obbliga.</string>
-    <string name="game_concept_prestige_use">Al livello 100, scegli: rinascere, o continuare a brillare. Rinascere riporta il tuo livello a 1 e la tua luce a zero. Tieni le tue scintille ricevute da sempre, la tua luce più alta, il tuo rango, la tua gloria, le tue Meesh, la tua Fiamma e i tuoi trofei; il tuo torneo e la tua alleanza restano aperti.</string>
+    <string name="game_concept_prestige_use">Al livello 100, scegli: rinascere, o continuare a brillare. Rinascere riporta il tuo livello a 1 e la tua luce a zero; il resto resta tuo.</string>
     <string name="game_concept_prestige_what">La rinascita apre una nuova Era della tua leggenda, offerta al livello 100, quando la tua luce è diventata Galassia. È facoltativa: cinque rinascite al massimo portano alla Sesta Era.</string>
     <string name="game_concept_prestige_why">La rinascita si offre a chi porta la propria luce al livello 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -1052,7 +1052,7 @@
     <string name="game_rank_voix">Voce</string>
     <string name="game_rules_1_body">Scrivere, parlare, pubblicare, reagire, invitare: ogni vero scambio fa scaturire scintille. Una pubblicazione ne fa scaturire secondo chi può vederla: pubblico, community o amici. I limiti riguardano i tuoi gesti, mai le tue scintille: slanci, Fiamma ed eventi ne fanno scaturire di più a ogni gesto.</string>
     <string name="game_rules_1_title">Ogni gesto fa scaturire scintille</string>
-    <string name="game_rules_2_body">Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei: un conio ne fissa una parte, quindi lo fa scendere. Un milione di scintille per il livello 100, e una prova ogni dieci livelli: finché non è superata, la tua luce aspetta. Venti stati. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente.</string>
+    <string name="game_rules_2_body">Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei: un milione di scintille per il livello 100. Un conio ne fissa una parte, quindi lo fa scendere.</string>
     <string name="game_rules_2_title">Le scintille formano la tua luce</string>
     <string name="game_rules_3_body" formatted="false">Una Meesh si conia a mano: una parte della tua luce vi si fissa. Questa parte dipende dal numero della moneta e dal tuo livello attuale: più piccola quando il tuo livello è basso, intera dal livello 100. Cresce del 30 % ogni dieci coni.</string>
     <string name="game_rules_3_title">Si coniano Meesh</string>
@@ -1067,15 +1067,15 @@
     <string name="game_rules_8_body">A ogni evoluzione, i tuoi antenati si manifestano: ogni segno si immortala in foto con Mee e Meo nella tua Cronaca.</string>
     <string name="game_rules_8_title">Gli antenati si manifestano</string>
     <string name="game_rules_badges_families">Le venti medaglie, per famiglia</string>
-    <string name="game_rules_badges_imprint">Coniare una Meesh non spegne più nessuna medaglia. Una medaglia spenta in passato resta un’impronta che dice cosa manca per riaccenderla.</string>
-    <string name="game_rules_badges_intro">Ogni medaglia segue UN gesto preciso: un messaggio vocale, una storia, un’amicizia stretta… Ce ne sono venti, ordinate in cinque famiglie.</string>
+    <string name="game_rules_badges_imprint">Una medaglia spenta resta un’impronta: dice cosa manca per riaccenderla.</string>
+    <string name="game_rules_badges_intro">Ogni medaglia segue UN gesto preciso: un messaggio vocale, una storia, un’amicizia stretta…</string>
     <string name="game_rules_badges_ladder">Ogni medaglia sale sette gradini. A ogni soglia superata, cambia materia e accende una stella in più.</string>
     <string name="game_rules_badges_ribbon">Dall’Oro in poi la medaglia porta un nastro; al Prisma il suo smalto diventa iridescente.</string>
     <string name="game_rules_badges_sheet">Tocca una medaglia: la sua scheda dice che cosa segue, la sua materia e perché, e che cosa manca per la prossima stella.</string>
     <string name="game_rules_badges_title">Le medaglie</string>
     <string name="game_rules_concept_atlas_body">Il tuo passaporto delle lingue.</string>
     <string name="game_rules_concept_badges_body">Venti medaglie, una per gesto preciso.</string>
-    <string name="game_rules_concept_chest_body">Appare quando i tre atti del sogno sono compiuti. È un dono velato: scintille secondo i tuoi atti, gloria, a volte un premio in scintille, un frammento di stella o una Lucerna.</string>
+    <string name="game_rules_concept_chest_body">Appare quando i tre atti del sogno sono compiuti: un dono velato.</string>
     <string name="game_rules_concept_chest_name">L’Offerta</string>
     <string name="game_rules_concept_defis_body">Gradini numerati in ogni famiglia di gesti.</string>
     <string name="game_rules_concept_duo_body">Una volta a settimana, un’alleanza con un amico accettato, aperta dal livello 20 per entrambi. Se ciascuno compie la sua parte, la ricompensa raddoppia. Fa anche avanzare il tuo viaggio di qualche passo.</string>
@@ -1091,12 +1091,12 @@
     <string name="game_rules_concept_prestige_body">Una rinascita facoltativa, offerta al livello 100, cinque volte al massimo.</string>
     <string name="game_rules_concept_season_body">Un viaggio di otto settimane in terra di lingua, con 40 soste gratuite.</string>
     <string name="game_rules_concept_showcase_body">Lo scaffale dei tuoi trofei: coppe del torneo e del viaggio, trofei di rinascita e della Fiamma.</string>
-    <string name="game_rules_concept_steps_body">Da 10 a 100, ogni dieci livelli, i tuoi antenati chiedono una prova semplice: coniare una Meesh, compiere sogni, tenere una Fiamma, raggiungere un rango. Finché non è superata, la tua luce aspetta; superata, il livello sale di colpo.</string>
+    <string name="game_rules_concept_steps_body">Ogni dieci livelli, da 10 a 100: coniare una Meesh, compiere sogni, tenere una Fiamma o raggiungere un rango. Finché non è superata, la tua luce aspetta.</string>
     <string name="game_rules_concept_steps_name">Le prove</string>
     <string name="game_rules_concept_succes_body">Riconoscimenti rari, compiuti in un colpo solo quando riunisci ciò che chiedono.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">+25 % sulle scintille dei tuoi gesti finché il tuo livello è 7 livelli o più sotto la tua luce più alta. Si ferma appena la distanza torna a 6.</string>
     <string name="game_rules_concept_tailwind_name">Vento in poppa</string>
-    <string name="game_rules_concept_treasury_body">Le Meesh che custodisci per la tua stirpe. Sei custodie, dalla Borsa alla Riserva, visibili sul tuo profilo. L’eredità cresce quando custodisci le tue Meesh e cala quando le spendi.</string>
+    <string name="game_rules_concept_treasury_body">Le Meesh che custodisci per la tua stirpe. Sei custodie, dalla Borsa alla Riserva, visibili sul tuo profilo.</string>
     <string name="game_rules_concept_treasury_name">L’Eredità</string>
     <string name="game_rules_concepts_intro">Ogni elemento del gioco, in chiaro.</string>
     <string name="game_rules_intro">Otto regole, e tutto il gioco ci sta dentro. Meo le spiega, Mee ti mostra il gesto.</string>

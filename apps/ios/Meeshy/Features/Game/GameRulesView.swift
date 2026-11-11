@@ -283,7 +283,6 @@ struct GameRulesBadgesSection: View {
             ForEach(GameRulesBadges.families) { group in
                 family(group)
             }
-            paragraph(GameBadgeGuideText.rulesSheet, muted: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)

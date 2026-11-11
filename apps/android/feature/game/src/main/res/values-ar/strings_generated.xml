@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">يُفتح الانبعاث عند المستوى 100. أنت في المستوى ⁦%1$s⁩.</string>
     <string name="game2_prestige_max">عاشت أسطورتك انبعاثاتها الخمسة: قمة القمم.</string>
     <string name="game2_prestige_mee">المستوى 100: يمكن لنورك أن ينبعث، أو أن ينمو أكثر.</string>
-    <string name="game2_prestige_meo">بالانبعاث، يعود نورك شرارةً: يعود مستواك إلى 1 وشراراتك إلى 0. وما تلقّيته منذ البداية وذروة نورك يبقيان منقوشين. ويهديك أجدادك عصرًا جديدًا، وكأسًا مرقّمة، و%1$s من المجد. ورتبتك لا تتراجع أبدًا.</string>
+    <string name="game2_prestige_meo">ويهديك أجدادك عصرًا جديدًا، وكأسًا مرقّمة، و%1$s من المجد. ورتبتك لا تتراجع أبدًا.</string>
     <string name="game2_prestige_stars">الانبعاثات: ⁦%1$s⁩ من ⁦%2$s⁩</string>
     <string name="game2_prestige_stay">مواصلة السطوع</string>
     <string name="game2_prestige_title">الانبعاث</string>
@@ -244,7 +244,7 @@
     <string name="game2_season_title">الرحلة</string>
     <string name="game2_season_to_next">%1$s حتى المحطة التالية</string>
     <string name="game2_season_upcoming">تنطلق الرحلة ⁦%1$s⁩ في ⁦%2$s⁩.</string>
-    <string name="game2_settings_celebrations_body">بطاقات مي وميو وعلامات الأجداد التي تظهر في التقدّم. يسري هذا الإعداد على هذا الجهاز فقط.</string>
+    <string name="game2_settings_celebrations_body">بطاقات مي وميو في التقدّم. هذا الجهاز فقط.</string>
     <string name="game2_settings_celebrations_switch">علامات الأسلاف</string>
     <string name="game2_settings_celebrations_title">مي وميو</string>
     <string name="game2_settings_friends_league_body">ترتيب أسبوعي بين الأصدقاء المقبولين. انسحابك يُخفي كلًّا منكم عن الآخر.</string>
@@ -487,7 +487,7 @@
     <string name="game_concept_meesh_name">الإرث</string>
     <string name="game_concept_meesh_tip_1">احتفظ بعملات Meesh: ينتقل إرثك من وعاء إلى الذي يليه.</string>
     <string name="game_concept_meesh_tip_2">أنفقها لتسهر على لهبك أو لتبدّل فصلًا من حلمك.</string>
-    <string name="game_concept_meesh_use">احتفظ بعملات Meesh: فهي تملأ إرثك، من الكيس إلى الاحتياطي، ويظهر في ملفك. أو أنفقها: قنديل للهبك، أو فصل تبدّله، أو خاتم الرحلة. وكل سكّ يُنمّي مجدك أيضًا.</string>
+    <string name="game_concept_meesh_use">احتفظ بعملات Meesh لإرثك، أو أنفقها: قنديل للهبك، أو فصل تبدّله، أو خاتم الرحلة.</string>
     <string name="game_concept_meesh_what">‏Meesh هي نورك مصوغًا في قطعة مرقّمة، تسكّها بنفسك. واحدة من كل مئة ذهبية، وواحدة من كل ألف منشورية.</string>
     <string name="game_concept_meesh_why">عملات Meesh التي تحتفظ بها تصنع الإرث الذي تتركه لسلالتك.</string>
     <string name="game_concept_missions_how">ثلاثة فصول لكل حلم. حين تتحقّق، تظهر العطيّة.</string>
@@ -509,7 +509,7 @@
     <string name="game_concept_prestige_name">الانبعاث</string>
     <string name="game_concept_prestige_tip_1">احمل نورك حتى المستوى ⁦100⁩.</string>
     <string name="game_concept_prestige_tip_2">انبعث متى شئت: لا شيء يُلزمك.</string>
-    <string name="game_concept_prestige_use">عند المستوى 100 اختر: أن تنبعث، أو أن تواصل السطوع. الانبعاث يعيد مستواك إلى 1 ونورك إلى الصفر. وتحتفظ بالشرارات التي تلقّيتها منذ البداية، وذروة نورك، ورتبتك، ومجدك، وعملات Meesh، ولهبك، وكؤوسك؛ وتبقى مبارزتك وتحالفك مفتوحين.</string>
+    <string name="game_concept_prestige_use">عند المستوى 100 اختر: أن تنبعث، أو أن تواصل السطوع. الانبعاث يعيد مستواك إلى 1 ونورك إلى الصفر؛ والباقي يبقى لك.</string>
     <string name="game_concept_prestige_what">الانبعاث يفتح عصرًا جديدًا لأسطورتك، ويُعرض عند المستوى 100، حين يصير نورك مجرّة. وهو اختياري: خمسة انبعاثات على الأكثر تقود إلى العصر السادس.</string>
     <string name="game_concept_prestige_why">الانبعاث يُعرض على من يبلغ نوره المستوى ⁦100⁩.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -1052,7 +1052,7 @@
     <string name="game_rank_voix">صوت</string>
     <string name="game_rules_1_body">الكتابة والكلام والنشر والتفاعل والدعوة: كل تبادل حقيقي يُطلق شرارات. ويُطلق المنشور شراراته بحسب من يستطيع رؤيته: العامة أو المجتمع أو الأصدقاء. الحدود تخصّ إجراءاتك، لا شراراتك أبدًا: الزخم واللهب والفعاليات تُطلق المزيد منها مع كل إجراء.</string>
     <string name="game_rules_1_title">كل إجراء يُطلق شرارات</string>
-    <string name="game_rules_2_body">شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك: السكّ يصوغ جزءًا منه فينخفض مستواك. مليون شرارة للمستوى 100، واختبار كل عشرة مستويات: ما لم تجتزه، ينتظر نورك. عشرون حالة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله.</string>
+    <string name="game_rules_2_body">شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك: مليون شرارة للمستوى 100. السكّ يصوغ جزءًا منه فينخفض مستواك.</string>
     <string name="game_rules_2_title">الشرارات تصنع نورك</string>
     <string name="game_rules_3_body" formatted="false">تُسكّ Meesh يدويًا: يُصاغ فيها جزء من نورك. ويتبع هذا الجزء رقم القطعة ومستواك الحالي: أصغر حين يكون مستواك منخفضًا، وكاملًا ابتداءً من المستوى 100. ويكبر بمقدار ⁦30%⁩ كل عشر مرات سكّ.</string>
     <string name="game_rules_3_title">نسكّ Meesh</string>
@@ -1067,15 +1067,15 @@
     <string name="game_rules_8_body">مع كل ارتقاء، يتجلّى أجدادك: وكل علامة تُخلَّد في صورة مع مي وميو في سيرتك.</string>
     <string name="game_rules_8_title">الأجداد يتجلّون</string>
     <string name="game_rules_badges_families">الأوسمة العشرون، حسب العائلة</string>
-    <string name="game_rules_badges_imprint">لم يعد سكّ Meesh يُطفئ أي وسام. والوسام الذي انطفأ من قبل يبقى أثرًا يقول ما ينقص لإعادة إضاءته.</string>
-    <string name="game_rules_badges_intro">كل وسام يتبع إجراءً واحدًا محددًا: رسالة صوتية، قصة، صداقة جديدة… هناك عشرون وسامًا، مرتبة في خمس عائلات.</string>
+    <string name="game_rules_badges_imprint">الوسام الذي انطفأ يبقى أثرًا: يقول ما ينقص لإعادة إضاءته.</string>
+    <string name="game_rules_badges_intro">كل وسام يتبع إجراءً واحدًا محددًا: رسالة صوتية، قصة، صداقة جديدة…</string>
     <string name="game_rules_badges_ladder">كل وسام يرتقي سبع درجات. عند كل عتبة تتجاوزها، تتغيّر مادته وتُضاء نجمة أخرى.</string>
     <string name="game_rules_badges_ribbon">ابتداءً من الذهب، تحمل الميدالية شريطًا؛ وفي المنشور، يتلألأ مينائها.</string>
     <string name="game_rules_badges_sheet">المس وسامًا: بطاقته تقول ما يتبعه، ومادته ولماذا، وما ينقص للنجمة التالية.</string>
     <string name="game_rules_badges_title">الأوسمة</string>
     <string name="game_rules_concept_atlas_body">جواز لغاتك.</string>
     <string name="game_rules_concept_badges_body">عشرون وسامًا، واحد لكل إجراء محدّد.</string>
-    <string name="game_rules_concept_chest_body">تظهر حين تتحقّق فصول الحلم الثلاثة. إنها هدية محجوبة: شرارات بحسب فصولك، ومجد، وأحيانًا علاوة شرارات أو شظية نجم أو قنديل.</string>
+    <string name="game_rules_concept_chest_body">تظهر حين تتحقّق فصول الحلم الثلاثة: هدية محجوبة.</string>
     <string name="game_rules_concept_chest_name">العطيّة</string>
     <string name="game_rules_concept_defis_body">درجات بأرقام في كل فئة من الإجراءات.</string>
     <string name="game_rules_concept_duo_body">مرة في الأسبوع، تحالف مع صديق مقبول، يُفتح عند المستوى 20 لكليكما. إن حقّق كلٌّ منكما حصته تضاعفت المكافأة. وهو يُقدّم رحلتك بضع خطوات أيضًا.</string>
@@ -1091,12 +1091,12 @@
     <string name="game_rules_concept_prestige_body">انبعاث اختياري يُعرض عند المستوى 100، خمس مرات على الأكثر.</string>
     <string name="game_rules_concept_season_body">رحلة من ثمانية أسابيع إلى أرض لغة، فيها 40 محطة مجانية.</string>
     <string name="game_rules_concept_showcase_body">رفّ كؤوسك: كؤوس المبارزة والرحلة والانبعاث واللهب.</string>
-    <string name="game_rules_concept_steps_body">من 10 إلى 100، كل عشرة مستويات، يطلب أجدادك اختبارًا بسيطًا: سكّ Meesh، أو تحقيق أحلام، أو الحفاظ على لهب، أو بلوغ رتبة. ما لم تجتزه، ينتظر نورك؛ وحين تجتازه، يرتفع المستوى دفعة واحدة.</string>
+    <string name="game_rules_concept_steps_body">كل عشرة مستويات، من 10 إلى 100: سكّ Meesh، أو تحقيق أحلام، أو الحفاظ على لهب، أو بلوغ رتبة. ما لم تجتزه، ينتظر نورك.</string>
     <string name="game_rules_concept_steps_name">الاختبارات</string>
     <string name="game_rules_concept_succes_body">تقديرات نادرة، تتحقّق دفعة واحدة حين تجمع ما تطلبه.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">يمنحك ⁦+25 %⁩ على شرارات أفعالك ما دام مستواك أدنى من ذروة نورك بسبعة مستويات أو أكثر، ويتوقف حين يعود الفرق إلى 6.</string>
     <string name="game_rules_concept_tailwind_name">رياح مواتية</string>
-    <string name="game_rules_concept_treasury_body">عملات Meesh التي تحتفظ بها لسلالتك. ستة أوعية، من الكيس إلى الاحتياطي، تظهر في ملفك. يكبر الإرث حين تحتفظ بعملاتك وينقص حين تنفقها.</string>
+    <string name="game_rules_concept_treasury_body">عملات Meesh التي تحتفظ بها لسلالتك. ستة أوعية، من الكيس إلى الاحتياطي، تظهر في ملفك.</string>
     <string name="game_rules_concept_treasury_name">الإرث</string>
     <string name="game_rules_concepts_intro">كل عنصر في اللعبة، بوضوح.</string>
     <string name="game_rules_intro">ثماني قواعد، واللعبة كلها بداخلها. ميو يشرحها، ومي تُريك الإجراء.</string>

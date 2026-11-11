@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">La Renaissance s’ouvre au niveau 100. Tu es au niveau %1$s.</string>
     <string name="game2_prestige_max">Ta légende a vécu ses cinq renaissances : le sommet du sommet.</string>
     <string name="game2_prestige_mee">Niveau 100 : ta lumière peut renaître, ou grandir encore.</string>
-    <string name="game2_prestige_meo">En renaissant, ta lumière redevient Étincelle : ton niveau repart à 1 et tes étincelles à 0. Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés. Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %1$s de gloire. Ton rang ne recule jamais.</string>
+    <string name="game2_prestige_meo">Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %1$s de gloire. Ton rang ne recule jamais.</string>
     <string name="game2_prestige_stars">Renaissances : %1$s sur %2$s</string>
     <string name="game2_prestige_stay">Continuer à briller</string>
     <string name="game2_prestige_title">Renaissance</string>
@@ -244,7 +244,7 @@
     <string name="game2_season_title">Voyage</string>
     <string name="game2_season_to_next">%1$s jusqu’à la halte suivante</string>
     <string name="game2_season_upcoming">Le voyage %1$s part le %2$s.</string>
-    <string name="game2_settings_celebrations_body">Les cartes de Mee et Meo et les signes des aïeux qui apparaissent sur Progression. Ce réglage vaut pour cet appareil seulement.</string>
+    <string name="game2_settings_celebrations_body">Cartes de Mee et Meo sur Progression. Cet appareil seulement.</string>
     <string name="game2_settings_celebrations_switch">Signes des aïeux</string>
     <string name="game2_settings_celebrations_title">Mee et Meo</string>
     <string name="game2_settings_friends_league_body">Classement de la semaine entre amis acceptés. T’en retirer vous masque les uns aux autres.</string>
@@ -487,7 +487,7 @@
     <string name="game_concept_meesh_name">L’Héritage</string>
     <string name="game_concept_meesh_tip_1">Garde tes Meeshes : ton héritage passe d’un contenant au suivant.</string>
     <string name="game_concept_meesh_tip_2">Dépense-les pour veiller sur ta Flamme ou changer un acte de ton rêve.</string>
-    <string name="game_concept_meesh_use">Garde tes Meeshes : elles remplissent ton héritage, de la Bourse à la Réserve, visible sur ton profil. Ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage. Chaque frappe fait aussi grandir ta gloire.</string>
+    <string name="game_concept_meesh_use">Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.</string>
     <string name="game_concept_meesh_what">Une Meesh, c’est ta lumière figée dans une pièce numérotée, que tu frappes toi-même. Une sur cent est d’or, une sur mille de prisme.</string>
     <string name="game_concept_meesh_why">Les Meeshes que tu gardes forment l’héritage que tu laisses à ta lignée.</string>
     <string name="game_concept_missions_how">Trois actes par rêve. Quand ils sont réalisés, l’Offrande apparaît.</string>
@@ -509,7 +509,7 @@
     <string name="game_concept_prestige_name">La Renaissance</string>
     <string name="game_concept_prestige_tip_1">Porte ta lumière jusqu’au niveau 100.</string>
     <string name="game_concept_prestige_tip_2">Renais quand tu veux : rien ne t’y oblige.</string>
-    <string name="game_concept_prestige_use">Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro. Tu gardes tes étincelles reçues depuis toujours, ta plus haute lumière, ton rang, ta gloire, tes Meeshes, ta Flamme et tes trophées ; ta joute et ton alliance restent ouvertes.</string>
+    <string name="game_concept_prestige_use">Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.</string>
     <string name="game_concept_prestige_what">La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative : cinq renaissances au plus mènent au Sixième Âge.</string>
     <string name="game_concept_prestige_why">La renaissance s’offre à ceux dont la lumière atteint le niveau 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -1052,7 +1052,7 @@
     <string name="game_rank_voix">Voix</string>
     <string name="game_rules_1_body">Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.</string>
     <string name="game_rules_1_title">Chaque geste fait jaillir des étincelles</string>
-    <string name="game_rules_2_body">Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : une frappe en fige une part, donc le fait baisser. Un million d’étincelles pour le niveau 100, et une épreuve tous les dix niveaux : tant qu’elle n’est pas réussie, ta lumière attend. Vingt états. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.</string>
+    <string name="game_rules_2_body">Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : un million d’étincelles pour le niveau 100. Une frappe en fige une part, donc le fait baisser.</string>
     <string name="game_rules_2_title">Les étincelles forment ta lumière</string>
     <string name="game_rules_3_body" formatted="false">Une Meesh se frappe à la main : une part de ta lumière s’y fige. Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.</string>
     <string name="game_rules_3_title">On frappe des Meeshes</string>
@@ -1067,15 +1067,15 @@
     <string name="game_rules_8_body">À chaque évolution, tes aïeux se manifestent : chaque signe s’immortalise en photo avec Mee et Meo dans ta Chronique.</string>
     <string name="game_rules_8_title">Les aïeux se manifestent</string>
     <string name="game_rules_badges_families">Les vingt médailles, par famille</string>
-    <string name="game_rules_badges_imprint">Frapper une Meesh n’éteint plus aucune médaille. Une médaille éteinte auparavant reste une empreinte qui dit ce qu’il manque pour la rallumer.</string>
-    <string name="game_rules_badges_intro">Chaque médaille suit UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangées en cinq familles.</string>
+    <string name="game_rules_badges_imprint">Une médaille éteinte reste une empreinte : elle dit ce qu’il manque pour la rallumer.</string>
+    <string name="game_rules_badges_intro">Chaque médaille suit UN geste précis : un message vocal, une story, une amitié nouée…</string>
     <string name="game_rules_badges_ladder">Chaque médaille gravit sept paliers. À chaque seuil franchi, elle change de matière et allume une étoile de plus.</string>
     <string name="game_rules_badges_ribbon">Dès l’Or, la médaille porte un ruban ; au Prisme, son émail s’irise.</string>
     <string name="game_rules_badges_sheet">Touche une médaille : sa fiche dit ce qu’elle suit, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile.</string>
     <string name="game_rules_badges_title">Les médailles</string>
     <string name="game_rules_concept_atlas_body">Ton passeport des langues.</string>
     <string name="game_rules_concept_badges_body">Vingt médailles, une par geste précis.</string>
-    <string name="game_rules_concept_chest_body">Elle apparaît quand les trois actes du rêve sont réalisés. C’est un présent voilé : des étincelles selon tes actes, de la gloire, parfois une prime d’étincelles, un fragment d’étoile ou une Veilleuse.</string>
+    <string name="game_rules_concept_chest_body">Elle apparaît quand les trois actes du rêve sont réalisés : un présent voilé.</string>
     <string name="game_rules_concept_chest_name">L’Offrande</string>
     <string name="game_rules_concept_defis_body">Des paliers chiffrés dans chaque famille de gestes.</string>
     <string name="game_rules_concept_duo_body">Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas.</string>
@@ -1091,12 +1091,12 @@
     <string name="game_rules_concept_prestige_body">Une renaissance facultative, offerte au niveau 100, cinq fois au plus.</string>
     <string name="game_rules_concept_season_body">Un voyage de huit semaines en terre de langue, avec 40 haltes gratuites.</string>
     <string name="game_rules_concept_showcase_body">L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme.</string>
-    <string name="game_rules_concept_steps_body">De 10 à 100, tous les dix niveaux, tes aïeux demandent une épreuve simple : frapper une Meesh, réaliser des rêves, tenir une Flamme, atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend ; réussie, le niveau monte d’un coup.</string>
+    <string name="game_rules_concept_steps_body">Tous les dix niveaux, de 10 à 100 : frapper une Meesh, réaliser des rêves, tenir une Flamme ou atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend.</string>
     <string name="game_rules_concept_steps_name">Les épreuves</string>
     <string name="game_rules_concept_succes_body">Des distinctions rares, accomplies d’un coup quand tu réunis ce qu’elles demandent.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière. Il s’arrête dès que l’écart retombe à 6.</string>
     <string name="game_rules_concept_tailwind_name">Vent arrière</string>
-    <string name="game_rules_concept_treasury_body">Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil. L’héritage grandit quand tu gardes tes Meeshes et baisse quand tu les dépenses.</string>
+    <string name="game_rules_concept_treasury_body">Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil.</string>
     <string name="game_rules_concept_treasury_name">L’Héritage</string>
     <string name="game_rules_concepts_intro">Chaque élément du jeu, en clair.</string>
     <string name="game_rules_intro">Huit règles, et tout le jeu tient dedans. Meo les explique, Mee te montre le geste.</string>

@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">Die Wiedergeburt öffnet sich bei Level 100. Du bist auf Level %1$s.</string>
     <string name="game2_prestige_max">Deine Legende hat ihre fünf Wiedergeburten erlebt: der Gipfel der Gipfel.</string>
     <string name="game2_prestige_mee">Level 100: Dein Licht kann wiedergeboren werden, oder weiter wachsen.</string>
-    <string name="game2_prestige_meo">Bei der Wiedergeburt wird dein Licht wieder zum Funken: Dein Level beginnt wieder bei 1 und deine Funken bei 0. Was du seit jeher empfangen hast und dein hellstes Licht bleiben eingraviert. Deine Ahnen schenken dir ein neues Zeitalter, eine nummerierte Trophäe und %1$s Ruhm. Dein Rang weicht nie zurück.</string>
+    <string name="game2_prestige_meo">Deine Ahnen schenken dir ein neues Zeitalter, eine nummerierte Trophäe und %1$s Ruhm. Dein Rang weicht nie zurück.</string>
     <string name="game2_prestige_stars">Wiedergeburten: %1$s von %2$s</string>
     <string name="game2_prestige_stay">Weiter strahlen</string>
     <string name="game2_prestige_title">Wiedergeburt</string>
@@ -244,7 +244,7 @@
     <string name="game2_season_title">Reise</string>
     <string name="game2_season_to_next">%1$s bis zur nächsten Rast</string>
     <string name="game2_season_upcoming">Reise %1$s bricht am %2$s auf.</string>
-    <string name="game2_settings_celebrations_body">Die Karten von Mee und Meo und die Zeichen der Ahnen, die unter Fortschritt erscheinen. Diese Einstellung gilt nur für dieses Gerät.</string>
+    <string name="game2_settings_celebrations_body">Karten von Mee und Meo unter Fortschritt. Nur dieses Gerät.</string>
     <string name="game2_settings_celebrations_switch">Zeichen der Ahnen</string>
     <string name="game2_settings_celebrations_title">Mee und Meo</string>
     <string name="game2_settings_friends_league_body">Wochenwertung unter bestätigten Freunden. Wer sich zurückzieht, ist füreinander unsichtbar.</string>
@@ -487,7 +487,7 @@
     <string name="game_concept_meesh_name">Das Erbe</string>
     <string name="game_concept_meesh_tip_1">Behalte deine Meeshes: Dein Erbe wandert von einem Behältnis ins nächste.</string>
     <string name="game_concept_meesh_tip_2">Gib sie aus, um über deine Flamme zu wachen oder einen Akt deines Traums zu tauschen.</string>
-    <string name="game_concept_meesh_use">Behalte deine Meeshes: Sie füllen dein Erbe, von der Börse bis zur Reserve, sichtbar auf deinem Profil. Oder gib sie aus: eine Hüterin für deine Flamme, einen Akt zum Tauschen, das Siegel der Reise. Jede Prägung lässt außerdem deinen Ruhm wachsen.</string>
+    <string name="game_concept_meesh_use">Behalte deine Meeshes für dein Erbe oder gib sie aus: eine Hüterin für deine Flamme, einen Akt zum Tauschen, das Siegel der Reise.</string>
     <string name="game_concept_meesh_what">Eine Meesh ist dein Licht, gebannt in eine nummerierte Münze, die du selbst prägst. Jede hundertste ist aus Gold, jede tausendste aus Prisma.</string>
     <string name="game_concept_meesh_why">Die Meeshes, die du behältst, bilden das Erbe für deine Linie.</string>
     <string name="game_concept_missions_how">Drei Akte pro Traum. Sind sie erfüllt, erscheint die Gabe.</string>
@@ -509,7 +509,7 @@
     <string name="game_concept_prestige_name">Die Wiedergeburt</string>
     <string name="game_concept_prestige_tip_1">Trag dein Licht bis Level 100.</string>
     <string name="game_concept_prestige_tip_2">Werde wiedergeboren, wann du willst: Nichts zwingt dich.</string>
-    <string name="game_concept_prestige_use">Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null. Du behältst deine seit jeher empfangenen Funken, dein hellstes Licht, deinen Rang, deinen Ruhm, deine Meeshes, deine Flamme und deine Trophäen; dein Turnier und dein Bündnis bleiben offen.</string>
+    <string name="game_concept_prestige_use">Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null; der Rest bleibt erhalten.</string>
     <string name="game_concept_prestige_what">Die Wiedergeburt öffnet ein neues Zeitalter deiner Legende, ab Level 100, wenn dein Licht zur Galaxie geworden ist. Sie ist freiwillig: Höchstens fünf Wiedergeburten führen ins Sechste Zeitalter.</string>
     <string name="game_concept_prestige_why">Die Wiedergeburt bietet sich allen, deren Licht Level 100 erreicht.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -1052,7 +1052,7 @@
     <string name="game_rank_voix">Stimme</string>
     <string name="game_rules_1_body">Schreiben, sprechen, veröffentlichen, reagieren, einladen: Jeder echte Austausch lässt Funken sprühen. Ein Beitrag lässt sie sprühen, je nachdem, wer ihn sehen kann: öffentlich, Community oder Freunde. Die Limits gelten für deine Aktionen, nie für deine Funken: Schwung, Flamme und Events lassen bei jeder Aktion mehr davon sprühen.</string>
     <string name="game_rules_1_title">Jede Aktion lässt Funken sprühen</string>
-    <string name="game_rules_2_body">Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus: Eine Prägung bannt einen Teil davon und lässt das Level sinken. Eine Million Funken für Level 100, und alle zehn Level eine Prüfung: Solange sie nicht bestanden ist, wartet dein Licht. Zwanzig Gestalten. Die Level steigen bis 499; der Rang Botschafter öffnet sie bis 1.000, der Rang Orakel ohne Grenze. Jedes Level verlangt etwas mehr als das vorherige.</string>
+    <string name="game_rules_2_body">Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus: eine Million Funken für Level 100. Eine Prägung bannt einen Teil davon und lässt das Level sinken.</string>
     <string name="game_rules_2_title">Die Funken bilden dein Licht</string>
     <string name="game_rules_3_body" formatted="false">Eine Meesh prägst du von Hand: Ein Teil deines Lichts wird darin gebannt. Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %.</string>
     <string name="game_rules_3_title">Man prägt Meeshes</string>
@@ -1067,15 +1067,15 @@
     <string name="game_rules_8_body">Bei jeder Entwicklung zeigen sich deine Ahnen: Jedes Zeichen wird mit Mee und Meo als Foto in deiner Chronik verewigt.</string>
     <string name="game_rules_8_title">Die Ahnen zeigen sich</string>
     <string name="game_rules_badges_families">Die zwanzig Medaillen nach Familie</string>
-    <string name="game_rules_badges_imprint">Das Prägen einer Meesh lässt keine Medaille mehr erlöschen. Eine früher erloschene Medaille bleibt ein Abdruck, der zeigt, was zum Wiederentzünden fehlt.</string>
-    <string name="game_rules_badges_intro">Jede Medaille verfolgt EINE bestimmte Aktion: eine Sprachnachricht, eine Story, eine neue Freundschaft… Es gibt zwanzig, in fünf Familien geordnet.</string>
+    <string name="game_rules_badges_imprint">Eine erloschene Medaille bleibt ein Abdruck: Er zeigt, was zum Wiederentzünden fehlt.</string>
+    <string name="game_rules_badges_intro">Jede Medaille verfolgt EINE bestimmte Aktion: eine Sprachnachricht, eine Story, eine neue Freundschaft…</string>
     <string name="game_rules_badges_ladder">Jede Medaille erklimmt sieben Stufen. Bei jeder überschrittenen Schwelle wechselt sie das Material und lässt einen Stern mehr leuchten.</string>
     <string name="game_rules_badges_ribbon">Ab Gold trägt die Medaille ein Band; bei Prisma schillert ihr Email.</string>
     <string name="game_rules_badges_sheet">Tippe auf eine Medaille: Ihr Blatt sagt, was sie verfolgt, ihr Material und warum, und was bis zum nächsten Stern fehlt.</string>
     <string name="game_rules_badges_title">Die Medaillen</string>
     <string name="game_rules_concept_atlas_body">Dein Sprachenpass.</string>
     <string name="game_rules_concept_badges_body">Zwanzig Medaillen, eine pro bestimmter Aktion.</string>
-    <string name="game_rules_concept_chest_body">Sie erscheint, wenn die drei Akte des Traums erfüllt sind. Ein verhülltes Geschenk: Funken je nach deinen Akten, Ruhm, manchmal ein Funkenbonus, ein Sternfragment oder eine Hüterin.</string>
+    <string name="game_rules_concept_chest_body">Sie erscheint, wenn die drei Akte des Traums erfüllt sind: ein verhülltes Geschenk.</string>
     <string name="game_rules_concept_chest_name">Die Gabe</string>
     <string name="game_rules_concept_defis_body">Stufen mit einer Zahl in jeder Aktionsfamilie.</string>
     <string name="game_rules_concept_duo_body">Einmal pro Woche ein Bündnis mit einem bestätigten Freund, offen ab Level 20 für euch beide. Erfüllt jeder seinen Teil, verdoppelt sich die Belohnung. Es bringt deine Reise auch ein paar Schritte voran.</string>
@@ -1091,12 +1091,12 @@
     <string name="game_rules_concept_prestige_body">Eine freiwillige Wiedergeburt, ab Level 100, höchstens fünfmal.</string>
     <string name="game_rules_concept_season_body">Eine Reise über acht Wochen in einem Sprachland, mit 40 kostenlosen Rasten.</string>
     <string name="game_rules_concept_showcase_body">Das Regal deiner Trophäen: Pokale aus Turnier und Reise, Trophäen der Wiedergeburt und der Flamme.</string>
-    <string name="game_rules_concept_steps_body">Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine einfache Prüfung: eine Meesh prägen, Träume erfüllen, eine Flamme halten, einen Rang erreichen. Solange sie nicht bestanden ist, wartet dein Licht; ist sie bestanden, steigt das Level sofort.</string>
+    <string name="game_rules_concept_steps_body">Alle zehn Level, von 10 bis 100: eine Meesh prägen, Träume erfüllen, eine Flamme halten oder einen Rang erreichen. Solange sie nicht bestanden ist, wartet dein Licht.</string>
     <string name="game_rules_concept_steps_name">Die Prüfungen</string>
     <string name="game_rules_concept_succes_body">Seltene Auszeichnungen, die auf einmal gelingen, wenn du erfüllst, was sie verlangen.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">+25 % auf die Funken deiner Aktionen, solange dein Level 7 oder mehr Level unter deinem hellsten Licht liegt. Er endet, sobald der Abstand wieder auf 6 sinkt.</string>
     <string name="game_rules_concept_tailwind_name">Rückenwind</string>
-    <string name="game_rules_concept_treasury_body">Die Meeshes, die du für deine Linie bewahrst. Sechs Behältnisse, von der Börse bis zur Reserve, sichtbar auf deinem Profil. Das Erbe wächst, wenn du deine Meeshes behältst, und schrumpft, wenn du sie ausgibst.</string>
+    <string name="game_rules_concept_treasury_body">Die Meeshes, die du für deine Linie bewahrst. Sechs Behältnisse, von der Börse bis zur Reserve, sichtbar auf deinem Profil.</string>
     <string name="game_rules_concept_treasury_name">Das Erbe</string>
     <string name="game_rules_concepts_intro">Jedes Element des Spiels, verständlich erklärt.</string>
     <string name="game_rules_intro">Acht Regeln, und das ganze Spiel passt hinein. Meo erklärt sie, Mee zeigt dir die Aktion.</string>

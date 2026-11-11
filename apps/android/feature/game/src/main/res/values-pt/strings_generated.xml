@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">O Renascimento se abre no nível 100. Você está no nível %1$s.</string>
     <string name="game2_prestige_max">Sua lenda viveu os seus cinco renascimentos: o topo do topo.</string>
     <string name="game2_prestige_mee">Nível 100: sua luz pode renascer, ou crescer mais.</string>
-    <string name="game2_prestige_meo">Ao renascer, sua luz volta a ser Faísca: seu nível recomeça em 1 e suas faíscas em 0. O que você recebeu desde sempre e o auge da sua luz ficam gravados. Seus ancestrais oferecem a você uma nova Era, um troféu numerado e %1$s de glória. Seu título nunca recua.</string>
+    <string name="game2_prestige_meo">Seus ancestrais oferecem a você uma nova Era, um troféu numerado e %1$s de glória. Seu título nunca recua.</string>
     <string name="game2_prestige_stars">Renascimentos: %1$s de %2$s</string>
     <string name="game2_prestige_stay">Continuar a brilhar</string>
     <string name="game2_prestige_title">Renascimento</string>
@@ -244,7 +244,7 @@
     <string name="game2_season_title">Viagem</string>
     <string name="game2_season_to_next">%1$s até a próxima parada</string>
     <string name="game2_season_upcoming">A viagem %1$s parte em %2$s.</string>
-    <string name="game2_settings_celebrations_body">Os cartões de Mee e Meo e os sinais dos ancestrais que aparecem em Progresso. Este ajuste vale só para este aparelho.</string>
+    <string name="game2_settings_celebrations_body">Cartões de Mee e Meo em Progresso. Só este aparelho.</string>
     <string name="game2_settings_celebrations_switch">Sinais dos ancestrais</string>
     <string name="game2_settings_celebrations_title">Mee e Meo</string>
     <string name="game2_settings_friends_league_body">Classificação semanal entre amigos aceitos. Se você sair, vocês deixam de se ver.</string>
@@ -487,7 +487,7 @@
     <string name="game_concept_meesh_name">A Herança</string>
     <string name="game_concept_meesh_tip_1">Guarde suas Meeshes: sua herança passa de um recipiente ao seguinte.</string>
     <string name="game_concept_meesh_tip_2">Gaste-as para cuidar da sua Chama ou trocar um ato do seu sonho.</string>
-    <string name="game_concept_meesh_use">Guarde suas Meeshes: elas enchem a sua herança, da Bolsa à Reserva, visível no seu perfil. Ou gaste-as: uma Lamparina para a sua Chama, um ato para trocar, o Selo da viagem. Cada cunhagem também faz a sua glória crescer.</string>
+    <string name="game_concept_meesh_use">Guarde suas Meeshes para a sua herança, ou gaste-as: uma Lamparina para a sua Chama, um ato para trocar, o Selo da viagem.</string>
     <string name="game_concept_meesh_what">Uma Meesh é a sua luz cristalizada numa moeda numerada, que você mesmo cunha. Uma em cem é de ouro, uma em mil é de prisma.</string>
     <string name="game_concept_meesh_why">As Meeshes que você guarda formam a herança da sua linhagem.</string>
     <string name="game_concept_missions_how">Três atos por sonho. Quando estão realizados, a Oferenda aparece.</string>
@@ -509,7 +509,7 @@
     <string name="game_concept_prestige_name">O Renascimento</string>
     <string name="game_concept_prestige_tip_1">Leve sua luz até o nível 100.</string>
     <string name="game_concept_prestige_tip_2">Renasça quando quiser: nada obriga você.</string>
-    <string name="game_concept_prestige_use">No nível 100, escolha: renascer, ou continuar a brilhar. Renascer leva o seu nível a 1 e a sua luz a zero. Você guarda as faíscas recebidas desde sempre, o auge da sua luz, seu título, sua glória, suas Meeshes, sua Chama e seus troféus; seu torneio e sua aliança continuam abertos.</string>
+    <string name="game_concept_prestige_use">No nível 100, escolha: renascer, ou continuar a brilhar. Renascer leva o seu nível a 1 e a sua luz a zero; o resto é mantido.</string>
     <string name="game_concept_prestige_what">O renascimento abre uma nova Era da sua lenda, oferecida no nível 100, quando a sua luz se tornou Galáxia. Ele é opcional: cinco renascimentos no máximo levam à Sexta Era.</string>
     <string name="game_concept_prestige_why">O renascimento se oferece a quem leva a luz ao nível 100.</string>
     <string name="game_concept_ratio">%1$s / %2$s</string>
@@ -1052,7 +1052,7 @@
     <string name="game_rank_voix">Voz</string>
     <string name="game_rules_1_body">Escrever, falar, publicar, reagir, convidar: cada troca de verdade faz saltar faíscas. Uma publicação faz saltar faíscas conforme quem pode vê-la: público, comunidade ou amigos. Os limites valem para os seus gestos, nunca para as suas faíscas: impulsos, Chama e eventos fazem saltar mais a cada gesto.</string>
     <string name="game_rules_1_title">Cada gesto faz saltar faíscas</string>
-    <string name="game_rules_2_body">Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela: uma cunhagem cristaliza uma parte dela, então o faz baixar. Um milhão de faíscas para o nível 100, e uma prova a cada dez níveis: enquanto ela não for vencida, sua luz espera. Vinte estados. Os níveis vão até 499; o título Embaixador os abre até 1.000, e o título Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior.</string>
+    <string name="game_rules_2_body">Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela: um milhão de faíscas para o nível 100. Uma cunhagem cristaliza uma parte dela, então o faz baixar.</string>
     <string name="game_rules_2_title">As faíscas formam a sua luz</string>
     <string name="game_rules_3_body" formatted="false">Uma Meesh se cunha à mão: uma parte da sua luz se cristaliza nela. Essa parte depende do número da moeda e do seu nível atual: menor quando o seu nível é baixo, inteira a partir do nível 100. Ela cresce 30% a cada dez cunhagens.</string>
     <string name="game_rules_3_title">Cunham-se Meeshes</string>
@@ -1067,15 +1067,15 @@
     <string name="game_rules_8_body">A cada evolução, seus ancestrais se manifestam: cada sinal fica eternizado numa foto com Mee e Meo na sua Crônica.</string>
     <string name="game_rules_8_title">Os ancestrais se manifestam</string>
     <string name="game_rules_badges_families">As vinte medalhas, por família</string>
-    <string name="game_rules_badges_imprint">Cunhar uma Meesh não apaga mais nenhuma medalha. Uma medalha apagada antes continua uma marca que diz o que falta para reacendê-la.</string>
-    <string name="game_rules_badges_intro">Cada medalha acompanha UM gesto preciso: uma mensagem de voz, um story, uma amizade feita… São vinte, arrumadas em cinco famílias.</string>
+    <string name="game_rules_badges_imprint">Uma medalha apagada continua uma marca: ela diz o que falta para reacendê-la.</string>
+    <string name="game_rules_badges_intro">Cada medalha acompanha UM gesto preciso: uma mensagem de voz, um story, uma amizade feita…</string>
     <string name="game_rules_badges_ladder">Cada medalha sobe sete patamares. A cada limiar vencido, ela muda de material e acende mais uma estrela.</string>
     <string name="game_rules_badges_ribbon">A partir do Ouro, a medalha ganha uma fita; no Prisma, seu esmalte fica iridescente.</string>
     <string name="game_rules_badges_sheet">Toque numa medalha: a ficha dela diz o que ela acompanha, o seu material e por quê, e o que falta para a próxima estrela.</string>
     <string name="game_rules_badges_title">As medalhas</string>
     <string name="game_rules_concept_atlas_body">Seu passaporte de idiomas.</string>
     <string name="game_rules_concept_badges_body">Vinte medalhas, uma por gesto preciso.</string>
-    <string name="game_rules_concept_chest_body">Ela aparece quando os três atos do sonho estão realizados. É um presente velado: faíscas conforme os seus atos, glória, às vezes um prêmio em faíscas, um fragmento de estrela ou uma Lamparina.</string>
+    <string name="game_rules_concept_chest_body">Ela aparece quando os três atos do sonho estão realizados: um presente velado.</string>
     <string name="game_rules_concept_chest_name">A Oferenda</string>
     <string name="game_rules_concept_defis_body">Patamares com número em cada família de gestos.</string>
     <string name="game_rules_concept_duo_body">Uma vez por semana, uma aliança com um amigo aceito, aberta a partir do nível 20 para vocês dois. Se cada um realizar a sua parte, a recompensa dobra. Ela também faz a sua viagem avançar alguns passos.</string>
@@ -1091,12 +1091,12 @@
     <string name="game_rules_concept_prestige_body">Um renascimento opcional, oferecido no nível 100, no máximo cinco vezes.</string>
     <string name="game_rules_concept_season_body">Uma viagem de oito semanas em terra de idioma, com 40 paradas gratuitas.</string>
     <string name="game_rules_concept_showcase_body">A prateleira dos seus troféus: taças de torneio e de viagem, troféus de renascimento e de Chama.</string>
-    <string name="game_rules_concept_steps_body">De 10 a 100, a cada dez níveis, seus ancestrais pedem uma prova simples: cunhar uma Meesh, realizar sonhos, manter uma Chama, alcançar um título. Enquanto ela não for vencida, a sua luz espera; vencida, o nível sobe de uma vez.</string>
+    <string name="game_rules_concept_steps_body">A cada dez níveis, de 10 a 100: cunhar uma Meesh, realizar sonhos, manter uma Chama ou alcançar um título. Enquanto ela não for vencida, a sua luz espera.</string>
     <string name="game_rules_concept_steps_name">As provas</string>
     <string name="game_rules_concept_succes_body">Distinções raras, cumpridas de uma vez quando você reúne o que elas pedem.</string>
     <string name="game_rules_concept_tailwind_body" formatted="false">+25% nas faíscas dos seus gestos enquanto o seu nível estiver 7 níveis ou mais abaixo do auge da sua luz. Ele para assim que a diferença volta a 6.</string>
     <string name="game_rules_concept_tailwind_name">Vento a favor</string>
-    <string name="game_rules_concept_treasury_body">As Meeshes que você guarda para a sua linhagem. Seis recipientes, da Bolsa à Reserva, visíveis no seu perfil. A herança cresce quando você guarda as suas Meeshes e baixa quando você as gasta.</string>
+    <string name="game_rules_concept_treasury_body">As Meeshes que você guarda para a sua linhagem. Seis recipientes, da Bolsa à Reserva, visíveis no seu perfil.</string>
     <string name="game_rules_concept_treasury_name">A Herança</string>
     <string name="game_rules_concepts_intro">Cada elemento do jogo, em palavras simples.</string>
     <string name="game_rules_intro">Oito regras, e o jogo inteiro cabe nelas. O Meo as explica, a Mee mostra a ação.</string>
