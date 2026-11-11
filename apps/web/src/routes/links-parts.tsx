@@ -170,9 +170,24 @@ export function ShareLinksStats({ language, summary }: { readonly language: Inte
  * #10381 — miroir `ShareLinkDetailCopy.rowExpiry` : la ligne dit l'échéance
  * choisie à la création ; un lien sans échéance n'ajoute rien à sa ligne.
  */
-/** « Créé le 10 sept. 2026 » — de quoi reconnaître un lien dans sa liste (#17641). */
+/** « Créé le 10 sept. 2026 » — ce que le lecteur d'écran entend de la date d'une rangée (#17641). */
 export const linkCreatedLabel = (language: InterfaceLanguage, createdAt: string): string =>
   `${translate(language, 'links.detail.createdAt')} ${new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(createdAt))}`;
+
+/**
+ * La date de création d'une rangée, sur SA ligne : de quoi reconnaître un lien dans sa liste
+ * (règle 7, #17641). Le calendrier la nomme à l'œil, `linkCreatedLabel` au lecteur d'écran.
+ */
+export function LinkCreated({ language, createdAt }: { readonly language: InterfaceLanguage; readonly createdAt: string }) {
+  return (
+    <span data-link-created title={linkCreatedLabel(language, createdAt)} className="flex items-center gap-1 text-caption" style={{ color: INK_2 }}>
+      <span aria-hidden="true">
+        <LinksGlyph name="calendarBlank" size={12} />
+      </span>
+      {new Intl.DateTimeFormat(language, { dateStyle: 'short' }).format(new Date(createdAt))}
+    </span>
+  );
+}
 
 export function shareLinkExpiryLabel(language: InterfaceLanguage, expiresAt: string | null, now: Date = new Date()): string | null {
   if (expiresAt === null) return null;
@@ -234,9 +249,7 @@ export function ShareLinkRow({
               </span>
             )}
           </span>
-          <span data-share-link-created className="truncate text-caption" style={{ color: INK_2 }}>
-            {created}
-          </span>
+          <LinkCreated language={language} createdAt={link.createdAt} />
           {expiry === null ? null : (
             <span data-share-link-expiry className="truncate text-caption" style={{ color: INK_2 }}>
               {expiry}

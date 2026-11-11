@@ -20,7 +20,7 @@ import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { AFFILIATE_TINT, CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySection, FamilySkeleton, FamilyStats, RowMore, SEPARATOR } from '@/routes/link-families-parts';
-import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice, linkCreatedLabel, statusLabel } from '@/routes/links-parts';
+import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinkCreated, LinksOfflineNotice, linkCreatedLabel, statusLabel } from '@/routes/links-parts';
 
 /**
  * **SES LIENS DE PARRAINAGE** (#6409) — miroir `AffiliateView.swift` : en-tête
@@ -94,10 +94,7 @@ export function AffiliateTokenRow({
               {uses}
             </span>
           )}
-          {SEPARATOR}
-          <span data-affiliate-created className="whitespace-nowrap">
-            {created}
-          </span>
+          <LinkCreated language={language} createdAt={token.createdAt} />
         </>
       }
       actions={

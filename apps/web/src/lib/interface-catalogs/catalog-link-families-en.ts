@@ -97,7 +97,7 @@ const en = {
   'linkFamilies.affiliate.delete.title': 'Delete this referral link?',
   'linkFamilies.affiliate.delete.body': 'It will no longer let anyone sign up in your name. Your referrals stay yours.',
   'linkFamilies.affiliate.create.title': 'New referral link',
-  'linkFamilies.affiliate.create.intro': 'Anyone who signs up to Meeshy through this link becomes your referral.',
+  'linkFamilies.affiliate.create.intro': 'Whoever signs up to Meeshy through this link becomes your referral.',
   'linkFamilies.affiliate.create.name': 'Name',
   'linkFamilies.affiliate.create.name.placeholder': 'e.g. Friends invitation',
   'linkFamilies.affiliate.create.name.invalid': 'Give this link a name (100 characters at most).',

@@ -169,36 +169,36 @@
       "firstScreen": 69
     },
     "links": {
-      "total": 39,
-      "firstScreen": 39
+      "total": 70,
+      "firstScreen": 70
     },
     "links-affiliate": {
-      "total": 33,
-      "firstScreen": 33
+      "total": 35,
+      "firstScreen": 35
     },
     "links-affiliate-new": {
-      "total": 11,
-      "firstScreen": 11
+      "total": 27,
+      "firstScreen": 27
     },
     "links-communities": {
       "total": 18,
       "firstScreen": 18
     },
     "links-share": {
-      "total": 35,
-      "firstScreen": 35
+      "total": 61,
+      "firstScreen": 61
     },
     "links-share-new": {
-      "total": 30,
-      "firstScreen": 22
+      "total": 95,
+      "firstScreen": 58
     },
     "links-tracking": {
-      "total": 34,
-      "firstScreen": 34
+      "total": 37,
+      "firstScreen": 37
     },
     "links-tracking-new": {
-      "total": 16,
-      "firstScreen": 16
+      "total": 37,
+      "firstScreen": 37
     },
     "login": {
       "total": 37,
@@ -384,5 +384,91 @@
     "status-new": "hors périmètre de l’épure : studio de publication (planche du composer)",
     "stories-new": "hors périmètre de l’épure : studio de publication (planche du composer)",
     "u-username": "route paramétrée sans identifiant de fixture désigné"
+  },
+  "releves": {
+    "links": {
+      "de": {
+        "total": 39,
+        "firstScreen": 39
+      },
+      "a": {
+        "total": 70,
+        "firstScreen": 70
+      },
+      "motif": "Chaque type de lien (partage, suivi, communautés, parrainage) redit sous son nom à quoi il sert",
+      "issue": 17641
+    },
+    "links-affiliate": {
+      "de": {
+        "total": 33,
+        "firstScreen": 33
+      },
+      "a": {
+        "total": 35,
+        "firstScreen": 35
+      },
+      "motif": "Chaque lien de parrainage montre sa date de création",
+      "issue": 17641
+    },
+    "links-affiliate-new": {
+      "de": {
+        "total": 11,
+        "firstScreen": 11
+      },
+      "a": {
+        "total": 27,
+        "firstScreen": 27
+      },
+      "motif": "Une phrase dit ce que fait un lien de parrainage, et l'effet de la limite est visible sous son libellé",
+      "issue": 17641
+    },
+    "links-share": {
+      "de": {
+        "total": 35,
+        "firstScreen": 35
+      },
+      "a": {
+        "total": 61,
+        "firstScreen": 61
+      },
+      "motif": "Chaque lien de partage montre sa conversation, son état inactif et sa date de création",
+      "issue": 17641
+    },
+    "links-share-new": {
+      "de": {
+        "total": 30,
+        "firstScreen": 22
+      },
+      "a": {
+        "total": 95,
+        "firstScreen": 58
+      },
+      "motif": "Une phrase d'orientation, et l'effet de chaque autorisation et de chaque limite visible sous son libellé",
+      "issue": 17641
+    },
+    "links-tracking": {
+      "de": {
+        "total": 34,
+        "firstScreen": 34
+      },
+      "a": {
+        "total": 37,
+        "firstScreen": 37
+      },
+      "motif": "Chaque lien de suivi montre sa date de création",
+      "issue": 17641
+    },
+    "links-tracking-new": {
+      "de": {
+        "total": 16,
+        "firstScreen": 16
+      },
+      "a": {
+        "total": 37,
+        "firstScreen": 37
+      },
+      "motif": "Une phrase dit ce que fait un lien de suivi ; le rôle des UTM et la consigne du jeton sont visibles",
+      "issue": 17641
+    }
   }
 }

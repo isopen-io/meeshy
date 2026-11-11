@@ -114,17 +114,19 @@ const mountRow = (link: MyShareLink) =>
   );
 
 describe('la rangée d’un lien de partage montre de quoi le reconnaître', () => {
-  test('nom, usages, conversation et date de création', async () => {
-    const text = seen(await mountRow(shareLink())).join(' ');
+  test('nom, usages, conversation et date de création, dite en entier au lecteur d’écran', async () => {
+    const host = await mountRow(shareLink());
+    const text = seen(host).join(' ');
     expect(text).toContain('Invitation');
     expect(text).toContain('31 rejoints');
     expect(text).toContain('Salle sécurité du réseau');
-    expect(text).toContain('Créé le 10 sept. 2026');
+    expect(text).toContain('10/09/2026');
+    expect(host.querySelector('a')?.getAttribute('aria-label')).toContain('Créé le 10 sept. 2026');
   });
 
   test('l’expiration s’ajoute à la date de création', async () => {
     const text = seen(await mountRow(shareLink({ expiresAt: '2999-01-05T09:00:00.000Z' }))).join(' ');
-    expect(text).toContain('Créé le 10 sept. 2026');
+    expect(text).toContain('10/09/2026');
     expect(text).toContain('Expire le 5 janv. 2999');
   });
 
@@ -161,7 +163,7 @@ const token = (): AffiliateToken => ({
 });
 
 describe('les rangées de suivi et de parrainage portent leur date de création', () => {
-  test('suivi : clics, uniques et « Créé le »', async () => {
+  test('suivi : clics, uniques et date de création', async () => {
     const host = await mount(
       <ul>
         <TrackingLinkRow language="fr" link={trackingLink()} copied={false} onCopy={noop} />
@@ -169,10 +171,11 @@ describe('les rangées de suivi et de parrainage portent leur date de création'
     );
     const text = seen(host).join(' ');
     expect(text).toContain('12 clics');
-    expect(text).toContain('Créé le 10 sept. 2026');
+    expect(text).toContain('10/09/2026');
+    expect(host.querySelector('a')?.getAttribute('aria-label')).toContain('Créé le 10 sept. 2026');
   });
 
-  test('parrainage : la jauge et « Créé le »', async () => {
+  test('parrainage : la jauge et date de création', async () => {
     const host = await mount(
       <ul>
         <AffiliateTokenRow language="fr" token={token()} copied={false} onCopy={noop} onShare={noop} onDelete={noop} />
@@ -180,7 +183,8 @@ describe('les rangées de suivi et de parrainage portent leur date de création'
     );
     const text = seen(host).join(' ');
     expect(text).toContain('4 sur 50');
-    expect(text).toContain('Créé le 10 sept. 2026');
+    expect(text).toContain('10/09/2026');
+    expect(host.querySelector('[role="group"]')?.getAttribute('aria-label')).toContain('Créé le 10 sept. 2026');
   });
 });
 
@@ -294,14 +298,14 @@ describe('« Nouveau lien de suivi » et « Nouveau lien de parrainage » orient
   test('suivi : ce que fait le lien, à quoi servent les UTM, et la consigne du jeton', async () => {
     const host = await mount(<MyTrackingLinkNewScreen />);
     const text = seen(host);
-    expect(seenIn(host, '[data-links-intro]')).toBe('Ce lien redirige vers votre adresse et compte chaque clic.');
+    expect(seenIn(host, '[data-links-intro]')).toBe('Il redirige vers votre adresse et compte chaque clic.');
     expect(text).toContain('Pour savoir d’où viennent vos clics');
     expect(text).toContain('Laissez vide pour un jeton aléatoire.');
   });
 
   test('parrainage : ce que fait le lien et l’effet de la limite', async () => {
     const host = await mount(<AffiliateLinkNewScreen />);
-    expect(seenIn(host, '[data-links-intro]')).toBe('Toute personne qui s’inscrit sur Meeshy par ce lien devient votre filleul.');
+    expect(seenIn(host, '[data-links-intro]')).toBe('Qui s’inscrit sur Meeshy par ce lien devient votre filleul.');
     expect(seenIn(host, '[data-link-rule-row="affiliate-limit"]')).toBe('Limiter les inscriptions | Au-delà, le lien n’inscrit plus personne');
   });
 });

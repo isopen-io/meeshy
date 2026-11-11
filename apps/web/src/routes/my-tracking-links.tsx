@@ -18,7 +18,7 @@ import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySkeleton, FamilyStats, TRACKING_TINT, SEPARATOR } from '@/routes/link-families-parts';
-import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice, linkCreatedLabel, statusLabel } from '@/routes/links-parts';
+import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinkCreated, LinksOfflineNotice, linkCreatedLabel, statusLabel } from '@/routes/links-parts';
 
 /**
  * **SES LIENS DE SUIVI** (#6408) — miroir `TrackingLinksView.swift` : en-tête
@@ -65,10 +65,7 @@ export function TrackingLinkRow({ language, link, copied, onCopy }: { readonly l
           </span>
           {SEPARATOR}
           <span className="whitespace-nowrap">{uniques}</span>
-          {SEPARATOR}
-          <span data-tracking-created className="whitespace-nowrap">
-            {created}
-          </span>
+          <LinkCreated language={language} createdAt={link.createdAt} />
         </>
       }
       actions={<CopyRowAction language={language} label={translateLinkFamilies(language, 'linkFamilies.tracking.copy')} tint={TRACKING_TINT} copied={copied} onCopy={onCopy} />}
