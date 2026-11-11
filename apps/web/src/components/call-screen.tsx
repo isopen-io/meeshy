@@ -5,7 +5,6 @@ import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
 import { CallIncomingAnswer } from '@/components/call-incoming-answer';
-import { CallJournalColumn } from '@/components/call-journal-column';
 import { RoundButton } from '@/components/call-round-button';
 import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveFrameShown, useLiveFrameState } from '@/components/call-live-frame-slots';
 import { Portrait } from '@/components/call-grid';
@@ -22,7 +21,7 @@ import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
 import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
-import { useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
+import { JOURNAL_COLUMN_GUTTER, JOURNAL_COLUMN_WIDTH, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { callPillText, PILL_TEXT_WIDTH_CLASS, type CallPillText } from '@/lib/calls/call-pill-text';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
@@ -167,6 +166,8 @@ const loadPeople = once(() => import('./call-people-sheet'));
 const CallPeopleSheet = lazy(() => loadPeople().then((module) => ({ default: module.CallPeopleSheet })));
 const loadJournal = once(() => import('./call-journal-panel'));
 const CallJournalPanel = lazy(() => loadJournal().then((module) => ({ default: module.CallJournalPanel })));
+/* La colonne du grand écran vit avec le journal, dans son chunk : l'écran d'appel n'en paie que l'`import()`. */
+const CallJournalInColumn = lazy(() => loadJournal().then((module) => ({ default: module.CallJournalInColumn })));
 
 /**
  * CE QU'UN TOUCHER VA DEMANDER, CHARGÉ AVANT LUI (#8735) — chaque mode et
@@ -705,11 +706,9 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           </Suspense>
         ) : null}
         {column.shown ? (
-          <CallJournalColumn>
-            <Suspense fallback={null}>
-              <CallJournalPanel id={CALL_PANEL_ID.journal} closeGlyph={closeGlyph} language={language} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} fill />
-            </Suspense>
-          </CallJournalColumn>
+          <Suspense fallback={null}>
+            <CallJournalInColumn width={JOURNAL_COLUMN_WIDTH} gutter={JOURNAL_COLUMN_GUTTER} id={CALL_PANEL_ID.journal} closeGlyph={closeGlyph} language={language} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />
+          </Suspense>
         ) : null}
         {declineOpen && phase === 'incoming' ? (
           <Suspense fallback={null}>

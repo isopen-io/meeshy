@@ -1,5 +1,6 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
+import { CallJournalColumn, type JournalColumnGeometry } from '@/components/call-journal-column';
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { CallJournalViewSwitch, type JournalView } from '@/components/call-journal-view-switch';
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
@@ -193,5 +194,14 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
         </div>
       )}
     </CallPanelFrame>
+  );
+}
+
+/** Le journal en colonne de verre sur grand écran (#16942, W1 et W2) : la même liste, qui prend toute la hauteur de la colonne. */
+export function CallJournalInColumn({ width, gutter, ...journal }: Omit<JournalProps, 'fill' | 'windowHeight'> & JournalColumnGeometry) {
+  return (
+    <CallJournalColumn width={width} gutter={gutter}>
+      <CallJournalPanel {...journal} fill />
+    </CallJournalColumn>
   );
 }
