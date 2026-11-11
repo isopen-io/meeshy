@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -5,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CallScreen } from './call-screen';
@@ -56,6 +58,7 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 });
 
 beforeAll(async () => {
+  await loadPillMotion();
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await import('./call-control-actions');
@@ -131,8 +134,8 @@ describe('le verre qui grandit pour contenir les rangées (G2.11)', () => {
     });
   });
 
-  test('les rangées qui arrivent entrent depuis la rangée de base, par la transformation et l’opacité (la feuille)', async () => {
-    const css = await Bun.file(new URL('../styles/call-motion.css', import.meta.url)).text();
+  test('les rangées qui arrivent entrent depuis la rangée de base, par la transformation et l’opacité (la feuille)', () => {
+    const css = readFileSync(new URL('../styles/call-motion.css', import.meta.url), 'utf8');
     expect(css).toContain("[data-call-deck-content='rows']");
   });
 });

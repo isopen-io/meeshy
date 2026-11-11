@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { lazy, Suspense, useRef, useState, type ReactNode } from 'react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -6,7 +6,7 @@ import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import { PILL_TEXT_WIDTH_CLASS, pillStaysWhenChromeStowed, type CallPillText } from '@/lib/calls/call-pill-text';
-import { leaveAsGhost, usePillGlass } from '@/lib/calls/use-pill-motion';
+import { usePillGlass } from '@/lib/calls/use-pill-motion';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
@@ -51,6 +51,9 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 const CallActionRows = lazy(() => import('./call-control-actions').then((module) => ({ default: module.CallActionRows })));
 
+/* Ce qui quitte le verre y repart en fondu : le double de la sortie vit dans son chunk, que seul un verre qui grandit paie (préchargé avec les rangées, `call-screen.tsx`). */
+const DeckContent = lazy(() => import('./call-deck-motion').then((module) => ({ default: module.DeckContent })));
+
 const CallDevicesSheet = lazy(() => import('./call-devices-sheet').then((module) => ({ default: module.CallDevicesSheet })));
 
 type PillProps = {
@@ -77,22 +80,6 @@ type PillProps = {
   readonly stowed?: boolean;
 };
 
-/** Ce que le verre ouvre au-dessus de sa rangée de base ; en partant, il laisse un double qui s'efface depuis sa place. */
-function DeckContent({ kind, box, children }: { readonly kind: 'rows' | 'panel'; readonly box: RefObject<HTMLElement | null>; readonly children: ReactNode }) {
-  const node = useRef<HTMLDivElement>(null);
-  useLayoutEffect(
-    () => () => {
-      if (node.current !== null && box.current !== null) leaveAsGhost(node.current, box.current);
-    },
-    [box],
-  );
-  return (
-    <div ref={node} className="flex flex-col gap-2" data-call-deck-content={kind}>
-      {children}
-    </div>
-  );
-}
-
 export function CallControlPill({ call, language, rows, expanded, grown, onToggle, prominent, text, captions, panels, kit, panel, stowed = false }: PillProps) {
   const [devicesOpen, setDevicesOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -113,15 +100,17 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
         {grown ? (
           <>
             <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="" {...away}>
-              <DeckContent key={panel === null ? 'rows' : 'panel'} kind={panel === null ? 'rows' : 'panel'} box={box}>
-                {panel === null ? (
-                  <Suspense fallback={null}>
-                    <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} />
-                  </Suspense>
-                ) : (
-                  <div data-call-pill-text={text}>{panel}</div>
-                )}
-              </DeckContent>
+              <Suspense fallback={null}>
+                <DeckContent key={panel === null ? 'rows' : 'panel'} kind={panel === null ? 'rows' : 'panel'} box={box}>
+                  {panel === null ? (
+                    <Suspense fallback={null}>
+                      <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} />
+                    </Suspense>
+                  ) : (
+                    <div data-call-pill-text={text}>{panel}</div>
+                  )}
+                </DeckContent>
+              </Suspense>
             </div>
             <hr className="mx-2 my-2 border-0 border-t border-media-hairline" {...away} />
           </>

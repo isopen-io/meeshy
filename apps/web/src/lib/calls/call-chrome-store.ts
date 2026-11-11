@@ -12,6 +12,8 @@ export const callChromeStore = createStore<{ readonly stowed: boolean }>(() => (
 
 /** Publie l'état du chrome tant que l'écran d'appel vit ; il le rend quand il part. */
 export function usePublishChrome(stowed: boolean): void {
-  useEffect(() => callChromeStore.setState({ stowed }), [stowed]);
-  useEffect(() => () => callChromeStore.setState({ stowed: false }), []);
+  useEffect(() => {
+    callChromeStore.setState({ stowed });
+    return () => callChromeStore.setState({ stowed: false });
+  }, [stowed]);
 }

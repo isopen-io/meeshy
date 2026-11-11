@@ -7,6 +7,7 @@ import { callJournalHeight } from '@/lib/calls/call-journal-height';
 import { PILL_TEXT_EXIT } from '@/lib/calls/call-pill-text-exit';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CallScreen } from './call-screen';
@@ -61,6 +62,7 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 const group: Partial<ActiveCall> = { isGroup: true, title: 'Équipe', members: { 'u-awa': member('u-awa', 'Awa'), 'u-karim': member('u-karim', 'Karim'), 'u-lina': member('u-lina', 'Lina') } };
 
 beforeAll(async () => {
+  await loadPillMotion();
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await import('./call-control-actions');

@@ -175,6 +175,7 @@ const CallJournalInColumn = lazy(() => loadJournal().then((module) => ({ default
  */
 const PREFETCH: readonly (() => Promise<unknown>)[] = [
   loadActions,
+  () => import('./call-deck-motion'),
   loadRails,
   loadEffectsMode,
   loadMontageMode,
