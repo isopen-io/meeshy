@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { InfoNoted, type InfoHint } from './info-hint';
+
 /**
  * **LA SECTION GROUPÉE** (#5563) — l'anatomie commune de `ProfileView` et de
  * `SettingsView` (iOS) : un titre de section coloré avec son icône, puis une
@@ -24,20 +26,25 @@ export function GroupedSection({
   title,
   icon,
   card = true,
+  note,
   children,
 }: {
   readonly id: string;
   readonly title: string;
   readonly icon: ReactNode;
   readonly card?: boolean;
+  /** Le (i) du titre (#17587, épure #17584) : l'explication du bloc, repliée mais lue. */
+  readonly note?: InfoHint;
   readonly children: ReactNode;
 }) {
   return (
     <section aria-labelledby={id} className="grid gap-2">
-      <h2 id={id} className={`flex items-center gap-1.5 ps-1 text-check font-bold tracking-wide ${SECTION_BRAND_INK}`}>
-        {icon}
-        {title}
-      </h2>
+      <InfoNoted note={note}>
+        <h2 id={id} className={`flex items-center gap-1.5 ps-1 text-check font-bold tracking-wide ${SECTION_BRAND_INK}`}>
+          {icon}
+          {title}
+        </h2>
+      </InfoNoted>
       {card ? (
         <div className="grid overflow-hidden rounded-card" style={SECTION_CARD_STYLE}>
           {children}

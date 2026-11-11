@@ -32,6 +32,8 @@ on:
     paths:
       - 'apps/android/**'
       - '.github/workflows/android.yml'
+      - 'scripts/check-verbosity-native.mjs'
+      - 'scripts/verbosity-native-budgets.json'
       - 'apps/ios/Meeshy/Localizable.xcstrings'
       - 'apps/ios/Meeshy/InfoPlist.xcstrings'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings'
@@ -223,6 +225,12 @@ jobs:
 
       - name: Arêtes feature vers feature conformes à l'ADR-033
         run: bash apps/android/scripts/check-feature-edges.sh
+
+      # #17587 (épure #17584) — le texte que les écrans Android ont à dire,
+      # module par module (values-fr/strings*.xml), sous le même cliquet que
+      # les catalogues iOS. Pur Node, aucun SDK Android requis.
+      - name: Cliquet du texte natif (épure)
+        run: node --test scripts/__tests__/check-verbosity-native.test.mjs && node scripts/check-verbosity-native.mjs
 
   android:
     name: Android (assemble + unit tests)
