@@ -91,6 +91,12 @@ class EpureReglagesReperesStringsTest {
     }
 
     @Test
+    fun `the online status says at rest who sees the dot, which its info question asks`() {
+        assertThat(fr("settings_privacy_online_status_question")).isEqualTo("Qui voit que je suis en ligne ?")
+        assertThat(fr("settings_privacy_online_status_subtitle")).isEqualTo("Vos amis voient une pastille verte quand vous êtes actif.")
+    }
+
+    @Test
     fun `every new string exists in all seven locales and the french is never copied`() {
         val names = listOf("settings_privacy_calls_non_contacts_subtitle", "data_storage_cache_size")
         allLocales.forEach { locale ->

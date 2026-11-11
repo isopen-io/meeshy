@@ -84,7 +84,7 @@
     <string name="settings_privacy_notify_contacts_on_return_subtitle">Vos contacts voient « était sur Meeshy récemment », au plus toutes les 3 heures.</string>
     <string name="settings_privacy_online_status_info">Désactivée, personne ne voit ce point. Écrire dans une conversation reste une preuve d\'activité pour vos interlocuteurs.</string>
     <string name="settings_privacy_online_status_question">Qui voit que je suis en ligne ?</string>
-    <string name="settings_privacy_online_status_subtitle">Pastille verte quand vous êtes actif.</string>
+    <string name="settings_privacy_online_status_subtitle">Vos amis voient une pastille verte quand vous êtes actif.</string>
     <string name="settings_security_orientation">Mot de passe, 2FA, sessions, appareils chiffrés.</string>
     <string name="settings_share_links_orientation">Invitez avec un lien : choisissez ce que les invités peuvent faire, pour combien de temps et combien peuvent rejoindre.</string>
     <string name="settings_tools_progression_orientation">Jeu, saisons et ligues.</string>

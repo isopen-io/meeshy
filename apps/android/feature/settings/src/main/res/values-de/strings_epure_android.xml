@@ -84,7 +84,7 @@
     <string name="settings_privacy_notify_contacts_on_return_subtitle">Ihre Kontakte sehen „war kürzlich auf Meeshy“, höchstens alle 3 Stunden.</string>
     <string name="settings_privacy_online_status_info">Ausgeschaltet sieht niemand diesen Punkt. Schreiben in einer Unterhaltung bleibt ein Zeichen von Aktivität.</string>
     <string name="settings_privacy_online_status_question">Wer sieht, dass ich online bin?</string>
-    <string name="settings_privacy_online_status_subtitle">Grüner Punkt, wenn Sie aktiv sind.</string>
+    <string name="settings_privacy_online_status_subtitle">Ihre Freunde sehen einen grünen Punkt, wenn Sie aktiv sind.</string>
     <string name="settings_security_orientation">Passwort, 2FA, Sitzungen, verschlüsselte Geräte.</string>
     <string name="settings_share_links_orientation">Lade Leute per Link ein: lege fest, was sie tun dürfen, wie lange er gilt und wie viele beitreten können.</string>
     <string name="settings_tools_progression_orientation">Spiel, Saisons und Ligen.</string>

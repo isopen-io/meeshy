@@ -84,7 +84,7 @@
     <string name="settings_privacy_notify_contacts_on_return_subtitle">Your contacts see “was on Meeshy recently”, at most every 3 hours.</string>
     <string name="settings_privacy_online_status_info">Turned off, nobody sees this dot. Typing in a conversation still shows you\'re around.</string>
     <string name="settings_privacy_online_status_question">Who sees that I\'m online?</string>
-    <string name="settings_privacy_online_status_subtitle">Green dot when you\'re active.</string>
+    <string name="settings_privacy_online_status_subtitle">Your friends see a green dot when you\'re active.</string>
     <string name="settings_security_orientation">Password, 2FA, sessions, encrypted devices.</string>
     <string name="settings_share_links_orientation">Invite people with a link: choose what they can do, for how long and how many can join.</string>
     <string name="settings_tools_progression_orientation">Game, seasons and leagues.</string>

@@ -84,7 +84,7 @@
     <string name="settings_privacy_notify_contacts_on_return_subtitle">Tus contactos ven «estuvo en Meeshy hace poco», como máximo cada 3 horas.</string>
     <string name="settings_privacy_online_status_info">Desactivado, nadie ve este punto. Escribir en una conversación sigue siendo una prueba de actividad.</string>
     <string name="settings_privacy_online_status_question">¿Quién ve que estoy en línea?</string>
-    <string name="settings_privacy_online_status_subtitle">Punto verde cuando estás activo.</string>
+    <string name="settings_privacy_online_status_subtitle">Tus amigos ven un punto verde cuando estás activo.</string>
     <string name="settings_security_orientation">Contraseña, 2FA, sesiones, dispositivos cifrados.</string>
     <string name="settings_share_links_orientation">Invita con un enlace: elige qué pueden hacer, durante cuánto tiempo y cuántas personas pueden unirse.</string>
     <string name="settings_tools_progression_orientation">Juego, temporadas y ligas.</string>

@@ -84,7 +84,7 @@
     <string name="settings_privacy_notify_contacts_on_return_subtitle">يرى جهات اتصالك «كان على Meeshy مؤخرًا»، مرة كل 3 ساعات كحد أقصى.</string>
     <string name="settings_privacy_online_status_info">عند إيقافه لا يرى أحد هذه النقطة. الكتابة في محادثة تبقى دليلًا على نشاطك.</string>
     <string name="settings_privacy_online_status_question">من يرى أنني متصل؟</string>
-    <string name="settings_privacy_online_status_subtitle">نقطة خضراء عندما تكون نشطًا.</string>
+    <string name="settings_privacy_online_status_subtitle">يرى أصدقاؤك نقطة خضراء عندما تكون نشطًا.</string>
     <string name="settings_security_orientation">كلمة المرور، المصادقة الثنائية، الجلسات، الأجهزة المشفّرة.</string>
     <string name="settings_share_links_orientation">ادعُ الآخرين برابط: حدّد ما يمكنهم فعله، ولكم من الوقت، وكم شخصًا يمكنه الانضمام.</string>
     <string name="settings_tools_progression_orientation">اللعبة والمواسم والدوريات.</string>

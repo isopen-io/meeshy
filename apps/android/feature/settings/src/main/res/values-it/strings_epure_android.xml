@@ -84,7 +84,7 @@
     <string name="settings_privacy_notify_contacts_on_return_subtitle">I tuoi contatti vedono «era su Meeshy di recente», al massimo ogni 3 ore.</string>
     <string name="settings_privacy_online_status_info">Disattivato, nessuno vede questo pallino. Scrivere in una conversazione resta una prova di attività.</string>
     <string name="settings_privacy_online_status_question">Chi vede che sono online?</string>
-    <string name="settings_privacy_online_status_subtitle">Pallino verde quando sei attivo.</string>
+    <string name="settings_privacy_online_status_subtitle">I tuoi amici vedono un pallino verde quando sei attivo.</string>
     <string name="settings_security_orientation">Password, 2FA, sessioni, dispositivi cifrati.</string>
     <string name="settings_share_links_orientation">Invita con un link: scegli cosa possono fare, per quanto tempo e quante persone possono unirsi.</string>
     <string name="settings_tools_progression_orientation">Gioco, stagioni e leghe.</string>
