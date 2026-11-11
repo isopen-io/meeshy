@@ -69,7 +69,13 @@ describe('la capsule de l’en-tête (P9.8)', () => {
       writable: true,
       value: function (this: HTMLElement, keyframes: Keyframe[], options: { duration: number }) {
         played.push({ what: this.hasAttribute('data-call-capsule') ? 'capsule' : 'other', keyframes, duration: options.duration });
-        return { cancel: () => undefined, finished: Promise.resolve(), onfinish: null };
+        const timer: { id?: ReturnType<typeof setTimeout>; abort?: (reason: unknown) => void } = {};
+        const finished = new Promise((resolve, reject) => {
+          timer.id = setTimeout(resolve, options.duration);
+          timer.abort = reject;
+        });
+        finished.catch(() => undefined);
+        return { cancel: () => (clearTimeout(timer.id), timer.abort?.(new Error('AbortError'))), finished, onfinish: null };
       },
     });
   });
@@ -126,6 +132,21 @@ describe('la capsule de l’en-tête (P9.8)', () => {
       await new Promise((resolve) => setTimeout(resolve, 260));
     });
     expect(view.capsule()).toBeNull();
+  });
+
+  test('revenue pendant son départ, elle reste : le départ interrompu ne la démonte pas', async () => {
+    const view = await mount(true);
+    await view.render(false);
+    await view.render(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 260));
+    });
+    const back = view.capsule();
+    expect(back).not.toBeNull();
+    expect(back?.hasAttribute('data-leaving')).toBe(false);
+    expect(back?.hasAttribute('inert')).toBe(false);
+    await view.render(false);
+    expect(view.capsule()?.hasAttribute('data-leaving')).toBe(true);
   });
 
   test('sous « Réduire les animations » : un fondu court, sans échelle, à l’arrivée comme au départ', async () => {

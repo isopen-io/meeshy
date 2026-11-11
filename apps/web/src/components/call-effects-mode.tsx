@@ -9,7 +9,7 @@ import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-captur
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
 import { addingLook, type EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
-import { useSwapPresence } from '@/lib/calls/use-pill-motion';
+import { useSwapPresence } from '@/lib/calls/use-mode-motion';
 import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESET_CATALOG, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
 import { loadCallStudioCatalog, translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
 import { translate } from '@/lib/i18n-catalog';

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useStore } from 'zustand/react';
 
@@ -13,11 +13,11 @@ import { customNameOf } from '@/lib/api/preferences';
 import { appQueryClient } from '@/lib/api/query-client';
 import { callActions } from '@/lib/calls/call-actions';
 import { participantCountOf } from '@/lib/calls/call-controls-disposition';
-import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegraded, type CallHeaderCapsule, type CallHeaderCapsuleLayout } from '@/lib/calls/call-header';
+import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegraded, type CallHeaderCapsuleLayout } from '@/lib/calls/call-header';
 import { browserPipSupport, pipOpenStore, requestCallPip, requestCallPipExit, shouldOfferPip } from '@/lib/calls/call-pip';
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callLayout } from '@/lib/calls/call-view';
-import { useSwapPresence } from '@/lib/calls/use-pill-motion';
+import { HeldSwap } from '@/lib/calls/use-pill-motion';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { href, navigate } from '@/routes/route-table';
@@ -81,25 +81,6 @@ function capsuleNames(call: ActiveCall) {
   return callHeaderNames(conversation === undefined ? undefined : { type: conversation.type, title: conversation.title, customName: customNameOf(conversation) }, call.isGroup ? call.title : null);
 }
 
-/**
- * LA CAPSULE ENTRE ET SORT PAR UNE MISE À L'ÉCHELLE ANCRÉE À DROITE (P9.8, #17509) — celle que
- * décide `call-header.ts` reste à sa place le temps de son départ (la dernière décidée), inerte,
- * puis se démonte ; `useSwapPresence` la joue en Web Animations : un fondu court sous « Réduire
- * les animations », que la règle générale (qui coupe les animations CSS) n'éteint pas.
- */
-function HeaderCapsule({ capsule, clock, call, language, prominent }: { readonly capsule: CallHeaderCapsule | null; readonly clock: string | null; readonly call: ActiveCall; readonly language: InterfaceLanguage; readonly prominent: boolean }) {
-  const last = useRef(capsule);
-  if (capsule !== null) last.current = capsule;
-  const { mounted, ref } = useSwapPresence<HTMLDivElement>(capsule !== null, 'scale');
-  const shown = last.current;
-  if (!mounted || shown === null) return null;
-  return (
-    <div ref={ref} className="min-w-0" data-call-capsule="" {...(capsule === null ? { 'data-leaving': '', inert: true, 'aria-hidden': true } : {})}>
-      <CallQualityChip capsule={shown} clock={clock} quality={call.quality} language={language} prominent={prominent} />
-    </div>
-  );
-}
-
 export function CallScreenHeader({ call, language, joined, prominent }: HeaderProps) {
   const live = call.phase.kind !== 'ended' && call.phase.kind !== 'incoming';
   const ticking = useCallClock(call, live && joined);
@@ -149,7 +130,11 @@ export function CallScreenHeader({ call, language, joined, prominent }: HeaderPr
           ),
         )}
       </div>
-      <HeaderCapsule capsule={capsule} clock={clock} call={call} language={language} prominent={prominent} />
+      {/* LA CAPSULE ENTRE ET SORT PAR UNE MISE À L'ÉCHELLE ANCRÉE À DROITE (P9.8, #17509) : celle que
+          décide `call-header.ts` reste à sa place le temps de son départ, inerte, puis se démonte. */}
+      <HeldSwap value={capsule} shape="scale" className="min-w-0" data-call-capsule="">
+        {(held) => <CallQualityChip capsule={held} clock={clock} quality={call.quality} language={language} prominent={prominent} />}
+      </HeldSwap>
     </div>
   );
 }
