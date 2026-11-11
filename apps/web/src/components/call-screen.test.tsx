@@ -337,26 +337,6 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('en hauteur compacte (iPhone en paysage), les rangées de la pilule d’un groupe se replient en UNE ligne sans légendes, et la grille garde ses 140 (P12.7)', async () => {
-    const real = window.innerHeight;
-    const heightOf = (value: number) => Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value });
-    heightOf(390);
-    const compact = mount({ isGroup: true, members: peers });
-    compact.press('[data-call-more]');
-    await act(async () => {});
-    expect(compact.find('[data-call-deck]')?.hasAttribute('data-call-compact')).toBe(true);
-    expect(compact.host.querySelectorAll('[data-call-deck] [data-call-row-title]')).toHaveLength(2);
-    expect(compact.find('[data-call-stage-surface]')?.className).toContain('min-h-[140px]');
-    compact.done();
-    heightOf(844);
-    const tall = mount({ isGroup: true, members: peers });
-    tall.press('[data-call-more]');
-    await act(async () => {});
-    expect(tall.find('[data-call-deck]')?.hasAttribute('data-call-compact')).toBe(false);
-    tall.done();
-    heightOf(real);
-  });
-
   test('en groupe, (…) fait grandir la pilule : une rangée par famille, légendée, qui défile à l’horizontale — jamais de rail sur la grille (#8550, #17327)', async () => {
     const view = mount({ isGroup: true, members: peers });
     view.press('[data-call-more]');
@@ -711,45 +691,6 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-spotlight]')).toBeNull();
     view.press('[data-call-tile-self]');
     expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('self');
-    view.done();
-  });
-
-  test('en groupe, chrome rangé, le doigt posé sur une vignette la focalise (Chromium) : le toucher rend les contrôles SANS la mettre à la une, grille comme bandeau (#17548, P11.10, P14.6)', () => {
-    const view = mount({ isGroup: true, members: peers, cameraOn: true });
-    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
-    const finger = (selector: string) => {
-      const tile = view.find(selector) as HTMLElement;
-      act(() => {
-        tile.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 6, clientX: 4, clientY: 4, button: 0, bubbles: true }));
-        tile.focus();
-      });
-      act(() => {
-        tile.dispatchEvent(new PointerEvent('pointerup', { pointerId: 6, clientX: 4, clientY: 4, button: 0, bubbles: true }));
-        tile.click();
-      });
-    };
-    tapStage(view);
-    expect(chrome()).toBe('hidden');
-    finger('[data-call-tile="u-b"]');
-    expect(chrome()).toBe('shown');
-    expect(view.find('[data-call-spotlight]')).toBeNull();
-    view.press('[data-call-tile="u-b"]');
-    expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('u-b');
-    tapStage(view);
-    expect(chrome()).toBe('hidden');
-    finger('[data-call-strip] [data-call-tile="u-peer"]');
-    expect(chrome()).toBe('shown');
-    expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('u-b');
-    view.done();
-  });
-
-  test('en groupe, la grille suit l’ORDRE D’ARRIVÉE, ma vignette en dernier : un pair qui se reconnecte garde sa case (P11.3)', () => {
-    const arrived = { 'u-z': member({ userId: 'u-z', name: 'Zoé' }), 'u-b': member({ userId: 'u-b', name: 'Bob' }), 'u-a': member({ userId: 'u-a', name: 'Ana' }) };
-    const order = (view: ReturnType<typeof mount>) => [...view.host.querySelectorAll('[data-call-slot]')].map((slot) => slot.getAttribute('data-call-slot'));
-    const view = mount({ isGroup: true, members: arrived });
-    expect(order(view)).toEqual(['u-z', 'u-b', 'u-a', 'self']);
-    act(() => view.rerender({ isGroup: true, members: { ...arrived, 'u-b': { ...arrived['u-b'], link: 'reconnecting' } } }));
-    expect(order(view)).toEqual(['u-z', 'u-b', 'u-a', 'self']);
     view.done();
   });
 

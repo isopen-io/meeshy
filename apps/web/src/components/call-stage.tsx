@@ -40,6 +40,7 @@ import type { ZoomControl } from '@/lib/calls/call-self-controls';
 import { autoSharer, resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
+import { useElementSize } from '@/lib/view/use-element-size';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { hasVideo, membersInArrival, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
 import { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
@@ -368,11 +369,20 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   );
 }
 
-export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
+/**
+ * LA SCÈNE D'UN GROUPE LIT SON ORIENTATION SUR ELLE-MÊME (P11.1, `GroupCallStageView` d'iOS, qui la lit dans sa
+ * géométrie) : la colonne du journal ouverte (W1), une fenêtre large porte une scène plus haute que large. Le cadre
+ * mesuré tient sa taille de l'écran (`flex-1` dans la surface de la scène, sa réserve exclue), jamais de la grille
+ * qu'il contient : passer de 2 × 3 à 3 × 2 ne le redimensionne pas, aucune boucle. Avant sa première mesure
+ * (rendu serveur, scène encore sans taille), la fenêtre.
+ */
+function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible, onRevealChrome }: Omit<StageProps, 'layout' | 'bleedEnd' | 'chromeVisible' | 'onRevealChrome'> & { readonly chromeVisible: boolean; readonly onRevealChrome: () => void }) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const viewport = useCallViewport();
-  if (layout === 'grid') {
-    return (
+  const [frame, measured] = useElementSize();
+  const scene = measured.width > 0 && measured.height > 0 ? measured : viewport;
+  return (
+    <div ref={frame} className="flex min-h-0 flex-1 flex-col" data-call-grid-frame="">
       <Suspense fallback={null}>
         <CallGrid
           kit={CALL_GRID_KIT}
@@ -387,12 +397,16 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
           language={language}
           chromeVisible={chromeVisible}
           onRevealChrome={onRevealChrome}
-          landscape={viewport.width > viewport.height}
+          landscape={scene.width > scene.height}
           selfZoom={self.local === undefined || self.zoom !== 'capsule' ? null : { local: self.local, column: self.column }}
         />
       </Suspense>
-    );
-  }
+    </div>
+  );
+}
+
+export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
+  if (layout === 'grid') return <GroupStage call={call} language={language} choice={choice} onChoose={onChoose} immersive={immersive} onToggleImmersive={onToggleImmersive} moderation={moderation} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} />;
   if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
   if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} bleedEnd={bleedEnd} />;
   return null;

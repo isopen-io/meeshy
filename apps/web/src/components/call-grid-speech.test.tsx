@@ -26,16 +26,16 @@ let awa: MediaStream;
 let bintou: MediaStream;
 let mine: MediaStream;
 
-/* Un niveau PAR flux que le témoin règle : l'analyseur rend un signal dont la valeur efficace vaut celle du flux écouté. */
+/* Un niveau PAR flux que le témoin règle : l'analyseur rend un signal dont la valeur efficace vaut celle du flux que sa source lui branche (un contexte sert toutes les vignettes). */
 const levels = new Map<MediaStream, number>();
+type FakeAnalyser = { stream: MediaStream | null };
 class FakeAudioContext {
-  private stream: MediaStream | null = null;
   createMediaStreamSource(stream: MediaStream) {
-    this.stream = stream;
-    return { connect: () => undefined, disconnect: () => undefined };
+    return { connect: (analyser: FakeAnalyser) => void (analyser.stream = stream), disconnect: () => undefined };
   }
   createAnalyser() {
-    return { fftSize: 0, connect: () => undefined, disconnect: () => undefined, getFloatTimeDomainData: (into: Float32Array) => into.fill(levels.get(this.stream as MediaStream) ?? 0) };
+    const analyser = { stream: null as MediaStream | null, fftSize: 0, connect: () => undefined, disconnect: () => undefined, getFloatTimeDomainData: (into: Float32Array) => into.fill(levels.get(analyser.stream as MediaStream) ?? 0) };
+    return analyser;
   }
   resume = async () => undefined;
   close = async () => undefined;
