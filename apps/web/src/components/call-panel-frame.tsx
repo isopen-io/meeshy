@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 
 import type { CallButton } from '@/components/call-glass-button';
+import { ROW_EDGE_FADE } from '@/lib/calls/call-row-keys';
 
 /**
  * **UN SOUS-MENU DE L'APPEL, DANS LE CADRE DE LA PILULE** (#8550, #8578) — la
@@ -26,7 +27,7 @@ export type RowKeyDown = (event: KeyboardEvent<HTMLElement>) => void;
 export type RowWheel = (event: WheelEvent<HTMLElement>) => void;
 
 /** La rangée d'un panneau : comme celles du `(…)`, libre et sans élasticité (#8736). */
-export const PANEL_ROW_SCROLL = 'flex gap-1.5 overflow-x-auto overscroll-x-none px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
+export const PANEL_ROW_SCROLL = 'flex gap-1.5 overflow-x-auto overscroll-x-none px-2 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 export const PANEL_ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-on-media-3 [font-variant-caps:all-small-caps]';
 
@@ -122,7 +123,7 @@ export function PanelRow({ title, role, onRowKeyDown, onRowWheel, children, data
       <span aria-hidden className={PANEL_ROW_TITLE}>
         {title}
       </span>
-      <div role={role} aria-label={title} {...(role === 'toolbar' ? { 'aria-orientation': 'horizontal' as const } : {})} onKeyDown={onRowKeyDown} {...(onRowWheel === undefined ? {} : { onWheel: onRowWheel })} className={PANEL_ROW_SCROLL} data-call-row-scroll="">
+      <div role={role} aria-label={title} {...(role === 'toolbar' ? { 'aria-orientation': 'horizontal' as const } : {})} onKeyDown={onRowKeyDown} {...(onRowWheel === undefined ? {} : { onWheel: onRowWheel })} className={PANEL_ROW_SCROLL} style={ROW_EDGE_FADE} data-call-row-scroll="">
         {children}
       </div>
     </div>

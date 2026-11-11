@@ -190,7 +190,7 @@ describe('le consentement et le pseudonyme (nom choisi ouvert)', () => {
     type(host, '#game-league-pseudonym', '!!');
     await submit(host);
     expect(calls).toBe(0);
-    expect(host.textContent).toContain('n’est pas valable');
+    expect(host.textContent).toContain('Nom non valable');
   });
 
   test('le refus de la passerelle s’affiche sous le champ', async () => {

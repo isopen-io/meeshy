@@ -100,7 +100,7 @@ const fr = {
   'onboarding.recap.streak.other': 'Flamme : {days} jours',
   'onboarding.recap.badges': 'Médailles : {count}',
   'onboarding.recap.friends': 'Demandes en route : {count}',
-  'onboarding.recap.tomorrow': 'Demain, ta Flamme peut brûler depuis {next} jours.',
+  'onboarding.recap.tomorrow': 'Demain, ta Flamme brûlera depuis {next} jours.',
   'onboarding.recap.explore': 'Continuer à explorer',
   'onboarding.recap.game': 'Découvrir le jeu avec Mee et Meo',
   'onboarding.recap.done': 'C’est bon pour aujourd’hui',
