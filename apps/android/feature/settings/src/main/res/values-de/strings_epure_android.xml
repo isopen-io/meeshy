@@ -26,6 +26,7 @@
     <string name="location_precision_footnote">Viertel und Stadt: Nur das Gebiet wird geteilt, nicht die genaue Adresse.</string>
     <string name="pack_shop_state_embedded">Enthalten</string>
     <string name="privacy_encryption_summary">Die Ende-zu-Ende-Verschlüsselung wird pro Unterhaltung gewählt und ist nicht umkehrbar.</string>
+    <string name="privacy_encryption_status_soon">Demnächst verfügbar</string>
     <string name="privacy_read_receipts_subtitle">Gegenseitig: ohne gesendete Bestätigung keine empfangene.</string>
     <string name="purge_limitation_question">Warum kann ich %1$s nicht leeren?</string>
     <string name="purge_unattributed_note">Dateien, die noch auf dem Gerät liegen, deren ursprünglicher Beitrag, Story oder Unterhaltung nicht mehr im Cache ist. Sie lassen sich keinem Bereich zuordnen.</string>

@@ -26,6 +26,7 @@
     <string name="location_precision_footnote">Quartiere e Città: viene condivisa solo la zona, non l\'indirizzo esatto.</string>
     <string name="pack_shop_state_embedded">Incluso</string>
     <string name="privacy_encryption_summary">La crittografia end-to-end si sceglie per conversazione e non si annulla.</string>
+    <string name="privacy_encryption_status_soon">Presto disponibile</string>
     <string name="privacy_read_receipts_subtitle">Reciproco: senza conferma inviata, nessuna conferma ricevuta.</string>
     <string name="purge_limitation_question">Perché non posso svuotare %1$s?</string>
     <string name="purge_unattributed_note">File ancora sul dispositivo il cui post, storia o conversazione di origine non è più in cache. Non è possibile associarli a un ambito.</string>

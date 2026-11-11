@@ -28,7 +28,9 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -40,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
@@ -172,7 +175,9 @@ private fun EncryptionComingSoonSection() {
     // Mirrors iOS: E2EE is not yet operational, so the section is shown dimmed (0.55) and
     // non-interactive with a "coming soon / disabled" status — never editable.
     val tint = MeeshyPalette.TileBlue
-    val spoken = stringResource(R.string.settings_privacy_encryption_coming_soon_a11y)
+    val summary = stringResource(R.string.privacy_encryption_summary)
+    val status = stringResource(R.string.privacy_encryption_status_soon)
+    val spoken = "${stringResource(R.string.settings_privacy_encryption_coming_soon_a11y)}. $summary"
     Column(
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(MeeshySpacing.md),
         modifier = Modifier
@@ -188,8 +193,17 @@ private fun EncryptionComingSoonSection() {
         SettingsCard(tint = tint) {
             SettingsRow(
                 icon = Icons.Filled.HourglassEmpty,
-                title = stringResource(R.string.privacy_encryption_summary),
+                title = summary,
                 color = tint,
+                value = status,
+                trailing = {
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                },
             )
         }
     }

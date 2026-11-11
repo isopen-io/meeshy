@@ -26,6 +26,7 @@
     <string name="location_precision_footnote">Bairro e Cidade: apenas a área é compartilhada, não o endereço exato.</string>
     <string name="pack_shop_state_embedded">Incluído</string>
     <string name="privacy_encryption_summary">A criptografia de ponta a ponta é escolhida por conversa e não se desfaz.</string>
+    <string name="privacy_encryption_status_soon">Em breve</string>
     <string name="privacy_read_receipts_subtitle">É recíproco: sem confirmação enviada, sem confirmação recebida.</string>
     <string name="purge_limitation_question">Por que não posso limpar %1$s?</string>
     <string name="purge_unattributed_note">Arquivos ainda no aparelho cuja publicação, story ou conversa de origem não está mais em cache. Não é possível vinculá-los a um domínio.</string>

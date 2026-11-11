@@ -110,6 +110,17 @@ class EpureReglagesReperesStringsTest {
     }
 
     @Test
+    fun `the encryption section still shows it is not available yet beside its irreversibility sentence`() {
+        assertThat(fr("privacy_encryption_status_soon")).isEqualTo("Bientôt disponible")
+        assertThat(fr("privacy_encryption_summary"))
+            .isEqualTo("Le chiffrement de bout en bout se choisit par conversation et ne se défait pas.")
+        Tree.locales.filter { it != "fr" }.forEach { locale ->
+            assertWithMessage("privacy_encryption_status_soon copié du français en $locale")
+                .that(Tree.entriesOf(locale).getValue("privacy_encryption_status_soon").text).isNotEqualTo("Bientôt disponible")
+        }
+    }
+
+    @Test
     fun `every new string exists in all seven locales and the french is never copied`() {
         val names = listOf("settings_privacy_calls_non_contacts_subtitle", "data_storage_cache_size")
         allLocales.forEach { locale ->

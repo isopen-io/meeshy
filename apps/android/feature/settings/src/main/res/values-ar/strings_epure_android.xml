@@ -26,6 +26,7 @@
     <string name="location_precision_footnote">الحي والمدينة: تتم مشاركة المنطقة فقط، وليس العنوان الدقيق.</string>
     <string name="pack_shop_state_embedded">مضمّنة</string>
     <string name="privacy_encryption_summary">يُختار التشفير من طرف إلى طرف لكل محادثة ولا يمكن التراجع عنه.</string>
+    <string name="privacy_encryption_status_soon">قريبًا</string>
     <string name="privacy_read_receipts_subtitle">متبادل: بدون إيصال مُرسل لا يصلك إيصال.</string>
     <string name="purge_limitation_question">لماذا لا يمكنني تفريغ %1$s؟</string>
     <string name="purge_unattributed_note">ملفات ما زالت على الجهاز ولم يعد المنشور أو القصة أو المحادثة الأصلية في ذاكرة التخزين المؤقت. لا يمكن ربطها بأي مجال.</string>

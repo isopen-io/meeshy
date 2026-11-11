@@ -26,6 +26,7 @@
     <string name="location_precision_footnote">Barrio y Ciudad: solo se comparte la zona, no la dirección exacta.</string>
     <string name="pack_shop_state_embedded">Incluido</string>
     <string name="privacy_encryption_summary">El cifrado de extremo a extremo se elige por conversación y no se deshace.</string>
+    <string name="privacy_encryption_status_soon">Próximamente</string>
     <string name="privacy_read_receipts_subtitle">Es recíproco: sin acuse enviado, no hay acuse recibido.</string>
     <string name="purge_limitation_question">¿Por qué no puedo vaciar %1$s?</string>
     <string name="purge_unattributed_note">Archivos que siguen en el dispositivo cuya publicación, historia o conversación de origen ya no está en caché. No se pueden vincular a ningún dominio.</string>

@@ -26,6 +26,7 @@
     <string name="location_precision_footnote">Neighborhood and City: only the area is shared, not the exact address.</string>
     <string name="pack_shop_state_embedded">Included</string>
     <string name="privacy_encryption_summary">End-to-end encryption is chosen per conversation and can\'t be undone.</string>
+    <string name="privacy_encryption_status_soon">Coming soon</string>
     <string name="privacy_read_receipts_subtitle">Works both ways: no receipt sent, no receipt received.</string>
     <string name="purge_limitation_question">Why can\'t I clear %1$s?</string>
     <string name="purge_unattributed_note">Files still on the device whose original post, story or conversation is no longer cached. They cannot be linked to any domain.</string>

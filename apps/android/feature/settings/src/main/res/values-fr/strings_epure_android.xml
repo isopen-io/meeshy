@@ -26,6 +26,7 @@
     <string name="location_precision_footnote">Quartier et Ville : seule la zone est transmise, pas l\'adresse exacte.</string>
     <string name="pack_shop_state_embedded">Inclus</string>
     <string name="privacy_encryption_summary">Le chiffrement de bout en bout se choisit par conversation et ne se défait pas.</string>
+    <string name="privacy_encryption_status_soon">Bientôt disponible</string>
     <string name="privacy_read_receipts_subtitle">Réciproque : sans accusé envoyé, pas d\'accusé reçu.</string>
     <string name="purge_limitation_question">Pourquoi ne puis-je pas vider %1$s ?</string>
     <string name="purge_unattributed_note">Fichiers encore sur l\'appareil dont la publication, la story ou la conversation d\'origine n\'est plus en cache. Impossible de les rattacher à un domaine.</string>
