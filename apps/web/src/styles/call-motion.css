@@ -12,7 +12,7 @@
    transformation tenue ferait de la capsule le bloc conteneur de son détail
    `fixed`, qui s'y écraserait. La CAPSULE, elle, entre et sort par une mise à
    l'échelle ancrée à son bord de fin (P9.8, #17509) : jouée par le moteur
-   (`useSwapPresence`, Web Animations), seul à pouvoir en faire un fondu court
+   (`HeldSwap`, Web Animations), seul à pouvoir en faire un fondu court
    sous « Réduire les animations » que la règle générale ne coupe pas ; la
    feuille n'y met que l'ancre. */
 [data-call-pill-text],
