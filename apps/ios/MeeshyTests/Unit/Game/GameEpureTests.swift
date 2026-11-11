@@ -52,7 +52,7 @@ final class GameEpureTests: XCTestCase {
         "game2.settings.celebrations.switch": "Signes des aïeux",
         "game2.settings.notifications.switch": "Notifications",
         "game2.settings.notifications.body": "Alliance, joute, voyage : au plus une par jour, sur tous tes appareils.",
-        "game2.settings.friends_league.switch": "Me retirer",
+        "game2.settings.friends_league.switch": "Me retirer de la joute des amis",
         "game2.settings.friends_league.body": "Classement de la semaine entre amis acceptés. T’en retirer vous masque les uns aux autres.",
         "game2.settings.visibility.body": "Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.",
         "game2.settings.hidden.body": "Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.",
@@ -105,7 +105,7 @@ final class GameEpureTests: XCTestCase {
         let catalog = try Self.catalog()
         let limit: [String: Int] = [
             "game2.settings.celebrations.switch": 30, "game2.settings.notifications.switch": 30,
-            "game2.settings.friends_league.switch": 30, "game2.league.pseudonym.invalid": 80,
+            "game2.settings.friends_league.switch": 40, "game2.league.pseudonym.invalid": 80,
             "game2.league.pseudonym.hint_change": 60, "game2.atlas.empty": 80, "game2.showcase.empty": 120,
             "game.flame_panel.freeze_full": 60, "game.photo.camera.unavailable": 100,
             "game.rules.concepts_intro": 60, "game2.atlas.intro": 100, "game2.league.friends.body": 100,
@@ -117,6 +117,22 @@ final class GameEpureTests: XCTestCase {
             let value = try XCTUnwrap(catalog[key]?["fr"], key)
             XCTAssertLessThanOrEqual(value.count, maximum, "\(key) : \(value)")
         }
+    }
+
+    /// Un commutateur se lit SEUL au lecteur d'écran, hors de son titre de carte : « Me retirer » ne dit pas de quoi.
+    /// Le libellé nomme la joute dont on se retire, dans chaque langue.
+    func test_friendsLeagueSwitch_namesWhatYouLeave_whenReadWithoutItsCardTitle() throws {
+        let catalog = try Self.catalog()
+        let title = try XCTUnwrap(catalog["game2.settings.friends_league.title"])
+        let switchLabel = try XCTUnwrap(catalog["game2.settings.friends_league.switch"])
+        let joust: [String: String] = ["fr": "joute des amis", "en": "Friends’ Joust", "es": "Justa de los amigos", "pt-BR": "Torneio dos amigos",
+                                       "de": "Turnier der Freunde", "it": "Torneo degli amici", "ar": "مبارزة الأصدقاء"]
+        for (language, name) in joust {
+            XCTAssertTrue((title[language] ?? "").lowercased().contains(name.lowercased()), "\(language) : le titre nomme la joute")
+            XCTAssertTrue((switchLabel[language] ?? "").lowercased().contains(name.lowercased()), "\(language) : « \(switchLabel[language] ?? "") » ne dit pas de quoi l'on se retire")
+        }
+        let view = try code("Meeshy/Features/Game/Wave2/GameSettingsViews.swift")
+        XCTAssertTrue(view.contains("label: GameText.settingsFriendsLeagueSwitch"))
     }
 
     // MARK: - Ce qui sort du texte : la redite, jamais la conséquence

@@ -280652,43 +280652,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الانسحاب"
+            "value": "الانسحاب من مبارزة الأصدقاء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mich zurückziehen"
+            "value": "Mich vom Turnier der Freunde zurückziehen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opt me out"
+            "value": "Opt out of the Friends’ Joust"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retirarme"
+            "value": "Retirarme de la Justa de los amigos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Me retirer"
+            "value": "Me retirer de la joute des amis"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ritirami"
+            "value": "Ritirami dal Torneo degli amici"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Me retirar"
+            "value": "Me retirar do Torneio dos amigos"
           }
         }
       }

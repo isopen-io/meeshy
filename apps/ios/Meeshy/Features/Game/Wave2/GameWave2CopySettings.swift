@@ -55,5 +55,5 @@ extension GameText {
 extension GameText {
     static var settingsFriendsLeagueTitle: String { String(localized: "game2.settings.friends_league.title", defaultValue: "Joute des amis", bundle: .main) }
     static var settingsFriendsLeagueBody: String { String(localized: "game2.settings.friends_league.body", defaultValue: "Classement de la semaine entre amis acceptés. T’en retirer vous masque les uns aux autres.", bundle: .main) }
-    static var settingsFriendsLeagueSwitch: String { String(localized: "game2.settings.friends_league.switch", defaultValue: "Me retirer", bundle: .main) }
+    static var settingsFriendsLeagueSwitch: String { String(localized: "game2.settings.friends_league.switch", defaultValue: "Me retirer de la joute des amis", bundle: .main) }
 }
