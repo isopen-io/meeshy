@@ -10,24 +10,22 @@ import os
 extension CallView {
     // MARK: - Caption lines (#8396)
 
-    /// Les phrases de l'appel, résolues pour l'affichage : Prisme, couleur de
-    /// la personne, étiquette « EN → FR ». Le réglage Traduit/Original du
-    /// bouton Sous-titres (`showOriginalText`) vaut pour toutes les lignes ;
-    /// un toucher sur une phrase l'inverse pour elle seule.
-    func captionLine(for segment: CallTranscriptionSegment) -> CallCaptionLine {
+    /// Les phrases de l'appel, résolues pour l'affichage (Prisme, couleur, « EN → FR »). Traduit/Original :
+    /// la bande suit le bouton Sous-titres, le journal sa propre bascule (#17678) ; un toucher inverse une phrase.
+    func captionLine(for segment: CallTranscriptionSegment, on surface: CallCaptionsSurface = .band) -> CallCaptionLine {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
         return CallCaptionLine.make(
             segment: segment,
             isLocal: segment.speakerId == localUserId,
             speakerName: speakerName(for: segment, localUserId: localUserId),
-            prefersOriginal: showOriginalText,
+            prefersOriginal: surface.prefersOriginal(bandOriginal: showOriginalText, journalOriginal: journalShowsOriginal),
             isRevealed: revealedCaptionIds.contains(segment.id),
             readerPrism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         )
     }
 
-    var journal: CallJournalComposer {
-        CallJournalComposer(segments: transcriptionService.displayedSegments, captures: transcriptionService.captureJournal.marks, callStartedAt: callManager.callStartDate, speechLine: captionLine)
+    func journal(on surface: CallCaptionsSurface) -> CallJournalComposer {
+        CallJournalComposer(segments: transcriptionService.displayedSegments, captures: transcriptionService.captureJournal.marks, callStartedAt: callManager.callStartDate, speechLine: { captionLine(for: $0, on: surface) })
     }
 
     /// Le nom du locuteur : le mien, puis le roster du groupe (source de
@@ -58,8 +56,9 @@ extension CallView {
     /// la pilule (`hasOwnGlass: false`, #17343), rangée ou non (le même verre se resserre,
     /// #17532) ; seuls ceux d'un mode (Effets, Montage) ont un verre à eux.
     func captionsBand(hasOwnGlass: Bool, opensJournal: Bool = true) -> some View {
-        CallCaptionsBand(
-            lines: journal.items.suffix(2).map(journal.line),
+        let band = journal(on: .band)
+        return CallCaptionsBand(
+            lines: band.items.suffix(2).map(band.line),
             hasOwnGlass: hasOwnGlass,
             onToggleOriginal: { toggleOriginal(of: $0) },
             onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil
@@ -87,10 +86,10 @@ extension CallView {
     /// #17343 — le journal s'ouvre DANS la pilule, à la place des sous-titres, et y
     /// défile ; sa hauteur est une part de la fenêtre (`CallJournalSizing`).
     var journalPanelRows: some View {
-        let composed = journal
+        let composed = journal(on: .journal)
         return CallJournalPanel(
             items: composed.items, line: composed.line,
-            showsOriginal: $showOriginalText,
+            showsOriginal: $journalShowsOriginal,
             height: CallJournalSizing.height(windowHeight: DeviceLayout.windowSize.height),
             onToggleOriginal: { toggleOriginal(of: $0) },
             onClose: closePanel

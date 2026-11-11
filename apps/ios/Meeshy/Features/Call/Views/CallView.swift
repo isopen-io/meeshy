@@ -39,6 +39,7 @@ struct CallView: View {
     /// et aucun masquage ne tombe sous un doigt posé.
     @State var showTranscript = false
     @State var showOriginalText = false
+    @State var journalShowsOriginal = false
     /// Progression du morph PiP (0 = plein écran, 1 = contracté vers la
     /// bannière). Piloté par `collapseIntoPip()` (réduction) et par
     /// `onAppear` (expansion depuis la bannière) — voir le trio
