@@ -576,7 +576,7 @@ extension CallView {
 struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {
     let peerUserId: String?
     let relayedSpeaking: Bool?
-    let sampleLevel: () async -> Double?
+    let sampleLevel: @MainActor () async -> Double?
     @ViewBuilder let avatar: (String) -> Avatar
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
