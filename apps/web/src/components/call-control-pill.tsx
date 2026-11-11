@@ -5,7 +5,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import { PILL_TEXT_WIDTH_CLASS, pillStaysWhenChromeStowed, type CallPillText } from '@/lib/calls/call-pill-text';
+import { PILL_TEXT_WIDTH_CLASS, type CallPillText } from '@/lib/calls/call-pill-text';
 import { usePillGlass } from '@/lib/calls/use-pill-motion';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { CallRowsKit } from '@/components/call-control-actions';
@@ -49,10 +49,9 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * transparent autour d'elle garde les commandes au lieu de les effacer.
  */
 
-const CallActionRows = lazy(() => import('./call-control-actions').then((module) => ({ default: module.CallActionRows })));
-
-/* Ce qui quitte le verre y repart en fondu : le double de la sortie vit dans son chunk, que seul un verre qui grandit paie (préchargé avec les rangées, `call-screen.tsx`). */
-const DeckContent = lazy(() => import('./call-deck-motion').then((module) => ({ default: module.DeckContent })));
+/* Ce que la pilule qui a grandi porte — les rangées ou le panneau, et le double qui en repart en fondu — vit dans son chunk, préchargé avec l'appel (`call-screen.tsx`). */
+export const loadDeck = () => import('./call-deck-motion');
+const Deck = lazy(() => loadDeck().then((module) => ({ default: module.Deck })));
 
 const CallDevicesSheet = lazy(() => import('./call-devices-sheet').then((module) => ({ default: module.CallDevicesSheet })));
 
@@ -76,7 +75,7 @@ type PillProps = {
   readonly kit: CallRowsKit;
   /** Le panneau ouvert, À LA PLACE des rangées. */
   readonly panel: ReactNode;
-  /** Les commandes sont rangées (un toucher sur la scène) : la pilule qui porte des sous-titres reste, resserrée autour d'eux. */
+  /** Les commandes sont rangées (un toucher sur la scène) et la pilule porte des sous-titres (`pillStaysWhenChromeStowed`) : elle reste, resserrée autour d'eux. */
   readonly stowed?: boolean;
 };
 
@@ -84,38 +83,24 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
   const [devicesOpen, setDevicesOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const skin = useRef<HTMLSpanElement>(null);
-  const keeps = stowed && pillStaysWhenChromeStowed(text);
-  usePillGlass(box, skin, keeps);
-  const away = keeps ? ({ 'data-call-pill-rest': '', inert: true, 'aria-hidden': true } as const) : { 'data-call-pill-rest': '' };
+  usePillGlass(box, skin, stowed);
+  const away = { 'data-call-pill-rest': '', inert: stowed || undefined, 'aria-hidden': stowed || undefined };
   return (
     <>
       <div
         ref={box}
         className={`relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${text !== 'none' ? PILL_TEXT_WIDTH_CLASS : grown ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
         data-call-control-pill={grown ? 'grown' : 'pill'}
-        data-call-pill-stowed={keeps ? '' : undefined}
+        data-call-pill-stowed={stowed ? '' : undefined}
         data-call-chrome-keep=""
       >
         <span ref={skin} aria-hidden="true" className={`${prominent ? 'glass-call-prominent' : 'glass-call'} absolute inset-0 -z-10 rounded-sheet`} data-call-pill-skin="" />
         {grown ? (
-          <>
-            <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="" {...away}>
-              <Suspense fallback={null}>
-                <DeckContent key={panel === null ? 'rows' : 'panel'} kind={panel === null ? 'rows' : 'panel'} box={box}>
-                  {panel === null ? (
-                    <Suspense fallback={null}>
-                      <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} />
-                    </Suspense>
-                  ) : (
-                    <div data-call-pill-text={text}>{panel}</div>
-                  )}
-                </DeckContent>
-              </Suspense>
-            </div>
-            <hr className="mx-2 my-2 border-0 border-t border-media-hairline" {...away} />
-          </>
+          <Suspense fallback={null}>
+            <Deck call={call} language={language} rows={rows} panels={panels} kit={kit} panel={panel} text={text} box={box} away={away} />
+          </Suspense>
         ) : null}
-        {grown && !keeps ? null : captions}
+        {grown && !stowed ? null : captions}
         <div className="flex items-center justify-center gap-2" {...away}>
           <CallButton
             label={translate(language, expanded ? 'call.more.hide' : 'call.more.show')}

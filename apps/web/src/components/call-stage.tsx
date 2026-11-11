@@ -297,7 +297,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
         <div
           ref={cornerFrame}
           className={`absolute z-10 ${composed ? 'pointer-events-none opacity-0' : ''}`}
-          style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transition: 'scale 300ms ease-out', transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
+          style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
           {...(composed ? { 'aria-hidden': true, inert: true } : {})}
           data-call-corner-frame=""
           data-call-self-tile-composed={composed ? '' : undefined}

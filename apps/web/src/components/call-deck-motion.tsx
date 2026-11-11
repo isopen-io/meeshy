@@ -1,5 +1,11 @@
 import { useLayoutEffect, useRef, type ReactNode, type RefObject } from 'react';
 
+import { CallActionRows, type CallRowsKit } from '@/components/call-control-actions';
+import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
+import type { CallPillText } from '@/lib/calls/call-pill-text';
+import type { CallPanels } from '@/lib/calls/call-screen-layer';
+import type { ActiveCall } from '@/lib/calls/call-store';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { PILL_TEXT_EXIT } from '@/lib/calls/call-pill-text-exit';
 import { STOW_REDUCED_MS } from '@/lib/calls/call-pill-motion';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
@@ -32,7 +38,7 @@ function leaveAsGhost(node: HTMLElement, box: HTMLElement): void {
   leaving.onfinish = () => ghost.remove();
 }
 
-export function DeckContent({ kind, box, children }: { readonly kind: 'rows' | 'panel'; readonly box: RefObject<HTMLElement | null>; readonly children: ReactNode }) {
+function DeckContent({ kind, box, children }: { readonly kind: 'rows' | 'panel'; readonly box: RefObject<HTMLElement | null>; readonly children: ReactNode }) {
   const node = useRef<HTMLDivElement>(null);
   useLayoutEffect(
     () => () => {
@@ -44,5 +50,39 @@ export function DeckContent({ kind, box, children }: { readonly kind: 'rows' | '
     <div ref={node} className="flex flex-col gap-2" data-call-deck-content={kind}>
       {children}
     </div>
+  );
+}
+
+type DeckProps = {
+  readonly call: ActiveCall;
+  readonly language: InterfaceLanguage;
+  readonly rows: readonly CallFamilyRow[];
+  readonly panels: CallPanels;
+  readonly kit: CallRowsKit;
+  /** Le panneau ouvert, À LA PLACE des rangées. */
+  readonly panel: ReactNode;
+  readonly text: CallPillText;
+  /** Le verre de la pilule, où le double de la sortie se pose. */
+  readonly box: RefObject<HTMLElement | null>;
+  /** Le verre rangé autour des sous-titres : le deck en part, inerte et muet. */
+  readonly away: Readonly<Record<string, unknown>>;
+};
+
+/**
+ * CE QUE LA PILULE QUI A GRANDI PORTE AU-DESSUS DE SA RANGÉE DE BASE (#8578) — les rangées
+ * d'un groupe OU le panneau ouvert, puis le séparateur. Chargé avec les rangées : l'écran
+ * d'appel ne paie que son `import()` (`budgets.json` › `call_deck_motion`).
+ */
+export function Deck({ call, language, rows, panels, kit, panel, text, box, away }: DeckProps) {
+  const kind = panel === null ? 'rows' : 'panel';
+  return (
+    <>
+      <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="" {...away}>
+        <DeckContent key={kind} kind={kind} box={box}>
+          {panel === null ? <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} /> : <div data-call-pill-text={text}>{panel}</div>}
+        </DeckContent>
+      </div>
+      <hr className="mx-2 my-2 border-0 border-t border-media-hairline" {...away} />
+    </>
   );
 }

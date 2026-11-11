@@ -696,6 +696,25 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
+  test('duo vidéo, chrome rangé : le doigt posé sur ma vignette la focalise (Chromium), et le toucher rend les contrôles SANS les ranger aussitôt ni permuter (G1.9, loi 15)', () => {
+    const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } });
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    tapStage(view);
+    expect(chrome()).toBe('hidden');
+    const tile = view.find('[data-call-corner]') as HTMLElement;
+    act(() => {
+      tile.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 5, clientX: 4, clientY: 4, button: 0, bubbles: true }));
+      tile.focus();
+    });
+    act(() => {
+      tile.dispatchEvent(new PointerEvent('pointerup', { pointerId: 5, clientX: 4, clientY: 4, button: 0, bubbles: true }));
+      tile.click();
+    });
+    expect(chrome()).toBe('shown');
+    expect(view.find('[data-call-corner]')?.hasAttribute('data-call-self-tile')).toBe(true);
+    view.done();
+  });
+
   test('Échap, un panneau ouvert, le ferme SANS réduire l’appel — même quand le focus a quitté le panneau (#8618)', async () => {
     const original = callActions.minimize;
     const minimized: number[] = [];

@@ -151,6 +151,12 @@
     visibility 0s linear 0.3s;
 }
 
+/* Ma vignette se range par une échelle ancrée à son coin (G1.11, `selfTileRestingFactor`) :
+   la transformation seule, jamais sa largeur ni sa hauteur. */
+[data-call-corner-frame] {
+  transition: scale 0.3s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-call-chrome='hidden'] [data-call-stow],
   [data-call-stow][data-call-stowed],

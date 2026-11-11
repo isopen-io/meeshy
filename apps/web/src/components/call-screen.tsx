@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, 
 import { useStore } from 'zustand/react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
-import { CallControlPill } from '@/components/call-control-pill';
+import { CallControlPill, loadDeck } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
 import { CallIncomingAnswer } from '@/components/call-incoming-answer';
 import { RoundButton } from '@/components/call-round-button';
@@ -119,6 +119,9 @@ const CallCaptionsSlot = lazy(() => loadCaptions().then((module) => ({ default: 
 
 const loadActions = once(() => import('./call-control-actions'));
 
+/* La pastille de l'appel réduit (`call-floating-pill.tsx`) : chargée dès que l'appel vit, car partager l'écran réduit l'appel aussitôt (#16664). */
+const loadFloatingPill = once(() => import('./call-floating-pill'));
+
 /* Les rails du duo (#17327) : leur cadre, leur glissement et la loi qui les écarte de ma vignette (#17429) sont un chunk à part (`budgets.json` › `call_rails`), chargé dès que l'appel vit. */
 const loadRails = once(() => import('./call-rails'));
 const CallRails = lazy(() => loadRails().then((module) => ({ default: module.CallRails })));
@@ -175,7 +178,7 @@ const CallJournalInColumn = lazy(() => loadJournal().then((module) => ({ default
  */
 const PREFETCH: readonly (() => Promise<unknown>)[] = [
   loadActions,
-  () => import('./call-deck-motion'),
+  loadDeck,
   loadRails,
   loadEffectsMode,
   loadMontageMode,
@@ -186,6 +189,7 @@ const PREFETCH: readonly (() => Promise<unknown>)[] = [
   () => import('./call-devices-sheet'),
   () => import('./call-quality-detail'),
   () => import('./call-waiting-banner'),
+  loadFloatingPill,
 ];
 
 const prefetchCallChunks = (): void => PREFETCH.forEach((load) => void load().catch(() => undefined));
@@ -389,6 +393,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     if (!live) return undefined;
     void loadActions().catch(() => undefined);
     void loadRails().catch(() => undefined);
+    void loadFloatingPill().catch(() => undefined);
     return whenIdle(prefetchCallChunks);
   }, [live]);
 
@@ -676,7 +681,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                   panels={panels}
                   kit={ROWS_KIT}
                   panel={chrome.panel === null ? null : <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense>}
-                  stowed={hidden}
+                  stowed={stowedWithCaptions}
                 />
               </div>
             ) : (
