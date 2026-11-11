@@ -114,7 +114,7 @@ const CONCURRENCE = { web: 2, android: 1, ios: 1 }
 const PIED = ATTR ? `Terminer chaque message de commit par ces lignes, telles quelles :\n${ATTR}` : 'Aucune ligne d’attribution dans les commits.'
 const COMMUN = l => {
   const P = PLATEFORME[l.p]
-  return `Dépôt ${GH}, clone ${REPO}. Ton worktree : ${WT(l)} (s'il n'existe pas : git -C ${REPO} fetch origin ${BASE} && git -C ${REPO} worktree add ${WT(l)} -B ${BRANCHE(l)} origin/${BASE} — si origin/${BRANCHE(l)} existe déjà, pars d'elle et refusionne origin/${BASE} ; s'il existe, refusionne origin/${BASE} dedans). Branche : ${BRANCHE(l)}. Ne travaille QUE dans ce worktree, ne pousse QUE cette branche (git push -u origin ${BRANCHE(l)}).
+  return `Dépôt ${GH}, clone ${REPO}. Ton worktree : ${WT(l)} (s'il n'existe pas : git -C ${REPO} fetch origin ${BASE} && git -C ${REPO} worktree add ${WT(l)} -B ${BRANCHE(l)} origin/${EMPILE(l) ? 'claude/epure-socle' : BASE}${EMPILE(l) ? ' (après git fetch origin claude/epure-socle : cette branche porte le composant (i) natif, pas encore compilé ni fusionné, puis refusionne origin/' + BASE + ')' : ''} — si origin/${BRANCHE(l)} existe déjà, pars d'elle et refusionne origin/${BASE} ; s'il existe, refusionne origin/${BASE} dedans). Branche : ${BRANCHE(l)}. Ne travaille QUE dans ce worktree, ne pousse QUE cette branche (git push -u origin ${BRANCHE(l)}).
 ${PIED}
 PLATEFORME : ${P.nom}.
 - Le (i) : ${P.info}.
