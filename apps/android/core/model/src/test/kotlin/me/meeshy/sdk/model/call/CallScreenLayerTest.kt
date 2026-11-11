@@ -111,6 +111,16 @@ class CallScreenLayerTest {
     }
 
     @Test
+    fun `an option drawn in the pill leaves the base row bare, the menu and a sheet caption it`() {
+        assertThat(CallScreenLayer.Panel(CallScreenPanel.Record).captionsBaseRow).isFalse()
+        assertThat(CallScreenLayer.Panel(CallScreenPanel.React).captionsBaseRow).isFalse()
+        assertThat(CallScreenLayer.Panel(CallScreenPanel.Journal).captionsBaseRow).isFalse()
+        assertThat(CallScreenLayer.Menu.captionsBaseRow).isTrue()
+        assertThat(CallScreenLayer.MenuOverJournal.captionsBaseRow).isTrue()
+        assertThat(CallScreenLayer.Panel(CallScreenPanel.People).captionsBaseRow).isTrue()
+    }
+
+    @Test
     fun `add people stays a sheet over the family rows`() {
         val people = CallScreenLayer.Panel(CallScreenPanel.People)
         assertThat(people.pillPanel).isNull()

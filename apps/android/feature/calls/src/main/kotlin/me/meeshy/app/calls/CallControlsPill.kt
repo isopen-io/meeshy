@@ -1,15 +1,19 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -89,7 +93,6 @@ internal fun CallControlsPill(
         scaleOut(targetScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
     val grow = if (reduceMotion) EnterTransition.None else expandVertically(tween(UNFOLD_MILLIS), expandFrom = Alignment.Bottom)
     val shrink = if (reduceMotion) ExitTransition.None else shrinkVertically(tween(UNFOLD_MILLIS), shrinkTowards = Alignment.Bottom)
-    val panel = layer.pillPanel
     val held = remember { HeldLayer() }
     if (expanded) held.layer = layer
     CallControlsGlass(modifier = modifier.widthIn(max = CallPillWidth.maxWidthDp(pillText).dp).fillMaxWidth()) {
@@ -100,19 +103,18 @@ internal fun CallControlsPill(
         ) {
             // What is leaving (a panel, the rows) keeps its content until it has faded: it does not vanish at once.
             val shownLayer = if (expanded) layer else held.layer
-            val shown = shownLayer.pillPanel
             Column {
-                if (shown == CallScreenPanel.Journal) {
-                    panelContent(CallScreenPanel.Journal)
-                } else if (shown != null) {
-                    CallPillPanel(
-                        title = items[shown.action]?.let { stringResource(it.labelRes) }.orEmpty(),
-                        onBack = onBackToMenu,
-                        onClose = onClosePanel,
-                    ) { panelContent(shown) }
-                } else if (shownLayer.showsFamilyRows) {
-                    FamilyRows(rows = rows, items = items, isOnHold = state.isOnHold, onAction = onAction)
-                }
+                UnfoldedContent(
+                    panel = shownLayer.pillPanel,
+                    reduceMotion = reduceMotion,
+                    rows = rows,
+                    items = items,
+                    isOnHold = state.isOnHold,
+                    onAction = onAction,
+                    onBackToMenu = onBackToMenu,
+                    onClosePanel = onClosePanel,
+                    panelContent = panelContent,
+                )
                 CallPillHairline()
             }
         }
@@ -132,7 +134,44 @@ internal fun CallControlsPill(
             enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale + grow,
             exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink + foldScale,
         ) {
-            BaseRow(state, captioned = expanded && panel != CallScreenPanel.Journal, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
+            BaseRow(state, captioned = expanded && layer.captionsBaseRow, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
+        }
+    }
+}
+
+/**
+ * G3.2 — what the unfolded pill holds above its base row: an option drawn in the pill, the journal, or (on a group) the
+ * family rows. They swap in the SAME glass by a cross-fade while the glass resizes, never at once; « reduce animations »
+ * keeps the fade only and the size follows at once. Mirrors iOS `callControlsPill` (`.animation(_, value: layer)`).
+ */
+@Composable
+private fun UnfoldedContent(
+    panel: CallScreenPanel?,
+    reduceMotion: Boolean,
+    rows: List<CallPillRowContent>,
+    items: Map<CallAction, CallPillItem>,
+    isOnHold: Boolean,
+    onAction: (CallAction) -> Unit,
+    onBackToMenu: () -> Unit,
+    onClosePanel: () -> Unit,
+    panelContent: @Composable (CallScreenPanel) -> Unit,
+) {
+    AnimatedContent(
+        targetState = panel,
+        transitionSpec = {
+            val swap = fadeIn(tween(UNFOLD_MILLIS)) togetherWith fadeOut(tween(UNFOLD_MILLIS))
+            swap using SizeTransform(clip = false) { _, _ -> if (reduceMotion) snap() else tween(UNFOLD_MILLIS) }
+        },
+        label = "callPillContent",
+    ) { shown ->
+        when (shown) {
+            null -> FamilyRows(rows = rows, items = items, isOnHold = isOnHold, onAction = onAction)
+            CallScreenPanel.Journal -> panelContent(CallScreenPanel.Journal)
+            else -> CallPillPanel(
+                title = items[shown.action]?.let { stringResource(it.labelRes) }.orEmpty(),
+                onBack = onBackToMenu,
+                onClose = onClosePanel,
+            ) { panelContent(shown) }
         }
     }
 }
