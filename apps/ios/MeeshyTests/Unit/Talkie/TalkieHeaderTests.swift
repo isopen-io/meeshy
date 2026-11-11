@@ -47,7 +47,9 @@ final class TalkieHeaderTests: XCTestCase {
         XCTAssertFalse(TalkieOfferRule.reachable(links: [link("a", .friend)], role: "USER"))
         XCTAssertTrue(TalkieOfferRule.reachable(links: [link("a", .friend), link("b", .close)], role: "USER"))
         XCTAssertTrue(TalkieOfferRule.reachable(links: [], role: "MODERATOR"))
-        XCTAssertFalse(TalkieOfferRule.reachable(links: [], role: "AUDIT"))
+        XCTAssertTrue(TalkieOfferRule.reachable(links: [], role: "AUDIT"))
+        XCTAssertTrue(TalkieOfferRule.reachable(links: [], role: "ANALYST"))
+        XCTAssertFalse(TalkieOfferRule.reachable(links: [], role: "AGENT"))
         XCTAssertFalse(TalkieOfferRule.reachable(links: [], role: nil))
     }
 
