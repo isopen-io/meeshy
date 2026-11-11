@@ -149,7 +149,7 @@ public fun MeeshyGlassButtonFace(
             drawContent()
             if (sourceFocused.value) {
                 val width = MeeshyGlassButtonRecipe.FOCUS_RING_WIDTH_DP.dp.toPx()
-                val radius = minOf(size.width, size.height) / 2f + MeeshyGlassButtonRecipe.FOCUS_RING_OFFSET_DP.dp.toPx() + width / 2f
+                val radius = this.size.minDimension / 2f + MeeshyGlassButtonRecipe.FOCUS_RING_OFFSET_DP.dp.toPx() + width / 2f
                 drawCircle(ringColor, radius = radius, style = Stroke(width = width))
             }
         }
