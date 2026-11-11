@@ -658,6 +658,7 @@ const en = {
   'a11y.floating.rung.discover.requests.other': 'Discover, {count} requests received',
 
   'links.hub.share.title': 'Sharing',
+  'links.hub.share.description': 'Invite contacts to join your conversations',
   'links.hub.share.create': 'Create a share link',
   'links.share.back': 'Back to My links',
   'links.share.stats.total': 'Links',
@@ -667,6 +668,7 @@ const en = {
   'links.share.joined.other': '{count} joined',
   'links.share.copy': 'Copy link',
   'links.share.empty.title': 'No share links',
+  'links.share.empty.subtitle': 'Create a link to invite people into a conversation',
   'links.share.loading': 'Loading links',
   'links.share.allLoaded': 'All your links are loaded',
   'links.status.active': 'Active',

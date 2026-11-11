@@ -24,14 +24,14 @@ import { ACCESS_RULES, PERMISSION_RULES, RulesSection } from './share-link-form'
 import ShareLinkNewScreen from './share-link-new';
 
 /**
- * L'ÉPURE DES ÉCRANS DE LIENS (#17595, épure #17584) — chaque entrée se NOMME,
- * l'explication passe derrière un (i) dont le nom est la QUESTION, et aucun
- * texte n'est perdu : ce qui quitte l'écran reste lu par le lecteur d'écran.
- * Les témoins lisent ce que l'utilisateur lit et ce qu'il peut atteindre.
+ * L'ÉPURE DES ÉCRANS DE LIENS (#17595, épure #17584) — chaque entrée se NOMME
+ * d'un mot du lexique et rien ne se dit deux fois. Les REPÈRES, eux, restent
+ * visibles (règle 7, #17641) : `links-reperes.test.tsx` les tient. Seul le détail
+ * SECONDAIRE passe derrière un (i) dont le nom est la QUESTION.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-const { mount, unmountAll, click } = createActMounter();
+const { mount, unmountAll } = createActMounter();
 
 beforeAll(async () => {
   await Promise.all([loadInterfaceCatalog('fr'), loadLinkFamiliesCatalog('fr'), loadInviteCatalog('fr')]);
@@ -70,31 +70,9 @@ describe('le hub /links', () => {
     expect(text).not.toContain('Partagez, suivez');
   });
 
-  test('chaque famille se NOMME par un mot du lexique, sans paraphrase dessous', async () => {
+  test('chaque famille se NOMME par un mot du lexique', async () => {
     const host = await mount(<LinksScreen />);
     expect([...host.querySelectorAll('[data-links-family-title]')].map((title) => title.textContent)).toEqual(['Partage', 'Suivi', 'Communautés', 'Parrainage']);
-    const text = seen(host).join(' | ');
-    expect(text).not.toContain('Invitez des contacts');
-    expect(text).not.toContain('Gérez les liens d’invitation');
-    expect(text).not.toContain('Suivez les performances');
-    expect(text).not.toContain('Invitez votre réseau');
-  });
-
-  test('suivi et parrainage gardent leur explication derrière un (i) en forme de question, lue repliée, ouverte au toucher', async () => {
-    const host = await mount(<LinksScreen />);
-    const tracking = infoButton(host, 'À quoi sert un lien de suivi ?');
-    const note = controlledBy(tracking);
-    expect(note?.textContent).toBe('Suivez les performances de vos liens de référence');
-    expect(note?.className).toContain('sr-only');
-    expect(infoButton(host, 'Que fait un lien de parrainage ?')).toBeDefined();
-    await click(tracking);
-    expect(tracking.getAttribute('aria-expanded')).toBe('true');
-    expect(controlledBy(tracking)?.className).not.toContain('sr-only');
-  });
-
-  test('un libellé qui se comprend seul n’a pas de (i) : ni le partage ni les communautés', async () => {
-    const host = await mount(<LinksScreen />);
-    expect(host.querySelectorAll('button[aria-expanded]')).toHaveLength(2);
   });
 
   test('la création et l’ouverture de chaque famille restent atteintes', async () => {
@@ -104,19 +82,17 @@ describe('le hub /links', () => {
   });
 });
 
-describe('les états vides tiennent en une ligne et une action', () => {
-  test('liens de partage : un titre et le bouton, aucun sous-titre', () => {
+describe('les états vides', () => {
+  test('un titre, une phrase et le bouton — rien de plus', () => {
     const html = renderToStaticMarkup(<ShareLinksEmpty language="fr" />);
     expect(html).toContain('Aucun lien de partage');
-    expect(html).not.toContain('Créez un lien pour inviter');
-    expect(html.match(/<p[ >]/gu)).toHaveLength(1);
+    expect(html.match(/<p[ >]/gu)).toHaveLength(2);
     expect(html).toContain('href="/links/share/new"');
-  });
-
-  test('les trois autres familles : le même gabarit, sans sous-titre', () => {
-    const html = renderToStaticMarkup(<FamilyEmpty family="tracking" glyph={null} title="Aucun lien de suivi" cta={{ to: 'myTrackingLinkNew', label: 'Créer un lien de suivi' }} />);
-    expect(html.match(/<p[ >]/gu)).toHaveLength(1);
-    expect(html).toContain('href="/links/tracking/new"');
+    const family = renderToStaticMarkup(
+      <FamilyEmpty family="tracking" glyph={null} title="Aucun lien de suivi" subtitle="Créez un lien pour suivre vos clics et vos campagnes" cta={{ to: 'myTrackingLinkNew', label: 'Créer un lien de suivi' }} />,
+    );
+    expect(family.match(/<p[ >]/gu)).toHaveLength(2);
+    expect(family).toContain('href="/links/tracking/new"');
   });
 });
 
@@ -150,7 +126,7 @@ describe('le parrainage', () => {
 });
 
 describe('la création d’un lien de partage', () => {
-  test('les sections portent le verbe, les rangées sont des noms, rien ne paraphrase', async () => {
+  test('les sections portent le verbe, les rangées sont des noms, aucun sous-titre ne répète son titre', async () => {
     const host = await mount(<ShareLinkNewScreen />);
     const text = seen(host);
     for (const wanted of ['Demander aux invités', 'Autoriser', 'Compte Meeshy', 'Pseudo', 'E-mail', 'Date de naissance', 'Messages', 'Images', 'Fichiers', 'Historique', 'Choisir', 'Description', 'Créer le lien']) {
@@ -166,21 +142,10 @@ describe('la création d’un lien de partage', () => {
       'Choisir un groupe ou une communauté',
       'Créer le lien de partage',
       'Ce que les visiteurs doivent fournir',
-      'Ce que les invités anonymes peuvent faire',
-      'Contrôlez l’audience',
-      'Les invités peuvent',
-      'Seuls les membres Meeshy',
       'Le visiteur doit',
     ]) {
       expect(joined).not.toContain(gone);
     }
-  });
-
-  test('la date de naissance garde son explication derrière un (i) qui est une question', async () => {
-    const host = await mount(<ShareLinkNewScreen />);
-    const button = infoButton(host, 'À quoi sert la date de naissance ?');
-    expect(controlledBy(button)?.textContent).toBe('Permet le contrôle d’âge');
-    expect(controlledBy(button)?.className).toContain('sr-only');
   });
 
   test('« Choisir » se lit seul à l’écran, mais le lecteur d’écran entend ce qu’on choisit', async () => {
@@ -188,15 +153,6 @@ describe('la création d’un lien de partage', () => {
     const choice = host.querySelector('button[aria-haspopup="dialog"]');
     expect(choice?.textContent).toBe('Choisir');
     expect(choice?.getAttribute('aria-label')).toBe('Choisir une conversation');
-  });
-
-  test('« Autoriser » dit derrière un (i) à qui s’appliquent ses bascules : aux invités sans compte', async () => {
-    const host = await mount(<ShareLinkNewScreen />);
-    const button = infoButton(host, 'À qui s’appliquent ces autorisations ?');
-    expect(controlledBy(button)?.textContent).toBe('Aux invités qui rejoignent sans compte Meeshy.');
-    expect(seen(host).join(' | ')).not.toContain('sans compte Meeshy');
-    await click(button);
-    expect(seen(host)).toContain('Aux invités qui rejoignent sans compte Meeshy.');
   });
 
   test('les huit bascules restent atteintes et nommées par leur mot court', () => {
@@ -215,22 +171,21 @@ describe('la création d’un lien de partage', () => {
 });
 
 describe('la création d’un lien de suivi', () => {
-  test('URL, Nom et Jeton se disent une fois, le détail passe derrière trois (i)', async () => {
+  test('URL, Nom et Jeton se disent une fois', async () => {
     const host = await mount(<MyTrackingLinkNewScreen />);
     const text = seen(host);
     for (const wanted of ['URL', 'Nom', 'Jeton', 'Créer le lien']) expect(text).toContain(wanted);
     const joined = text.join(' | ');
-    for (const gone of ['URL de destination', 'Nom interne', 'Jeton personnalisé', 'Jeton (facultatif)', 'Laissez vide', 'Pour savoir d’où viennent', 'Créer le lien de suivi']) {
+    for (const gone of ['URL de destination', 'Nom interne', 'Jeton personnalisé', 'Jeton (facultatif)', 'Créer le lien de suivi']) {
       expect(joined).not.toContain(gone);
     }
-    expect(controlledBy(infoButton(host, 'À quoi servent les paramètres UTM ?'))?.textContent).toBe('Pour savoir d’où viennent vos clics');
-    expect(controlledBy(infoButton(host, 'Que devient un jeton laissé vide ?'))?.textContent).toBe('Laissez vide pour un jeton aléatoire.');
   });
 
-  test('« Nom » garde, derrière un (i), ce que disait « Nom interne » : vous seul le voyez', async () => {
+  test('seul le détail secondaire reste derrière un (i) : « Nom » y garde ce que disait « Nom interne »', async () => {
     const host = await mount(<MyTrackingLinkNewScreen />);
     const name = infoButton(host, 'Qui voit ce nom ?');
     expect(controlledBy(name)?.textContent).toBe('Vous seul : il range vos liens, le public ne le voit pas.');
+    expect(seen(host).join(' | ')).not.toContain('Vous seul');
     expect(host.querySelector('#tracking-name')?.getAttribute('aria-describedby')).toContain(name.getAttribute('aria-controls') ?? '?');
   });
 });
@@ -242,13 +197,6 @@ describe('la création d’un lien de parrainage', () => {
     expect(text.filter((line) => line === 'Nom')).toHaveLength(1);
     expect(text.filter((line) => line === 'Limiter les inscriptions')).toHaveLength(1);
     expect(text).toContain('Créer le lien');
-    expect(text.join(' | ')).not.toContain('Au-delà');
-  });
-
-  test('l’effet de la limite reste derrière un (i)', async () => {
-    const host = await mount(<AffiliateLinkNewScreen />);
-    const button = infoButton(host, 'Que se passe-t-il au-delà de la limite ?');
-    expect(controlledBy(button)?.textContent).toBe('Au-delà, le lien n’inscrit plus personne');
   });
 });
 
@@ -319,10 +267,10 @@ describe('les sept langues portent les mots courts, traduits et jamais copiés d
     }
   });
 
-  test('les (i) du lot ont leur question dans les sept langues', async () => {
+  test('le (i) qui reste a sa question dans les sept langues', async () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       await loadLinkFamiliesCatalog(language);
-      for (const key of ['links.hub.tracking.question', 'links.hub.affiliate.question', 'links.create.access.birthday.question', 'linkFamilies.tracking.create.section.utm.question', 'linkFamilies.tracking.create.token.question', 'linkFamilies.affiliate.create.limit.question'] as const) {
+      for (const key of ['linkFamilies.tracking.create.name.question'] as const) {
         expect(translateLinkFamilies(language, key).endsWith(language === 'ar' ? '؟' : '?')).toBe(true);
       }
     }

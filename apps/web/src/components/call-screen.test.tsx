@@ -11,13 +11,14 @@ import { callActions } from '@/lib/calls/call-actions';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
-import { CallModePending, CallScreen } from './call-screen';
+import { CallModePending, CallScreen, loadColdCallViews } from './call-screen';
 import { ThreadCallButton } from './thread-call-button';
 
 /* Les rangées d'actions et les rails du duo vivent dans leurs chunks (`call-control-actions.tsx`, `call-rails.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
 beforeAll(async () => {
   await loadPillMotion();
   await loadCallControlsCatalog('fr');
+  await loadColdCallViews();
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming', preview: { getVideoTracks: () => [], getTracks: () => [] } as unknown as MediaStream })} />);
   await import('./call-control-actions');

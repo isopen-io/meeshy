@@ -12,7 +12,7 @@ import { useOnline } from '@/lib/net/online';
 import { Field, FormError, SubmitButton } from '@/routes/link-family-form';
 import { LinksGlyph, LinksHeader, LinksOfflineNotice, linksHint } from '@/routes/links-parts';
 import { href, navigate } from '@/routes/route-table';
-import { FormSection } from '@/routes/share-link-form';
+import { FormIntro, FormSection } from '@/routes/share-link-form';
 
 /**
  * **NOUVEAU LIEN DE SUIVI** (#6408) — miroir `CreateTrackingLinkView.swift` :
@@ -86,6 +86,7 @@ export default function MyTrackingLinkNewScreen() {
         <InfoHintScope>
           <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
             {online ? null : <LinksOfflineNotice language={language} />}
+            <FormIntro text={translateLinkFamilies(language, 'linkFamilies.tracking.create.intro')} />
             <FormSection id="tracking-section-destination" title={translateLinkFamilies(language, 'linkFamilies.tracking.create.section.destination')} subtitle={null} icon={<LinksGlyph name="arrowSquareOut" size={12} />}>
               <Field
                 id="tracking-url"
@@ -113,8 +114,7 @@ export default function MyTrackingLinkNewScreen() {
             <FormSection
               id="tracking-section-utm"
               title={translateLinkFamilies(language, 'linkFamilies.tracking.create.section.utm')}
-              subtitle={null}
-              note={linksHint(translateLinkFamilies(language, 'linkFamilies.tracking.create.section.utm.question'), translateLinkFamilies(language, 'linkFamilies.tracking.create.section.utm.subtitle'))}
+              subtitle={translateLinkFamilies(language, 'linkFamilies.tracking.create.section.utm.subtitle')}
               icon={<LinksGlyph name="tag" size={12} />}
             >
               <Field id="tracking-campaign" maxLength={TRACKING_UTM_MAX} label={translateLinkFamilies(language, 'linkFamilies.tracking.campaign')} placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.campaign.placeholder')} value={draft.campaign} onChange={(value) => edit('campaign', value)} />
@@ -129,8 +129,7 @@ export default function MyTrackingLinkNewScreen() {
                 label={translateLinkFamilies(language, 'linkFamilies.tracking.create.token')}
                 placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.token.placeholder')}
                 value={draft.customToken}
-                {...(preview === null ? {} : { help: preview })}
-                note={linksHint(translateLinkFamilies(language, 'linkFamilies.tracking.create.token.question'), translateLinkFamilies(language, 'linkFamilies.tracking.create.token.help'))}
+                help={preview ?? translateLinkFamilies(language, 'linkFamilies.tracking.create.token.help')}
                 error={errorOf('customToken')}
                 onChange={(value) => edit('customToken', value)}
               />
