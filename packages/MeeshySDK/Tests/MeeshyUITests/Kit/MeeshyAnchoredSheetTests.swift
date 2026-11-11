@@ -221,7 +221,7 @@ struct MeeshyAnchoredSheetTests {
     // MARK: - Mesures et jetons
 
     @Test("la poignée, l'ombre et le voile de la planche vivent dans la loi, nulle part ailleurs")
-    func chrome_followsTheVectors() throws {
+    func chromeTokens_liveInTheLaw() throws {
         let chrome = try Self.object("chrome")
         let handle = try #require(chrome["handle"] as? [String: Any])
         let shadow = try #require(chrome["shadow"] as? [String: Any])
@@ -292,13 +292,13 @@ struct MeeshyAnchoredSheetTests {
     func source_isAgnosticAndFlat() throws {
         for file in ["MeeshyAnchoredSheet.swift", "MeeshyAnchoredSheetHost.swift", "MeeshyAnchoredSheetMetrics.swift"] {
             let code = try Self.code(file)
-            #expect(!code.contains("Color(hex"), file)
-            #expect(!code.contains("Color.white") && !code.contains("Color.black"), file)
-            #expect(!code.contains(".meeshyGlass("), file)
-            #expect(!code.contains("glassEffect"), file)
-            #expect(!code.contains("Composer"), file)
-            #expect(!code.contains(".shared"), file)
-            #expect(!code.contains("UIImpactFeedbackGenerator"), file)
+            #expect(!code.contains("Color(hex"), "\(file)")
+            #expect(!code.contains("Color.white") && !code.contains("Color.black"), "\(file)")
+            #expect(!code.contains(".meeshyGlass("), "\(file)")
+            #expect(!code.contains("glassEffect"), "\(file)")
+            #expect(!code.contains("Composer"), "\(file)")
+            #expect(!code.contains(".shared"), "\(file)")
+            #expect(!code.contains("UIImpactFeedbackGenerator"), "\(file)")
         }
     }
 
