@@ -189,6 +189,17 @@ describe('ModeCarousel', () => {
     view.done();
   });
 
+  test('une piste qui quitte la page ne choisit rien : son dernier défilement, remis à zéro par le démontage, ne rend pas « Naturel » sous Échap', async () => {
+    const view = mount();
+    view.track.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    view.host.remove();
+    await view.scrollTo(3 * PITCH);
+    view.track.dispatchEvent(new Event('scrollend'));
+    await act(frame);
+    expect(view.chosen).toEqual([]);
+    view.done();
+  });
+
   const mountCapture = (options: { readonly recording?: boolean } = {}) => {
     const host = document.createElement('div');
     document.body.appendChild(host);
