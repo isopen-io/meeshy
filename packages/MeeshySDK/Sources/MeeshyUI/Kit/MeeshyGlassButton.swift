@@ -243,7 +243,7 @@ enum MeeshyGlassButtonTrigger {
     static func perform(
         isEnabled: Bool,
         haptic: MeeshyGlassButtonHaptic,
-        play: (MeeshyGlassButtonHaptic) -> Void = MeeshyGlassButtonTrigger.playSystemHaptic,
+        play: @MainActor (MeeshyGlassButtonHaptic) -> Void = MeeshyGlassButtonTrigger.playSystemHaptic,
         action: () -> Void
     ) -> Bool {
         guard isEnabled else { return false }
