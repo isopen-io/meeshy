@@ -30,7 +30,7 @@ const enCall = {
   'call.camera.peerOff': 'Camera off',
   'call.video.connecting': 'Connecting video…',
   'call.hangup': 'Hang up',
-  'call.minimize': 'Minimize call',
+  'call.minimize': 'Minimize',
   'call.expand': 'Return to call',
   'call.captions.on': 'Show translated captions',
   'call.captions.off': 'Hide captions',

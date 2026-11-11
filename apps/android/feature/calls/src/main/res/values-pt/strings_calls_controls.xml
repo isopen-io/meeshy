@@ -3,9 +3,6 @@
     <string name="call_control_more_caption">Mais</string>
     <string name="call_control_expanded">Expandido</string>
     <string name="call_control_collapsed">Recolhido</string>
-    <string name="call_control_mute_label">Silenciar o microfone</string>
-    <string name="call_control_unmute_label">Reativar o microfone</string>
-    <string name="call_control_mute_caption">Mic</string>
     <string name="call_control_output_hint">Escolhe onde toca o áudio da chamada</string>
     <string name="call_control_end_caption">Desligar</string>
     <string name="call_control_video_paused">Vídeo em pausa (conexão fraca)</string>

@@ -83,7 +83,7 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
         ) : null}
         <div className="flex items-center justify-center gap-2">
           <CallButton
-            label={translate(language, 'call.more')}
+            label={translate(language, expanded ? 'call.more.hide' : 'call.more.show')}
             glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.dotsThree} size={24} />}
             onPress={onToggle}
             tone={expanded ? 'active' : 'disc'}

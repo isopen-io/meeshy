@@ -42,10 +42,10 @@ class CallControlsPillSemanticsTest {
 
     private val config = CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true)
 
-    private fun ui(muted: Boolean = false) = CallPresenter.present(
+    private fun ui(muted: Boolean = false, cameraOn: Boolean = true) = CallPresenter.present(
         state = CallState.Connected,
         config = config,
-        media = CallMedia(isMuted = muted),
+        media = CallMedia(isMuted = muted, isCameraOn = cameraOn),
         mediaEstablished = true,
     )
 
@@ -57,13 +57,14 @@ class CallControlsPillSemanticsTest {
         layer: CallScreenLayer = CallScreenLayer.Idle,
         disposition: CallControlsDisposition = CallControlsDisposition.Rows,
         muted: Boolean = false,
+        cameraOn: Boolean = true,
         taps: MutableList<String> = mutableListOf(),
         actions: MutableList<CallAction> = mutableListOf(),
         pillText: CallPillText = CallPillText.None,
         captions: @Composable () -> Unit = {},
         panelContent: @Composable (CallScreenPanel) -> Unit = {},
     ) {
-        val state = ui(muted)
+        val state = ui(muted, cameraOn)
         val items = CallPillModel.items(state, offered)
         val set = CallPillModel.available(state, items) { false }
         rule.setContent {
@@ -94,10 +95,31 @@ class CallControlsPillSemanticsTest {
     @Test
     fun `the pill always carries more, microphone, output and end with their labels`() {
         setPill()
-        rule.onNodeWithContentDescription("More actions").assertHasClickAction()
+        rule.onNodeWithContentDescription("Show actions").assertHasClickAction()
         rule.onNodeWithContentDescription("Mute microphone").assertHasClickAction()
-        rule.onNodeWithContentDescription("Output").assertHasClickAction()
+        rule.onNodeWithContentDescription("Audio output").assertHasClickAction()
         rule.onNodeWithContentDescription("Hang up").assertHasClickAction()
+    }
+
+    @Test
+    fun `the more button names what it does, Show actions folded and Hide actions open`() {
+        setPill(layer = CallScreenLayer.Menu)
+        rule.onNodeWithContentDescription("Hide actions").assertHasClickAction()
+        rule.onNodeWithContentDescription("Show actions").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the camera button names the action it performs, Turn off camera when on and Turn on camera when off`() {
+        setPill(layer = CallScreenLayer.Menu)
+        rule.onNodeWithContentDescription("Turn off camera").assertHasClickAction()
+        rule.onNodeWithContentDescription("Turn on camera").assertDoesNotExist()
+    }
+
+    @Test
+    fun `a camera that is off offers to turn it on`() {
+        setPill(layer = CallScreenLayer.Menu, cameraOn = false)
+        rule.onNodeWithContentDescription("Turn on camera").assertHasClickAction()
+        rule.onNodeWithContentDescription("Turn off camera").assertDoesNotExist()
     }
 
     @Test
@@ -126,16 +148,16 @@ class CallControlsPillSemanticsTest {
         rule.onNodeWithText("My image".uppercase()).assertDoesNotExist()
         rule.onNodeWithText("The call".uppercase()).assertDoesNotExist()
         rule.onNodeWithContentDescription("Speaker").assertDoesNotExist()
-        rule.onNodeWithContentDescription("More actions").assertHasClickAction()
+        rule.onNodeWithContentDescription("Hide actions").assertHasClickAction()
     }
 
     @Test
     fun `each base button reports its tap`() {
         val taps = mutableListOf<String>()
         setPill(taps = taps)
-        rule.onNodeWithContentDescription("More actions").performClick()
+        rule.onNodeWithContentDescription("Show actions").performClick()
         rule.onNodeWithContentDescription("Mute microphone").performClick()
-        rule.onNodeWithContentDescription("Output").performClick()
+        rule.onNodeWithContentDescription("Audio output").performClick()
         rule.onNodeWithContentDescription("Hang up").performClick()
         assertThat(taps).containsExactly("more", "mute", "output", "end").inOrder()
     }

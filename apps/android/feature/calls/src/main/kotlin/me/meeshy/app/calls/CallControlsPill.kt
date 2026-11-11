@@ -178,7 +178,7 @@ private fun BaseRow(
             CallPillButton(
                 icon = Icons.Filled.MoreHoriz,
                 kind = if (menuOpen) CallPillKind.Active else CallPillKind.Normal,
-                label = stringResource(R.string.call_control_more),
+                label = stringResource(if (menuOpen) R.string.call_control_more_hide else R.string.call_control_more_show),
                 hint = stringResource(R.string.call_control_more_hint),
                 caption = if (captioned) stringResource(R.string.call_control_more_caption) else null,
                 onClick = onToggleMenu,
@@ -203,7 +203,7 @@ private fun BaseRow(
             CallPillButton(
                 icon = outputIcon,
                 kind = CallPillKind.Normal,
-                label = stringResource(R.string.call_audio_button),
+                label = stringResource(R.string.call_control_output_a11y),
                 hint = stringResource(R.string.call_control_output_hint),
                 caption = if (captioned) stringResource(R.string.call_audio_button) else null,
                 onClick = onOutput,
