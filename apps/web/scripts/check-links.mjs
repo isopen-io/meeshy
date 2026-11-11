@@ -200,7 +200,9 @@ try {
       await assertInks(label, 'le hub', page, {
         titre: 'header h1',
         famille: '[data-links-family-title]',
+        'famille, description': '[data-links-family-description]',
       });
+      check((await page.$$('[data-links-family-description]')).length === 4, `${label} : chaque famille dit, sous son nom, à quoi elle sert (#17641)`);
 
       // ------------------------------------------------ 2. la liste
       await page.click('[data-links-family-open]');
@@ -209,13 +211,13 @@ try {
       await page.waitForTimeout(250);
       check(JSON.stringify(await shownLinks(page)) === JSON.stringify(ALL), `${label} : les cinq liens, dans l'ordre servi (${JSON.stringify(await shownLinks(page))})`);
       check(JSON.stringify(await textsOf(page, '[data-share-links-stat] strong')) === JSON.stringify(['5', '2', '175']), `${label} : les agrégats de la passerelle — liens, actifs, rejoints`);
-      const inactive = await page.$$eval('[data-share-link]', (els) => els.filter((el) => el.querySelector('a')?.getAttribute('aria-label')?.includes('Inactif') === true).map((el) => el.getAttribute('data-share-link')));
-      check(JSON.stringify(inactive) === JSON.stringify(INACTIVE), `${label} : « Inactif » se lit (lecteur d'écran) sur les trois liens inactifs, et seulement eux (${JSON.stringify(inactive)})`);
-      check((await page.$('[data-share-link-status], [data-share-link-conversation]')) === null, `${label} : la rangée n'écrit ni « Inactif » ni le titre de la conversation, tronqué`);
+      const inactive = await page.$$eval('[data-share-link]', (els) => els.filter((el) => el.querySelector('[data-share-link-status]') !== null).map((el) => el.getAttribute('data-share-link')));
+      check(JSON.stringify(inactive) === JSON.stringify(INACTIVE), `${label} : « Inactif » s'écrit sur les trois liens inactifs, et seulement eux (${JSON.stringify(inactive)})`);
+      check((await page.$$('[data-share-link] [data-link-created]')).length === 5, `${label} : chaque rangée porte sa date de création (#17641)`);
       check((await textOf(page, `[data-share-link="${ANNONCES}"] [data-share-link-name]`)) === 'annonces-produit', `${label} : un lien sans nom se nomme par son identifiant`);
       check(
-        (await page.getAttribute(`[data-share-link="${DEPLOIEMENT}"] a`, 'aria-label')) === 'Invitation de l’équipe, Actif, 12 rejoints et Équipe déploiement',
-        `${label} : une ligne annonce nom, état, rejoints et conversation`,
+        (await page.getAttribute(`[data-share-link="${DEPLOIEMENT}"] a`, 'aria-label')) === 'Invitation de l’équipe, Actif, 12 rejoints, Équipe déploiement et Créé le 10 sept. 2026',
+        `${label} : une ligne annonce nom, état, rejoints, conversation et date de création`,
       );
       await capture(page, `liste-${slug}`);
       assertReach(label, 'la liste', await reachAtRest(page, { controls: 'header a, [data-share-link] a, [data-share-link-copy]', texts: 'header h1, [data-share-links-stat] strong, [data-share-link-name], [data-share-link-joined]' }), {
@@ -230,6 +232,9 @@ try {
         'agrégat, libellé': '[data-share-links-stat] .text-chip',
         nom: `[data-share-link="${DEPLOIEMENT}"] [data-share-link-name]`,
         rejoints: `[data-share-link="${DEPLOIEMENT}"] [data-share-link-joined]`,
+        conversation: `[data-share-link="${DEPLOIEMENT}"] [data-share-link-conversation]`,
+        inactif: '[data-share-link-status]',
+        creation: `[data-share-link="${DEPLOIEMENT}"] [data-link-created]`,
       });
 
       // ------------------------------------------------ 3. copier, avec l'origine publique

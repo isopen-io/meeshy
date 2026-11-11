@@ -142,6 +142,11 @@ export function InviteLinkCard({
           {displayUrlOf(url)}
         </span>
       </p>
+      {link.isActive ? (
+        <p data-share-link-effect className="text-caption" style={{ opacity: 0.95 }}>
+          {translateInvite(language, 'linkDetail.card.effect')}
+        </p>
+      ) : null}
       {link.inactiveReason === null ? null : (
         <p data-share-link-reason className="text-caption font-semibold">
           {translate(language, REASON_KEY[link.inactiveReason])}
