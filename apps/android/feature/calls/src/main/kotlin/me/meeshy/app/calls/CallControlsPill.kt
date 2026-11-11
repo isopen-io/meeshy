@@ -85,16 +85,17 @@ internal fun CallControlsPill(
     val grow = if (reduceMotion) EnterTransition.None else expandVertically(tween(UNFOLD_MILLIS), expandFrom = Alignment.Bottom)
     val shrink = if (reduceMotion) ExitTransition.None else shrinkVertically(tween(UNFOLD_MILLIS), shrinkTowards = Alignment.Bottom)
     val panel = layer.pillPanel
-    val held = remember { HeldPanel() }
-    if (panel != null) held.panel = panel
+    val held = remember { HeldLayer() }
+    if (expanded) held.layer = layer
     CallControlsGlass(modifier = modifier.widthIn(max = CallPillWidth.maxWidthDp(pillText).dp).fillMaxWidth()) {
         AnimatedVisibility(
             visible = expanded,
             enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale + grow,
             exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink,
         ) {
-            // The panel that is leaving keeps its content until it has faded: it does not vanish at once.
-            val shown = if (expanded) panel else held.panel
+            // What is leaving (a panel, the rows) keeps its content until it has faded: it does not vanish at once.
+            val shownLayer = if (expanded) layer else held.layer
+            val shown = shownLayer.pillPanel
             Column {
                 if (shown == CallScreenPanel.Journal) {
                     panelContent(CallScreenPanel.Journal)
@@ -104,25 +105,8 @@ internal fun CallControlsPill(
                         onBack = onBackToMenu,
                         onClose = onClosePanel,
                     ) { panelContent(shown) }
-                } else if (layer.showsFamilyRows) {
-                    val label = stringResource(R.string.call_actions_label)
-                    Column(
-                        Modifier
-                            .heightIn(max = ROWS_MAX_HEIGHT)
-                            .verticalScroll(rememberScrollState())
-                            .semantics { contentDescription = label },
-                    ) {
-                        rows.forEach { row ->
-                            key(row.id) {
-                                CallActionRow(
-                                    title = callFamilyTitle(row.family),
-                                    items = row.actions.mapNotNull { items[it] },
-                                    onAction = onAction,
-                                    dimmed = if (state.isOnHold) HOLD_DIMMED_ACTIONS else emptySet(),
-                                )
-                            }
-                        }
-                    }
+                } else if (shownLayer.showsFamilyRows) {
+                    FamilyRows(rows = rows, items = items, isOnHold = state.isOnHold, onAction = onAction)
                 }
                 CallPillHairline()
             }
@@ -141,9 +125,37 @@ internal fun CallControlsPill(
     }
 }
 
-/** The panel the pill drew last: what a closing panel keeps showing while it fades (not state, never recomposes). */
-private class HeldPanel {
-    var panel: CallScreenPanel? = null
+/** On a group, one titled row per family, stacked above the base row; it scrolls past [ROWS_MAX_HEIGHT]. */
+@Composable
+private fun FamilyRows(
+    rows: List<CallPillRowContent>,
+    items: Map<CallAction, CallPillItem>,
+    isOnHold: Boolean,
+    onAction: (CallAction) -> Unit,
+) {
+    val label = stringResource(R.string.call_actions_label)
+    Column(
+        Modifier
+            .heightIn(max = ROWS_MAX_HEIGHT)
+            .verticalScroll(rememberScrollState())
+            .semantics { contentDescription = label },
+    ) {
+        rows.forEach { row ->
+            key(row.id) {
+                CallActionRow(
+                    title = callFamilyTitle(row.family),
+                    items = row.actions.mapNotNull { items[it] },
+                    onAction = onAction,
+                    dimmed = if (isOnHold) HOLD_DIMMED_ACTIONS else emptySet(),
+                )
+            }
+        }
+    }
+}
+
+/** The layer the pill last drew unfolded: what a folding pill keeps showing while it fades (not state, never recomposes). */
+private class HeldLayer {
+    var layer: CallScreenLayer = CallScreenLayer.Idle
 }
 
 @Composable

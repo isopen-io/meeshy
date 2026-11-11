@@ -2,6 +2,8 @@ package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallJournalFollow
 import me.meeshy.sdk.model.call.CallJournalSizing
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
@@ -214,22 +217,29 @@ internal fun CallJournalList(
 @Composable
 private fun CallJournalReturnToLive(hasUnseen: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val newLines = stringResource(R.string.call_captions_new_lines)
-    Row(
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    CallGlassButtonSurface(
+        role = CallButtonRole.Neutral,
+        shape = CircleShape,
+        isPressed = pressed,
         modifier = modifier
             .defaultMinSize(minHeight = CAPTION_TARGET)
             .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.75f))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = MeeshySpacing.md)
+            .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onClick)
             .semantics { if (hasUnseen) stateDescription = newLines },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
     ) {
-        Icon(MeeshyIcons.ArrowDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-        Text(stringResource(R.string.call_captions_back_to_live), style = MaterialTheme.typography.labelLarge, color = Color.White)
-        if (hasUnseen) {
-            Spacer(Modifier.width(2.dp))
-            Box(Modifier.size(8.dp).clip(CircleShape).background(CallPalette.Brand))
+        Row(
+            modifier = Modifier.padding(horizontal = MeeshySpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+        ) {
+            Icon(MeeshyIcons.ArrowDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Text(stringResource(R.string.call_captions_back_to_live), style = MaterialTheme.typography.labelLarge, color = Color.White)
+            if (hasUnseen) {
+                Spacer(Modifier.width(2.dp))
+                Box(Modifier.size(8.dp).clip(CircleShape).background(CallPalette.Brand))
+            }
         }
     }
 }

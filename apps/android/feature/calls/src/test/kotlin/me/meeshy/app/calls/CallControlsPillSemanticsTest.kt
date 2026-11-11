@@ -5,6 +5,9 @@ import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.onNodeWithTag
@@ -187,5 +190,45 @@ class CallControlsPillSemanticsTest {
     fun `the resting pill keeps its 440 dp`() {
         setPill()
         rule.onNodeWithTag("pill").assertWidthIsEqualTo(440.dp)
+    }
+
+    @Test
+    fun `folding the open menu keeps its rows while they fade, never a panel closed before`() {
+        val state = ui()
+        val items = CallPillModel.items(state, offered)
+        val set = CallPillModel.available(state, items) { false }
+        val rows = CallGroupStageSizing.rows(CallControlsDisposition.Rows.pillRows(set, CallScreenLayer.Menu), isCompactHeight = false)
+        var layer by mutableStateOf<CallScreenLayer>(CallScreenLayer.Panel(CallScreenPanel.React))
+        rule.setContent {
+            MeeshyTheme {
+                CallControlsPill(
+                    state = state,
+                    layer = layer,
+                    disposition = CallControlsDisposition.Rows,
+                    rows = rows,
+                    items = items,
+                    outputIcon = Icons.Filled.VolumeUp,
+                    onToggleMenu = {},
+                    onToggleMute = {},
+                    onOutput = {},
+                    onHangUp = {},
+                    onAction = {},
+                    onBackToMenu = {},
+                    onClosePanel = {},
+                    panelContent = { Text("Réactions") },
+                )
+            }
+        }
+        rule.onNodeWithText("Réactions").assertExists()
+        layer = CallScreenLayer.Menu
+        rule.waitForIdle()
+        rule.onNodeWithText("My image".uppercase()).assertExists()
+
+        rule.mainClock.autoAdvance = false
+        layer = CallScreenLayer.Idle
+        rule.mainClock.advanceTimeBy(100)
+
+        rule.onNodeWithText("My image".uppercase()).assertExists()
+        rule.onNodeWithText("Réactions").assertDoesNotExist()
     }
 }
