@@ -2,6 +2,11 @@ import { describe, expect, test } from 'bun:test';
 
 import { budgetsFromMeasure, verbosityProblems } from './verbosity-budgets.mjs';
 
+const expectOne = (problems: readonly string[], fragment: string): void => {
+  expect(problems).toHaveLength(1);
+  expect(problems[0]).toContain(fragment);
+};
+
 const measure = (views: Record<string, { total: number; firstScreen: number }>, uncovered: Record<string, string> = {}) => ({ views, uncovered });
 
 describe('le cliquet des mots visibles', () => {
@@ -22,7 +27,7 @@ describe('le cliquet des mots visibles', () => {
     const previous = measure({ settings: { total: 120, firstScreen: 60 } });
     const budgets = measure({ settings: { total: 130, firstScreen: 60 } });
     const problems = verbosityProblems({ listed: ['settings'], measured: measure({ settings: { total: 125, firstScreen: 60 } }), budgets, previous });
-    expect(problems).toEqual([expect.stringContaining('ne peut que baisser')]);
+    expectOne(problems, 'ne peut que baisser');
   });
 
   test('une vue nouvelle n’a pas de base et passe', () => {
@@ -36,15 +41,13 @@ describe('le cliquet des mots visibles', () => {
   });
 
   test('une vue listée sans budget ni mention « non couverte » échoue', () => {
-    expect(verbosityProblems({ listed: ['links'], measured: measure({ links: { total: 1, firstScreen: 1 } }), budgets: measure({}), previous: null })).toEqual([
-      expect.stringContaining('links'),
-    ]);
+    expectOne(verbosityProblems({ listed: ['links'], measured: measure({ links: { total: 1, firstScreen: 1 } }), budgets: measure({}), previous: null }), 'links');
   });
 
   test('une vue couverte qu’on ne peut plus ouvrir échoue, au lieu de passer à vide', () => {
     const budgets = measure({ links: { total: 80, firstScreen: 40 } });
     const problems = verbosityProblems({ listed: ['links'], measured: measure({}, { links: '0 mot après 4 essais' }), budgets, previous: budgets });
-    expect(problems).toEqual([expect.stringContaining('ne s’ouvre plus')]);
+    expectOne(problems, 'ne s’ouvre plus');
   });
 
   test('une vue non couverte et listée comme telle passe', () => {
@@ -56,7 +59,7 @@ describe('le cliquet des mots visibles', () => {
     const previous = measure({ links: { total: 80, firstScreen: 40 } });
     const budgets = measure({}, { links: 'plus mesurable' });
     const problems = verbosityProblems({ listed: ['links'], measured: budgets, budgets, previous });
-    expect(problems).toEqual([expect.stringContaining('couverte')]);
+    expectOne(problems, 'couverte');
   });
 
   test('le relevé devient le budget, vues triées, non couvertes gardées', () => {
