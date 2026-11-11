@@ -101,9 +101,6 @@ class EpureReglagesReperesStringsTest {
         assertThat(fr("encrypted_devices_notice_code_question")).isEqualTo("Ce téléphone peut-il vérifier le code d'un appareil ?")
         assertThat(fr("encrypted_devices_notice_code_note"))
             .isEqualTo("Pas encore : il ne peut ni montrer son code, ni scanner celui d'un autre appareil.")
-        val screen = source("EncryptedDevicesScreen.kt")
-        assertThat(screen).contains("R.string.encrypted_devices_notice_code_question")
-        assertThat(screen).contains("R.string.encrypted_devices_notice_code_note")
         Tree.locales.filter { it != "fr" }.forEach { locale ->
             listOf("encrypted_devices_notice_code_question", "encrypted_devices_notice_code_note").forEach { name ->
                 assertWithMessage("$name copié du français en $locale")

@@ -91,4 +91,20 @@ class EncryptedDevicesScreenTest {
         compose.onNodeWithText("Added", substring = true).assertExists()
         compose.onNodeWithText("Last used:", substring = true).assertExists()
     }
+
+    @Test
+    fun `the code limitation is read behind an info button named by its question`() {
+        show(listOf(tablet))
+
+        compose.onNodeWithText("Not yet: it can't show its own code or scan another device's code.").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Can this phone verify a device's code?").performClick()
+        compose.onNodeWithText("Not yet: it can't show its own code or scan another device's code.").assertExists()
+    }
+
+    @Test
+    fun `the current device says so`() {
+        show(listOf(laptop))
+
+        compose.onNodeWithText("This device", substring = true).assertExists()
+    }
 }
