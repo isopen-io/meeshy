@@ -202,6 +202,31 @@ struct MeeshyStatusCapsuleTests {
         #expect(base != MeeshyStatusCapsuleItem(id: "limit.scene", message: "Dix scènes au maximum", duration: .persistent))
     }
 
+    @MainActor
+    @Test("un même refus reposé avec une nouvelle occurrence est un autre élément : l'hôte relance son minuteur, le silence de 2 s tient")
+    func item_occurrence_distinguishesARepresentation() {
+        let first = MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning)
+        #expect(first.occurrence == 0)
+        let again = MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning, occurrence: 1)
+        #expect(first != again)
+        #expect(again == MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning, occurrence: 1))
+    }
+
+    @MainActor
+    @Test("reposé dans les 2 s sous une nouvelle occurrence : ni vibration ni annonce, mais le minuteur repart")
+    func session_representedWithinTwoSeconds_restartsTheTimerSilently() async {
+        let spy = SessionSpy()
+        let session = spy.session()
+        let first = MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning)
+        await session.run(first, haptic: .automatic, retire: spy.retire)
+        spy.events = []
+        spy.advance(milliseconds: 500)
+        let again = MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning, occurrence: 1)
+        await session.run(again, haptic: .automatic, retire: spy.retire)
+        #expect(spy.events.isEmpty)
+        #expect(spy.sleeps == [4000, 4000])
+    }
+
     // MARK: - La séance d'un hôte
 
     @MainActor
