@@ -35,9 +35,11 @@ extension CallView {
                     // vidéo comme en groupe ; en audio, pour le seul réseau dégradé.
                     if headerCapsule != nil {
                         durationChip
+                            .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.8, anchor: .trailing)))
                     }
                 }
                 .animation(disclosureAnimation, value: headerActions)
+                .animation(disclosureAnimation, value: headerCapsule != nil)
             }
             Spacer()
         }
@@ -57,7 +59,7 @@ extension CallView {
                 glyphSize: 16,
                 label: String(localized: "call.minimize", defaultValue: "Réduire", bundle: .main),
                 hint: String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une bannière flottante", bundle: .main),
-                action: collapseIntoPip
+                action: { collapseIntoPip() }
             )
         case .pictureInPicture:
             pictureInPictureHeaderButton()
@@ -70,7 +72,7 @@ extension CallView {
                 glyphSize: 15,
                 label: String(localized: "call.openConversation", defaultValue: "Conversation", bundle: .main),
                 hint: String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main),
-                action: openConversationDuringCall
+                action: { openConversationDuringCall() }
             )
         }
     }
@@ -181,54 +183,16 @@ extension CallView {
             } else {
                 CallSignalGlyph(strength: signalStrength)
             }
-            if let title = capsule.title {
-                Text(title)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.white)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                chipSeparator
-            }
-            if let count = capsule.participantCount {
-                Image(systemName: "person.2.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.white)
-                Text("\(count)")
-                    .font(.caption2.weight(.medium).monospacedDigit())
-                    .foregroundStyle(Color.white)
-                    .fixedSize()
-                chipSeparator
-            }
+            chipIdentity(capsule)
             if capsule.showsDuration {
                 Text(callManager.formattedDuration)
                     .font(.caption2.weight(.medium).monospacedDigit())
                     .foregroundStyle(Color.white)
                     .fixedSize()
             }
-            if capsule.showsNetwork && callManager.isRemoteQualityDegraded {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(MeeshyColors.warning)
-            }
-            // §4.3 — même remplacement pill-compacte qu'en audio
-            // (voir audioCallLayout) : pas de bandeau plein-écran.
-            // No per-icon .accessibilityLabel — the badge is one
-            // opaque element (children: .ignore below); this
-            // state is folded into videoDurationBadgeAccessibilityLabel.
-            if case .reconnecting = callManager.callState {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(MeeshyColors.warning)
-                    .accessibilityHidden(true)
-            }
+            chipWarnings(capsule)
         }
-        // The parent's own .accessibilityLabel below already makes this
-        // whole badge one opaque VoiceOver element (children: .ignore) —
-        // every child label is discarded regardless, so hiding them here
-        // is a no-op today. Kept explicit so a future removal of the
-        // parent label doesn't silently re-expose fragmented per-child
-        // announcements (glyph, then digits, then icon) instead of the
-        // single composed sentence `videoDurationBadgeAccessibilityLabel`.
+        // Un seul élément VoiceOver : la phrase de `videoDurationBadgeAccessibilityLabel`.
         .accessibilityElement(children: .ignore)
         .padding(.horizontal, MeeshySpacing.smPlus)
         .padding(.vertical, MeeshySpacing.xs)
@@ -243,8 +207,46 @@ extension CallView {
         .accessibilityAddTraits(.updatesFrequently)
     }
 
+    @ViewBuilder
+    private func chipIdentity(_ capsule: CallHeaderCapsule) -> some View {
+        if let title = capsule.title {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            chipSeparator
+        }
+        if let count = capsule.participantCount {
+            Image(systemName: "person.2.fill")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.white)
+            Text(count, format: .number)
+                .font(.caption2.weight(.medium).monospacedDigit())
+                .foregroundStyle(Color.white)
+                .fixedSize()
+            chipSeparator
+        }
+    }
+
+    /// En audio, la reconnexion a déjà sa pill sous l'avatar : la capsule ne la répète pas.
+    @ViewBuilder
+    private func chipWarnings(_ capsule: CallHeaderCapsule) -> some View {
+        if capsule.showsNetwork && callManager.isRemoteQualityDegraded {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(MeeshyColors.warning)
+        }
+        if capsule.showsDuration, case .reconnecting = callManager.callState {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(MeeshyColors.warning)
+                .accessibilityHidden(true)
+        }
+    }
+
     private var chipSeparator: some View {
-        Text("·")
+        MetaSeparator()
             .font(.caption2.weight(.medium))
             .foregroundStyle(Color.white.opacity(MeeshyOpacity.heavy))
     }

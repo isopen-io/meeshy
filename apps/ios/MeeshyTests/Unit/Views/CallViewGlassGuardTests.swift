@@ -161,7 +161,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(chrome.contains("ForEach(headerActions, id: \\.self)"), "Les boutons viennent de la loi CallHeaderRule")
         XCTAssertEqual(header.components(separatedBy: ".callControlGlass(diameter: 40").count - 1, 1, "Un seul bouton de verre, trois usages")
         XCTAssertFalse(chrome.contains(".adaptiveGlass("))
-        let glassButton = try block("private func headerGlassButton(", until: "// MARK: - La capsule de droite", in: header)
+        let glassButton = try block("private func headerGlassButton(", until: "func refreshHeaderNames()", in: header)
         XCTAssertTrue(glassButton.contains(".frame(width: 44, height: 44)"), "Cible tactile HIG 44 pt")
         let chip = try block("private func chipContent(", until: "private var chipSeparator", in: header)
         XCTAssertTrue(chip.contains(".modifier(CallInteractiveChromeCapsule())"))

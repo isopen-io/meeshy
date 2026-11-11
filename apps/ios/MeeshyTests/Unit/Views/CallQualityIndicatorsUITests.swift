@@ -86,4 +86,20 @@ final class CallQualityIndicatorsUITests: XCTestCase {
             "Le glyphe de signal vit dans la capsule de l'en-tête (#17341) : plus sous l'avatar."
         )
     }
+
+    /// #17341 — en audio, la capsule ne porte que le réseau dégradé : la reconnexion a
+    /// déjà sa pill sous l'avatar, la capsule ne la répète ni à l'œil ni à VoiceOver.
+    func test_audioCapsule_doesNotRepeatTheReconnectingPill() throws {
+        let view = AppSourceGuard.stripComments(try callViewSource())
+        XCTAssertTrue(view.contains("if capsule.showsDuration, case .reconnecting = callManager.callState {"))
+        XCTAssertTrue(view.contains("reconnecting: reconnecting && capsule?.showsDuration != false"))
+    }
+
+    /// #17406 — la capsule n'apparaît ni ne disparaît d'un coup : elle naît de son
+    /// bord, en fondu seul sous « Réduire les animations ».
+    func test_headerCapsule_arrivesAndLeavesInMotion() throws {
+        let view = AppSourceGuard.stripComments(try callViewSource())
+        XCTAssertTrue(view.contains(".transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.8, anchor: .trailing)))"))
+        XCTAssertTrue(view.contains(".animation(disclosureAnimation, value: headerCapsule != nil)"))
+    }
 }

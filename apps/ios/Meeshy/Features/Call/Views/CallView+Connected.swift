@@ -320,10 +320,8 @@ extension CallView {
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundStyle(Color.white)
 
-            // Duration + glyphe signal code couleur :
-            // invisible sur lien sain, apparaît à la dégradation, persiste en
-            // vert `recoveryLingerSeconds` après récupération puis se retire
-            // (cycle de vie dans TransientCallSignalGlyph).
+            // La durée, sous le nom. Le réseau dégradé n'est plus ici : il vit
+            // dans la capsule de droite de l'en-tête (#17341, `headerCapsule`).
             CallDurationClock {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(callManager.formattedDuration)
@@ -411,7 +409,7 @@ extension CallView {
             signalDegraded: signalStrength.isDegraded ? signalStrength.accessibilityLabel : nil,
             peerMuted: capsule?.showsDuration != false && !callManager.isRemoteAudioEnabled,
             peerNetworkWeak: callManager.isRemoteQualityDegraded,
-            reconnecting: reconnecting
+            reconnecting: reconnecting && capsule?.showsDuration != false
         )
     }
 
