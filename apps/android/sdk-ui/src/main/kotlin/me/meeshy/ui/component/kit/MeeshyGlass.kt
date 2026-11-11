@@ -138,7 +138,17 @@ public fun MeeshyGlass(
 
     Box(
         modifier
-            .then(if (isInteractive) Modifier.graphicsLayer { scaleBy(rest, full, response.value) } else Modifier)
+            .then(
+                if (isInteractive) {
+                    Modifier.graphicsLayer {
+                        val scale = glassScale(rest, full, response.value)
+                        scaleX = scale
+                        scaleY = scale
+                    }
+                } else {
+                    Modifier
+                },
+            )
             .then(
                 if (rest.shadowOpacity > 0f) {
                     val shadowColor = MeeshyMediaChromeColors.MediaBackdrop.copy(alpha = rest.shadowOpacity)
@@ -199,19 +209,25 @@ private val IdleResponse: State<Float> = object : State<Float> {
 /**
  * UNE valeur animée, du repos (0) à l'appui (1) ; le survol est à mi-chemin : le reflet de la recette survolée est la
  * moyenne de celles du repos et de l'appui. [pressed] fige l'état (catalogue) et l'emporte sur la source.
+ *
+ * La source n'est écoutée qu'une fois par source : « réduire les animations » change le ressort, jamais l'état, et une
+ * surface rendue à sa source après un appui figé repart du repos (aucune interaction n'est alors en cours).
  */
 @Composable
-private fun rememberGlassResponse(
+internal fun rememberGlassResponse(
     interactionSource: InteractionSource?,
     pressed: Boolean?,
     reduceMotion: Boolean,
 ): State<Float> {
     val response = remember { Animatable(if (pressed == true) PRESS_RESPONSE else REST_RESPONSE) }
-    val spec: AnimationSpec<Float> = if (reduceMotion) snap() else MeeshyMotion.springFast()
+    val spec by rememberUpdatedState<AnimationSpec<Float>>(if (reduceMotion) snap() else MeeshyMotion.springFast())
     if (pressed != null) {
-        LaunchedEffect(pressed, reduceMotion) { response.animateTo(if (pressed) PRESS_RESPONSE else REST_RESPONSE, spec) }
+        LaunchedEffect(pressed) { response.animateTo(if (pressed) PRESS_RESPONSE else REST_RESPONSE, spec) }
     } else if (interactionSource != null) {
-        LaunchedEffect(interactionSource, reduceMotion) {
+        LaunchedEffect(interactionSource) {
+            if (response.targetValue != REST_RESPONSE) {
+                launch(start = CoroutineStart.UNDISPATCHED) { response.animateTo(REST_RESPONSE, spec) }
+            }
             var isPressed = false
             var isHovered = false
             interactionSource.interactions.collect { interaction ->
@@ -221,12 +237,18 @@ private fun rememberGlassResponse(
                     is HoverInteraction.Enter -> isHovered = true
                     is HoverInteraction.Exit -> isHovered = false
                 }
-                val target = if (isPressed) PRESS_RESPONSE else if (isHovered) HOVER_RESPONSE else REST_RESPONSE
+                val target = glassResponseTarget(isPressed = isPressed, isHovered = isHovered)
                 launch(start = CoroutineStart.UNDISPATCHED) { response.animateTo(target, spec) }
             }
         }
     }
     return response.asState()
+}
+
+private fun glassResponseTarget(isPressed: Boolean, isHovered: Boolean): Float = when {
+    isPressed -> PRESS_RESPONSE
+    isHovered -> HOVER_RESPONSE
+    else -> REST_RESPONSE
 }
 
 /** Le fondu du remplissage quand le ton change ; un ton fixe (`Theme`) n'ouvre aucune animation. */
@@ -237,12 +259,10 @@ private fun rememberGlassFill(target: Color, animated: Boolean, reduceMotion: Bo
     return animateColorAsState(targetValue = target, animationSpec = spec, label = "meeshyGlassFill")
 }
 
-/** L'échelle ne répond qu'à l'appui : à mi-chemin (survol) elle reste à 1. */
-private fun androidx.compose.ui.graphics.GraphicsLayerScope.scaleBy(rest: MeeshyGlassRecipe, full: MeeshyGlassRecipe, response: Float) {
+/** L'échelle ne répond qu'à l'appui : à mi-chemin (survol) elle reste à celle du repos. */
+internal fun glassScale(rest: MeeshyGlassRecipe, full: MeeshyGlassRecipe, response: Float): Float {
     val pressedShare = ((response - HOVER_RESPONSE) / (PRESS_RESPONSE - HOVER_RESPONSE)).coerceAtLeast(0f)
-    val scale = rest.scale + (full.scale - rest.scale) * pressedShare
-    scaleX = scale
-    scaleY = scale
+    return rest.scale + (full.scale - rest.scale) * pressedShare
 }
 
 private fun MeeshyGlassRecipe.fillColor(system: Color): Color = when (fill) {
