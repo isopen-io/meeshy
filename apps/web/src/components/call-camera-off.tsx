@@ -4,6 +4,7 @@ import { Portrait } from '@/components/call-grid';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { cameraOffFadeMs } from '@/lib/calls/call-camera-off';
+import { usePeerSpeaking } from '@/lib/calls/peer-audio-level';
 import { useOpacityFade } from '@/lib/calls/use-pill-motion';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
@@ -29,6 +30,11 @@ export function SpeechRing({ color, speaking }: { readonly color: string; readon
   const ring = useRef<HTMLSpanElement>(null);
   useOpacityFade(ring, speaking, cameraOffFadeMs(prefersReducedMotion()));
   return <span ref={ring} className="absolute inset-3 rounded-full" style={{ '--call-tint': color } as CSSProperties} data-call-camera-off-speech="" />;
+}
+
+/** L'anneau du duo audio, allumé au niveau reçu du flux de l'autre (`usePeerSpeaking`) : un basculement ne rend que l'anneau, jamais l'écran d'appel. */
+export function PeerSpeechRing({ color, stream }: { readonly color: string; readonly stream: MediaStream | null }) {
+  return <SpeechRing color={color} speaking={usePeerSpeaking(stream)} />;
 }
 
 type CameraOffStageProps = {

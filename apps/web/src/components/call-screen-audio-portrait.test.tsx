@@ -34,17 +34,20 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall =>
 /* Un niveau que le témoin règle : l'analyseur rend un signal dont la valeur efficace vaut `level.now`. */
 const level = { now: 0 };
 const metered: MediaStream[] = [];
+const closed: MediaStream[] = [];
 class FakeAudioContext {
   state = 'running';
+  private stream: MediaStream | null = null;
   createMediaStreamSource(stream: MediaStream) {
     metered.push(stream);
+    this.stream = stream;
     return { connect: () => undefined, disconnect: () => undefined };
   }
   createAnalyser() {
     return { fftSize: 0, connect: () => undefined, disconnect: () => undefined, getFloatTimeDomainData: (into: Float32Array) => into.fill(level.now) };
   }
   resume = async () => undefined;
-  close = async () => undefined;
+  close = async () => void (this.stream === null ? undefined : closed.push(this.stream));
 }
 
 const runs: { readonly target: Element; readonly frames: readonly Keyframe[]; readonly duration: number }[] = [];
@@ -65,6 +68,7 @@ afterAll(async () => {
 beforeEach(() => {
   runs.length = 0;
   metered.length = 0;
+  closed.length = 0;
   level.now = 0;
   saved.animate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
   saved.audio = Object.getOwnPropertyDescriptor(globalThis, 'AudioContext');
@@ -192,6 +196,27 @@ describe('P9.6 / P10.12 — l’anneau et le halo n’existent qu’à la parole
     tick(1000);
     expect(view.find(ring)?.style.opacity).toBe('0');
     view.done();
+  });
+
+  test('la fin de l’appel ferme la mesure : l’AudioContext est rendu et l’anneau s’éteint', async () => {
+    jest.useFakeTimers();
+    const view = mount(call());
+    await settle();
+    level.now = 0.2;
+    tick(400);
+    expect(view.find(ring)?.style.opacity).toBe('1');
+    view.render(call({ phase: { kind: 'ended' } as ActiveCall['phase'], endedDurationSec: 12 }));
+    expect(closed).toEqual([heard]);
+    expect(view.find(ring)?.style.opacity).toBe('0');
+    view.done();
+  });
+
+  test('démonter l’écran pendant l’appel ferme la mesure', async () => {
+    const view = mount(call());
+    await settle();
+    expect(metered).toEqual([heard]);
+    view.done();
+    expect(closed).toEqual([heard]);
   });
 
   test('sonnerie : pas de mesure tant que l’appel n’est pas joint', async () => {
