@@ -70,13 +70,21 @@ describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', 
     expect(el.querySelector('#login-password')).toBeNull();
   });
 
-  test('le mode de fonctionnement est derrière un (i) « Comment ça marche », replié par défaut', () => {
+  test('la phrase qui dit ce que fait la porte est LISIBLE AU REPOS, sous le titre, sans (i) ni clic (épure #17584, règle 7)', () => {
     const el = mountAt('/login');
-    const info = el.querySelector('button[aria-label="Comment ça marche"]') as HTMLButtonElement | null;
+    const lead = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Pas de mot de passe à retenir'));
+    expect(lead?.textContent).toBe('Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.');
+    expect(lead?.classList.contains('sr-only')).toBe(false);
+  });
+
+  test('le (i) ne garde que le détail, son nom est la QUESTION, sa note reste lue repliée', () => {
+    const el = mountAt('/login');
+    expect(el.querySelector('button[aria-label="Comment ça marche"]')).toBeNull();
+    const info = el.querySelector('button[aria-label="Combien de temps le lien reste valable ?"]') as HTMLButtonElement | null;
     expect(info).not.toBeNull();
     expect(info?.getAttribute('aria-expanded')).toBe('false');
     const note = controlledBy(info);
-    expect(note?.textContent).toBe('Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.');
+    expect(note?.textContent).toBe('Le lien est valable 10 minutes et ne sert qu’une fois.');
     expect(note?.classList.contains('sr-only')).toBe(true);
 
     act(() => {

@@ -195,6 +195,16 @@ const precedes = (first: Element | null, second: Element | null): boolean =>
   first !== null && second !== null && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
 describe('WorldGuestEntry — une vue, un clic (#10098)', () => {
+  test('une phrase LISIBLE AU REPOS dit que l’entrée se fait sans compte et ce que voient les autres (épure #17584, règle 7)', async () => {
+    const { deps: d } = deps();
+    const host = await mount({ deps: d });
+    const note = [...host.querySelectorAll('p')].find((p) => (p.textContent ?? '') === 'Entrée sans compte : les autres verront ce nom.');
+    expect(note).toBeDefined();
+    expect(note?.classList.contains('sr-only')).toBe(false);
+    expect(precedes(note ?? null, nameField(host))).toBe(false);
+    expect(precedes(nameField(host), note ?? null)).toBe(true);
+  });
+
   test('le nom, la liste déroulante de la langue, puis « Entrer » — sur la même vue, sans étape', async () => {
     const { deps: d } = deps();
     const host = await mount({ deps: d });

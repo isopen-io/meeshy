@@ -59,7 +59,6 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     }
     const fr = renderToStaticMarkup(<DownloadPage language="fr" />);
     expect(fr).not.toMatch(/bientôt/i);
-    expect(fr).toContain('Gratuit sur Google Play.');
   });
 
   test('une porte explicite mène au produit SERVI aujourd’hui — le web', () => {
@@ -160,5 +159,40 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     expect(html).toContain('Meeshy');
     expect(html).toContain('المتصفح');
     expect(html).not.toContain('قريبًا');
+  });
+
+  test('chaque information est dite une fois : ni « Gratuit sur… » sous les badges, ni phrase sur l’ordinateur, le bouton reste (épure #17584, règle 2)', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const html = renderToStaticMarkup(<DownloadPage language={language} />);
+      expect(html).toContain('data-store="app-store"');
+      expect(html).toContain('data-store="google-play"');
+      expect(html).not.toMatch(/<p [^>]*>[^<]*(Gratuit|Free on|Gratis|Grátis|Kostenlos|مجاني)[^<]*<\/p>/u);
+    }
+    const fr = renderToStaticMarkup(<DownloadPage language="fr" />);
+    expect(fr).not.toContain('sans rien installer');
+    expect(fr).toContain('Ouvrir Meeshy dans le navigateur');
+  });
+
+  test('aucun lien ne mène à la page où l’on est : ni « Télécharger » dans l’en-tête, ni « Télécharger l’app » au pied', () => {
+    const fr = renderToStaticMarkup(<DownloadPage language="fr" />);
+    expect(fr).not.toContain('href="/download"');
+    expect(fr).not.toContain('data-download>');
+    expect(fr).not.toContain('Télécharger l’app');
+    expect(fr).not.toContain("Télécharger l'app");
+    expect(fr).toContain('>Téléchargez Meeshy<');
+  });
+
+  test('le pied garde visibles ce que les boutiques exigent, et range le reste derrière « Plus », atteignable', () => {
+    const html = renderToStaticMarkup(<DownloadPage language="fr" />);
+    const [outside = '', more = ''] = html.split('<details class="ld-footer-more"');
+    for (const page of ['privacy', 'terms', 'child-safety']) {
+      expect(outside).toContain(`href="/${page}"`);
+    }
+    expect(more).toContain('<summary');
+    expect(more).toContain('>Plus<');
+    for (const page of ['about', 'help', 'faq', 'partners']) {
+      expect(more).toContain(`href="/${page}"`);
+      expect(outside).not.toContain(`href="/${page}"`);
+    }
   });
 });

@@ -89,10 +89,13 @@ async function sendFrom(el: HTMLDivElement) {
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s+/gu, ' ');
 
 describe('/forgot-password prend la forme de /login', () => {
-  test('aucune barre de titre — ni `<h1>`, ni « Mot de passe oublié » en en-tête', () => {
+  test('l’écran porte son titre « Mot de passe oublié » au-dessus de la phrase (épure #17584, règle 7)', () => {
     const el = mount();
     expect(el.querySelector('h1')).toBeNull();
-    expect(el.querySelector('h2')).toBeNull();
+    const title = el.querySelector('h2');
+    expect(title?.textContent).toBe('Mot de passe oublié');
+    const lead = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Recevez par e-mail'));
+    expect(title && lead && (title.compareDocumentPosition(lead) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
   });
 
   test('un glyphe, la phrase, le champ et le bouton', () => {

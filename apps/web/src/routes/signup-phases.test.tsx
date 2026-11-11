@@ -264,14 +264,18 @@ describe('l’adresse parue porte son (i)', () => {
     return harness.el;
   }
 
-  test('le (i) « Pourquoi un lien » est replié, et le champ cite sa note', async () => {
+  test('la phrase du lien est LISIBLE sous le champ ; le (i) « Un lien ou un code ? » ne garde que le détail, replié mais cité', async () => {
     const el = await emailShown();
-    const bouton = el.querySelector('button[aria-label="Pourquoi un lien"]') as HTMLButtonElement;
+    const lead = el.querySelector('[data-field-note]') as HTMLElement;
+    expect(lead.textContent).toBe('Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.');
+    expect(lead.classList.contains('sr-only')).toBe(false);
+    expect(el.querySelector('button[aria-label="Pourquoi un lien"]')).toBeNull();
+    const bouton = el.querySelector('button[aria-label="Un lien ou un code ?"]') as HTMLButtonElement;
     expect(bouton.getAttribute('aria-expanded')).toBe('false');
     const note = el.querySelector(`#${bouton.getAttribute('aria-controls') ?? ''}`) as HTMLElement;
-    expect(note.textContent).toBe('Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.');
+    expect(note.textContent).toBe('L’e-mail contient un lien et un code à 6 chiffres : l’un ou l’autre suffit pour valider.');
     expect(note.className).toContain('sr-only');
-    expect(el.querySelector('#signup-email')?.getAttribute('aria-describedby')).toBe(note.id);
+    expect(el.querySelector('#signup-email')?.getAttribute('aria-describedby')).toBe(`${lead.id} ${note.id}`);
   });
 
   test('le champ vide ne s’annonce pas invalide pour autant', async () => {
@@ -444,5 +448,28 @@ describe('« S’inscrire » depuis la carte', () => {
     expect(phase(el)).toBe('code');
     expect(primary(el).disabled).toBe(true);
     expect(location()).toBe('/signup');
+  });
+});
+
+/**
+ * ÉPURE DES ÉCRANS D'ENTRÉE (#17584, #17666) — l'inscription ne dit rien deux fois.
+ */
+describe('l’inscription ne dit rien deux fois', () => {
+  test('les conditions et la confidentialité ne sont liées QU’UNE fois : par la phrase de consentement, pas aussi par le pied de page', () => {
+    const { el } = mount();
+    expect(el.querySelectorAll('a[href$="/terms"]').length).toBe(1);
+    expect(el.querySelectorAll('a[href$="/privacy"]').length).toBe(1);
+    expect(has(el, '[data-auth-site-footer]')).toBe(true);
+    expect(has(el, '[data-auth-site-link="contact"]')).toBe(true);
+  });
+
+  test('un mot de passe valable ne ressert pas « Votre compte sera actif immédiatement » : le bord le dit, le détail du (i) l’explique', () => {
+    const { el } = mount();
+    toCard(el);
+    type(el, '#signup-password', 'Un-mot-de-passe-solide-2026!');
+    expect(el.textContent).not.toMatch(/Votre compte sera actif immédiatement\.(?! Vous)/u);
+    expect(has(el, '[data-signup-password-block] [role="status"]')).toBe(false);
+    const detail = el.querySelector('#signup-password-why') as HTMLElement;
+    expect(detail.textContent).toContain('Votre compte sera actif immédiatement.');
   });
 });
