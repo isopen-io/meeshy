@@ -179294,43 +179294,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "متى تُحفظ؟"
+            "value": "متى تُحفظ النسخة مع التأثيرات؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wann wird sie gesichert?"
+            "value": "Wann wird die Version mit Effekten gesichert?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When is it saved?"
+            "value": "When is the version with effects saved?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Cuándo se guarda?"
+            "value": "¿Cuándo se guarda la versión con efectos?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quand est-elle enregistrée ?"
+            "value": "Quand la version avec effets est-elle enregistrée ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quando viene salvata?"
+            "value": "Quando viene salvata la versione con effetti?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quando ela é salva?"
+            "value": "Quando a versão com efeitos é salva?"
           }
         }
       }
@@ -337635,7 +337635,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "متى تتم النسخ؟"
+            "value": "متى يتم النسخ؟"
           }
         },
         "de": {

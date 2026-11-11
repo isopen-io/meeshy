@@ -197,7 +197,7 @@ enum SettingsInfoNotes {
 
     static var renderedCapture: MeeshyInfoNote {
         MeeshyInfoNote(
-            question: String(localized: "settings.media.capture.rendered.note.question", defaultValue: "Quand est-elle enregistrée ?", bundle: .main),
+            question: String(localized: "settings.media.capture.rendered.note.question", defaultValue: "Quand la version avec effets est-elle enregistrée ?", bundle: .main),
             text: String(localized: "settings.media.capture.rendered.note", defaultValue: "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande.", bundle: .main)
         )
     }
