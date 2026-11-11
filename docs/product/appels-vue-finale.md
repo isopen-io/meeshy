@@ -45,7 +45,9 @@
    - **Les sous-titres vivent DANS la pilule**, au-dessus de sa rangée de base, dans le même verre, en duo comme en groupe (décision porteur du 2026-11-09, #17343). Ouvrir les actions (…) les range ; refermer les actions les rend.
    - **La bande et le journal rangent les phrases dans le MÊME ordre : par début de phrase** (l'heure dans l'appel où la phrase a commencé), la plus ancienne en haut, la plus récente en bas, contre la rangée. Une traduction ou une version finale qui arrive plus tard met la ligne à jour sur place, sans la déplacer : en P3 et P4, la phrase d'Awa reste au-dessus de ma réponse même si sa traduction arrive après (compte rendu famille 1, #17329).
 6. **Toucher une phrase montre son original dessous** ; la retoucher le replie. « Journal » ouvre tout l'appel, DANS la pilule, à la place des sous-titres (#17343).
-   - En appel audio, la taille de l'avatar quand le journal est ouvert (garder 120 pt ou passer à 56 pt) attend la décision du porteur, #17529 : la planche ne la fixe pas encore.
+   - **En appel audio, le journal ouvert RÉDUIT l'avatar** (décision porteur du 2026-11-11, #17529 ; P9b). L'avatar passe de 120 pt à ~56 pt et monte en un en-tête compact, sous l'en-tête de l'appel : l'avatar à gauche, et à côté, sur la même rangée, le nom puis la durée (iOS `CallCompactAudioHeader`). Le journal prend la place libérée ; la personne ne disparaît jamais derrière lui, et son anneau de parole suit l'avatar à sa nouvelle taille.
+     - Seul le journal ouvert DANS la pilule réduit l'avatar : les sous-titres le laissent à 120 pt, et l'avatar reprend sa taille dès que le journal n'est plus dans la pilule (journal fermé, (…) ouvert par-dessus, pilule rangée au toucher, loi 11).
+     - La transition est un morphisme : l'avatar glisse et se réduit vers l'en-tête compact pendant que le nom et la durée le rejoignent en fondu (≈ 200 ms, transformation et opacité seulement), puis le chemin inverse au retour. Réduire les animations ⇒ un fondu seul, sans déplacement ni changement d'échelle.
 7. **Le journal est FIDÈLE, pendant et après l'appel.**
    - C'est le MÊME journal avant et après la fin de l'appel : mêmes phrases, même ordre, mêmes couleurs, même descente du Prisme.
    - L'original : pendant l'appel, il se déplie sous la phrase qu'on touche, comme dans la bande ; après l'appel, il est sous chaque traduction (décision porteur du 2026-11-09, #17340).
@@ -159,11 +161,11 @@
 
 ### Duo audio
 
-En audio, la personne est au centre et son anneau prend sa couleur, avec son halo, quand elle parle ; au repos, aucun anneau. « Caméra » (rail gauche) bascule l'appel en vidéo.
+En audio, la personne est au centre et son anneau prend sa couleur, avec son halo, quand elle parle ; au repos, aucun anneau. « Caméra » (rail gauche) bascule l'appel en vidéo. Quand le journal s'ouvre dans la pilule, l'avatar se réduit en un en-tête compact, nom et durée à côté (loi 6, P9b).
 
-| P9 · Audio, repos | P10 · Audio, actions et sous-titres |
-|---|---|
-| ![P9](appels-vue-finale/vues/P9.png) | ![P10](appels-vue-finale/vues/P10.png) |
+| P9 · Audio, repos | P9b · Audio, journal ouvert | P10 · Audio, actions et sous-titres |
+|---|---|---|
+| ![P9](appels-vue-finale/vues/P9.png) | ![P9b](appels-vue-finale/vues/P9b.png) | ![P10](appels-vue-finale/vues/P10.png) |
 
 ### Groupe
 
@@ -222,7 +224,7 @@ Ce tableau est un compte rendu daté. Les lignes du chantier #17329 (Liquid Glas
 | Pilule, rails, groupe (lois 1–3) | livré | livré ; le verre qui s'assombrit sur un écran reçu (loi 3) reste à porter, #16972 ; reliquats de mise en page dans `apps/ios/tasks/routine-appels.md` | livré dans le code, verre de la loi 3 compris (#16952) ; à vérifier sur capture |
 | Boutons en Liquid Glass (loi 1, #17323) et rails en duo (loi 2, #17327) | fusionné : verre par bouton #17419 (#17418), rails #17445 (#17429), libellés #17470 (#17462) ; rendu à rejouer, #17423 et #17455 | fusionné : Liquid Glass #17403, rails #17431, libellés #17428 (#17417) ; rendu à rejouer, #17422, #17438, #17439 | fusionné : verre #17420, rails #17446, libellés #17472 (#17461) ; rendu à rejouer, #17421 et #17450 |
 | Capsule de l'en-tête : nom donné · durée, réseau seulement dégradé (loi 1, #17341) | fusionné, #17504 (#17499 fermée) | fusionné, #17493 (#17491 fermée) | fusionné, #17501 (#17498 fermée) |
-| Sous-titres et journal DANS la pilule, (…) les range (lois 5–7, #17343) | fusionné, #17486 (#17479) ; phrases et pied Langue · Journal, #17503 (#17496) | fusionné, #17502 (#17456) ; phrases et pied, #17494 (#17492) ; taille de l'avatar en audio journal ouvert, #17529 | fusionné, #17484 (#17478) ; phrases et pied, #17500 (#17495) |
+| Sous-titres et journal DANS la pilule, (…) les range (lois 5–7, #17343) | fusionné, #17486 (#17479) ; phrases et pied Langue · Journal, #17503 (#17496) | fusionné, #17502 (#17456) ; phrases et pied, #17494 (#17492) ; avatar réduit à 56 pt en audio journal ouvert, `CallCompactAudioHeader` (#17529) | fusionné, #17484 (#17478) ; phrases et pied, #17500 (#17495) |
 | Le journal garde tout l'appel, sous-titres allumés ou non (loi 7, #17342) | gardé avant la décision (constat de #17342) ; heure dans l'appel et ordre, fusionné, #17519 (#17517) | fusionné, #17513 (#17510) | fusionné, #17518 (#17516), le témoin qui jetait ces phrases y est retourné |
 | Original au toucher pendant l'appel, bascule Traduit · Original sur tout le journal (lois 6, 7, #17340) | original seulement sous la phrase touchée, fusionné, #17519 (#17517) ; bascule dans la tête du journal (#16942) | fusionné, #17513 (#17510) | fusionné, #17518 (#17516) |
 | Mode Effets : sous-titres gardés au-dessus des looks, Réglages à l'engrenage légendé (lois 9, 11, 14 ; P8) | fusionné, #17525 (#17524) ; engrenage : ligne P8b | P8 conforme à l'audit du 2026-11-11 (10/10, glyphe d'Effets alors dessiné sur Réglages) ; engrenage : ligne P8b | fusionné, #17512 (#17511, sous-titres gardés) ; engrenage : ligne P8b |
