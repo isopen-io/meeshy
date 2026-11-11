@@ -2,6 +2,7 @@ import { lazy, Suspense, useId, useRef, useState, type KeyboardEvent, type React
 import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
+import { CameraOffStage } from '@/components/call-camera-off';
 import { CallGrid, Portrait } from '@/components/call-grid';
 import { StageBleed, StreamVideo } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
@@ -43,6 +44,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { cameraMirrored } from '@/lib/media/camera-mirror';
 import { sessionStore } from '@/lib/api/session';
+import { peerSpeakingOnCameraOff } from '@/lib/calls/call-camera-off';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 
 /**
@@ -99,7 +101,6 @@ const TILE_SAID: Readonly<Record<SelfTileScale, 'callControls.selfTile.small' | 
 /** Mon image dans son aperçu (#8696) : la loi du miroir, jamais une condition locale. */
 export const selfPreviewMirrored = (call: Pick<ActiveCall, 'facing' | 'screenSharing'>): boolean => cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing });
 
-const INK_2 = 'var(--color-on-media-3)';
 
 type StageProps = {
   readonly call: ActiveCall;
@@ -209,8 +210,10 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
   const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
   /* La vignette du coin porte la couleur de qui s'y montre : la mienne, ou celle du correspondant une fois échangée (#16635). */
+  const mainOwner = swapped ? meId : (firstPeer?.userId ?? null);
   const cornerOwner = swapped ? (firstPeer?.userId ?? null) : meId;
-  const cornerColor = cornerOwner === null ? SELF_SPEAKER_COLOR : speakerColor(cornerOwner);
+  const colorOf = (owner: string | null): string => (owner === null ? SELF_SPEAKER_COLOR : speakerColor(owner));
+  const cornerColor = colorOf(cornerOwner);
   const selfMirrored = selfPreviewMirrored(call);
   const local = useLocalZoom(call.callId, call.facing);
   const you = translate(language, 'call.you');
@@ -273,20 +276,16 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   return (
     <div role="group" aria-label={stageLabel} className="absolute inset-0" data-call-duo-stage="">
       {mainOn && bleedEnd > 0 ? <StageBleed stream={main} mirrored={swapped && selfMirrored} width={bleedEnd} /> : null}
-      {mainOn ? (
-        <div className="absolute inset-0 overflow-hidden">
-          <StreamVideo stream={main} mirrored={swapped && selfMirrored} className="absolute inset-0 size-full" label={swapped ? you : call.title} member={swapped ? undefined : firstPeer?.userId} self={swapped} />
-        </div>
-      ) : (
-        <div className="absolute inset-0 grid place-items-center">
-          <div className="flex flex-col items-center gap-3">
-            <Portrait name={swapped ? you : call.title} avatar={swapped ? null : call.avatar} size={96} pulse={false} presenceKey={swapped ? undefined : (call.peerKey ?? undefined)} />
-            <span className="text-body" style={{ color: INK_2 }}>
-              {translate(language, swapped ? 'call.camera.off' : remoteStream === null ? 'call.video.connecting' : 'call.camera.peerOff')}
-            </span>
-          </div>
-        </div>
-      )}
+      <CameraOffStage
+        videoOn={mainOn}
+        video={<StreamVideo stream={main} mirrored={swapped && selfMirrored} className="absolute inset-0 size-full" label={swapped ? you : call.title} member={swapped ? undefined : firstPeer?.userId} self={swapped} />}
+        name={swapped ? you : call.title}
+        avatar={swapped ? null : call.avatar}
+        presenceKey={swapped ? undefined : (call.peerKey ?? undefined)}
+        color={colorOf(mainOwner)}
+        speaking={!swapped && peerSpeakingOnCameraOff(call.captions, firstPeer?.userId)}
+        label={translate(language, swapped ? 'call.camera.off' : remoteStream === null ? 'call.video.connecting' : 'call.camera.peerOff')}
+      />
       {peerMuted && !swapped ? <PeerMuted where="main" /> : null}
       {swapped ? (
         <Suspense fallback={self.zoom === 'capsule' ? self.column(null) : null}>

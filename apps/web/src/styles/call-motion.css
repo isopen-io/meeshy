@@ -225,3 +225,10 @@
     translate: none;
   }
 }
+
+/* L'ANNEAU ET LE HALO DE LA CAMÉRA COUPÉE (G4.2, #17567) — un seul calque d'ombres, à la
+   couleur de la personne que la scène noire remet (`--call-tint`, `speakerColor`) ; il ne
+   paraît qu'à la parole, par son opacité seule (`useOpacityFade`). */
+[data-call-camera-off-speech] {
+  box-shadow: 0 0 0 3px var(--call-tint), 0 0 24px 6px color-mix(in srgb, var(--call-tint) 50%, transparent);
+}
