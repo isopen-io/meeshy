@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-kt6x2g` |
+| Branche de travail de la session courante | `claude/practical-fermat-y94b4f` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -47,7 +47,27 @@ normal.
 | **80w** | 2026-11-07 | `claude/practical-fermat-k0hf3y` | → `dev` | ✅ mergé |
 | **81w** | 2026-11-08 | `claude/practical-fermat-9e6ean` | → `dev` | ✅ mergé |
 | **82w** | 2026-11-09 | `claude/practical-fermat-jsk76s` | → `dev` | ✅ mergé |
-| **83w** | 2026-11-10 | `claude/practical-fermat-kt6x2g` | → `dev` | ⏳ ouverte |
+| **83w** | 2026-11-10 | `claude/practical-fermat-kt6x2g` | → `dev` | ✅ mergé |
+| **84w** | 2026-11-11 | `claude/practical-fermat-y94b4f` | → `dev` | ⏳ ouverte |
+
+**84w** — cohérence de thème / maintenabilité : le talkie élargi sur la barre
+d'en-tête (`components/talkie-header-band.tsx`, transposition de
+`TalkieHeaderLiveBar.swift`, #17338) peignait son chrome en **15 littéraux bruts**
+(blanc/noir rgba, `#fff`, `#000`) — **15 des 28 violations du gate (54 %)**, la plus
+grosse poche de chrome du web, apparue sur `dev` APRÈS 83w. Encre, voiles, filets et
+halos ramenés à l'échelle `on-media`/`scrim-soft`/`media-fill`/`media-hairline` (ou
+`color-mix` de `var(--color-on-media)` pour les alphas hors dosage canonique), et le
+rouge d'enregistrement passé de `var(--color-error)` (illisible sur verre sombre en
+thème clair) à `var(--ios-error-strong)` — parité iOS (`errorStrong`) et avec les
+autres chromes d'appel. Seules exemptions, déclarées à la ligne : l'onde en CANVAS
+(hors du DOM) et le masque de luminance (`#000` = opaque). Témoins :
+`check-design-harmony.test.ts` (describe « la barre de talkie élargie », `scanSource`
+→ `[]`, 25→29) + `thread-header-talkie.test.tsx` (voile hors ligne re-jetonné
+`var(--color-scrim-soft)`). Gate **28 → 13 violations** (−15, exactement
+`talkie-header-band.tsx`), **11 → 10 fichiers** ; `tsc` 0. Housekeeping : 83w
+confirmée mergée (`lens-preview-line` dérive de `RAINBOW_SPECTRUM` sur `dev`) ;
+appariement analyses↔plans 1:1 revérifié (45w→83w). Analyse :
+`docs/analyses/uiux/2026-11-11-iteration-84w.md`.
 
 **83w** — cohérence de positionnement / maintenabilité : l'aperçu de liste
 (`components/lens-preview-line.tsx`) peignait le fini « rainbow » d'un message avec
@@ -159,10 +179,13 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **84w**
-Revue fraîche `apps/web` — voir les pistes 84w+ en pied de
-`docs/analyses/uiux/2026-11-10-iteration-83w.md` (gate d'harmonie à 9/7 :
-`comment-compose-bar.tsx` (▶ sur vignette vidéo → `text-on-media` ou exempt),
-`message-menu`/`message-edit-composer` (encre sur accent/scrim), letterbox admin
-(`#000`, exempt motivé), `call-overlay`/`conversation-backdrop`/`rank-blason` ;
-+ axe épuration, toujours non entamé).
+## Prochaine itération : **85w**
+Revue fraîche `apps/web` — voir les pistes 85w+ en pied de
+`docs/analyses/uiux/2026-11-11-iteration-84w.md` (gate d'harmonie à **13/10** après
+84w : `call-control-actions.tsx` (`#000` ×2), `message-menu`/`message-edit-composer`
+(encre sur accent/scrim), `thread-header-bring`/`thread-header-talkie` (`#fff` encre
+sur média), `comment-compose-bar.tsx` (▶ sur vignette), letterbox admin (`#000`,
+exempt motivé), `call-overlay`/`conversation-backdrop`/`rank-blason` ; + axe
+épuration, toujours non entamé).
+**Toujours REMESURER le gate à l'ouverture** : il peut remonter si `dev` reçoit une
+poche neuve entre deux tours (c'est ce qui a fait passer 9/7 → 28/11 entre 83w et 84w).
