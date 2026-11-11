@@ -302,7 +302,7 @@ final class CallModeRulesTests: XCTestCase {
     /// que l'appel établi offre Effets ; un repli audio le referme.
     func test_preConnect_openModeSurvivesTheConnectionOnlyIfEffectsStayOffered() {
         let open = CallScreenLayer.idle.entering(.effects)
-        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: true, hasSelectableCameras: false, isConnected: true, mayRecord: false, canPictureInPicture: false, showsVideo: true))), open)
-        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: false, hasSelectableCameras: false, isConnected: true, mayRecord: false, canPictureInPicture: false, showsVideo: false))), .idle)
+        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: true, hasSelectableCameras: false, isConnected: true, mayRecord: false, showsVideo: true))), open)
+        XCTAssertEqual(open.reconciled(with: CallActionSet.resolve(.init(isOnMac: false, isVideoEnabled: false, hasSelectableCameras: false, isConnected: true, mayRecord: false, showsVideo: false))), .idle)
     }
 }

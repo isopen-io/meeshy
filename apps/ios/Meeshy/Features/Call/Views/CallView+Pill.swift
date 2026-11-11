@@ -113,7 +113,6 @@ extension CallView {
                 && (isOnMac || callManager.availableCameras.contains(where: { $0.isExternal })),
             isConnected: isConnected,
             mayRecord: callManager.mayRequestRecording || callManager.recording.phase.isActive,
-            canPictureInPicture: callManager.canActivateSystemPiP || callManager.isSystemPiPActive,
             showsVideo: callManager.isVideoUIActive
         )
     }
@@ -363,8 +362,6 @@ extension CallView {
             captionsActionButton(captioned: captioned, diameter: diameter)
         case .recording:
             recordingActionButton(captioned: captioned, diameter: diameter)
-        case .pictureInPicture:
-            pictureInPictureActionButton(captioned: captioned, diameter: diameter)
         case .addPeople:
             addPeopleActionButton(captioned: captioned, diameter: diameter)
         case .react:
@@ -428,28 +425,5 @@ extension CallView {
         }
         .menuIndicator(.hidden)
         .accessibilityLabel(String(localized: "call.control.camera", defaultValue: "Choisir la caméra", bundle: .main))
-    }
-
-    /// PiP système : visible seulement si l'appel y est éligible (vidéo, piste
-    /// distante, caméra distante allumée, appareil compatible) — ou déjà actif,
-    /// pour pouvoir en sortir.
-    private func pictureInPictureActionButton(captioned: Bool, diameter: CGFloat) -> some View {
-        let isActive = callManager.isSystemPiPActive
-        return CallPillButton(
-            symbol: isActive ? "pip.exit" : "pip.enter",
-            kind: isActive ? .active : .normal,
-            label: isActive
-                ? String(localized: "call.control.pip.exit", defaultValue: "Quitter le mode Picture-in-Picture", bundle: .main)
-                : String(localized: "call.control.pip", defaultValue: "Réduire en Picture-in-Picture", bundle: .main),
-            caption: captioned ? String(localized: "call.control.pip.caption", defaultValue: "PiP", bundle: .main) : nil,
-            hint: isActive ? nil : String(localized: "call.control.pip.hint", defaultValue: "Ferme l'écran d'appel et garde la vidéo dans une fenêtre flottante", bundle: .main),
-            diameter: diameter
-        ) {
-            if isActive {
-                callManager.stopSystemPiP()
-            } else {
-                enterSystemPiP()
-            }
-        }
     }
 }
