@@ -176,3 +176,8 @@ Ce qu'Android transpose, et pourquoi :
 - Le glyphe reçoit sa taille en paramètre (`glyph: @Composable (Dp) -> Unit`) : le « Aa » la prend en `sp` équivalent, le glyphe ne grandit pas avec la police.
 - Les chaînes réutilisent le catalogue de l'app (`a11y_kit_toggle_*`) : K02 n'ajoute aucune chaîne à `:sdk-ui`.
 - Partage du débord de deux 40 accolés (↶ ↷) : reste à l'hôte (K16), comme sur iOS.
+
+Relecture du 2026-11-11 (corrigé sur la branche du lot) :
+- Focus clavier : `indication = null` laissait le bouton sans aucun anneau au clavier, alors que le § 5 le demande. K01 Android n'en dessine pas (il n'en a pas besoin : sa surface ne prend pas le focus) ; K02 trace donc l'anneau lui-même, en phase de dessin, à la règle du `:focus-visible` de K01 web : 2 dp décalés de 2 dp, blanc des médias sur `plain` et dans un verre, sombre du verre sur `deep` et `onLight`, encre du thème sur `theme` (`MeeshyGlassButtonFocusRing`, dans la recette). Le `clickable` de Compose ne prend le focus qu'au clavier : jamais d'anneau au doigt.
+- Fondu enchaîné : passer du normal à l'actif (ou au destructif, au doux) faisait disparaître le verre de K01 d'un coup sous un fond qui partait de zéro. Le verre qui part s'efface désormais en 200 ms sous le fond qui arrive (sec sous « réduire les animations »), comme le changement d'identité du disque sur iOS ; il reste à la même place de la composition, donc K01 garde son flou pendant le fondu.
+- Stabilité : `MeeshyGlassButtonActivation` est `@Immutable`. Sans la marque, Compose (saut fort, Kotlin 2.1) comparait l'interface par identité, et un hôte qui écrit `Toggle(isOn)` en ligne recomposait le bouton à valeur égale.

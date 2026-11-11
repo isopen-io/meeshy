@@ -11,6 +11,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -23,14 +24,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -59,7 +64,12 @@ import me.meeshy.ui.theme.MeeshyTheme
  * Atome opaque : ni action, ni nom accessible, ni haptique, ni légende. Le glyphe reçoit l'encre ([LocalContentColor]) et
  * la taille que la recette lui fixe : il est figé dans son disque, la taille de police du système ne le touche pas. La
  * réponse au toucher vient de [interactionSource] (appui, survol au pointeur) ou d'un état [pressed] figé (le catalogue) ;
- * elle se joue en phase de dessin, le contenu ne se recompose jamais à l'appui.
+ * elle se joue en phase de dessin, le contenu ne se recompose jamais à l'appui. Au clavier, la même source porte le
+ * focus : un anneau décalé de 2 dp, à la couleur que le ton laisse lisible (jamais au doigt : le bouton ne prend le
+ * focus qu'au clavier).
+ *
+ * Un changement de tenue est un fondu enchaîné : le fond et l'encre se fondent, et le verre de K01 qui part (normal →
+ * actif, destructif, doux) s'efface dessous au lieu de disparaître.
  *
  * Pendant iOS : `MeeshyGlassButtonFace`.
  */
@@ -93,10 +103,14 @@ public fun MeeshyGlassButtonFace(
     }
     val sourcePressed: State<Boolean>? = if (interactionSource != null) interactionSource.collectIsPressedAsState() else null
     val sourceHovered: State<Boolean>? = if (interactionSource != null) interactionSource.collectIsHoveredAsState() else null
+    val sourceFocused: State<Boolean>? = if (interactionSource != null) interactionSource.collectIsFocusedAsState() else null
 
     val fadeSpec: AnimationSpec<Float> = if (reduceMotion) snap() else tween(durationMillis = MeeshyGlassRecipe.TONE_FADE_MILLIS)
     val inkSpec: AnimationSpec<Color> = if (reduceMotion) snap() else tween(durationMillis = MeeshyGlassRecipe.TONE_FADE_MILLIS)
     val restOpacity = animateFloatAsState(targetValue = rest.fillOpacity, animationSpec = fadeSpec, label = "meeshyGlassButtonFill")
+    val wearsGlass = rest.glass == MeeshyGlassButtonGlassRequest.Neutral
+    val glassOpacity = animateFloatAsState(targetValue = if (wearsGlass) 1f else 0f, animationSpec = fadeSpec, label = "meeshyGlassButtonGlass")
+    val glassLingers = remember(glassOpacity) { derivedStateOf { glassOpacity.value > 0f } }
     val ink = animateColorAsState(targetValue = rest.inkColor(themeInk, themeInverse), animationSpec = inkSpec, label = "meeshyGlassButtonInk")
     val lastFill = remember { LastFill() }
     if (rest.fill != MeeshyGlassButtonFill.Clear) lastFill.color = rest.fillColor(themeInk)
@@ -127,21 +141,34 @@ public fun MeeshyGlassButtonFace(
             if (live.pressVeilOpacity > 0f) drawCircle(MeeshyMediaChromeColors.OnMedia.copy(alpha = live.pressVeilOpacity))
         }
 
-    Box(modifier.then(if (rest.opacity < 1f) Modifier.alpha(rest.opacity) else Modifier).size(rest.diameterDp.dp)) {
-        if (rest.glass == MeeshyGlassButtonGlassRequest.Neutral) {
+    val ringColor = rest.focusRingColor(themeInk)
+    val focusRing = if (sourceFocused == null) {
+        Modifier
+    } else {
+        Modifier.drawWithContent {
+            drawContent()
+            if (sourceFocused.value) {
+                val width = MeeshyGlassButtonRecipe.FOCUS_RING_WIDTH_DP.dp.toPx()
+                val radius = size.minDimension / 2f + MeeshyGlassButtonRecipe.FOCUS_RING_OFFSET_DP.dp.toPx() + width / 2f
+                drawCircle(ringColor, radius = radius, style = Stroke(width = width))
+            }
+        }
+    }
+
+    Box(modifier.then(if (rest.opacity < 1f) Modifier.alpha(rest.opacity) else Modifier).size(rest.diameterDp.dp).then(focusRing)) {
+        if (wearsGlass || glassLingers.value) {
             MeeshyGlass(
-                modifier = Modifier.size(rest.diameterDp.dp),
+                modifier = Modifier.size(rest.diameterDp.dp).graphicsLayer { alpha = glassOpacity.value },
                 shape = CircleShape,
                 tone = effectiveTone,
                 tint = tint,
-                interactionSource = if (enabled) interactionSource else null,
-                pressed = if (enabled) pressed else null,
+                interactionSource = if (enabled && wearsGlass) interactionSource else null,
+                pressed = if (enabled && wearsGlass) pressed else null,
             ) {
-                GlassButtonDisc(discModifier, ink, rest.glyphSizeDp.dp, glyph)
+                if (wearsGlass) GlassButtonDisc(discModifier, ink, rest.glyphSizeDp.dp, glyph)
             }
-        } else {
-            GlassButtonDisc(discModifier, ink, rest.glyphSizeDp.dp, glyph)
         }
+        if (!wearsGlass) GlassButtonDisc(discModifier, ink, rest.glyphSizeDp.dp, glyph)
         if (badge != null) {
             Box(Modifier.align(Alignment.TopEnd).clearAndSetSemantics { }) { badge() }
         }

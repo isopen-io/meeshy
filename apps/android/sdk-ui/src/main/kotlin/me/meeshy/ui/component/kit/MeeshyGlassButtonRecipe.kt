@@ -64,7 +64,11 @@ public enum class MeeshyGlassButtonHaptic {
 /**
  * L'état que le bouton DIT à l'hôte et au lecteur d'écran. Vrai ⇒ la tenue [MeeshyGlassButtonKind.Active] quand l'hôte
  * n'en force pas une autre. Miroir de `MeeshyGlassButtonActivation` (iOS).
+ *
+ * `@Immutable` : un hôte qui écrit `Toggle(isOn)` en ligne crée une instance par recomposition ; sans cette marque, Compose
+ * compare l'interface par identité et recompose le bouton à valeur égale.
  */
+@Immutable
 public sealed interface MeeshyGlassButtonActivation {
     public val isOn: Boolean
 
@@ -113,6 +117,16 @@ public sealed interface MeeshyGlassButtonInk {
     public data class Custom(val color: Color) : MeeshyGlassButtonInk
 }
 
+/**
+ * La couleur de l'anneau du focus clavier. Décalé du disque, il se pose sur ce qui est DESSOUS : sa couleur suit le ton
+ * qui a été élu pour ce dessous (règle du `:focus-visible` de K01 sur le web), et l'encre de la planche dans un verre.
+ */
+public enum class MeeshyGlassButtonFocusRing {
+    OnMedia,
+    MediaBackdrop,
+    ThemeInk,
+}
+
 /** L'ombre de l'actif : le flou de la planche (CSS) en rayon, comme K01 le fait pour le verre. */
 @Immutable
 public data class MeeshyGlassButtonShadow(val opacity: Float, val radiusDp: Float, val yDp: Float)
@@ -136,6 +150,8 @@ public data class MeeshyGlassButtonRecipe(
     val glass: MeeshyGlassButtonGlassRequest,
     val ink: MeeshyGlassButtonInk,
     val shadow: MeeshyGlassButtonShadow?,
+    /** L'anneau du focus clavier (jamais au doigt : un bouton ne prend le focus qu'au clavier). */
+    val focusRing: MeeshyGlassButtonFocusRing,
     val opacity: Float,
     val isActionEnabled: Boolean,
 ) {
@@ -156,6 +172,8 @@ public data class MeeshyGlassButtonRecipe(
         public const val PRESS_VEIL_HOVERED_OPACITY: Float = 0.11f
         public const val LONG_PRESS_MILLIS: Long = 500L
         public const val LONG_PRESS_MAX_MOVEMENT_DP: Float = 10f
+        public const val FOCUS_RING_WIDTH_DP: Float = 2f
+        public const val FOCUS_RING_OFFSET_DP: Float = 2f
 
         /** Le flou de l'ombre de l'actif sur la planche (`0 4px 14px`) ; le rayon en est la moitié, comme pour le verre de K01. */
         public const val ACTIVE_SHADOW_BLUR: Float = 14f
@@ -197,6 +215,7 @@ public data class MeeshyGlassButtonRecipe(
                 glass = glass,
                 ink = ink(kind, tone, glyphTint),
                 shadow = if (kind == MeeshyGlassButtonKind.Active) ActiveShadow else null,
+                focusRing = focusRing(tone, isNested),
                 opacity = if (isEnabled) 1f else DISABLED_OPACITY,
                 isActionEnabled = isEnabled,
             )
@@ -207,6 +226,13 @@ public data class MeeshyGlassButtonRecipe(
             MeeshyGlassButtonKind.Active -> if (tone == MeeshyGlassTone.Theme) MeeshyGlassButtonFill.ThemeInk else MeeshyGlassButtonFill.White
             MeeshyGlassButtonKind.Destructive -> MeeshyGlassButtonFill.Red
             MeeshyGlassButtonKind.Soft -> MeeshyGlassButtonFill.Veil
+        }
+
+        private fun focusRing(tone: MeeshyGlassTone, isNested: Boolean): MeeshyGlassButtonFocusRing = when {
+            isNested -> MeeshyGlassButtonFocusRing.OnMedia
+            tone == MeeshyGlassTone.Plain -> MeeshyGlassButtonFocusRing.OnMedia
+            tone == MeeshyGlassTone.Theme -> MeeshyGlassButtonFocusRing.ThemeInk
+            else -> MeeshyGlassButtonFocusRing.MediaBackdrop
         }
 
         private fun glassRequest(kind: MeeshyGlassButtonKind): MeeshyGlassButtonGlassRequest =
@@ -266,6 +292,13 @@ public fun MeeshyGlassButtonRecipe.inkColor(themeInk: Color, themeInverse: Color
     MeeshyGlassButtonInk.ThemeInk -> themeInk
     MeeshyGlassButtonInk.ThemeInverse -> themeInverse
     is MeeshyGlassButtonInk.Custom -> value.color
+}
+
+/** La couleur de l'anneau du focus clavier. [themeInk] : l'encre du thème, pour le ton `Theme`. */
+public fun MeeshyGlassButtonRecipe.focusRingColor(themeInk: Color): Color = when (focusRing) {
+    MeeshyGlassButtonFocusRing.OnMedia -> MeeshyMediaChromeColors.OnMedia
+    MeeshyGlassButtonFocusRing.MediaBackdrop -> MeeshyMediaChromeColors.MediaBackdrop
+    MeeshyGlassButtonFocusRing.ThemeInk -> themeInk
 }
 
 /**
