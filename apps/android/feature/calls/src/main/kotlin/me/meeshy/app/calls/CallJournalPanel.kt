@@ -66,8 +66,7 @@ private val CAPTION_TARGET = 48.dp
 
 /**
  * The whole call, DRAWN IN THE PILL in place of the captions (#17343, iOS `CallJournalPanel`): a header (« Journal » on
- * the left, the Translated / Original switch on the right, nothing else, plate P6), then the list, which scrolls and offers « Back to live ». The switch is the
- * « Captions » setting, a touch per sentence flips it. The list has the height of [CallJournalSizing]; the base row of the
+ * the left, the Translated / Original switch on the right, nothing else, plate P6), then the list, which scrolls and offers « Back to live ». The switch is the journal's OWN (the band does not follow, law 7), a touch per sentence flips it there only. The list has the height of [CallJournalSizing]; the base row of the
  * pill stays under it and stays touchable. It keeps the whole call, captions on or off (#17342), each sentence dated by the time in the call. The (…), the
  * « Journal » button and the back button (TalkBack's escape) close it.
  */
@@ -81,16 +80,17 @@ internal fun CallJournalPanel(
     peerName: String = "",
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val view by viewModel.journalView.collectAsStateWithLifecycle()
     val labels = rememberCaptionLabels()
     val lines = rememberStableLines(
-        remember(state.journal, state.showsOriginal, state.revealed, state.callStartedAtMs, labels) { viewModel.journalLines(state, labels) },
+        remember(state.journal, view, state.callStartedAtMs, labels) { viewModel.journalLines(state, view, labels) },
     )
-    val toggle = remember(viewModel) { { key: String -> viewModel.toggleReveal(key) } }
+    val toggle = remember(viewModel) { { key: String -> viewModel.toggleJournalReveal(key) } }
     val title = stringResource(R.string.call_captions_journal_title)
     val windowHeight = LocalConfiguration.current.screenHeightDp.toFloat()
     BackHandler(onBack = onClose)
     Column(modifier.fillMaxWidth().semantics { paneTitle = title }) {
-        CallJournalHeader(showsOriginal = state.showsOriginal, onShowsOriginal = viewModel::setShowsOriginal)
+        CallJournalHeader(showsOriginal = view.showsOriginal, onShowsOriginal = viewModel::setJournalShowsOriginal)
         CallJournalList(
             lines = lines,
             onToggleOriginal = toggle,

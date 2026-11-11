@@ -217,6 +217,21 @@ data class CallCaptionListeners(val peers: Set<String> = emptySet()) {
 }
 
 /**
+ * What the journal alone remembers of how it is read (P13.5, law 7): its own Translated · Original switch and the
+ * sentences touched there. The band keeps its own, [CallCaptionsState.showsOriginal] and [CallCaptionsState.revealed]:
+ * one set per surface, so neither the switch nor a touch on one ever moves the other.
+ */
+data class CallJournalView(
+    val showsOriginal: Boolean = false,
+    val revealed: Set<String> = emptySet(),
+) {
+    fun showing(original: Boolean): CallJournalView = copy(showsOriginal = original)
+
+    fun togglingReveal(key: String): CallJournalView =
+        copy(revealed = if (key in revealed) revealed - key else revealed + key)
+}
+
+/**
  * The captions state of the call screen: the panel the reader opened (the pilot of [mode], never
  * the capture), the « Original » preference, the lines touched to flip, the journal, and whether
  * this device can caption MY words ([ownSpeech], #13718).
