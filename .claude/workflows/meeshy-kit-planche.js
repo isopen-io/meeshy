@@ -3,7 +3,7 @@ export const meta = {
   description:
     "Le kit de composants de la planche « Composer, vue finale » : chaque composant de la planche devient UN composant réutilisable dans toute l'application, sur iOS d'abord (MeeshyUI/Kit) puis reproduit sur Android (:sdk-ui component/kit) et sur le web (apps/web/src/components/kit), et les écrans l'adoptent. Registre des lots, fiche de contrat par composant (fable), exécution (haiku ou sonnet selon le lot), relecture, divergences iOS ↔ Android ↔ web ↔ planche et intégrations (opus), preuve par la CI, couverture des 70 vues",
   whenToUse:
-    "Lancer ou reprendre le chantier du kit depuis n'importe quelle session. Args (objet ou chaîne JSON) : { attribution (OBLIGATOIRE : les lignes Co-Authored-By et Claude-Session de la session qui lance), attributionPR (le bloc de deux lignes que la session doit poser en tête de chaque PR, s'il existe), date, etape ('kit' par défaut : socle + composants ; 'integration' : adoption par les écrans ; 'verifier' : aucune écriture, seulement divergences et couverture ; 'tout'), plateformes (['ios','android','web']), seulement [clés], sauter [clés], devPar (2), maxFix (3), run ('/home/user/meeshy-kit-run'), base ('dev'), autonome (false : true = aucune question n'arrête un lot, chaque choix est tranché, consigné en issue décision-produit et rendu dans le bilan), consignes ({ '*': texte pour tous les lots, 'K02': texte pour un lot } : change une décision prise et prime sur elle) }.",
+    "Lancer ou reprendre le chantier du kit depuis n'importe quelle session. Args (objet ou chaîne JSON) : { attribution (OBLIGATOIRE : les lignes Co-Authored-By et Claude-Session de la session qui lance), attributionPR (le bloc de deux lignes que la session doit poser en tête de chaque PR, s'il existe), date, etape ('kit' par défaut : socle + composants ; 'integration' : adoption par les écrans ; 'verifier' : aucune écriture, seulement divergences et couverture ; 'tout'), plateformes (['ios','android','web']), seulement [clés], sauter [clés], devPar (2), maxFix (3), run ('/home/user/meeshy-kit-run'), base ('dev'), autonome (false : true = aucune question n'arrête un lot, chaque choix est tranché, consigné en issue décision-produit et rendu dans le bilan), consignes ({ '*': texte pour tous les lots, 'K02': texte pour un lot } : change une décision prise et prime sur elle), modeles ({ mecanique, prouver, livrer : haiku par défaut ; reflexion : fable ; relire, corriger, diverger, integrer : opus } : remplace le modèle d'un rôle) }.",
   phases: [
     { title: 'Préparer', detail: 'dev à jour, registre lu, état de chaque lot par plateforme (livré, en PR, à faire)', model: 'haiku' },
     { title: 'Spécifier', detail: 'la fiche de contrat du composant : API, états, gestes, accessibilité, jumeaux à absorber, sur les trois plateformes', model: 'fable' },
@@ -12,9 +12,9 @@ export const meta = {
     { title: 'Reproduire Android', detail: 'le composant iOS fusionné et sa fiche reproduits dans :sdk-ui (haiku ou sonnet selon le lot)' },
     { title: 'Reproduire web', detail: 'le composant iOS fusionné et sa fiche reproduits en Preact dans apps/web (haiku ou sonnet selon le lot)' },
     { title: 'Relire', detail: 'le diff confronté à la fiche et à la planche ; opus corrige lui-même', model: 'opus' },
-    { title: 'Prouver', detail: 'merge de dev, CI concernées au SHA de tête, verdict et images des instantanés', model: 'sonnet' },
+    { title: 'Prouver', detail: 'merge de dev, CI concernées au SHA de tête, verdict et images des instantanés', model: 'haiku' },
     { title: 'Corriger', detail: 'cause racine des rouges du lot et des conflits avec dev', model: 'opus' },
-    { title: 'Livrer', detail: 'kit : fusion au vert, issue close avec preuve ; intégration : PR ouverte, arrêt pour captures (simulateur, ou navigateur pour le web) et accord du porteur', model: 'sonnet' },
+    { title: 'Livrer', detail: 'kit : fusion au vert, issue close avec preuve ; intégration : PR ouverte, arrêt pour captures (simulateur, ou navigateur pour le web) et accord du porteur', model: 'haiku' },
     { title: 'Diverger', detail: 'composant par composant : iOS contre Android contre web contre fiche contre planche, et jumeaux restants', model: 'opus' },
     { title: 'Intégrer', detail: "un écran adopte le kit, ses jumeaux sont supprimés, conflits avec dev résolus", model: 'opus' },
     { title: 'Couvrir', detail: 'les 70 vues de la planche × les composants : chaque vue se compose du kit seul, cliquets relevés', model: 'opus' },
@@ -61,7 +61,12 @@ const REGISTRE = '.claude/workflows/meeshy-kit-planche.lots.json'
 const PLANCHE = 'docs/product/composer-vue-finale/planche.html'
 const LOIS = 'docs/product/composer-vue-finale.md'
 const FICHES = 'docs/product/kit'
-const MODELE = { mecanique: 'haiku', reflexion: 'fable', prouver: 'sonnet', livrer: 'sonnet', relire: 'opus', corriger: 'opus', diverger: 'opus', integrer: 'opus' }
+const MODELES_ADMIS = ['haiku', 'sonnet', 'opus', 'fable']
+const MODELE = {
+  mecanique: 'haiku', prouver: 'haiku', livrer: 'haiku',
+  reflexion: 'fable', relire: 'opus', corriger: 'opus', diverger: 'opus', integrer: 'opus',
+  ...Object.fromEntries(Object.entries(A.modeles && typeof A.modeles === 'object' ? A.modeles : {}).filter(([, m]) => MODELES_ADMIS.includes(m))),
+}
 const branche = (cle, plateforme) => `claude/kit-${cle.toLowerCase()}-${plateforme}`
 
 if (!ATTR) {

@@ -3,14 +3,14 @@ export const meta = {
   description:
     "Le chantier « kit de la planche » de bout en bout et sans s'arrêter : tours du kit (pilote K00-K02 puis les 26 lots) jusqu'à ce qu'un tour ne livre plus rien, tours d'intégration, puis RAPPROCHEMENT — chaque branche du chantier reçoit ce qui a bougé sur dev sur ses fichiers, sans rien écraser ni perdre, est prouvée par la CI et fusionnée dans dev — et un tour de vérification final",
   whenToUse:
-    "Lancer tout le chantier du kit (#17312) en automatique. Args : { attribution (OBLIGATOIRE : lignes Co-Authored-By et Claude-Session), date, pilote (['K00','K01','K02']), toursMax (10), seche (2 tours sans livraison avant de passer à l'étape suivante), integration (true), rapprocher (true), verifier (true), autonome (true : aucune question n'arrête le chantier, chaque choix est consigné), consignes ({ '*': …, 'K02': … } : change une décision prise, prime sur elle), base ('dev'), run ('/home/user/meeshy-kit-run') }.",
+    "Lancer tout le chantier du kit (#17312) en automatique. Args : { attribution (OBLIGATOIRE : lignes Co-Authored-By et Claude-Session), date, pilote (['K00','K01','K02']), toursMax (10), seche (2 tours sans livraison avant de passer à l'étape suivante), integration (true), rapprocher (true), verifier (true), autonome (true : aucune question n'arrête le chantier, chaque choix est consigné), consignes ({ '*': …, 'K02': … } : change une décision prise, prime sur elle), modeles ({ rôle: modèle }, transmis au kit), base ('dev'), run ('/home/user/meeshy-kit-run') }.",
   phases: [
     { title: 'Pilote', detail: 'tours du kit sur K00, K01, K02 jusqu’à ce qu’un tour ne livre plus rien' },
     { title: 'Kit', detail: 'tours du kit sur les 26 lots, iOS puis Android et web' },
     { title: 'Intégration', detail: 'les écrans adoptent le kit, PR ouvertes' },
-    { title: 'Inventaire', detail: 'branches claude/kit-* et PR ouvertes qui portent du travail absent de dev', model: 'sonnet' },
+    { title: 'Inventaire', detail: 'branches claude/kit-* et PR ouvertes qui portent du travail absent de dev', model: 'haiku' },
     { title: 'Rapprocher', detail: 'merge de dev dans chaque branche, conflits résolus sans rien perdre, gates, preuve CI', model: 'opus' },
-    { title: 'Fusionner', detail: 'une branche à la fois : dev re-mergé s’il a bougé, fusion, contrôle que rien de dev n’est perdu', model: 'opus' },
+    { title: 'Fusionner', detail: 'une branche à la fois : dev re-mergé s’il a bougé, fusion, contrôle que rien de dev n’est perdu', model: 'sonnet' },
     { title: 'Vérifier', detail: 'tour de vérification : divergences et couverture des 70 vues' },
     { title: 'Bilan', detail: 'compte rendu daté sur #17312', model: 'haiku' },
   ],
@@ -32,7 +32,7 @@ const TOURS_MAX = Number.isInteger(A.toursMax) && A.toursMax > 0 ? A.toursMax : 
 const SECHE = Number.isInteger(A.seche) && A.seche > 0 ? A.seche : 2
 const KIT = { scriptPath: `${REPO}/.claude/workflows/meeshy-kit-planche.js` }
 const CONSIGNES = A.consignes && typeof A.consignes === 'object' ? A.consignes : {}
-const commun = { attribution: ATTR, date: DATE, base: BASE, run: RUN, autonome: A.autonome !== false, consignes: CONSIGNES }
+const commun = { attribution: ATTR, date: DATE, base: BASE, run: RUN, autonome: A.autonome !== false, consignes: CONSIGNES, ...(A.modeles && typeof A.modeles === 'object' ? { modeles: A.modeles } : {}) }
 
 const PROGRES = ['fusionne', 'pr_en_attente_porteur']
 const journal = []
@@ -111,7 +111,7 @@ Liste les branches distantes « claude/kit-* » de ${GH} qui portent au moins un
 et les PR OUVERTES vers ${BASE} dont la branche commence par « claude/kit- » (outils MCP GitHub, list_pull_requests). Pour chacune : branche, numéro de PR s'il y en a,
 clé du lot (K.. en majuscules) et plateforme (ios, android, web) lues dans le nom, « integration » si le registre .claude/workflows/meeshy-kit-planche.lots.json
 donne au lot le type « integration », et le nombre de fichiers différents de ${BASE}. Ordre de sortie : lots de kit avant intégrations, iOS avant Android avant web, clés croissantes.`,
-    { label: 'inventaire', phase: 'Inventaire', schema: INVENTAIRE, model: 'sonnet', effort: 'medium' })
+    { label: 'inventaire', phase: 'Inventaire', schema: INVENTAIRE, model: 'haiku', effort: 'medium' })
   const branches = inv && Array.isArray(inv.branches) ? inv.branches : []
   log(`Inventaire : ${branches.length} branche(s) à rapprocher — ${branches.map((b) => b.branche).join(', ')}`)
 
@@ -145,7 +145,7 @@ ${REGLES}
    Une perte va dans « perte_detectee » ET se répare aussitôt par une PR vers ${BASE}.
 4. Commente l'issue du lot avec la preuve (PR, SHA, runs) ; ferme-la si le composant existe désormais sur iOS, Android et le web (ou si l'intégration est complète sur la plateforme).
 Supprime le clone.`,
-      { label: `fusionner:${b.cle}:${b.plateforme}`, phase: 'Fusionner', schema: FUSION, model: 'opus', effort: 'high' })
+      { label: `fusionner:${b.cle}:${b.plateforme}`, phase: 'Fusionner', schema: FUSION, model: 'sonnet', effort: 'medium' })
     fusions.push({ branche: b.branche, ...(f || { statut: 'bloque', resume: 'agent interrompu' }) })
     log(`${b.branche} : ${f ? f.statut : 'interrompu'}`)
   }
