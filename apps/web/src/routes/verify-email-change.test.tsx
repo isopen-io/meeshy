@@ -81,6 +81,18 @@ describe('/settings/verify-email-change — un refus motivé', () => {
     expect(host.textContent).toContain('Lien expiré');
   });
 
+  test('un lien sans correspondance tient en une ligne, le détail est derrière un (i) en forme de question', async () => {
+    const host = await mount(
+      <VerifyEmailChangePage token="tok" signedIn language="fr" deps={scripted(refused(400, 'No pending email change')).deps} />,
+    );
+    expect(host.textContent).toContain('Lien expiré ou déjà utilisé');
+    expect(host.textContent).not.toContain('aucun changement en attente');
+    const hint = host.querySelector<HTMLButtonElement>('button[aria-label="Pourquoi ce lien ne marche plus ?"]');
+    expect(hint).not.toBeNull();
+    const noteId = hint?.getAttribute('aria-controls') ?? hint?.getAttribute('aria-describedby') ?? '';
+    expect(host.ownerDocument.getElementById(noteId)?.textContent).toContain('aucun changement en attente sur ce compte');
+  });
+
   test('une adresse prise entre-temps', async () => {
     const host = await mount(
       <VerifyEmailChangePage token="tok" signedIn language="fr" deps={scripted(refused(400, 'This email address is no longer available')).deps} />,
