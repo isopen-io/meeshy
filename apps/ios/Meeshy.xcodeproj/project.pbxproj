@@ -1748,6 +1748,7 @@
 		609D6396B5767A95A9A07348 /* ConversationView+StickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2327D438A9EE8D3320B3E90C /* ConversationView+StickerSheet.swift */; };
 		60A2C355D9B4115B6C4A98E6 /* OnboardingFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97C3E7D48FF842BBB445163 /* OnboardingFlow.swift */; };
 		60B2F7A2E0749C34A3242AF9 /* DarkFrameDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62FD9669B8E2B44A00E72257 /* DarkFrameDetectorTests.swift */; };
+		1CBADA98B99BDF16C5437D49 /* ComposerSceneViewfinderMount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728363F533CB66D480DBA619 /* ComposerSceneViewfinderMount.swift */; };
 		60B831A91FAA33903D2DB65B /* MeeshyComposerHost+Viewfinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 720EE3FB88CE1312044A0114 /* MeeshyComposerHost+Viewfinder.swift */; };
 		60C4BEA8131D319F30336E4E /* MessageListLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = D97CBCD45029B2BC8D131280 /* MessageListLayout.swift */; };
 		60CE9CD8E8B54EC6CEEFA9E9 /* LanguageFlagChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AD0AF6FB243AA63DCF30A2E /* LanguageFlagChip.swift */; };
@@ -6714,6 +6715,7 @@
 		71F38F52373DCB867CD7D8C6 /* SilentPushDurabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SilentPushDurabilityTests.swift; sourceTree = "<group>"; };
 		71F9605F55EF5A8FAD59B0FA /* StoryViewerSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerSheets.swift; sourceTree = "<group>"; };
 		72051B160CE648F3C1135388 /* futuriste_orbite_front.webp */ = {isa = PBXFileReference; path = futuriste_orbite_front.webp; sourceTree = "<group>"; };
+		728363F533CB66D480DBA619 /* ComposerSceneViewfinderMount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneViewfinderMount.swift; sourceTree = "<group>"; };
 		720EE3FB88CE1312044A0114 /* MeeshyComposerHost+Viewfinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+Viewfinder.swift"; sourceTree = "<group>"; };
 		7244C11C3AE2AD765FB16FDA /* ComposerSceneSurface+Stage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ComposerSceneSurface+Stage.swift"; sourceTree = "<group>"; };
 		724659267F2A3B9953713E48 /* CallManager+GroupMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+GroupMesh.swift"; sourceTree = "<group>"; };
@@ -13148,6 +13150,7 @@
 				1B881641AB0C5EB0F72C9AC3 /* MeeshyComposerHost+Socle.swift */,
 				BCC5AD6E07D37D67219D1FA8 /* MeeshyComposerHost+Sound.swift */,
 				D3DEBB8C72417731C4EFBD54 /* MeeshyComposerHost+Surfaces.swift */,
+				728363F533CB66D480DBA619 /* ComposerSceneViewfinderMount.swift */,
 				720EE3FB88CE1312044A0114 /* MeeshyComposerHost+Viewfinder.swift */,
 				05A37827156E65302052171F /* MoodComposerDoor.swift */,
 				FDF0CD3897ED2D7D30B225BE /* PasteDestination.swift */,
@@ -17119,6 +17122,7 @@
 				C209C2CC9E86DE09DDF0C716 /* MeeshyComposerHost+Socle.swift in Sources */,
 				08E6AABFD51E71D87439353D /* MeeshyComposerHost+Sound.swift in Sources */,
 				7108A0833BF0AB05F6C04C48 /* MeeshyComposerHost+Surfaces.swift in Sources */,
+				1CBADA98B99BDF16C5437D49 /* ComposerSceneViewfinderMount.swift in Sources */,
 				60B831A91FAA33903D2DB65B /* MeeshyComposerHost+Viewfinder.swift in Sources */,
 				9BC938D91BA4B363018A9697 /* MeeshyComposerHost.swift in Sources */,
 				3720FDE7AAD19CD732D144DD /* MeeshyFeatureFlags.swift in Sources */,

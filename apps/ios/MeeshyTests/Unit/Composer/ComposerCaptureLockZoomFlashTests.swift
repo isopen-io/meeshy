@@ -470,7 +470,7 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
     }
 
     func test_lesDeuxMontages_profitentDesGestesSansLesRecabler() throws {
-        for montage in ["Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift",
+        for montage in ["Meeshy/Features/Composer/ComposerSceneViewfinderMount.swift",
                         "Meeshy/Features/Composer/ComposerViewfinder.swift"] {
             let code = try source(montage)
             XCTAssertTrue(code.contains("ComposerCaptureMount("), "\(montage) monte le montage partagé")
