@@ -3,7 +3,7 @@
     <string name="activation_email_sent">Codice inviato a %1$s.</string>
     <string name="activation_invite_days_left">Restano %1$d giorni: poi, per accedere servirà un codice.</string>
     <string name="activation_invite_days_left_one">Resta 1 giorno: poi, per accedere servirà un codice.</string>
-    <string name="activation_invite_lead">Per usarlo senza interruzioni.</string>
+    <string name="activation_invite_lead">Verifica la tua e-mail o il tuo telefono per continuare ad accedere senza codice.</string>
     <string name="auth_forgot_sent_title">Link inviato</string>
     <string name="auth_magic_sent_title">Codice e link inviati</string>
     <string name="auth_magic_subtitle">Nessuna password: ti inviamo un link via e-mail.</string>
@@ -38,6 +38,7 @@
     <string name="onboarding_story_audience_friends">Visibile ai tuoi amici</string>
     <string name="onboarding_story_audience_public">Visibile a tutti</string>
     <string name="onboarding_story_body">Una foto, una frase: una storia.</string>
+    <string name="onboarding_story_title">La tua story</string>
     <string name="onboarding_story_verify">Conferma la tua e-mail per pubblicare la tua storia</string>
     <string name="session_closed_activation_message">Accedi di nuovo e inserisci il codice ricevuto via e-mail.</string>
     <string name="session_closed_admin_message">Per proteggere il tuo account.</string>

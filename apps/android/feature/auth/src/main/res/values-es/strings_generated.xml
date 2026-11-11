@@ -277,7 +277,6 @@
         <item quantity="other">+%1$d chispas · primera story</item>
     </plurals>
     <string name="onboarding_story_sending">Tu story se está enviando…</string>
-    <string name="onboarding_story_title">Muéstrate</string>
     <string name="registration_back">Atrás</string>
     <string name="session_closed_activation_title">Confirma tu dirección de correo</string>
     <string name="session_closed_contact">Escribir al equipo de Meeshy</string>
