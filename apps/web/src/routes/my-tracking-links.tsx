@@ -18,7 +18,7 @@ import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySkeleton, FamilyStats, TRACKING_TINT, SEPARATOR } from '@/routes/link-families-parts';
-import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice, statusLabel } from '@/routes/links-parts';
+import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinkCreated, LinksOfflineNotice, linkCreatedLabel, statusLabel } from '@/routes/links-parts';
 
 /**
  * **SES LIENS DE SUIVI** (#6408) — miroir `TrackingLinksView.swift` : en-tête
@@ -40,10 +40,11 @@ export function TrackingLinkRow({ language, link, copied, onCopy }: { readonly l
   const uniques = translateLinkFamilies(language, link.uniqueClicks === 1 ? 'linkFamilies.tracking.uniques.one' : 'linkFamilies.tracking.uniques.other', {
     count: new Intl.NumberFormat(language).format(link.uniqueClicks),
   });
+  const created = linkCreatedLabel(language, link.createdAt);
   const label = new Intl.ListFormat(language, {
     type: 'unit',
     style: 'short',
-  }).format([name, statusLabel(language, link.isActive), clicks, uniques]);
+  }).format([name, statusLabel(language, link.isActive), clicks, uniques, created]);
   return (
     <FamilyRow
       rowId={link.token}
@@ -64,6 +65,7 @@ export function TrackingLinkRow({ language, link, copied, onCopy }: { readonly l
           </span>
           {SEPARATOR}
           <span className="whitespace-nowrap">{uniques}</span>
+          <LinkCreated language={language} createdAt={link.createdAt} />
         </>
       }
       actions={<CopyRowAction language={language} label={translateLinkFamilies(language, 'linkFamilies.tracking.copy')} tint={TRACKING_TINT} copied={copied} onCopy={onCopy} />}
@@ -109,6 +111,7 @@ export default function MyTrackingLinksScreen() {
           family="tracking"
           glyph={<LinksGlyph name="chartLine" size={48} />}
           title={translateLinkFamilies(language, 'linkFamilies.tracking.empty.title')}
+          subtitle={translateLinkFamilies(language, 'linkFamilies.tracking.empty.subtitle')}
           cta={{
             to: 'myTrackingLinkNew',
             label: translateLinkFamilies(language, 'links.hub.tracking.create'),
