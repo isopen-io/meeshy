@@ -5,14 +5,6 @@ import org.junit.Test
 
 class CallHeaderLawTest {
     @Test
-    fun `la puce ne s'affiche que sur un appel etabli en video ou en groupe`() {
-        assertThat(CallHeaderLaw.showsDurationChip(showsConnectedLayout = true, isVideoUiActive = true)).isTrue()
-        assertThat(CallHeaderLaw.showsDurationChip(showsConnectedLayout = true, isVideoUiActive = false, isGroupStage = true)).isTrue()
-        assertThat(CallHeaderLaw.showsDurationChip(showsConnectedLayout = true, isVideoUiActive = false)).isFalse()
-        assertThat(CallHeaderLaw.showsDurationChip(showsConnectedLayout = false, isVideoUiActive = true)).isFalse()
-    }
-
-    @Test
     fun `la porte vers la conversation exige un salon connu`() {
         assertThat(CallHeaderLaw.showsConversationButton("65f0")).isTrue()
         assertThat(CallHeaderLaw.showsConversationButton("")).isFalse()

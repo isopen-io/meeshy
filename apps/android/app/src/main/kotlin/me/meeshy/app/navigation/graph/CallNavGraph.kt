@@ -52,11 +52,22 @@ internal fun NavGraphBuilder.callNavGraph(
             // destination re-attaches to the live call instead of spinning
             // up a nav-scoped one that would die on the next pop.
             viewModel = callViewModel,
-            // Minimise → open the DM with the call still running. popUpTo the
-            // CALL entry (inclusive) so the back stack never accumulates stale
+            // « Réduire » (#17329): back to where the user was, the call kept in the pill; with
+            // nothing behind the call, the conversation list. « Conversation » opens the call's chat
+            // instead. popUpTo the CALL entry (inclusive) so the back stack never accumulates stale
             // call screens that a Back press could re-enter (and re-initiate).
             onMinimize = {
-                navController.navigate(CallRoute.minimize(callViewModel.activeConfig.conversationId)) {
+                if (navController.previousBackStackEntry != null) {
+                    navController.popBackStack()
+                } else {
+                    navController.navigate(Routes.CONVERSATIONS) {
+                        popUpTo(CallRoute.PATTERN) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            },
+            onOpenConversation = {
+                navController.navigate(CallRoute.openConversation(callViewModel.activeConfig.conversationId)) {
                     popUpTo(CallRoute.PATTERN) { inclusive = true }
                     launchSingleTop = true
                 }

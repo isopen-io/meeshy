@@ -153,6 +153,9 @@ object CallRoute {
      * matches no destination and `navigate` throws (an offer, a swap or a push that
      * carries no room used to crash the app on the chevron).
      */
-    fun minimize(conversationId: String): String =
+    fun minimize(conversationId: String): String = openConversation(conversationId)
+
+    /** Where « Conversation » (header, #17329) lands while the call keeps running — the same destination rule as [minimize]. */
+    fun openConversation(conversationId: String): String =
         if (conversationId.isBlank()) Routes.CONVERSATIONS else Routes.chat(conversationId)
 }

@@ -304,6 +304,12 @@ class CallRouteTest {
     }
 
     @Test
+    fun `Conversation du header opens the call's chat, the list when the room is unknown`() {
+        assertThat(CallRoute.openConversation("conv-1")).isEqualTo(Routes.chat("conv-1"))
+        assertThat(CallRoute.openConversation("")).isEqualTo(Routes.CONVERSATIONS)
+    }
+
+    @Test
     fun `calling back may switch an audio call to video`() {
         val record = CallRecord(
             callId = "c1", conversationId = "conv-9", conversationType = "direct", mode = "p2p",

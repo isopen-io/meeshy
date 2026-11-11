@@ -64,12 +64,12 @@ class CallStageSemanticsTest {
     }
 
     @Test
-    fun `the audio stage names the peer and shows the weak network pill`() {
+    fun `the audio stage names the peer, and the weak network lives in the header capsule not under the avatar`() {
         rule.setContent {
             MeeshyTheme { CallAudioStage(connected(peerQualityDegraded = true), peer = CallPeerVisual.EMPTY) }
         }
         rule.onNodeWithText("Alice").assertExists()
-        rule.onNodeWithText("Poor network (contact)").assertExists()
+        rule.onNodeWithText("Poor network (contact)").assertDoesNotExist()
         rule.onNodeWithText("Server disconnected").assertDoesNotExist()
     }
 
