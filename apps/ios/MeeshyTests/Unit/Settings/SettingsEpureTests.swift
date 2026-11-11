@@ -40,6 +40,12 @@ final class SettingsEpureTests: XCTestCase {
         }
     }
 
+    func test_notes_renderedCapture_questionNamesTheRowItAnswers() {
+        let rowTitle = String(localized: "settings.media.capture.rendered.title", defaultValue: "Version avec effets", bundle: .main)
+        XCTAssertTrue(SettingsInfoNotes.renderedCapture.question.localizedCaseInsensitiveContains(rowTitle),
+                      "entendu seul, le (i) dit de quoi il parle : \(SettingsInfoNotes.renderedCapture.question)")
+    }
+
     func test_toggling_aSecondNote_closesTheFirst() {
         let first = SettingsInfoNotes.onlineStatus
         let second = SettingsInfoNotes.analytics
