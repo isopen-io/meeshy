@@ -76,8 +76,8 @@
     <string name="email_verification_subtitle">Introduce el código de 6 dígitos enviado a <b>%1$s</b></string>
     <string name="email_verification_subtitle_account_created">Cuenta creada. Código y enlace enviados a <b>%1$s</b>.</string>
     <string name="email_verification_subtitle_activation_required">Activa tu cuenta: se envió un código a <b>%1$s</b> para demostrar esta dirección.</string>
-    <string name="email_verification_success">¡Correo verificado!</string>
-    <string name="email_verification_title">Revisa tu correo</string>
+    <string name="email_verification_success">Dirección confirmada ✓</string>
+    <string name="email_verification_title">Confirma tu dirección de correo</string>
     <string name="email_verification_verify_button">Verificar</string>
     <string name="email_verification_verifying_a11y">Verificando</string>
     <string name="guest_ended_expired_message">Este enlace ya no da acceso a la conversación. Pide un enlace nuevo a la persona que te lo envió.</string>
@@ -328,7 +328,7 @@
     <string name="onboarding_story_sending">Tu story se está enviando…</string>
     <string name="onboarding_story_sending_detail">Puedes seguir: se publica mientras tanto.</string>
     <string name="onboarding_story_title">Muéstrate</string>
-    <string name="onboarding_story_verify">Confirma tu correo para publicar tu historia</string>
+    <string name="onboarding_story_verify">Confirma tu correo para publicar</string>
     <string name="onboarding_story_verify_detail">Toca el enlace del correo: tu historia podrá salir justo después.</string>
     <string name="registration_back">Atrás</string>
     <string name="session_closed_activation_message">Vuelve a iniciar sesión e introduce el código recibido por correo.</string>
@@ -351,7 +351,7 @@
     <string name="signup_card_code_lead">Introduce el código de 6 cifras enviado a %1$s o abre el enlace recibido.</string>
     <string name="signup_card_title">Tu cuenta</string>
     <string name="signup_card_verified">¡Cuenta validada!</string>
-    <string name="signup_card_verified_lead">Todo listo: tus contactos te leen en su idioma.</string>
+    <string name="signup_card_verified_lead">Tus contactos te leen en su idioma.</string>
     <string name="signup_close">Cerrar</string>
     <string name="signup_country_search_hint">Buscar un país</string>
     <string name="signup_display_name_label">¿Cómo te llamamos?</string>

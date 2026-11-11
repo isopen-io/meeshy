@@ -76,8 +76,8 @@
     <string name="email_verification_subtitle">أدخل الرمز المكوّن من 6 أرقام المُرسَل إلى <b>%1$s</b></string>
     <string name="email_verification_subtitle_account_created">تم إنشاء الحساب. أُرسل الرمز والرابط إلى <b>%1$s</b>.</string>
     <string name="email_verification_subtitle_activation_required">فعّل حسابك: أُرسل رمز إلى <b>%1$s</b> لإثبات هذا العنوان.</string>
-    <string name="email_verification_success">تم التحقق من البريد!</string>
-    <string name="email_verification_title">تحقّق من بريدك الإلكتروني</string>
+    <string name="email_verification_success">تم تأكيد العنوان ✓</string>
+    <string name="email_verification_title">أكّد عنوان بريدك الإلكتروني</string>
     <string name="email_verification_verify_button">تحقّق</string>
     <string name="email_verification_verifying_a11y">جارٍ التحقّق</string>
     <string name="guest_ended_expired_message">لم يعد هذا الرابط يتيح الوصول إلى المحادثة. اطلب رابطًا جديدًا من الشخص الذي أرسله إليك.</string>
@@ -343,7 +343,7 @@
     <string name="onboarding_story_sending">قصتك في الطريق…</string>
     <string name="onboarding_story_sending_detail">يمكنك المتابعة، ستُنشر في الخلفية.</string>
     <string name="onboarding_story_title">أظهِر نفسك</string>
-    <string name="onboarding_story_verify">أكّد بريدك الإلكتروني لنشر قصتك</string>
+    <string name="onboarding_story_verify">أكّد بريدك الإلكتروني للنشر</string>
     <string name="onboarding_story_verify_detail">المس الرابط الذي وصلك بالبريد: ستنطلق قصتك بعده مباشرة.</string>
     <string name="registration_back">رجوع</string>
     <string name="session_closed_activation_message">سجّل الدخول مجددًا ثم أدخل الرمز الذي وصلك بالبريد الإلكتروني.</string>
@@ -366,7 +366,7 @@
     <string name="signup_card_code_lead">أدخل الرمز المكوّن من 6 أرقام المرسل إلى %1$s، أو افتح الرابط الذي وصلك.</string>
     <string name="signup_card_title">حسابك</string>
     <string name="signup_card_verified">تم تأكيد الحساب!</string>
-    <string name="signup_card_verified_lead">كل شيء جاهز: يقرأك الآخرون بلغتهم.</string>
+    <string name="signup_card_verified_lead">يقرأك الآخرون بلغتهم.</string>
     <string name="signup_close">إغلاق</string>
     <string name="signup_country_search_hint">ابحث عن بلد</string>
     <string name="signup_display_name_label">بماذا نناديك؟</string>

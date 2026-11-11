@@ -76,8 +76,8 @@
     <string name="email_verification_subtitle">Enter the 6-digit code sent to <b>%1$s</b></string>
     <string name="email_verification_subtitle_account_created">Account created. Code and link sent to <b>%1$s</b>.</string>
     <string name="email_verification_subtitle_activation_required">Activate your account: a code was sent to <b>%1$s</b> to prove this address.</string>
-    <string name="email_verification_success">Email verified!</string>
-    <string name="email_verification_title">Check your email</string>
+    <string name="email_verification_success">Address confirmed ✓</string>
+    <string name="email_verification_title">Confirm your email address</string>
     <string name="email_verification_verify_button">Verify</string>
     <string name="email_verification_verifying_a11y">Verifying</string>
     <string name="guest_ended_expired_message">This link no longer opens the conversation. Ask the person who sent it for a new link.</string>
@@ -323,7 +323,7 @@
     <string name="onboarding_story_sending">Your story is on its way…</string>
     <string name="onboarding_story_sending_detail">You can keep going — it\'s posting in the background.</string>
     <string name="onboarding_story_title">Show yourself</string>
-    <string name="onboarding_story_verify">Confirm your email to post your story</string>
+    <string name="onboarding_story_verify">Confirm your email to post</string>
     <string name="onboarding_story_verify_detail">Tap the link we emailed you: your story can go out right after.</string>
     <string name="registration_back">Back</string>
     <string name="session_closed_activation_message">Sign in again and enter the code received by email.</string>
@@ -346,7 +346,7 @@
     <string name="signup_card_code_lead">Enter the 6-digit code sent to %1$s, or open the link you received.</string>
     <string name="signup_card_title">Your account</string>
     <string name="signup_card_verified">Account verified!</string>
-    <string name="signup_card_verified_lead">You’re all set: people read you in your language.</string>
+    <string name="signup_card_verified_lead">People read you in your language.</string>
     <string name="signup_close">Close</string>
     <string name="signup_country_search_hint">Search for a country</string>
     <string name="signup_display_name_label">What should we call you?</string>

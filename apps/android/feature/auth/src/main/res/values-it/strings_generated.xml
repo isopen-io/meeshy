@@ -55,7 +55,7 @@
     <string name="email_gate_sending">Invio…</string>
     <string name="email_gate_sent">Codice inviato a %1$s.</string>
     <string name="email_gate_title">Convalida il tuo indirizzo e-mail</string>
-    <string name="email_verification_code_a11y_hint">Inserisci il codice a 6 cifre ricevuto via email</string>
+    <string name="email_verification_code_a11y_hint">Inserisci il codice a 6 cifre ricevuto via e-mail</string>
     <string name="email_verification_code_a11y_label">Codice di verifica</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">Questo codice è scaduto. Richiedine uno nuovo.</string>
@@ -76,8 +76,8 @@
     <string name="email_verification_subtitle">Inserisci il codice a 6 cifre inviato a <b>%1$s</b></string>
     <string name="email_verification_subtitle_account_created">Account creato. Codice e link inviati a <b>%1$s</b>.</string>
     <string name="email_verification_subtitle_activation_required">Attiva il tuo account: un codice è stato inviato a <b>%1$s</b> per dimostrare questo indirizzo.</string>
-    <string name="email_verification_success">Email verificata!</string>
-    <string name="email_verification_title">Controlla la tua email</string>
+    <string name="email_verification_success">Indirizzo confermato ✓</string>
+    <string name="email_verification_title">Conferma il tuo indirizzo e-mail</string>
     <string name="email_verification_verify_button">Verifica</string>
     <string name="email_verification_verifying_a11y">Verifica in corso</string>
     <string name="guest_ended_expired_message">Questo link non dà più accesso alla conversazione. Chiedi un nuovo link alla persona che te l\'ha inviato.</string>
@@ -328,7 +328,7 @@
     <string name="onboarding_story_sending">La tua storia sta partendo…</string>
     <string name="onboarding_story_sending_detail">Puoi continuare: intanto si pubblica.</string>
     <string name="onboarding_story_title">Fatti vedere</string>
-    <string name="onboarding_story_verify">Conferma la tua e-mail per pubblicare la tua storia</string>
+    <string name="onboarding_story_verify">Conferma la tua e-mail per pubblicare</string>
     <string name="onboarding_story_verify_detail">Tocca il link ricevuto per e-mail: subito dopo la tua storia potrà partire.</string>
     <string name="registration_back">Indietro</string>
     <string name="session_closed_activation_message">Accedi di nuovo e inserisci il codice ricevuto via e-mail.</string>
@@ -351,7 +351,7 @@
     <string name="signup_card_code_lead">Inserisci il codice a 6 cifre inviato a %1$s o apri il link ricevuto.</string>
     <string name="signup_card_title">Il tuo account</string>
     <string name="signup_card_verified">Account convalidato!</string>
-    <string name="signup_card_verified_lead">Tutto pronto: i tuoi contatti ti leggono nella loro lingua.</string>
+    <string name="signup_card_verified_lead">I tuoi contatti ti leggono nella loro lingua.</string>
     <string name="signup_close">Chiudi</string>
     <string name="signup_country_search_hint">Cerca un paese</string>
     <string name="signup_display_name_label">Come dobbiamo chiamarti?</string>

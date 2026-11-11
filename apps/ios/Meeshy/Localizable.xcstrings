@@ -37168,100 +37168,6 @@
         }
       }
     },
-    "onboarding.profile.benefit.contacts": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "جهات اتصال أكثر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mehr Kontakte"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "More contacts"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Más contactos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus de contacts"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Più contatti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais contatos"
-          }
-        }
-      }
-    },
-    "onboarding.profile.benefit.visibility": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ظهور أكبر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mehr Sichtbarkeit"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "More visibility"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Más visibilidad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus de visibilité"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Più visibilità"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais visibilidade"
-          }
-        }
-      }
-    },
     "onboarding.profile.body": {
       "extractionState": "manual",
       "localizations": {
@@ -38494,53 +38400,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Seu story ainda não foi enviado"
-          }
-        }
-      }
-    },
-    "onboarding.story.failed.detail": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "محفوظة كما هي. أعد المحاولة متى شئت."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sie bleibt genau so gespeichert. Versuch es, wann du willst."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "It's kept just as you made it. Try again whenever you like."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se guarda tal cual. Reinténtalo cuando quieras."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elle est gardée telle quelle. Réessaie quand tu veux."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "È conservata così com'è. Riprova quando vuoi."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ele fica guardado do jeito que está. Tente de novo quando quiser."
           }
         }
       }
@@ -59941,13 +59800,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Adresse email"
+            "value": "Adresse e-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Indirizzo email"
+            "value": "Indirizzo e-mail"
           }
         },
         "pt-BR": {
@@ -122848,13 +122707,13 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entrez le code à 6 chiffres reçu par email"
+            "value": "Entrez le code à 6 chiffres reçu par e-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inserisci il codice a 6 cifre ricevuto via email"
+            "value": "Inserisci il codice a 6 cifre ricevuto via e-mail"
           }
         },
         "pt-BR": {
@@ -123670,43 +123529,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تم التحقق من البريد!"
+            "value": "تم تأكيد العنوان ✓"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "E-Mail verifiziert!"
+            "value": "Adresse bestätigt ✓"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email verified!"
+            "value": "Address confirmed ✓"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¡Correo verificado!"
+            "value": "Dirección confirmada ✓"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email vérifié !"
+            "value": "Adresse confirmée ✓"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email verificata!"
+            "value": "Indirizzo confermato ✓"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "E-mail verificado!"
+            "value": "Endereço confirmado ✓"
           }
         }
       }
@@ -123717,43 +123576,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تحقّق من بريدك الإلكتروني"
+            "value": "أكّد عنوان بريدك الإلكتروني"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prüfe deine E-Mails"
+            "value": "Bestätige deine E-Mail-Adresse"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Check your email"
+            "value": "Confirm your email address"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Revisa tu correo"
+            "value": "Confirma tu dirección de correo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vérifiez votre email"
+            "value": "Confirmez votre adresse e-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Controlla la tua email"
+            "value": "Conferma il tuo indirizzo e-mail"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verifique seu e-mail"
+            "value": "Confirme seu endereço de e-mail"
           }
         }
       }
@@ -232045,43 +231904,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أكّد بريدك الإلكتروني لنشر قصتك"
+            "value": "أكّد بريدك الإلكتروني للنشر"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bestätige deine E-Mail, um deine Story zu posten"
+            "value": "Bestätige deine E-Mail, um zu posten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confirm your email to post your story"
+            "value": "Confirm your email to post"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confirma tu correo para publicar tu historia"
+            "value": "Confirma tu correo para publicar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vérifie ton courriel pour publier ta story"
+            "value": "Confirme ton adresse e-mail pour publier"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conferma la tua e-mail per pubblicare la tua storia"
+            "value": "Conferma la tua e-mail per pubblicare"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Confirme seu e-mail para publicar seu story"
+            "value": "Confirme seu e-mail para publicar"
           }
         }
       }
@@ -240270,43 +240129,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل شيء جاهز: يقرأك الآخرون بلغتهم."
+            "value": "يقرأك الآخرون بلغتهم."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alles bereit: Deine Kontakte lesen dich in ihrer Sprache."
+            "value": "Deine Kontakte lesen dich in ihrer Sprache."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’re all set: people read you in your language."
+            "value": "People read you in your language."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Todo listo: tus contactos te leen en su idioma."
+            "value": "Tus contactos te leen en su idioma."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tout est prêt : vos proches vous lisent dans votre langue."
+            "value": "Vos proches vous lisent dans votre langue."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tutto pronto: i tuoi contatti ti leggono nella loro lingua."
+            "value": "I tuoi contatti ti leggono nella loro lingua."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tudo pronto: seus contatos leem você no idioma deles."
+            "value": "Seus contatos leem você no idioma deles."
           }
         }
       }

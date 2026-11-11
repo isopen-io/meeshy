@@ -316,13 +316,11 @@ struct OnboardingCardView: View {
         case .publishing:
             statusBanner(
                 text: String(localized: "onboarding.story.sending", bundle: .main),
-                detail: String(localized: "onboarding.story.sending.detail", bundle: .main),
                 tint: MeeshyColors.indigo500
             ) { ProgressView().tint(MeeshyColors.indigo500) }
         case .failed:
             statusBanner(
                 text: String(localized: "onboarding.story.failed", bundle: .main),
-                detail: String(localized: "onboarding.story.failed.detail", bundle: .main),
                 tint: MeeshyColors.warning
             ) {
                 Image(systemName: "arrow.clockwise.circle.fill")
@@ -433,7 +431,7 @@ struct OnboardingCardView: View {
 
     /// Un état EN COURS ou À REPRENDRE : même gabarit que la réussite, sans
     /// coche ni « +N » — rien n'est encore gagné.
-    private func statusBanner<Leading: View>(text: String, detail: String, tint: Color,
+    private func statusBanner<Leading: View>(text: String, detail: String? = nil, tint: Color,
                                              @ViewBuilder leading: () -> Leading) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             leading()
@@ -442,10 +440,12 @@ struct OnboardingCardView: View {
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(detail)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
-                    .fixedSize(horizontal: false, vertical: true)
+                if let detail {
+                    Text(detail)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

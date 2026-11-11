@@ -161,7 +161,7 @@ struct MagicLinkView: View {
                     .submitLabel(.send)
                     .onSubmit { sendMagicLink() }
                     .accessibilityLabel(String(localized: "auth.magiclink.email.a11yLabel",
-                                               defaultValue: "Adresse email", bundle: .main))
+                                               defaultValue: "Adresse e-mail", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.mdPlus)

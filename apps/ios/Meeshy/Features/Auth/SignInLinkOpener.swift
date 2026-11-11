@@ -119,7 +119,7 @@ enum SignInLinkOpener {
             consentedAccountId = consented
         }
         guard let proven else {
-            toasts.showSuccess(String(localized: "emailVerification.success", defaultValue: "Email vérifié !", bundle: .main))
+            toasts.showSuccess(String(localized: "emailVerification.success", defaultValue: "Adresse confirmée ✓", bundle: .main))
             return
         }
         if SignInLink.replacesSignedInAccount(provenUserId: proven.user.id, isAuthenticated: auth.isAuthenticated, currentUserId: auth.currentUser?.id) {

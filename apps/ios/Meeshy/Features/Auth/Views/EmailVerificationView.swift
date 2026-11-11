@@ -95,7 +95,7 @@ struct EmailVerificationView: View {
     // MARK: - Title
 
     private var titleSection: some View {
-        Text(String(localized: "emailVerification.title", defaultValue: "Vérifiez votre email"))
+        Text(String(localized: "emailVerification.title", defaultValue: "Confirmez votre adresse e-mail"))
             .font(.system(.title, design: .rounded).weight(.bold))
             .foregroundStyle(theme.textPrimary)
             .accessibilityAddTraits(.isHeader)
@@ -176,7 +176,7 @@ struct EmailVerificationView: View {
                         .foregroundStyle(MeeshyColors.success)
                         .adaptiveSymbolBounce(value: viewModel.verificationSuccess)
 
-                    Text(String(localized: "emailVerification.success", defaultValue: "Email vérifié !"))
+                    Text(String(localized: "emailVerification.success", defaultValue: "Adresse confirmée ✓"))
                         .font(.system(.title2, design: .rounded).weight(.bold))
                         .foregroundStyle(theme.textPrimary)
                 }

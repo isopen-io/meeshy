@@ -76,8 +76,8 @@
     <string name="email_verification_subtitle">Gib den 6-stelligen Code ein, der an <b>%1$s</b> gesendet wurde</string>
     <string name="email_verification_subtitle_account_created">Konto erstellt. Code und Link an <b>%1$s</b> gesendet.</string>
     <string name="email_verification_subtitle_activation_required">Aktiviere dein Konto: Ein Code wurde an <b>%1$s</b> gesendet, um diese Adresse zu bestätigen.</string>
-    <string name="email_verification_success">E-Mail verifiziert!</string>
-    <string name="email_verification_title">Prüfe deine E-Mails</string>
+    <string name="email_verification_success">Adresse bestätigt ✓</string>
+    <string name="email_verification_title">Bestätige deine E-Mail-Adresse</string>
     <string name="email_verification_verify_button">Prüfen</string>
     <string name="email_verification_verifying_a11y">Wird überprüft</string>
     <string name="guest_ended_expired_message">Dieser Link öffnet die Unterhaltung nicht mehr. Bitte die Person, die ihn dir geschickt hat, um einen neuen Link.</string>
@@ -323,7 +323,7 @@
     <string name="onboarding_story_sending">Deine Story ist unterwegs …</string>
     <string name="onboarding_story_sending_detail">Du kannst weitermachen – sie wird im Hintergrund veröffentlicht.</string>
     <string name="onboarding_story_title">Zeig dich</string>
-    <string name="onboarding_story_verify">Bestätige deine E-Mail, um deine Story zu posten</string>
+    <string name="onboarding_story_verify">Bestätige deine E-Mail, um zu posten</string>
     <string name="onboarding_story_verify_detail">Tippe auf den Link in der E-Mail: Danach kann deine Story sofort raus.</string>
     <string name="registration_back">Zurück</string>
     <string name="session_closed_activation_message">Melde dich erneut an und gib den per E-Mail erhaltenen Code ein.</string>
@@ -346,7 +346,7 @@
     <string name="signup_card_code_lead">Gib den 6-stelligen Code ein, der an %1$s gesendet wurde, oder öffne den erhaltenen Link.</string>
     <string name="signup_card_title">Dein Konto</string>
     <string name="signup_card_verified">Konto bestätigt!</string>
-    <string name="signup_card_verified_lead">Alles bereit: Deine Kontakte lesen dich in ihrer Sprache.</string>
+    <string name="signup_card_verified_lead">Deine Kontakte lesen dich in ihrer Sprache.</string>
     <string name="signup_close">Schließen</string>
     <string name="signup_country_search_hint">Land suchen</string>
     <string name="signup_display_name_label">Wie sollen wir dich nennen?</string>

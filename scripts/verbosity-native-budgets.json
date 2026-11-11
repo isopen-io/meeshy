@@ -188,7 +188,7 @@
     },
     "ios:Meeshy/auth": {
       "labels": 100,
-      "words": 492,
+      "words": 488,
       "long": 1,
       "explanations": 10
     },
@@ -229,10 +229,10 @@
       "explanations": 16
     },
     "ios:Meeshy/call": {
-      "labels": 445,
-      "words": 1665,
+      "labels": 444,
+      "words": 1664,
       "long": 11,
-      "explanations": 88
+      "explanations": 87
     },
     "ios:Meeshy/calls": {
       "labels": 50,
@@ -715,10 +715,10 @@
       "explanations": 0
     },
     "ios:Meeshy/onboarding": {
-      "labels": 129,
-      "words": 778,
+      "labels": 127,
+      "words": 762,
       "long": 4,
-      "explanations": 6
+      "explanations": 5
     },
     "ios:Meeshy/outbox": {
       "labels": 1,

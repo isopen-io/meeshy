@@ -53,7 +53,7 @@ struct SessionClosedNoticeCopy: Equatable {
             offersContact = false
         case .logout, .unknown:
             title = String(localized: "sessionClosed.signedOut.title", defaultValue: "Vous avez été déconnecté", bundle: .main)
-            message = String(localized: "sessionClosed.signedOut.message", defaultValue: "Cette session a été fermée.", bundle: .main)
+            message = nil
             systemImage = "rectangle.portrait.and.arrow.right"
             offersContact = false
         }

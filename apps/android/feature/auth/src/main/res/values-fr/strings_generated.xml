@@ -55,7 +55,7 @@
     <string name="email_gate_sending">Envoi…</string>
     <string name="email_gate_sent">Code envoyé à %1$s.</string>
     <string name="email_gate_title">Validez votre adresse e-mail</string>
-    <string name="email_verification_code_a11y_hint">Entrez le code à 6 chiffres reçu par email</string>
+    <string name="email_verification_code_a11y_hint">Entrez le code à 6 chiffres reçu par e-mail</string>
     <string name="email_verification_code_a11y_label">Code de vérification</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">Ce code a expiré. Demandez-en un nouveau.</string>
@@ -76,8 +76,8 @@
     <string name="email_verification_subtitle">Entrez le code à 6 chiffres envoyé à <b>%1$s</b></string>
     <string name="email_verification_subtitle_account_created">Compte créé. Code et lien envoyés à <b>%1$s</b>.</string>
     <string name="email_verification_subtitle_activation_required">Activez votre compte : un code a été envoyé à <b>%1$s</b> pour prouver cette adresse.</string>
-    <string name="email_verification_success">Email vérifié !</string>
-    <string name="email_verification_title">Vérifiez votre email</string>
+    <string name="email_verification_success">Adresse confirmée ✓</string>
+    <string name="email_verification_title">Confirmez votre adresse e-mail</string>
     <string name="email_verification_verify_button">Vérifier</string>
     <string name="email_verification_verifying_a11y">Vérification en cours</string>
     <string name="guest_ended_expired_message">Ce lien ne donne plus accès à la conversation. Demandez un nouveau lien à la personne qui vous l\'a envoyé.</string>
@@ -328,7 +328,7 @@
     <string name="onboarding_story_sending">Ta story part…</string>
     <string name="onboarding_story_sending_detail">Tu peux continuer : elle se publie pendant ce temps.</string>
     <string name="onboarding_story_title">Montre-toi</string>
-    <string name="onboarding_story_verify">Vérifie ton courriel pour publier ta story</string>
+    <string name="onboarding_story_verify">Confirme ton adresse e-mail pour publier</string>
     <string name="onboarding_story_verify_detail">Touche le lien reçu par e-mail : ta story pourra partir tout de suite après.</string>
     <string name="registration_back">Retour</string>
     <string name="session_closed_activation_message">Reconnectez-vous puis saisissez le code reçu par e-mail.</string>
@@ -351,7 +351,7 @@
     <string name="signup_card_code_lead">Entrez le code à 6 chiffres envoyé à %1$s, ou ouvrez le lien reçu.</string>
     <string name="signup_card_title">Votre compte</string>
     <string name="signup_card_verified">Compte validé !</string>
-    <string name="signup_card_verified_lead">Tout est prêt : vos proches vous lisent dans votre langue.</string>
+    <string name="signup_card_verified_lead">Vos proches vous lisent dans votre langue.</string>
     <string name="signup_close">Fermer</string>
     <string name="signup_country_search_hint">Rechercher un pays</string>
     <string name="signup_display_name_label">Comment doit-on vous appeler ?</string>
