@@ -40,6 +40,8 @@
     <string name="call_control_add_people">Add people to the call</string>
     <string name="call_control_add_people_caption">Add</string>
     <string name="call_control_camera">Choose camera</string>
+    <string name="call_control_camera_off">Turn off camera</string>
+    <string name="call_control_camera_on">Turn on camera</string>
     <string name="call_control_camera_rail">My camera options</string>
     <string name="call_control_capture">Capture the call</string>
     <string name="call_control_capture_caption">Capture</string>
@@ -49,10 +51,16 @@
     <string name="call_control_flip_camera_caption">Flip</string>
     <string name="call_control_flip_camera_hint">Switches between the front and back camera</string>
     <string name="call_control_more">More actions</string>
+    <string name="call_control_more_hide">Hide actions</string>
     <string name="call_control_more_hint">Shows or hides the call actions</string>
+    <string name="call_control_more_show">Show actions</string>
+    <string name="call_control_mute_caption">Mic</string>
     <string name="call_control_mute_hint">Mutes your microphone for the other person</string>
+    <string name="call_control_mute_label">Mute microphone</string>
+    <string name="call_control_output_a11y">Audio output</string>
     <string name="call_control_pip">Reduce to Picture-in-Picture</string>
     <string name="call_control_react">Send a reaction</string>
+    <string name="call_control_unmute_label">Unmute microphone</string>
     <string name="call_decline_cancel">Cancel</string>
     <string name="call_decline_custom_label">Your message</string>
     <string name="call_decline_custom_placeholder">Write a message…</string>

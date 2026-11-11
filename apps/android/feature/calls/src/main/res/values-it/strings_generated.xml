@@ -40,6 +40,8 @@
     <string name="call_control_add_people">Aggiungi persone alla chiamata</string>
     <string name="call_control_add_people_caption">Aggiungi</string>
     <string name="call_control_camera">Scegli la fotocamera</string>
+    <string name="call_control_camera_off">Disattiva la fotocamera</string>
+    <string name="call_control_camera_on">Attiva la fotocamera</string>
     <string name="call_control_camera_rail">Opzioni della mia fotocamera</string>
     <string name="call_control_capture">Cattura la chiamata</string>
     <string name="call_control_capture_caption">Cattura</string>
@@ -49,10 +51,16 @@
     <string name="call_control_flip_camera_caption">Gira</string>
     <string name="call_control_flip_camera_hint">Passa dalla fotocamera anteriore a quella posteriore</string>
     <string name="call_control_more">Altre azioni</string>
+    <string name="call_control_more_hide">Nascondi le azioni</string>
     <string name="call_control_more_hint">Mostra o nasconde le azioni della chiamata</string>
+    <string name="call_control_more_show">Mostra le azioni</string>
+    <string name="call_control_mute_caption">Microfono</string>
     <string name="call_control_mute_hint">Disattiva il microfono per l\'altra persona</string>
+    <string name="call_control_mute_label">Disattiva il microfono</string>
+    <string name="call_control_output_a11y">Uscita audio</string>
     <string name="call_control_pip">Riduci in Picture-in-Picture</string>
     <string name="call_control_react">Invia una reazione</string>
+    <string name="call_control_unmute_label">Riattiva il microfono</string>
     <string name="call_decline_cancel">Annulla</string>
     <string name="call_decline_custom_label">Il tuo messaggio</string>
     <string name="call_decline_custom_placeholder">Scrivi un messaggio…</string>

@@ -45,7 +45,7 @@ const INTERACTIVE = [
 /**
  * Décidé à la DESCENTE du toucher (phase de capture), avant que la cible
  * n'agisse : sous Preact, un bouton qui change d'état (« Couper le micro » →
- * « Activer le micro ») remplace son glyphe pendant son propre gestionnaire,
+ * « Réactiver le micro ») remplace son glyphe pendant son propre gestionnaire,
  * et à la remontée la cible, détachée, n'a plus de bouton parmi ses ancêtres.
  *
  * Un toucher qui rate de peu (le titre d'une feuille, l'espace entre deux

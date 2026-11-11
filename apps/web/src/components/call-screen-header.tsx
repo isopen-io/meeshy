@@ -71,7 +71,7 @@ export function CallScreenHeader({ call, language, joined, prominent }: HeaderPr
         <CallButton label={translate(language, 'call.minimize')} glyph={<GlyphSvg glyph={CALL_SCREEN_GLYPHS.arrowsInSimple} size={20} />} onPress={callActions.minimize} tone="glass" prominent={prominent} size={44} />
         {call.conversationId === '' ? null : (
           <CallButton
-            label={translate(language, 'call.conversation.open')}
+            label={translate(language, 'call.conversation.header')}
             glyph={<GlyphSvg glyph={CALL_SCREEN_GLYPHS.chatCircleText} size={20} />}
             onPress={() => openConversation(call.conversationId)}
             tone="glass"
