@@ -271,7 +271,7 @@ describe('le formulaire « Modifier le lien »', () => {
   test('les deux « Maximum » se distinguent à l’oreille : chacun dit la rangée qu’il borne', async () => {
     const host = await mountForm();
     for (const rule of ['limitUses', 'limitConcurrent']) {
-      const toggle = host.querySelector(`[data-link-rule="${rule}"]`);
+      const toggle = host.querySelector<HTMLElement>(`[data-link-rule="${rule}"]`);
       if (toggle?.getAttribute('aria-checked') === 'false') await click(toggle);
     }
     const nameOf = (input: Element): string =>
