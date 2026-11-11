@@ -221,6 +221,7 @@ internal fun CallConnectedColumn(
         )
         // #17327 : à deux le (…) fait sortir deux rails sur les bords, à plusieurs il déplie des rangées dans la pilule.
         val disposition = CallControlsDisposition.resolve(CallControlsDisposition.MAX_PARTICIPANTS_ON_RAILS, showsGroupGrid = groupStage != null)
+        val stageMaxHeight = maxHeight
         val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), CallGroupStageSizing.isCompactHeight(maxHeight.value))
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
@@ -273,7 +274,7 @@ internal fun CallConnectedColumn(
                     onBackToMenu = chrome::backToMenu,
                     onClosePanel = chrome::close,
                     pillText = pillText,
-                    rowsMaxHeight = callPillRowsMaxHeight(maxHeight, hasGrid = groupStage != null),
+                    rowsMaxHeight = callPillRowsMaxHeight(stageMaxHeight, hasGrid = groupStage != null),
                     captions = { CallCaptionsBandHost(state = state, hasOwnGlass = false) },
                     panelContent = { panel ->
                         when (panel) {
