@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.call.effects
 
+import kotlin.math.pow
 import me.meeshy.sdk.model.call.VideoFilterPreset
 
 /**
@@ -35,6 +36,10 @@ object CallColorLook {
         val vibrance: Float = 0f,
         val saturation: Float = 1f,
         val skinProtection: Float = 0.7f,
+        /** Exposure gain in stops, applied before the balance (iOS `exposure`). */
+        val exposure: Float = 0f,
+        /** R, G, B weights of a black and white; `null` keeps the colour (iOS `monochrome`). */
+        val monochrome: Rgb? = null,
     )
 
     /** `null`: the look touches nothing (Naturel). Values are iOS's, digit for digit. */
@@ -56,19 +61,54 @@ object CallColorLook {
             Rgb(1.01f, 1f, 0.99f), -0.18f, 0.05f,
             Rgb(0.006f, 0.006f, 0.012f), Rgb(0.012f, 0.008f, 0f), -0.1f, 0.76f, 0.5f,
         )
+        VideoFilterPreset.Golden -> Recipe(
+            Rgb(1.045f, 1f, 0.93f), 0.12f, 0.02f,
+            Rgb(0.01f, 0.004f, -0.006f), Rgb(0.04f, 0.016f, -0.03f), 0.1f, 1.04f, 0.6f,
+        )
+        VideoFilterPreset.Film -> Recipe(
+            Rgb(1.015f, 1f, 0.985f), 0.24f, 0.06f,
+            Rgb(-0.02f, 0.006f, 0.035f), Rgb(0.03f, 0.016f, -0.02f), -0.05f, 0.86f, 0.7f,
+        )
+        VideoFilterPreset.SoftNight -> Recipe(
+            Rgb(0.965f, 1f, 1.04f), -0.12f, 0.05f,
+            Rgb(-0.004f, 0f, 0.025f), Rgb(0f, 0f, 0.006f), 0f, 0.9f, 0.75f, exposure = 0.15f,
+        )
+        VideoFilterPreset.Bright -> Recipe(
+            Rgb(1.01f, 1f, 0.99f), -0.08f, 0.04f,
+            Rgb(0f, 0f, 0f), Rgb(0.008f, 0.008f, 0.008f), 0f, 0.82f, 0.6f, exposure = 0.25f,
+        )
+        VideoFilterPreset.Velvet -> Recipe(
+            Rgb(1.02f, 1f, 0.98f), 0.36f, 0f,
+            Rgb(0.012f, -0.004f, 0.012f), Rgb(0.01f, 0.004f, 0f), 0.3f, 1.08f, 0.8f, exposure = -0.08f,
+        )
+        VideoFilterPreset.Sky -> Recipe(
+            Rgb(0.98f, 1f, 1.03f), 0.22f, 0f,
+            Rgb(0f, 0f, 0.008f), Rgb(-0.006f, 0f, 0.02f), 0.5f, 1.06f, 0.85f,
+        )
+        VideoFilterPreset.Monochrome -> Recipe(
+            Rgb(1f, 1f, 1f), 0.3f, 0.02f,
+            Rgb(0f, 0f, 0f), Rgb(0f, 0f, 0f), 0f, 1f, 0f, monochrome = Rgb(0.42f, 0.46f, 0.12f),
+        )
     }
 
     /** Grades a gamma-encoded sRGB colour (0…1). Pure. */
     fun grade(rgb: Rgb, recipe: Recipe): Rgb {
         val input = rgb.clamped()
-        val balanced = (input * recipe.balance).clamped()
+        val exposed = if (recipe.exposure == 0f) input else (input * 2f.pow(recipe.exposure)).clamped()
+        val balanced = gray((exposed * recipe.balance).clamped(), recipe)
         val toned = Rgb(curve(balanced.r, recipe), curve(balanced.g, recipe), curve(balanced.b, recipe))
         val luma = luminance(toned)
         val split = recipe.shadows * ((1 - luma) * (1 - luma)) + recipe.highlights * (luma * luma)
         val saturated = saturate((toned + split).clamped(), recipe)
-        val toneOnly = Rgb(curve(input.r, recipe), curve(input.g, recipe), curve(input.b, recipe))
+        val toneOnly = Rgb(curve(exposed.r, recipe), curve(exposed.g, recipe), curve(exposed.b, recipe))
         val protected = skinLikelihood(input) * recipe.skinProtection
         return (saturated * (1 - protected) + toneOnly * protected).clamped()
+    }
+
+    /** The black and white of a recipe: a grey weighted by its R, G, B weights. */
+    private fun gray(rgb: Rgb, recipe: Recipe): Rgb {
+        val weights = recipe.monochrome ?: return rgb
+        return Rgb.gray((rgb.r * weights.r + rgb.g * weights.g + rgb.b * weights.b).coerceIn(0f, 1f))
     }
 
     /** How likely a colour is a skin tone: hue between red and orange, moderate saturation, neither black nor white. */
@@ -89,6 +129,28 @@ object CallColorLook {
     fun saturation(rgb: Rgb): Float {
         val maxC = maxOf(rgb.r, rgb.g, rgb.b)
         return if (maxC <= 0f) 0f else (maxC - minOf(rgb.r, rgb.g, rgb.b)) / maxC
+    }
+
+    /** How many moods the carousel of the Effects mode shows on each side of the chosen one. */
+    const val VISIBLE_NEIGHBOURS: Int = 2
+
+    /**
+     * What to bake when [preset] is asked: [preset] first, then the moods the carousel shows beside it in [catalog],
+     * nearest first. The next pick is one of them and finds its cube ready; a mood out of sight costs nothing until
+     * it is asked. Natural has no cube; a preset outside [catalog] (an older tint a call still carries) bakes alone.
+     */
+    fun bakeOrder(
+        preset: VideoFilterPreset,
+        catalog: List<VideoFilterPreset> = VideoFilterPreset.catalog,
+        reach: Int = VISIBLE_NEIGHBOURS,
+    ): List<VideoFilterPreset> {
+        val index = catalog.indexOf(preset)
+        val around = if (index < 0) {
+            emptyList()
+        } else {
+            (1..reach).flatMap { distance -> listOfNotNull(catalog.getOrNull(index + distance), catalog.getOrNull(index - distance)) }
+        }
+        return (listOf(preset) + around).filter { recipe(it) != null }
     }
 
     /** Width and height of the packed strip, in texels. */

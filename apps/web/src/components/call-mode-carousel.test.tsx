@@ -379,6 +379,22 @@ describe('ModeCarousel', () => {
     view.done();
   });
 
+  /* UNE RANGÉE QUI DÉFILE N'EST JAMAIS COUPÉE NET (#17409, facture #17406) :
+     la piste s'efface en fondu à ses DEUX bords, de la même largeur à gauche
+     et à droite — l'arabe n'a donc rien à inverser. Le masque est posé sur la
+     piste elle-même : les éléments défilent dessous, le fondu ne bouge pas. */
+  test('la piste s’efface en fondu à ses deux bords, la même largeur à gauche et à droite (#17409)', () => {
+    const view = mountRecorded();
+    const style = view.track.getAttribute('style') ?? '';
+    const mask = /(?:^|;)\s*mask-image:\s*([^;]+)/.exec(style)?.[1]?.trim() ?? '';
+    expect(mask).toMatch(/^linear-gradient\(/);
+    const stops = /linear-gradient\(\s*(?:90deg|to right)\s*,\s*transparent(?:\s+0(?:px)?)?\s*,\s*(?:#000|black)\s+(\d+)px\s*,\s*(?:#000|black)\s+calc\(100% - (\d+)px\)\s*,\s*transparent(?:\s+100%)?\s*\)/.exec(mask);
+    expect(stops).not.toBeNull();
+    expect(Number(stops?.[1])).toBeGreaterThanOrEqual(16);
+    expect(stops?.[1]).toBe(stops?.[2]);
+    view.done();
+  });
+
   /* Chromium, sous `scroll-snap-type: mandatory`, recalcule les points
      d'accroche à chaque mise en page de la piste ; s'ils ont bougé pendant un
      glissé du doigt, il RÉACCROCHE sur-le-champ au dernier élément accroché et

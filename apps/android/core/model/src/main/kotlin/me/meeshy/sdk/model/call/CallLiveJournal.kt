@@ -132,7 +132,8 @@ object CallTranscriptMergeRules {
  *  - a new utterance first drops that speaker's in-progress line (at most one live partial per
  *    speaker), every finalized line is kept;
  *  - the lines stay sorted by capture clock (a later equal clock lands after), and the journal
- *    keeps the [CEILING] most recent ones so a marathon call stays bounded.
+ *    keeps EVERY one of them (#17342): no ceiling makes the oldest sentences of a long call fall, the one
+ *    the journal after the call (read from the gateway) does not drop either.
  */
 data class CallLiveJournal(
     val segments: List<CallJournalSegment> = emptyList(),
@@ -156,17 +157,18 @@ data class CallLiveJournal(
         val key = "j${minted + 1}"
         val others = segments.filterNot { it.speakerId == segment.speakerId && !it.isFinal }
         val inserted = inserting(segment.copy(key = key), others)
-        return CallLiveJournal(segments = inserted.takeLast(CEILING), minted = minted + 1)
+        return CallLiveJournal(segments = inserted, minted = minted + 1)
     }
 
+    /** After the last line whose clock is not later than [segment]'s, searched from the end, where a live sentence lands. */
     private fun inserting(segment: CallJournalSegment, sorted: List<CallJournalSegment>): List<CallJournalSegment> {
-        val index = sorted.indexOfFirst { it.capturedAtMs > segment.capturedAtMs }.let { if (it < 0) sorted.size else it }
-        return sorted.subList(0, index) + segment + sorted.subList(index, sorted.size)
-    }
-
-    companion object {
-        /** iOS `CallTranscriptJournal.ceiling`. */
-        const val CEILING: Int = 10_000
+        var index = sorted.size
+        while (index > 0 && sorted[index - 1].capturedAtMs > segment.capturedAtMs) index--
+        return ArrayList<CallJournalSegment>(sorted.size + 1).apply {
+            addAll(sorted.subList(0, index))
+            add(segment)
+            addAll(sorted.subList(index, sorted.size))
+        }
     }
 }
 

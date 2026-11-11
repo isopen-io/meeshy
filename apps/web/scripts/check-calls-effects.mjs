@@ -21,10 +21,10 @@
  *     les double pas (#8432, #8550, #8626) ;
  *  4. « Effets » entre dans le MODE Effets (#8578) : l'en-tête, la pilule et
  *     ses rangées partent, ma vidéo prend tout l'écran ; « Visage · Couleur »
- *     au-dessus d'UN carrousel centré en bas ; « Chaud » remplace la piste
+ *     au-dessus d'UN carrousel centré en bas ; « Doré » remplace la piste
  *     envoyée par la piste traitée, et le pair continue de DÉCODER des images
  *     (aucune image perdue) ; plus de déclencheur : l'indice « Deux tapes :
- *     photo · Appui long : vidéo » se montre, et deux tapes sur « Chaud »
+ *     photo · Appui long : vidéo » se montre, et deux tapes sur « Doré »
  *     téléchargent MON image (#8625) ; l'autre reste à l'écran, dans un
  *     bloc en haut, hors de l'aperçu capturé, qui ne couvre pas le carrousel
  *     et se glisse d'un coin du haut à l'autre (#8737) ;
@@ -278,7 +278,7 @@ try {
       check((await page.$('[data-call-row="mine"]')) === null && (await page.$('[data-call-self-controls], [data-call-self-row]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra, et rien ne les pose autour de ma vignette`);
       const mine = await page.$$eval('[data-call-rail="mine"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), blur: ['glass-call', 'glass-call-prominent'].some((token) => button.classList.contains(token)), disc: button.classList.contains('glass-call-disc') || button.querySelector('.glass-call-disc') !== null, solid: (button.getAttribute('style') ?? '').includes('background'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
       const labels = mine.map((button) => button.label).filter((name) => name !== 'Retourner la caméra');
-      check(JSON.stringify(labels) === JSON.stringify(['Couper la caméra', 'Effets de ma vidéo', 'Partager l’écran']), `${label} : le rail de mon image : Caméra · Effets · Écran — ${mine.map((b) => b.label).join(' · ')}`);
+      check(JSON.stringify(labels) === JSON.stringify(['Couper la caméra', 'Effets de ma caméra', 'Partager l’écran']), `${label} : le rail de mon image : Caméra · Effets · Écran — ${mine.map((b) => b.label).join(' · ')}`);
       check(mine.every((button) => (button.disc || button.solid) && !button.blur && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons du rail font ${TAP_FLOOR}, portent leur disque de verre (ou leur plein, enclenchés) et n'ont pas de flou à eux (#17345)`);
       const zoomStep = await page.$$eval('[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
       check(zoomStep.length === 1 && zoomStep[0].label === 'Zoom de ma caméra, 1×' && zoomStep[0].w >= TAP_FLOOR && zoomStep[0].h >= TAP_FLOOR, `${label} : le cran du zoom (#8441) reste dans le coin de ma vignette, ${TAP_FLOOR} px (${JSON.stringify(zoomStep)})`);
@@ -330,14 +330,19 @@ try {
       check((await nestedGlass(page)) === 0, `${label} : aucun verre posé dans un verre, mode ouvert`);
       await page.click('[data-call-effects-category="color"]');
       const presets = await page.$$eval('[data-call-mode="effects"] [data-carousel-item]', (chips) => chips.map((chip) => chip.getAttribute('data-carousel-item')));
-      check(JSON.stringify(presets) === JSON.stringify(['natural', 'warm', 'cool', 'vivid', 'muted']), `${label} : « Couleur » : cinq préréglages (${presets.join(' · ')})`);
-      await page.click('[data-carousel-item="warm"]');
-      check((await page.getAttribute('[data-carousel-item="warm"]', 'aria-checked')) === 'true', `${label} : « Chaud » est coché`);
-      await centered(page, 'warm');
+      check(JSON.stringify(presets) === JSON.stringify(['natural', 'golden', 'film', 'softNight', 'bright', 'velvet', 'sky', 'monochrome']), `${label} : « Couleur » : huit ambiances (${presets.join(' · ')})`);
+      const edgeFade = await page.$eval('[data-call-mode="effects"] [data-call-mode-carousel] [data-call-row-scroll]', (row) => {
+        const computed = getComputedStyle(row);
+        return computed.maskImage || computed.webkitMaskImage || 'none';
+      });
+      check(/^linear-gradient\(/.test(edgeFade) && (edgeFade.match(/transparent|rgba\(0, 0, 0, 0\)/g) ?? []).length === 2, `${label} : le carrousel s'efface en fondu à ses deux bords (#17409) — ${edgeFade}`);
+      await page.click('[data-carousel-item="golden"]');
+      check((await page.getAttribute('[data-carousel-item="golden"]', 'aria-checked')) === 'true', `${label} : « Doré » est coché`);
+      await centered(page, 'golden');
       const selfShot = page.waitForEvent('download', { timeout: 8000 });
-      await page.dblclick('[data-carousel-item="warm"]');
+      await page.dblclick('[data-carousel-item="golden"]');
       const selfDownload = await selfShot.catch(() => null);
-      check(selfDownload !== null && /^meeshy-appel-warm-\d{8}-\d{6}\.jpg$/.test(selfDownload.suggestedFilename()), `${label} : deux tapes sur « Chaud » téléchargent mon image (${selfDownload?.suggestedFilename() ?? 'rien'})`);
+      check(selfDownload !== null && /^meeshy-appel-golden-\d{8}-\d{6}\.jpg$/.test(selfDownload.suggestedFilename()), `${label} : deux tapes sur « Doré » téléchargent mon image (${selfDownload?.suggestedFilename() ?? 'rien'})`);
       check(await until(page, (id) => {
         const video = document.querySelector('[data-call-corner] video, [data-call-tile-self] video, [data-call-mode-preview] video');
         const track = video?.srcObject?.getVideoTracks?.()[0];
@@ -392,8 +397,8 @@ try {
       await appears(page, '[data-call-mode="effects"]');
       check((await page.getAttribute('[data-carousel-item="volcano"]', 'aria-checked')) === 'true', `${label} : l'effet validé est gardé`);
       await page.click('[data-call-effects-category="color"]');
-      await page.click('[data-carousel-item="cool"]');
-      await page.focus('[data-carousel-item="cool"]');
+      await page.click('[data-carousel-item="sky"]');
+      await page.focus('[data-carousel-item="sky"]');
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]') && (await page.$('[data-call-screen="connected"]')) !== null, `${label} : Échap quitte le mode sans réduire l'appel`);
       await openActions(page);
@@ -401,7 +406,7 @@ try {
       await appears(page, '[data-call-mode="effects"]');
       await page.click('[data-call-effects-category="color"]');
       const restored = await page.getAttribute('[data-call-mode="effects"] [data-carousel-item][aria-checked="true"]', 'data-carousel-item');
-      check(restored === 'warm', `${label} : quitter rend les effets d'avant (« Chaud », pas « Froid » : ${restored})`);
+      check(restored === 'golden', `${label} : quitter rend les effets d'avant (« Doré », pas « Ciel » : ${restored})`);
       await page.click('[data-call-mode-quit]');
       await vanishes(page, '[data-call-mode]');
 

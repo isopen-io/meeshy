@@ -118,14 +118,14 @@ describe('CallEffectsMode', () => {
     const view = mount();
     const region = view.find('[data-call-mode="effects"]');
     expect(region?.getAttribute('role')).toBe('region');
-    expect(region?.getAttribute('aria-label')).toBe('Effets de ma vidéo');
+    expect(region?.getAttribute('aria-label')).toBe('Effets de ma caméra');
     expect(view.find('[data-call-mode-preview="effects"] [data-testid="self-preview"]')).not.toBeNull();
     expect(view.find('[data-call-mode-preview="effects"]')?.className).toContain('fixed inset-0');
     expect(view.all('[data-call-mode-carousel]')).toHaveLength(1);
     view.done();
   });
 
-  test('« Visage » d’abord : les six effets, « Aucun » coché ; « Couleur » montre les cinq préréglages', () => {
+  test('« Visage » d’abord : les six effets, « Aucun » coché ; « Couleur » montre les huit ambiances d’iOS', () => {
     const view = mount();
     const categories = view.all('[data-call-effects-category]');
     expect(categories.map((button) => button.textContent)).toEqual(['Visage', 'Couleur']);
@@ -133,7 +133,8 @@ describe('CallEffectsMode', () => {
     expect(view.all('[data-carousel-item]').map((item) => item.getAttribute('data-carousel-item'))).toEqual(['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano']);
     expect(view.find('[aria-checked="true"]')?.getAttribute('data-carousel-item')).toBe('none');
     view.press('[data-call-effects-category="color"]');
-    expect(view.all('[data-carousel-item]').map((item) => item.getAttribute('data-carousel-item'))).toEqual(['natural', 'warm', 'cool', 'vivid', 'muted']);
+    expect(view.all('[data-carousel-item]').map((item) => item.getAttribute('data-carousel-item'))).toEqual(['natural', 'golden', 'film', 'softNight', 'bright', 'velvet', 'sky', 'monochrome']);
+    expect(view.all('[data-carousel-item]').map((item) => item.getAttribute('aria-label'))).toEqual(['Naturel', 'Doré', 'Pellicule', 'Nuit douce', 'Clair', 'Velours', 'Ciel', 'Noir et blanc']);
     view.done();
   });
 

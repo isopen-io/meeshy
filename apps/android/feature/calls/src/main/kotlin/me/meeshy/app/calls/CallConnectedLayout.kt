@@ -9,9 +9,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
@@ -25,7 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -39,6 +41,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallControlsDisposition
 import me.meeshy.sdk.model.call.CaptionsMode
@@ -47,6 +50,8 @@ import me.meeshy.sdk.model.call.CallHeaderLaw
 import me.meeshy.sdk.model.call.CallPillText
 import me.meeshy.sdk.model.call.CallRailsLayout
 import me.meeshy.sdk.model.call.CallScreenPanel
+import me.meeshy.sdk.model.call.CallVerticalEdge
+import me.meeshy.sdk.model.call.group.GroupCallStageLaw
 import me.meeshy.ui.theme.MeeshySpacing
 
 /** What the rails leave free at the foot of the screen: the pill and its margins in portrait, nothing when it fits between them. */
@@ -69,38 +74,81 @@ internal fun rememberCallTouchExploration(): Boolean {
     return on
 }
 
-internal fun callIsVideoStage(state: CallUiState): Boolean = CallChromeVisibility.isVideoStage(
-    isGroup = false,
+/** What the group stage shows of the others' cameras: the chrome hides to a tap only when one of them is on (G1.13). */
+internal data class CallGroupVideoStage(val remoteCamerasOn: Int) {
+    companion object {
+        fun of(mesh: GroupCallMeshUi, isPrimaryVideoActive: Boolean): CallGroupVideoStage =
+            CallGroupVideoStage(GroupCallStageLaw.remoteCamerasOn(mesh.roster, isPrimaryVideoActive))
+    }
+}
+
+/** The video-scene rule of [CallChromeVisibility]: a duo by its video, a group ([group] non-null) by a camera, mine or theirs. */
+internal fun callIsVideoStage(state: CallUiState, group: CallGroupVideoStage? = null): Boolean = CallChromeVisibility.isVideoStage(
+    isGroup = group != null,
     isLocalVideoEnabled = state.isCameraOn,
     isDuoVideoActive = state.isVideoCall && state.showsConnectedLayout,
-    remoteCamerasOn = 0,
+    remoteCamerasOn = group?.remoteCamerasOn ?: 0,
 )
 
 /** What the chrome shows now; reads the controller state so it recomposes on every change. */
 @Composable
-internal fun rememberCallChromeVisibility(chrome: CallChromeController, state: CallUiState): CallChromeVisibility {
+internal fun rememberCallChromeVisibility(
+    chrome: CallChromeController,
+    state: CallUiState,
+    group: CallGroupVideoStage? = null,
+): CallChromeVisibility {
     val explore = rememberCallTouchExploration()
     chrome.state.collectAsState().value
-    return chrome.visibility(callIsVideoStage(state), explore)
+    return chrome.visibility(callIsVideoStage(state, group), explore)
 }
 
 /**
- * Fades [content] out in [CallChromeVisibility.FADE_DURATION_MILLIS] and takes it out of the
- * composition once faded (it no longer captures a touch nor TalkBack), leaving the room it took.
- * A touch received DURING the fade relights it ([onRevive]).
+ * A touch on [Modifier] while [isHidden] relights the chrome ([onRevive]) WITHOUT taking the touch: the button under the
+ * finger still answers, but the controls come back first (G2.7). Passive otherwise.
+ */
+internal fun Modifier.callReviveOnTouch(isHidden: Boolean, onRevive: () -> Unit): Modifier =
+    pointerInput(isHidden) {
+        if (!isHidden) return@pointerInput
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.changes.any { it.pressed }) onRevive()
+            }
+        }
+    }
+
+/**
+ * Stows [content] in [CallChromeStow.fadeMillis] and takes it out of the composition once stowed (it no longer captures a
+ * touch nor TalkBack), leaving the room it took. Toward [stowsToward] it LEAVES BY ITS EDGE, its whole measured height
+ * plus [edgeMargin] and the system bar of that edge, and comes back by the same way (G1.11, G2.8); under « Reduce
+ * animations » it only fades, shortly. Only the transform and the opacity move, read at draw time. A touch received DURING the stow relights it ([onRevive]).
  */
 @Composable
 internal fun CallChromeFade(
     isVisible: Boolean,
     onRevive: () -> Unit,
     modifier: Modifier = Modifier,
+    stowsToward: CallVerticalEdge? = null,
+    edgeMargin: Dp = 0.dp,
     content: @Composable () -> Unit,
 ) {
-    val fade = CallChromeVisibility.FADE_DURATION_MILLIS.toInt()
-    val alpha by animateFloatAsState(if (isVisible) 1f else 0f, tween(fade), label = "callChromeFade")
+    val reduceMotion = rememberCallReduceMotion()
+    val fade = CallChromeStow.fadeMillis(reduceMotion)
+    val fadeAlpha = animateFloatAsState(if (isVisible) 1f else 0f, tween(fade), label = "callChromeFade")
     var settledHidden by remember { mutableStateOf(!isVisible) }
     var heightPx by remember { mutableIntStateOf(0) }
-    LaunchedEffect(isVisible) {
+    val density = LocalDensity.current
+    val bars = WindowInsets.systemBars
+    val barPx = when (stowsToward) {
+        CallVerticalEdge.Top -> bars.getTop(density)
+        CallVerticalEdge.Bottom -> bars.getBottom(density)
+        null -> 0
+    }
+    val marginPx = with(density) { edgeMargin.toPx() } + barPx
+    val travelsAway = stowsToward != null && CallChromeStow.leavesByItsEdge(isVisible, reduceMotion)
+    val travel = if (travelsAway && stowsToward != null) CallChromeStow.travel(stowsToward, heightPx.toFloat(), marginPx) else 0f
+    val stowOffset = animateFloatAsState(travel, tween(fade), label = "callChromeStow")
+    LaunchedEffect(isVisible, fade) {
         if (isVisible) {
             settledHidden = false
         } else {
@@ -115,16 +163,11 @@ internal fun CallChromeFade(
     Box(
         modifier
             .onSizeChanged { if (it.height > 0) heightPx = it.height }
-            .alpha(alpha)
-            .pointerInput(isVisible) {
-                if (isVisible) return@pointerInput
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.changes.any { it.pressed }) onRevive()
-                    }
-                }
-            },
+            .graphicsLayer {
+                alpha = fadeAlpha.value
+                translationY = stowOffset.value
+            }
+            .callReviveOnTouch(isHidden = !isVisible, onRevive = onRevive),
     ) { content() }
 }
 
@@ -145,15 +188,16 @@ internal fun CallConnectedColumn(
     pill: CallPillActions,
     modifier: Modifier = Modifier,
     inPip: Boolean = false,
+    /** What the group stage shows of the others' cameras (G1.13); `null` on a duo. */
+    groupVideo: CallGroupVideoStage? = null,
     /** La scène d'un appel de groupe (#13740), posée à la place du bloc du pair ; `null` en duo. */
     groupStage: (@Composable (Modifier) -> Unit)? = null,
 ) {
     val extensions = viewModel.extensions
     val explore = rememberCallTouchExploration()
     val chromeState by chrome.state.collectAsState()
-    val visibility = chrome.visibility(callIsVideoStage(state), explore)
+    val visibility = chrome.visibility(callIsVideoStage(state, groupVideo), explore)
     val controlsVisible = visibility.isVisible(CallChromeElement.Controls) && !inPip
-    val isVideoStage = callIsVideoStage(state)
 
     val recordingViewModel: CallRecordingViewModel = hiltViewModel()
     val reactionsViewModel: CallReactionsViewModel = hiltViewModel()
@@ -201,7 +245,6 @@ internal fun CallConnectedColumn(
                 controlsVisible = controlsVisible,
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                 onInteraction = chrome::onInteraction,
-                stowedCaptions = { CallCaptionsBandHost(state = state, hasOwnGlass = true) },
                 modifier = Modifier.padding(bottom = MeeshySpacing.xl),
             ) {
                 CallControlsPill(
@@ -243,6 +286,7 @@ internal fun CallConnectedColumn(
                 dimmed = if (state.isOnHold) HOLD_DIMMED_ACTIONS else emptySet(),
                 onAction = pill.onAction,
                 bottomClearance = callRailsBottomClearance(maxWidth.value),
+                onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
             )
         }
         // #16665 — R1 : la capsule de capture, UNE fois sous l'en-tête, en audio comme en vidéo, en duo

@@ -268,9 +268,16 @@
     <string name="call_zoom_hint">Scorri in alto o in basso per lo zoom. Sullo schermo, pizzica la tua immagine; tocca due volte per tornare a 1×</string>
     <string name="call_zoom_label">Zoom della mia fotocamera</string>
     <string name="permission_microphone_denied">Microfono negato — tocca per aprire Impostazioni</string>
+    <string name="video_filter_preset_bright">Chiaro</string>
     <string name="video_filter_preset_cool">Freddo</string>
+    <string name="video_filter_preset_film">Pellicola</string>
+    <string name="video_filter_preset_golden">Dorato</string>
+    <string name="video_filter_preset_monochrome">Bianco e nero</string>
     <string name="video_filter_preset_muted">Morbido</string>
     <string name="video_filter_preset_natural">Naturale</string>
+    <string name="video_filter_preset_sky">Cielo</string>
+    <string name="video_filter_preset_softNight">Notte dolce</string>
+    <string name="video_filter_preset_velvet">Velluto</string>
     <string name="video_filter_preset_vivid">Vivido</string>
     <string name="video_filter_preset_warm">Caldo</string>
 </resources>

@@ -6,7 +6,7 @@ import kotlin.math.min
 /**
  * #17343 — what the pill carries as TEXT above its base row. The captions and the journal live INSIDE its glass, on a
  * duo as on a group; the journal opens in place of the captions; (…) stows them both and closing the actions gives them
- * back; a touch that stows the pill leaves the captions in a glass without a base row (law 11 of
+ * back; a touch that stows the pill tightens the same glass around the captions (law 11 of
  * `docs/product/appels-vue-finale.md`). Mirrors iOS `CallPillText`.
  */
 enum class CallPillText {
@@ -26,6 +26,15 @@ enum class CallPillText {
     /** Only the stowed pill leaves the captions without their base row. */
     val hasBaseRow: Boolean get() = this != CaptionsAlone
 
+    /** The captions are in the glass: at rest, or alone when the pill is stowed. */
+    val showsCaptionsBand: Boolean get() = this == Captions || this == CaptionsAlone
+
+    /**
+     * Law 11 · 17 — stowed, the pill does not leave: its glass stays on screen, loses its base row and tightens around the
+     * captions. No second glass.
+     */
+    val staysWhenChromeStowed: Boolean get() = this == CaptionsAlone
+
     companion object {
         /**
          * [isCaptionsEnabled]: the « Captions » setting of the user. The journal keeps the whole call, captions on or
@@ -42,7 +51,7 @@ enum class CallPillText {
 }
 
 /**
- * #17343 — ONE width for the glass: the pill that carries text and the glass of the stowed captions are limited to
+ * #17343 — ONE width for the glass: the pill that carries text, stowed or not, is limited to
  * [TEXT_DP] so the eye does not sweep the whole screen (landscape, tablet); the resting pill keeps its [RESTING_DP].
  */
 object CallPillWidth {

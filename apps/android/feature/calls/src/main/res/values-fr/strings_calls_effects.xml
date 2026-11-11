@@ -10,11 +10,6 @@
     <string name="call_effects_face_angel">Ange</string>
     <string name="call_effects_face_demon">Démon</string>
     <string name="call_effects_face_volcano">Éruption</string>
-    <string name="call_effects_preset_natural">Naturel</string>
-    <string name="call_effects_preset_warm">Chaud</string>
-    <string name="call_effects_preset_cool">Froid</string>
-    <string name="call_effects_preset_vivid">Vif</string>
-    <string name="call_effects_preset_muted">Doux</string>
     <string name="call_effects_settings">Réglages</string>
     <string name="call_effects_settings_hint">Affiche la luminosité et le flou du fond à la place des effets</string>
     <string name="call_effects_validate">Valider</string>

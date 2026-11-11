@@ -50,11 +50,11 @@ class CallCaptionsViewModelTest {
         controller.onCleared()
     }
 
-    private fun relay(id: String, text: String, translated: String) = CallTranslatedSegmentPayload(
+    private fun relay(id: String, text: String, translated: String, capturedAtMs: Long = 1_000) = CallTranslatedSegmentPayload(
         callId = "call-1",
         segment = CallTranslatedSegmentRef(
             id = id, text = text, translatedText = translated, speakerId = "peer", isFinal = true,
-            sourceLanguage = "en", targetLanguage = "fr", capturedAtMs = 1_000,
+            sourceLanguage = "en", targetLanguage = "fr", capturedAtMs = capturedAtMs,
         ),
     )
 
@@ -89,6 +89,14 @@ class CallCaptionsViewModelTest {
 
         viewModel.toggleReveal(translated.key)
         assertThat(viewModel.journalLines(viewModel.state.value, labels).single().originalBelow).isNull()
+    }
+
+    @Test
+    fun `each sentence of the journal reads the hour IN the call, since the media first flowed, never a wall clock (P6.4)`() = runViewModel { viewModel ->
+        relayed.tryEmit(relay("w1", "Hello", "Bonjour", capturedAtMs = 5_000L + 75_000L))
+        relayed.tryEmit(relay("w2", "Bye", "Salut", capturedAtMs = 5_000L + 3_725_000L))
+
+        assertThat(viewModel.journalLines(viewModel.state.value, labels).map { it.timeLabel }).containsExactly("01:15", "1:02:05").inOrder()
     }
 
     @Test

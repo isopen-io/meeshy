@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { callNoticeStore, callReactionStore } from '@/lib/calls/call-control-state';
 import type { CallModeration } from '@/lib/calls/call-moderation';
@@ -27,6 +28,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 /* Les rangées d'actions vivent dans leur chunk (`call-control-actions.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
 beforeAll(async () => {
+  await loadPillMotion();
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await import('./call-control-actions');
@@ -100,7 +102,8 @@ const mount = (node: React.ReactElement) => {
   document.body.appendChild(host);
   const root = createRoot(host);
   act(() => root.render(node));
-  const find = (selector: string) => document.body.querySelector<HTMLElement>(selector);
+  /* Le double d'une sortie (`data-call-pill-ghost`) s'efface et part : il n'est pas le contenu. */
+  const find = (selector: string) => [...document.body.querySelectorAll<HTMLElement>(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
   const press = (selector: string) => act(() => find(selector)?.click());
   const done = () => {
     act(() => root.unmount());

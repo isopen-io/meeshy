@@ -18,7 +18,7 @@ const line = (overrides: Partial<TranscriptLine> = {}): TranscriptLine => ({
   speakerId: 'u-awa',
   speakerName: 'Awa',
   mine: false,
-  offsetSec: 4,
+  offsetMs: 4_000,
   original: 'Can you hear me?',
   text: 'Tu m’entends ?',
   language: 'fr',
@@ -65,10 +65,10 @@ describe('le journal d’après l’appel (#16634)', () => {
 
 describe('les captures dans le journal d’après l’appel (#16665)', () => {
   const notes: readonly TranscriptNote[] = [
-    { id: 'cap-1', kind: 'screenshot', userId: 'u-karim', name: 'Karim', offsetSec: 6 },
-    { id: 'cap-2', kind: 'call-recording-started', userId: 'u-awa', name: 'Awa', offsetSec: 1 },
+    { id: 'cap-1', kind: 'screenshot', userId: 'u-karim', name: 'Karim', offsetMs: 6_000 },
+    { id: 'cap-2', kind: 'call-recording-started', userId: 'u-awa', name: 'Awa', offsetMs: 1_000 },
   ];
-  const html = renderToStaticMarkup(<CallTranscriptLines lines={[line({ offsetSec: 4 }), line({ id: 's-9', offsetSec: 9 })]} notes={notes} language="fr" original={false} />);
+  const html = renderToStaticMarkup(<CallTranscriptLines lines={[line({ offsetMs: 4_000 }), line({ id: 's-9', offsetMs: 9_000 })]} notes={notes} language="fr" original={false} />);
 
   test('chaque capture entre à son heure dans l’appel, parmi les phrases', () => {
     const order = [...html.matchAll(/data-call-transcript-(?:line|note)="([^"]+)"/g)].map((match) => match[1]);
