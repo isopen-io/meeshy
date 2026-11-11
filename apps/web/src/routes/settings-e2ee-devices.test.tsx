@@ -118,7 +118,7 @@ describe('ce navigateur', () => {
     const host = await mount(element);
     await settle();
     const here = host.querySelector('[data-e2ee-devices-here]');
-    expect(here?.querySelector('span:not(.sr-only)')?.textContent).toBe('Illisible dans ce navigateur');
+    expect(here?.querySelector('span:not(.sr-only)')?.textContent).toBe('Conversations chiffrées illisibles ici');
     const note = host.querySelector(`[id="${here?.querySelector('button')?.getAttribute('aria-controls')}"]`);
     expect(here?.querySelector('button')?.getAttribute('aria-label')).toBe('Où lire mes conversations chiffrées ?');
     expect(note?.textContent).toBe(
@@ -130,7 +130,10 @@ describe('ce navigateur', () => {
     const { element } = harness({}, 'android-shell');
     const host = await mount(element);
     await settle();
-    expect(host.querySelector('[data-e2ee-devices-here]')?.textContent).toContain('Illisible dans cette application');
+    const here = host.querySelector('[data-e2ee-devices-here]')?.textContent ?? '';
+    expect(here).toContain('Conversations chiffrées illisibles ici');
+    expect(here).toContain('Cette application ne lit pas encore');
+    expect(here).not.toContain('navigateur');
   });
 });
 

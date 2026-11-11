@@ -229,7 +229,7 @@ describe('mes appareils chiffrés', () => {
     );
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(text(host)).toContain('Aucun appareil chiffré');
-    expect(text(host)).toContain('Illisible dans ce navigateur');
+    expect(text(host)).toContain('Conversations chiffrées illisibles ici');
     expect(text(host)).not.toContain('CHIFFREMENT DE BOUT EN BOUT');
     expect(text(host)).not.toContain('ne lit pas les conversations');
     expect(noteOf(host, infoButton(host, 'Où lire mes conversations chiffrées ?')).textContent).toContain('application Meeshy');
