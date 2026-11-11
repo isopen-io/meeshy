@@ -79,7 +79,7 @@ describe('les noms que la conversation en cache donne à la capsule', () => {
 });
 
 describe('ce qui paraît dans l’en-tête arrive, jamais d’un coup (#17406, comme `CallView+Header` d’iOS)', () => {
-  const css = readFileSync(new URL('../../styles/glass.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const css = readFileSync(new URL('../../styles/call-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
   const rule = (selector: string): string => {
     const start = css.indexOf(selector);
     return start < 0 ? '' : css.slice(start, css.indexOf('}', start));
