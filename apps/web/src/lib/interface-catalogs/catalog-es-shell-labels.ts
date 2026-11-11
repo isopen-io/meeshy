@@ -77,8 +77,9 @@ const esShellLabels = {
   'media.policy.wifiAndGoodCellular': 'Wi-Fi + buena red móvil',
   'media.policy.wifiOnly': 'Solo Wi-Fi',
   'media.policy.never': 'Nunca',
-  'settings.media_download': 'Descarga automática de medios',
+  'settings.media_download': 'Descarga automática',
   'settings.media_download.info': 'Si no, un toque lo descarga. Por debajo de 100 KB, un archivo se descarga siempre solo.',
+  'settings.media_download.question': '¿Y si la descarga no es automática?',
   'settings.media_download.images': 'Imágenes',
   'settings.media_download.videos': 'Vídeos',
 

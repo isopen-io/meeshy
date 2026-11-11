@@ -77,8 +77,9 @@ const deShellLabels = {
   'media.policy.wifiAndGoodCellular': 'WLAN + gutes Mobilnetz',
   'media.policy.wifiOnly': 'Nur WLAN',
   'media.policy.never': 'Nie',
-  'settings.media_download': 'Medien automatisch herunterladen',
+  'settings.media_download': 'Auto-Download',
   'settings.media_download.info': 'Sonst lädt ein Tippen sie herunter. Unter 100 KB werden Medien immer automatisch geladen.',
+  'settings.media_download.question': 'Und wenn der Download nicht automatisch läuft?',
   'settings.media_download.images': 'Bilder',
   'settings.media_download.videos': 'Videos',
 
