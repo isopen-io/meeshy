@@ -12,6 +12,7 @@
     <string name="call_actions_label">إجراءات المكالمة</string>
     <string name="call_actions_my_image">صورتي</string>
     <string name="call_actions_the_call">المكالمة</string>
+    <string name="call_captions_journal">السجل</string>
     <string name="call_capture_faces">كل وجه</string>
     <string name="call_capture_faces_saved">تم حفظ %1$d وجوه</string>
     <string name="call_capture_failed">تعذّر حفظ اللقطة</string>
@@ -238,6 +239,7 @@
     <string name="call_recording_stopped_timeout">لم يُجب الجميع: لا تسجيل</string>
     <string name="call_recording_unavailable">التسجيل غير متاح حاليًا</string>
     <string name="call_recording_waiting">بانتظار موافقة الجميع…</string>
+    <string name="call_screen_share_caption">الشاشة</string>
     <string name="call_screen_share_error">تعذّرت مشاركة الشاشة</string>
     <string name="call_screen_share_hint">يعرض شاشتك على الطرف الآخر أثناء المكالمة</string>
     <string name="call_screen_share_local_banner">أنت تشارك شاشتك</string>

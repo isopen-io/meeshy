@@ -12,6 +12,7 @@
     <string name="call_actions_label">Ações da chamada</string>
     <string name="call_actions_my_image">Minha imagem</string>
     <string name="call_actions_the_call">A chamada</string>
+    <string name="call_captions_journal">Registro</string>
     <string name="call_capture_faces">Cada rosto</string>
     <string name="call_capture_faces_saved">%1$d rostos salvos</string>
     <string name="call_capture_failed">Não foi possível salvar a captura</string>
@@ -238,6 +239,7 @@
     <string name="call_recording_stopped_timeout">Nem todos responderam: sem gravação</string>
     <string name="call_recording_unavailable">Gravação indisponível de momento</string>
     <string name="call_recording_waiting">À espera do consentimento de todos…</string>
+    <string name="call_screen_share_caption">Tela</string>
     <string name="call_screen_share_error">Não foi possível compartilhar a tela</string>
     <string name="call_screen_share_hint">Mostra sua tela ao seu contato durante a chamada</string>
     <string name="call_screen_share_local_banner">Você está compartilhando sua tela</string>

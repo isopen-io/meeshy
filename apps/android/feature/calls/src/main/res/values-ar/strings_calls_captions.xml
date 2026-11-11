@@ -5,7 +5,6 @@
     <string name="call_captions_state_translated">الترجمة</string>
     <string name="call_captions_state_original">النص الأصلي</string>
     <string name="call_captions_peer_active">فعّل محاورك النسخ</string>
-    <string name="call_captions_journal">السجل</string>
     <string name="call_captions_journal_title">سجل المكالمة</string>
     <string name="call_captions_journal_hint">يفتح كل جمل المكالمة</string>
     <string name="call_captions_waiting">ستظهر الترجمة النصية هنا بمجرد أن يتكلم أحد.</string>

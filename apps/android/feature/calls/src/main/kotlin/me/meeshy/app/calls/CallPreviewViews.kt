@@ -158,7 +158,7 @@ internal fun CallPreviewOutgoingPanel(
                     isOn = preview.outgoingConsent.sendsVideo,
                     on = MeeshyIcons.Video,
                     off = MeeshyIcons.VideoOff,
-                    caption = stringResource(R.string.call_control_video_caption),
+                    caption = stringResource(R.string.call_action_camera),
                     label = stringResource(R.string.call_preview_camera_a11y),
                     hint = stringResource(R.string.call_preview_camera_hint, name),
                     onToggle = onToggleVideo,

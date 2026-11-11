@@ -190,7 +190,7 @@ class CallCaptionsBandSemanticsTest {
             MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour")), onToggleOriginal = {}, onOpenJournal = { opened++ }) }
         }
 
-        rule.onNodeWithText("Journal").assertHeightIsAtLeast(48.dp).performClick()
+        rule.onNodeWithText("Transcript").assertHeightIsAtLeast(48.dp).performClick()
 
         assertThat(opened).isEqualTo(1)
     }
@@ -233,8 +233,8 @@ class CallCaptionsBandSemanticsTest {
         }
 
         rule.onNodeWithText("Ada · Bonjour", substring = true).assertIsDisplayed()
-        rule.onNodeWithText("Journal").assertDoesNotExist()
+        rule.onNodeWithText("Transcript").assertDoesNotExist()
         rule.runOnIdle { opens = true }
-        rule.onNodeWithText("Journal").assertIsDisplayed()
+        rule.onNodeWithText("Transcript").assertIsDisplayed()
     }
 }

@@ -12,6 +12,7 @@
     <string name="call_actions_label">Actions de l\'appel</string>
     <string name="call_actions_my_image">Mon image</string>
     <string name="call_actions_the_call">L\'appel</string>
+    <string name="call_captions_journal">Journal</string>
     <string name="call_capture_faces">Chaque visage</string>
     <string name="call_capture_faces_saved">%1$d visages enregistrés</string>
     <string name="call_capture_failed">La capture n\'a pas pu être enregistrée</string>
@@ -238,6 +239,7 @@
     <string name="call_recording_stopped_timeout">Tout le monde n’a pas répondu : pas d’enregistrement</string>
     <string name="call_recording_unavailable">Enregistrement impossible pour le moment</string>
     <string name="call_recording_waiting">En attente de l’accord de tous…</string>
+    <string name="call_screen_share_caption">Écran</string>
     <string name="call_screen_share_error">Impossible de partager l\'écran</string>
     <string name="call_screen_share_hint">Montre votre écran au correspondant pendant l\'appel</string>
     <string name="call_screen_share_local_banner">Vous partagez votre écran</string>

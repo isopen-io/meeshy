@@ -8,6 +8,5 @@
     <string name="call_control_video_paused">Vídeo em pausa (conexão fraca)</string>
     <string name="call_control_video_paused_caption">Em pausa</string>
     <string name="call_control_video_paused_hint">Toque para desligar a câmera. O vídeo retoma sozinho se a conexão melhorar.</string>
-    <string name="call_control_video_caption">Vídeo</string>
     <string name="call_panel_close">Fechar</string>
 </resources>

@@ -1,8 +1,6 @@
 package me.meeshy.app.calls
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -60,6 +58,7 @@ import me.meeshy.sdk.model.call.CallButtonGlassSurface
 import me.meeshy.sdk.model.call.CallButtonGlassTreatment
 import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallChromeInteraction
+import me.meeshy.sdk.model.call.CallPillMotion
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
@@ -134,8 +133,6 @@ internal fun CallPillGlyph(icon: ImageVector, kind: CallPillKind, diameter: Dp, 
     }
 }
 
-private const val CAPTION_MILLIS = 250
-
 /** Un bouton refusé pendant une prise ou un film se lit atténué (SwiftUI `.disabled`). */
 private const val DISABLED_ALPHA = 0.4f
 
@@ -156,12 +153,13 @@ internal fun CallPillButton(
     toggleState: Boolean? = null,
     diameter: Dp = 48.dp,
     enabled: Boolean = true,
-    /** The caption fades and folds in or out with the rows around it, never snaps (G3.4). */
+    /** The caption fades and folds in or out with the rows around it, never snaps (G3.4), reduced motion included. */
     captionShown: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val reduceMotion = rememberCallReduceMotion()
+    val captionMillis = CallPillMotion.millis(reduceMotion)
     val scale by animateFloatAsState(
         targetValue = CallButtonFill.pressScale(pressed, reduceMotion),
         animationSpec = if (pressed) tween(0) else spring(dampingRatio = 0.7f, stiffness = 400f),
@@ -190,8 +188,8 @@ internal fun CallPillButton(
         if (caption != null) {
             AnimatedVisibility(
                 visible = captionShown,
-                enter = fadeIn(tween(CAPTION_MILLIS)) + if (reduceMotion) EnterTransition.None else expandVertically(tween(CAPTION_MILLIS)),
-                exit = fadeOut(tween(CAPTION_MILLIS)) + if (reduceMotion) ExitTransition.None else shrinkVertically(tween(CAPTION_MILLIS)),
+                enter = fadeIn(tween(captionMillis)) + expandVertically(tween(captionMillis)),
+                exit = fadeOut(tween(captionMillis)) + shrinkVertically(tween(captionMillis)),
             ) {
                 Text(
                     text = caption,

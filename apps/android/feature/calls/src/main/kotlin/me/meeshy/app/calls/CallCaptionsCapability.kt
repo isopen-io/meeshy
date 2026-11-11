@@ -246,8 +246,6 @@ class CallCaptionsController internal constructor(
 
     fun toggleReveal(key: String) = _state.update { it.togglingReveal(key) }
 
-    fun setShowsOriginal(showsOriginal: Boolean) = _state.update { it.copy(showsOriginal = showsOriginal) }
-
     fun openJournal() {
         _journalRequests.tryEmit(Unit)
     }
@@ -434,7 +432,12 @@ object CallCaptionsPresenter {
     /** Absent where captions cannot exist: an end-to-end call has no journal to open. */
     fun journal(chip: CallCaptionsChip): CallActionPresentation? =
         if (chip.gate.allowsCaptions) {
-            CallActionPresentation(MeeshyIcons.ListChecklist, R.string.call_captions_journal_title, hintRes = R.string.call_captions_journal_hint)
+            CallActionPresentation(
+                MeeshyIcons.ListChecklist,
+                R.string.call_captions_journal_title,
+                hintRes = R.string.call_captions_journal_hint,
+                captionRes = R.string.call_captions_journal,
+            )
         } else {
             null
         }
