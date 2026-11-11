@@ -655,3 +655,35 @@ export function kitGlassToneContrast() {
     }),
   );
 }
+
+/** La luminance au-delà de laquelle le contenu est clair et le verre passe `onLight` (fiche K01 § 6). */
+export const DEEP_WORST_LUMINANCE = 0.613;
+
+const KIT_FOCUS_BANDS = {
+  plain: [0, PLAIN_WORST_LUMINANCE],
+  deep: [PLAIN_WORST_LUMINANCE, DEEP_WORST_LUMINANCE],
+  onLight: [DEEP_WORST_LUMINANCE, 1],
+};
+
+/**
+ * LE CONTOUR DU FOCUS DU VERRE DU KIT : décalé de 2 px, il se pose sur le
+ * CONTENU, pas sur le verre. Sa couleur, lue dans `styles/glass-kit.css`
+ * (`--glass-focus-ring`), est comparée aux deux bords de la bande de luminance
+ * qui élit le ton ; le pire des deux est rendu. Le ton `theme` suit l'encre du
+ * thème (`currentColor`), sur le fond de l'app.
+ */
+export function kitGlassFocusRingContrast() {
+  const css = readFileSync(GLASS_KIT_CSS_PATH, 'utf8');
+  const vars = loadIosSchemes().dark;
+  const base = parseDeclarations(extractBlock(css, KIT_TONE_SELECTORS.base));
+  const own = {
+    plain: parseDeclarations(extractBlock(css, KIT_TONE_SELECTORS.plain)),
+    deep: {},
+    onLight: parseDeclarations(extractBlock(css, KIT_TONE_SELECTORS.onLight)),
+  };
+  return Object.entries(KIT_FOCUS_BANDS).map(([tone, edges]) => {
+    const ring = resolveColor({ ...base, ...own[tone] }['--glass-focus-ring'], vars);
+    const ratio = Math.min(...edges.map((luminance) => wcagContrastRatio(ring, grayWithLuminance(luminance))));
+    return { tone, ring, ratio, minRatio: KIT_TONE_MIN_RATIO['non-text'], passes: ratio >= KIT_TONE_MIN_RATIO['non-text'] };
+  });
+}

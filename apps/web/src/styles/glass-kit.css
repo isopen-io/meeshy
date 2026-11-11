@@ -8,12 +8,6 @@
   display: contents;
 }
 
-.glass-group {
-  display: flex;
-  align-items: center;
-  gap: var(--ios-space-sm);
-}
-
 .glass-tone {
   --glass-fill: var(--ios-media-backdrop);
   --glass-alpha: 46%;
@@ -29,8 +23,22 @@
   --glass-glow-hover: 0.5;
   --glass-glow-press: 1;
   --glass-wash: 22%;
-  position: relative;
+  --glass-focus-ring: var(--ios-media-backdrop);
   transition: background-color var(--glass-tone-fade) ease;
+}
+
+/* Ce qui PLACE la surface et dispose le groupe vit sous la couche des
+   utilitaires : un `absolute`, un `grid` ou un `gap-*` de l'appelant l'emporte. */
+@layer components {
+  .glass-tone {
+    position: relative;
+  }
+
+  .glass-group {
+    display: flex;
+    align-items: center;
+    gap: var(--ios-space-sm);
+  }
 }
 
 /* Le ton `theme` n'a pas de matière ICI : il porte les classes `.glass` /
@@ -54,6 +62,7 @@
   --glass-fill: var(--ios-on-media);
   --glass-alpha: 14%;
   --glass-rim: 24%;
+  --glass-focus-ring: var(--ios-on-media);
 }
 
 .glass-tone[data-glass-tone='onLight'] {
@@ -66,6 +75,7 @@
   --glass-top-light: 0%;
   --glass-glow-peak: 10%;
   --glass-tone-fade: 0ms;
+  --glass-focus-ring: currentColor;
 }
 
 :root.light .glass-tone[data-glass-tone='theme'] {
@@ -128,6 +138,7 @@
 }
 
 .glass-tone[data-glass-nested][data-glass-tone] {
+  --glass-focus-ring: var(--ios-on-media);
   background-color: transparent;
   backdrop-filter: none;
   box-shadow: none;
@@ -187,7 +198,7 @@
 }
 
 .glass-touch:focus-visible {
-  outline: 2px solid currentColor;
+  outline: 2px solid var(--glass-focus-ring);
   outline-offset: 2px;
 }
 

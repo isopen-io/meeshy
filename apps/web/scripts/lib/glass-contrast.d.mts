@@ -93,3 +93,14 @@ export type KitGlassToneContrastResult = {
 export declare const PLAIN_WORST_LUMINANCE: number;
 export declare function loadKitGlassTones(): KitGlassTones;
 export declare function kitGlassToneContrast(): readonly KitGlassToneContrastResult[];
+
+export type KitGlassFocusRingContrastResult = {
+  readonly tone: 'plain' | 'deep' | 'onLight';
+  readonly ring: RGBA;
+  readonly ratio: number;
+  readonly minRatio: number;
+  readonly passes: boolean;
+};
+
+export declare const DEEP_WORST_LUMINANCE: number;
+export declare function kitGlassFocusRingContrast(): readonly KitGlassFocusRingContrastResult[];

@@ -2,10 +2,10 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { act, type ReactElement } from 'react';
+import { act, useState, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { kitGlassToneContrast, loadGlassDensities, loadKitGlassTones } from '../../../scripts/lib/glass-contrast.mjs';
+import { kitGlassFocusRingContrast, kitGlassToneContrast, loadGlassDensities, loadKitGlassTones } from '../../../scripts/lib/glass-contrast.mjs';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import {
@@ -320,7 +320,28 @@ describe('la matière de glass.css porte les valeurs de la recette', () => {
   });
 
   test('le focus clavier est visible sur les quatre tons : contour de 2 px décalé de 2 px', () => {
-    expect(glassCss).toMatch(/\.glass-touch:focus-visible\s*\{[^}]*outline: 2px solid[^}]*outline-offset: 2px/);
+    expect(glassCss).toMatch(/\.glass-touch:focus-visible\s*\{[^}]*outline: 2px solid var\(--glass-focus-ring\)[^}]*outline-offset: 2px/);
+  });
+
+  test('le contour du focus prend la couleur que le contenu de son ton laisse lisible, à 3:1 sur toute la bande', () => {
+    const rings = kitGlassFocusRingContrast();
+    expect(rings.map((entry) => entry.tone)).toEqual(['plain', 'deep', 'onLight']);
+    for (const entry of rings) expect(entry.ratio).toBeGreaterThanOrEqual(3);
+    expect(bodiesOf(glassCss, /\.glass-tone\[data-glass-tone='theme'\] \{/)[0]).toContain('--glass-focus-ring: currentColor');
+  });
+
+  test('posée dans un verre, la surface trace son focus sur le verre de l’hôte, à l’encre de la planche', () => {
+    expect(bodiesOf(glassCss, /\.glass-tone\[data-glass-nested\]\[data-glass-tone\] \{/)[0]).toContain('--glass-focus-ring: var(--ios-on-media)');
+    expect(kitGlassToneContrast().every((entry) => entry.ratio >= 3)).toBe(true);
+  });
+
+  test('ce que l’appelant pose en utilitaire l’emporte : la position de la surface et la disposition du groupe vivent sous la couche des utilitaires', () => {
+    const [layer] = bodiesOf(glassCss, /@layer components \{/);
+    expect(layer).toContain('.glass-tone { position: relative; }');
+    expect(layer).toMatch(/\.glass-group \{ display: flex;/);
+    const unlayered = glassCss.replace(/@layer components \{[\s\S]*?\n\}/, '');
+    expect(unlayered).not.toMatch(/position:\s*relative/);
+    expect(unlayered).not.toMatch(/\.glass-group\s*\{/);
   });
 });
 
@@ -473,6 +494,29 @@ describe('MeeshyGlass', () => {
     expect(element.getAttribute('aria-label')).toBe('Fermer');
     expect(element.hasAttribute('role')).toBe(false);
     expect(container.querySelector('[data-glass-tone] [role]')).toBeNull();
+  });
+
+  test('quand le ton de l’hôte change, la surface suit sans rendre son contenu de nouveau', () => {
+    const renders = { count: 0 };
+    const control: { setTone: ((tone: MeeshyGlassTone) => void) | null } = { setTone: null };
+    function Leaf() {
+      renders.count += 1;
+      return <span>feuille</span>;
+    }
+    const leaf = <Leaf />;
+    function Host() {
+      const [tone, setTone] = useState<MeeshyGlassTone>('deep');
+      control.setTone = setTone;
+      return (
+        <MeeshyGlassScope tone={tone}>
+          <MeeshyGlass interactive>{leaf}</MeeshyGlass>
+        </MeeshyGlassScope>
+      );
+    }
+    const container = mount(<Host />);
+    act(() => control.setTone?.('onLight'));
+    expect(surface(container).getAttribute('data-glass-tone')).toBe('onLight');
+    expect(renders.count).toBe(1);
   });
 
   test('la classe de l’appelant s’ajoute à celles du verre', () => {
