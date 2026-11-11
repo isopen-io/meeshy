@@ -276,7 +276,7 @@ extension CallView {
     /// la racine, il recalculerait tout l'écran d'appel.
     func noteChromeInteraction(_ interaction: CallChromeInteraction) {
         guard interaction.revealsChrome, !showControls else { return }
-        withAnimation(.easeInOut(duration: CallChromeVisibility.fadeDuration)) { showControls = true }
+        withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { showControls = true }
     }
 
     func toggleControls() {
@@ -284,7 +284,7 @@ extension CallView {
             return tapCameraMenu(.elsewhere)
         }
         guard CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage) else { return }
-        withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
+        withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { showControls.toggle() }
     }
 
     /// Whether to render the full-screen LOCAL self-preview as the call

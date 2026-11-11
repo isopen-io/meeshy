@@ -80,6 +80,11 @@ final class CallChromeInteractionTests: XCTestCase {
         XCTAssertLessThan(CallChromeStow.headerTravel(topInset: 59), CallChromeStow.headerTravel(topInset: 20))
     }
 
+    func test_stow_pillLeavesDownwards_pastTheBottomInset() {
+        XCTAssertGreaterThan(CallChromeStow.pillTravel(bottomInset: 34), CallRailsLayout.pillHeight + 34)
+        XCTAssertGreaterThan(CallChromeStow.pillTravel(bottomInset: 34), CallChromeStow.pillTravel(bottomInset: 0))
+    }
+
     // MARK: - Enfoncement
 
     func test_pressFeedback_pressIn_hasNoAnimationDelay() {

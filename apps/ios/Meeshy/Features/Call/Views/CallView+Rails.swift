@@ -63,6 +63,7 @@ extension CallView {
             .padding(.top, Self.chromeTopInset + 52)
             .padding(.bottom, bottom)
             .callChromeVisibility(isChromeVisible)
+            .modifier(CallRailStow(side: side, safeHorizontal: safeHorizontal, isVisible: isChromeVisible, reduceMotion: reduceMotion))
             .transition(CallRailSlide.transition(side, safeHorizontal: safeHorizontal, reduceMotion: reduceMotion))
     }
 
@@ -86,6 +87,21 @@ extension CallView {
         .callControlsGlass(in: Capsule())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallControlsCopy.familyTitle(row.family))
+    }
+}
+
+/// G1.11 · G2.8 — rangé, le rail sort par son bord de l'écran et en revient (transformation
+/// et opacité seulement) ; Réduire les animations : un fondu, rien ne se déplace.
+private struct CallRailStow: ViewModifier {
+    let side: CallRailSide
+    let safeHorizontal: CGFloat
+    let isVisible: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(CallRailSlide(side: side, safeHorizontal: safeHorizontal, isAway: CallChromeStow.leavesByItsEdge(isVisible: isVisible, reduceMotion: reduceMotion)))
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isVisible)
     }
 }
 

@@ -47,7 +47,7 @@ extension CallView {
             height: container.height - safeArea.top - safeArea.bottom
                 - QualityThresholds.pipTopClearance - QualityThresholds.pipBottomClearance
         )
-        return CallSelfTileScale.fitted(CallSelfTileScale.liveSize(pinch: selfTilePinch, from: CallSelfTileScale.resting(selfTileScale, isChromeVisible: isChromeVisible)), in: available)
+        return CallSelfTileScale.fitted(CallSelfTileScale.liveSize(pinch: selfTilePinch, from: selfTileScale), in: available)
     }
 
     /// Nearest corner to a point — used to snap on drag end.
@@ -81,6 +81,7 @@ extension CallView {
                         }
                     }
                     .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
+                    .modifier(CallSelfTileStow(factor: CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible), anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
                     .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
                     .gesture(
                         DragGesture()
@@ -97,8 +98,7 @@ extension CallView {
                             }
                     )
                     .simultaneousGesture(selfTilePinchGesture)
-                    // Toucher la vignette ne fait que permuter les flux ; ses commandes vivent autour.
-                    .onTapGesture { swapPictureInPicture() }
+                    .onTapGesture { tapPictureInPicture() }
                     .accessibilityAddTraits(.isButton)
                     .accessibilityAction { swapPictureInPicture() }
                     .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
@@ -137,6 +137,11 @@ extension CallView {
         selfTileMemory.remember(scale, for: callManager.currentCallId)
     }
 
+    /// G1.9 — la règle de la scène de groupe vaut pour ma vignette (`showControls`, jamais un mode).
+    private func tapPictureInPicture() {
+        if GroupStageTapRule.outcome(isChromeVisible: showControls) == .spotlight { swapPictureInPicture() } else { noteChromeInteraction(.revive) }
+    }
+
     private func swapPictureInPicture() {
         withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.8)) { swapStreams.toggle() }
         HapticFeedback.light()
@@ -163,6 +168,7 @@ extension CallView {
                         .stroke(MeeshyColors.warning.opacity(MeeshyOpacity.heavy), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
+                .modifier(CallSelfTileStow(factor: CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible), anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
                 .position(x: base.x, y: base.y)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))

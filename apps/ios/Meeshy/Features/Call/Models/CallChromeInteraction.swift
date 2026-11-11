@@ -53,6 +53,11 @@ enum CallChromeStow {
     static func headerTravel(topInset: CGFloat) -> CGFloat {
         -(topInset + headerRowHeight)
     }
+
+    /// La translation de la pilule rangée : vers le bas, au-delà de l'encart bas.
+    static func pillTravel(bottomInset: CGFloat) -> CGFloat {
+        CallRailsLayout.pillHeight + CallRailsLayout.pillGap + bottomInset
+    }
 }
 
 /// Ce que fait le toucher d'une vignette de la scène de groupe.

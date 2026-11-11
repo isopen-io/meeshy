@@ -47,6 +47,7 @@ extension CallView {
         .padding(.top, Self.chromeTopInset)
         // §7.3 — l'en-tête se masque avec la pilule et les rails.
         .callChromeVisibility(isChromeVisible)
+        .modifier(CallEdgeStow(travel: CallChromeStow.headerTravel(topInset: Self.chromeTopInset), isVisible: isChromeVisible, reduceMotion: reduceMotion))
         .task(id: callManager.conversationId) { await refreshHeaderNames() }
     }
 

@@ -220,11 +220,14 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
         let pill = try block("var callControlsPill: some View {", until: "var pillHairline: some View", in: pillSource)
         XCTAssertTrue(pill.contains("text.hasBaseRow"), "La rangée de base se retire quand la pilule est rangée")
         XCTAssertTrue(pill.contains("text.showsCaptionsBand"), "Les sous-titres restent dans le verre, rangés ou non")
-        XCTAssertTrue(pill.contains(".transition(baseRowRetirement)"), "La rangée de base part par morphisme : le verre se resserre")
+        XCTAssertTrue(pill.contains(".transition(unfoldTransition)"), "La rangée de base part par le morphisme des rangées : le verre se resserre")
         XCTAssertEqual(pill.components(separatedBy: ".callControlsGlass(in:").count - 1, 1)
         let controlsBlock = try block("var callControlsBlock: some View {", until: "private func unfoldedRows", in: pillSource)
-        XCTAssertTrue(controlsBlock.contains(".callChromeVisibility(isChromeVisible || pillText.staysWhenChromeStowed)"),
+        XCTAssertTrue(controlsBlock.contains("let isShown = isChromeVisible || pillText.staysWhenChromeStowed"),
                       "La pilule rangée ne s'efface pas quand elle porte les sous-titres")
+        XCTAssertTrue(controlsBlock.contains(".callChromeVisibility(isShown)"))
+        XCTAssertTrue(controlsBlock.contains(".modifier(CallEdgeStow(travel: CallChromeStow.pillTravel(bottomInset: Self.chromeBottomInset), isVisible: isShown, reduceMotion: reduceMotion))"),
+                      "Toute rangée, la pilule repart vers le bas de l'écran, d'où elle vient")
         XCTAssertFalse(pillSource.contains("stowedCaptions"), "Plus de second verre pour les sous-titres rangés")
         let transcript = try view("CallView+Transcript.swift")
         XCTAssertFalse(transcript.contains("stowedCaptions"))
@@ -237,12 +240,16 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
     func test_stow_movesTheChromeThroughItsEdges() throws {
         let rails = try view("CallView+Rails.swift")
         let positioned = try block("private func positionedRail(", until: "private func actionRail(", in: rails)
-        XCTAssertTrue(positioned.contains("CallChromeStow.leavesByItsEdge(isVisible: isChromeVisible, reduceMotion: reduceMotion)"),
+        XCTAssertTrue(positioned.contains(".modifier(CallRailStow(side: side, safeHorizontal: safeHorizontal, isVisible: isChromeVisible, reduceMotion: reduceMotion))"),
                       "Le rail rangé sort par SON bord de l'écran")
-        XCTAssertTrue(positioned.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isChromeVisible)"))
+        let stow = try block("private struct CallRailStow: ViewModifier {", until: "private struct CallRailSlide", in: rails)
+        XCTAssertTrue(stow.contains("CallChromeStow.leavesByItsEdge(isVisible: isVisible, reduceMotion: reduceMotion)"))
+        XCTAssertTrue(stow.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isVisible)"))
         let header = try view("CallView+Header.swift")
-        XCTAssertTrue(header.contains("CallChromeStow.headerTravel(topInset: Self.chromeTopInset)"), "L'en-tête rangé remonte")
-        XCTAssertTrue(header.contains("CallChromeStow.leavesByItsEdge(isVisible: isChromeVisible, reduceMotion: reduceMotion)"))
+        XCTAssertTrue(header.contains(".modifier(CallEdgeStow(travel: CallChromeStow.headerTravel(topInset: Self.chromeTopInset), isVisible: isChromeVisible, reduceMotion: reduceMotion))"), "L'en-tête rangé remonte")
+        let glass = try view("CallControlGlass.swift")
+        let edgeStow = try block("struct CallEdgeStow: ViewModifier {", until: "struct CallSelfTileStow", in: glass)
+        XCTAssertTrue(edgeStow.contains("CallChromeStow.leavesByItsEdge(isVisible: isVisible, reduceMotion: reduceMotion) ? travel : 0"))
         let connected = try view("CallView+Connected.swift")
         let toggle = try block("func toggleControls() {", until: "\n    }\n", in: connected)
         XCTAssertTrue(toggle.contains("withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion))"), "Le toggle tient compte de Réduire les animations")
@@ -254,11 +261,14 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
     /// ne change pas : aucun relayout pendant le geste.
     func test_selfTile_stowsByScale_notByANewFrame() throws {
         let tile = try view("CallView+SelfView.swift")
-        let size = try block("func pipTileSize(in container: CGSize, safeArea: EdgeInsets) -> CGSize {", until: "/// Nearest corner", in: tile)
+        let size = try block("func pipTileSize(in container: CGSize, safeArea: EdgeInsets) -> CGSize {", until: "private func nearestCorner(", in: tile)
         XCTAssertFalse(size.contains("isChromeVisible"), "Le cadre est celui du palier choisi")
-        XCTAssertTrue(tile.contains("CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible)"))
-        XCTAssertTrue(tile.contains(".scaleEffect(pipRestingFactor, anchor: pipCorner.anchor)"))
-        XCTAssertTrue(tile.contains(".animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isChromeVisible)"),
+        XCTAssertEqual(tile.components(separatedBy: ".modifier(CallSelfTileStow(factor: CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible), anchor: CallSelfTileScale.anchor(of: base, in: geo.size)").count - 1, 2,
+                       "La vignette vivante ET la tuile « vidéo en pause » se rangent de même")
+        let glass = try view("CallControlGlass.swift")
+        let stow = try block("struct CallSelfTileStow: ViewModifier {", until: "\n}\n", in: glass)
+        XCTAssertTrue(stow.contains(".scaleEffect(factor, anchor: anchor)"))
+        XCTAssertTrue(stow.contains(".animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isChromeVisible)"),
                       "Réduire les animations : la vignette change de taille sans mouvement")
     }
 
@@ -268,10 +278,8 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
     func test_selfTileTap_revealsTheControlsFirst_thenSwaps() throws {
         let tile = try view("CallView+SelfView.swift")
         let tap = try block("private func tapPictureInPicture() {", until: "private func swapPictureInPicture()", in: tile)
-        XCTAssertTrue(tap.contains("GroupStageTapRule.outcome(isChromeVisible: showControls)"), "La règle de la scène de groupe, pas une seconde")
-        XCTAssertTrue(tap.contains("case .revealChrome:"))
-        XCTAssertTrue(tap.contains("noteChromeInteraction(.revive)"))
-        XCTAssertTrue(tap.contains("case .spotlight:"))
+        XCTAssertTrue(tap.contains("GroupStageTapRule.outcome(isChromeVisible: showControls) == .spotlight"), "La règle de la scène de groupe, pas une seconde")
+        XCTAssertTrue(tap.contains("noteChromeInteraction(.revive)"), "Contrôles rangés : on les rend, on ne permute pas")
         XCTAssertTrue(tap.contains("swapPictureInPicture()"))
         XCTAssertTrue(tile.contains(".onTapGesture { tapPictureInPicture() }"))
         XCTAssertTrue(tile.contains(".accessibilityAction { swapPictureInPicture() }"))

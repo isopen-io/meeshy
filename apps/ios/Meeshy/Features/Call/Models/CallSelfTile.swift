@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SwiftUI
 
 enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
     case x1 = 1
@@ -61,6 +62,12 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
     /// vignette est mise à l'échelle de sa petite taille, jamais relayoutée.
     static func restingFactor(_ chosen: CallSelfTileScale, isChromeVisible: Bool) -> CGFloat {
         resting(chosen, isChromeVisible: isChromeVisible).width / chosen.width
+    }
+
+    /// L'ancre du rangement : le coin de l'écran le plus proche du centre de la vignette, qui garde
+    /// ainsi sa marge pendant la réduction.
+    static func anchor(of center: CGPoint, in container: CGSize) -> UnitPoint {
+        UnitPoint(x: center.x < container.width / 2 ? 0 : 1, y: center.y < container.height / 2 ? 0 : 1)
     }
 
     static func fitted(_ size: CGSize, in available: CGSize) -> CGSize {

@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import Meeshy
 
@@ -143,6 +144,14 @@ final class CallSelfTileTests: XCTestCase {
         XCTAssertEqual(CallSelfTileScale.restingFactor(.x3, isChromeVisible: false), CallSelfTileScale.x1.width / CallSelfTileScale.x3.width, accuracy: 0.0001)
         XCTAssertEqual(CallSelfTileScale.restingFactor(.x2, isChromeVisible: false), CallSelfTileScale.x1.width / CallSelfTileScale.x2.width, accuracy: 0.0001)
         XCTAssertEqual(CallSelfTileScale.restingFactor(.x1, isChromeVisible: false), 1, accuracy: 0.0001)
+    }
+
+    func test_anchor_isTheScreenCornerNearestTheTile() {
+        let screen = CGSize(width: 400, height: 800)
+        XCTAssertEqual(CallSelfTileScale.anchor(of: CGPoint(x: 340, y: 90), in: screen), .topTrailing)
+        XCTAssertEqual(CallSelfTileScale.anchor(of: CGPoint(x: 60, y: 90), in: screen), .topLeading)
+        XCTAssertEqual(CallSelfTileScale.anchor(of: CGPoint(x: 340, y: 700), in: screen), .bottomTrailing)
+        XCTAssertEqual(CallSelfTileScale.anchor(of: CGPoint(x: 60, y: 700), in: screen), .bottomLeading)
     }
 
     // MARK: - Loi 4 — le liseré porte la couleur de qui est DANS la vignette

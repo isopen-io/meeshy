@@ -198,4 +198,16 @@ final class CallControlsDispositionTests: XCTestCase {
         let trailing = Layout.slideOffset(side: .trailing, isRightToLeft: false, safeHorizontal: 21)
         XCTAssertEqual(abs(leading), abs(trailing))
     }
+
+    // MARK: - #17532 — le rangement fait sortir le rail par son bord (G1.11 · G2.8)
+
+    func test_stow_aStowedRailLeavesByItsEdge_withMotionAllowed() {
+        XCTAssertTrue(CallChromeStow.leavesByItsEdge(isVisible: false, reduceMotion: false))
+        XCTAssertNotEqual(Layout.slideOffset(side: .leading, isRightToLeft: false, safeHorizontal: 0), 0)
+    }
+
+    func test_stow_aRevealedRailStaysInPlace_andReducedMotionOnlyFades() {
+        XCTAssertFalse(CallChromeStow.leavesByItsEdge(isVisible: true, reduceMotion: false))
+        XCTAssertFalse(CallChromeStow.leavesByItsEdge(isVisible: false, reduceMotion: true))
+    }
 }

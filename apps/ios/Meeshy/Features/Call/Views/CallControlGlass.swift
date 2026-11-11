@@ -166,3 +166,32 @@ enum CallButtonFill {
         Color.white.opacity(isPressed ? 0.22 : 0)
     }
 }
+
+/// G1.11 · G2.8 — rangé, un élément du chrome (l'en-tête, la pilule) sort par SON bord de l'écran
+/// et en revient (loi 17) ; Réduire les animations : un fondu, rien ne se déplace.
+struct CallEdgeStow: ViewModifier {
+    let travel: CGFloat
+    let isVisible: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: CallChromeStow.leavesByItsEdge(isVisible: isVisible, reduceMotion: reduceMotion) ? travel : 0)
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isVisible)
+    }
+}
+
+/// G1.11 — ma vignette se range par une transformation, ancrée à son coin : son cadre ne
+/// change pas. Réduire les animations : elle change de taille sans mouvement.
+struct CallSelfTileStow: ViewModifier {
+    let factor: CGFloat
+    let anchor: UnitPoint
+    let isChromeVisible: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(factor, anchor: anchor)
+            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isChromeVisible)
+    }
+}
