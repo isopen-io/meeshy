@@ -1,7 +1,8 @@
-import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject, type WheelEvent } from 'react';
 
 import { CAPTURE_HOLD_MS, captureIntent, keyIntent, PRESS_SLOP_PX, tapGesture, type LastTap, type PressGesture } from '@/lib/calls/call-capture-gesture';
 import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
+import { useModeGlass } from '@/lib/calls/use-mode-motion';
 
 /**
  * **LE CARROUSEL UNIQUE D'UN MODE** (#8578) — en bas, au milieu, seul : les
@@ -383,19 +384,47 @@ type Action = { readonly label: string; readonly onPress: () => void; readonly d
 
 type BarProps = {
   readonly quit: Action & { readonly glyph: ReactNode };
-  /** Au centre, rien de visible : la vidéo au clavier, qui ne se montre qu'au focus (#8625). */
+  /** Au centre : rien de visible en Montage (la vidéo au clavier, #8625) ; en Effets, Réglages. */
   readonly center?: ReactNode;
   readonly options: ReactNode;
+  /** Le verre : la barre est UNE surface, qui se resserre par morphisme quand `above` repart (P8b.8). */
+  readonly glass?: boolean;
+  /** Ce qui se pose AU-DESSUS de la rangée de base, dans le même verre (les puces, P8). */
+  readonly above?: ReactNode;
+  /** Ce qui est posé sur la barre, hors de son verre (le panneau, la bande de looks) : il suit son bord du haut pendant le morphisme. */
+  readonly rider?: RefObject<HTMLElement | null>;
 };
 
 const SIDE_SHAPE = 'grid size-12 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none';
 
 const SIDE = `${SIDE_SHAPE} text-on-media`;
 
-/** La barre d'un mode : ✕ Quitter · (la vidéo au clavier) · les options. */
-export function CallModeBar({ quit, center = null, options }: BarProps) {
+/** La largeur de la barre de verre, et du panneau qui la surmonte : celle de la pilule de l'appel, un liseré de chaque côté. */
+export const GLASS_WIDTH = 'w-[calc(100%-2rem)] max-w-[560px]';
+
+const GLASS_BAR = `relative isolate flex ${GLASS_WIDTH} flex-col items-center rounded-[24px] p-2`;
+
+/**
+ * Le verre de la barre : un élément à lui, seul mis à l'échelle par le morphisme (`createPillGlass`),
+ * depuis son bord du bas — le contenu garde ses proportions, et la barre ne quitte pas le bas de l'écran.
+ */
+function GlassBar({ above, rider, children }: { readonly above: ReactNode; readonly rider: RefObject<HTMLElement | null> | undefined; readonly children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const skin = useRef<HTMLSpanElement>(null);
+  useModeGlass(box, skin, rider);
   return (
-    <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-4 px-6" data-call-mode-bar="">
+    <div ref={box} className={GLASS_BAR} data-call-mode-bar="">
+      <span ref={skin} aria-hidden className="glass-call absolute inset-0 -z-10 origin-bottom rounded-[24px]" data-call-mode-bar-skin="" />
+      {above}
+      {children}
+    </div>
+  );
+}
+
+/** La barre d'un mode : ✕ Quitter (‹ en Effets) · le centre · les options ; posée sur son verre quand `glass`. */
+export function CallModeBar({ quit, center = null, options, glass = false, above = null, rider }: BarProps) {
+  const row = (
+    <div className={`grid w-full grid-cols-[1fr_auto_1fr] items-center gap-4 ${glass ? '' : 'px-6'}`} {...(glass ? {} : { 'data-call-mode-bar': '' })}>
       <div className="flex justify-start">
         <button type="button" aria-label={quit.label} title={quit.label} onClick={quit.onPress} className={`glass-call ${SIDE}`} {...(quit.data ?? {})}>
           {quit.glyph}
@@ -405,10 +434,29 @@ export function CallModeBar({ quit, center = null, options }: BarProps) {
       <div className="flex justify-end gap-2">{options}</div>
     </div>
   );
+  return glass ? (
+    <GlassBar above={above} rider={rider}>
+      {row}
+    </GlassBar>
+  ) : (
+    row
+  );
 }
 
-/** Une option discrète de la barre : un rond de verre, pressé ou non. */
-export function ModeOption({ label, glyph, onPress, pressed, hint, data = {} }: { readonly label: string; readonly glyph: ReactNode; readonly onPress: () => void; readonly pressed?: boolean; readonly hint?: string; readonly data?: Readonly<Record<`data-${string}`, string>> }) {
+type OptionProps = {
+  readonly label: string;
+  readonly glyph: ReactNode;
+  readonly onPress: () => void;
+  readonly pressed?: boolean;
+  readonly hint?: string;
+  /** Une légende sous le disque (Réglages, P8b). */
+  readonly caption?: string;
+  readonly data?: Readonly<Record<`data-${string}`, string>>;
+};
+
+/** Une option discrète de la barre : un rond de verre, pressé (disque blanc, glyphe indigo) ou non. */
+export function ModeOption({ label, glyph, onPress, pressed, hint, caption, data = {} }: OptionProps) {
+  const disc = pressed === true ? `bg-on-media text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`;
   return (
     <button
       type="button"
@@ -417,10 +465,19 @@ export function ModeOption({ label, glyph, onPress, pressed, hint, data = {} }: 
       {...(hint === undefined ? {} : { 'aria-description': hint })}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
       onClick={onPress}
-      className={pressed === true ? `bg-on-media text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`}
+      className={caption === undefined ? disc : 'flex min-h-11 touch-manipulation flex-col items-center gap-0.5 text-on-media'}
       {...data}
     >
-      {glyph}
+      {caption === undefined ? (
+        glyph
+      ) : (
+        <>
+          <span className={disc}>{glyph}</span>
+          <span aria-hidden className="text-mini font-semibold [text-shadow:0_1px_2px_var(--color-scrim)]">
+            {caption}
+          </span>
+        </>
+      )}
     </button>
   );
 }

@@ -55,8 +55,7 @@ const expect = (ok, what) => {
 const GERMAN = {
   lang: 'de',
   title: 'Meine Links',
-  subtitle: 'Teile, verfolge und vergrößere deine Reichweite',
-  banner: 'Deine Links verwalten',
+  family: 'Teilen',
   back: 'Zurück zu den Unterhaltungen',
   /* Le bouton DIT le compte de la cloche (#6288) : les fixtures en servent
      trois non lues, et son nom le porte dans la langue d'interface. */
@@ -70,8 +69,7 @@ const GERMAN = {
 const ARABIC = {
   lang: 'ar',
   title: 'روابطي',
-  subtitle: 'شارك وتابع ووسّع جمهورك',
-  banner: 'إدارة روابطك',
+  family: 'مشاركة',
   back: 'العودة إلى المحادثات',
   menu: 'القائمة، 3 إشعارات غير مقروءة',
   ladder: 'التنقل في Meeshy',
@@ -81,8 +79,7 @@ const ARABIC = {
 const FRENCH = {
   lang: 'fr',
   title: 'Mes liens',
-  subtitle: 'Partagez, suivez et développez votre audience',
-  banner: 'Gérez vos liens',
+  family: 'Partage',
   back: 'Revenir aux conversations',
   menu: 'Menu, 3 notifications non lues',
   ladder: 'Navigation Meeshy',
@@ -134,8 +131,7 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
 
   expect((await page.evaluate(() => document.documentElement.lang)) === want.lang, `${tag} : <html lang="${want.lang}">`);
   expect((await page.locator('header h1').innerText()).trim() === want.title, `${tag} : titre « ${want.title} »`);
-  expect((await page.getByText(want.banner, { exact: true }).count()) === 1, `${tag} : bannière du hub dans la langue`);
-  expect((await page.getByText(want.subtitle, { exact: true }).count()) === 1, `${tag} : sous-titre de la bannière dans la langue`);
+  expect((await page.locator('[data-links-family-title]').first().innerText()).trim() === want.family, `${tag} : la première famille du hub dans la langue`);
   expect(
     (await page.locator('header a').first().getAttribute('aria-label')) === want.back,
     `${tag} : le retour s'annonce « ${want.back} »`,
@@ -146,8 +142,8 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
   );
 
   const reach = await page.evaluate(() => {
-    const subtitle = document.querySelector('[data-links-banner] .text-caption');
-    return [document.querySelector('header h1'), subtitle].map((el) => {
+    const family = document.querySelector('[data-links-family-title]');
+    return [document.querySelector('header h1'), family].map((el) => {
       if (!el) return { found: false };
       const r = el.getBoundingClientRect();
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -158,7 +154,7 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
       };
     });
   });
-  for (const [index, label] of ['titre', 'sous-titre de la bannière'].entries()) {
+  for (const [index, label] of ['titre', 'première famille'].entries()) {
     const r = reach[index];
     expect(r.found && r.reachable, `${tag} : ${label} atteignable à son centre`);
     expect(r.found && r.inside, `${tag} : ${label} ne déborde pas l'écran`);

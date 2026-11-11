@@ -267,7 +267,7 @@ final class CallViewAccessibilityTests: XCTestCase {
         // avec le visage `avatarFace(size: 96, …)`.
         guard let mount = source.range(of: "private var remoteCameraOffPlaceholder: some View {"),
               let range = source.range(of: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {"),
-              let end = source.range(of: "private func followSpeech()", range: range.lowerBound ..< source.endIndex) else {
+              let end = source.range(of: "private nonisolated struct CallGroupStageHeightKey", range: range.lowerBound ..< source.endIndex) else {
             XCTFail("CallView must define remoteCameraOffPlaceholder")
             return
         }

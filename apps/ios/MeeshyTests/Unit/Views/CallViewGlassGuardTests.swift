@@ -310,7 +310,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         )
         XCTAssertTrue(bar.contains(".callControlsGlass(in:"), "Le verre est l'atome partagé, d'une pièce")
         XCTAssertTrue(bar.contains("AdaptiveGlassContainer("))
-        XCTAssertTrue(bar.contains("symbol: \"chevron.left\""), "‹ Retour à l'appel")
+        XCTAssertTrue(bar.contains("symbol: \"chevron.backward\""), "‹ Retour à l'appel")
         XCTAssertTrue(bar.contains("symbol: \"gearshape\""), "Réglages porte l'engrenage, pas le glyphe d'Effets")
         XCTAssertTrue(bar.contains("symbol: \"plus\""), "(+) Ajouter un autre look")
         XCTAssertTrue(bar.contains("showsSettings ? .active : .normal"), "Réglages ouvert = disque blanc")
