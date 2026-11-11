@@ -8,7 +8,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import { CallCaptureAlerts, CallPeerAlerts, CallQualityChip } from './call-quality';
 import { CallQualityDetail } from './call-quality-detail';
-import { CallScreen } from './call-screen';
+import { CallScreen, loadColdCallViews } from './call-screen';
 
 /**
  * **LA QUALITÉ SE VOIT** (#8047) — l'indicateur de l'en-tête (quatre barres,
@@ -155,13 +155,15 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
     expect(economy).toContain('data-call-quality-profile="economy"');
   });
 
-  test('l’écran d’appel connecté porte l’indicateur ; sans relevé, il n’invente rien', () => {
+  test('l’écran d’appel connecté porte l’indicateur ; sans relevé, il n’invente rien', async () => {
+    await loadColdCallViews();
     expect(renderToStaticMarkup(<CallScreen call={call()} canShare={false} />)).toContain('data-call-quality="good"');
     expect(renderToStaticMarkup(<CallScreen call={call({ quality: null })} canShare={false} />)).not.toContain('data-call-quality=');
     expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' } })} canShare={false} />)).not.toContain('data-call-quality=');
   });
 
-  test('ma vidéo gelée puis suspendue se dit par une pastille', () => {
+  test('ma vidéo gelée puis suspendue se dit par une pastille', async () => {
+    await loadColdCallViews();
     expect(renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'frozen' }) })} canShare={false} />)).toContain('data-call-pill="video-frozen"');
     const paused = renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'suspended' }) })} canShare={false} />);
     expect(paused).toContain('data-call-pill="video-suspended"');
