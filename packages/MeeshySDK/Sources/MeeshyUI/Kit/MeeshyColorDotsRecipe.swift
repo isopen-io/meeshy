@@ -57,7 +57,7 @@ public nonisolated struct MeeshyColorDotsRecipe: Sendable, Equatable {
         let diameter = size.diameter
         let cell = size.cell
         let perRow = columns(count: count, available: available, diameter: diameter, cell: cell, layout: layout)
-        let rows = count > 0 ? Self.rows(count: count, perRow: perRow) : []
+        let rows = count > 0 ? Self.split(count: count, perRow: perRow) : []
         let ringGap = Double(MeeshySpacing.xxs)
         let ringWidth = Double(MeeshyBorder.strong)
         return MeeshyColorDotsRecipe(
@@ -162,7 +162,7 @@ public nonisolated struct MeeshyColorDotsRecipe: Sendable, Equatable {
         return min(count, max(1, fitting))
     }
 
-    private static func rows(count: Int, perRow: Int) -> [Int] {
+    private static func split(count: Int, perRow: Int) -> [Int] {
         let full = Array(repeating: perRow, count: count / perRow)
         let rest = count % perRow
         return rest > 0 ? full + [rest] : full

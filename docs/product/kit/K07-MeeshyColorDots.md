@@ -150,4 +150,4 @@ Choix retenus (mode autonome ; alternatives entre parenthèses) :
 ## 10. Livraison iOS (lot K07, branche `claude/kit-k07-ios`)
 - Fichiers : `MeeshyUI/Kit/MeeshyColorDots.swift` (valeurs, groupe, disposition, pastille), `MeeshyUI/Kit/MeeshyColorDotsRecipe.swift` (recette, encre, mots), `Kit/Catalog/MeeshyKitCatalog+K07.swift`, clé `kit.color_dots.position` du catalogue de chaînes de MeeshyUI.
 - Témoins : `MeeshyColorDotsTests` (vecteurs, nom dit en fr/en/ar, déclencheur, égalité, gardes de source) et `MeeshyColorDotsSnapshotTests` (sept états, pressé, `grande-police`, `rtl`).
-- Restent ouverts, chacun par son issue : l'anneau de focus clavier de K01 (iOS n'en a pas encore : la cellule garde l'anneau du système) ; `trailing` reste dans le conteneur nommé du groupe (il est annoncé après les pastilles, sans état choisi).
+- Restent ouverts, chacun par son issue : l'anneau de focus clavier de K01 (#17621 : iOS n'en a pas encore, la cellule garde l'anneau du système) ; `trailing` reste dans le conteneur nommé du groupe (#17622 : il est annoncé après les pastilles, sans état choisi).
