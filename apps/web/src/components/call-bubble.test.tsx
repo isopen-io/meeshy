@@ -5,7 +5,8 @@ import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 
 import { CallBubble } from './call-bubble';
 import { ActiveCallView } from './call-overlay';
-import { CallScreen } from './call-screen';
+import { CallScreen, loadColdCallViews } from './call-screen';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 /**
  * **CONTINUER À DISCUTER PENDANT L'APPEL, DESSINÉ** (#8046) — la pastille se
@@ -52,6 +53,8 @@ const overlay = (active: ActiveCall) => renderToStaticMarkup(<ActiveCallView cal
 beforeAll(async () => {
   overlay(call({ display: 'pill' }));
   await import('./call-floating-pill');
+  await loadCallControlsCatalog('fr');
+  await loadColdCallViews();
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 

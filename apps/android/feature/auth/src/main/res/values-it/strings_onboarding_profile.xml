@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="onboarding_profile_title">Mostrati</string>
-    <string name="onboarding_profile_body">Un volto e un banner rendono il tuo profilo più visibile: ti riconoscono nei suggerimenti, nelle conversazioni e nelle storie, e ricevi più richieste di contatto.</string>
     <string name="onboarding_profile_benefit_visibility">Più visibilità</string>
     <string name="onboarding_profile_benefit_contacts">Più contatti</string>
     <string name="onboarding_profile_banner_add">Aggiungi un banner</string>

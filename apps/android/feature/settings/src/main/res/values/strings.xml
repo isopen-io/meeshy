@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_section_chats">Chats</string>
-    <string name="settings_section_privacy">Privacy &amp; Security</string>
     <string name="settings_display_language">Display language</string>
-    <string name="settings_language_system">System default</string>
     <string name="settings_regional_language_search">Search languages</string>
     <string name="settings_regional_language_empty">No language matches your search</string>
-    <string name="settings_notification_vibration">Vibration</string>
     <string name="settings_notif_show_preview">Message preview</string>
     <string name="settings_notif_badge_enabled">App icon badge</string>
     <string name="settings_dnd_start">From</string>
@@ -31,19 +27,9 @@
     <string name="settings_notif_type_friend_content">Friend activity</string>
     <string name="settings_notif_type_group_invite">Group invites</string>
     <string name="settings_notif_type_system">System alerts</string>
-    <string name="settings_two_factor">Two-factor auth</string>
-    <string name="settings_account_contact">Email &amp; phone</string>
-    <string name="settings_clear_media_cache">Clear media cache</string>
-    <string name="settings_storage_used">Storage used</string>
     <!-- Two-factor authentication (§L) -->
     <string name="twofactor_status_enabled">Enabled</string>
-    <string name="twofactor_enable_button">Set up two-factor authentication</string>
     <string name="twofactor_regenerate_button">Regenerate backup codes</string>
-    <string name="twofactor_setup_title">Scan the QR code</string>
-    <string name="twofactor_setup_instructions">Scan this QR code with your authenticator app, or enter the code manually.</string>
-    <string name="twofactor_setup_secret_label">Manual entry code</string>
-    <string name="twofactor_backup_codes_warning">Save these codes somewhere safe. Each code can only be used once.</string>
-    <string name="twofactor_backup_codes_done">I\'ve saved my codes</string>
     <string name="twofactor_regenerate_title">Regenerate backup codes</string>
     <string name="twofactor_regenerate_confirm">Regenerate</string>
     <string name="twofactor_error_status">Unable to load 2FA status</string>
@@ -57,16 +43,11 @@
     <string name="change_password_error_weak">New password is too weak. Choose a longer, less predictable one.</string>
     <string name="change_password_error_rejected">Password rejected. Check it and try again.</string>
     <!-- Email / phone change (§K) -->
-    <string name="account_contact_title">Email &amp; phone</string>
-    <string name="account_contact_email_resend">Resend email</string>
     <string name="account_contact_email_resend_cooldown">Resend (%1$ds)</string>
-    <string name="account_contact_error_email_change">Unable to send the verification email. Check the address and try again.</string>
-    <string name="account_contact_error_email_resend">Unable to resend the verification email.</string>
     <string name="account_contact_phone_new_label">New phone</string>
     <string name="account_contact_phone_send_code">Send code</string>
     <string name="account_contact_error_phone_change">Unable to send the verification code. Check the number and try again.</string>
     <!-- Privacy & visibility (§L) -->
-    <string name="settings_privacy">Privacy &amp; visibility</string>
     <string name="privacy_title">Privacy &amp; visibility</string>
     <!-- Account deletion (§L) -->
     <string name="delete_account_warning_title">This cannot be undone</string>
@@ -80,28 +61,16 @@
     <string name="delete_account_email_body">Check your inbox to confirm the deletion of your account.</string>
 
     <!-- Data export (GDPR) -->
-    <string name="data_export_info_body">Under GDPR, you can export all of your personal data.</string>
     <string name="data_export_format_json">JSON</string>
     <string name="data_export_format_csv">CSV</string>
     <string name="data_export_content_profile">Profile (always included)</string>
     <string name="data_export_ready_title">Export ready</string>
 
     <!-- Media cache management -->
-    <string name="media_cache_info_title">Cached media</string>
-    <string name="media_cache_info_body">Caching lets media load faster and saves data. Clearing it is safe — files are re-downloaded when needed.</string>
-    <string name="media_cache_total_label">Total cache used</string>
-    <string name="media_cache_category_thumbnails">Thumbnails</string>
-    <string name="media_cache_clear_all">Clear cache</string>
-    <string name="media_cache_confirm_title">Clear cache</string>
-    <string name="media_cache_confirm_message">This removes all locally cached media. They will be re-downloaded if needed.</string>
-    <string name="media_cache_error_scan">Couldn\'t read the cache size. Pull to refresh.</string>
-    <string name="media_cache_error_clear">Couldn\'t clear the cache. Please try again.</string>
 
     <!-- Crash diagnostics -->
     <string name="settings_diagnostics">Diagnostics</string>
     <string name="crash_reports_title">Diagnostics</string>
-    <string name="crash_reports_info_body">If the app closes unexpectedly, a report is saved here so you can share it with support. Nothing leaves your device until you share it.</string>
-    <string name="crash_reports_empty">No crash reports — the app has been running smoothly.</string>
     <string name="crash_reports_clear_all">Clear reports</string>
     <string name="crash_reports_confirm_title">Clear reports</string>
     <string name="crash_reports_confirm_message">This permanently deletes all saved crash reports from this device.</string>
@@ -110,13 +79,10 @@
     <string name="crash_kind_anr">ANR</string>
     <string name="about_version_label">Version %1$s</string>
     <string name="about_info_application_id">Application ID</string>
-    <string name="settings_help_support">Help &amp; Support</string>
     <string name="licenses_type_mit">MIT</string>
     <string name="licenses_type_apache">Apache 2.0</string>
     <string name="licenses_type_bsd">BSD</string>
     <string name="support_title">Help &amp; Support</string>
-    <string name="support_link_email">Email support</string>
 
     <!-- Active sessions -->
-    <string name="sessions_revoke_others">Sign out all other devices</string>
 </resources>

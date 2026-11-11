@@ -13,7 +13,7 @@ import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { CallModerationMenu } from './call-moderation-menu';
 import { CallButton } from './call-glass-button';
 import { CallRecordChoice, CallReactionPalette } from './call-control-panels';
-import { CallScreen } from './call-screen';
+import { CallScreen, loadColdCallViews } from './call-screen';
 
 /**
  * LES CONTRÔLES D'UN APPEL EN COURS, À L'ÉCRAN (#8433, #8438, #8439, #8437) —
@@ -31,6 +31,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   await loadPillMotion();
   await loadCallControlsCatalog('fr');
+  await loadColdCallViews();
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await import('./call-control-actions');
   await import('./call-rails');

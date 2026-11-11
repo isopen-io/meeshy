@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="onboarding_profile_title">Muéstrate</string>
-    <string name="onboarding_profile_body">Una cara y un banner hacen tu perfil más visible: te reconocen en las sugerencias, las conversaciones y las historias, y recibes más solicitudes de contacto.</string>
     <string name="onboarding_profile_benefit_visibility">Más visibilidad</string>
     <string name="onboarding_profile_benefit_contacts">Más contactos</string>
     <string name="onboarding_profile_banner_add">Añadir un banner</string>

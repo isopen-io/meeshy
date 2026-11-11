@@ -40,7 +40,11 @@ internal fun SecurityTwoFactorSection(
     onOpen: (TwoFactorEntryStep) -> Unit,
 ) {
     val haptics = rememberMeeshyHaptics()
-    SecuritySectionCard(Icons.Filled.Shield, stringResource(R.string.twofactor_title)) {
+    SecuritySectionCard(
+        Icons.Filled.Shield,
+        stringResource(R.string.twofactor_title),
+        orientation = stringResource(R.string.twofactor_orientation),
+    ) {
         when (status) {
             TwoFactorStatusUi.Loading -> MeeshySkeletonBox(Modifier.fillMaxWidth().height(40.dp))
             TwoFactorStatusUi.Failed -> Row(verticalAlignment = Alignment.CenterVertically) {

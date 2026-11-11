@@ -183,10 +183,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "login_welcome_back",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "commands.contacts",
           "androidName": "menu_contacts",
