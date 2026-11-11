@@ -123,14 +123,15 @@ public struct MeeshyFadingScrollView<Content: View>: View {
 
     public var body: some View {
         let axis = self.axis
-        let viewport = self.viewport
+        let axes: Axis.Set = axis == .horizontal ? .horizontal : .vertical
+        let knownViewport = viewport
         let isRightToLeft = layoutDirection == .rightToLeft
         let space = Self.space
-        return ScrollView(axis, showsIndicators: false) {
+        return ScrollView(axes, showsIndicators: false) {
             content.onGeometryChange(for: MeeshyScrollEdges.self) { proxy in
                 MeeshyScrollEdges.of(
                     contentFrame: proxy.frame(in: .named(space)),
-                    viewport: viewport,
+                    viewport: knownViewport,
                     axis: axis,
                     isRightToLeft: isRightToLeft
                 )
