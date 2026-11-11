@@ -11,6 +11,7 @@ struct ComposerSceneViewfinderMount<Contenu: View>: View {
 
     var body: some View {
         let modes = ComposerSceneCamera.modes(for: host.selectedFormat)
+        let owner = host.sceneCaptureOwner
         ComposerCaptureMount(session: host.sceneCapture, size: host.$sceneCameraSize,
                              allowsPhoto: modes.contains(.photo),
                              allowsVideo: modes.contains(.video),
@@ -21,6 +22,8 @@ struct ComposerSceneViewfinderMount<Contenu: View>: View {
             contenu
         }
         .environment(\.composerViewfinderSceneEntry, { host.handleViewfinderEntry($0) })
+        // Le composer démonté rend sa caméra : ni voyant vert, ni second objectif au suivant (#17469).
+        .background(ComposerCaptureTeardown(release: { owner.release() }))
         // L'outil fermé, le viseur revient sur la scène composée (#17432).
         .adaptiveOnChange(of: host.viewfinderEntryToolIsOpen) { _, ouvert in
             if !ouvert { host.viewfinderYieldsToScene = false }

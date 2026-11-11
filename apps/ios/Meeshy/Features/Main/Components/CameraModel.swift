@@ -524,6 +524,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         zoomScale = installe.zoomScale
         zoomFactor = 1
         watchSubjectArea(of: installe.device)
+        watchSystemPressure(of: installe.device)
     }
 
     /// Switches the active camera. While recording, this cannot reconfigure the
@@ -659,6 +660,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// L'objectif en place, tel que la file l'a installé.
     private(set) var activeVideoDevice: AVCaptureDevice?
+    /// Le guet de la pression du système sur cet objectif — `CameraModel+SystemPressure`.
+    var pressureObservation: NSKeyValueObservation?
 
     /// **Le cadrage de l'objectif actif** — publié pour le badge du
     /// viseur en facteur AFFICHÉ, remis à ×1 à chaque changement d'objectif.

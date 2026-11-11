@@ -369,7 +369,7 @@ final class ComposerCaptureSession: ObservableObject {
         Task { @MainActor in
             await camera.enableAudioCaptureIfNeeded()
             let avant = camera.recordingId
-            camera.startRecording()
+            await camera.startRecording(whileWanted: { [weak self] in self?.stage == .recording })
             bindRecording(intent, to: camera.isRecordingVideo && camera.recordingId != avant ? camera.recordingId : nil)
         }
     }
