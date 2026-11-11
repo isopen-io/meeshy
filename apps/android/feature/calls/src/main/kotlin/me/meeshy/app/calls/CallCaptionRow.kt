@@ -14,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,6 +41,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
@@ -60,7 +60,7 @@ private const val WAITING_STEP_MS = 450L
  * the label « EN » / « EN → FR » and the three waiting dots (iOS `CallCaptionRow`). Touching a translated sentence
  * unfolds « Original · … » below it in secondary ink; touching it again folds it. TalkBack stops on FINAL sentences only.
  *
- * In the journal ([showsTime]) the header keeps its place: the name and the hour, the label, then the sentence.
+ * In the journal ([showsTime]) the header keeps its place: the name and the label, the hour in the call on the right, then the sentence.
  */
 @Composable
 internal fun CallCaptionRow(
@@ -155,27 +155,35 @@ private fun CallCaptionStackedPhrase(line: CallLiveCaptionLine) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
         ) {
-            Text(
-                text = line.speakerName,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = speakerColor,
-                maxLines = 1,
-            )
-            line.languageTag?.let { tag ->
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+            ) {
                 Text(
-                    text = tag,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontFamily = FontFamily.Monospace,
+                    text = line.speakerName,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = MeeshyMediaChromeColors.ChromeTertiary,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(MeeshyMediaChromeColors.MediaFill)
-                        .padding(horizontal = MeeshySpacing.xs, vertical = 1.dp),
+                    color = speakerColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                line.languageTag?.let { tag ->
+                    Text(
+                        text = tag,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyMediaChromeColors.ChromeTertiary,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(MeeshyMediaChromeColors.MediaFill)
+                            .padding(horizontal = MeeshySpacing.xs, vertical = 1.dp),
+                    )
+                }
             }
-            Spacer(Modifier.weight(1f))
             line.timeLabel?.let { time ->
                 Text(
                     text = time,

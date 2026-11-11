@@ -252,7 +252,7 @@ class CallCaptionsController internal constructor(
         _journalRequests.tryEmit(Unit)
     }
 
-    /** One of MY lines, captioned on this device: my finals enter my journal even while my panel is closed. */
+    /** One of MY lines, captioned on this device: my words, partials included, enter my journal even while my captions are off (#17342). */
     fun receiveOwn(segment: CallJournalSegment) = _state.update { it.receivingOwn(segment) }
 
     /** Whether this device can caption my words: the button and the journal say it when it cannot. */
