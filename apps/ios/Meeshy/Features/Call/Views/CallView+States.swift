@@ -223,6 +223,12 @@ extension CallView {
     }
 
     func avatarCircle(size: CGFloat) -> some View {
+        avatarFace(size: size, accentHex: MeeshyColors.brandPrimaryHex)
+            .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
+    }
+
+    /// Le visage seul, sans halo : l'appelant pose le sien.
+    func avatarFace(size: CGFloat, accentHex: String) -> some View {
         // Un seul visage : la photo, sinon les initiales d'un avatar sans photo
         // (jamais les initiales sous la photo).
         CachedAvatarImage(
@@ -230,10 +236,9 @@ extension CallView {
             thumbHash: remoteProfile?.avatarThumbHash,
             name: callManager.remoteUsername ?? "?",
             size: size,
-            accentColor: MeeshyColors.brandPrimaryHex
+            accentColor: accentHex
         )
         .avatarRingWithin(ProfileDecorResolver.ring(remoteProfile?.profileDecor?.avatarRing), footprint: size)
-        .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
     }
 
     /// Duo d'avatars de l'appel : le correspondant en grand, l'utilisateur

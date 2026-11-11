@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+import MeeshyUI
 @testable import Meeshy
 
 // MARK: - #8788 — un pair sans image n'est pas « en chargement »
@@ -29,6 +30,60 @@ final class CallRemoteVideoSurfaceTests: XCTestCase {
 
     func test_resolve_trackArrivesAfterTheWait_isLive() {
         XCTAssertEqual(CallRemoteVideoSurface.resolve(hasTrack: true, peerVideoEnabled: true, waitElapsed: true), .live)
+    }
+
+    // MARK: - G4.6 — l'image cède la place à l'avatar en fondu
+
+    func test_fade_isShortUnderReduceMotion_andNeverInstant() {
+        XCTAssertGreaterThan(CallRemoteVideoFade.duration(reduceMotion: true), 0)
+        XCTAssertLessThan(
+            CallRemoteVideoFade.duration(reduceMotion: true),
+            CallRemoteVideoFade.duration(reduceMotion: false)
+        )
+    }
+
+    func test_remoteSurfaceSwitch_fadesOnOpacityAlone_neverAHardSwap() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let start = try XCTUnwrap(source.range(of: "switch remoteVideoSurface {"))
+        let stage = String(source[start.lowerBound...].prefix(1200))
+        XCTAssertEqual(stage.components(separatedBy: ".transition(.opacity)").count - 1, 3, "chaque face entre et sort en fondu")
+        XCTAssertTrue(stage.contains("CallRemoteVideoFade.duration(reduceMotion: reduceMotion)"))
+        XCTAssertTrue(stage.contains("value: remoteVideoSurface"), "le fondu suit la face, sans animer le reste de la scène")
+    }
+
+    // MARK: - G4.2 — l'anneau de parole de la caméra coupée
+
+    func test_peerSpeech_atRest_hasNoRing() {
+        XCTAssertFalse(CallPeerSpeech().isSpeaking)
+        XCTAssertFalse(CallPeerSpeech().recording(level: 0.01, at: Date()).isSpeaking)
+        XCTAssertFalse(CallPeerSpeech().recording(level: nil, at: Date()).isSpeaking)
+    }
+
+    func test_peerSpeech_aboveTheThreshold_ringsUp() {
+        XCTAssertTrue(CallPeerSpeech().recording(level: 0.3, at: Date()).isSpeaking)
+    }
+
+    func test_peerSpeech_holdsBetweenSyllables_thenFallsSilent() {
+        let t0 = Date(timeIntervalSince1970: 1_000)
+        let speaking = CallPeerSpeech().recording(level: 0.3, at: t0)
+        XCTAssertTrue(speaking.recording(level: 0.0, at: t0.addingTimeInterval(0.4)).isSpeaking)
+        XCTAssertTrue(speaking.recording(level: nil, at: t0.addingTimeInterval(0.4)).isSpeaking)
+        XCTAssertFalse(speaking.recording(level: 0.0, at: t0.addingTimeInterval(2)).isSpeaking)
+    }
+
+    func test_peerSpeech_ringColor_isThePersonsOwn_theSameAsTheirCaptions() {
+        XCTAssertEqual(CallPeerSpeech.colorHex(forPeer: "karim"), CallSpeakerColor.hex(for: "karim"))
+        XCTAssertNotEqual(CallPeerSpeech.colorHex(forPeer: "karim"), CallPeerSpeech.colorHex(forPeer: "amina"))
+        XCTAssertEqual(CallPeerSpeech.colorHex(forPeer: nil), MeeshyColors.brandPrimaryHex)
+    }
+
+    func test_cameraOffPlaceholder_ringAppearsOnlyWhileSpeaking_aboveTheKeptProfileDecor() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let start = try XCTUnwrap(source.range(of: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {"))
+        let body = String(source[start.lowerBound...].prefix(2400))
+        XCTAssertEqual(body.components(separatedBy: ".opacity(isSpeaking ? 1 : 0)").count - 1, 2, "halo et anneau, absents au repos")
+        XCTAssertTrue(body.contains("CallPeerSpeech.colorHex(forPeer: peerUserId)"))
+        XCTAssertTrue(try AppSourceGuard.callViewSource().contains(".avatarRingWithin(ProfileDecorResolver.ring("), "la décoration de profil reste dans le visage")
     }
 }
 
@@ -107,9 +162,7 @@ final class CallVideoBadgeAccessibilityTests: XCTestCase {
     }
 
     func test_videoLayout_showsThePeerMutedBadgeOutsideTheFadingChrome() throws {
-        let connected = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift")
-        )
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
         let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var videoCallLayout: some View", in: connected))
         XCTAssertTrue(layout.contains("CallPeerMutedBadge(compact: false)"))
         XCTAssertFalse(layout.contains("callChromeVisibility"), "le glyphe reste quand le chrome s'efface")
@@ -167,9 +220,7 @@ final class CallGroupStageSizingTests: XCTestCase {
     }
 
     func test_groupStage_keepsTheGridMinimumAndMeasuresItsHeightByPreference() throws {
-        let connected = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift")
-        )
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
         let stage = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
         XCTAssertTrue(stage.contains(".frame(minHeight: CallGroupStageSizing.minimumGridHeight)"))
         XCTAssertTrue(stage.contains(".onPreferenceChange(CallGroupStageHeightKey.self)"))
