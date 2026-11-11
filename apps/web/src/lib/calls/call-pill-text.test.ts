@@ -99,7 +99,7 @@ describe('une seule largeur pour le verre (P3.10)', () => {
  * l'opacité seulement ; sous « Réduire les animations », rien ne se joue.
  */
 describe('le texte repart comme il est venu (#17406)', () => {
-  const css = readFileSync(new URL('../../styles/glass.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const css = readFileSync(new URL('../../styles/call-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
   const block = (selector: string): string => {
     const start = css.indexOf(selector);
     return start < 0 ? '' : css.slice(start, css.indexOf('}', start));
