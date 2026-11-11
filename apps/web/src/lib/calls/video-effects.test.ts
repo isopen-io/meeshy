@@ -30,7 +30,9 @@ describe('les préréglages', () => {
   test('chacune des huit ambiances a son filtre ; le noir et blanc ôte la couleur', () => {
     const filters = VIDEO_PRESET_CATALOG.filter((preset) => preset !== 'natural').map((preset) => effectsFilter(effects({ preset })));
     expect(filters).toHaveLength(7);
-    expect(effectsFilter(effects({ preset: 'monochrome' }))).toContain('grayscale(1)');
+    expect(effectsFilter(effects({ preset: 'monochrome' }))).toBe('contrast(1.1) grayscale(1)');
+    expect(effectsFilter(effects({ preset: 'warm' }))).toBe('sepia(0.18) saturate(1.1) contrast(1.05) brightness(1.02)');
+    expect(effectsFilter(effects({ preset: 'cool' }))).toBe('hue-rotate(-10deg) saturate(0.95) contrast(1.05)');
   });
 
   test('la luminosité s’ajoute au préréglage, et se borne à ±50 %', () => {
