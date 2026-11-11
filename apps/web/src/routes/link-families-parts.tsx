@@ -2,12 +2,11 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
 import { Glyph } from '@/components/glyph';
-import { InfoHintButton, InfoHintText, useInfoHint } from '@/components/info-hint';
 import { SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { translateLinkFamilies, type PlainLinkFamiliesKey } from '@/lib/i18n-link-families-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { BRAND_BUTTON_STYLE, LinksGlyph, SECTION_TITLE_CLASS, SHARE_TINT, SKELETON_TINT, STRETCHED, linksHint, tinted } from '@/routes/links-parts';
+import { BRAND_BUTTON_STYLE, LinksGlyph, SECTION_TITLE_CLASS, SHARE_TINT, SKELETON_TINT, STRETCHED, tinted } from '@/routes/links-parts';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -53,8 +52,8 @@ type FamilySpec = {
   readonly tint: string;
   readonly glyph: ReactNode;
   readonly title: Phrase;
-  /** Ce que la famille FAIT, derrière un (i) — seulement quand son nom ne le dit pas seul (épure, règle 1). */
-  readonly hint: { readonly question: Phrase; readonly text: Phrase } | null;
+  /** Ce que la famille FAIT, lisible au repos sous son nom : les liens sont propres à Meeshy (épure, règle 7). */
+  readonly description: Phrase;
   readonly open: 'shareLinks' | 'myTrackingLinks' | 'communityLinks' | 'affiliateLinks';
   readonly create: {
     readonly to: 'shareLinkNew' | 'myTrackingLinkNew' | 'affiliateLinkNew';
@@ -72,7 +71,7 @@ export const LINK_FAMILIES: Readonly<Record<LinkFamily, FamilySpec>> = {
     tint: SHARE_TINT,
     glyph: <Glyph name="linkSimple" size={22} />,
     title: main('links.hub.share.title'),
-    hint: null,
+    description: main('links.hub.share.description'),
     open: 'shareLinks',
     create: { to: 'shareLinkNew', label: main('links.hub.share.create') },
   },
@@ -80,7 +79,7 @@ export const LINK_FAMILIES: Readonly<Record<LinkFamily, FamilySpec>> = {
     tint: TRACKING_TINT,
     glyph: <LinksGlyph name="chartLine" size={22} />,
     title: family('links.hub.tracking.title'),
-    hint: { question: family('links.hub.tracking.question'), text: family('links.hub.tracking.description') },
+    description: family('links.hub.tracking.description'),
     open: 'myTrackingLinks',
     create: {
       to: 'myTrackingLinkNew',
@@ -91,7 +90,7 @@ export const LINK_FAMILIES: Readonly<Record<LinkFamily, FamilySpec>> = {
     tint: COMMUNITY_TINT,
     glyph: <LinksGlyph name="usersThree" size={22} />,
     title: family('links.hub.community.title'),
-    hint: null,
+    description: family('links.hub.community.description'),
     open: 'communityLinks',
     create: null,
   },
@@ -99,7 +98,7 @@ export const LINK_FAMILIES: Readonly<Record<LinkFamily, FamilySpec>> = {
     tint: AFFILIATE_TINT,
     glyph: <LinksGlyph name="gift" size={22} />,
     title: family('links.hub.affiliate.title'),
-    hint: { question: family('links.hub.affiliate.question'), text: family('links.hub.affiliate.description') },
+    description: family('links.hub.affiliate.description'),
     open: 'affiliateLinks',
     create: {
       to: 'affiliateLinkNew',
@@ -112,46 +111,44 @@ export const HUB_FAMILIES: readonly LinkFamily[] = ['share', 'tracking', 'commun
 
 /**
  * Miroir `LinksHubView.linkCard` — la carte ouvre la famille, « + » ouvre la création.
- * Le nom seul tient la carte ; le (i), quand il existe, se pose À CÔTÉ du lien étiré (jamais
- * dedans) et sa note se lit repliée.
+ * Sous le nom, une phrase dit à quoi sert la famille — visible au repos, jamais derrière un (i).
  */
 export function LinkFamilyCard({ language, family }: { readonly language: InterfaceLanguage; readonly family: LinkFamily }) {
   const spec = LINK_FAMILIES[family];
-  const hint = spec.hint === null ? undefined : linksHint(spec.hint.question(language), spec.hint.text(language));
-  const info = useInfoHint();
   return (
-    <div>
-      <div data-links-family={family} className="relative flex items-center gap-1 rounded-card ps-3.5 pe-1" style={{ ...CARD_STYLE, minHeight: 80 }}>
-        <Link
-          to={spec.open}
-          data-links-family-open
-          className={`flex min-w-0 flex-1 items-center gap-3.5 py-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${STRETCHED}`}
-          style={{ outlineColor: BRAND }}
-        >
-          <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-full" style={{ color: spec.tint, backgroundColor: tinted(spec.tint, 15) }}>
-            {spec.glyph}
-          </span>
-          <span data-links-family-title className="relative text-body font-semibold" style={{ color: INK }}>
+    <div data-links-family={family} className="relative flex items-center gap-1 rounded-card ps-3.5 pe-1" style={{ ...CARD_STYLE, minHeight: 80 }}>
+      <Link
+        to={spec.open}
+        data-links-family-open
+        className={`flex min-w-0 flex-1 items-center gap-3.5 py-3.5 focus-visible:outline-2 focus-visible:outline-offset-2 ${STRETCHED}`}
+        style={{ outlineColor: BRAND }}
+      >
+        <span aria-hidden="true" className="grid size-12 shrink-0 place-items-center rounded-full" style={{ color: spec.tint, backgroundColor: tinted(spec.tint, 15) }}>
+          {spec.glyph}
+        </span>
+        <span className="relative grid min-w-0 gap-0.5">
+          <span data-links-family-title className="text-body font-semibold" style={{ color: INK }}>
             {spec.title(language)}
           </span>
-        </Link>
-        {hint === undefined ? null : <InfoHintButton hint={hint} state={info} style={{ position: 'relative', zIndex: 1 }} />}
-        {spec.create === null ? null : (
-          <Link
-            to={spec.create.to}
-            aria-label={spec.create.label(language)}
-            data-links-family-create
-            className={`${CHROME_ACTION_HIT_CLASS} z-[1] focus-visible:outline-2`}
-            style={{ color: spec.tint, outlineColor: BRAND }}
-          >
-            <LinksGlyph name="plusCircle" size={26} />
-          </Link>
-        )}
-        <span aria-hidden="true" className="pointer-events-none pe-2" style={{ color: INK_2 }}>
-          <LinksGlyph name="caretRight" size={14} />
+          <span data-links-family-description className="text-caption" style={{ color: INK_2 }}>
+            {spec.description(language)}
+          </span>
         </span>
-      </div>
-      {hint === undefined ? null : <InfoHintText hint={hint} state={info} {...(info.isOpen ? { className: 'px-3.5 pt-1.5' } : {})} />}
+      </Link>
+      {spec.create === null ? null : (
+        <Link
+          to={spec.create.to}
+          aria-label={spec.create.label(language)}
+          data-links-family-create
+          className={`${CHROME_ACTION_HIT_CLASS} z-[1] focus-visible:outline-2`}
+          style={{ color: spec.tint, outlineColor: BRAND }}
+        >
+          <LinksGlyph name="plusCircle" size={26} />
+        </Link>
+      )}
+      <span aria-hidden="true" className="pointer-events-none pe-2" style={{ color: INK_2 }}>
+        <LinksGlyph name="caretRight" size={14} />
+      </span>
     </div>
   );
 }
@@ -433,16 +430,18 @@ export function FamilySkeleton({ label, rows = 3 }: { readonly label: string; re
   );
 }
 
-/** Nommer, offrir le geste : une ligne et une action (épure, règle 4) — miroir des `emptyState` d'iOS. */
+/** Nommer, dire ce qu'est le lien, offrir le geste (épure, règle 7) — miroir des `emptyState` d'iOS. */
 export function FamilyEmpty({
   family,
   glyph,
   title,
+  subtitle,
   cta,
 }: {
   readonly family: LinkFamily;
   readonly glyph: ReactNode;
   readonly title: string;
+  readonly subtitle: string;
   readonly cta: {
     readonly to: 'myTrackingLinkNew' | 'affiliateLinkNew' | 'communityNew';
     readonly label: string;
@@ -455,6 +454,9 @@ export function FamilyEmpty({
       </span>
       <p className="text-thread font-bold" style={{ color: INK }}>
         {title}
+      </p>
+      <p data-family-empty-subtitle className="text-caption" style={{ color: INK_2 }}>
+        {subtitle}
       </p>
       {cta === null ? null : (
         <Link

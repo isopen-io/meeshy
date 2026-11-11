@@ -13,7 +13,6 @@ import { loadLinkFamiliesCatalog, translateLinkFamilies } from '@/lib/i18n-link-
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
 
 import { AffiliateTokenRow } from './affiliate-links';
 import { CommunityLinkRow } from './community-links';
@@ -25,9 +24,9 @@ import { ConfigurationCard, LinkStatTiles } from './share-link-detail-parts';
 /**
  * L'ÉPURE DES ENTRÉES DE LIENS, DEUXIÈME PASSE (#17595, épure #17584) — la
  * rangée d'un lien nomme sans répéter, le rare passe derrière « Plus » ou
- * « Modifier », et les formulaires nomment leurs champs en un mot, l'explication
- * derrière un (i) dont le nom est la question. Rien n'est perdu : ce qui quitte
- * l'écran reste lu, ou reste atteignable.
+ * « Modifier », et les formulaires nomment leurs champs en un mot. Les REPÈRES
+ * (de quoi reconnaître un lien, l'effet d'une autorisation) restent visibles :
+ * règle 7, #17641, tenus par `links-reperes.test.tsx`.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -56,12 +55,6 @@ const seen = (host: ParentNode): string[] => {
     lines.push(text);
   }
   return lines;
-};
-
-const infoButton = (host: ParentNode, question: string): HTMLButtonElement => {
-  const button = [...host.querySelectorAll('button')].find((candidate) => candidate.getAttribute('aria-label') === question);
-  if (button === undefined) throw new Error(`aucun (i) nommé « ${question} »`);
-  return button;
 };
 
 const noop = () => undefined;
@@ -97,13 +90,13 @@ const shareLink = (overrides: Partial<MyShareLink> = {}): MyShareLink => ({
 });
 
 describe('la rangée d’un lien de partage', () => {
-  test('inactif : le disque tireté le dit, « Inactif » n’est plus écrit — mais reste lu par le lecteur d’écran', async () => {
+  test('inactif : le disque tireté le dit, « Inactif » s’écrit et se lit au lecteur d’écran', async () => {
     const host = await mount(
       <ul>
         <ShareLinkRow language="fr" link={shareLink({ isActive: false, inactiveReason: 'REVOKED' })} copied={false} onCopy={noop} />
       </ul>,
     );
-    expect(seen(host).join(' | ')).not.toContain('Inactif');
+    expect(seen(host).join(' | ')).toContain('Inactif');
     expect(host.querySelector('a')?.getAttribute('aria-label')).toContain('Inactif');
   });
 
@@ -116,10 +109,9 @@ describe('la rangée d’un lien de partage', () => {
     const text = seen(host);
     expect(text).toContain('Expiré');
     expect(text.join(' | ')).not.toContain('Lien expiré');
-    expect(text.join(' | ')).not.toContain('Inactif');
   });
 
-  test('la rangée garde le nom du lien et « N rejoints » ; le titre de la conversation, tronqué, part à la fiche', async () => {
+  test('la rangée garde le nom du lien, « N rejoints » et la conversation qu’il ouvre', async () => {
     const host = await mount(
       <ul>
         <ShareLinkRow language="fr" link={shareLink()} copied={false} onCopy={noop} />
@@ -128,7 +120,7 @@ describe('la rangée d’un lien de partage', () => {
     const text = seen(host);
     expect(text).toContain('Invitation');
     expect(text).toContain('31 rejoints');
-    expect(text.join(' | ')).not.toContain('Salle sécurité');
+    expect(text.join(' | ')).toContain('Salle sécurité du réseau');
     expect(host.querySelector('a')?.getAttribute('aria-label')).toContain('Salle sécurité du réseau');
     expect(host.querySelector('[data-share-link-copy]')).not.toBeNull();
   });
@@ -227,8 +219,6 @@ describe('les clés qui n’ont plus de lecteur sont supprimées des sept langue
   });
 });
 
-const EDIT_QUESTIONS = ['Qui voit le nom du lien ?', 'Qui voit ce message ?', 'Comment choisir certaines langues ?'] as const;
-
 describe('le formulaire « Modifier le lien »', () => {
   const mountForm = () =>
     mount(<EditLinkForm language="fr" link={shareLink()} policy={POLICY} now={() => new Date('2026-09-24T12:00:00Z')} onSave={async () => 'done'} onToggleActive={noop} onDelete={noop} />);
@@ -239,24 +229,8 @@ describe('le formulaire « Modifier le lien »', () => {
     expect(text).toContain('Nom');
     expect(text).toContain('Message');
     const joined = text.join(' | ');
-    expect(joined).not.toContain('visible par toi seul');
+    expect(joined).not.toContain('Nom du lien');
     expect(joined).not.toContain('Message d’invitation');
-    expect(joined).not.toContain('affiché aux invités');
-    expect(joined).not.toContain('Désactive « Toutes les langues »');
-  });
-
-  test('l’explication passe derrière un (i) dont le nom est la question, note lue repliée, champ relié à sa note', async () => {
-    const host = await mountForm();
-    const name = infoButton(host, EDIT_QUESTIONS[0]);
-    expect(controlledBy(name)?.textContent).toBe('Visible par toi seul');
-    expect(controlledBy(name)?.className).toContain('sr-only');
-    expect(host.querySelector('#link-edit-name')?.getAttribute('aria-describedby')).toContain(name.getAttribute('aria-controls') ?? '?');
-    expect(controlledBy(infoButton(host, EDIT_QUESTIONS[1]))?.textContent).toBe('Affiché aux invités');
-    const languages = infoButton(host, EDIT_QUESTIONS[2]);
-    expect(controlledBy(languages)?.textContent).toBe('Désactive « Toutes les langues » pour choisir.');
-    await click(languages);
-    expect(languages.getAttribute('aria-expanded')).toBe('true');
-    expect(controlledBy(languages)?.className).not.toContain('sr-only');
   });
 
   test('« Utilisations » et « Maximum » : le verbe est porté par la section, l’effet par la valeur', async () => {
@@ -282,10 +256,6 @@ describe('le formulaire « Modifier le lien »', () => {
     expect([...host.querySelectorAll('input[type="number"]')].map(nameOf)).toEqual(['Utilisations Maximum', 'En même temps Maximum']);
   });
 
-  test('« Autoriser » garde, derrière un (i), qu’il ne gouverne que les invités sans compte', async () => {
-    const host = await mountForm();
-    expect(controlledBy(infoButton(host, 'À qui s’appliquent ces autorisations ?'))?.textContent).toBe('Aux invités qui rejoignent sans compte Meeshy.');
-  });
 });
 
 describe('les tuiles de statistiques', () => {
@@ -376,7 +346,7 @@ describe('la fiche d’un lien : la configuration, puis le formulaire derrière 
 });
 
 describe('les sept langues portent les mots courts, traduits', () => {
-  test('« Plus », « Expiré », « Pas encore mesuré » et les questions des (i) existent partout', async () => {
+  test('« Plus », « Expiré » et « Pas encore mesuré » existent partout', async () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       await Promise.all([loadInterfaceCatalog(language), loadLinkFamiliesCatalog(language), loadInviteCatalog(language)]);
       if (language !== 'fr') {
@@ -384,16 +354,6 @@ describe('les sept langues portent les mots courts, traduits', () => {
         expect(translate(language, 'links.status.expired')).not.toBe(translate('fr', 'links.status.expired'));
         expect(translateInvite(language, 'linkDetail.stats.unavailable')).not.toBe(translateInvite('fr', 'linkDetail.stats.unavailable'));
       }
-      for (const key of ['linkDetail.edit.name.question', 'linkDetail.edit.message.question', 'linkDetail.edit.languages.question'] as const) {
-        expect(translateInvite(language, key).endsWith(language === 'ar' ? '؟' : '?')).toBe(true);
-      }
     }
-  });
-});
-
-describe('le nom accessible d’un (i) est une question', () => {
-  test('les trois (i) du formulaire sont des questions', async () => {
-    const host = await mount(<EditLinkForm language="fr" link={shareLink()} policy={POLICY} now={() => new Date()} onSave={async () => 'done'} onToggleActive={noop} onDelete={noop} />);
-    for (const question of EDIT_QUESTIONS) expect(perceivableText(host)).toContain(question);
   });
 });

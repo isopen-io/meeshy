@@ -16,7 +16,8 @@
  * sa raison — jamais omise.
  *
  * `--write-budgets` réécrit `verbosity-budgets.json` depuis le relevé : c'est
- * ainsi qu'on ABAISSE un budget après une épure.
+ * ainsi qu'on ABAISSE un budget après une épure. Les relèvements motivés
+ * (`releves`) inscrits à la main y sont gardés tels quels.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
@@ -93,5 +94,8 @@ served.close();
 
 const result = budgetsFromMeasure(measured);
 writeFileSync(`${ROOT}render/verbosity-measure.json`, `${JSON.stringify(result, null, 2)}\n`);
-if (process.argv.includes('--write-budgets')) writeFileSync(`${ROOT}verbosity-budgets.json`, `${JSON.stringify(result, null, 2)}\n`);
+if (process.argv.includes('--write-budgets')) {
+  const current = JSON.parse(readFileSync(`${ROOT}verbosity-budgets.json`, 'utf8'));
+  writeFileSync(`${ROOT}verbosity-budgets.json`, `${JSON.stringify(budgetsFromMeasure(measured, current), null, 2)}\n`);
+}
 console.log(`\n  relevé : render/verbosity-measure.json · captures : render/verbosity/`);

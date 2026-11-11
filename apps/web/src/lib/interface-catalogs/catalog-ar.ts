@@ -656,6 +656,7 @@ const ar = {
   'a11y.floating.rung.discover.requests.other': 'اكتشاف، {count} طلبات واردة',
 
   'links.hub.share.title': 'مشاركة',
+  'links.hub.share.description': 'ادعُ جهات اتصالك للانضمام إلى محادثاتك',
   'links.hub.share.create': 'إنشاء رابط مشاركة',
   'links.share.back': 'العودة إلى روابطي',
   'links.share.stats.total': 'الروابط',
@@ -665,6 +666,7 @@ const ar = {
   'links.share.joined.other': 'انضمّ {count}',
   'links.share.copy': 'نسخ الرابط',
   'links.share.empty.title': 'لا توجد روابط مشاركة',
+  'links.share.empty.subtitle': 'أنشئ رابطًا لدعوة أشخاص إلى محادثة',
   'links.share.loading': 'جارٍ تحميل الروابط',
   'links.share.allLoaded': 'تم تحميل كل روابطك',
   'links.status.active': 'نشط',
