@@ -3,7 +3,7 @@
     <string name="activation_email_sent">Código enviado para %1$s.</string>
     <string name="activation_invite_days_left">Faltam %1$d dias: depois, o login pedirá um código.</string>
     <string name="activation_invite_days_left_one">Falta 1 dia: depois, o login pedirá um código.</string>
-    <string name="activation_invite_lead">Verifique seu e-mail para continuar entrando sem código.</string>
+    <string name="activation_invite_lead">Verifique seu e-mail para entrar sem código.</string>
     <string name="auth_forgot_sent_title">Link enviado</string>
     <string name="auth_magic_sent_title">Código e link enviados</string>
     <string name="auth_magic_subtitle">Sem senha: enviamos um link por e-mail.</string>

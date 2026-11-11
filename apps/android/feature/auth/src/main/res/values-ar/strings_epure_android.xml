@@ -3,7 +3,7 @@
     <string name="activation_email_sent">أُرسل الرمز إلى %1$s.</string>
     <string name="activation_invite_days_left">تبقّى %1$d يومًا: بعد ذلك سيطلب تسجيل الدخول رمزًا.</string>
     <string name="activation_invite_days_left_one">تبقّى يوم واحد: بعد ذلك سيطلب تسجيل الدخول رمزًا.</string>
-    <string name="activation_invite_lead">أكّد بريدك الإلكتروني لمتابعة تسجيل الدخول دون رمز.</string>
+    <string name="activation_invite_lead">أكّد بريدك الإلكتروني لتسجيل الدخول دون رمز.</string>
     <string name="auth_forgot_sent_title">أُرسل الرابط</string>
     <string name="auth_magic_sent_title">أُرسل الرمز والرابط</string>
     <string name="auth_magic_subtitle">بلا كلمة مرور: نرسل إليك رابطًا عبر البريد الإلكتروني.</string>

@@ -153,8 +153,8 @@ class EpureEntreeStringsTest {
 
     @Test
     fun `the activation invitation lead names the email, the only proof that ends the code requirement`() {
-        assertThat(all("values")["activation_invite_lead"]).isEqualTo("Verify your email to keep signing in without a code.")
-        assertThat(all("values-fr")["activation_invite_lead"]).isEqualTo("Validez votre adresse e-mail pour continuer à vous connecter sans code.")
+        assertThat(all("values")["activation_invite_lead"]).isEqualTo("Verify your email to sign in without a code.")
+        assertThat(all("values-fr")["activation_invite_lead"]).isEqualTo("Validez votre e-mail pour vous connecter sans code.")
         folders.forEach { folder ->
             val lead = all(folder).getValue("activation_invite_lead")
             assertWithMessage(folder).that(lead).doesNotContainMatch("(?i)phone|téléphone|teléfono|telefon|هاتف")
