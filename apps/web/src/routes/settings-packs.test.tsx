@@ -55,6 +55,7 @@ describe('SettingsPacksScreen', () => {
       </QueryClientProvider>,
     );
     expect(host.querySelector('h1')?.textContent).toBe('Packs et téléchargements');
+    expect(host.querySelector('[data-pack-shop] [data-shop-hint]')?.textContent).toContain('Installez les packs');
     expect(host.querySelector('[data-packs-segment="stickers"]')?.getAttribute('aria-checked')).toBe('true');
     await until(() => host.querySelectorAll('[data-pack-shop="sticker"] [data-shop-pack]').length === 3);
 

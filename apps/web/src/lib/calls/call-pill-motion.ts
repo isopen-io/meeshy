@@ -81,8 +81,52 @@ const SWAP_RISE_PX = 20;
 
 export const swapMs = (reducedMotion: boolean): number => (reducedMotion ? STOW_REDUCED_MS : SWAP_MS);
 
-export function swapKeyframes(entering: boolean, reducedMotion: boolean): readonly Keyframe[] {
-  const shown: Keyframe = reducedMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0)' };
-  const hidden: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: `translateY(${SWAP_RISE_PX}px)` };
+/**
+ * LA FORME DU DÉPART ET DE L'ARRIVÉE — `rise` : le panneau monte depuis la barre ; `scale` : la
+ * capsule de l'en-tête grandit depuis son bord de fin (P9.8, `.scale(scale: 0.8, anchor: .trailing)`
+ * d'iOS ; l'ancre est `transform-origin`, dans `call-motion.css`).
+ */
+export type SwapShape = 'rise' | 'scale';
+
+const SCALE_FROM = 0.8;
+
+const SWAP_SHAPES: Readonly<Record<SwapShape, { readonly shown: string; readonly hidden: string }>> = {
+  rise: { shown: 'translateY(0)', hidden: `translateY(${SWAP_RISE_PX}px)` },
+  scale: { shown: 'scale(1)', hidden: `scale(${SCALE_FROM})` },
+};
+
+export function swapKeyframes(entering: boolean, reducedMotion: boolean, shape: SwapShape = 'rise'): readonly Keyframe[] {
+  const { shown: at, hidden: away } = SWAP_SHAPES[shape];
+  const shown: Keyframe = reducedMotion ? { opacity: 1 } : { opacity: 1, transform: at };
+  const hidden: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: away };
   return entering ? [hidden, shown] : [shown, hidden];
+}
+
+/**
+ * L'AVATAR DU DUO AUDIO SE RÉDUIT VERS L'EN-TÊTE COMPACT (#17529, loi 6, P9b ; `CallCompactAudioHeader`
+ * d'iOS) — quand le journal s'ouvre dans la pilule, la mise en page pose d'un coup l'avatar à 56 px en
+ * haut, le nom et la durée à côté ; l'avatar en repart de sa place et de sa taille d'avant, vues comme
+ * une translation de son centre et une échelle de la nouvelle (FLIP ; l'avatar est carré), et la
+ * rejoint, pendant que le nom et la durée arrivent en fondu. Le chemin inverse au retour. Sous
+ * « Réduire les animations », aucun déplacement : un fondu court.
+ */
+export const PORTRAIT_MORPH_MS = 200;
+
+export type MorphRect = { readonly x: number; readonly y: number; readonly width: number };
+
+/** L'avatar de la scène audio, celui que le morphisme déplace. */
+export const STAGE_PORTRAIT = '[data-call-incoming-portrait]';
+
+/** Le nom et la durée, qui rejoignent l'avatar en fondu. */
+export const STAGE_LABEL = '[data-call-stage-label]';
+
+export const portraitMorphMs = (reducedMotion: boolean): number => (reducedMotion ? STOW_REDUCED_MS : PORTRAIT_MORPH_MS);
+
+export function portraitMorphKeyframes(first: MorphRect, last: MorphRect, reducedMotion: boolean): readonly Keyframe[] | null {
+  if (reducedMotion || first.width <= 0 || last.width <= 0) return null;
+  const dx = first.x + first.width / 2 - (last.x + last.width / 2);
+  const dy = first.y + first.width / 2 - (last.y + last.width / 2);
+  const scale = first.width / last.width;
+  if (Math.abs(dx) < EPSILON_PX && Math.abs(dy) < EPSILON_PX && Math.abs(first.width - last.width) < EPSILON_PX) return null;
+  return [{ transform: `translate(${dx}px, ${dy}px) scale(${scale})` }, { transform: 'none' }];
 }

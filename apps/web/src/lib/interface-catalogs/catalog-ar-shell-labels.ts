@@ -77,8 +77,9 @@ const arShellLabels = {
   'media.policy.wifiAndGoodCellular': 'Wi-Fi + شبكة جوال جيدة',
   'media.policy.wifiOnly': 'Wi-Fi فقط',
   'media.policy.never': 'أبدًا',
-  'settings.media_download': 'التنزيل التلقائي للوسائط',
+  'settings.media_download': 'التنزيل التلقائي',
   'settings.media_download.info': 'وإلا، تنزّلها لمسة واحدة. أقل من 100 كيلوبايت، تُنزَّل الوسائط تلقائيًا دائمًا.',
+  'settings.media_download.question': 'وإذا لم يكن التنزيل تلقائيًا؟',
   'settings.media_download.images': 'الصور',
   'settings.media_download.videos': 'الفيديوهات',
 

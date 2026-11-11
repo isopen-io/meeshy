@@ -459,12 +459,24 @@
       "path": "/settings"
     },
     {
+      "name": "settings-appareils-chiffres",
+      "path": "/settings?volet=appareils-chiffres"
+    },
+    {
       "name": "settings-data-export",
       "path": "/settings/data-export"
     },
     {
       "name": "settings-notifications",
       "path": "/settings/notifications"
+    },
+    {
+      "name": "settings-packs",
+      "path": "/settings?volet=packs"
+    },
+    {
+      "name": "settings-securite",
+      "path": "/settings?volet=securite"
     },
     {
       "name": "settings-verify-email-change",
