@@ -502,7 +502,7 @@ const PRIVACY_TOGGLES = [
 const NOTIFICATION_TOGGLES = [
   { key: 'pushEnabled', label: 'settings.notifications.title', icon: { set: 'ecran', name: 'bellRinging' }, tint: 'var(--color-error)' },
   { key: 'soundEnabled', label: 'settings.notif.sounds', icon: { set: 'ecran', name: 'speakerHigh' }, tint: 'var(--ios-indigo-300)' },
-  { key: 'contactActivityEnabled', label: 'settings.notif.contact_activity', icon: { set: 'ecran', name: 'handPalm' }, tint: 'var(--color-ios-brand)' },
+  { key: 'contactActivityEnabled', label: 'settings.notif.contact_activity', caption: 'settings.notif.contact_activity.info', icon: { set: 'ecran', name: 'handPalm' }, tint: 'var(--color-ios-brand)' },
 ] as const satisfies readonly ToggleSpec[];
 
 type PreferenceSectionProps = {

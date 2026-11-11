@@ -1082,7 +1082,7 @@ const ar = {
   ...arStoriesMine,
   'settings.tools.sounds': 'أصواتي',
   'settings.section.packs': 'الحزم والتنزيلات',
-  'settings.packs.shop': 'متجر الملصقات والإطارات',
+  'settings.packs.shop': 'المتجر',
   ...arContactCard,
   ...arQuote,
   ...arCommentRow,

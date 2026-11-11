@@ -1085,7 +1085,7 @@ const es = {
   ...esStoriesMine,
   'settings.tools.sounds': 'Mis sonidos',
   'settings.section.packs': 'Paquetes y descargas',
-  'settings.packs.shop': 'Tienda de stickers y marcos',
+  'settings.packs.shop': 'Tienda',
   ...esContactCard,
   ...esQuote,
   ...esCommentRow,

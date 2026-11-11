@@ -175,7 +175,7 @@ describe('la confidentialité — les bascules que la passerelle obéit', () => 
   /* #8105 — la passerelle applique `hideProfileFromSearch` à toutes les
      recherches par identifiant et à l'annonce « X a rejoint Meeshy » (#8104,
      #8112) : la bascule a un effet, elle se montre. */
-  const DISCRETION = 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail';
+  const DISCRETION = 'Masquer mon numéro et mon e-mail';
 
   test('la discrétion de la recherche par identifiant se bascule, et écrit SA clé', () => {
     const edits: Array<readonly [string, boolean]> = [];
@@ -225,7 +225,7 @@ describe('la confidentialité — les bascules que la passerelle obéit', () => 
 
   /* #8285 — la passerelle ne prévient les contacts du retour de X que si ce
      réglage est ouvert (défaut : ouvert), et jamais si sa présence est masquée. */
-  const RETURN = 'Prévenir mes contacts quand je reviens sur Meeshy';
+  const RETURN = 'Annoncer mon retour';
 
   test('« prévenir mes contacts quand je reviens » se bascule, écrit SA clé et dit ce qu’elle montre', () => {
     const host = dom(
@@ -330,7 +330,7 @@ describe('les packs et téléchargements (#10149)', () => {
     const host = dom(<PacksSection language="fr" />);
     const row = host.querySelector<HTMLAnchorElement>('[data-settings-packs]');
     expect(row?.getAttribute('href')).toBe('/settings?volet=packs');
-    expect(row?.textContent).toContain('Boutique des stickers et des cadres');
+    expect(row?.textContent).toBe('Boutique');
     expect(host.textContent).toContain('PACKS ET TÉLÉCHARGEMENTS');
   });
 });
@@ -474,7 +474,7 @@ describe('les notifications', () => {
 
   /* #8285 — la passerelle ne pousse « X était sur Meeshy récemment » qu'à
      qui garde cette préférence ouverte (défaut : ouverte). */
-  const CONTACT_BACK = 'Quand un contact revient sur Meeshy';
+  const CONTACT_BACK = 'Retour d’un contact';
 
   test('« quand un contact revient » se bascule et écrit SA clé', () => {
     const host = dom(

@@ -1085,7 +1085,7 @@ const de = {
   ...deStoriesMine,
   'settings.tools.sounds': 'Meine Sounds',
   'settings.section.packs': 'Pakete und Downloads',
-  'settings.packs.shop': 'Sticker- und Rahmen-Shop',
+  'settings.packs.shop': 'Shop',
   ...deContactCard,
   ...deQuote,
   ...deCommentRow,

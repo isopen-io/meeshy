@@ -107,10 +107,10 @@ describe('confidentialité : chaque bascule propre à Meeshy dit ce qu’elle fa
     expect(read).toContain('« était sur Meeshy récemment », au plus une fois toutes les 3 heures');
   });
 
-  test('les deux bascules du carnet et du retour gardent leur nom entier, et chaque bascule cite sa phrase', async () => {
+  test('les bascules du carnet et du retour portent le mot du lexique, et chaque bascule cite sa phrase', async () => {
     const host = await mount(<PrivacySection language="fr" view={ready} disabled={false} onToggle={noop} onRetry={noop} />);
-    const hidden = host.querySelector('[role="switch"][aria-label="Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail"]');
-    const back = host.querySelector('[role="switch"][aria-label="Prévenir mes contacts quand je reviens sur Meeshy"]');
+    const hidden = host.querySelector('[role="switch"][aria-label="Masquer mon numéro et mon e-mail"]');
+    const back = host.querySelector('[role="switch"][aria-label="Annoncer mon retour"]');
     expect(hidden).not.toBeNull();
     expect(back).not.toBeNull();
     const described = host.querySelector(`[id="${back?.getAttribute('aria-describedby')}"]`);
@@ -120,9 +120,12 @@ describe('confidentialité : chaque bascule propre à Meeshy dit ce qu’elle fa
 });
 
 describe('notifications et données', () => {
-  test('le retour d’un contact se nomme en entier', async () => {
+  test('le retour d’un contact garde le mot du lexique et dit, dessous, ce qu’il notifie', async () => {
     const host = await mount(<NotificationsSection language="fr" view={ready} disabled={false} onToggle={noop} onRetry={noop} />);
-    expect(host.querySelector('[role="switch"][aria-label="Quand un contact revient sur Meeshy"]')).not.toBeNull();
+    const toggle = host.querySelector('[role="switch"][aria-label="Retour d’un contact"]');
+    expect(toggle).not.toBeNull();
+    expect(atRest(host)).toContain('Une notification quand un contact revient sur Meeshy.');
+    expect(host.querySelector(`[id="${toggle?.getAttribute('aria-describedby')}"]`)?.textContent).toBe('Une notification quand un contact revient sur Meeshy.');
   });
 
   test('la traduction sur l’appareil dit ce qu’elle fait ; le détail (taille, langues) reste derrière son (i)', async () => {

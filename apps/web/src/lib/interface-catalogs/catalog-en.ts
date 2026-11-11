@@ -1085,7 +1085,7 @@ const en = {
   ...enStoriesMine,
   'settings.tools.sounds': 'My sounds',
   'settings.section.packs': 'Packs and downloads',
-  'settings.packs.shop': 'Sticker and frame shop',
+  'settings.packs.shop': 'Shop',
   ...enContactCard,
   ...enQuote,
   ...enCommentRow,

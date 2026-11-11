@@ -1099,7 +1099,7 @@ const fr = {
   ...frStoriesMine,
   'settings.tools.sounds': 'Mes sons',
   'settings.section.packs': 'Packs et téléchargements',
-  'settings.packs.shop': 'Boutique des stickers et des cadres',
+  'settings.packs.shop': 'Boutique',
   ...frFeedPost,
   ...frContactCard,
   ...frQuote,
