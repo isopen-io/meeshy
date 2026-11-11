@@ -57,6 +57,23 @@ enum CaptionsMode: Equatable, Sendable {
 }
 
 
+/// #17678 (loi 7) — deux surfaces lisent les phrases de l'appel : la bande des
+/// sous-titres, qui suit le bouton Sous-titres, et le journal, dont la bascule
+/// Traduit · Original est SA propre. Choisir « Original » dans le journal ne
+/// touche pas la bande, qui reste dans la langue du lecteur (Prisme).
+enum CallCaptionsSurface: Equatable, Sendable {
+    case band
+    case journal
+
+    func prefersOriginal(bandOriginal: Bool, journalOriginal: Bool) -> Bool {
+        switch self {
+        case .band: return bandOriginal
+        case .journal: return journalOriginal
+        }
+    }
+}
+
+
 // MARK: - Transcription capture policy
 
 /// Ce que la couche d'appel doit faire de la capture locale, une fois

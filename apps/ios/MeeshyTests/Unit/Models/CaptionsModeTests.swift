@@ -144,4 +144,33 @@ final class TranscriptionCapturePolicyTests: XCTestCase {
             .stop
         )
     }
+
+    // MARK: - La bascule du journal ne touche pas la bande (#17678, loi 7)
+
+    func test_surface_bandFollowsTheCaptionsButtonOnly() {
+        XCTAssertFalse(CallCaptionsSurface.band.prefersOriginal(bandOriginal: false, journalOriginal: true))
+        XCTAssertTrue(CallCaptionsSurface.band.prefersOriginal(bandOriginal: true, journalOriginal: false))
+    }
+
+    func test_surface_journalFollowsItsOwnToggleOnly() {
+        XCTAssertTrue(CallCaptionsSurface.journal.prefersOriginal(bandOriginal: false, journalOriginal: true))
+        XCTAssertFalse(CallCaptionsSurface.journal.prefersOriginal(bandOriginal: true, journalOriginal: false))
+    }
+
+    func test_originalChosenInTheJournal_keepsTheBandInTheReadersLanguage() {
+        let segment = Meeshy.CallTranscriptionSegment(
+            id: UUID(), text: "Hello", speakerId: "peer", startTime: 0, endTime: 1, isFinal: true,
+            confidence: 1, language: "en", translatedText: "Bonjour", translatedLanguage: "fr",
+            capturedAt: Date(timeIntervalSince1970: 0)
+        )
+        func line(on surface: CallCaptionsSurface) -> CallCaptionLine {
+            CallCaptionLine.make(
+                segment: segment, isLocal: false, speakerName: "Peer",
+                prefersOriginal: surface.prefersOriginal(bandOriginal: false, journalOriginal: true),
+                isRevealed: false, readerPrism: ["fr"]
+            )
+        }
+        XCTAssertEqual(line(on: .journal).text, "Hello")
+        XCTAssertEqual(line(on: .band).text, "Bonjour")
+    }
 }
