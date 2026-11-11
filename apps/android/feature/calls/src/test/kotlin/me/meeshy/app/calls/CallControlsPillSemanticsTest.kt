@@ -253,4 +253,83 @@ class CallControlsPillSemanticsTest {
         rule.onNodeWithText("My image".uppercase()).assertExists()
         rule.onNodeWithText("Réactions").assertDoesNotExist()
     }
+
+    @Test
+    fun `a stowed pill keeps ONE glass, the captions stay and the base row folds out (G1_3)`() {
+        var text by mutableStateOf(CallPillText.Captions)
+        val state = ui()
+        rule.setContent {
+            MeeshyTheme {
+                CallControlsPill(
+                    state = state,
+                    layer = CallScreenLayer.Idle,
+                    disposition = CallControlsDisposition.Rows,
+                    rows = emptyList(),
+                    items = emptyMap(),
+                    outputIcon = Icons.Filled.VolumeUp,
+                    onToggleMenu = {},
+                    onToggleMute = {},
+                    onOutput = {},
+                    onHangUp = {},
+                    onAction = {},
+                    onBackToMenu = {},
+                    onClosePanel = {},
+                    pillText = text,
+                    captions = { Text("Bonjour Ada") },
+                )
+            }
+        }
+        rule.onNodeWithContentDescription("Hang up").assertExists()
+
+        text = CallPillText.CaptionsAlone
+        rule.mainClock.advanceTimeBy(1_000)
+
+        rule.onNodeWithText("Bonjour Ada").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Hang up").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Mute microphone").assertDoesNotExist()
+        text = CallPillText.Captions
+        rule.mainClock.advanceTimeBy(1_000)
+        rule.onNodeWithContentDescription("Hang up").assertExists()
+    }
+
+    @Test
+    fun `closing the open menu tightens the pill progressively, legends and rows together, never at once (G3_4)`() {
+        var layer by mutableStateOf<CallScreenLayer>(CallScreenLayer.Menu)
+        val state = ui()
+        val items = CallPillModel.items(state, offered)
+        val set = CallPillModel.available(state, items) { false }
+        val rows = CallGroupStageSizing.rows(CallControlsDisposition.Rows.pillRows(set, CallScreenLayer.Menu), isCompactHeight = false)
+        rule.setContent {
+            MeeshyTheme {
+                CallControlsPill(
+                    state = state,
+                    layer = layer,
+                    disposition = CallControlsDisposition.Rows,
+                    rows = rows,
+                    items = items,
+                    outputIcon = Icons.Filled.VolumeUp,
+                    onToggleMenu = {},
+                    onToggleMute = {},
+                    onOutput = {},
+                    onHangUp = {},
+                    onAction = {},
+                    onBackToMenu = {},
+                    onClosePanel = {},
+                    modifier = Modifier.testTag("pill"),
+                )
+            }
+        }
+        val open = rule.onNodeWithTag("pill").fetchSemanticsNode().size.height
+
+        rule.mainClock.autoAdvance = false
+        layer = CallScreenLayer.Idle
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(100)
+        val folding = rule.onNodeWithTag("pill").fetchSemanticsNode().size.height
+        rule.mainClock.advanceTimeBy(1_000)
+        val resting = rule.onNodeWithTag("pill").fetchSemanticsNode().size.height
+
+        assertThat(folding).isLessThan(open)
+        assertThat(folding).isGreaterThan(resting)
+    }
 }

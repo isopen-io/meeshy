@@ -84,6 +84,27 @@ object CallSelfTileLaw {
     fun resting(chosen: CallSelfTileScale, controlsVisible: Boolean): CallSelfTileScale =
         if (controlsVisible) chosen else CallSelfTileScale.X1
 
+    /**
+     * G1.11 — le rangement est une TRANSFORMATION : le cadre reste celui du palier choisi et la vignette est mise à
+     * l'échelle de sa petite taille, jamais relayoutée.
+     */
+    fun restingFactor(chosen: CallSelfTileScale, controlsVisible: Boolean): Float =
+        resting(chosen, controlsVisible).widthDp / chosen.widthDp
+
+    /**
+     * Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins) : divisé par le facteur d'échelle, il est
+     * dessiné à sa taille de petite vignette (lois 4 et 11).
+     */
+    fun counterScaled(length: Float, by: Float): Float = if (by.isFinite() && by > 0f) length / by else length
+
+    /** L'ancre du rangement : le coin de la vignette tourné vers son coin d'écran, qui garde ainsi sa marge. */
+    fun anchor(corner: CallSelfTileCorner): CallTilePoint = when (corner) {
+        CallSelfTileCorner.TopStart -> CallTilePoint(0f, 0f)
+        CallSelfTileCorner.TopEnd -> CallTilePoint(1f, 0f)
+        CallSelfTileCorner.BottomStart -> CallTilePoint(0f, 1f)
+        CallSelfTileCorner.BottomEnd -> CallTilePoint(1f, 1f)
+    }
+
     /** La taille affichée : le palier, suivi du pincement, borné à la zone sûre de l'écran. */
     fun tileSize(container: CallTileSize, insets: CallSafeInsets, scale: CallSelfTileScale, pinch: Float): CallTileSize {
         val available = CallTileSize(

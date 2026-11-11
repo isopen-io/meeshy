@@ -7,7 +7,8 @@ import Foundation
 /// participants (`CallControlsDisposition`) : à deux, un rail par famille sur
 /// les bords ; à plusieurs, une rangée légendée par famille dans la pilule.
 /// #8578 — une seule chose à la fois : `CallScreenLayer`. La conversation n'est PAS une action : sa
-/// seule porte est le bouton de l'en-tête (#8436). Ce fichier tient les RÈGLES
+/// seule porte est le bouton de l'en-tête (#8436), comme Image dans l'image (#17329,
+/// `CallHeaderRule`). Ce fichier tient les RÈGLES
 /// (quelles actions, où, quand) ; les vues ne font que les dessiner.
 
 /// Une action déployée par le `(…)`.
@@ -19,7 +20,6 @@ enum CallAction: String, CaseIterable, Sendable {
     case screenShare
     case captions
     case recording
-    case pictureInPicture
     /// #8433 — faire sonner un ami dans l'appel en cours.
     case addPeople
     /// #8439 — envoyer une réaction à tout l'appel.
@@ -39,7 +39,6 @@ struct CallActionContext: Equatable, Sendable {
     let hasSelectableCameras: Bool
     let isConnected: Bool
     let mayRecord: Bool
-    let canPictureInPicture: Bool
     let showsVideo: Bool
 
     init(
@@ -48,7 +47,6 @@ struct CallActionContext: Equatable, Sendable {
         hasSelectableCameras: Bool,
         isConnected: Bool,
         mayRecord: Bool,
-        canPictureInPicture: Bool,
         showsVideo: Bool? = nil
     ) {
         self.isOnMac = isOnMac
@@ -56,7 +54,6 @@ struct CallActionContext: Equatable, Sendable {
         self.hasSelectableCameras = hasSelectableCameras
         self.isConnected = isConnected
         self.mayRecord = mayRecord
-        self.canPictureInPicture = canPictureInPicture
         self.showsVideo = showsVideo ?? isVideoEnabled
     }
 }
@@ -111,8 +108,7 @@ struct CallActionSet: Equatable, Sendable {
         let add: [CallAction] = context.isConnected ? [.addPeople] : []
         let react: [CallAction] = context.isConnected ? [.react] : []
         let capture: [CallAction] = context.isConnected && context.showsVideo ? [.capture] : []
-        let pip: [CallAction] = context.canPictureInPicture ? [.pictureInPicture] : []
-        return [.captions] + recording + add + [.journal] + react + capture + pip
+        return [.captions] + recording + add + [.journal] + react + capture
     }
 }
 

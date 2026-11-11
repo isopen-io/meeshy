@@ -38,18 +38,25 @@ enum CallCaptureJournalCopy {
 /// est entière (borne de l'enregistrement de l'appel).
 enum CallCaptureSentence {
     static func text(name: String, nameColor: Color, tail: String, tailColor: Color) -> Text {
-        var lead = AttributedString(name.isEmpty ? "" : "\(name) · ")
-        lead.foregroundColor = nameColor
-        lead.font = Font.callout.weight(.semibold)
         var rest = AttributedString(tail)
         rest.foregroundColor = tailColor
         rest.font = Font.callout
-        return Text(lead + rest)
+        return Text(lead(name: name, nameColor: nameColor) + rest)
+    }
+
+    /// « Karim · », le début commun d'une phrase d'événement et d'une phrase de
+    /// sous-titres (`CallCaptionSentence`) : une seule façon de signer une ligne.
+    static func lead(name: String, nameColor: Color) -> AttributedString {
+        var lead = AttributedString(name.isEmpty ? "" : "\(name) · ")
+        lead.foregroundColor = nameColor
+        lead.font = Font.callout.weight(.semibold)
+        return lead
     }
 }
 
 /// Le journal vivant : les phrases et, à leur heure, les captures (loi 7),
-/// résolus pour le bandeau, le panneau audio et la feuille du journal.
+/// résolus pour le bandeau et le journal de la pilule. Chaque phrase y porte son
+/// heure DANS l'appel (`CallJournalClock`), comme les captures.
 struct CallJournalComposer {
     let segments: [CallTranscriptionSegment]
     let captures: [CallTranscriptCapture]
@@ -63,14 +70,15 @@ struct CallJournalComposer {
     func line(for item: CallJournalItem<CallTranscriptionSegment>) -> CallCaptionLine {
         switch item {
         case .speech(let segment):
-            return speechLine(segment)
+            var line = speechLine(segment)
+            line.timeLabel = CallJournalClock.label(at: segment.capturedAt, since: callStartedAt)
+            return line
         case .capture(let capture):
-            let elapsed = capture.capturedAt.timeIntervalSince(callStartedAt ?? capture.capturedAt)
             return CallCaptionLine.capture(
                 capture,
                 displayName: CallCaptureJournalCopy.who(capture.displayName),
                 phrase: CallCaptureJournalCopy.phrase(capture.kind),
-                timeLabel: CallManager.formatDuration(max(0, elapsed))
+                timeLabel: CallJournalClock.label(at: capture.capturedAt, since: callStartedAt ?? capture.capturedAt) ?? ""
             )
         }
     }

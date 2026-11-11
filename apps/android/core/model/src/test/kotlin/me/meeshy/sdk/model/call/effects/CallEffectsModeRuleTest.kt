@@ -20,8 +20,25 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `the colours are the five looks in iOS order`() {
-        assertThat(CallEffectsModeRule.colors.map { it.id }).containsExactly("natural", "warm", "cool", "vivid", "muted").inOrder()
+    fun `the colours are the eight moods of iOS, in iOS order, the four older tints no longer offered`() {
+        assertThat(CallEffectsModeRule.colors.map { it.id })
+            .containsExactly("natural", "golden", "film", "softNight", "bright", "velvet", "sky", "monochrome").inOrder()
+    }
+
+    @Test
+    fun `an older tint stays readable and selectable by a call that carries it`() {
+        val warm = CallEffectsModeRule.applying(VideoFilterPreset.Warm, VideoFilterConfig())
+        assertThat(CallEffectsModeRule.colorSelection(warm)).isEqualTo(VideoFilterPreset.Warm)
+        assertThat(VideoFilterPreset.fromId("muted")).isEqualTo(VideoFilterPreset.Muted)
+    }
+
+    @Test
+    fun `every mood of the catalogue applies and is read back as itself`() {
+        CallEffectsModeRule.colors.forEach { mood ->
+            val applied = CallEffectsModeRule.applying(mood, VideoFilterConfig())
+            assertThat(CallEffectsModeRule.colorSelection(applied)).isEqualTo(mood)
+            assertThat(applied.isEnabled).isEqualTo(mood != VideoFilterPreset.Natural)
+        }
     }
 
     @Test

@@ -2,14 +2,18 @@ import { createStore } from 'zustand/vanilla';
 
 import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
 
+import { BRIGHTNESS_LIMIT, clampBrightness, effectsFilter, VIDEO_PRESET_CATALOG, VIDEO_PRESETS, type VideoPreset } from './video-effects-look';
+
+export { BRIGHTNESS_LIMIT, effectsFilter, VIDEO_PRESET_CATALOG, VIDEO_PRESETS, type VideoPreset };
+
 /**
  * **LES EFFETS DE MA VIDÉO** (#8442) — les règles et l'état, sans traitement
  * d'image : ce module est LÉGER, l'écran d'appel le lit ; le traitement vit
  * dans un chunk à part (`video-effects-pipeline.ts`), chargé au premier effet
  * de couleur, et le moteur le branche par `camera-effects.ts`.
  *
- * Miroir de `VideoFilterPreset` d'iOS : naturel, chaud, froid, vif, doux, et la
- * luminosité (±50 %). Les effets s'appliquent à la piste ENVOYÉE : ce que je
+ * Miroir de `VideoFilterPreset` d'iOS : les huit ambiances de Meeshy
+ * (#17000, `VIDEO_PRESET_CATALOG`) et la luminosité (±50 %). Les effets s'appliquent à la piste ENVOYÉE : ce que je
  * vois dans ma vignette est ce que l'autre voit.
  *
  * Les EFFETS DE VISAGE (#8551) — lissage de peau, crapaud, ange, démon,
@@ -29,10 +33,6 @@ import type { LensSettings } from '@/lib/meeshy-lens/lens-stage';
  * réunit ce que le traitement reçoit pour une caméra donnée.
  */
 
-export const VIDEO_PRESETS = ['natural', 'warm', 'cool', 'vivid', 'muted'] as const;
-
-export type VideoPreset = (typeof VIDEO_PRESETS)[number];
-
 /** Les effets de visage, dans l'ordre partagé avec iOS (`CallFaceEffect`). */
 export const FACE_EFFECTS = ['none', 'smoothing', 'toad', 'angel', 'demon', 'volcano'] as const;
 
@@ -41,26 +41,6 @@ export type FaceEffect = (typeof FACE_EFFECTS)[number];
 export type VideoEffects = { readonly preset: VideoPreset; readonly brightness: number; readonly blur: boolean; readonly faceEffect: FaceEffect };
 
 export const NO_EFFECTS: VideoEffects = { preset: 'natural', brightness: 0, blur: false, faceEffect: 'none' };
-
-export const BRIGHTNESS_LIMIT = 0.5;
-
-/* La colorimétrie d'iOS (température, contraste, saturation) rendue en filtres CSS. */
-const PRESET_FILTER: Readonly<Record<VideoPreset, string>> = {
-  natural: '',
-  warm: 'sepia(0.18) saturate(1.1) contrast(1.05) brightness(1.02)',
-  cool: 'hue-rotate(-10deg) saturate(0.95) contrast(1.05)',
-  vivid: 'saturate(1.3) contrast(1.15) brightness(1.03)',
-  muted: 'saturate(0.7) contrast(0.9) brightness(0.98)',
-};
-
-const clampBrightness = (value: number): number => Math.max(-BRIGHTNESS_LIMIT, Math.min(BRIGHTNESS_LIMIT, value));
-
-/** Le filtre de canevas que le traitement pose sur chaque image — `none` quand il n'y a rien à faire. */
-export function effectsFilter(effects: VideoEffects): string {
-  const brightness = clampBrightness(effects.brightness);
-  const parts = [PRESET_FILTER[effects.preset], brightness === 0 ? '' : `brightness(${Math.round((1 + brightness) * 100) / 100})`].filter((part) => part !== '');
-  return parts.length === 0 ? 'none' : parts.join(' ');
-}
 
 /** Faut-il traiter les images ? Le flou seul non : il se règle sur la caméra elle-même. */
 export const needsFramePipeline = (effects: VideoEffects): boolean => effectsFilter(effects) !== 'none' || effects.faceEffect !== 'none';

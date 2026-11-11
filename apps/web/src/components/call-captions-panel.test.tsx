@@ -181,7 +181,7 @@ describe('les gestes', () => {
     const original = view.host.querySelector('[data-call-caption-original]');
     expect(original?.textContent).toBe('Original · Hello everyone');
     expect(original?.getAttribute('dir')).toBe('ltr');
-    const text = view.host.querySelector('[data-call-caption-original-text]');
+    const text = view.host.querySelector('[data-call-original-text]');
     expect(text?.textContent).toBe('Hello everyone');
     expect(text?.getAttribute('dir')).toBe('auto');
     expect(text?.getAttribute('lang')).toBe('en');

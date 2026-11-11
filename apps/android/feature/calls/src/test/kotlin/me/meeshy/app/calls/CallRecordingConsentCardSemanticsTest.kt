@@ -82,11 +82,11 @@ class CallRecordingConsentCardSemanticsTest {
     }
 
     @Test
-    fun `the kind panel offers audio only and audio and video`() {
+    fun `the kind panel offers audio and video`() {
         val picked = mutableListOf<CallRecordingKind>()
         rule.setContent { MeeshyTheme { CallRecordingKindPanel(onPick = { picked += it }) } }
-        rule.onNodeWithContentDescription("Audio and video").performClick()
-        rule.onNodeWithContentDescription("Audio only").performClick()
+        rule.onNodeWithContentDescription("Video").performClick()
+        rule.onNodeWithContentDescription("Audio").performClick()
         assertThat(picked).containsExactly(CallRecordingKind.VIDEO, CallRecordingKind.AUDIO).inOrder()
     }
 }

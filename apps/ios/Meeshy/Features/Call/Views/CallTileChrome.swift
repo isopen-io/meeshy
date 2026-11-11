@@ -46,3 +46,19 @@ extension CallSelfTileStroke {
         return Color(hex: CallSpeakerColor.hex(for: key))
     }
 }
+
+/// Loi 4 · 11 — la découpe et le liseré de ma vignette du duo. Rangée par une échelle
+/// (`CallSelfTileStow`), elle garde les coins et le trait d'une petite vignette : les deux sont
+/// contre-mis à l'échelle de son rangement.
+struct CallSelfTileOutline: ViewModifier {
+    let color: Color
+    let lineWidth: CGFloat
+    let stowFactor: CGFloat
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: CallSelfTileScale.counterScaled(MeeshyRadius.smPlus, by: stowFactor))
+        return content
+            .clipShape(shape)
+            .overlay(shape.stroke(color, lineWidth: CallSelfTileScale.counterScaled(lineWidth, by: stowFactor)))
+    }
+}

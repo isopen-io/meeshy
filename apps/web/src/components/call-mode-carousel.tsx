@@ -68,6 +68,11 @@ type CarouselProps = {
 
 const ITEM = 64;
 
+/** La piste s'efface à ses deux bords (#17409) : la même largeur des deux côtés, rien à inverser en arabe. */
+const EDGE_FADE_PX = 34;
+// harmony-exempt: masque alpha du fondu de bord, seule l'opacité compte, aucune couleur n'est peinte
+const EDGE_FADE = `linear-gradient(90deg, transparent 0, #000 ${EDGE_FADE_PX}px, #000 calc(100% - ${EDGE_FADE_PX}px), transparent 100%)`;
+
 type Press = { readonly id: string; readonly x: number; readonly y: number; readonly timer: ReturnType<typeof setTimeout> };
 
 /** Ce qui rend la main à l'utilisateur pendant qu'un toucher centre son élément — sauf re-toucher cet élément : c'est une double tape (#8625). */
@@ -304,7 +309,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
         onKeyDown={onKeyDown}
         {...(onWheel === undefined ? {} : { onWheel })}
         className="flex w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto overscroll-x-none py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        style={{ paddingInline: `calc(50% - ${ITEM / 2}px)` }}
+        style={{ paddingInline: `calc(50% - ${ITEM / 2}px)`, maskImage: EDGE_FADE, WebkitMaskImage: EDGE_FADE }}
         data-call-row-scroll=""
       >
         {items.map((item, index) => {

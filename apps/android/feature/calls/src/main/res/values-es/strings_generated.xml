@@ -222,9 +222,9 @@
     <string name="call_recording_caption">Grabar</string>
     <string name="call_recording_close">Cerrar</string>
     <string name="call_recording_hint">Pide el consentimiento de cada participante antes de grabar</string>
-    <string name="call_recording_kind_audio">Solo audio</string>
+    <string name="call_recording_kind_audio">Audio</string>
     <string name="call_recording_kind_hint">Elige qué se grabará; después, cada participante debe aceptar</string>
-    <string name="call_recording_kind_video">Audio y vídeo</string>
+    <string name="call_recording_kind_video">Vídeo</string>
     <string name="call_recording_refuse">Rechazar</string>
     <string name="call_recording_saveFailed">No se pudo añadir la grabación</string>
     <string name="call_recording_saved">La grabación se añadió a la conversación</string>
@@ -268,9 +268,16 @@
     <string name="call_zoom_hint">Desliza hacia arriba o abajo para hacer zoom. En pantalla, pellizca tu imagen; toca dos veces para volver a 1×</string>
     <string name="call_zoom_label">Zoom de mi cámara</string>
     <string name="permission_microphone_denied">Micrófono denegado: toca para abrir Ajustes</string>
+    <string name="video_filter_preset_bright">Claro</string>
     <string name="video_filter_preset_cool">Frío</string>
+    <string name="video_filter_preset_film">Película</string>
+    <string name="video_filter_preset_golden">Dorado</string>
+    <string name="video_filter_preset_monochrome">Blanco y negro</string>
     <string name="video_filter_preset_muted">Suave</string>
     <string name="video_filter_preset_natural">Natural</string>
+    <string name="video_filter_preset_sky">Cielo</string>
+    <string name="video_filter_preset_softNight">Noche suave</string>
+    <string name="video_filter_preset_velvet">Terciopelo</string>
     <string name="video_filter_preset_vivid">Vívido</string>
     <string name="video_filter_preset_warm">Cálido</string>
 </resources>

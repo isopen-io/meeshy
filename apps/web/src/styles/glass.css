@@ -186,10 +186,3 @@
     opacity 0.3s ease,
     visibility 0.3s;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  [data-call-chrome-fade],
-  [data-call-chrome='hidden'] [data-call-chrome-fade] {
-    transition: none;
-  }
-}

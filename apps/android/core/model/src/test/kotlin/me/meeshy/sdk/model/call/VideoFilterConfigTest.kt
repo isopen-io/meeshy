@@ -137,6 +137,22 @@ class VideoFilterConfigTest {
     }
 
     @Test
+    fun `the catalogue lists the eight moods of iOS and keeps the four older tints decodable`() {
+        assertThat(VideoFilterPreset.catalog.map { it.id })
+            .containsExactly("natural", "golden", "film", "softNight", "bright", "velvet", "sky", "monochrome").inOrder()
+        listOf("warm", "cool", "vivid", "muted").forEach { assertThat(VideoFilterPreset.fromId(it)).isNotNull() }
+        assertThat(VideoFilterPreset.catalog).doesNotContain(VideoFilterPreset.Warm)
+    }
+
+    @Test
+    fun `black and white is the grey colorimetry of iOS`() {
+        val c = requireNotNull(VideoFilterPreset.fromId("monochrome")).config
+        assertThat(c.saturation).isEqualTo(0f)
+        assertThat(c.contrast).isEqualTo(1.1f)
+        assertThat(VideoFilterPreset.matching(c)).isEqualTo(VideoFilterPreset.fromId("monochrome"))
+    }
+
+    @Test
     fun `an unknown preset id resolves to null`() {
         assertThat(VideoFilterPreset.fromId("sepia")).isNull()
         assertThat(VideoFilterPreset.fromId("")).isNull()

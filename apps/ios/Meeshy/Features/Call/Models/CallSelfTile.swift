@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SwiftUI
 
 enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
     case x1 = 1
@@ -55,6 +56,24 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
     /// taille ; le chrome revenu, elle reprend celle que j'avais choisie.
     static func resting(_ chosen: CallSelfTileScale, isChromeVisible: Bool) -> CallSelfTileScale {
         isChromeVisible ? chosen : .x1
+    }
+
+    /// G1.11 — le rangement est une TRANSFORMATION : le cadre reste celui du palier choisi et la
+    /// vignette est mise à l'échelle de sa petite taille, jamais relayoutée.
+    static func restingFactor(_ chosen: CallSelfTileScale, isChromeVisible: Bool) -> CGFloat {
+        resting(chosen, isChromeVisible: isChromeVisible).width / chosen.width
+    }
+
+    /// Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins, badge) : divisé par
+    /// le facteur d'échelle, il est dessiné à sa taille de petite vignette (lois 4, 11).
+    static func counterScaled(_ length: CGFloat, by factor: CGFloat) -> CGFloat {
+        factor.isFinite && factor > 0 ? length / factor : length
+    }
+
+    /// L'ancre du rangement : le coin de l'écran le plus proche du centre de la vignette, qui garde
+    /// ainsi sa marge pendant la réduction.
+    static func anchor(of center: CGPoint, in container: CGSize) -> UnitPoint {
+        UnitPoint(x: center.x < container.width / 2 ? 0 : 1, y: center.y < container.height / 2 ? 0 : 1)
     }
 
     static func fitted(_ size: CGSize, in available: CGSize) -> CGSize {

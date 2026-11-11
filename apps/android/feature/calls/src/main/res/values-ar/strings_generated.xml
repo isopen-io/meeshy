@@ -222,9 +222,9 @@
     <string name="call_recording_caption">تسجيل</string>
     <string name="call_recording_close">إغلاق</string>
     <string name="call_recording_hint">يطلب موافقة كل مشارك قبل التسجيل</string>
-    <string name="call_recording_kind_audio">الصوت فقط</string>
+    <string name="call_recording_kind_audio">الصوت</string>
     <string name="call_recording_kind_hint">اختر ما سيُسجَّل؛ ثم يجب أن يوافق كل مشارك</string>
-    <string name="call_recording_kind_video">الصوت والفيديو</string>
+    <string name="call_recording_kind_video">الفيديو</string>
     <string name="call_recording_refuse">رفض</string>
     <string name="call_recording_saveFailed">تعذّرت إضافة التسجيل</string>
     <string name="call_recording_saved">أُضيف التسجيل إلى المحادثة</string>
@@ -268,9 +268,16 @@
     <string name="call_zoom_hint">اسحب لأعلى أو لأسفل للتكبير. على الشاشة، اضغط بإصبعين على صورتك؛ انقر مرتين للعودة إلى 1×</string>
     <string name="call_zoom_label">تكبير كاميرتي</string>
     <string name="permission_microphone_denied">تم رفض الميكروفون — اضغط لفتح الإعدادات</string>
+    <string name="video_filter_preset_bright">ساطع</string>
     <string name="video_filter_preset_cool">بارد</string>
+    <string name="video_filter_preset_film">فيلم</string>
+    <string name="video_filter_preset_golden">ذهبي</string>
+    <string name="video_filter_preset_monochrome">أبيض وأسود</string>
     <string name="video_filter_preset_muted">ناعم</string>
     <string name="video_filter_preset_natural">طبيعي</string>
+    <string name="video_filter_preset_sky">سماء</string>
+    <string name="video_filter_preset_softNight">ليل هادئ</string>
+    <string name="video_filter_preset_velvet">مخملي</string>
     <string name="video_filter_preset_vivid">زاهٍ</string>
     <string name="video_filter_preset_warm">دافئ</string>
 </resources>

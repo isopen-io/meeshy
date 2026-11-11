@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
+import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { TypingDots } from '@/components/typing-dots';
 import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
@@ -71,20 +72,6 @@ function WaitingDots({ waiting, label }: { readonly waiting: boolean; readonly l
       </span>
       {waiting ? <span className="sr-only">{`, ${label}`}</span> : null}
     </>
-  );
-}
-
-/** « Original · … » déplié sous la phrase : il en descend, et y remonte en fondu, inerte, avant de ne rien laisser. */
-function UnfoldedOriginal({ open, caption, language }: { readonly open: boolean; readonly caption: CallCaption; readonly language: InterfaceLanguage }) {
-  const present = useRailPresence(open, PILL_TEXT_EXIT).mounted;
-  if (!present) return null;
-  return (
-    <span className="block ps-3 text-mini" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-caption-original="" {...(open ? {} : PILL_TEXT_LEAVING)}>
-      {`${translateCallControls(language, 'callControls.journal.original')} · `}
-      <span dir="auto" lang={caption.pair?.from} data-call-caption-original-text="">
-        {caption.original}
-      </span>
-    </span>
   );
 }
 
@@ -178,7 +165,7 @@ const CaptionLine = memo(function CaptionLine({
           {content}
         </p>
       )}
-      <UnfoldedOriginal open={unfoldable && open} caption={caption} language={language} />
+      <UnfoldedOriginal open={unfoldable && open} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-caption-original" />
     </div>
   );
 });
