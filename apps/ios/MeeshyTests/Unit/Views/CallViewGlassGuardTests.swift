@@ -280,9 +280,11 @@ final class CallViewGlassGuardTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
         )
         let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
-        XCTAssertTrue(effects.contains("if showsSettings {"), "Réglages REMPLACE le carrousel")
+        XCTAssertTrue(effects.contains("if !showsSettings {"), "Réglages RETIRE le carrousel (P8b)")
         XCTAssertTrue(effects.contains("switch category {"), "Un seul carrousel, Visage OU Couleur")
-        XCTAssertEqual(effects.components(separatedBy: "CallModeActionBar(").count - 1, 1)
+        XCTAssertEqual(effects.components(separatedBy: "CallEffectsBar(").count - 1, 1, "Une seule barre de verre : ‹ · Réglages · (+)")
+        XCTAssertFalse(effects.contains("CallModeActionBar("), "Effets ne porte ni Quitter ni Valider (loi 14, #17409)")
+        XCTAssertFalse(effects.contains("validate"), "Le look touché s'applique tout de suite : aucun « Valider »")
         let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
         XCTAssertEqual(montage.components(separatedBy: "CallModeCarousel(").count - 1, 1)
         XCTAssertEqual(montage.components(separatedBy: "CallModeActionBar(").count - 1, 1)
@@ -292,6 +294,30 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Le carrousel s'accroche")
         XCTAssertTrue(carousel.contains(".scrollPosition(id: $centred, anchor: .center)"), "L'élément choisi se pose au centre")
         XCTAssertTrue(carousel.contains(".accessibilityAdjustableAction"), "VoiceOver choisit d'un balayage vertical")
+    }
+
+    /// P8b.4 · P8b.6 · P8b.8 — la barre d'Effets est UN verre d'une pièce (l'atome
+    /// partagé) : ‹ · Réglages · (+), le panneau Luminosité · Flou du fond s'y croise avec les
+    /// looks, et « Réduire les animations » en fait un fondu court, jamais un retrait net.
+    func test_effectsBar_isOneGlassPiece_withBackSettingsAndAddLook() throws {
+        let bar = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift")
+        )
+        XCTAssertTrue(bar.contains(".callControlsGlass(in:"), "Le verre est l'atome partagé, d'une pièce")
+        XCTAssertTrue(bar.contains("AdaptiveGlassContainer("))
+        XCTAssertTrue(bar.contains("symbol: \"chevron.left\""), "‹ Retour à l'appel")
+        XCTAssertTrue(bar.contains("symbol: \"gearshape\""), "Réglages porte l'engrenage, pas le glyphe d'Effets")
+        XCTAssertTrue(bar.contains("symbol: \"plus\""), "(+) Ajouter un autre look")
+        XCTAssertTrue(bar.contains("showsSettings ? .active : .normal"), "Réglages ouvert = disque blanc")
+        XCTAssertTrue(bar.contains(".transition(.opacity)"), "Les contenus se croisent en fondu")
+        XCTAssertFalse(bar.contains("slider.horizontal.3"))
+        let controls = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
+        )
+        XCTAssertTrue(controls.contains("CallEffectsSettingsMotion.duration(reduceMotion: reduceMotion)"), "Réduire les animations = fondu court")
+        XCTAssertFalse(controls.contains("reduceMotion ? nil"), "Réduire les animations ne supprime plus l'animation")
+        XCTAssertTrue(controls.contains("Text(CallEffectsCopy.brightness)"), "« Luminosité » est un titre visible")
+        XCTAssertTrue(controls.contains("Toggle(isOn: blurBinding)"), "« Flou du fond » est une ligne titrée à interrupteur")
     }
 
     /// #8625 — aucun déclencheur : deux tapes sur le style choisi prennent la
