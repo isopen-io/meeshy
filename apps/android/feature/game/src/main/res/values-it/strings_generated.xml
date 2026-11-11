@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">La Rinascita si apre al livello 100. Sei al livello %1$s.</string>
     <string name="game2_prestige_max">La tua leggenda ha vissuto le sue cinque rinascite: la vetta della vetta.</string>
     <string name="game2_prestige_mee">Livello 100: la tua luce può rinascere, o crescere ancora.</string>
-    <string name="game2_prestige_meo">I tuoi antenati ti offrono una nuova Era, un trofeo numerato e %1$s di gloria. Il tuo rango non arretra mai.</string>
+    <string name="game2_prestige_meo">Rinascendo, il tuo livello riparte da 1 e le tue scintille da 0. I tuoi antenati ti offrono una nuova Era, un trofeo numerato e %1$s di gloria. Il tuo rango non arretra mai.</string>
     <string name="game2_prestige_stars">Rinascite: %1$s su %2$s</string>
     <string name="game2_prestige_stay">Continuare a brillare</string>
     <string name="game2_prestige_title">Rinascita</string>

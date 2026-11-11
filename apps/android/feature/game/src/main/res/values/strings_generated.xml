@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">Rebirth opens at level 100. You are at level %1$s.</string>
     <string name="game2_prestige_max">Your legend has lived its five rebirths: the summit of summits.</string>
     <string name="game2_prestige_mee">Level 100: your light can be reborn, or keep growing.</string>
-    <string name="game2_prestige_meo">Your ancestors offer you a new Age, a numbered trophy and %1$s glory. Your rank never goes back.</string>
+    <string name="game2_prestige_meo">When you are reborn, your level starts over at 1 and your sparks at 0. Your ancestors offer you a new Age, a numbered trophy and %1$s glory. Your rank never goes back.</string>
     <string name="game2_prestige_stars">Rebirths: %1$s of %2$s</string>
     <string name="game2_prestige_stay">Keep shining</string>
     <string name="game2_prestige_title">Rebirth</string>

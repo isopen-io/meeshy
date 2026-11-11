@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">O Renascimento se abre no nível 100. Você está no nível %1$s.</string>
     <string name="game2_prestige_max">Sua lenda viveu os seus cinco renascimentos: o topo do topo.</string>
     <string name="game2_prestige_mee">Nível 100: sua luz pode renascer, ou crescer mais.</string>
-    <string name="game2_prestige_meo">Seus ancestrais oferecem a você uma nova Era, um troféu numerado e %1$s de glória. Seu título nunca recua.</string>
+    <string name="game2_prestige_meo">Ao renascer, seu nível recomeça em 1 e suas faíscas em 0. Seus ancestrais oferecem a você uma nova Era, um troféu numerado e %1$s de glória. Seu título nunca recua.</string>
     <string name="game2_prestige_stars">Renascimentos: %1$s de %2$s</string>
     <string name="game2_prestige_stay">Continuar a brilhar</string>
     <string name="game2_prestige_title">Renascimento</string>

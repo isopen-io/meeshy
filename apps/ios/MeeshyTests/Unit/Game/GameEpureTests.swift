@@ -294,7 +294,7 @@ final class GameEpureTests: XCTestCase {
         "game.rules.concept.treasury.body": "Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil.",
         "game.rules.badges.intro": "Chaque médaille suit UN geste précis : un message vocal, une story, une amitié nouée…",
         "game.rules.badges.imprint": "Une médaille éteinte reste une empreinte : elle dit ce qu’il manque pour la rallumer.",
-        "game2.prestige.meo": "Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %@ de gloire. Ton rang ne recule jamais.",
+        "game2.prestige.meo": "En renaissant, ton niveau repart à 1 et tes étincelles à 0. Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %@ de gloire. Ton rang ne recule jamais.",
         "game.concept.prestige.use": "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.",
         "game2.settings.celebrations.body": "Cartes de Mee et Meo sur Progression. Cet appareil seulement.",
         "game.concept.meesh.use": "Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.",
@@ -348,12 +348,25 @@ final class GameEpureTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(catalog["game2.prestige.confirm.keeps"]?["fr"]).contains("ta Flamme"))
     }
 
+    /// La Renaissance est irréversible : l'offre AU REPOS dit ce qui repart, avant même le premier toucher. La note
+    /// « Ce qui reste » qui la suit ne se comprend qu'à côté de ce qui repart.
+    func test_prestigeOffer_atRest_saysWhatTheRebirthResets_inEveryLanguage() throws {
+        let catalog = try Self.catalog()
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.prestige.meo"]?["fr"]).contains("ton niveau repart à 1 et tes étincelles à 0"))
+        for language in ["fr"] + Self.otherLanguages {
+            let value = try XCTUnwrap(catalog["game2.prestige.meo"]?[language], language)
+            XCTAssertTrue(value.contains("1") && value.contains("0"), "game2.prestige.meo [\(language)] : la conséquence irréversible au repos")
+        }
+        let views = try code("Meeshy/Features/Game/Wave2/GamePrestigeViews.swift")
+        XCTAssertTrue(views.contains("GameText.prestigeMeo(glory:"), "l'offre au repos lit la phrase de Meo")
+    }
+
     func test_secondPass_shortenedTexts_holdTheirBudget() throws {
         let catalog = try Self.catalog()
         let limit: [String: Int] = [
             "game.rules.2.body": 180, "game.rules.concept.steps.body": 170, "game.rules.concept.chest.body": 80,
             "game.rules.concept.treasury.body": 115, "game.rules.badges.intro": 90, "game.rules.badges.imprint": 90,
-            "game2.prestige.meo": 110, "game.concept.prestige.use": 140, "game2.settings.celebrations.body": 70,
+            "game2.prestige.meo": 160, "game.concept.prestige.use": 140, "game2.settings.celebrations.body": 70,
             "game.concept.meesh.use": 130,
         ]
         for (key, maximum) in limit {

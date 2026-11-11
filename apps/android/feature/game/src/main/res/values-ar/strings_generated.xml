@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">يُفتح الانبعاث عند المستوى 100. أنت في المستوى ⁦%1$s⁩.</string>
     <string name="game2_prestige_max">عاشت أسطورتك انبعاثاتها الخمسة: قمة القمم.</string>
     <string name="game2_prestige_mee">المستوى 100: يمكن لنورك أن ينبعث، أو أن ينمو أكثر.</string>
-    <string name="game2_prestige_meo">ويهديك أجدادك عصرًا جديدًا، وكأسًا مرقّمة، و%1$s من المجد. ورتبتك لا تتراجع أبدًا.</string>
+    <string name="game2_prestige_meo">بالانبعاث، يعود مستواك إلى 1 وشراراتك إلى 0. ويهديك أجدادك عصرًا جديدًا، وكأسًا مرقّمة، و%1$s من المجد. ورتبتك لا تتراجع أبدًا.</string>
     <string name="game2_prestige_stars">الانبعاثات: ⁦%1$s⁩ من ⁦%2$s⁩</string>
     <string name="game2_prestige_stay">مواصلة السطوع</string>
     <string name="game2_prestige_title">الانبعاث</string>

@@ -285635,43 +285635,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ويهديك أجدادك عصرًا جديدًا، وكأسًا مرقّمة، و%@ من المجد. ورتبتك لا تتراجع أبدًا."
+            "value": "بالانبعاث، يعود مستواك إلى 1 وشراراتك إلى 0. ويهديك أجدادك عصرًا جديدًا، وكأسًا مرقّمة، و%@ من المجد. ورتبتك لا تتراجع أبدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Ahnen schenken dir ein neues Zeitalter, eine nummerierte Trophäe und %@ Ruhm. Dein Rang weicht nie zurück."
+            "value": "Bei der Wiedergeburt beginnt dein Level wieder bei 1 und deine Funken bei 0. Deine Ahnen schenken dir ein neues Zeitalter, eine nummerierte Trophäe und %@ Ruhm. Dein Rang weicht nie zurück."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your ancestors offer you a new Age, a numbered trophy and %@ glory. Your rank never goes back."
+            "value": "When you are reborn, your level starts over at 1 and your sparks at 0. Your ancestors offer you a new Age, a numbered trophy and %@ glory. Your rank never goes back."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus ancestros te ofrecen una nueva Edad, un trofeo numerado y %@ de gloria. Tu rango nunca retrocede."
+            "value": "Al renacer, tu nivel vuelve a 1 y tus chispas a 0. Tus ancestros te ofrecen una nueva Edad, un trofeo numerado y %@ de gloria. Tu rango nunca retrocede."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %@ de gloire. Ton rang ne recule jamais."
+            "value": "En renaissant, ton niveau repart à 1 et tes étincelles à 0. Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %@ de gloire. Ton rang ne recule jamais."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi antenati ti offrono una nuova Era, un trofeo numerato e %@ di gloria. Il tuo rango non arretra mai."
+            "value": "Rinascendo, il tuo livello riparte da 1 e le tue scintille da 0. I tuoi antenati ti offrono una nuova Era, un trofeo numerato e %@ di gloria. Il tuo rango non arretra mai."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus ancestrais oferecem a você uma nova Era, um troféu numerado e %@ de glória. Seu título nunca recua."
+            "value": "Ao renascer, seu nível recomeça em 1 e suas faíscas em 0. Seus ancestrais oferecem a você uma nova Era, um troféu numerado e %@ de glória. Seu título nunca recua."
           }
         }
       }

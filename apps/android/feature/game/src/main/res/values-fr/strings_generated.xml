@@ -206,7 +206,7 @@
     <string name="game2_prestige_locked">La Renaissance s’ouvre au niveau 100. Tu es au niveau %1$s.</string>
     <string name="game2_prestige_max">Ta légende a vécu ses cinq renaissances : le sommet du sommet.</string>
     <string name="game2_prestige_mee">Niveau 100 : ta lumière peut renaître, ou grandir encore.</string>
-    <string name="game2_prestige_meo">Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %1$s de gloire. Ton rang ne recule jamais.</string>
+    <string name="game2_prestige_meo">En renaissant, ton niveau repart à 1 et tes étincelles à 0. Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %1$s de gloire. Ton rang ne recule jamais.</string>
     <string name="game2_prestige_stars">Renaissances : %1$s sur %2$s</string>
     <string name="game2_prestige_stay">Continuer à briller</string>
     <string name="game2_prestige_title">Renaissance</string>
