@@ -152,8 +152,8 @@
     },
     "ios:Meeshy/activation": {
       "labels": 20,
-      "words": 151,
-      "long": 6,
+      "words": 112,
+      "long": 1,
       "explanations": 0
     },
     "ios:Meeshy/affiliate": {
@@ -188,9 +188,9 @@
     },
     "ios:Meeshy/auth": {
       "labels": 100,
-      "words": 524,
-      "long": 6,
-      "explanations": 11
+      "words": 492,
+      "long": 1,
+      "explanations": 10
     },
     "ios:Meeshy/block": {
       "labels": 2,
@@ -452,8 +452,8 @@
     },
     "ios:Meeshy/emailVerification": {
       "labels": 25,
-      "words": 160,
-      "long": 2,
+      "words": 139,
+      "long": 0,
       "explanations": 4
     },
     "ios:Meeshy/emoji": {
@@ -716,8 +716,8 @@
     },
     "ios:Meeshy/onboarding": {
       "labels": 129,
-      "words": 885,
-      "long": 12,
+      "words": 778,
+      "long": 4,
       "explanations": 6
     },
     "ios:Meeshy/outbox": {
@@ -878,8 +878,8 @@
     },
     "ios:Meeshy/sessionClosed": {
       "labels": 15,
-      "words": 134,
-      "long": 5,
+      "words": 87,
+      "long": 0,
       "explanations": 0
     },
     "ios:Meeshy/sessions": {
@@ -908,7 +908,7 @@
     },
     "ios:Meeshy/signInLink": {
       "labels": 10,
-      "words": 142,
+      "words": 115,
       "long": 4,
       "explanations": 0
     },
@@ -1141,10 +1141,10 @@
       "explanations": 2
     },
     "ios:MeeshyUI/auth": {
-      "labels": 105,
-      "words": 529,
-      "long": 10,
-      "explanations": 12
+      "labels": 81,
+      "words": 281,
+      "long": 0,
+      "explanations": 4
     },
     "ios:MeeshyUI/avatar": {
       "labels": 4,

@@ -1935,6 +1935,7 @@
 		6B3BD0C70FDE5C5F3D589CA7 /* P2PWebRTCClientSwitchCameraFailureRevertSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E98C43545402357C503AB1BE /* P2PWebRTCClientSwitchCameraFailureRevertSourceTests.swift */; };
 		6B45C99CEA7562DF30D52DEE /* PermissionGateSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049D766E3A61D55633A52412 /* PermissionGateSourceGuardTests.swift */; };
 		6B461272AE2B56EFA46CC47C /* EmailSignInWordingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F925DB1B1ECEF832E88B86A4 /* EmailSignInWordingTests.swift */; };
+		503B4BA20A1FB0CE63B45FA3 /* EntryScreensEpureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439BE3A15AF5312D58B78AEF /* EntryScreensEpureTests.swift */; };
 		6B4A2C2DB4AEEBEA3312C0E5 /* GamePhotoFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86C44F4D839207D47CC6D39 /* GamePhotoFlowTests.swift */; };
 		6B75D3F35DF240403B947B24 /* ComposerSceneArrangement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D3056D81EB56F742C19C2FB /* ComposerSceneArrangement.swift */; };
 		6B84029858B366DC5B2C7667 /* MessageStorePerAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33C703A06ECB3AD9676950B5 /* MessageStorePerAccountTests.swift */; };
@@ -9044,6 +9045,7 @@
 		F912F556E396482AA1533501 /* UserNotificationsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotificationsUI.framework; path = System/Library/Frameworks/UserNotificationsUI.framework; sourceTree = SDKROOT; };
 		F91C31D6DCB1FBC077DB5C56 /* ShareRecipientRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareRecipientRow.swift; sourceTree = "<group>"; };
 		F925DB1B1ECEF832E88B86A4 /* EmailSignInWordingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailSignInWordingTests.swift; sourceTree = "<group>"; };
+		439BE3A15AF5312D58B78AEF /* EntryScreensEpureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntryScreensEpureTests.swift; sourceTree = "<group>"; };
 		F92779606CE4BDB425AF76FF /* MediaGalleryGestureArbitrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaGalleryGestureArbitrationTests.swift; sourceTree = "<group>"; };
 		F93765D2201BAF60CBDA787C /* MeeshyComposerHost+ScenePicking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+ScenePicking.swift"; sourceTree = "<group>"; };
 		F940A9F285FABD68A9109BD9 /* CallVideoBadgeAccessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallVideoBadgeAccessibility.swift; sourceTree = "<group>"; };
@@ -9619,6 +9621,7 @@
 				1A9155B40380452CBB53B7A6 /* DiscoverTabSMSComposerCoordinatorSourceGuardTests.swift */,
 				5B830F2B39B78158478DCDEB /* EffectOverlayMountingSourceGuardTests.swift */,
 				F925DB1B1ECEF832E88B86A4 /* EmailSignInWordingTests.swift */,
+				439BE3A15AF5312D58B78AEF /* EntryScreensEpureTests.swift */,
 				8C2C08C5E00583427CA363B2 /* EmailSpamFolderHintTests.swift */,
 				DA861CB8001A717DC6A29D7D /* EngagementRevealQueueTests.swift */,
 				E25093456113FD3919E8DAE8 /* EngagementRevealWiringTests.swift */,
@@ -18908,6 +18911,7 @@
 				22FE5C64FE7A1479863D67D3 /* EmailLinkExactFormTests.swift in Sources */,
 				3B97B31EEA2625F025E9AFC8 /* EmailProofErrorTextTests.swift in Sources */,
 				6B461272AE2B56EFA46CC47C /* EmailSignInWordingTests.swift in Sources */,
+				503B4BA20A1FB0CE63B45FA3 /* EntryScreensEpureTests.swift in Sources */,
 				5197A28678F610DB91AFBA13 /* EmailSpamFolderHintTests.swift in Sources */,
 				3799892B947B6CD009CA6645 /* EmailVerificationGateControllerTests.swift in Sources */,
 				C22077091049A67D609F92A7 /* EmailVerificationGateTests.swift in Sources */,
