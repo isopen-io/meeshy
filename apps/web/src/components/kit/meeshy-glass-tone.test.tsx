@@ -261,6 +261,21 @@ describe('la matière de glass.css porte les valeurs de la recette', () => {
     expect(tones.theme.dense.alpha).toBe(densities['glass-prominent']);
   });
 
+  test('le ton theme enveloppe la matière de glass.css au lieu de la recopier', () => {
+    const [theme] = bodiesOf(glassCss, /\.glass-tone\[data-glass-tone='theme'\] \{/);
+    expect(theme).not.toMatch(/--glass-alpha|background|backdrop-filter/);
+    expect(glassCss).not.toMatch(/\[data-glass-tone='theme'\]\[data-glass-density='dense'\]/);
+    const [base] = bodiesOf(glassCss, /\.glass-tone \{/);
+    expect(base).not.toMatch(/(?:^|; )(?:background-color|backdrop-filter|box-shadow):/);
+    const [toned] = bodiesOf(glassCss, /\.glass-tone:not\(\[data-glass-tone='theme'\]\) \{/);
+    expect(toned).toContain('backdrop-filter');
+  });
+
+  test('le ton theme ne fond pas sa teinte : le verre actuel ne s’animait pas', () => {
+    const [theme] = bodiesOf(glassCss, /\.glass-tone\[data-glass-tone='theme'\] \{/);
+    expect(theme).toContain('--glass-tone-fade: 0ms');
+  });
+
   test('réduire les animations coupe l’échelle, le ressort et le fondu', () => {
     const blocks = bodiesOf(glassCss, /@media \(prefers-reduced-motion: reduce\)/).filter((body) => body.includes('.glass-touch'));
     expect(blocks).toHaveLength(1);
@@ -286,6 +301,22 @@ describe('la matière de glass.css porte les valeurs de la recette', () => {
     const [glow] = bodiesOf(glassCss, /\.glass-touch::after \{/);
     expect(glow).toContain('transition: opacity');
     expect(glow).not.toMatch(/transition:[^;]*(?:blur|filter|width|height)/);
+  });
+
+  test('l’appui d’un verre hôte ne descend pas dans la surface posée dedans', () => {
+    expect(glassCss).not.toMatch(/(?:^|[\s,]):active > \.glass-touch/m);
+    expect(glassCss.match(/:active:not\(\.glass-touch\) > \.glass-touch/g)).toHaveLength(3);
+  });
+
+  test('un contrôle désactivé ne répond pas : ni échelle, ni reflet, ni main', () => {
+    const [disabled] = bodiesOf(glassCss, /\.glass-touch:disabled,\s*\.glass-touch\[aria-disabled='true'\] \{/);
+    expect(disabled).toContain('cursor: default');
+    expect(disabled).toContain('transform: none');
+    const [glow] = bodiesOf(glassCss, /\.glass-touch:disabled::after,\s*\.glass-touch\[aria-disabled='true'\]::after \{/);
+    expect(glow).toContain('opacity: 0');
+    const order = ['.glass-touch[data-pressed]::after', '.glass-touch:disabled::after'].map((needle) => glassCss.indexOf(needle));
+    expect(order[0]).toBeGreaterThan(-1);
+    expect(order[1]).toBeGreaterThan(order[0] ?? 0);
   });
 
   test('le focus clavier est visible sur les quatre tons : contour de 2 px décalé de 2 px', () => {
@@ -463,6 +494,17 @@ describe('MeeshyGlass', () => {
     expect(surface(container, 0).getAttribute('data-glass-tint')).toBe('card');
     expect(surface(container, 1).getAttribute('data-glass-tint')).toBe('accent');
     expect(surface(container, 1).getAttribute('data-glass-density')).toBe('dense');
+    expect([...surface(container, 0).classList]).toEqual(['glass-tone', 'glass', 'glass-card']);
+    expect([...surface(container, 1).classList]).toEqual(['glass-tone', 'glass-prominent', 'glass-accent']);
+  });
+
+  test('les tons de la planche ne portent aucune classe du verre des listes', () => {
+    const container = mount(
+      <MeeshyGlass tone="deep" tint="accent" interactive>
+        x
+      </MeeshyGlass>,
+    );
+    expect([...surface(container).classList]).toEqual(['glass-tone', 'glass-touch']);
   });
 });
 

@@ -155,7 +155,24 @@ const restingOf = (input: Required<Pick<MeeshyGlassRecipeInput, 'tone' | 'densit
   return drawn(tone, density, tintWash, isDark);
 };
 
-const classesOf = (isInteractive: boolean): string => (isInteractive ? 'glass-tone glass-touch' : 'glass-tone');
+const THEME_TINT_CLASS: Readonly<Record<MeeshyGlassTint, string>> = { accent: 'glass-accent', card: 'glass-card' };
+
+const themeClassesOf = (density: MeeshyGlassDensity, tint: MeeshyGlassTint | null): readonly string[] => [
+  density === 'dense' ? 'glass-prominent' : 'glass',
+  ...(tint === null ? [] : [THEME_TINT_CLASS[tint]]),
+];
+
+const classesOf = (input: {
+  readonly tone: MeeshyGlassTone;
+  readonly density: MeeshyGlassDensity;
+  readonly tint: MeeshyGlassTint | null;
+  readonly isInteractive: boolean;
+}): string =>
+  [
+    'glass-tone',
+    ...(input.tone === 'theme' ? themeClassesOf(input.density, input.tint) : []),
+    ...(input.isInteractive ? ['glass-touch'] : []),
+  ].join(' ');
 
 const attributesOf = (input: {
   readonly tone: MeeshyGlassTone;
@@ -193,7 +210,7 @@ export const meeshyGlassRecipe = (input: MeeshyGlassRecipeInput): MeeshyGlassRec
     ...resting,
     topLight: lit,
     ...response,
-    className: classesOf(isInteractive),
+    className: classesOf({ tone: input.tone, density, tint, isInteractive }),
     attributes: attributesOf({ tone: input.tone, density, tint, material: resting.material, isNested, isPressed }),
   };
 };

@@ -570,7 +570,6 @@ const KIT_TONE_SELECTORS = {
   onLight: /\.glass-tone\[data-glass-tone='onLight'\]\s*\{/,
   theme: /\.glass-tone\[data-glass-tone='theme'\]\s*\{/,
   deepDense: /\.glass-tone\[data-glass-tone='deep'\]\[data-glass-density='dense'\]\s*\{/,
-  themeDense: /\.glass-tone\[data-glass-tone='theme'\]\[data-glass-density='dense'\]\s*\{/,
 };
 
 const percentOf = (value) => Number(/^(\d+(?:\.\d+)?)%$/.exec(value.trim())?.[1] ?? Number.NaN);
@@ -583,10 +582,12 @@ const fillNameOf = (value) => {
 };
 
 /**
- * LA MATIÈRE DU VERRE DU KIT (K01), lue dans `styles/glass.css` — jamais recopiée.
- * Rend, par ton et par densité, le remplissage, son opacité et le liseré (en
- * pourcentage), puis les mesures communes. `meeshy-glass-tone.test.tsx` les
- * compare aux vecteurs de parité de la fiche.
+ * LA MATIÈRE DU VERRE DU KIT (K01), lue dans `styles/glass-kit.css` — jamais
+ * recopiée. Rend, par ton et par densité, le remplissage, son opacité et le
+ * liseré (en pourcentage), puis les mesures communes. Le ton `theme` n'a pas de
+ * matière dans le kit : il porte `.glass` / `.glass-prominent`, dont l'opacité
+ * se lit dans `styles/glass.css`. `meeshy-glass-tone.test.tsx` les compare aux
+ * vecteurs de parité de la fiche.
  */
 export function loadKitGlassTones() {
   const css = readFileSync(GLASS_KIT_CSS_PATH, 'utf8');
@@ -596,6 +597,11 @@ export function loadKitGlassTones() {
     const denseMerged = { ...merged, ...dense };
     const read = (declarations) => ({ fill: fillNameOf(declarations['--glass-fill']), alpha: percentOf(declarations['--glass-alpha']), rim: percentOf(declarations['--glass-rim']) });
     return { regular: read(merged), dense: read(denseMerged) };
+  };
+  const densities = loadGlassDensities();
+  const themeEntry = (own) => {
+    const rim = percentOf({ ...blocks.base, ...own }['--glass-rim']);
+    return { regular: { fill: 'system', alpha: densities.glass, rim }, dense: { fill: 'system', alpha: densities['glass-prominent'], rim } };
   };
   const base = blocks.base;
   return {
@@ -611,7 +617,7 @@ export function loadKitGlassTones() {
     plain: entry(blocks.plain),
     deep: entry({}, blocks.deepDense),
     onLight: entry(blocks.onLight),
-    theme: entry(blocks.theme, blocks.themeDense),
+    theme: themeEntry(blocks.theme),
   };
 }
 

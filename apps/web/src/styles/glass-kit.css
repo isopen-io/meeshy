@@ -30,13 +30,20 @@
   --glass-glow-press: 1;
   --glass-wash: 22%;
   position: relative;
+  transition: background-color var(--glass-tone-fade) ease;
+}
+
+/* Le ton `theme` n'a pas de matière ICI : il porte les classes `.glass` /
+   `.glass-prominent` (et `.glass-card` / `.glass-accent`) de `glass.css`, que
+   K01 enveloppe au lieu de les recopier. Seuls les trois tons de la planche
+   reçoivent la matière du kit. */
+.glass-tone:not([data-glass-tone='theme']) {
   background-color: color-mix(in srgb, var(--glass-fill) var(--glass-alpha), transparent);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--ios-on-media) var(--glass-rim), transparent),
     inset 0 1px 0 color-mix(in srgb, var(--ios-on-media) var(--glass-top-light), transparent),
     0 var(--glass-shadow-y) 28px color-mix(in srgb, var(--ios-media-backdrop) var(--glass-shadow-alpha), transparent);
-  transition: background-color var(--glass-tone-fade) ease;
 }
 
 :root.light .glass-tone {
@@ -54,14 +61,11 @@
 }
 
 .glass-tone[data-glass-tone='theme'] {
-  --glass-fill: var(--glass-tint-color, var(--color-ios-surface));
-  --glass-alpha: 80%;
+  --glass-fill: var(--glass-tone, var(--color-ios-surface));
   --glass-rim: 0%;
   --glass-top-light: 0%;
   --glass-glow-peak: 10%;
-  --glass-saturate: 100%;
-  --glass-shadow-alpha: 0%;
-  --glass-shadow-y: 0px;
+  --glass-tone-fade: 0ms;
 }
 
 :root.light .glass-tone[data-glass-tone='theme'] {
@@ -70,10 +74,6 @@
 
 .glass-tone[data-glass-tone='deep'][data-glass-density='dense'] {
   --glass-alpha: 66%;
-}
-
-.glass-tone[data-glass-tone='theme'][data-glass-density='dense'] {
-  --glass-alpha: 94%;
 }
 
 .glass-tone[data-glass-tint='accent'] {
@@ -162,15 +162,28 @@
 }
 
 .glass-touch:active,
-:active > .glass-touch,
+:active:not(.glass-touch) > .glass-touch,
 .glass-touch[data-pressed] {
   transform: scale(var(--glass-press-scale));
 }
 
 .glass-touch:active::after,
-:active > .glass-touch::after,
+:active:not(.glass-touch) > .glass-touch::after,
 .glass-touch[data-pressed]::after {
   opacity: var(--glass-glow-press);
+}
+
+/* Un contrôle désactivé ne répond pas : ni échelle, ni reflet, ni main au
+   survol (sur iOS, un bouton désactivé ne passe jamais à l'état pressé). */
+.glass-touch:disabled,
+.glass-touch[aria-disabled='true'] {
+  cursor: default;
+  transform: none;
+}
+
+.glass-touch:disabled::after,
+.glass-touch[aria-disabled='true']::after {
+  opacity: 0;
 }
 
 .glass-touch:focus-visible {
@@ -185,7 +198,7 @@
 
   .glass-touch,
   .glass-touch:active,
-  :active > .glass-touch,
+  :active:not(.glass-touch) > .glass-touch,
   .glass-touch[data-pressed] {
     transform: none;
     transition: none;
