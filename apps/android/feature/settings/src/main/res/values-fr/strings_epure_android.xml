@@ -18,6 +18,8 @@
     <string name="encrypted_devices_empty">Aucun appareil chiffré : il apparaît ici dès que Meeshy y active le chiffrement.</string>
     <string name="encrypted_devices_last_seen">Dernier usage : %1$s</string>
     <string name="encrypted_devices_notice_body">Il n\'apparaît pas encore dans cette liste. Vous pouvez déjà retirer un appareil perdu : il ne reçoit plus vos messages chiffrés.</string>
+    <string name="encrypted_devices_notice_code_note">Pas encore : il ne peut ni montrer son code, ni scanner celui d\'un autre appareil.</string>
+    <string name="encrypted_devices_notice_code_question">Ce téléphone peut-il vérifier le code d\'un appareil ?</string>
     <string name="encrypted_devices_notice_title">Ce téléphone ne lit pas encore vos conversations chiffrées</string>
     <string name="encrypted_devices_orientation">Les appareils qui lisent vos conversations chiffrées de bout en bout. Retirez un appareil perdu.</string>
     <string name="encrypted_devices_retire_changed">Cet appareil a changé : la liste a été relue, vérifiez avant de retirer.</string>

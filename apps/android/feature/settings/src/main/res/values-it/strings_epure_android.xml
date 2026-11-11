@@ -18,6 +18,8 @@
     <string name="encrypted_devices_empty">Nessun dispositivo cifrato: compare qui appena Meeshy vi attiva la crittografia.</string>
     <string name="encrypted_devices_last_seen">Ultimo utilizzo: %1$s</string>
     <string name="encrypted_devices_notice_body">Non compare ancora in questo elenco. Puoi già rimuovere un dispositivo smarrito: non riceverà più i tuoi messaggi cifrati.</string>
+    <string name="encrypted_devices_notice_code_note">Non ancora: non può mostrare il suo codice né scansionare quello di un altro dispositivo.</string>
+    <string name="encrypted_devices_notice_code_question">Questo telefono può verificare il codice di un dispositivo?</string>
     <string name="encrypted_devices_notice_title">Questo telefono non legge ancora le tue conversazioni cifrate</string>
     <string name="encrypted_devices_orientation">I dispositivi che leggono le tue conversazioni cifrate end-to-end. Rimuovi uno smarrito.</string>
     <string name="encrypted_devices_retire_changed">Questo dispositivo è cambiato: l\'elenco è stato ricaricato, verifica prima di rimuovere.</string>

@@ -18,6 +18,8 @@
     <string name="encrypted_devices_empty">لا يوجد جهاز مشفّر: يظهر هنا عندما يفعّل Meeshy التشفير عليه.</string>
     <string name="encrypted_devices_last_seen">آخر استخدام: %1$s</string>
     <string name="encrypted_devices_notice_body">لا يظهر بعد في هذه القائمة. يمكنك إزالة جهاز مفقود: لن يتلقى رسائلك المشفّرة بعد الآن.</string>
+    <string name="encrypted_devices_notice_code_note">ليس بعد: لا يمكنه عرض رمزه ولا مسح رمز جهاز آخر.</string>
+    <string name="encrypted_devices_notice_code_question">هل يمكن لهذا الهاتف التحقق من رمز جهاز؟</string>
     <string name="encrypted_devices_notice_title">هذا الهاتف لا يقرأ محادثاتك المشفّرة بعد</string>
     <string name="encrypted_devices_orientation">الأجهزة التي تقرأ محادثاتك المشفّرة من طرف إلى طرف. أزل الجهاز المفقود.</string>
     <string name="encrypted_devices_retire_changed">تغيّر هذا الجهاز: أُعيد تحميل القائمة، تحقق قبل الإزالة.</string>

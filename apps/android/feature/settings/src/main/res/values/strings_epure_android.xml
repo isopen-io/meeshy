@@ -18,6 +18,8 @@
     <string name="encrypted_devices_empty">No encrypted device: it shows up here once Meeshy turns encryption on there.</string>
     <string name="encrypted_devices_last_seen">Last used: %1$s</string>
     <string name="encrypted_devices_notice_body">It isn\'t in this list yet. You can already remove a lost device: it stops receiving your encrypted messages.</string>
+    <string name="encrypted_devices_notice_code_note">Not yet: it can\'t show its own code or scan another device\'s code.</string>
+    <string name="encrypted_devices_notice_code_question">Can this phone verify a device\'s code?</string>
     <string name="encrypted_devices_notice_title">This phone doesn\'t read your encrypted conversations yet</string>
     <string name="encrypted_devices_orientation">The devices that read your end-to-end encrypted conversations. Remove a lost one.</string>
     <string name="encrypted_devices_retire_changed">This device changed: the list was reloaded, check before removing.</string>

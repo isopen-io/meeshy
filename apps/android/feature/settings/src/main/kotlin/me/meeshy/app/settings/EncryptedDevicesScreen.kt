@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +35,8 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -116,12 +119,22 @@ private fun NotYetEncryptedNotice() {
             Icon(MeeshyIcons.Shield, contentDescription = null, tint = MeeshyPalette.Indigo500, modifier = Modifier.size(22.dp))
             Spacer(Modifier.width(MeeshySpacing.sm))
             Column {
-                Text(
-                    text = stringResource(R.string.encrypted_devices_notice_title),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MeeshyTheme.tokens.textPrimary,
-                    modifier = Modifier.semantics { heading() },
-                )
+                var openNote by rememberOpenNote()
+                MeeshyInfoNoted(
+                    note = MeeshyInfoNote(
+                        question = stringResource(R.string.encrypted_devices_notice_code_question),
+                        text = stringResource(R.string.encrypted_devices_notice_code_note),
+                    ),
+                    openNoteId = openNote,
+                    onOpenNoteIdChange = { openNote = it },
+                ) {
+                    Text(
+                        text = stringResource(R.string.encrypted_devices_notice_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                }
                 Text(
                     text = stringResource(R.string.encrypted_devices_notice_body),
                     style = MaterialTheme.typography.bodySmall,

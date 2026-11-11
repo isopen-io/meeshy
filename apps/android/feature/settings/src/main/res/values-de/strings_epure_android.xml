@@ -18,6 +18,8 @@
     <string name="encrypted_devices_empty">Kein verschlüsseltes Gerät: Es erscheint hier, sobald Meeshy die Verschlüsselung darauf aktiviert.</string>
     <string name="encrypted_devices_last_seen">Zuletzt genutzt: %1$s</string>
     <string name="encrypted_devices_notice_body">Es steht noch nicht in dieser Liste. Ein verlorenes Gerät können Sie schon entfernen: Es erhält Ihre verschlüsselten Nachrichten nicht mehr.</string>
+    <string name="encrypted_devices_notice_code_note">Noch nicht: Es kann weder seinen Code zeigen noch den eines anderen Geräts scannen.</string>
+    <string name="encrypted_devices_notice_code_question">Kann dieses Telefon den Code eines Geräts prüfen?</string>
     <string name="encrypted_devices_notice_title">Dieses Telefon liest Ihre verschlüsselten Unterhaltungen noch nicht</string>
     <string name="encrypted_devices_orientation">Die Geräte, die Ihre Ende-zu-Ende-verschlüsselten Unterhaltungen lesen. Entfernen Sie ein verlorenes.</string>
     <string name="encrypted_devices_retire_changed">Dieses Gerät hat sich geändert: Die Liste wurde neu geladen, prüfen Sie vor dem Entfernen.</string>
