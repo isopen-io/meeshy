@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { callActions } from '@/lib/calls/call-actions';
+import { pipOpenStore, registerPipCloser, registerPipOpener } from '@/lib/calls/call-pip';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { NO_EFFECTS, setVideoEffects, videoEffectsStore } from '@/lib/calls/video-effects';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
@@ -176,20 +177,55 @@ describe('un appel vocal propose d’ajouter la vidéo (#9095, `video.badge.plus
   });
 });
 
-describe('l’image dans l’image vit dans la liste « l’appel » (#9095, `CallView+Pill.swift`)', () => {
-  test('offerte, elle ferme le rail « l’appel » et quitte l’en-tête', async () => {
+describe('l’image dans l’image vit dans l’en-tête, entre Réduire et Conversation (#17329)', () => {
+  test('offerte, elle s’ouvre dans le geste depuis l’en-tête et quitte la liste « l’appel »', async () => {
     const pipWindow = window as unknown as { documentPictureInPicture?: unknown };
     withDevices([]);
     pipWindow.documentPictureInPicture = {};
+    const opened: string[] = [];
+    const unregister = registerPipOpener(async () => {
+      opened.push('ouverte');
+      return true;
+    });
     try {
       const view = await mount({ media: 'video', members: { 'u-peer': member({ cameraOn: true }) }, remoteStreams: { 'u-peer': videoOf('remote') } });
-      expect(view.find('[data-call-header] [data-call-pip]')).toBeNull();
-      const row = [...document.querySelectorAll('[data-call-rail="call"] button')].map((button) => button.getAttribute('data-call-control'));
-      expect(row.at(-1)).toBe('pip');
-      expect(view.find('[data-call-rail="call"] [data-call-control="pip"]')?.getAttribute('aria-label')).toBe('Image dans l’image');
+      const header = [...document.querySelectorAll('[data-call-header] button')].map((button) => button.getAttribute('aria-label'));
+      expect(header).toEqual(['Réduire', 'Image dans l’image', 'Conversation']);
+      expect(view.find('[data-call-rail="call"] [data-call-control="pip"]')).toBeNull();
+      act(() => (view.find('[data-call-header] [data-call-pip]') as HTMLElement | null)?.click());
+      expect(opened).toEqual(['ouverte']);
       view.done();
     } finally {
+      unregister();
       delete pipWindow.documentPictureInPicture;
     }
+  });
+
+  test('flottante, le même bouton propose d’en SORTIR', async () => {
+    const pipWindow = window as unknown as { documentPictureInPicture?: unknown };
+    withDevices([]);
+    pipWindow.documentPictureInPicture = {};
+    const closed: string[] = [];
+    const unregister = registerPipCloser(() => void closed.push('fermée'));
+    act(() => pipOpenStore.setState({ open: true }));
+    try {
+      const view = await mount({ media: 'video', members: { 'u-peer': member({ cameraOn: true }) }, remoteStreams: { 'u-peer': videoOf('remote') } });
+      const exit = view.find('[data-call-header] [data-call-pip]') as HTMLElement | null;
+      expect(exit?.getAttribute('aria-label')).toBe('Quitter l’image dans l’image');
+      act(() => exit?.click());
+      expect(closed).toEqual(['fermée']);
+      view.done();
+    } finally {
+      unregister();
+      act(() => pipOpenStore.setState({ open: false }));
+      delete pipWindow.documentPictureInPicture;
+    }
+  });
+
+  test('sans image dans l’image possible, l’en-tête ne porte que Réduire et Conversation', async () => {
+    withDevices([]);
+    const view = await mount({ media: 'video', members: { 'u-peer': member({ cameraOn: true }) }, remoteStreams: { 'u-peer': videoOf('remote') } });
+    expect(view.find('[data-call-header] [data-call-pip]')).toBeNull();
+    view.done();
   });
 });

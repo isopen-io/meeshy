@@ -1,6 +1,8 @@
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 import { lazy, Suspense, useState } from 'react';
 
+import { Glyph } from '@/components/glyph';
+import type { CallHeaderCapsule } from '@/lib/calls/call-header';
 import type { CallMember, CallQuality } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -29,7 +31,7 @@ const LEVEL_KEY = {
 
 function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
   return (
-    <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true">
+    <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true" data-call-signal="">
       {[0, 1, 2, 3].map((index) => {
         const lit = index < LIT[level];
         const height = 5 + index * 4;
@@ -40,7 +42,7 @@ function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
 }
 
 type CallQualityChipProps = {
-  readonly title: string;
+  readonly capsule: CallHeaderCapsule;
   readonly clock: string | null;
   readonly quality: CallQuality | null;
   readonly language: InterfaceLanguage;
@@ -49,29 +51,45 @@ type CallQualityChipProps = {
 };
 
 /**
- * LA PUCE « NOM · DURÉE » DE L'EN-TÊTE (#8391) — à droite de l'en-tête d'appel,
- * un verre qui porte le nom, la durée et les barres de qualité ; la toucher
- * ouvre le détail. Son nom accessible DIT ce qu'elle montre puis le niveau :
- * la légende visible est contenue dans le nom (WCAG 2.5.3). Sans relevé, la
- * puce n'est qu'une étiquette : aucun bouton ne promet un détail absent.
+ * LA CAPSULE DE DROITE DE L'EN-TÊTE (#8391, #17341) — un verre qui porte ce que
+ * `callHeaderCapsule` décide : en vidéo « nom donné · durée », en groupe « nom ·
+ * nombre · durée », en audio le seul indicateur réseau ; les barres n'y paraissent
+ * que si le lien est dégradé. La toucher ouvre le détail. Son nom accessible DIT
+ * ce qu'elle montre (nom, nombre de participants, durée) puis le niveau : la
+ * légende visible est contenue dans le nom (WCAG 2.5.3). Sans relevé, la capsule
+ * n'est qu'une étiquette : aucun bouton ne promet un détail absent.
  */
-export function CallQualityChip({ title, clock, quality, language, prominent }: CallQualityChipProps) {
+export function CallQualityChip({ capsule, clock, quality, language, prominent }: CallQualityChipProps) {
   const [open, setOpen] = useState(false);
-  const shown = clock === null ? title : `${title} · ${clock}`;
+  const count = capsule.participantCount === null ? null : translate(language, 'call.members', { count: String(capsule.participantCount) });
+  const spoken = [capsule.title, count, capsule.duration ? clock : null].filter((part): part is string => part !== null && part !== '').join(' · ');
   const glass = `${prominent ? 'glass-call-prominent' : 'glass-call'} flex min-h-11 min-w-0 max-w-[60vw] items-center gap-2 rounded-full px-3 text-body font-semibold tabular-nums`;
+  const content = (
+    <>
+      {capsule.title === null ? null : <span className="truncate">{capsule.title}</span>}
+      {capsule.participantCount === null ? null : (
+        <span className="inline-flex shrink-0 items-center gap-1" aria-hidden="true" data-call-chip-count="">
+          <Glyph name="users" size={16} />
+          {capsule.participantCount}
+        </span>
+      )}
+      {capsule.duration && clock !== null ? <span className="shrink-0">{clock}</span> : null}
+      {capsule.network && quality !== null ? <SignalBars level={quality.level} /> : null}
+    </>
+  );
   if (quality === null) {
     return (
       <span className={glass} data-call-chip="">
-        <span className="truncate">{shown}</span>
+        {content}
       </span>
     );
   }
-  const label = `${shown} — ${translate(language, 'call.quality.indicator', { level: translate(language, LEVEL_KEY[quality.level]) })}`;
+  const level = translate(language, 'call.quality.indicator', { level: translate(language, LEVEL_KEY[quality.level]) });
+  const label = spoken === '' ? level : `${spoken} — ${level}`;
   return (
     <div className="relative min-w-0">
       <button type="button" aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} className={glass} data-call-chip="" data-call-quality={quality.level}>
-        <span className="truncate">{shown}</span>
-        <SignalBars level={quality.level} />
+        {content}
       </button>
       {open ? (
         <Suspense fallback={null}>

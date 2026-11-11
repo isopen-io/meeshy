@@ -71,7 +71,6 @@ const en = {
   'callControls.cameraPicker': 'Camera',
   'callControls.cameraPicker.label': 'Choose camera',
   'callControls.cameraPicker.unnamed': 'Camera {n}',
-  'callControls.pip': 'PiP',
   'callControls.camera.options': 'My camera options',
   'callControls.selfTile.small': 'My thumbnail: small',
   'callControls.selfTile.medium': 'My thumbnail: medium',

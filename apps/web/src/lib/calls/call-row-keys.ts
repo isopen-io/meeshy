@@ -6,9 +6,10 @@
  * (`role="radiogroup"`), aller sur un choix le coche, comme un groupe de
  * radios natif.
  *
- * Le module vit avec l'écran d'appel ; les panneaux chargés à part reçoivent
- * `onRowKeyDown` en propriété, comme leur glyphe de Fermer : ils n'importent
- * rien de `call_overlay`.
+ * Le module vit avec les rangées, pas avec l'écran d'appel (#17499) : seuls les
+ * chunks chargés à part (rangées, rails, panneaux, modes) le lisent, et ils
+ * l'importent eux-mêmes — l'écran d'appel n'en paie rien, et aucun d'eux
+ * n'importe quoi que ce soit de `call_overlay`.
  */
 
 type Step = { readonly key: string; readonly index: number; readonly count: number; readonly rtl: boolean; readonly vertical?: boolean };

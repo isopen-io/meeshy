@@ -71,7 +71,6 @@ const de = {
   'callControls.cameraPicker': 'Kamera',
   'callControls.cameraPicker.label': 'Kamera wählen',
   'callControls.cameraPicker.unnamed': 'Kamera {n}',
-  'callControls.pip': 'BiB',
   'callControls.camera.options': 'Meine Kameraoptionen',
   'callControls.selfTile.small': 'Mein Vorschaubild: klein',
   'callControls.selfTile.medium': 'Mein Vorschaubild: mittel',

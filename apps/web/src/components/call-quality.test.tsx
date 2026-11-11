@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import type { CallHeaderCapsule } from '@/lib/calls/call-header';
 import type { ActiveCall, CallMember, CallQuality } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
@@ -59,28 +60,52 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 
 const barsLit = (html: string): number => (html.match(/data-bar="on"/g) ?? []).length;
 
-describe('l’indicateur de qualité (#8047), dans la puce « Nom · durée » (#8391)', () => {
-  const chip = (overrides: Partial<CallQuality> | null = {}) => renderToStaticMarkup(<CallQualityChip title="Nadia Benali" clock="1:23" quality={overrides === null ? null : quality(overrides)} language="fr" prominent={false} />);
+describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#8391, #17341)', () => {
+  const video: CallHeaderCapsule = { title: 'Awa', participantCount: null, duration: true, network: true };
+  const chip = (overrides: Partial<CallQuality> | null = {}, capsule: CallHeaderCapsule = video) =>
+    renderToStaticMarkup(<CallQualityChip capsule={capsule} clock="1:23" quality={overrides === null ? null : quality(overrides)} language="fr" prominent={false} />);
 
-  test('quatre barres, allumées selon le niveau, et un nom qui DIT la puce ET le niveau', () => {
+  test('quatre barres, allumées selon le niveau, et un nom qui DIT la capsule ET le niveau', () => {
     const levels = (['excellent', 'good', 'fair', 'poor'] as const).map((level) => chip({ level }));
     expect(levels.map(barsLit)).toEqual([4, 3, 2, 1]);
-    expect(levels[3]).toContain('aria-label="Nadia Benali · 1:23 — Qualité de l’appel : faible"');
+    expect(levels[3]).toContain('aria-label="Awa · 1:23 — Qualité de l’appel : faible"');
     expect(levels[3]).toContain('data-call-quality="poor"');
     expect(levels[0]).toContain('aria-expanded="false"');
     expect(levels[0]).toContain('aria-haspopup="dialog"');
     expect(levels[0]).toContain('min-h-11');
   });
 
-  test('une puce de verre qui montre le nom et la durée', () => {
-    const html = chip();
-    expect(html).toContain('glass-call');
-    expect(html).toContain('Nadia Benali · 1:23');
+  test('tant que le lien n’est pas dégradé, la capsule ne dessine aucune barre — mais le niveau reste dit et le détail ouvrable', () => {
+    const html = chip({ level: 'good' }, { ...video, network: false });
+    expect(barsLit(html)).toBe(0);
+    expect(html).not.toContain('data-bar=');
+    expect(html).toContain('aria-label="Awa · 1:23 — Qualité de l’appel : bonne"');
+    expect(html).toContain('<button');
   });
 
-  test('sans relevé de qualité, la puce ne promet aucun détail : pas de bouton', () => {
+  test('une capsule de verre qui montre le nom donné et la durée', () => {
+    const html = chip({ level: 'good' }, { ...video, network: false });
+    expect(html).toContain('glass-call');
+    expect(html).toContain('Awa');
+    expect(html).toContain('1:23');
+  });
+
+  test('en groupe : le nom, le nombre de participants (dit en toutes lettres au lecteur d’écran) et la durée', () => {
+    const html = chip({ level: 'good' }, { title: 'Famille', participantCount: 4, duration: true, network: false });
+    expect(html).toContain('data-call-chip-count');
+    expect(html).toContain('aria-label="Famille · 4 participants · 1:23 — Qualité de l’appel : bonne"');
+  });
+
+  test('en audio : la capsule n’existe que pour le réseau dégradé — ni nom, ni durée, les barres seules', () => {
+    const html = chip({ level: 'poor' }, { title: null, participantCount: null, duration: false, network: true });
+    expect(barsLit(html)).toBe(1);
+    expect(html).not.toContain('1:23');
+    expect(html).toContain('aria-label="Qualité de l’appel : faible"');
+  });
+
+  test('sans relevé de qualité, la capsule ne promet aucun détail : pas de bouton', () => {
     const html = chip(null);
-    expect(html).toContain('Nadia Benali · 1:23');
+    expect(html).toContain('Awa');
     expect(html).not.toContain('<button');
     expect(html).not.toContain('data-call-quality=');
   });
