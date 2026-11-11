@@ -123,6 +123,16 @@ describe('sans code dans l’adresse, le champ ne s’impose à personne', () =>
     });
     expect(el.querySelector('#signup-referral')).not.toBeNull();
   });
+
+  test('ouvert, le champ ne redit pas qu’il est facultatif : le geste d’ouverture l’a dit (épure #17666)', () => {
+    const el = mountAt('/signup');
+    openIdentity(el);
+    act(() => {
+      (el.querySelector('[data-signup-referral-toggle]') as HTMLButtonElement).click();
+    });
+    expect(text(el)).not.toContain('laisser ce champ vide');
+    expect(el.querySelector('[data-signup-referral-status="idle"]')?.textContent ?? '').toBe('');
+  });
 });
 
 /**

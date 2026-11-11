@@ -61,6 +61,16 @@ function mountAt(url: string): HTMLDivElement {
 
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s+/gu, ' ');
 
+describe('/login — les champs ne redisent pas leur libellé (épure #17666)', () => {
+  test('identifiant et mot de passe : le libellé visible nomme le champ, aucun placeholder ne le répète', () => {
+    const el = mountAt('/login?methode=password');
+    expect(text(el)).toContain('E-mail, téléphone ou pseudo');
+    expect(text(el)).toContain('Mot de passe');
+    expect(el.querySelector('#login-username')?.getAttribute('placeholder') ?? '').toBe('');
+    expect(el.querySelector('#login-password')?.getAttribute('placeholder') ?? '').toBe('');
+  });
+});
+
 describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', () => {
   test('sans paramètre : le champ e-mail et « Recevoir le lien », jamais un champ mot de passe', () => {
     const el = mountAt('/login');

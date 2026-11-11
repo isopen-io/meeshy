@@ -119,6 +119,12 @@ describe('ResetPasswordFlow — « Nouveau mot de passe », dans la colonne de l
     expect(strayFromAuthColumn(el)).toEqual([]);
   });
 
+  test('l’ordre n’est pas donné trois fois : titre et libellé restent, « Choisissez un nouveau mot de passe. » disparaît (épure #17666)', async () => {
+    const el = await mount('abc123', valid());
+    expect(el.textContent).not.toContain('Choisissez un nouveau mot de passe.');
+    expect(el.textContent).toContain('Nouveau mot de passe');
+  });
+
   test('enregistré : « Mot de passe enregistré », sans « réinitialisé »', async () => {
     const el = await mount('abc123', valid());
     fill(el, 'reset-password', 'Sup3r!Secret1');

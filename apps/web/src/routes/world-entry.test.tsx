@@ -205,6 +205,13 @@ describe('WorldGuestEntry — une vue, un clic (#10098)', () => {
     expect(precedes(nameField(host), note ?? null)).toBe(true);
   });
 
+  test('la demande du nom n’est posée qu’UNE fois : le libellé « Votre nom », plus « Comment doit-on vous appeler ? » (épure #17666)', async () => {
+    const { deps: d } = deps();
+    const host = await mount({ deps: d });
+    expect(host.textContent).not.toContain('Comment doit-on vous appeler');
+    expect(host.textContent).toContain('Votre nom');
+  });
+
   test('le nom, la liste déroulante de la langue, puis « Entrer » — sur la même vue, sans étape', async () => {
     const { deps: d } = deps();
     const host = await mount({ deps: d });
