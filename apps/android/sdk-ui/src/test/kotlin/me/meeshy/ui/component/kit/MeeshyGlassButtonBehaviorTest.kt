@@ -116,6 +116,30 @@ class MeeshyGlassButtonBehaviorTest {
     }
 
     @Test
+    fun `un bouton deplie ne dit ni bascule ni selection, son nom est celui que l'hote lui donne`() {
+        show {
+            Column {
+                MeeshyGlassButton(
+                    icon = MeeshyIcons.MoreHorizontal, label = "Ranger les actions",
+                    activation = MeeshyGlassButtonActivation.Expanded(true), onClick = {},
+                )
+                MeeshyGlassButton(
+                    icon = MeeshyIcons.MoreHorizontal, label = "Afficher les actions",
+                    activation = MeeshyGlassButtonActivation.Expanded(false), onClick = {},
+                )
+            }
+        }
+
+        listOf("Ranger les actions", "Afficher les actions").forEach { name ->
+            compose.onNodeWithContentDescription(name)
+                .assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button))
+                .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.ToggleableState))
+                .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.Selected))
+                .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.StateDescription))
+        }
+    }
+
+    @Test
     fun `sans activation ni valeur, aucun etat n'est ajoute au nom`() {
         show { MeeshyGlassButton(icon = MeeshyIcons.Close, label = "Fermer", onClick = {}) }
 

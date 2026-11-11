@@ -296,6 +296,39 @@ class MeeshyGlassButtonTest {
 
     // endregion
 
+    // region Le focus clavier
+
+    @Test
+    fun `l'anneau du focus clavier prend la couleur que son ton laisse lisible, et l'encre de la planche dans un verre`() {
+        val expected = mapOf(
+            MeeshyGlassTone.Plain to MeeshyGlassButtonFocusRing.OnMedia,
+            MeeshyGlassTone.Deep to MeeshyGlassButtonFocusRing.MediaBackdrop,
+            MeeshyGlassTone.OnLight to MeeshyGlassButtonFocusRing.MediaBackdrop,
+            MeeshyGlassTone.Theme to MeeshyGlassButtonFocusRing.ThemeInk,
+        )
+
+        MeeshyGlassButtonKind.entries.forEach { kind ->
+            expected.forEach { (tone, ring) ->
+                assertWithMessage("$kind sur $tone").that(recipe(kind, tone = tone).focusRing).isEqualTo(ring)
+                assertWithMessage("$kind emboite sur $tone").that(recipe(kind, tone = tone, nested = true).focusRing)
+                    .isEqualTo(MeeshyGlassButtonFocusRing.OnMedia)
+            }
+        }
+        assertThat(MeeshyGlassButtonRecipe.FOCUS_RING_WIDTH_DP).isEqualTo(2f)
+        assertThat(MeeshyGlassButtonRecipe.FOCUS_RING_OFFSET_DP).isEqualTo(2f)
+    }
+
+    @Test
+    fun `l'anneau du focus a les encres des jetons - blanc des medias, sombre du verre, encre du theme`() {
+        val focus = recipe(MeeshyGlassButtonKind.Normal)
+
+        assertThat(focus.copy(focusRing = MeeshyGlassButtonFocusRing.OnMedia).focusRingColor(THEME_INK)).isEqualTo(MeeshyMediaChromeColors.OnMedia)
+        assertThat(focus.copy(focusRing = MeeshyGlassButtonFocusRing.MediaBackdrop).focusRingColor(THEME_INK)).isEqualTo(MeeshyMediaChromeColors.MediaBackdrop)
+        assertThat(focus.copy(focusRing = MeeshyGlassButtonFocusRing.ThemeInk).focusRingColor(THEME_INK)).isEqualTo(THEME_INK)
+    }
+
+    // endregion
+
     // region Les gardes de source
 
     @Test
