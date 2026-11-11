@@ -121,8 +121,8 @@ extension CallView {
         guard showTranscript, UIAccessibility.isVoiceOverRunning,
               let id = latestFinalRemoteSegmentId,
               let segment = transcriptionService.displayedSegments.last(where: { $0.id == id }),
-              let announcement = captionLine(for: segment).queuedAnnouncement else { return }
-        UIAccessibility.post(notification: .announcement, argument: announcement)
+              let queued = captionLine(for: segment).queuedAnnouncement else { return }
+        UIAccessibility.post(notification: .announcement, argument: queued)
     }
 
     // MARK: - Captions mode

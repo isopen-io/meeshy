@@ -159,14 +159,12 @@ struct CallCaptionRow: View {
         .accessibilityHidden(!line.isFinal)
     }
 
-    @ViewBuilder
+    /// Une seule vue, que la traduction attendue soit là ou non : l'horloge des trois
+    /// points se met en pause au lieu de céder la place, et le texte se fond en place.
     private var inlinePhrase: some View {
-        if isWaiting && !reduceMotion {
-            TimelineView(.periodic(from: .now, by: 0.45)) { context in
-                sentence(phase: Int(context.date.timeIntervalSinceReferenceDate / 0.45) % 3)
-            }
-        } else {
-            sentence(phase: nil)
+        let pulses = isWaiting && !reduceMotion
+        return TimelineView(.animation(minimumInterval: 0.45, paused: !pulses)) { context in
+            sentence(phase: pulses ? Int(context.date.timeIntervalSinceReferenceDate / 0.45) % 3 : nil)
         }
     }
 
@@ -254,6 +252,7 @@ struct CallCaptionsBand: View {
     let onOpenJournal: (() -> Void)?
 
     @State private var now = Date()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var settledLines: [CallCaptionLine] {
         lines.map { $0.settled(at: now) }
@@ -324,13 +323,20 @@ struct CallCaptionsBand: View {
                         .foregroundColor(MeeshyColors.mediaChromeSecondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
+                        .contentTransition(.opacity)
+                        .transition(.opacity)
                 }
                 Spacer(minLength: 0)
                 if let onOpenJournal {
                     journalButton(onOpenJournal)
                 }
             }
+            .animation(fade, value: note)
         }
+    }
+
+    private var fade: Animation {
+        .easeInOut(duration: reduceMotion ? 0.12 : 0.22)
     }
 
     private func journalButton(_ action: @escaping () -> Void) -> some View {

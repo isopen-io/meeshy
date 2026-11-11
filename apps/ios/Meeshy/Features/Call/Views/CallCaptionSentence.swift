@@ -13,9 +13,7 @@ enum CallCaptionSentence {
         showsWaiting: Bool,
         waitingPhase: Int?
     ) -> Text {
-        var sentence = AttributedString(line.speakerName.isEmpty ? "" : "\(line.speakerName) · ")
-        sentence.foregroundColor = nameColor
-        sentence.font = Font.callout.weight(.semibold)
+        var sentence = CallCaptureSentence.lead(name: line.speakerName, nameColor: nameColor)
         var body = AttributedString(line.text)
         body.foregroundColor = textColor
         body.font = Font.callout.weight(line.isFinal ? .regular : .light)

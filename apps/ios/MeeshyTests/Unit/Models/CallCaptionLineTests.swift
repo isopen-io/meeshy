@@ -57,7 +57,7 @@ final class CallCaptionLineTests: XCTestCase {
 
     func test_textColor_onlyATranslatedLineTakesTheSpeakerColor() {
         XCTAssertEqual(line(segment()).textColorHex, CallSpeakerColor.hex(for: "peer"))
-        XCTAssertNil(line(segment(), isRevealed: true).textColorHex)
+        XCTAssertNil(line(segment(), prefersOriginal: true).textColorHex)
         XCTAssertNil(line(segment(translatedText: nil, translatedLanguage: nil)).textColorHex)
         XCTAssertNil(line(segment(speakerId: "me", text: "Salut", language: "fr"), isLocal: true).textColorHex)
     }

@@ -38,13 +38,19 @@ enum CallCaptureJournalCopy {
 /// est entière (borne de l'enregistrement de l'appel).
 enum CallCaptureSentence {
     static func text(name: String, nameColor: Color, tail: String, tailColor: Color) -> Text {
-        var lead = AttributedString(name.isEmpty ? "" : "\(name) · ")
-        lead.foregroundColor = nameColor
-        lead.font = Font.callout.weight(.semibold)
         var rest = AttributedString(tail)
         rest.foregroundColor = tailColor
         rest.font = Font.callout
-        return Text(lead + rest)
+        return Text(lead(name: name, nameColor: nameColor) + rest)
+    }
+
+    /// « Karim · », le début commun d'une phrase d'événement et d'une phrase de
+    /// sous-titres (`CallCaptionSentence`) : une seule façon de signer une ligne.
+    static func lead(name: String, nameColor: Color) -> AttributedString {
+        var lead = AttributedString(name.isEmpty ? "" : "\(name) · ")
+        lead.foregroundColor = nameColor
+        lead.font = Font.callout.weight(.semibold)
+        return lead
     }
 }
 
