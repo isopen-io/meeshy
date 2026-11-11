@@ -83,4 +83,39 @@ final class SettingsEpureTests: XCTestCase {
         XCTAssertEqual(row.status, EncryptedDevicePresentation.status(of: .thisDevice))
         XCTAssertTrue(row.accessibilityLabel.contains(row.status))
     }
+
+    // MARK: - Les repères propres à Meeshy sont lisibles au repos (règle 7)
+
+    func test_orientation_everySentence_isResolved_neverARawKey() {
+        for sentence in SettingsOrientation.all {
+            XCTAssertFalse(sentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            XCTAssertFalse(sentence.hasPrefix("settings."), "clé non résolue : \(sentence)")
+        }
+    }
+
+    func test_orientation_sentences_areDistinct_soNoneRepeatsAnother() {
+        XCTAssertEqual(Set(SettingsOrientation.all).count, SettingsOrientation.all.count)
+    }
+
+    func test_orientation_riviere_saysWhyItIsGreyedOut_notOnlyToVoiceOver() {
+        XCTAssertNotEqual(SettingsOrientation.riviereMode, SettingsOrientation.riviereUnavailable)
+    }
+
+    func test_orientation_encryption_isNoLongerComingSoon() {
+        XCTAssertFalse(SettingsOrientation.encryption.localizedCaseInsensitiveContains("bientôt"))
+        XCTAssertFalse(SettingsOrientation.encryption.localizedCaseInsensitiveContains("coming soon"))
+    }
+
+    // MARK: - Les (i) ajoutés par l'épure 2/3
+
+    func test_notes_transcriptionAndEncryption_areAnsweredByAnInfoNote() {
+        let questions = SettingsInfoNotes.all.map(\.question)
+        XCTAssertTrue(questions.contains(SettingsInfoNotes.transcriptionAuto.question))
+        XCTAssertTrue(questions.contains(SettingsInfoNotes.encryption.question))
+    }
+
+    func test_notes_returnAnnouncement_doesNotRepeatTheVisibleSentence() {
+        let note = SettingsInfoNotes.returnAnnouncement.text
+        XCTAssertFalse(note.contains("3"), "la fréquence est déjà dite au repos : \(note)")
+    }
 }
