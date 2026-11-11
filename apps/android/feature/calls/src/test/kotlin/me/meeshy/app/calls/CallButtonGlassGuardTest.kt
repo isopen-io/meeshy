@@ -13,13 +13,14 @@ class CallButtonGlassGuardTest {
 
     private val commentLine = Regex("""^\s*(//|\*|/\*)""")
 
-    /** Non merci (cadre proposé), Refuser (enregistrement), puce d'ambiance, son et bascules de l'aperçu, Message (appel entrant). */
+    /** Non merci (cadre proposé), Refuser (enregistrement), puce d'ambiance, son et bascules de l'aperçu, Message (appel entrant), puces Audio | Vidéo (G3.2). */
     private val neighbourButtons = mapOf(
         "CallLiveFrameUi.kt" to 1,
         "CallRecordingConsentCard.kt" to 1,
         "CallFrameMoodChips.kt" to 1,
         "CallPreviewViews.kt" to 2,
         "IncomingCallScreen.kt" to 1,
+        "CallRecordingControls.kt" to 1,
     )
 
     private fun calls(): File = generateSequence(File("").absoluteFile) { it.parentFile }
@@ -110,6 +111,15 @@ class CallButtonGlassGuardTest {
 
             assertThat(found).isEqualTo(neighbourButtons.getValue(name))
         }
+    }
+
+    @Test
+    fun `Retour et Fermer d'une option de la pilule portent le verre du bouton d'appel, pas un IconButton nu (G3_6)`() {
+        val panel = code("CallPillPanel.kt")
+        val header = block(panel, "private fun PanelHeaderButton(", "}")
+
+        assertThat(header).contains("CallPillButton(")
+        assertThat(panel).doesNotContain("IconButton(")
     }
 
     @Test
