@@ -2,12 +2,10 @@ import { lazy, Suspense, useLayoutEffect, useRef, type ReactNode, type RefObject
 
 import type { CallRowsKit } from '@/components/call-control-actions';
 import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
-import { isCompactHeight } from '@/lib/calls/call-group-stage';
 import type { CallPillText } from '@/lib/calls/call-pill-text';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { PILL_TEXT_EXIT } from '@/lib/calls/call-pill-text-exit';
 import { STOW_REDUCED_MS } from '@/lib/calls/call-pill-motion';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
@@ -71,6 +69,8 @@ type DeckProps = {
   readonly box: RefObject<HTMLElement | null>;
   /** Le verre rangé autour des sous-titres : le deck en part, inerte et muet. */
   readonly away: Readonly<Record<string, unknown>>;
+  /** P12.7 : hauteur compacte — les rangées se replient en UNE ligne sans légendes (`call-motion.css`). */
+  readonly compact: boolean;
 };
 
 /**
@@ -78,10 +78,8 @@ type DeckProps = {
  * d'un groupe OU le panneau ouvert, puis le séparateur. Chargé avec les rangées : l'écran
  * d'appel ne paie que son `import()` (`budgets.json` › `call_deck_motion`).
  */
-export function Deck({ call, language, rows, panels, kit, panel, text, box, away }: DeckProps) {
+export function Deck({ call, language, rows, panels, kit, panel, text, box, away, compact }: DeckProps) {
   const kind = panel === null ? 'rows' : 'panel';
-  /* P12.7 : en hauteur compacte, les rangées se replient en UNE ligne sans légendes (`call-motion.css`) et la grille garde ses 140. */
-  const compact = isCompactHeight(useCallViewport().height);
   return (
     <>
       <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="" {...(compact ? { 'data-call-compact': '' } : {})} {...away}>

@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { useStageFlip } from './use-stage-flip';
+import { loadStageFlip, useStageFlip } from './use-stage-flip';
 
 /**
  * **CHAQUE VIGNETTE PASSE DE SA CASE À LA SUIVANTE** (P14.10) — le crochet mesure l’ancienne scène au rendu qui
@@ -24,7 +24,8 @@ const runs: { readonly target: Element; readonly frames: readonly Keyframe[]; re
 let cancelled = 0;
 const saved: { animate?: PropertyDescriptor | undefined; rect?: PropertyDescriptor | undefined; media?: PropertyDescriptor | undefined } = {};
 
-beforeAll(() => {
+beforeAll(async () => {
+  await loadStageFlip();
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -38,7 +39,7 @@ beforeEach(() => {
   cancelled = 0;
   scene = 'grid';
   saved.animate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
-  saved.rect = Object.getOwnPropertyDescriptor(Element.prototype, 'getBoundingClientRect');
+  saved.rect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
   saved.media = Object.getOwnPropertyDescriptor(window, 'matchMedia');
   Object.defineProperty(HTMLElement.prototype, 'animate', {
     configurable: true,
@@ -47,7 +48,7 @@ beforeEach(() => {
       return { cancel: () => (cancelled += 1) };
     },
   });
-  Object.defineProperty(Element.prototype, 'getBoundingClientRect', {
+  Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
     configurable: true,
     value(this: Element) {
       const box = layouts[scene]?.[this.getAttribute('data-call-slot') ?? ''] ?? { left: 0, top: 0, width: 0, height: 0 };
@@ -59,7 +60,7 @@ beforeEach(() => {
 afterEach(() => {
   const restore = (target: object, key: string, descriptor: PropertyDescriptor | undefined) => (descriptor === undefined ? Reflect.deleteProperty(target, key) : Object.defineProperty(target, key, descriptor));
   restore(HTMLElement.prototype, 'animate', saved.animate);
-  restore(Element.prototype, 'getBoundingClientRect', saved.rect);
+  restore(HTMLElement.prototype, 'getBoundingClientRect', saved.rect);
   restore(window, 'matchMedia', saved.media);
 });
 

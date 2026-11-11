@@ -6,11 +6,13 @@ import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import { PILL_TEXT_WIDTH_CLASS, type CallPillText } from '@/lib/calls/call-pill-text';
+import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { usePillGlass } from '@/lib/calls/use-pill-motion';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
 import type { ActiveCall } from '@/lib/calls/call-store';
+import { isCompactHeight } from '@/lib/calls/call-view';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -84,6 +86,8 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
   const box = useRef<HTMLDivElement>(null);
   const skin = useRef<HTMLSpanElement>(null);
   usePillGlass(box, skin, stowed);
+  /* P12.7 : en hauteur compacte, les rangées de la pilule d'un groupe se replient en UNE ligne sans légendes. */
+  const compact = isCompactHeight(useCallViewport().height);
   const away = { 'data-call-pill-rest': '', inert: stowed || undefined, 'aria-hidden': stowed || undefined };
   return (
     <>
@@ -97,7 +101,7 @@ export function CallControlPill({ call, language, rows, expanded, grown, onToggl
         <span ref={skin} aria-hidden="true" className={`${prominent ? 'glass-call-prominent' : 'glass-call'} absolute inset-0 -z-10 rounded-sheet`} data-call-pill-skin="" />
         {grown ? (
           <Suspense fallback={null}>
-            <Deck call={call} language={language} rows={rows} panels={panels} kit={kit} panel={panel} text={text} box={box} away={away} />
+            <Deck call={call} language={language} rows={rows} panels={panels} kit={kit} panel={panel} text={text} box={box} away={away} compact={compact} />
           </Suspense>
         ) : null}
         {grown && !stowed ? null : captions}

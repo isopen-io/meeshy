@@ -163,3 +163,12 @@ export function gridColumns(count: number, landscape: boolean): number {
   if (count <= 4) return 2;
   return landscape ? 3 : 2;
 }
+
+/**
+ * La grille d'un groupe garde 140 de haut au moins (P12.7, `CallGroupStageSizing` d'iOS) ; en hauteur compacte, les
+ * rangées de la pilule se replient en une ligne. Ici et non avec le bandeau : la pilule (l'écran) et la grille (son chunk) la lisent.
+ */
+export const GRID_MIN_HEIGHT = 140;
+export const COMPACT_HEIGHT = 500;
+
+export const isCompactHeight = (height: number): boolean => height > 0 && height < COMPACT_HEIGHT;

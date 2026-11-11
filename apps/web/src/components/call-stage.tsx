@@ -2,6 +2,7 @@ import { lazy, Suspense, useId, useRef, useState, type KeyboardEvent, type React
 import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
+import { Arrives } from '@/components/call-arrives';
 import { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallModerationSlot } from '@/components/call-control-slots';
 import type { CallGridKit } from '@/components/call-grid';
@@ -42,6 +43,7 @@ import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { hasVideo, membersInArrival, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
 import { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
+import { useStageFlip } from '@/lib/calls/use-stage-flip';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -110,6 +112,9 @@ export const CALL_GRID_KIT: CallGridKit = {
   resolveSpotlight,
   autoSharer,
   SpeechRing: PeerSpeechRing,
+  usePressedChrome,
+  useStageFlip,
+  Arrives,
 };
 
 /** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */

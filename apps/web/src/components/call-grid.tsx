@@ -5,6 +5,7 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { PeerAvatar } from '@/components/peer-avatar';
 import type { Portrait } from '@/components/call-portrait';
 import type { CallButton } from '@/components/call-glass-button';
+import type { Arrives } from '@/components/call-arrives';
 import type { PeerSpeechRing } from '@/components/call-camera-off';
 import type { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo, useSrcObject } from '@/components/call-media-elements';
@@ -17,8 +18,8 @@ import { chooseGrid, chooseMember, chooseSelf } from '@/lib/calls/call-spotlight
 import type { CallMember } from '@/lib/calls/call-store';
 import { filmstripOf, STRIP_COLUMN_WIDTH, STRIP_HALO_PAD, STRIP_TILE_HEIGHT, STRIP_TILE_WIDTH } from '@/lib/calls/call-group-stage';
 import { gridColumns, hasVideo } from '@/lib/calls/call-view';
-import { useStageFlip } from '@/lib/calls/use-stage-flip';
-import { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
+import type { useStageFlip } from '@/lib/calls/use-stage-flip';
+import type { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -78,6 +79,12 @@ export type CallGridKit = {
   readonly autoSharer: typeof autoSharer;
   /** Le calque UNIQUE de la parole (`SpeechRing`), allumé au niveau reçu du flux : une bascule ne rend que lui, jamais la grille. */
   readonly SpeechRing: typeof PeerSpeechRing;
+  /** Décider à la descente du pointeur, comme le duo : le crochet vit dans l'écran, qui le remet. */
+  readonly usePressedChrome: typeof usePressedChrome;
+  /** Chaque vignette passe de sa case à la suivante (P14.10) : le crochet et son moteur chargé à part vivent dans l'écran. */
+  readonly useStageFlip: typeof useStageFlip;
+  /** Ce qui arrive avec la une (la capsule) y entre en fondu, plus court sous « Réduire les animations » : rien n'apparaît d'un coup. */
+  readonly Arrives: typeof Arrives;
 };
 
 export type CallGridProps = {
@@ -173,14 +180,11 @@ function HeldVideo({ held, subject }: { readonly held: Held; readonly subject: S
     element.playsInline = true;
     element.defaultMuted = element.muted = true;
     element.className = 'absolute inset-0 size-full';
-    element.style.objectFit = 'cover';
-    element.style.transform = subject.mirrored ? 'scaleX(-1)' : '';
-    element.style.backgroundColor = 'var(--color-media-backdrop)';
+    Object.assign(element.style, { objectFit: 'cover', transform: subject.mirrored ? 'scaleX(-1)' : '', backgroundColor: 'var(--color-media-backdrop)' });
     element.setAttribute('aria-label', subject.shown);
     element.setAttribute('data-call-stream', 'cover');
     element.toggleAttribute('data-call-mirrored', subject.mirrored);
-    if (subject.self) element.setAttribute('data-call-self', '');
-    else element.setAttribute('data-call-member', subject.id);
+    element.setAttribute(subject.self ? 'data-call-self' : 'data-call-member', subject.self ? '' : subject.id);
     if (element.parentNode !== host.current) host.current?.appendChild(element);
     video.current = element;
   });
@@ -206,17 +210,13 @@ function Tile({ kit, subject, held, onPress, label, portrait, press }: TileProps
       <NameLabel name={subject.shown} muted={subject.muted} suffix={subject.suffix} />
     </>
   );
-  const frame = { background: TILE, borderColor: subject.color };
-  const className = 'relative grid min-h-0 min-w-0 place-items-center overflow-hidden rounded-card border-2';
+  const Tag = onPress === null || subject.ringing ? 'div' : 'button';
+  const act = Tag === 'div' ? {} : { type: 'button' as const, 'aria-label': label, onClick: onPress ?? undefined, onPointerDownCapture: press.press, onKeyDown: press.clear };
   const marks = { ...(subject.self ? { 'data-call-tile-self': '' } : { 'data-call-tile': subject.id }), ...(subject.ringing ? { 'data-call-ringing': '' } : {}) };
-  return onPress === null || subject.ringing ? (
-    <div className={className} style={frame} {...marks}>
+  return (
+    <Tag className="relative grid min-h-0 min-w-0 place-items-center overflow-hidden rounded-card border-2" style={{ background: TILE, borderColor: subject.color }} {...act} {...marks}>
       {body}
-    </div>
-  ) : (
-    <button type="button" aria-label={label} onClick={onPress} onPointerDownCapture={press.press} onKeyDown={press.clear} className={className} style={frame} {...marks}>
-      {body}
-    </button>
+    </Tag>
   );
 }
 
@@ -258,13 +258,21 @@ function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGri
   );
 }
 
-/** Ce qui défile dans le bandeau s'efface en fondu à ses deux bords, sur les 8 de son liseré (la recette de `RAIL_FADE`, dans l'axe du bandeau) : au repos, aucune vignette n'est estompée. */
-const stripFade = (axis: 'right' | 'bottom'): CSSProperties => ({ maskImage: `linear-gradient(to ${axis}, transparent, #000 8px, #000 calc(100% - 8px), transparent)` });
+/**
+ * Le bandeau des autres : des vignettes de 84 × 112 en rangée sous la une, en colonne de 128 à sa droite en
+ * paysage (P14.1, P14.2) ; ce qui défile s'efface en fondu à ses deux bords, sur les 8 de son liseré (la recette
+ * de `RAIL_FADE`, dans l'axe du bandeau) : au repos, aucune vignette n'est estompée.
+ */
+const stripBox = (strip: 'bottom' | 'trailing'): CSSProperties => {
+  const bottom = strip === 'bottom';
+  const fade = `linear-gradient(to ${bottom ? 'right' : 'bottom'}, transparent, #000 8px, #000 calc(100% - 8px), transparent)`;
+  return bottom ? { maskImage: fade, gridAutoColumns: STRIP_TILE_WIDTH, gridTemplateRows: STRIP_TILE_HEIGHT, height: STRIP_TILE_HEIGHT + 2 * STRIP_HALO_PAD } : { maskImage: fade, gridAutoRows: STRIP_TILE_HEIGHT, gridTemplateColumns: STRIP_TILE_WIDTH, width: STRIP_COLUMN_WIDTH };
+};
 
 const SCROLL_HIDDEN = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false }: CallGridProps) {
-  const press = usePressedChrome(chromeVisible);
+  const press = kit.usePressedChrome(chromeVisible);
   /** #9183 — chrome masqué, toucher une vignette le RENDS au lieu de changer la une (`GroupStageTapRule` sur iOS) ; décidé à la descente du pointeur (#17548). */
   const decide = (next: SpotlightChoice) => () => (press.release() ? onRevealChrome() : onChoose(next));
   const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
@@ -272,7 +280,7 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
   const held = useRef<Held>(new Map());
   const root = useRef<HTMLDivElement>(null);
   const fullscreen = immersive;
-  useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}`);
+  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}`);
   const present = members.map((member) => member.userId).join();
   useEffect(() => {
     for (const [id, video] of held.current) if (id !== SELF && !members.some((member) => member.userId === id)) video.remove(), held.current.delete(id);
@@ -340,7 +348,7 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
             </Suspense>
           ) : null}
           <div className="absolute right-2 top-2 flex flex-col items-end gap-2" data-call-chrome-fade="">
-            <div className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
+            <kit.Arrives className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
               <kit.Button label={back} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />} onPress={() => onChoose(chooseGrid(sharer?.userId ?? null))} size={44} data={{ 'data-call-grid-back': '' }} />
               <kit.Button
                 label={full}
@@ -351,17 +359,12 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
                 size={44}
                 data={{ 'data-call-fullscreen': '' }}
               />
-            </div>
+            </kit.Arrives>
             {moderated && featured !== null && !fullscreen ? <kit.ModerationSlot member={featured} language={language} moderation={moderation} prominent={screen} /> : null}
           </div>
         </div>
-        {strip === 'none' ? null : strip === 'bottom' ? (
-          <div className={`-mx-2 grid shrink-0 grid-flow-col content-center gap-2 overflow-x-auto overscroll-x-none px-2 ${SCROLL_HIDDEN}`} style={{ ...stripFade('right'), gridAutoColumns: STRIP_TILE_WIDTH, gridTemplateRows: STRIP_TILE_HEIGHT, height: STRIP_TILE_HEIGHT + 2 * STRIP_HALO_PAD }} data-call-strip="">
-            {peerTiles}
-            {featured === null ? null : <Slot {...tile(mine, decide(chooseSelf()), selfLabel, 40)} />}
-          </div>
-        ) : (
-          <div className={`-my-2 grid shrink-0 content-start justify-center gap-2 overflow-y-auto overscroll-y-none py-2 ${SCROLL_HIDDEN}`} style={{ ...stripFade('bottom'), gridAutoRows: STRIP_TILE_HEIGHT, gridTemplateColumns: STRIP_TILE_WIDTH, width: STRIP_COLUMN_WIDTH }} data-call-strip="">
+        {strip === 'none' ? null : (
+          <div className={`grid shrink-0 gap-2 ${SCROLL_HIDDEN} ${strip === 'bottom' ? '-mx-2 grid-flow-col content-center overflow-x-auto overscroll-x-none px-2' : '-my-2 content-start justify-center overflow-y-auto overscroll-y-none py-2'}`} style={stripBox(strip)} data-call-strip="">
             {peerTiles}
             {featured === null ? null : <Slot {...tile(mine, decide(chooseSelf()), selfLabel, 40)} />}
           </div>
