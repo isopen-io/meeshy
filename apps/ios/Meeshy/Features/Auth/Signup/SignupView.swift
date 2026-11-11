@@ -202,11 +202,6 @@ struct SignupView: View {
                 .font(MeeshyFont.relative(MeeshyFont.titleSize + 4, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
-
-            Text(String(localized: "auth.signup.subtitle", defaultValue: "Vous lirez tout le monde dans votre langue.", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundStyle(theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -218,7 +213,7 @@ struct SignupView: View {
         AuthInfoHint(
             text: String(
                 localized: "auth.signup.email.verificationNotice",
-                defaultValue: "Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.",
+                defaultValue: "Nous envoyons un lien à cette adresse : ouvrez-le pour valider.",
                 bundle: .main
             ),
             buttonLabel: String(

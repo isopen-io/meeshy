@@ -63,7 +63,6 @@ struct EmailVerificationView: View {
                 _ = await cancellableSleep(for: Self.successPause)
                 dismiss()
             }
-            .navigationTitle(String(localized: "emailVerification.nav.title", defaultValue: "Vérification de l'email"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -123,10 +122,6 @@ struct EmailVerificationView: View {
 
     private var resendSection: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            Text(String(localized: "emailVerification.noCode", defaultValue: "Vous n'avez pas reçu le code ?"))
-                .font(.footnote)
-                .foregroundStyle(theme.textSecondary)
-
             Button {
                 Task { await viewModel.resendCode() }
             } label: {

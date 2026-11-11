@@ -10,7 +10,9 @@ import MeeshyUI
 /// aucun administrateur n'est jamais nommé.
 struct SessionClosedNoticeCopy: Equatable {
     let title: String
-    let message: String
+    /// Absent quand le titre et le bouton disent tout : l'expiration d'une
+    /// session n'a rien à ajouter à « Votre session a expiré » + « Se reconnecter ».
+    let message: String?
     let systemImage: String
     /// La fermeture appelle peut-être une question : on offre d'écrire à l'équipe.
     let offersContact: Bool
@@ -20,38 +22,38 @@ struct SessionClosedNoticeCopy: Equatable {
     init(reason: SessionRevocationReason) {
         switch reason {
         case .adminRevoke:
-            title = String(localized: "sessionClosed.admin.title", defaultValue: "Votre session a été fermée par l'équipe Meeshy", bundle: .main)
-            message = String(localized: "sessionClosed.admin.message", defaultValue: "Pour protéger votre compte, l'équipe Meeshy a fermé cette session. Vous pouvez vous reconnecter. Une question ? Écrivez-nous.", bundle: .main)
+            title = String(localized: "sessionClosed.admin.title", defaultValue: "Session fermée par l'équipe Meeshy", bundle: .main)
+            message = String(localized: "sessionClosed.admin.message", defaultValue: "Pour protéger votre compte.", bundle: .main)
             systemImage = "shield.lefthalf.filled"
             offersContact = true
         case .userRevoke:
             title = String(localized: "sessionClosed.userRevoke.title", defaultValue: "Cet appareil a été déconnecté", bundle: .main)
-            message = String(localized: "sessionClosed.userRevoke.message", defaultValue: "La session a été fermée depuis un autre de vos appareils. Si ce n'était pas vous, reconnectez-vous et changez votre mot de passe.", bundle: .main)
+            message = String(localized: "sessionClosed.userRevoke.message", defaultValue: "Fermée depuis un autre de vos appareils. Pas vous ? Changez votre mot de passe.", bundle: .main)
             systemImage = "iphone.slash"
             offersContact = false
         case .passwordChanged:
             title = String(localized: "sessionClosed.password.title", defaultValue: "Votre mot de passe a changé", bundle: .main)
-            message = String(localized: "sessionClosed.password.message", defaultValue: "Reconnectez-vous avec le nouveau mot de passe. Si vous n'êtes pas à l'origine de ce changement, réinitialisez-le tout de suite.", bundle: .main)
+            message = String(localized: "sessionClosed.password.message", defaultValue: "Pas vous à l'origine du changement ? Réinitialisez-le tout de suite.", bundle: .main)
             systemImage = "key.fill"
             offersContact = true
         case .logoutAllDevices:
             title = String(localized: "sessionClosed.signedOut.title", defaultValue: "Vous avez été déconnecté", bundle: .main)
-            message = String(localized: "sessionClosed.allSignedOut.message", defaultValue: "Toutes les sessions de votre compte ont été fermées. Reconnectez-vous pour continuer.", bundle: .main)
+            message = String(localized: "sessionClosed.allSignedOut.message", defaultValue: "Toutes les sessions du compte sont fermées.", bundle: .main)
             systemImage = "rectangle.portrait.and.arrow.right"
             offersContact = false
         case .sessionExpired:
             title = String(localized: "sessionClosed.expired.title", defaultValue: "Votre session a expiré", bundle: .main)
-            message = String(localized: "sessionClosed.expired.message", defaultValue: "Reconnectez-vous pour continuer.", bundle: .main)
+            message = nil
             systemImage = "clock.arrow.circlepath"
             offersContact = false
         case .activationRequired:
             title = String(localized: "sessionClosed.activation.title", defaultValue: "Confirmez votre adresse e-mail", bundle: .main)
-            message = String(localized: "sessionClosed.activation.message", defaultValue: "Pour continuer à utiliser Meeshy, reconnectez-vous puis saisissez le code reçu par e-mail.", bundle: .main)
+            message = String(localized: "sessionClosed.activation.message", defaultValue: "Reconnectez-vous puis saisissez le code reçu par e-mail.", bundle: .main)
             systemImage = "envelope.badge"
             offersContact = false
         case .logout, .unknown:
             title = String(localized: "sessionClosed.signedOut.title", defaultValue: "Vous avez été déconnecté", bundle: .main)
-            message = String(localized: "sessionClosed.signedOut.message", defaultValue: "Cette session a été fermée. Reconnectez-vous pour continuer.", bundle: .main)
+            message = String(localized: "sessionClosed.signedOut.message", defaultValue: "Cette session a été fermée.", bundle: .main)
             systemImage = "rectangle.portrait.and.arrow.right"
             offersContact = false
         }
@@ -82,11 +84,13 @@ struct SessionClosedNoticeView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
 
-                Text(copy.message)
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                    .foregroundStyle(theme.textSecondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let message = copy.message {
+                    Text(message)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
+                        .foregroundStyle(theme.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Button(action: onContinue) {
                     Text(String(localized: "sessionClosed.continue", defaultValue: "Se reconnecter", bundle: .main))

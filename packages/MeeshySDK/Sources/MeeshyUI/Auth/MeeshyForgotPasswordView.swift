@@ -287,7 +287,7 @@ public struct MeeshyForgotPasswordView: View {
                     .padding(.horizontal, MeeshySpacing.xxl)
                 }
 
-                Text(String(localized: "auth.forgotPassword.verifyIdentityPrompt", defaultValue: "Pour vérifier votre identité, entrez votre nom d'utilisateur et votre e-mail complets.", bundle: .module))
+                Text(String(localized: "auth.forgotPassword.verifyIdentityPrompt", defaultValue: "Entrez votre nom d'utilisateur et votre e-mail complets.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .font(.caption)
                     .foregroundStyle(.secondary)

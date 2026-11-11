@@ -180,7 +180,6 @@ struct LoginView: View {
                 }
                 .bounceOnTap(scale: 0.94)
                 .accessibilityLabel(String(localized: "auth.login.create_account", bundle: .main))
-                .accessibilityHint(String(localized: "auth.login.create_account.hint", bundle: .main))
                 .padding(.bottom, MeeshySpacing.md)
                 .opacity(showFields ? 1 : 0)
 

@@ -171,9 +171,7 @@ struct OnboardingCardView: View {
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundStyle(MeeshyColors.error)
         case .idle, .sending:
-            Label(String(localized: "onboarding.email.waiting", bundle: .main), systemImage: "hourglass")
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
+            EmptyView()
         }
     }
 
@@ -237,9 +235,6 @@ struct OnboardingCardView: View {
                     .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: MeeshyBorder.emphasis))
                 .accessibilityLabel(String(localized: "onboarding.global.editor.a11y", bundle: .main))
                 .accessibilityIdentifier("onboarding.global.editor")
-            Label(String(localized: "onboarding.global.hint", bundle: .main), systemImage: "pencil")
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
         }
     }
 
