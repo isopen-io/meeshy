@@ -40,6 +40,7 @@
     <string name="call_control_add_people">إضافة أشخاص إلى المكالمة</string>
     <string name="call_control_add_people_caption">إضافة</string>
     <string name="call_control_camera">اختيار الكاميرا</string>
+    <string name="call_control_camera_caption">الكاميرا</string>
     <string name="call_control_camera_off">إيقاف الكاميرا</string>
     <string name="call_control_camera_on">تشغيل الكاميرا</string>
     <string name="call_control_camera_rail">خيارات الكاميرا الخاصة بي</string>
@@ -60,6 +61,7 @@
     <string name="call_control_output_a11y">إخراج الصوت</string>
     <string name="call_control_pip">التصغير إلى صورة داخل صورة</string>
     <string name="call_control_react">إرسال تفاعل</string>
+    <string name="call_control_react_caption">تفاعل</string>
     <string name="call_control_unmute_label">إعادة تشغيل الميكروفون</string>
     <string name="call_decline_cancel">إلغاء</string>
     <string name="call_decline_custom_label">رسالتك</string>
@@ -238,6 +240,7 @@
     <string name="call_recording_stopped_timeout">لم يُجب الجميع: لا تسجيل</string>
     <string name="call_recording_unavailable">التسجيل غير متاح حاليًا</string>
     <string name="call_recording_waiting">بانتظار موافقة الجميع…</string>
+    <string name="call_screen_share_caption">الشاشة</string>
     <string name="call_screen_share_error">تعذّرت مشاركة الشاشة</string>
     <string name="call_screen_share_hint">يعرض شاشتك على الطرف الآخر أثناء المكالمة</string>
     <string name="call_screen_share_local_banner">أنت تشارك شاشتك</string>

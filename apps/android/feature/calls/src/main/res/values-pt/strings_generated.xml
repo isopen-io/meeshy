@@ -40,6 +40,7 @@
     <string name="call_control_add_people">Adicionar pessoas à chamada</string>
     <string name="call_control_add_people_caption">Adicionar</string>
     <string name="call_control_camera">Escolher câmera</string>
+    <string name="call_control_camera_caption">Câmera</string>
     <string name="call_control_camera_off">Desligar câmera</string>
     <string name="call_control_camera_on">Ligar câmera</string>
     <string name="call_control_camera_rail">Opções da minha câmera</string>
@@ -60,6 +61,7 @@
     <string name="call_control_output_a11y">Saída de áudio</string>
     <string name="call_control_pip">Reduzir para Picture-in-Picture</string>
     <string name="call_control_react">Enviar uma reação</string>
+    <string name="call_control_react_caption">Reagir</string>
     <string name="call_control_unmute_label">Ativar microfone</string>
     <string name="call_decline_cancel">Cancelar</string>
     <string name="call_decline_custom_label">Sua mensagem</string>
@@ -238,6 +240,7 @@
     <string name="call_recording_stopped_timeout">Nem todos responderam: sem gravação</string>
     <string name="call_recording_unavailable">Gravação indisponível de momento</string>
     <string name="call_recording_waiting">À espera do consentimento de todos…</string>
+    <string name="call_screen_share_caption">Tela</string>
     <string name="call_screen_share_error">Não foi possível compartilhar a tela</string>
     <string name="call_screen_share_hint">Mostra sua tela ao seu contato durante a chamada</string>
     <string name="call_screen_share_local_banner">Você está compartilhando sua tela</string>

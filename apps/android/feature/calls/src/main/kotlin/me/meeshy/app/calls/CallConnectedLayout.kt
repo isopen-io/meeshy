@@ -273,6 +273,7 @@ internal fun CallConnectedColumn(
                     onBackToMenu = chrome::backToMenu,
                     onClosePanel = chrome::close,
                     pillText = pillText,
+                    rowsMaxHeight = callPillRowsMaxHeight(maxHeight, hasGrid = groupStage != null),
                     captions = { CallCaptionsBandHost(state = state, hasOwnGlass = false) },
                     panelContent = { panel ->
                         when (panel) {

@@ -60,7 +60,7 @@ internal object CallPillModel {
                 state.isCameraOn -> CallPillKind.Active
                 else -> CallPillKind.Normal
             },
-            captionRes = if (paused) R.string.call_control_video_paused_caption else R.string.call_control_video_caption,
+            captionRes = if (paused) R.string.call_control_video_paused_caption else R.string.call_control_camera_caption,
             hintRes = if (paused) R.string.call_control_video_paused_hint else null,
             isToggle = true,
         )
@@ -79,6 +79,13 @@ internal object CallPillModel {
         )
     }
 
+    /** A toggle that is on is a white disc; one that is a state to stop (the recording) is red, like iOS. */
+    fun kindOf(presentation: CallActionPresentation): CallPillKind = when {
+        presentation.isActive && presentation.isDestructive -> CallPillKind.Destructive
+        presentation.isActive -> CallPillKind.Active
+        else -> CallPillKind.Normal
+    }
+
     /** What the capabilities offer, plus the built-in camera toggle, keyed by action. */
     fun items(state: CallUiState, offered: List<OfferedCallAction>): Map<CallAction, CallPillItem> {
         val fromHandlers = offered.associate { entry ->
@@ -86,7 +93,7 @@ internal object CallPillModel {
                 action = entry.action,
                 icon = entry.presentation.icon,
                 labelRes = entry.presentation.labelRes,
-                kind = if (entry.presentation.isActive) CallPillKind.Active else CallPillKind.Normal,
+                kind = kindOf(entry.presentation),
                 captionRes = entry.presentation.captionRes,
                 hintRes = entry.presentation.hintRes,
                 isToggle = entry.presentation.isActive,

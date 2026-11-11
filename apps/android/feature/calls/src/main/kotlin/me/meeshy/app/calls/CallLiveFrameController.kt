@@ -160,7 +160,7 @@ class CallLiveFrameController internal constructor(
 class CallCaptureActionHandler @Inject constructor() : CallActionHandler {
     override fun present(state: CallUiState): CallActionPresentation? =
         if (state.status == CallStatus.CONNECTED && CallLiveFrameRule.mayOffer(CallLiveFrameRule.PEOPLE, state.isVideoCall && state.showsConnectedLayout)) {
-            CallActionPresentation(MeeshyIcons.Wallpaper, R.string.call_control_capture)
+            CallActionPresentation(MeeshyIcons.Wallpaper, R.string.call_control_capture, captionRes = R.string.call_control_capture_caption)
         } else {
             null
         }

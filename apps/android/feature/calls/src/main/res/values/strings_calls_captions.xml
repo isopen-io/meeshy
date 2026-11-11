@@ -5,7 +5,7 @@
     <string name="call_captions_state_translated">Translation</string>
     <string name="call_captions_state_original">Original text</string>
     <string name="call_captions_peer_active">The other person turned on transcription</string>
-    <string name="call_captions_journal">Journal</string>
+    <string name="call_captions_journal">Transcript</string>
     <string name="call_captions_journal_title">Call journal</string>
     <string name="call_captions_journal_hint">Opens every sentence of the call</string>
     <string name="call_captions_waiting">Captions will appear here as soon as someone speaks.</string>

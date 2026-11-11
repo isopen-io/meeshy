@@ -133,7 +133,11 @@ class CallReactionsController internal constructor(
 @Singleton
 class CallReactionsActionHandler @Inject constructor() : CallActionHandler {
     override fun present(state: CallUiState): CallActionPresentation? =
-        if (state.status == CallStatus.CONNECTED) CallActionPresentation(MeeshyIcons.Emoji, R.string.call_control_react) else null
+        if (state.status == CallStatus.CONNECTED) {
+            CallActionPresentation(MeeshyIcons.Emoji, R.string.call_control_react, captionRes = R.string.call_control_react_caption)
+        } else {
+            null
+        }
 
     override fun perform() = Unit
 }

@@ -92,6 +92,8 @@ class CallRecordingActionHandler @Inject constructor(
             icon = if (active) MeeshyIcons.StopCircle else MeeshyIcons.Record,
             labelRes = if (active) R.string.call_recording_stop else R.string.call_recording_start,
             isActive = active,
+            captionRes = R.string.call_recording_caption,
+            isDestructive = true,
         )
     }
 
