@@ -40,7 +40,6 @@ extension CallView {
     func togglePanel(_ panel: CallScreenPanel) {
         withAnimation(disclosureAnimation) {
             layer = layer.opening(panel)
-            showControls = true
         }
         HapticFeedback.light()
     }
@@ -74,9 +73,7 @@ extension CallView {
             reactionPanelRows
         case .record:
             recordingPanelRows
-        case .journal:
-            journalPanelRows
-        case .people:
+        case .people, .journal:
             EmptyView()
         }
     }
