@@ -481,7 +481,7 @@ const ar = {
   'settings.interface_language.automatic': 'تلقائي',
   'settings.content_languages': 'لغات الترجمة',
   'settings.section.notifications': 'الإشعارات',
-  'settings.notifications.title': 'الإشعارات الفورية',
+  'settings.notifications.title': 'الإشعارات',
   'settings.notif.sounds': 'الأصوات',
   'settings.notif.more_options': 'المزيد من الخيارات',
   'settings.section.data': 'البيانات',

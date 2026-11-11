@@ -487,7 +487,7 @@ const pt = {
   'settings.interface_language.automatic': 'Automático',
   'settings.content_languages': 'Idiomas de tradução',
   'settings.section.notifications': 'Notificações',
-  'settings.notifications.title': 'Push',
+  'settings.notifications.title': 'Notificações',
   'settings.notif.sounds': 'Sons',
   'settings.notif.more_options': 'Mais opções',
   'settings.section.data': 'Dados',

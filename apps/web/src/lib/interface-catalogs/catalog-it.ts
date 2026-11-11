@@ -483,7 +483,7 @@ const it = {
   'settings.interface_language.automatic': 'Automatico',
   'settings.content_languages': 'Lingue di traduzione',
   'settings.section.notifications': 'Notifiche',
-  'settings.notifications.title': 'Push',
+  'settings.notifications.title': 'Notifiche',
   'settings.notif.sounds': 'Suoni',
   'settings.notif.more_options': 'Altre opzioni',
   'settings.section.data': 'Dati',

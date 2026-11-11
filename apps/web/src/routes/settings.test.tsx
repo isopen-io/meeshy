@@ -465,7 +465,7 @@ describe('l’apparence', () => {
 describe('les notifications', () => {
   test('les notifications poussées et leur son, dans leur état réel', () => {
     const host = dom(<NotificationsSection language="fr" view={ready({ soundEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
-    expect(switchNamed(host, 'Push')?.getAttribute('aria-checked')).toBe('true');
+    expect(switchNamed(host, 'Notifications')?.getAttribute('aria-checked')).toBe('true');
     expect(switchNamed(host, 'Sons')?.getAttribute('aria-checked')).toBe('false');
   });
 

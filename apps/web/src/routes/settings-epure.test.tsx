@@ -122,9 +122,9 @@ describe('la confidentialité se lit en libellés', () => {
 });
 
 describe('les notifications', () => {
-  test('la rangée s’appelle « Push », le retour d’un contact se dit court', async () => {
+  test('la rangée garde le mot d’iOS (« Notifications », même clé), le retour d’un contact se dit court', async () => {
     const host = await mount(<NotificationsSection language="fr" view={ready} disabled={false} onToggle={noop} onRetry={noop} />);
-    expect(host.querySelector('[role="switch"][aria-label="Push"]')).not.toBeNull();
+    expect(host.querySelector('[role="switch"][aria-label="Notifications"]')).not.toBeNull();
     expect(host.querySelector('[role="switch"][aria-label="Retour d’un contact"]')).not.toBeNull();
   });
 

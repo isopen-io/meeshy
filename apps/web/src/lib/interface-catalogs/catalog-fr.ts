@@ -480,7 +480,7 @@ const fr = {
   'settings.interface_language.automatic': 'Automatique',
   'settings.content_languages': 'Langues de traduction',
   'settings.section.notifications': 'Notifications',
-  'settings.notifications.title': 'Push',
+  'settings.notifications.title': 'Notifications',
   'settings.notif.sounds': 'Sons',
   'settings.notif.more_options': "Plus d'options",
   'settings.section.data': 'Données',
