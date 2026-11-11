@@ -12,7 +12,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 
-import { ActionLink, LinkPage, LinkText, ReachFailurePage, SignedOutPage } from './link-page-parts';
+import { ActionLink, LinkHint, LinkPage, LinkText, ReachFailurePage, SignedOutPage } from './link-page-parts';
 
 /**
  * **`/settings/verify-email-change?token=` — LA NOUVELLE ADRESSE SE CONFIRME**
@@ -49,7 +49,7 @@ export function VerifyEmailChangePage({
   readonly deps: VerifyEmailChangeDeps;
 }) {
   if (token === null || token === '') return <EmailChangeRefused language={language} message="missing" />;
-  if (!signedIn) return <SignedOutPage language={language} />;
+  if (!signedIn) return <SignedOutPage language={language} fromEmail />;
   return <EmailChangeVerification token={token} language={language} deps={deps} />;
 }
 
@@ -127,7 +127,7 @@ function EmailChangeVerification({
   }
 
   const { failure } = state;
-  if (failure === 'signed-out') return <SignedOutPage language={language} />;
+  if (failure === 'signed-out') return <SignedOutPage language={language} fromEmail />;
   if (failure === 'offline' || failure === 'rate-limited' || failure === 'unavailable') {
     return <ReachFailurePage language={language} failure={failure} onRetry={retry} />;
   }
@@ -152,6 +152,7 @@ function EmailChangeRefused({ language, message }: { readonly language: Interfac
               }}
             />
           ) : null}
+          {message === 'expired' ? <LinkHint language={language} question="linkPage.expired.question" text="linkPage.expired.hint" /> : null}
         </>
       }
     >

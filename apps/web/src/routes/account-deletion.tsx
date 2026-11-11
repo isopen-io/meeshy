@@ -26,7 +26,7 @@ import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 
 import { DeletionGuidePage } from './account-deletion-guide';
-import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, REACH_FAILURE_LINE, type ActionTone } from './link-page-parts';
+import { ActionButton, ActionLink, LinkAlert, LinkHint, LinkPage, LinkText, REACH_FAILURE_LINE, type ActionTone } from './link-page-parts';
 import { PasswordInput } from '@/components/password-input';
 
 /**
@@ -132,7 +132,12 @@ function DeletionLinkPage({ link, online, language, deps }: PageProps & { readon
         glyph="warningCircle"
         tone="danger"
         title={translate(language, 'accountDeletion.closed.title')}
-        body={<LinkText>{translate(language, state.reason === 'expired' ? 'linkPage.expired' : 'accountDeletion.invalid')}</LinkText>}
+        body={
+          <>
+            <LinkText>{translate(language, state.reason === 'expired' ? 'linkPage.expired' : 'accountDeletion.invalid')}</LinkText>
+            {state.reason === 'expired' ? <LinkHint language={language} question="linkPage.expired.question" text="linkPage.expired.hint" /> : null}
+          </>
+        }
       >
         <ActionLink to="list" tone="secondary">
           {translate(language, 'linkPage.home')}

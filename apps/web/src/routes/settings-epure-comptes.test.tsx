@@ -302,8 +302,24 @@ describe('les pages de lien', () => {
       />,
     );
     await settle();
-    expect(host.textContent).not.toContain('Refaites la demande');
+    expect(seen(host)).toContain('Lien expiré');
+    expect(seen(host)).not.toContain('Refaites la demande');
+    const hint = infoButton(host, 'Comment obtenir un nouveau lien ?');
+    expect(noteOf(host, hint).textContent).toBe('Refaites la demande depuis les réglages.');
     expect([...host.querySelectorAll('a')].map((link) => link.textContent)).toContain('Réglages');
+  });
+
+  test('un lien de confirmation ouvert sans session : la consigne « rouvrez-le depuis l’e-mail » reste derrière son (i)', async () => {
+    const host = await mount(<VerifyEmailChangePage token="jeton" signedIn={false} language="fr" deps={{ verify: async () => ({ ok: false, status: 0, error: '' }) }} />);
+    expect(seen(host)).toContain('Connectez-vous pour continuer');
+    expect(seen(host)).not.toContain('rouvrez-le');
+    const hint = infoButton(host, 'Que faire après la connexion ?');
+    expect(noteOf(host, hint).textContent).toContain('rouvrez-le depuis l’e-mail');
+  });
+
+  test('un lien de désabonnement ouvert sans session : même consigne derrière le même (i)', async () => {
+    const host = await mount(<EmailNotificationsPage signedIn={false} language="fr" deps={pageDeps} />);
+    expect(noteOf(host, infoButton(host, 'Que faire après la connexion ?')).textContent).toContain('rouvrez-le depuis l’e-mail');
   });
 
   test('une page de lien ne pose plus de LinkPage vide à elle seule', async () => {

@@ -59,7 +59,7 @@ export function EmailNotificationsPage({
   readonly language: InterfaceLanguage;
   readonly deps: EmailNotificationsPageDeps;
 }) {
-  if (!signedIn) return <SignedOutPage language={language} />;
+  if (!signedIn) return <SignedOutPage language={language} fromEmail />;
   return <EmailPreference language={language} deps={deps} />;
 }
 
@@ -116,7 +116,7 @@ function EmailPreference({ language, deps }: { readonly language: InterfaceLangu
 
   if (state.phase === 'failed') {
     return state.failure === 'signed-out' ? (
-      <SignedOutPage language={language} />
+      <SignedOutPage language={language} fromEmail />
     ) : (
       <ReachFailurePage language={language} failure={state.failure} onRetry={retry} />
     );
