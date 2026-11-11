@@ -68,6 +68,19 @@ export function createPillGlass(element: HTMLElement, glass: HTMLElement): PillG
 }
 
 /**
+ * Un fondu d'OPACITÉ, interruptible (la caméra coupée du duo, G4.6, #17567) : de l'opacité
+ * affichée à cet instant vers `to`, le fondu en cours annulé (son `finished` est rejeté). La
+ * valeur visée est posée dessous : rien n'est tenu par l'animation une fois finie. `ms` nul
+ * (la première peinture) : posée d'un coup, sans animation.
+ */
+export function fadeOpacity(element: HTMLElement, to: number, ms: number, previous: Animation | null): Animation | null {
+  const from = getComputedStyle(element).opacity;
+  previous?.cancel();
+  element.style.opacity = String(to);
+  return ms > 0 && typeof element.animate === 'function' ? element.animate([{ opacity: from }, { opacity: to }], { duration: ms, easing: 'ease-out' }) : null;
+}
+
+/**
  * Ranger les commandes ou les rendre, sous « Réduire les animations » : l'en-tête, la
  * pilule et les bandeaux ne se déplacent pas, ils s'effacent (et reviennent) en un fondu
  * court. Hors de ce régime, la feuille (`call-motion.css`) les mène vers leur bord.

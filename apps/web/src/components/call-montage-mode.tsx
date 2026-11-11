@@ -8,6 +8,8 @@ import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Siz
 import type { MontageCall, MontageCircle } from '@/lib/calls/call-montage-circle';
 import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
+import type { ActiveCall } from '@/lib/calls/call-store';
+import { callAudioOf } from '@/lib/calls/call-view';
 import { browserFaceDetector } from '@/lib/calls/face-tracker';
 import { startFrameClock } from '@/lib/calls/frame-clock';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
@@ -89,7 +91,7 @@ type ModeProps = {
   readonly clipEnv?: () => ClipEnv;
   readonly viewport?: () => Size;
   /** L'appel : qui y est (le nombre de personnes choisit les cadres), la conversation. Sans lui, les classiques seuls. */
-  readonly call?: MontageCall;
+  readonly call?: MontageCall & Partial<Pick<ActiveCall, 'localStream' | 'remoteStreams'>>;
   /** L'atelier des cadres, dans son chunk — sans lui, les classiques seuls. */
   readonly loadFrames?: FrameStudioLoader;
   readonly circleOf?: CircleOf;
@@ -101,7 +103,6 @@ type ModeProps = {
 
 export type { LiveFrameHold };
 
-const NO_AUDIO = (): readonly MediaStream[] => [];
 
 const browserEnv = (): CaptureEnv => ({ canvas: browserCanvas, detector: browserFaceDetector(), now: () => new Date() });
 
@@ -132,7 +133,7 @@ const facesGlyph = (
   </svg>
 );
 
-export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = onRowWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold }: ModeProps) {
+export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = onRowWheel, audio = () => callAudioOf(call), env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
   const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language, loadShelf });

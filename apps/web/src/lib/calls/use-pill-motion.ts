@@ -42,3 +42,25 @@ export function useStowFade(root: RefObject<HTMLElement | null>, stowed: boolean
     if (root.current !== null) engine?.fadeStow(root.current, stowed);
   }, [root, stowed]);
 }
+
+/**
+ * Un fondu d'opacité que « Réduire les animations » raccourcit sans le couper (G4.6, #17567) :
+ * joué par le moteur, en Web Animations, là où une transition CSS serait éteinte par la règle
+ * générale. Un changement en plein fondu repart de l'opacité affichée ; `done` ne vient que
+ * pour le dernier. La première peinture ne joue rien, et tant que le moteur n'est pas là,
+ * l'opacité se pose d'un coup.
+ */
+export function useOpacityFade(ref: RefObject<HTMLElement | null>, on: boolean, ms: number, done?: () => void): void {
+  const engine = usePillEngine();
+  const running = useRef<Animation | null>(null);
+  const painted = useRef(false);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (element === null) return;
+    running.current = engine === null ? null : engine.fadeOpacity(element, on ? 1 : 0, painted.current ? ms : 0, running.current);
+    if (engine === null) element.style.opacity = on ? '1' : '0';
+    painted.current = true;
+    if (running.current === null) done?.();
+    else running.current.finished.then(done, () => undefined);
+  }, [on]);
+}

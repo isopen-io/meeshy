@@ -32,6 +32,10 @@ import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
  * donc dans la FACE d'un élément (la zone d'accroche garde sa boîte), et le
  * nom sous la piste est une boîte fixe, contenue.
  *
+ * Une piste qui a quitté la page ne choisit rien : le démontage remet son
+ * `scrollLeft` à zéro et émet un dernier `scroll`, qui rendait « Naturel » sous
+ * l'Échap qui venait de rendre les effets d'avant.
+ *
  * Seul un défilement TENU choisit (#8969) : un doigt (jusqu'au `scrollend`),
  * une molette ou une touche. Le réaccrochage de Chromium quand la mise en
  * page change (chunk chargé, piste remplacée) ne choisit rien — l'élément
@@ -144,6 +148,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
     };
     const settle = (): void => {
       clearTimeout(quiet);
+      if (!row.isConnected) return;
       const moved = travelled.current;
       const gripped = held();
       finger = false;
@@ -163,6 +168,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       } else center(announced.current, false);
     };
     const onScroll = (): void => {
+      if (!row.isConnected) return;
       travelled.current = true;
       if (settling.current === null && press.current !== null) {
         clearTimeout(press.current.timer);
@@ -176,7 +182,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       if (until > 0) until = performance.now() + GRIP_MS;
       cancelAnimationFrame(frame.current);
       frame.current = requestAnimationFrame(() => {
-        const nearest = centered();
+        const nearest = row.isConnected ? centered() : null;
         if (nearest === null || settling.current !== null || nearest === announced.current) return;
         announced.current = nearest;
         choose.current(nearest);
