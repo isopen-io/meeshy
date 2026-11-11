@@ -54,13 +54,21 @@ internal fun CallAudioStage(
     peer: CallPeerVisual,
     modifier: Modifier = Modifier,
     signalingDegraded: Boolean = false,
+    /** D'où vient « le pair parle » : l'anneau et le halo de sa couleur n'existent qu'à la parole (P9). */
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
     ) {
-        CallAvatarPair(name = state.peerName, peer = peer, size = PAIR_AVATAR_SIZE)
+        CallAvatarPair(
+            name = state.peerName,
+            peer = peer,
+            size = PAIR_AVATAR_SIZE,
+            faceHex = CallTileRim.peerFace(peerSpeech.peerUserId),
+            speaking = rememberPeerSpeaking(peerSpeech),
+        )
         Text(
             text = callPeerTitle(state.peerName),
             style = MaterialTheme.typography.headlineMedium,
@@ -74,15 +82,34 @@ internal fun CallAudioStage(
 
 /** Le correspondant et, en pastille au coin bas-fin, soi : décoratif, le nom est lu par le texte voisin. */
 @Composable
-internal fun CallAvatarPair(name: String, peer: CallPeerVisual, size: Dp, modifier: Modifier = Modifier) {
+internal fun CallAvatarPair(
+    name: String,
+    peer: CallPeerVisual,
+    size: Dp,
+    modifier: Modifier = Modifier,
+    /** La couleur d'auteur du pair (fonction partagée) ; `null` = la marque. */
+    faceHex: String? = null,
+    /** Il parle : l'anneau et le halo de [faceHex] fondent à l'opacité ; au repos, rien. */
+    speaking: Boolean = false,
+) {
     val badge = maxOf(LOCAL_BADGE_MIN, size * LOCAL_BADGE_RATIO)
+    val reach = callSpeakingReach(compact = false)
     Box(modifier = modifier.clearAndSetSemantics { }) {
-        CallAvatarDisc(name = name, size = size, avatarUrl = peer.avatarUrl, ring = peer.ring)
+        CallSpeakingAvatar(
+            name = name,
+            size = size,
+            avatarUrl = peer.avatarUrl,
+            colorHex = faceHex,
+            speaking = speaking,
+            reduceMotion = rememberCallReduceMotion(),
+            compact = false,
+            ring = peer.ring,
+        )
         CallAvatarDisc(
             name = peer.localBadgeName(stringResource(R.string.call_avatar_you)),
             size = badge,
             avatarUrl = peer.selfAvatarUrl,
-            modifier = Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.22f, y = badge * 0.12f),
+            modifier = Modifier.align(Alignment.BottomEnd).offset(x = badge * 0.22f - reach, y = badge * 0.12f - reach),
         )
     }
 }

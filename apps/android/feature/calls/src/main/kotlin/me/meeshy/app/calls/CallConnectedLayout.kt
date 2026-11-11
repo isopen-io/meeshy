@@ -192,6 +192,8 @@ internal fun CallConnectedColumn(
     groupVideo: CallGroupVideoStage? = null,
     /** La scène d'un appel de groupe (#13740), posée à la place du bloc du pair ; `null` en duo. */
     groupStage: (@Composable (Modifier) -> Unit)? = null,
+    /** La parole du pair, pour l'anneau de la scène audio. */
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     val extensions = viewModel.extensions
     val explore = rememberCallTouchExploration()
@@ -233,7 +235,7 @@ internal fun CallConnectedColumn(
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; la capture, dans la capsule ci-dessous.
                 Spacer(Modifier.weight(1f).fillMaxWidth())
             } else {
-                CallAudioStage(state = state, peer = peer, signalingDegraded = signalingDegraded)
+                CallAudioStage(state = state, peer = peer, signalingDegraded = signalingDegraded, peerSpeech = peerSpeech)
             }
 
             state.captionText?.let { caption -> CallCaption(caption) }
