@@ -220,7 +220,7 @@ export function CircleNotifySectionView({
   if (!useCircleNotifyCatalog(language)) return null;
   return (
     <GroupedSection id="settings-circle-notify" title={t(language, 'circleNotify.title').toLocaleUpperCase(language)} icon={<Glyph name="users" size={12} />}>
-      <p className="px-3.5 pt-2.5 text-caption" style={{ color: SECTION_INK_2 }}>
+      <p data-circle-notify-intro className="px-3.5 pt-2.5 text-caption" style={{ color: SECTION_INK_2 }}>
         {t(language, 'circleNotify.intro')}
       </p>
       {view.kind === 'loading' ? (

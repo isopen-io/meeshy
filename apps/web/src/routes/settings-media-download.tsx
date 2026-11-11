@@ -2,7 +2,9 @@ import { useId, type ReactNode } from 'react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALLS_GLYPHS } from '@/components/glyphs-calls';
-import { RowIcon, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { RowIcon, SECTION_INK } from '@/components/grouped-section';
+import { InfoNoted } from '@/components/info-hint';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { AUTO_DOWNLOAD_POLICIES, type AutoDownloadKind, type AutoDownloadPolicy } from '@/lib/media/auto-download-policy';
@@ -35,12 +37,18 @@ export function MediaDownloadRows({ language, store = mediaDownloadStore() }: { 
   return (
     <div data-settings-media-download className="grid">
       <div className="px-3.5 pt-2.5">
-        <span className="block text-body font-medium" style={{ color: SECTION_INK }}>
-          {translate(language, 'settings.media_download')}
-        </span>
-        <span id={captionId} className="block text-caption" style={{ color: SECTION_INK_2 }}>
-          {translate(language, 'settings.media_download.info')}
-        </span>
+        <InfoNoted
+          note={{
+            label: translate(language, 'settings.media_download.question'),
+            text: translate(language, 'settings.media_download.info'),
+            glyph: SETTINGS_GLYPHS.info,
+          }}
+          noteId={captionId}
+        >
+          <span className="block text-body font-medium" style={{ color: SECTION_INK }}>
+            {translate(language, 'settings.media_download')}
+          </span>
+        </InfoNoted>
       </div>
       {KINDS.map(({ kind, label, icon }) => (
         <label key={kind} className="flex items-center gap-3 px-3.5 py-2" style={{ minHeight: 52 }}>

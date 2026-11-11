@@ -77,8 +77,9 @@ const ptShellLabels = {
   'media.policy.wifiAndGoodCellular': 'Wi-Fi + boa rede móvel',
   'media.policy.wifiOnly': 'Somente Wi-Fi',
   'media.policy.never': 'Nunca',
-  'settings.media_download': 'Download automático de mídia',
+  'settings.media_download': 'Download automático',
   'settings.media_download.info': 'Caso contrário, um toque baixa. Abaixo de 100 KB, a mídia é sempre baixada sozinha.',
+  'settings.media_download.question': 'E se o download não for automático?',
   'settings.media_download.images': 'Imagens',
   'settings.media_download.videos': 'Vídeos',
 

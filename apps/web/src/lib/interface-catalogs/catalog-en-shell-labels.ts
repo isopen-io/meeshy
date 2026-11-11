@@ -77,8 +77,9 @@ const enShellLabels = {
   'media.policy.wifiAndGoodCellular': 'Wi-Fi + good cellular',
   'media.policy.wifiOnly': 'Wi-Fi only',
   'media.policy.never': 'Never',
-  'settings.media_download': 'Automatic media download',
+  'settings.media_download': 'Auto-download',
   'settings.media_download.info': 'Otherwise, a tap downloads it. Under 100 KB, media always downloads on its own.',
+  'settings.media_download.question': 'What if download isn’t automatic?',
   'settings.media_download.images': 'Images',
   'settings.media_download.videos': 'Videos',
 
