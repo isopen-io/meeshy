@@ -5938,3 +5938,17 @@ Les deux voiles lisent ces jetons et importent la feuille eux-mêmes (`@import '
 **Écart assumé.** Le fond d'une scène ne se déplace pas (le studio n'offre qu'un recadrage centré) : l'image se cadre au centre, le Cadre bascule entre remplir et ajuster. La feuille d'image de l'administration (`admin-user-image-sheet.tsx`) reste sans retouche.
 
 **Gardes.** `components/entity-image-retouch.test.tsx` (scène carrée voilée, scène 3:1, rendu aux tailles du format, ✕ et retour sans rendu, rien téléversé), `lib/profile/use-entity-image-edit.test.tsx`, `routes/onboarding-profile.test.tsx` (seule l'image retouchée part, Annuler n'envoie rien, l'avatar n'ouvre jamais la bannière), `lib/stories/studio-background-tools.test.ts`, `lib/stories/studio-retouch.test.ts`.
+
+## D-235 — Le catalogue du kit est une route de développement hors de `ROUTES`, et son instantané est une capture de référence gardée par sa présence (2026-11-10, #17335, K00 ; #17482, #17483)
+
+**Contexte.** Chantier « kit de la planche » : chaque composant du kit se voit dans un catalogue et se prouve par un instantané, sur iOS, Android et le web (fiche `docs/product/kit/K00-Catalogue.md`, § 12).
+
+**Décision.**
+- `/kit` et `/kit/$composant` sont déclarées dans `KIT_ROUTES` (`routes/route-table.tsx`), fusionnées au routeur sous `__FIXTURES__` seulement. Elles restent HORS de `ROUTES` : le miroir de `nginx.conf` (`nginx-app-routes.test.ts`), `isAppPath` et la garde de session ne les connaissent pas, et une image de production ou de staging (construite en `gateway`) ne les sert ni ne les livre (`FIXTURE_MARKERS`).
+- Le réglage « Sombre » du détail pose le schéma du document par `applyScheme` (exporté, sans persistance) et le rend en quittant l'écran : les jetons de couleur sont posés sur `:root.dark` et `:root.light`, pas sur un sous-arbre. Les fonds `dark` et `light` des états suivent donc ce schéma (#17482).
+- « Grande police » est `zoom: 2` sur les tuiles : le zoom du navigateur à 200 %, seul équivalent web du Dynamic Type `accessibility3`. « RTL » est `dir="rtl"` sur les tuiles ; les composants du kit n'emploient que des propriétés logiques.
+- L'instantané web est une image de référence produite par `check-kit.mjs` (`CAPTURE_DIR`) et exigée par sa présence ; les comportements se mesurent dans Chromium à chaque passage. Pas de comparaison au pixel : les polices du système diffèrent entre le poste et la CI (#17483).
+- Le cliquet du verre hors du kit (`kit-glass-baseline.json`) ne fait que descendre ; un verre neuf passe par le kit.
+
+**Écart assumé.** Aucun composant web n'est livré par ce lot : le catalogue est vide, son premier instantané est l'état vide (`Catalogue/vide.*`), et le détail se prouve par les témoins de l'écran sous happy-dom jusqu'à K01.
+

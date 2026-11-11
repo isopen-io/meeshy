@@ -16,6 +16,7 @@ import {
   MeeshyKitCatalogStage,
   tileId,
   tilesOf,
+  type MeeshyKitCatalogState,
 } from './meeshy-kit-catalog';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -47,7 +48,7 @@ const mount = (element: React.ReactElement): HTMLElement => {
   return container;
 };
 
-const entry = (states: Parameters<typeof kitCatalogEntry>[0]['states']) => kitCatalogEntry({ key: 'K02', name: 'MeeshyGlassButton', states });
+const entry = (states: readonly MeeshyKitCatalogState[]) => kitCatalogEntry({ key: 'K02', name: 'MeeshyGlassButton', states });
 
 describe('MeeshyKitCatalogEntry', () => {
   test('une entrée sans état ne se livre pas', () => {
