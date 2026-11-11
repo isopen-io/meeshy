@@ -207,7 +207,7 @@ final class CallCaptionLineTests: XCTestCase {
             isLocalVideoEnabled: false,
             isPrimaryVideoActive: false
         )
-        XCTAssertEqual(tiles.map(\.accentHex), ["me", "b", "c"].map(CallSpeakerColor.hex(for:)))
+        XCTAssertEqual(tiles.map(\.accentHex), ["b", "c", "me"].map(CallSpeakerColor.hex(for:)))
     }
 
     // MARK: - VoiceOver
