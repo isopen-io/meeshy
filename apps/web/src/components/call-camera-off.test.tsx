@@ -101,7 +101,7 @@ describe('G4.1 — la scène noire de la caméra coupée', () => {
     const view = mount(call());
     const off = view.find('[data-call-camera-off]');
     expect(off).not.toBeNull();
-    expect(off?.className).toContain('bg-black');
+    expect(off?.className).toContain('bg-media-backdrop');
     expect(off?.outerHTML).toContain(speakerColor('u-peer', 'Awa Diallo'));
     expect(view.find('[data-call-camera-off] > div > span svg')).not.toBeNull();
     expect(view.find('[data-call-camera-off] > div > span')?.textContent).toBe('Caméra désactivée');
