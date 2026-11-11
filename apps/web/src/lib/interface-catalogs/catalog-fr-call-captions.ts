@@ -8,10 +8,9 @@
 const frCallCaptions = {
   'call.captions.original': 'Afficher les sous-titres originaux',
   'call.captions.invited': 'Afficher les sous-titres — votre interlocuteur les lit déjà',
+  'callCaptions.footer.touchForOriginal': '{pair} · toucher = original',
   'callCaptions.region': 'Sous-titres',
   'callCaptions.waiting': 'Les sous-titres s’affichent ici dès que quelqu’un parle',
-  'callCaptions.mode.translated': 'Traduits dans votre langue',
-  'callCaptions.mode.original': 'Dans la langue d’origine',
   'callCaptions.listening': 'Votre voix est transcrite',
   'callCaptions.unsupported': 'Votre voix n’est pas transcrite sur cet appareil : vous lisez les autres',
   'callCaptions.denied': 'Reconnaissance vocale refusée : vous lisez les autres',

@@ -208,3 +208,39 @@ describe('la voix non transcrite (#9142)', () => {
     expect(notes.filter((note) => /navigateur|browser|navegador|المتصفح/i.test(note))).toEqual([]);
   });
 });
+
+/**
+ * #17343 · #17473 — LE PIED, COMME SUR iOS (`CallCaptionsFooter`) : il dit la paire
+ * de la dernière phrase TRADUITE et le geste qui montre l'original, dans les sept
+ * langues ; sans phrase traduite, il ne dit rien de plus — aucune étiquette de mode
+ * qu'iOS ne pose pas. La note de la voix non transcrite (#9142) y reste.
+ */
+describe('le pied des sous-titres, aligné sur iOS (#17473)', () => {
+  const footerOf = (html: string): string => html.slice(html.indexOf('data-call-captions-footer'));
+
+  test('une phrase traduite : « EN → FR · toucher = original », sur une ligne', () => {
+    const footer = footerOf(panel());
+    expect(footer).toContain('EN → FR · toucher = original');
+    expect(footer).toMatch(/<span class="truncate" data-call-captions-pair="EN → FR">/);
+  });
+
+  test('sans phrase traduite, le pied ne pose aucune étiquette de mode', () => {
+    for (const html of [panel({ captionsMode: 'original' }), panel({ captions: [caption({ translated: null, pair: null })] }), panel({ captions: [] })]) {
+      const footer = footerOf(html);
+      expect(footer).not.toContain('data-call-captions-pair');
+      expect(footer).not.toContain('Traduits dans votre langue');
+      expect(footer).not.toContain('Dans la langue d’origine');
+    }
+  });
+
+  test('la note de la voix non transcrite reste au pied', () => {
+    expect(footerOf(panel({ transcription: 'unsupported', captionsMode: 'original' }))).toContain('data-call-captions-note="unsupported"');
+  });
+
+  test('le geste est dit dans les sept langues, avec la paire en tête comme sur iOS', async () => {
+    await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadInterfaceCatalog(language)));
+    const footers = SUPPORTED_INTERFACE_LANGUAGES.map((language) => renderToStaticMarkup(<CallCaptionsPanel call={call()} language={language} colorOf={colorOf} />).match(/data-call-captions-pair="EN → FR"[^>]*>([^<]*)</)?.[1] ?? '');
+    expect(footers).toHaveLength(7);
+    expect(footers.every((footer) => footer.startsWith('EN → FR · ') && footer.length > 'EN → FR · '.length)).toBe(true);
+  });
+});
