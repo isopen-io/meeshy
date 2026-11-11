@@ -288,6 +288,7 @@ function SessionCard({
   readonly onRevoke: () => void;
 }) {
   const title = sessionTitle(session, t);
+  const titleId = useId();
   const tint = session.isCurrent ? 'var(--color-success)' : 'var(--color-ios-brand)';
   return (
     <li
@@ -297,7 +298,7 @@ function SessionCard({
       style={{ ...SECTION_CARD_STYLE, borderColor: `color-mix(in srgb, ${tint} 40%, transparent)` }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 break-words text-body font-semibold" style={{ color: SECTION_INK }}>
+        <span id={titleId} className="min-w-0 flex-1 break-words text-body font-semibold" style={{ color: SECTION_INK }}>
           {title}
         </span>
         {session.isCurrent ? <Badge tint="var(--color-success)">{t('sessions.current')}</Badge> : null}
@@ -307,6 +308,7 @@ function SessionCard({
         fields={sessionFields(session, { language, now, t, approximate })}
         rest={SESSION_REST_FIELDS}
         moreLabel={t('sessions.more')}
+        subjectId={titleId}
         rowOf={(field) => <FieldRow key={field.key} field={field} note={field.key === 'place' ? placeNote : undefined} />}
       />
       {session.isCurrent ? null : (
@@ -395,11 +397,14 @@ export function MoreFields<F extends { readonly key: string }>({
   fields,
   rest,
   moreLabel,
+  subjectId,
   rowOf,
 }: {
   readonly fields: readonly F[];
   readonly rest: ReadonlySet<string>;
   readonly moreLabel: string;
+  /** L'identifiant du titre de la fiche : chaque « Plus » d'une liste dit au lecteur d'écran de QUOI il parle. */
+  readonly subjectId: string;
   readonly rowOf: (field: F) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -417,6 +422,7 @@ export function MoreFields<F extends { readonly key: string }>({
           type="button"
           aria-expanded={open}
           aria-controls={id}
+          aria-describedby={subjectId}
           onClick={() => setOpen((current) => !current)}
           className="inline-flex items-center rounded-chip px-3 text-caption font-semibold focus-visible:outline-2"
           style={{ minHeight: 44, justifySelf: 'start', color: SECTION_INK_2, outlineColor: 'var(--color-ios-brand)' }}

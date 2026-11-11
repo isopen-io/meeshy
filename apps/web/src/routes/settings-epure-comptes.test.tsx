@@ -77,6 +77,13 @@ const moreButton = (host: ParentNode): HTMLButtonElement => {
   return button;
 };
 
+const descriptionOf = (host: ParentNode, control: Element): string =>
+  (control.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter((id) => id !== '')
+    .map((id) => host.querySelector(`[id="${id}"]`)?.textContent ?? '')
+    .join(' ');
+
 const fieldKeys = (card: Element | null, attribute: string): readonly (string | null)[] =>
   [...(card?.querySelectorAll(`[${attribute}]`) ?? [])].map((field) => field.getAttribute(attribute));
 
@@ -137,6 +144,13 @@ describe('une session ouverte', () => {
     const keys = fieldKeys(card, 'data-session-field');
     for (const key of ['app', 'platform', 'system', 'browser', 'ip', 'timezone', 'opened', 'method']) expect(keys).toContain(key);
   });
+
+  test('chaque « Plus » dit, au lecteur d’écran, de quelle session il parle', async () => {
+    const host = await mount(screen());
+    await settle();
+    const more = moreButton(host.querySelector<HTMLElement>('[data-session="autre"]') as HTMLElement);
+    expect(descriptionOf(host, more)).toBe('Pixel 7');
+  });
 });
 
 describe('un appareil chiffré', () => {
@@ -180,6 +194,13 @@ describe('un appareil chiffré', () => {
     const keys = fieldKeys(card, 'data-e2ee-device-field');
     expect(keys).toContain('number');
     expect(keys).toContain('platform');
+  });
+
+  test('son « Plus » dit, au lecteur d’écran, de quel appareil il parle', async () => {
+    const host = await mount(screen());
+    await settle();
+    const more = moreButton(host.querySelector<HTMLElement>('[data-e2ee-device="7"]') as HTMLElement);
+    expect(descriptionOf(host, more)).toBe('iPhone de Awa');
   });
 });
 

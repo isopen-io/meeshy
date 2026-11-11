@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -244,6 +244,7 @@ function DeviceCard({
   readonly onRetire: () => void;
 }) {
   const title = e2eeDeviceTitle(device, t);
+  const titleId = useId();
   const tint = device.current ? 'var(--color-success)' : 'var(--color-ios-brand)';
   return (
     <li
@@ -252,7 +253,7 @@ function DeviceCard({
       style={{ ...SECTION_CARD_STYLE, borderColor: `color-mix(in srgb, ${tint} 40%, transparent)` }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 break-words text-body font-semibold" style={{ color: SECTION_INK }} dir="auto">
+        <span id={titleId} className="min-w-0 flex-1 break-words text-body font-semibold" style={{ color: SECTION_INK }} dir="auto">
           {title}
         </span>
         {device.current ? (
@@ -268,6 +269,7 @@ function DeviceCard({
         fields={e2eeDeviceFields(device, { language, now, t })}
         rest={E2EE_DEVICE_REST_FIELDS}
         moreLabel={t('sessions.more')}
+        subjectId={titleId}
         rowOf={(field) => (
           <div key={field.key} data-e2ee-device-field={field.key} style={{ display: 'contents' }}>
             <dt style={{ color: SECTION_INK_2 }}>{field.label}</dt>
