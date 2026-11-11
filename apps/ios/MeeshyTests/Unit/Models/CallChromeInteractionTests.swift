@@ -75,14 +75,21 @@ final class CallChromeInteractionTests: XCTestCase {
         XCTAssertLessThan(CallChromeStow.reducedFadeDuration, CallChromeVisibility.fadeDuration)
     }
 
-    func test_stow_headerLeavesUpwards_pastTheTopInset() {
-        XCTAssertLessThan(CallChromeStow.headerTravel(topInset: 59), -59)
-        XCTAssertLessThan(CallChromeStow.headerTravel(topInset: 59), CallChromeStow.headerTravel(topInset: 20))
+    /// La sortie est MESURÉE : l'élément part de toute sa hauteur plus sa marge au bord, si bien
+    /// qu'une pilule dépliée (rangées, journal) quitte l'écran aussi entièrement que la pilule nue.
+    func test_stow_headerLeavesUpwards_byItsMeasuredHeightAndTopMargin() {
+        XCTAssertEqual(CallChromeStow.travel(toward: .top, extent: 44, margin: 59), -103)
     }
 
-    func test_stow_pillLeavesDownwards_pastTheBottomInset() {
-        XCTAssertGreaterThan(CallChromeStow.pillTravel(bottomInset: 34), CallRailsLayout.pillHeight + 34)
-        XCTAssertGreaterThan(CallChromeStow.pillTravel(bottomInset: 34), CallChromeStow.pillTravel(bottomInset: 0))
+    func test_stow_pillLeavesDownwards_byItsMeasuredHeightAndBottomMargin() {
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: 68, margin: 46), 114)
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: 440, margin: 46), 486, "Le journal ouvert sort lui aussi tout entier")
+    }
+
+    func test_stow_unmeasuredExtent_stillLeavesPastTheMargin() {
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: 0, margin: 46), 46)
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: -5, margin: 46), 46)
+        XCTAssertEqual(CallChromeStow.travel(toward: .bottom, extent: .nan, margin: 46), 46)
     }
 
     // MARK: - Enfoncement

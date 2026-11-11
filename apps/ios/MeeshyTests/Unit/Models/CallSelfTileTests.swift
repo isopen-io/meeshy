@@ -154,6 +154,19 @@ final class CallSelfTileTests: XCTestCase {
         XCTAssertEqual(CallSelfTileScale.anchor(of: CGPoint(x: 60, y: 700), in: screen), .bottomLeading)
     }
 
+    /// Loi 4 · 11 — rangée par une échelle, ma vignette garde le liseré, les coins et le badge
+    /// d'une petite vignette : ce qui ne doit pas rapetisser est contre-mis à l'échelle.
+    func test_counterScaled_keepsTheDrawnLength_onceTheTileIsScaled() {
+        let factor = CallSelfTileScale.restingFactor(.x3, isChromeVisible: false)
+        XCTAssertEqual(CallSelfTileScale.counterScaled(CallSelfTileStroke.lineWidth, by: factor) * factor, CallSelfTileStroke.lineWidth, accuracy: 0.0001)
+        XCTAssertEqual(CallSelfTileScale.counterScaled(12, by: 1), 12, accuracy: 0.0001)
+    }
+
+    func test_counterScaled_degenerateFactor_leavesTheLengthUntouched() {
+        XCTAssertEqual(CallSelfTileScale.counterScaled(2, by: 0), 2)
+        XCTAssertEqual(CallSelfTileScale.counterScaled(2, by: .nan), 2)
+    }
+
     // MARK: - Loi 4 — le liseré porte la couleur de qui est DANS la vignette
 
     func test_strokeKey_myImageInTheTile_isMyId() {

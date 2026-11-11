@@ -552,8 +552,8 @@ final class CallHangupFastPathTests: XCTestCase {
 
     /// #17343 — les sous-titres vivent DANS la pilule, au-dessus de sa rangée de base,
     /// dans le même verre, en duo comme en groupe : le bandeau à verre propre posé AU-DESSUS
-    /// de la pilule (géométrie d'avant #17343) a disparu ; le seul verre à eux est celui de
-    /// la pilule RANGÉE (loi 11), posé à sa place.
+    /// de la pilule (géométrie d'avant #17343) a disparu ; rangée, la pilule les garde dans le
+    /// même verre, privé de sa rangée de base (loi 11, #17532).
     func test_captions_liveInThePill_aboveItsBaseRow_inTheSameGlass() throws {
         let view = try AppSourceGuard.callViewSource()
         XCTAssertFalse(view.contains("transcriptOverlay"), "Le bandeau flottant a disparu.")
