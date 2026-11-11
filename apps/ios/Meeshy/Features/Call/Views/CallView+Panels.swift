@@ -74,9 +74,7 @@ extension CallView {
             reactionPanelRows
         case .record:
             recordingPanelRows
-        case .journal:
-            journalPanelRows
-        case .people:
+        case .people, .journal:
             EmptyView()
         }
     }

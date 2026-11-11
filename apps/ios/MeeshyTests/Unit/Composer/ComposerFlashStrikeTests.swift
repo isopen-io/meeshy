@@ -65,7 +65,6 @@ final class ComposerFlashStrikeTests: XCTestCase {
     func test_frame_atStart_drawsNothing() {
         let image = ComposerFlashStrike.frame(at: 0)
         XCTAssertEqual(image.drawn, 0, accuracy: 0.001)
-        XCTAssertEqual(image.whitening, 0, accuracy: 0.001)
     }
 
     func test_frame_afterDrawDuration_boltIsFullyDrawn() {
@@ -80,23 +79,10 @@ final class ComposerFlashStrikeTests: XCTestCase {
         XCTAssertEqual(traces, traces.sorted(), "le tracé ne recule jamais")
     }
 
-    func test_frame_whitening_isBriefAndModerate() {
-        let pas = stride(from: 0.0, through: ComposerFlashStrike.lifetime, by: 0.005)
-        let blancs = pas.map { ($0, ComposerFlashStrike.frame(at: $0).whitening) }
-        let allumes = blancs.filter { $0.1 > 0.001 }
-        let duree = (allumes.last?.0 ?? 0) - (allumes.first?.0 ?? 0)
-        XCTAssertLessThanOrEqual(duree, 0.13, "le blanchiment dure environ 120 ms")
-        XCTAssertGreaterThan(duree, 0.08)
-        let pic = blancs.map(\.1).max() ?? 0
-        XCTAssertLessThanOrEqual(pic, ComposerFlashStrike.whiteningPeak)
-        XCTAssertLessThan(ComposerFlashStrike.whiteningPeak, 0.5, "l'image reste lisible sous le blanc")
-    }
-
     func test_frame_atLifetime_leavesNothingOnScreen() {
         let image = ComposerFlashStrike.frame(at: ComposerFlashStrike.lifetime)
         XCTAssertEqual(image.boltOpacity, 0, accuracy: 0.001)
         XCTAssertEqual(image.glow, 0, accuracy: 0.001)
-        XCTAssertEqual(image.whitening, 0, accuracy: 0.001)
     }
 
     func test_frame_negativeOrNonFiniteTime_isTheFirstImage() {
@@ -106,11 +92,21 @@ final class ComposerFlashStrikeTests: XCTestCase {
 
     // MARK: - Le tracé
 
-    func test_boltPath_staysInsideTheViewfinder() {
-        let toile = CGRect(x: 0, y: 0, width: 390, height: 693)
-        let cadre = ComposerFlashStrike.boltPath(in: toile.size).boundingRect
-        XCTAssertTrue(toile.contains(cadre))
-        XCTAssertGreaterThan(cadre.height, toile.height * 0.3, "un éclair qui se voit")
+    /// **L'éclair frappe l'ICÔNE, pas l'écran** (porteur 2026-11-11, #17463) : il
+    /// remplit le bouton du flash et n'en sort pas.
+    func test_boltPath_fillsTheFlashIcon() {
+        let icone = CGRect(x: 0, y: 0, width: 44, height: 44)
+        let cadre = ComposerFlashStrike.boltPath(in: icone.size).boundingRect
+        XCTAssertTrue(icone.contains(cadre))
+        XCTAssertGreaterThan(cadre.height, icone.height * 0.6, "un éclair qui se voit dans l'icône")
+    }
+
+    @MainActor
+    func test_theStrike_playsOnTheFlashButton_neverOverTheViewfinder() throws {
+        let vues = try ComposerCaptureStageWiringTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
+        XCTAssertFalse(vues.contains("ComposerFlashStrike"), "plus aucun éclair posé sur le viseur")
+        let barre = try ComposerCaptureStageWiringTests.code("Meeshy/Features/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains("ComposerFlashIconStrike(flash: flashMode"), "l'éclair joue dans le bouton du flash")
     }
 
     func test_boltPath_emptyCanvas_isEmpty() {

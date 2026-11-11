@@ -216,24 +216,34 @@ nonisolated enum ComposerSceneCameraSize: String, Equatable, CaseIterable, Senda
 /// **Une entrée de scène de la colonne du viseur** (#17432, directive porteur) :
 /// ce qu'on compose sans quitter la caméra.
 nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Sendable {
+    /// En PREMIER (directive porteur) : choisir dans la photothèque est le geste
+    /// qui remplace la prise.
+    case gallery
     case text
     case background
-    case gallery
     case sticker
 
     /// Ce que l'entrée fait de la caméra.
     enum Camera: Equatable, Sendable {
-        /// La caméra reste armée : ce qu'on pose attend la prise, qui passera dessous.
+        /// La caméra reste armée, l'aperçu tourne : ce qu'on pose attend la prise, qui passera dessous.
         case kept
-        /// La caméra se coupe : l'entrée remplace ce qu'elle aurait pris.
+        /// La caméra s'arrête : l'élément choisi remplace ce qu'elle aurait pris.
         case cut
     }
 
-    var camera: Camera {
-        switch self {
-        case .text, .sticker: return .kept
-        case .background, .gallery: return .cut
-        }
+    /// Ce qui est arrivé à l'entrée ouverte.
+    enum Outcome: Equatable, Sendable {
+        case opened
+        case dismissed
+        case chosen
+    }
+
+    /// **Le viseur reste vivant pendant tout le processus** (directive porteur),
+    /// sauf quand un élément de la galerie est CHOISI : le viseur s'arrête et le composer de
+    /// base revient. Un fond choisi reste celui de la scène tant qu'aucune prise ne le remplace.
+    func camera(after outcome: Outcome) -> Camera {
+        guard self == .gallery, outcome == .chosen else { return .kept }
+        return .cut
     }
 
     /// La porte de la scène que l'entrée ouvre ; la galerie n'en a pas, elle ouvre la photothèque.
@@ -253,17 +263,30 @@ nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Senda
     var accessibilityIdentifier: String { "composer.viewfinder.\(rawValue)" }
 }
 
-/// **La colonne du viseur du composer : Texte · Fond · Galerie · Sticker, puis
+/// **La colonne du viseur du composer : Galerie · Texte · Fond · Stickers, puis
 /// les familles de look** (#17432). Elle retourne « pas de rail au viseur »
 /// (A8, #17109) : les rails de la SCÈNE cèdent toujours, mais le viseur armé
 /// porte ses entrées de scène. La caméra de conversation n'en a aucune ; une
 /// prise en cours, une tenue ou une retouche les retirent ; des segments en
-/// attente ne laissent que ce qui garde la caméra.
+/// attente retirent la Galerie, dont le choix couperait la caméra.
 nonisolated enum ComposerViewfinderColumn {
     static func entries(composesScene: Bool, context: ComposerCaptureGestureContext) -> [ComposerViewfinderEntry] {
         guard composesScene, context.stage == .armed, !context.editing, !context.holding else { return [] }
         guard context.pendingSegments > 0 else { return ComposerViewfinderEntry.allCases }
-        return ComposerViewfinderEntry.allCases.filter { $0.camera == .kept }
+        return ComposerViewfinderEntry.allCases.filter { $0.camera(after: .chosen) == .kept }
+    }
+
+    /// Une feuille se pose PAR-DESSUS le viseur vivant ; un outil qui s'édite SUR la scène (la
+    /// saisie d'un texte, la bande du cadre) prend la scène le temps de l'outil, caméra armée.
+    static func yieldsToScene(toolPresentsSheet: Bool) -> Bool {
+        !toolPresentsSheet
+    }
+
+    /// L'outil auquel le viseur a cédé la scène est-il encore ouvert ? Sa fermeture rend le
+    /// viseur. La bande du cadre en est un : sans elle, fermer la bande laissait la scène figée.
+    static func entryToolIsOpen(yieldsToScene: Bool, sceneToolOwnsScreen: Bool,
+                                sheetIsPresented: Bool, bandIsOpen: Bool) -> Bool {
+        yieldsToScene && (sceneToolOwnsScreen || sheetIsPresented || bandIsOpen)
     }
 
     /// Un trait sépare ce qu'on pose de ce qui teinte la prise, quand le rail porte les deux.
@@ -271,10 +294,14 @@ nonisolated enum ComposerViewfinderColumn {
         !sceneEntries.isEmpty && offersLooks
     }
 
+    /// **Des noms simples, ceux du porteur** : Galerie · Texte · Fond · Stickers —
+    /// des noms d'objets, pas les verbes du rail de la scène.
     static func label(_ entry: ComposerViewfinderEntry) -> String {
-        guard let door = entry.door else {
-            return String(localized: "composer.viewfinder.gallery", defaultValue: "Galerie", bundle: .main)
+        switch entry {
+        case .gallery: return String(localized: "composer.viewfinder.gallery", defaultValue: "Galerie", bundle: .main)
+        case .text: return String(localized: "composer.viewfinder.text", defaultValue: "Texte", bundle: .main)
+        case .background: return String(localized: "composer.viewfinder.background", defaultValue: "Fond", bundle: .main)
+        case .sticker: return String(localized: "composer.viewfinder.stickers", defaultValue: "Stickers", bundle: .main)
         }
-        return ComposerRailCopy.label(door)
     }
 }

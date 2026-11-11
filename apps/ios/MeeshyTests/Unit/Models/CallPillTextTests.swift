@@ -87,6 +87,15 @@ final class CallPillTextTests: XCTestCase {
         XCTAssertTrue([CallPillText.none, .captions, .journal].allSatisfy(\.hasBaseRow))
     }
 
+    /// En audio, seul le journal ouvert resserre l'avatar en en-tête compact : deux
+    /// phrases de sous-titres laissent la personne au centre.
+    func test_onlyTheOpenJournal_compactsTheAudioLayout() {
+        XCTAssertTrue(text(.panel(.journal)).compactsAudioLayout)
+        XCTAssertFalse(text().compactsAudioLayout)
+        XCTAssertFalse(text(.menuOverJournal).compactsAudioLayout)
+        XCTAssertFalse(text(.panel(.journal), revealed: false).compactsAudioLayout)
+    }
+
     // MARK: - Une seule largeur pour le verre
 
     func test_width_aPillThatCarriesText_andTheStowedGlass_shareOneCap() {

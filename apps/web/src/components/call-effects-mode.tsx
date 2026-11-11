@@ -5,6 +5,7 @@ import { callActions } from '@/lib/calls/call-actions';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
+import { onRowWheel } from '@/lib/calls/call-row-keys';
 import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
 import { loadCallStudioCatalog, translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -201,7 +202,7 @@ const sliders = (
 
 const TEXT_TAB = 'min-h-11 rounded-full px-3 text-mini font-semibold transition-colors motion-reduce:transition-none';
 
-export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, companions = [], captions = [], quitGlyph, onExit, onWheel, apply = applyNow, audio = NO_AUDIO, grab = VIDEO_GRAB, save, clipEnv }: ModeProps) {
+export function CallEffectsMode({ language, colorAvailable, blurAvailable, preview, selfVideo, companions = [], captions = [], quitGlyph, onExit, onWheel = onRowWheel, apply = applyNow, audio = NO_AUDIO, grab = VIDEO_GRAB, save, clipEnv }: ModeProps) {
   const effects = useStore(videoEffectsStore, (state) => state.effects);
   const before = useRef(effects);
   const root = useRef<HTMLDivElement>(null);

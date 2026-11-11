@@ -44,6 +44,7 @@ import me.meeshy.sdk.model.call.CallControlsDisposition
 import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.sdk.model.call.CallGroupStageSizing
 import me.meeshy.sdk.model.call.CallHeaderLaw
+import me.meeshy.sdk.model.call.CallPillText
 import me.meeshy.sdk.model.call.CallRailsLayout
 import me.meeshy.sdk.model.call.CallScreenPanel
 import me.meeshy.ui.theme.MeeshySpacing
@@ -166,7 +167,11 @@ internal fun CallConnectedColumn(
     LaunchedEffect(state.isVideoCall) { routeViewModel.onEvent(CallAudioRouteUiEvent.Start(state.isVideoCall)) }
 
     BoxWithConstraints(modifier) {
-        val audioPanel = groupStage == null && !videoStage && state.captions.mode != CaptionsMode.Off
+        val pillText = CallPillText.resolve(
+            isCaptionsEnabled = state.captions.mode != CaptionsMode.Off,
+            layer = chromeState.layer,
+            isChromeRevealed = controlsVisible,
+        )
         // #17327 : à deux le (…) fait sortir deux rails sur les bords, à plusieurs il déplie des rangées dans la pilule.
         val disposition = CallControlsDisposition.resolve(CallControlsDisposition.MAX_PARTICIPANTS_ON_RAILS, showsGroupGrid = groupStage != null)
         val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), CallGroupStageSizing.isCompactHeight(maxHeight.value))
@@ -183,53 +188,52 @@ internal fun CallConnectedColumn(
                 // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; la capture, dans la capsule ci-dessous.
                 Spacer(Modifier.weight(1f).fillMaxWidth())
-            } else if (audioPanel) {
-                CallCaptionsTranscriptPanel(state = state, peer = peer, modifier = Modifier.weight(1f))
             } else {
                 CallAudioStage(state = state, peer = peer, signalingDegraded = signalingDegraded)
             }
 
             state.captionText?.let { caption -> CallCaption(caption) }
-            if (!audioPanel) CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
 
             // La vignette à la une en plein écran (#13750) rend toute la place : la pilule sort de la mise en page.
-            if (!chromeState.isStageFullScreen) CallChromeFade(
-                isVisible = controlsVisible,
+            if (!chromeState.isStageFullScreen) CallControlsBlock(
+                pillText = pillText,
+                controlsVisible = controlsVisible,
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
+                onInteraction = chrome::onInteraction,
+                stowedCaptions = { CallCaptionsBandHost(state = state, hasOwnGlass = true) },
                 modifier = Modifier.padding(bottom = MeeshySpacing.xl),
             ) {
-                androidx.compose.runtime.CompositionLocalProvider(
-                    LocalCallChromeInteraction provides chrome::onInteraction,
-                ) {
-                    CallControlsPill(
-                        state = state,
-                        layer = chromeState.layer,
-                        disposition = disposition,
-                        rows = rows,
-                        items = pill.items,
-                        outputIcon = route.route.active?.kind?.icon() ?: Icons.Filled.VolumeUp,
-                        onToggleMenu = chrome::toggleMenu,
-                        onToggleMute = viewModel::toggleMute,
-                        onOutput = { routeSheetOpen = true },
-                        onHangUp = viewModel::hangUp,
-                        onAction = pill.onAction,
-                        onBackToMenu = chrome::backToMenu,
-                        onClosePanel = chrome::close,
-                        panelContent = { panel ->
-                            when (panel) {
-                                CallScreenPanel.Record -> CallRecordingKindPanel(
-                                    onPick = { kind ->
-                                        recordingViewModel.onEvent(CallRecordingUiEvent.Pick(kind))
-                                        chrome.close()
-                                    },
-                                )
-                                CallScreenPanel.React -> CallReactionsPanel(onReact = reactionsViewModel::react)
-                                else -> Unit
-                            }
-                        },
-                    )
-                }
+                CallControlsPill(
+                    state = state,
+                    layer = chromeState.layer,
+                    disposition = disposition,
+                    rows = rows,
+                    items = pill.items,
+                    outputIcon = route.route.active?.kind?.icon() ?: Icons.Filled.VolumeUp,
+                    onToggleMenu = chrome::toggleMenu,
+                    onToggleMute = viewModel::toggleMute,
+                    onOutput = { routeSheetOpen = true },
+                    onHangUp = viewModel::hangUp,
+                    onAction = pill.onAction,
+                    onBackToMenu = chrome::backToMenu,
+                    onClosePanel = chrome::close,
+                    pillText = pillText,
+                    captions = { CallCaptionsBandHost(state = state, hasOwnGlass = false) },
+                    panelContent = { panel ->
+                        when (panel) {
+                            CallScreenPanel.Record -> CallRecordingKindPanel(
+                                onPick = { kind ->
+                                    recordingViewModel.onEvent(CallRecordingUiEvent.Pick(kind))
+                                    chrome.close()
+                                },
+                            )
+                            CallScreenPanel.React -> CallReactionsPanel(onReact = reactionsViewModel::react)
+                            CallScreenPanel.Journal -> CallJournalPanel(onClose = chrome::close, captures = state.liveCaptures, peerName = state.peerName)
+                            else -> Unit
+                        }
+                    },
+                )
             }
         }
         androidx.compose.runtime.CompositionLocalProvider(LocalCallChromeInteraction provides chrome::onInteraction) {

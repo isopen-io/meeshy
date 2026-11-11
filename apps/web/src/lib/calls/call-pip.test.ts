@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { armAutoPip, pipAspect, pipSource, pipSupport, registerPipOpener, requestCallPip, shouldOfferPip } from './call-pip';
+import { armAutoPip, pipAspect, pipSource, pipSupport, pipOpenStore, registerPipCloser, registerPipOpener, requestCallPip, requestCallPipExit, shouldOfferPip } from './call-pip';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -82,6 +82,22 @@ describe('requestCallPip', () => {
     unregister();
     requestCallPip();
     expect(calls).toEqual(['ouverte']);
+  });
+});
+
+describe('requestCallPipExit (#17329 : le bouton de l’en-tête sert aussi à SORTIR de l’image dans l’image)', () => {
+  test('ferme la fenêtre enregistrée, et plus rien une fois retirée', () => {
+    const calls: string[] = [];
+    const unregister = registerPipCloser(() => void calls.push('fermée'));
+    requestCallPipExit();
+    expect(calls).toEqual(['fermée']);
+    unregister();
+    requestCallPipExit();
+    expect(calls).toEqual(['fermée']);
+  });
+
+  test('l’état « elle flotte » se lit dans un store, faux au départ', () => {
+    expect(pipOpenStore.getState().open).toBe(false);
   });
 });
 

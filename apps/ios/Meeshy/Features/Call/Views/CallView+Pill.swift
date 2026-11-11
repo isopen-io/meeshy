@@ -143,7 +143,8 @@ extension CallView {
     /// sous-titres (ou le journal, à leur place), PUIS la rangée de base. Le verre
     /// enveloppe le tout et grandit avec lui (#8459, #8550, #8578). À deux, `(…)` ne
     /// le fait pas grandir : ses actions sont sur les rails (#17327). #17343 — les
-    /// sous-titres et le journal y vivent en duo comme en groupe ; (…) les range.
+    /// sous-titres et le journal y vivent en duo comme en groupe ; (…) les range. Le journal,
+    /// qui défile à sa hauteur, reste HORS du `ViewThatFits` des rangées (rendu asynchrone, #9456).
     var callControlsPill: some View {
         let actions = currentActionSet
         let disposition = controlsDisposition
@@ -151,11 +152,15 @@ extension CallView {
         return VStack(spacing: 0) {
             if disposition.unfoldsPill(for: layer) {
                 VStack(spacing: 0) {
-                    unfoldedRows {
-                        if let panel = layer.pillPanel {
-                            panelRows(panel)
-                        } else {
-                            familyRows(disposition.pillRows(actions, layer: layer))
+                    if layer.pillPanel == .journal {
+                        journalPanelRows
+                    } else {
+                        unfoldedRows {
+                            if let panel = layer.pillPanel {
+                                panelRows(panel)
+                            } else {
+                                familyRows(disposition.pillRows(actions, layer: layer))
+                            }
                         }
                     }
                     pillHairline

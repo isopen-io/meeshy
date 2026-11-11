@@ -29,6 +29,12 @@ enum CallPillText: Equatable, Sendable {
     var hasBaseRow: Bool {
         self != .captionsAlone
     }
+
+    /// Le journal prend une part de la fenêtre (`CallJournalSizing`) : en audio,
+    /// l'avatar se resserre alors en en-tête compact pour lui laisser la place.
+    var compactsAudioLayout: Bool {
+        self == .journal
+    }
 }
 
 /// #17343 — UNE largeur pour le verre : la pilule qui porte du texte et le verre

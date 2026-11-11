@@ -104,10 +104,11 @@ describe('CallJournalPanel', () => {
     view.done();
   });
 
-  test('ma parole se lit telle que dite, sans original redoublé ; chaque ligne ne se peint que là où je regarde', () => {
+  test('ma parole se lit telle que dite, signée « Moi » comme dans la bande (planche P6), sans original redoublé ; chaque ligne ne se peint que là où je regarde', () => {
     const view = mount([caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null })]);
     const entry = view.find('[data-call-journal-entry="mine"]') as HTMLElement;
-    expect(entry.textContent).toContain('Vous');
+    expect(entry.querySelector('strong')?.textContent).toBe('Moi');
+    expect(entry.textContent).not.toContain('Vous');
     expect(entry.querySelector('[data-call-journal-original]')).toBeNull();
     expect(entry.style.contentVisibility).toBe('auto');
     view.done();

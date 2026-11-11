@@ -4,12 +4,12 @@ import UIKit
 import MeeshySDK
 import MeeshyUI
 
-/// **Allumer le flash se VOIT : un éclair frappe le viseur** (#17463).
+/// **Allumer le flash se VOIT : un éclair frappe son ICÔNE** (#17463 : « sur
+/// l'icône uniquement, pas sur tout l'écran »).
 ///
-/// Un tracé de foudre se dessine en 250 ms depuis le haut du viseur, sous la
-/// capsule du flash, avec une lueur chaude ; quand il touche, l'image blanchit
-/// 120 ms, sans jamais cesser d'être lisible. Éteindre ne joue rien. Sous Reduce
-/// Motion il ne reste que l'icône et l'annonce VoiceOver ; en filmant, rien.
+/// Un tracé de foudre se dessine en 250 ms dans le bouton du flash, avec une
+/// lueur chaude, puis s'éteint ; le viseur n'est jamais touché. Éteindre ne joue
+/// rien. Sous Reduce Motion il ne reste que l'annonce VoiceOver ; en filmant, rien.
 ///
 /// La loi est pure : quand l'éclair joue, et ce que montre chaque image en
 /// fonction du seul temps écoulé. La vue n'a qu'un état, l'instant de la frappe.
@@ -28,17 +28,12 @@ nonisolated enum ComposerFlashStrike {
         let drawn: Double
         let boltOpacity: Double
         let glow: Double
-        let whitening: Double
     }
 
     static let drawDuration: TimeInterval = 0.25
     static let lifetime: TimeInterval = 0.5
-    static let whiteningPeak: Double = 0.32
 
     private static let holdUntil: TimeInterval = 0.3
-    private static let whiteningStart: TimeInterval = 0.2
-    private static let whiteningTop: TimeInterval = 0.23
-    private static let whiteningEnd: TimeInterval = 0.32
 
     /// On ALLUME — vers « activé » ou « auto », depuis un autre mode.
     static func outcome(from old: AVCaptureDevice.FlashMode, to new: AVCaptureDevice.FlashMode,
@@ -59,13 +54,7 @@ nonisolated enum ComposerFlashStrike {
         let drawn = 1 - pow(1 - draw, 3)
         let boltOpacity = t <= holdUntil ? 1 : max(0, 1 - (t - holdUntil) / (lifetime - holdUntil))
         let glow = t <= drawDuration ? draw * draw : max(0, 1 - (t - drawDuration) / (lifetime - drawDuration))
-        return Frame(drawn: drawn, boltOpacity: boltOpacity, glow: glow, whitening: whitening(at: t))
-    }
-
-    private static func whitening(at t: TimeInterval) -> Double {
-        guard t > whiteningStart, t < whiteningEnd else { return 0 }
-        guard t > whiteningTop else { return whiteningPeak * (t - whiteningStart) / (whiteningTop - whiteningStart) }
-        return whiteningPeak * (whiteningEnd - t) / (whiteningEnd - whiteningTop)
+        return Frame(drawn: drawn, boltOpacity: boltOpacity, glow: glow)
     }
 
     // MARK: - Le tracé
@@ -78,11 +67,11 @@ nonisolated enum ComposerFlashStrike {
         CGPoint(x: 0.58, y: 0.36), CGPoint(x: 0.80, y: 0.52), CGPoint(x: 0.72, y: 0.64)
     ]
 
-    /// Le cadre de l'éclair : 40 % de la hauteur, centré, sous la capsule du haut.
+    /// Le cadre de l'éclair : 70 % de l'icône, centré.
     private static func box(in size: CGSize) -> CGRect {
-        let hauteur = size.height * 0.4
-        let largeur = min(hauteur * 0.42, size.width * 0.8)
-        return CGRect(x: (size.width - largeur) / 2, y: size.height * 0.08, width: largeur, height: hauteur)
+        let hauteur = size.height * 0.7
+        let largeur = min(hauteur * 0.6, size.width * 0.8)
+        return CGRect(x: (size.width - largeur) / 2, y: (size.height - hauteur) / 2, width: largeur, height: hauteur)
     }
 
     private static func path(_ points: [CGPoint], in size: CGSize) -> Path {
@@ -121,17 +110,16 @@ struct ComposerFlashStrikeCanvas: View {
         }
     }
 
+    /// Les traits sont dessinés pour une icône de 44 pt et suivent sa taille.
     private static func paint(_ image: ComposerFlashStrike.Frame, in contexte: inout GraphicsContext, size: CGSize) {
-        if image.whitening > 0 {
-            contexte.fill(Path(CGRect(origin: .zero, size: size)), with: .color(.white.opacity(image.whitening)))
-        }
         guard image.drawn > 0, image.boltOpacity > 0 else { return }
+        let echelle = min(size.width, size.height) / 44
         let tronc = ComposerFlashStrike.boltPath(in: size).trimmedPath(from: 0, to: image.drawn)
         let branche = ComposerFlashStrike.forkPath(in: size)
             .trimmedPath(from: 0, to: ComposerFlashStrike.forkDrawn(image.drawn))
-        stroke(tronc, scale: 1, image: image, in: &contexte)
-        stroke(branche, scale: 0.6, image: image, in: &contexte)
-        flare(at: tronc.currentPoint, image: image, in: &contexte)
+        stroke(tronc, scale: echelle, image: image, in: &contexte)
+        stroke(branche, scale: echelle * 0.6, image: image, in: &contexte)
+        flare(at: tronc.currentPoint, radius: 14 * echelle, image: image, in: &contexte)
     }
 
     /// Trois traits superposés : un halo chaud, une lueur, un cœur blanc.
@@ -139,9 +127,9 @@ struct ComposerFlashStrikeCanvas: View {
                                in contexte: inout GraphicsContext) {
         guard !trace.isEmpty else { return }
         let couches: [(width: CGFloat, color: Color, opacity: Double)] = [
-            (16, warm, 0.16 * image.glow),
-            (7, warm, 0.4 * image.glow),
-            (2.5, .white, 1)
+            (7, warm, 0.25 * image.glow),
+            (3.5, warm, 0.55 * image.glow),
+            (1.5, .white, 1)
         ]
         couches.forEach { couche in
             contexte.stroke(trace, with: .color(couche.color.opacity(couche.opacity * image.boltOpacity)),
@@ -150,10 +138,10 @@ struct ComposerFlashStrikeCanvas: View {
     }
 
     /// L'impact : une tache de lumière à la pointe de l'éclair.
-    private static func flare(at point: CGPoint?, image: ComposerFlashStrike.Frame,
+    private static func flare(at point: CGPoint?, radius: CGFloat, image: ComposerFlashStrike.Frame,
                               in contexte: inout GraphicsContext) {
         guard let point, image.glow > 0 else { return }
-        let rayon = 46 * image.glow
+        let rayon = radius * image.glow
         let disque = Path(ellipseIn: CGRect(x: point.x - rayon, y: point.y - rayon, width: rayon * 2, height: rayon * 2))
         let degrade = Gradient(colors: [.white.opacity(0.85 * image.boltOpacity),
                                         warm.opacity(0.35 * image.boltOpacity), .clear])
@@ -161,10 +149,10 @@ struct ComposerFlashStrikeCanvas: View {
     }
 }
 
-/// **La surimpression de l'éclair**, montée sur le viseur : elle écoute le mode
-/// du flash et ne s'insère dans l'arbre que le temps d'une frappe. Elle ne prend
-/// aucun toucher et VoiceOver ne la voit pas — l'annonce dit l'état.
-struct ComposerFlashStrikeLayer: View {
+/// **L'éclair posé SUR le bouton du flash** : il écoute le mode du flash et ne
+/// s'insère dans l'arbre que le temps d'une frappe, dans le cadre de l'icône.
+/// Il ne prend aucun toucher et VoiceOver ne le voit pas — l'annonce dit l'état.
+struct ComposerFlashIconStrike: View {
     let flash: AVCaptureDevice.FlashMode
     let recording: Bool
 
@@ -186,7 +174,6 @@ struct ComposerFlashStrikeLayer: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .ignoresSafeArea()
         .adaptiveOnChange(of: flash) { avant, mode in
             react(from: avant, to: mode)
         }

@@ -3,7 +3,6 @@ package me.meeshy.app.calls
 import me.meeshy.ui.icons.MeeshyIcons
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -58,20 +57,26 @@ internal fun CallPillPanel(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).semantics { heading() },
             )
-            PanelHeaderButton(onClose) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.call_panel_close),
-                    tint = MeeshyMediaChromeColors.OnMediaSecondary,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+            CallPanelCloseButton(onClose)
         }
         content()
     }
 }
 
+/** The « Close » of a panel drawn in the pill (a 48 dp target): the reaction and recording panels and the journal share it. */
 @Composable
-private fun RowScope.PanelHeaderButton(onClick: () -> Unit, icon: @Composable () -> Unit) {
+internal fun CallPanelCloseButton(onClose: () -> Unit) {
+    PanelHeaderButton(onClose) {
+        Icon(
+            Icons.Filled.Close,
+            contentDescription = stringResource(R.string.call_panel_close),
+            tint = MeeshyMediaChromeColors.OnMediaSecondary,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun PanelHeaderButton(onClick: () -> Unit, icon: @Composable () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) { icon() }
 }

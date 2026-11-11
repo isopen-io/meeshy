@@ -2,32 +2,31 @@ package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,24 +37,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallJournalFollow
+import me.meeshy.sdk.model.call.CallJournalSizing
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
@@ -64,14 +65,15 @@ import me.meeshy.ui.theme.hexColor
 private val CAPTION_TARGET = 48.dp
 
 /**
- * The whole call, Translated or Original — the setting is the « Sous-titres » one, a touch per
- * sentence flips it (iOS `CallCaptionsJournalSheet`). Follows the live edge until the reader scrolls
- * up; « Revenir au direct » brings him back, with a dot when sentences arrived meanwhile.
+ * The whole call, DRAWN IN THE PILL in place of the captions (#17343, iOS `CallJournalPanel`): a header (the title, the
+ * Translated / Original switch, Close), then the list, which scrolls and offers « Back to live ». The switch is the
+ * « Captions » setting, a touch per sentence flips it. The list has the height of [CallJournalSizing]; the base row of the
+ * pill stays under it and stays touchable. It keeps the whole call, captions on or off (#17342). The back button closes it.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CallCaptionsJournalSheet(
-    onDismiss: () -> Unit,
+internal fun CallJournalPanel(
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
     viewModel: CallCaptionsViewModel = hiltViewModel(),
     /** #16665 — the dated captures of the call, in the journal at their time (loi 13). */
     captures: List<CallLiveCapture> = emptyList(),
@@ -79,21 +81,27 @@ internal fun CallCaptionsJournalSheet(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val labels = rememberCaptionLabels()
-    val lines = remember(state, labels) {
-        viewModel.journalLines(state, labels)
-    }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = CallPalette.Raised, contentColor = Color.White) {
-        Column(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.85f).navigationBarsPadding()) {
-            CallJournalHeader(showsOriginal = state.showsOriginal, onShowsOriginal = viewModel::setShowsOriginal, onClose = onDismiss)
-            CallJournalList(lines = lines, onToggleOriginal = viewModel::toggleReveal, modifier = Modifier.weight(1f), captures = captures, peerName = peerName)
-            state.ownSpeech.notCaptionedRes()?.let { notCaptioned ->
-                Text(
-                    text = stringResource(notCaptioned),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.55f),
-                    modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
-                )
-            }
+    val lines = rememberStableLines(remember(state, labels) { viewModel.journalLines(state, labels) })
+    val toggle = remember(viewModel) { { key: String -> viewModel.toggleReveal(key) } }
+    val title = stringResource(R.string.call_captions_journal_title)
+    val windowHeight = LocalConfiguration.current.screenHeightDp.toFloat()
+    BackHandler(onBack = onClose)
+    Column(modifier.fillMaxWidth().semantics { paneTitle = title }) {
+        CallJournalHeader(showsOriginal = state.showsOriginal, onShowsOriginal = viewModel::setShowsOriginal, onClose = onClose)
+        CallJournalList(
+            lines = lines,
+            onToggleOriginal = toggle,
+            modifier = Modifier.height(CallJournalSizing.heightDp(windowHeight).dp),
+            captures = captures,
+            peerName = peerName,
+        )
+        state.ownSpeech.notCaptionedRes()?.let { notCaptioned ->
+            Text(
+                text = stringResource(notCaptioned),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.55f),
+                modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+            )
         }
     }
 }
@@ -101,31 +109,35 @@ internal fun CallCaptionsJournalSheet(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CallJournalHeader(showsOriginal: Boolean, onShowsOriginal: (Boolean) -> Unit, onClose: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = stringResource(R.string.call_captions_journal_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f).semantics { heading() },
-            )
-            TextButton(onClick = onClose, modifier = Modifier.defaultMinSize(minHeight = CAPTION_TARGET)) {
-                Text(stringResource(R.string.call_panel_close))
-            }
-        }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        modifier = Modifier.fillMaxWidth().padding(start = MeeshySpacing.md, end = MeeshySpacing.xs, top = MeeshySpacing.xxs),
+    ) {
+        Text(
+            text = stringResource(R.string.call_captions_journal),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1,
+            modifier = Modifier.weight(1f).semantics { heading() },
+        )
         val options = listOf(false to R.string.call_captions_translated, true to R.string.call_captions_original)
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth().padding(vertical = MeeshySpacing.sm)) {
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.widthIn(max = JOURNAL_SWITCH_MAX_WIDTH)) {
             options.forEachIndexed { index, (original, label) ->
                 SegmentedButton(
                     selected = showsOriginal == original,
                     onClick = { onShowsOriginal(original) },
                     shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
                     modifier = Modifier.defaultMinSize(minHeight = CAPTION_TARGET),
-                ) { Text(stringResource(label)) }
+                ) { Text(stringResource(label), maxLines = 1) }
             }
         }
+        CallPanelCloseButton(onClose)
     }
 }
+
+private val JOURNAL_SWITCH_MAX_WIDTH = 200.dp
 
 @Composable
 internal fun CallJournalList(
@@ -175,10 +187,10 @@ internal fun CallJournalList(
                     )
                 }
             }
-            items(entries, key = { entry -> journalKey(entry) }) { entry ->
+            items(entries, key = { entry -> journalKey(entry) }, contentType = { entry -> entry::class }) { entry ->
                 when (entry) {
                     is CallBandEntry.Sentence ->
-                        CallCaptionRow(line = entry.line, showsTime = true, onToggleOriginal = { onToggleOriginal(entry.line.key) })
+                        CallCaptionRow(line = entry.line, showsTime = true, onToggleOriginal = onToggleOriginal)
                     is CallBandEntry.Capture -> CallCaptureLine(
                         name = liveCaptureName(entry.capture, selfId = null, youLabel = you, peerName = peerName),
                         nameColor = hexColor(CallSpeakerColor.hex(entry.capture.userId.ifBlank { peerName })),
@@ -205,69 +217,30 @@ internal fun CallJournalList(
 @Composable
 private fun CallJournalReturnToLive(hasUnseen: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val newLines = stringResource(R.string.call_captions_new_lines)
-    Row(
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    CallGlassButtonSurface(
+        role = CallButtonRole.Neutral,
+        shape = CircleShape,
+        isPressed = pressed,
         modifier = modifier
             .defaultMinSize(minHeight = CAPTION_TARGET)
             .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.75f))
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = MeeshySpacing.md)
+            .clickable(interactionSource = source, indication = null, role = Role.Button, onClick = onClick)
             .semantics { if (hasUnseen) stateDescription = newLines },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
     ) {
-        Icon(MeeshyIcons.ArrowDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-        Text(stringResource(R.string.call_captions_back_to_live), style = MaterialTheme.typography.labelLarge, color = Color.White)
-        if (hasUnseen) {
-            Spacer(Modifier.width(2.dp))
-            Box(Modifier.size(8.dp).clip(CircleShape).background(CallPalette.Brand))
-        }
-    }
-}
-
-private val PANEL_AVATAR = 44.dp
-
-/**
- * The audio call's captions (iOS `transcriptPanel`): a real layout element between the compact header
- * and the pill — never a floating overlay over the actions. The same journal list, dark glass.
- */
-@Composable
-internal fun CallCaptionsTranscriptPanel(
-    state: CallUiState,
-    peer: CallPeerVisual,
-    modifier: Modifier = Modifier,
-    viewModel: CallCaptionsViewModel = hiltViewModel(),
-) {
-    val captions by viewModel.state.collectAsStateWithLifecycle()
-    val labels = rememberCaptionLabels()
-    val lines = remember(captions, labels) { viewModel.journalLines(captions, labels) }
-    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
-            CallAvatarPair(name = state.peerName, peer = peer, size = PANEL_AVATAR)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = callPeerTitle(state.peerName),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = CallPalette.Ink,
-                    maxLines = 1,
-                )
-                state.durationLabel?.let { clock ->
-                    Text(text = clock, style = MaterialTheme.typography.bodySmall, color = CallPalette.Brand)
-                }
+        Row(
+            modifier = Modifier.padding(horizontal = MeeshySpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
+        ) {
+            Icon(MeeshyIcons.ArrowDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Text(stringResource(R.string.call_captions_back_to_live), style = MaterialTheme.typography.labelLarge, color = Color.White)
+            if (hasUnseen) {
+                Spacer(Modifier.width(2.dp))
+                Box(Modifier.size(8.dp).clip(CircleShape).background(CallPalette.Brand))
             }
         }
-        CallJournalList(
-            lines = lines,
-            captures = state.liveCaptures,
-            peerName = state.peerName,
-            onToggleOriginal = viewModel::toggleReveal,
-            modifier = Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.Black.copy(alpha = 0.45f)),
-            contentPadding = MeeshySpacing.md,
-        )
     }
 }
 

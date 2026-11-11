@@ -45,6 +45,20 @@ final class CaptionsModeTests: XCTestCase {
     func test_init_transcribing_showOriginalTextTrue_returnsOriginal() {
         XCTAssertEqual(CaptionsMode(isShowingCaptions: true, showOriginalText: true), .original)
     }
+
+    // MARK: - Ce que le bouton montre et dit
+
+    func test_symbol_eachStateHasItsOwnGlyph() {
+        XCTAssertEqual(CaptionsMode.off.symbol, "captions.bubble")
+        XCTAssertEqual(CaptionsMode.translated.symbol, "captions.bubble.fill")
+        XCTAssertEqual(CaptionsMode.original.symbol, "character.bubble.fill")
+    }
+
+    func test_stateLabel_eachStateIsSpokenDistinctly() {
+        let spoken = [CaptionsMode.off, .translated, .original].map { $0.stateLabel }
+        XCTAssertEqual(Set(spoken).count, 3)
+        XCTAssertFalse(spoken.contains(""))
+    }
 }
 
 // MARK: - TranscriptionCapturePolicy
