@@ -386,7 +386,8 @@ struct MeeshyGlassButtonTests {
     func source_namedLongPress_goesThroughTheTrigger() throws {
         let code = try Self.code("MeeshyGlassButton.swift")
         #expect(!code.contains("perform: onLongPress\n"))
-        #expect(code.contains("perform: onLongPress == nil ? nil : performNamedLongPress"))
+        #expect(code.contains("perform: namedLongPress\n"))
+        #expect(code.contains("guard onLongPress != nil else { return nil }\n        return { performNamedLongPress() }"))
         let body = try #require(code.range(of: "private func performNamedLongPress()"))
         #expect(code[body.upperBound...].prefix(260).contains("MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled"))
     }
