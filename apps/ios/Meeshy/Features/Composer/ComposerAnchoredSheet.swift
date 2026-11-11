@@ -15,12 +15,12 @@ nonisolated enum ComposerAnchoredSheetMetrics {
         case tall
     }
 
-    static let maximumFraction: CGFloat = 0.62
+    static let maximumFraction: CGFloat = MeeshyAnchoredSheetMetrics.maximumFraction
 
     static func fraction(_ size: Size) -> CGFloat {
         switch size {
-        case .compact: return 0.3
-        case .regular: return 0.5
+        case .compact: return MeeshyAnchoredSheetMetrics.compactFraction
+        case .regular: return MeeshyAnchoredSheetMetrics.regularFraction
         case .tall: return maximumFraction
         }
     }
@@ -30,16 +30,18 @@ nonisolated enum ComposerAnchoredSheetMetrics {
         return min(available * fraction(size), available)
     }
 
+    /// La loi du glissé est celle du kit (K15) : une seule, lue par les trois plateformes.
     static func dismisses(translation: CGFloat, predictedEnd: CGFloat, height: CGFloat) -> Bool {
-        guard height > 0 else { return translation > 0 }
-        return translation > height * 0.25 || predictedEnd > height * 0.5
+        MeeshyAnchoredSheetMetrics.dismisses(translation: translation, predictedEnd: predictedEnd, height: height)
     }
 
-    static func dragOffset(_ translation: CGFloat) -> CGFloat { max(0, translation) }
+    static func dragOffset(_ translation: CGFloat) -> CGFloat { MeeshyAnchoredSheetMetrics.dragOffset(translation) }
 
     /// Le haut de la feuille AU REPOS, hors glissé : la scène ne se recadre
     /// pas à chaque image du doigt.
-    static func restingTop(containerMaxY: CGFloat, height: CGFloat) -> CGFloat { containerMaxY - height }
+    static func restingTop(containerMaxY: CGFloat, height: CGFloat) -> CGFloat {
+        MeeshyAnchoredSheetMetrics.restingTop(containerMaxY: containerMaxY, height: height)
+    }
 }
 
 /// Le HAUT de la feuille ouverte, en coordonnées globales : la scène s'y arrête.

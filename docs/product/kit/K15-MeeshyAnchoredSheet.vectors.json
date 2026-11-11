@@ -1,0 +1,79 @@
+{
+  "kit": "K15",
+  "fractions": {
+    "compact": 0.3,
+    "regular": 0.5,
+    "tall": 0.62,
+    "reservedAbove": 120
+  },
+  "ceiling": [
+    { "available": 800, "maximumFraction": 0.62, "ceiling": 496 },
+    { "available": 800, "maximumFraction": 0.7, "ceiling": 560 },
+    { "available": 200, "maximumFraction": 0.62, "ceiling": 80 },
+    { "available": 100, "maximumFraction": 0.62, "ceiling": 0 },
+    { "available": 0, "maximumFraction": 0.62, "ceiling": 0 }
+  ],
+  "height": [
+    { "case": "le contenu court épouse", "height": "content", "content": 300, "available": 800, "rest": 300 },
+    { "case": "le contenu long plafonne", "height": "content", "content": 900, "available": 800, "rest": 496 },
+    { "case": "compact", "height": "compact", "content": 0, "available": 800, "rest": 240 },
+    { "case": "regular", "height": "regular", "content": 0, "available": 800, "rest": 400 },
+    { "case": "tall", "height": "tall", "content": 0, "available": 800, "rest": 496 },
+    { "case": "une fraction trop haute plafonne", "height": "fraction", "fraction": 0.9, "content": 0, "available": 800, "rest": 496 },
+    { "case": "la fenêtre basse garde 120 au-dessus", "height": "regular", "content": 0, "available": 200, "rest": 80 },
+    { "case": "aucune place, aucune feuille", "height": "regular", "content": 0, "available": 0, "rest": 0 },
+    { "case": "le cran d'ouverture", "height": "detents", "fractions": [0.3, 0.6], "initial": 1, "content": 0, "available": 800, "rest": 480 }
+  ],
+  "detents": [
+    { "fractions": [0.6, 0.3], "available": 800, "rests": [240, 480] },
+    { "fractions": [0.3, 0.9], "available": 800, "rests": [240, 496] }
+  ],
+  "dismisses": [
+    { "translation": 30, "predictedEnd": 40, "height": 400, "closes": false },
+    { "translation": 140, "predictedEnd": 150, "height": 400, "closes": true },
+    { "translation": 40, "predictedEnd": 260, "height": 400, "closes": true },
+    { "translation": 100, "predictedEnd": 100, "height": 400, "closes": false },
+    { "translation": 101, "predictedEnd": 101, "height": 400, "closes": true },
+    { "translation": 0, "predictedEnd": 200, "height": 400, "closes": false },
+    { "translation": 0, "predictedEnd": 201, "height": 400, "closes": true }
+  ],
+  "dragOffset": [
+    { "translation": -50, "upwardRoom": 0, "offset": 0 },
+    { "translation": 35, "upwardRoom": 0, "offset": 35 },
+    { "translation": -50, "upwardRoom": 80, "offset": -50 },
+    { "translation": -120, "upwardRoom": 80, "offset": -80 }
+  ],
+  "settle": [
+    { "rests": [200, 400], "index": 1, "translation": 60, "predictedEnd": 70, "settles": "rest", "to": 1 },
+    { "rests": [200, 400], "index": 1, "translation": 150, "predictedEnd": 160, "settles": "rest", "to": 0 },
+    { "rests": [200, 400], "index": 1, "translation": 300, "predictedEnd": 320, "settles": "dismiss" },
+    { "rests": [200, 400], "index": 0, "translation": 20, "predictedEnd": 30, "settles": "rest", "to": 0 },
+    { "rests": [200, 400], "index": 0, "translation": 60, "predictedEnd": 60, "settles": "dismiss" },
+    { "rests": [200, 400], "index": 0, "translation": -100, "predictedEnd": -250, "settles": "rest", "to": 1 },
+    { "rests": [200, 400], "index": 0, "translation": -30, "predictedEnd": -40, "settles": "rest", "to": 0 },
+    { "rests": [400], "index": 0, "translation": 30, "predictedEnd": 40, "settles": "rest", "to": 0 },
+    { "rests": [400], "index": 0, "translation": 140, "predictedEnd": 150, "settles": "dismiss" }
+  ],
+  "restingTop": [
+    { "containerMaxY": 800, "height": 400, "top": 400 },
+    { "containerMaxY": 852, "height": 420, "top": 432 }
+  ],
+  "motion": {
+    "response": 0.32,
+    "dampingFraction": 0.88,
+    "durationMs": 280,
+    "reduced": { "durationMs": 0, "immediate": true }
+  },
+  "chrome": {
+    "handle": { "width": 36, "height": 5, "opacityDark": 0.35, "opacityTheme": 0.5 },
+    "shadow": { "radius": 15, "y": -12, "opacity": 0.4 },
+    "scrimOpacity": 0.4,
+    "radius": 24,
+    "bottomMargin": 24,
+    "headerMinHeight": 44
+  },
+  "contrast": {
+    "titleMin": 4.5,
+    "handleMin": 3.0
+  }
+}
