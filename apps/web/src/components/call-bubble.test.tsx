@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
@@ -47,6 +47,13 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 });
 
 const overlay = (active: ActiveCall) => renderToStaticMarkup(<ActiveCallView call={active} />);
+
+/* La pastille vit dans son chunk (`call-floating-pill.tsx`), que l'appel vivant charge : le rendu sans geste la trouve chargée, comme l'écran la trouve. */
+beforeAll(async () => {
+  overlay(call({ display: 'pill' }));
+  await import('./call-floating-pill');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
 
 describe('la pastille', () => {
   test('propose de se replier en bulle, sans bloquer l’application', () => {
