@@ -5,6 +5,7 @@
  * (`satisfies CallControlsCatalog`, `i18n-call-controls-catalog.test.ts`).
  */
 const fr = {
+  'callControls.duration.a11y.label': 'Durée de l’appel',
   'callControls.invite': 'Ajouter',
   'callControls.invite.label': 'Ajouter des personnes à l’appel',
   'callControls.react': 'Réagir',
