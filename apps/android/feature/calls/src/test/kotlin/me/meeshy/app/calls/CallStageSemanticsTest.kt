@@ -11,6 +11,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
@@ -77,6 +78,20 @@ class CallStageSemanticsTest {
         rule.onNodeWithText("Alice").assertExists()
         rule.onNodeWithText("Poor network (contact)").assertDoesNotExist()
         rule.onNodeWithText("Server disconnected").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the audio stage puts the speaking ring on the peer so the pair can light up at its author colour`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallAudioStage(
+                    connected(),
+                    peer = CallPeerVisual.EMPTY,
+                    peerSpeech = CallPeerSpeechSource(peerUserId = "u-awa", level = { null }, relayed = true),
+                )
+            }
+        }
+        rule.onNodeWithTag(CALL_SPEAKING_RING_TAG, useUnmergedTree = true).assertExists()
     }
 
     @Test
