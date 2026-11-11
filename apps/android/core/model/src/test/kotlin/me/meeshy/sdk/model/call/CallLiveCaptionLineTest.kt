@@ -129,6 +129,17 @@ class CallLiveCaptionLineTest {
     }
 
     @Test
+    fun `a regional variant of a prism language is already in the prism — no label, no wait (Prisme rule 4)`() {
+        val regional = line(seg(translatedText = null, translatedLanguage = null, language = "en-US"))
+        val underscored = lineForFrench(seg(translatedText = null, translatedLanguage = null, language = "fr_CA"))
+
+        assertThat(regional.languageTag).isNull()
+        assertThat(regional.isAwaitingTranslation).isFalse()
+        assertThat(underscored.languageTag).isNull()
+        assertThat(underscored.isAwaitingTranslation).isFalse()
+    }
+
+    @Test
     fun `without a prism nothing is awaited, but the original is labelled`() {
         val line = CallLiveCaptionLines.line(
             seg(translatedText = null, translatedLanguage = null), reader.copy(prism = emptyList()), "Ada", false, false, labels,

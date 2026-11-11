@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.call
 
+import me.meeshy.sdk.lang.LanguageCodeNormalizer
 import me.meeshy.sdk.lang.PrismCandidate
 import me.meeshy.sdk.lang.PrismTranslation
 import me.meeshy.sdk.lang.PrismTranslationResolver
@@ -73,7 +74,7 @@ object CallLiveCaptionLines {
         val translation = if (isLocal) null else served(segment, reader.prism)
         val showsOriginal = translation == null || (prefersOriginal && !isRevealed)
         val origin = segment.language?.takeIf { !isLocal && it.isNotBlank() }?.uppercase()
-        val outsidePrism = origin != null && reader.prism.none { it.equals(segment.language, ignoreCase = true) }
+        val outsidePrism = origin != null && !inPrism(segment.language, reader.prism)
         val servedLanguage = translation?.takeUnless { showsOriginal }?.language?.uppercase()
         val awaits = !isLocal && segment.isFinal && translation == null && outsidePrism && reader.prism.isNotEmpty()
         return CallLiveCaptionLine(
@@ -111,6 +112,12 @@ object CallLiveCaptionLines {
     /** The next instant a wait falls after [nowMs], the only moment the screen has to redraw for it. */
     fun nextDeadline(lines: List<CallLiveCaptionLine>, nowMs: Long): Long? =
         lines.mapNotNull { it.awaitingUntilMs }.filter { it > nowMs }.minOrNull()
+
+    /** Compared as the Prisme compares (rule 4): an `en-US` sentence is already in the rank `en`. */
+    private fun inPrism(language: String?, prism: List<String>): Boolean {
+        val key = language?.let(LanguageCodeNormalizer::normalizeForDedup) ?: return false
+        return prism.any { LanguageCodeNormalizer.normalizeForDedup(it) == key }
+    }
 
     private fun isLocal(segment: CallJournalSegment, reader: CallCaptionReader): Boolean =
         reader.userId?.takeIf { it.isNotBlank() } == segment.speakerId
