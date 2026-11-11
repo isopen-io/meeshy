@@ -1,20 +1,34 @@
-import { useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
 import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { callCaptionsFooter } from '@/lib/calls/call-captions-footer';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
+import { PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
+import { useRailPresence } from '@/lib/calls/use-rail-presence';
+import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
- * **LE BANDEAU DES SOUS-TITRES D'UN APPEL** (#8048, #8393) — les deux
- * dernières lignes dites (`CallTranscriptionOverlay` d'iOS) dans un verre
- * d'appel sombre posé juste au-dessus de la pilule, qui reste quand les
- * actions sont rangées ; en groupe, il se pose en haut du cadre de verre de la
- * pilule (`surface="inset"` : le verre est celui du cadre, jamais un verre sur
- * du verre). Chunk à part : l'écran d'appel ne le charge qu'au premier passage
- * en mode traduit.
+ * **LES SOUS-TITRES D'UN APPEL** (#8048, #8393, #17343) — les deux dernières
+ * lignes dites (`CallTranscriptionOverlay` d'iOS), puis un PIED : à gauche la
+ * paire de langues de la dernière phrase traduite et comment voir l'original
+ * (« EN → FR · toucher = original »), à droite le bouton « Journal » (#17346),
+ * qui ouvre tout l'appel à leur place. Ils vivent DANS la pilule, au-dessus de
+ * sa rangée de base, dans le même verre (`surface="inset"` : le verre est celui
+ * de la pilule, jamais un verre sur du verre) ; `(…)` les range, refermer les
+ * actions les rend. Ils ne prennent un verre à eux (`surface="glass"`) que
+ * pilule rangée d'un toucher, ou sous un mode (Effets, Montage). Chunk à part :
+ * l'écran d'appel n'en paie que l'`import()` ; il le monte dès que l'appel vit
+ * (et le précharge de toute façon quand le navigateur souffle).
+ *
+ * RIEN NE PART D'UN COUP (#17406) : `CallCaptionsSlot` pose les sous-titres à leur
+ * place (dans la pilule, ou seuls à sa place) et les y RETIENT le temps d'un fondu
+ * vers la rangée de base quand `(…)` les range ou que la pilule revient — inertes,
+ * cachés au lecteur d'écran, à la largeur du verre qui porte du texte. L'écran
+ * d'appel ne fait que les garder montés : la sortie vit ici, hors de son chunk.
  *
  * Le nom de chaque personne porte SA couleur (`call-speaker-color.ts`), la
  * même que le liseré de sa vignette dans la grille. Une ligne traduite porte
@@ -59,7 +73,12 @@ function NoteLine({ note, language, color, clock }: { readonly note: CallJournal
   );
 }
 
-function CaptionLine({
+/**
+ * Une phrase qui arrive ne redessine que sa ligne : les autres se comparent par
+ * ce qu'elles MONTRENT (la phrase, le mode, le nom, la couleur, l'état déplié) ;
+ * l'action reçoit l'identifiant, elle ne change pas d'un rendu à l'autre.
+ */
+const CaptionLine = memo(function CaptionLine({
   caption,
   mode,
   speaker,
@@ -72,7 +91,7 @@ function CaptionLine({
   readonly speaker: string;
   readonly color: string;
   readonly open: boolean;
-  readonly onToggle: () => void;
+  readonly onToggle: (id: string) => void;
 }) {
   const shown = captionText(caption, mode);
   const languages = captionLanguageLabel(caption, mode);
@@ -93,7 +112,7 @@ function CaptionLine({
   return (
     <div aria-hidden={caption.isFinal ? undefined : true} style={caption.isFinal ? undefined : { opacity: 0.7 }} data-call-caption={caption.mine ? 'mine' : 'peer'}>
       {unfoldable ? (
-        <button type="button" aria-expanded={open} onClick={onToggle} className="block min-h-11 w-full text-start" data-call-caption-line={caption.id}>
+        <button type="button" aria-expanded={open} onClick={() => onToggle(caption.id)} className="block min-h-11 w-full text-start" data-call-caption-line={caption.id}>
           {content}
         </button>
       ) : (
@@ -108,21 +127,55 @@ function CaptionLine({
       ) : null}
     </div>
   );
+});
+
+type PanelProps = {
+  readonly call: ActiveCall;
+  readonly language: InterfaceLanguage;
+  readonly colorOf: SpeakerColorOf;
+  readonly surface?: CaptionsSurface;
+  /** Ouvre tout l'appel à la place des sous-titres : absent, le bouton « Journal » n'est pas posé. */
+  readonly onOpenJournal?: (() => void) | undefined;
+};
+
+/** Où les sous-titres se posent : dans le verre de la pilule (`captions`) ou seuls, à sa place (`captionsAlone`). */
+export type CaptionsSlot = 'captions' | 'captionsAlone';
+
+/**
+ * Les sous-titres à leur place, et leur sortie : `shown` faux, ils restent le temps
+ * du fondu (`PILL_TEXT_EXIT`), puis ne laissent rien. Revenus pendant le fondu,
+ * ce sont les mêmes, aussitôt.
+ */
+export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'surface'> & { readonly slot: CaptionsSlot; readonly shown: boolean }) {
+  const present = useRailPresence(shown, PILL_TEXT_EXIT).mounted;
+  if (!present) return null;
+  const leaving = shown ? {} : PILL_TEXT_LEAVING;
+  return slot === 'captions' ? (
+    <div className="pt-1" data-call-pill-text="captions" {...leaving}>
+      <CallCaptionsPanel {...panel} surface="inset" />
+      <hr className="mx-2 my-1 border-0 border-t border-media-hairline" />
+    </div>
+  ) : (
+    <div data-call-pill-text="captionsAlone" {...leaving}>
+      <CallCaptionsPanel {...panel} surface="glass" />
+    </div>
+  );
 }
 
-export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass' }: { readonly call: ActiveCall; readonly language: InterfaceLanguage; readonly colorOf: SpeakerColorOf; readonly surface?: CaptionsSurface }) {
+export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal }: PanelProps) {
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
   const mode = call.captionsMode;
   const lines = overlayEntries(call.captions, call.journalNotes ?? [], CAPTIONS_OVERLAY_LINES);
   const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'message.author.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
-  const toggle = (id: string) => () => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id])));
+  const toggle = useCallback((id: string) => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id]))), []);
+  const pair = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? { languages: null, event: true } : { languages: captionLanguageLabel(entry.caption, mode), event: false })));
 
   return (
     <section
       aria-label={translate(language, 'callCaptions.region')}
-      className={`${surface === 'glass' ? 'glass-call-prominent mx-4 rounded-card ' : ''}flex flex-col gap-1.5 px-3 py-2`}
+      className={`${surface === 'glass' ? 'glass-call-prominent rounded-card ' : ''}flex flex-col gap-1.5 px-3 py-2`}
       data-call-captions-panel={mode}
       data-call-captions-surface={surface}
     >
@@ -134,15 +187,28 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass' }
             entry.type === 'note' ? (
               <NoteLine key={entry.note.id} note={entry.note} language={language} color={colorOf({ speakerId: entry.note.userId ?? '', speakerName: entry.note.name ?? '' })} clock={clockOf(entry.at)} />
             ) : (
-              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={unfolded.has(entry.caption.id)} onToggle={toggle(entry.caption.id)} />
+              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={unfolded.has(entry.caption.id)} onToggle={toggle} />
             ),
           )
         )}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 text-mini" style={{ color: INK_2 }}>
-        <span data-call-captions-mode={mode}>{translate(language, mode === 'original' ? 'callCaptions.mode.original' : 'callCaptions.mode.translated')}</span>
-        {note === null ? null : <span data-call-captions-note={call.transcription}>{translate(language, note)}</span>}
-      </div>
+      {pair === null && note === null && onOpenJournal === undefined ? null : (
+        <div className="flex items-center justify-between gap-x-3 text-mini" style={{ color: INK_2 }} data-call-captions-footer="">
+          <div className="flex min-w-0 flex-col">
+            {pair === null ? null : (
+              <span className="truncate" data-call-captions-pair={pair}>
+                {translate(language, 'callCaptions.footer.touchForOriginal', { pair })}
+              </span>
+            )}
+            {note === null ? null : <span data-call-captions-note={call.transcription}>{translate(language, note)}</span>}
+          </div>
+          {onOpenJournal === undefined ? null : (
+            <button type="button" onClick={onOpenJournal} className="glass-call-disc min-h-11 shrink-0 rounded-full px-4 font-semibold transition-transform active:scale-95 motion-reduce:transition-none" style={{ color: INK }} data-call-captions-journal="">
+              {translateCallControls(language, 'callControls.journal')}
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
 }

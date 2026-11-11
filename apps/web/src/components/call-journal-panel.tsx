@@ -1,10 +1,12 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
+import { CallJournalColumn, type JournalColumnGeometry } from '@/components/call-journal-column';
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { CallJournalViewSwitch, type JournalView } from '@/components/call-journal-view-switch';
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
 import { captionLanguageLabel, captionText, type CallCaption } from '@/lib/calls/call-captions';
 import { journalEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
+import { callJournalHeight } from '@/lib/calls/call-journal-height';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -54,11 +56,14 @@ type JournalProps = {
   readonly onListen: () => void;
   /** Posé dans la colonne du grand écran (#16942) : la liste prend toute la hauteur au lieu d'une fenêtre bornée. */
   readonly fill?: boolean;
+  /** La hauteur de la fenêtre : dans la pilule, la liste en prend une part (`callJournalHeight`, #17343). */
+  readonly windowHeight?: number;
 };
 
 type Clock = Intl.DateTimeFormat;
 
-function JournalNoteLine({ note, language, clock, colorOf }: { readonly note: CallJournalNote; readonly language: InterfaceLanguage; readonly clock: Clock; readonly colorOf: JournalProps['colorOf'] }) {
+/* Une ligne qui arrive ne redessine que la sienne : chaque ligne se compare par ce qu'elle MONTRE (sa phrase, son nom, sa couleur, la vue, l'horloge mémoïsée). */
+const JournalNoteLine = memo(function JournalNoteLine({ note, language, clock, colorOf }: { readonly note: CallJournalNote; readonly language: InterfaceLanguage; readonly clock: Clock; readonly colorOf: JournalProps['colorOf'] }) {
   return (
     <li className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 48px' }} data-call-journal-note={note.kind}>
       <time className="text-mini" style={{ color: INK_2 }} dateTime={new Date(note.at).toISOString()}>
@@ -69,11 +74,11 @@ function JournalNoteLine({ note, language, clock, colorOf }: { readonly note: Ca
       </span>
     </li>
   );
-}
+});
 
 type CaptionLineProps = { readonly caption: CallCaption; readonly view: JournalView; readonly language: InterfaceLanguage; readonly clock: Clock; readonly speaker: string; readonly color: string };
 
-function JournalCaptionLine({ caption, view, language, clock, speaker, color }: CaptionLineProps) {
+const JournalCaptionLine = memo(function JournalCaptionLine({ caption, view, language, clock, speaker, color }: CaptionLineProps) {
   const served = captionText(caption, view);
   const languages = captionLanguageLabel(caption, view);
   return (
@@ -95,16 +100,19 @@ function JournalCaptionLine({ caption, view, language, clock, speaker, color }: 
       )}
     </li>
   );
-}
+});
+
+/** La liste du journal dans la pilule : une part de la fenêtre (`callJournalHeight`), et jamais plus que ce que la fenêtre laisse sous l'en-tête et au-dessus de la rangée de base. */
+const listSize = (windowHeight: number | undefined): CSSProperties => (windowHeight === undefined ? { maxHeight: 'min(28rem, calc(100dvh - 20rem))' } : { height: `${callJournalHeight(windowHeight)}px`, maxHeight: 'max(8rem, calc(100dvh - 17rem))' });
 
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
-export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, notes, colorOf, listening, onListen, fill = false }: JournalProps) {
+export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, notes, colorOf, listening, onListen, fill = false, windowHeight }: JournalProps) {
   const list = useRef<HTMLOListElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
   const [view, setView] = useState<JournalView>('translated');
-  const clock = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const clock = useMemo(() => new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' }), [language]);
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'message.author.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
   const last = captions.at(-1);
   const entries = journalEntries(captions, notes);
@@ -161,7 +169,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
             onScroll={onScroll}
             tabIndex={0}
             className={`flex flex-col gap-3 overflow-y-auto overscroll-contain px-3 pb-2 ${fill ? 'min-h-0 flex-1' : ''}`}
-            style={fill ? undefined : { maxHeight: 'min(28rem, calc(100dvh - 20rem))' }}
+            style={fill ? undefined : listSize(windowHeight)}
             data-call-journal=""
             data-panel-first=""
           >
@@ -186,5 +194,14 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
         </div>
       )}
     </CallPanelFrame>
+  );
+}
+
+/** Le journal en colonne de verre sur grand écran (#16942, W1 et W2) : la même liste, qui prend toute la hauteur de la colonne. */
+export function CallJournalInColumn({ width, gutter, ...journal }: Omit<JournalProps, 'fill' | 'windowHeight'> & JournalColumnGeometry) {
+  return (
+    <CallJournalColumn width={width} gutter={gutter}>
+      <CallJournalPanel {...journal} fill />
+    </CallJournalColumn>
   );
 }
