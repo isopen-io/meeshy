@@ -24,6 +24,9 @@ export const pillShowsCaptionsBand = (text: CallPillText): boolean => text === '
 /** Rangée, la pilule ne s'efface pas : son verre reste, et se resserre autour des sous-titres (`staysWhenChromeStowed`, iOS). */
 export const pillStaysWhenChromeStowed = (text: CallPillText): boolean => text === 'captionsAlone';
 
+/** Le journal ouvert dans la pilule prend une part de la fenêtre : en audio, l'avatar se réduit en en-tête compact pour lui laisser la place (#17529, `compactsAudioLayout`, iOS). */
+export const pillCompactsAudioStage = (text: CallPillText): boolean => text === 'journal';
+
 /** La rangée de base (`(…)` · Micro · Sortie · Fin) est dans le verre : jamais pour les sous-titres seuls (`hasBaseRow`, iOS). */
 export const pillHasBaseRow = (text: CallPillText): boolean => text !== 'captionsAlone';
 

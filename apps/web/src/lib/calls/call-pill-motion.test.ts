@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { followKeyframes, morphKeyframes, MORPH_MS, STOW_MS, STOW_REDUCED_MS, stowFadeKeyframes, stowedGlass, SWAP_MS, swapKeyframes, swapMs } from './call-pill-motion';
+import { followKeyframes, morphKeyframes, MORPH_MS, PORTRAIT_MORPH_MS, portraitMorphKeyframes, portraitMorphMs, STOW_MS, STOW_REDUCED_MS, stowFadeKeyframes, stowedGlass, SWAP_MS, swapKeyframes, swapMs } from './call-pill-motion';
 
 /**
  * RIEN N'APPARAÎT NI NE DISPARAÎT D'UN COUP (#17406, #17536 ; `CallChromeStow` et
@@ -111,5 +111,27 @@ describe('ce qui est posé sur un verre qui se déforme suit son bord du haut (P
   test('rien ne bouge quand la hauteur ne change pas, ni sous « Réduire les animations »', () => {
     expect(followKeyframes({ width: 300, height: 64 }, { width: 400, height: 64 }, false)).toBeNull();
     expect(followKeyframes({ width: 400, height: 120 }, { width: 400, height: 64 }, true)).toBeNull();
+  });
+});
+
+describe('#17529 — l’avatar du duo audio se réduit vers l’en-tête compact par morphisme (loi 6, P9b)', () => {
+  const full = { x: 139, y: 300, width: 112 };
+  const compact = { x: 24, y: 80, width: 56 };
+
+  test('il part de sa place (son centre) et de sa taille d’avant, vues depuis la nouvelle (FLIP), et la rejoint : transformation seule', () => {
+    expect(portraitMorphKeyframes(full, compact, false)).toEqual([{ transform: 'translate(143px, 248px) scale(2)' }, { transform: 'none' }]);
+    expect(portraitMorphKeyframes(compact, full, false)).toEqual([{ transform: 'translate(-143px, -248px) scale(0.5)' }, { transform: 'none' }]);
+  });
+
+  test('« Réduire les animations » : aucun déplacement ni changement d’échelle, un fondu court les remplace', () => {
+    expect(portraitMorphKeyframes(full, compact, true)).toBeNull();
+    expect(portraitMorphMs(true)).toBe(STOW_REDUCED_MS);
+    expect(portraitMorphMs(false)).toBe(PORTRAIT_MORPH_MS);
+    expect(PORTRAIT_MORPH_MS).toBe(200);
+  });
+
+  test('rien ne bouge quand rien n’a bougé, ni quand une taille manque', () => {
+    expect(portraitMorphKeyframes(full, full, false)).toBeNull();
+    expect(portraitMorphKeyframes({ ...full, width: 0 }, compact, false)).toBeNull();
   });
 });

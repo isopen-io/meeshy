@@ -23,7 +23,7 @@ import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from 
 import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
 import { JOURNAL_COLUMN_GUTTER, JOURNAL_COLUMN_WIDTH, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
-import { callPillText, PILL_TEXT_WIDTH_CLASS, pillStaysWhenChromeStowed, type CallPillText } from '@/lib/calls/call-pill-text';
+import { callPillText, PILL_TEXT_WIDTH_CLASS, pillCompactsAudioStage, pillStaysWhenChromeStowed, type CallPillText } from '@/lib/calls/call-pill-text';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, panelInThePill, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
@@ -38,7 +38,7 @@ import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { usePublishChrome } from '@/lib/calls/call-chrome-store';
-import { useStowFade } from '@/lib/calls/use-pill-motion';
+import { useStageMorph, useStowFade } from '@/lib/calls/use-pill-motion';
 import { useCallSwipeDown } from '@/lib/calls/use-call-swipe-down';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
@@ -326,6 +326,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const focusNext = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const audioStage = useRef<HTMLDivElement>(null);
   const myPreview = useRef<HTMLVideoElement | null>(null);
   const moderation = useCallModeration(call);
   const liveFrame = useLiveFrameState();
@@ -418,18 +419,31 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
 
   useEscapeFolds({ live, panelOpen: chrome.panel !== null, column, send });
 
+  const hidden = visibility !== 'shown' || immersive;
+  /* LES SOUS-TITRES VIVENT DANS LA PILULE (#17343, `call-pill-text.ts`) : au repos
+     dans son verre, au-dessus de sa rangée de base ; (…) les range, refermer les
+     actions les rend ; le journal s'ouvre à leur place. Ils ne s'effacent JAMAIS
+     avec les commandes, et UN SEUL verre les porte (G1.3, #17536) : la pilule
+     rangée d'un toucher les garde dans son verre, qui perd sa rangée de base et se
+     resserre autour d'eux. Seul un mode, qui n'a pas de pilule, les pose dans un
+     verre à eux. */
+  const text: CallPillText = live ? callPillText({ captionsOn: call.captionsMode !== 'off', layer: shown, chromeShown: !hidden }) : 'none';
+  /* P9b (#17529) : le journal ouvert dans la pilule réduit l'avatar du duo audio en en-tête compact, nom et durée à côté. */
+  const compactStage = pillCompactsAudioStage(text);
   const clock = statusKey === null ? <CallClock call={call} active={joined} /> : endedClock;
   const identity = (
-    <div className="flex flex-col items-center gap-3 px-6 text-center">
+    <div className={compactStage ? 'flex w-full items-center gap-3 px-6 text-start' : 'flex flex-col items-center gap-3 px-6 text-center'}>
       {/* P17 (#16944) : la vidéo de l'appelant tient lieu de portrait pendant la sonnerie. */}
       {phase === 'incoming' && hasVideo(call.preview) ? null : (
         <span data-call-incoming-portrait="">
-          <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} {...(peerTint === undefined ? {} : { tint: peerTint })}>
+          <Portrait name={call.title} avatar={call.avatar} size={compactStage ? 56 : 112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} {...(peerTint === undefined ? {} : { tint: peerTint })}>
             {peerTint === undefined ? null : <SpeechRing color={peerTint} speaking={peerHeard} />}
           </Portrait>
         </span>
       )}
-      <h2 className="text-[1.6rem] font-bold leading-tight" style={{ color: INK }}>
+      {/* Le nom et la durée : à côté de l'avatar réduit (P9b), en colonne ; sinon ils s'empilent sous lui, comme avant. */}
+      <div className={compactStage ? 'flex min-w-0 flex-col gap-0.5' : 'contents'}>
+      <h2 className={compactStage ? 'truncate text-[17px] font-semibold leading-tight' : 'text-[1.6rem] font-bold leading-tight'} style={{ color: INK }} data-call-stage-label="">
         {call.title}
       </h2>
       {phase === 'incoming' && call.invitedBy !== null && call.callerName !== null ? (
@@ -448,7 +462,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           {translate(language, call.media === 'video' ? 'call.preview.seenBy' : 'call.preview.heardBy', { name: call.title })}
         </p>
       ) : null}
-      <div className="text-body" style={{ color: INK_2 }} data-call-status="">
+      <div className={compactStage ? 'text-mini tabular-nums' : 'text-body'} style={{ color: INK_2 }} data-call-status="" data-call-stage-label="">
         <span role="status" aria-live="polite">
           {statusKey === null ? null : t(statusKey)}
         </span>
@@ -461,6 +475,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
             </span>
           </>
         )}
+      </div>
       </div>
     </div>
   );
@@ -540,16 +555,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   );
 
   const overlayVideo = layout === 'video-duo' || layout === 'screen';
-  const hidden = visibility !== 'shown' || immersive;
   const railsShown = rails.length > 0 && !hidden;
-  /* LES SOUS-TITRES VIVENT DANS LA PILULE (#17343, `call-pill-text.ts`) : au repos
-     dans son verre, au-dessus de sa rangée de base ; (…) les range, refermer les
-     actions les rend ; le journal s'ouvre à leur place. Ils ne s'effacent JAMAIS
-     avec les commandes, et UN SEUL verre les porte (G1.3, #17536) : la pilule
-     rangée d'un toucher les garde dans son verre, qui perd sa rangée de base et se
-     resserre autour d'eux. Seul un mode, qui n'a pas de pilule, les pose dans un
-     verre à eux. */
-  const text: CallPillText = live ? callPillText({ captionsOn: call.captionsMode !== 'off', layer: shown, chromeShown: !hidden }) : 'none';
   const stowedWithCaptions = hidden && pillStaysWhenChromeStowed(text);
   /* Toujours montés : c'est `CallCaptionsSlot`, dans son chunk, qui les pose quand
      `visible` et les fait repartir en fondu sinon (#17406) — rangés par (…),
@@ -603,6 +609,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     ) : null;
   /* LE CHROME SE RANGE VERS SES BORDS, ET REVIENT PAR LE MÊME CHEMIN (G1.11, G2.8, #17406) : l'en-tête par le haut, la pilule par le bas, les bandeaux en fondu (`data-call-stow`, `call-motion.css`). Il ne retire JAMAIS le doigt à un bouton encore visible (#8735) : rangés d'un toucher, ils deviennent `invisible` à la FIN du mouvement, et reviennent d'un coup. Sous « Réduire les animations » : un fondu court, sans déplacement (`useStowFade`). */
   useStowFade(root, hidden);
+  useStageMorph(audioStage, compactStage);
   usePublishChrome(hidden);
 
   return (
@@ -662,7 +669,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
             {pillRow}
           </div>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-5">
+          <div ref={audioStage} className={`flex flex-1 flex-col items-center gap-5 ${compactStage ? 'justify-start' : 'justify-center'}`} data-call-audio-stage={compactStage ? 'compact' : 'full'}>
             {identity}
             {pillRow}
           </div>

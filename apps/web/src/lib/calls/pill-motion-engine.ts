@@ -1,6 +1,6 @@
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-import { followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape } from './call-pill-motion';
+import { followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape } from './call-pill-motion';
 
 /**
  * **LE MOTEUR DOM DU MOUVEMENT DU VERRE** (#17536, lois dans `call-pill-motion.ts`) — il mesure
@@ -112,4 +112,33 @@ export function playSwap(element: HTMLElement, entering: boolean, previous: Anim
   const playing = element.animate([shown, to], { duration: swapMs(reduced), easing: EASING, fill: entering ? 'none' : 'forwards' });
   playing.finished?.catch(() => undefined);
   return playing;
+}
+
+const FADE_IN: readonly Keyframe[] = [{ opacity: 0 }, { opacity: 1 }];
+
+/** Un passage annulé en route rejette son `finished` : ce rejet attendu ne remonte pas. */
+const quiet = (animation: Animation): Animation => {
+  animation.finished?.catch(() => undefined);
+  return animation;
+};
+
+/**
+ * LA SCÈNE AUDIO PASSE DE PLEINE À COMPACTE, ET RETOUR (#17529, P9b) : l'avatar repart de sa place
+ * d'avant (`first`, relevée avant que la mise en page ne change) et rejoint la nouvelle (FLIP), le nom
+ * et la durée arrivent en fondu ; sous « Réduire les animations », la scène entière en un fondu court,
+ * sans déplacement. Interruptible : un passage repris en route annule le précédent, et part de la
+ * place où l'avatar se voyait.
+ */
+export function playStageMorph(stage: HTMLElement, first: MorphRect | null, previous: readonly Animation[]): readonly Animation[] {
+  for (const running of previous) running.cancel();
+  if (typeof stage.animate !== 'function') return [];
+  const reduced = prefersReducedMotion();
+  const duration = portraitMorphMs(reduced);
+  if (reduced) return [quiet(stage.animate([...FADE_IN], { duration, easing: 'linear' }))];
+  const portrait = stage.querySelector<HTMLElement>(STAGE_PORTRAIT);
+  const rect = portrait?.getBoundingClientRect();
+  const frames = first === null || rect === undefined ? null : portraitMorphKeyframes(first, { x: rect.left, y: rect.top, width: rect.width }, false);
+  const moved = frames === null || portrait === null ? [] : [quiet(portrait.animate([...frames], { duration, easing: EASING }))];
+  const labels = [...stage.querySelectorAll<HTMLElement>(STAGE_LABEL)].map((label) => quiet(label.animate([...FADE_IN], { duration, easing: 'ease-out' })));
+  return [...moved, ...labels];
 }
