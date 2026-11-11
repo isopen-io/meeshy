@@ -20,7 +20,7 @@ import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { AFFILIATE_TINT, CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySection, FamilySkeleton, FamilyStats, RowMore, SEPARATOR } from '@/routes/link-families-parts';
-import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice, statusLabel } from '@/routes/links-parts';
+import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice, linkCreatedLabel, statusLabel } from '@/routes/links-parts';
 
 /**
  * **SES LIENS DE PARRAINAGE** (#6409) — miroir `AffiliateView.swift` : en-tête
@@ -65,10 +65,11 @@ export function AffiliateTokenRow({
           used: format.format(token.currentUses),
           max: format.format(token.maxUses),
         });
+  const created = linkCreatedLabel(language, token.createdAt);
   const label = new Intl.ListFormat(language, {
     type: 'unit',
     style: 'short',
-  }).format([token.name, statusLabel(language, token.isActive), uses ?? signups]);
+  }).format([token.name, statusLabel(language, token.isActive), uses ?? signups, created]);
   return (
     <FamilyRow
       rowId={token.id}
@@ -93,6 +94,10 @@ export function AffiliateTokenRow({
               {uses}
             </span>
           )}
+          {SEPARATOR}
+          <span data-affiliate-created className="whitespace-nowrap">
+            {created}
+          </span>
         </>
       }
       actions={
@@ -225,6 +230,7 @@ export default function AffiliateLinksScreen() {
           family="affiliate"
           glyph={<LinksGlyph name="gift" size={48} />}
           title={translateLinkFamilies(language, 'linkFamilies.affiliate.empty.title')}
+          subtitle={translateLinkFamilies(language, 'linkFamilies.affiliate.empty.subtitle')}
           cta={{
             to: 'affiliateLinkNew',
             label: translateLinkFamilies(language, 'links.hub.affiliate.create'),

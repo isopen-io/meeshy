@@ -663,6 +663,7 @@ const de = {
   'a11y.floating.rung.discover.requests.other': 'Entdecken, {count} Anfragen erhalten',
 
   'links.hub.share.title': 'Teilen',
+  'links.hub.share.description': 'Lade Kontakte in deine Unterhaltungen ein',
   'links.hub.share.create': 'Freigabelink erstellen',
   'links.share.back': 'Zurück zu Meine Links',
   'links.share.stats.total': 'Links',
@@ -672,6 +673,7 @@ const de = {
   'links.share.joined.other': '{count} beigetreten',
   'links.share.copy': 'Link kopieren',
   'links.share.empty.title': 'Keine Freigabelinks',
+  'links.share.empty.subtitle': 'Erstelle einen Link, um Personen in eine Unterhaltung einzuladen',
   'links.share.loading': 'Links werden geladen',
   'links.share.allLoaded': 'Alle deine Links sind geladen',
   'links.status.active': 'Aktiv',

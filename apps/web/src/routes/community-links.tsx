@@ -73,6 +73,7 @@ export default function CommunityLinksScreen() {
           family="community"
           glyph={<LinksGlyph name="usersThree" size={48} />}
           title={translateLinkFamilies(language, 'linkFamilies.community.empty.title')}
+          subtitle={translateLinkFamilies(language, 'linkFamilies.community.empty.subtitle')}
           cta={{ to: 'communityNew', label: translateLinkFamilies(language, 'linkFamilies.community.empty.create') }}
         />
       </li>

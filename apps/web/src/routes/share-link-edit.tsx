@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
 import { Glyph } from '@/components/glyph';
-import { InfoNoted } from '@/components/info-hint';
 import { RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { endonymOf } from '@/components/language-share-bar';
 import { MAX_USES_CEILING, SHARE_LINK_EXPIRATIONS, type MyShareLink, type ShareLinkPatch, type ShareLinkPolicy } from '@/lib/api/links';
@@ -12,8 +11,8 @@ import { translateInvite } from '@/lib/i18n-invite-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { editDraftOf, validateEditDraft, type EditDraftField, type ShareLinkEditDraft, type ShareLinkExpirationChoice } from '@/lib/links/edit-draft';
 import { canReactivate } from '@/lib/links/view';
-import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT, linksHint } from '@/routes/links-parts';
-import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, permissionsScopeHint, ruleLabelId, type RuleKey } from '@/routes/share-link-form';
+import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT } from '@/routes/links-parts';
+import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, ruleLabelId, type RuleKey } from '@/routes/share-link-form';
 
 /**
  * **L'ÉDITION D'UN LIEN D'INVITATION** (#7797) — la colonne de droite de la
@@ -53,6 +52,20 @@ const TEXT_INPUT_STYLE = {
   border: '1.5px solid color-mix(in srgb, var(--ios-indigo-400) 45%, transparent)',
   outlineColor: BRAND,
 } as const;
+
+/** Le nom d'un champ et, à côté, QUI le voit — lisible au repos, et relié au champ par `noteId` (règle 7, #17641). */
+function FieldHeading({ htmlFor, label, noteId, note }: { readonly htmlFor: string; readonly label: string; readonly noteId: string; readonly note: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2">
+      <label htmlFor={htmlFor} className="text-caption font-bold" style={{ color: INK_2 }}>
+        {label}
+      </label>
+      <span id={noteId} className="text-caption" style={{ color: INK_2 }}>
+        {note}
+      </span>
+    </div>
+  );
+}
 
 function NumberRow({
   id,
@@ -122,7 +135,7 @@ function LanguageChoices({
       <RuleToggle
         id="allLanguages"
         label={translateInvite(language, 'linkDetail.edit.languages.all')}
-        note={linksHint(translateInvite(language, 'linkDetail.edit.languages.question'), translateInvite(language, 'linkDetail.edit.languages.hint'))}
+        caption={translateInvite(language, 'linkDetail.edit.languages.hint')}
         icon={<Glyph name="translate" size={15} />}
         tint={SHARE_TINT}
         checked={draft.allLanguages}
@@ -234,14 +247,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
       >
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <InfoNoted
-              note={linksHint(translateInvite(language, 'linkDetail.edit.name.question'), translateInvite(language, 'linkDetail.edit.name.note'))}
-              noteId="link-edit-name-note"
-            >
-              <label htmlFor="link-edit-name" className="text-caption font-bold" style={{ color: INK_2 }}>
-                {translateInvite(language, 'linkDetail.edit.name')}
-              </label>
-            </InfoNoted>
+            <FieldHeading htmlFor="link-edit-name" label={translateInvite(language, 'linkDetail.edit.name')} noteId="link-edit-name-note" note={translateInvite(language, 'linkDetail.edit.name.note')} />
             <input
               id="link-edit-name"
               dir="auto"
@@ -256,14 +262,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             />
           </div>
           <div className="grid gap-1.5">
-            <InfoNoted
-              note={linksHint(translateInvite(language, 'linkDetail.edit.message.question'), translateInvite(language, 'linkDetail.edit.message.note'))}
-              noteId="link-edit-message-note"
-            >
-              <label htmlFor="link-edit-message" className="text-caption font-bold" style={{ color: INK_2 }}>
-                {translateInvite(language, 'linkDetail.edit.message')}
-              </label>
-            </InfoNoted>
+            <FieldHeading htmlFor="link-edit-message" label={translateInvite(language, 'linkDetail.edit.message')} noteId="link-edit-message-note" note={translateInvite(language, 'linkDetail.edit.message.note')} />
             <textarea
               id="link-edit-message"
               dir="auto"
@@ -279,7 +278,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           </div>
         </div>
 
-        <FormSection id="link-edit-limits" title={translateInvite(language, 'linkDetail.edit.limits')} subtitle={null} icon={<LinksGlyph name="hourglass" size={13} />}>
+        <FormSection id="link-edit-limits" title={translateInvite(language, 'linkDetail.edit.limits')} subtitle={translateLinkFamilies(language, 'links.create.section.limits.subtitle')} icon={<LinksGlyph name="hourglass" size={13} />}>
           <label htmlFor="link-edit-expiration" className="flex items-center gap-3 px-3.5 py-1.5 focus-within:outline-2 focus-within:-outline-offset-2" style={{ outlineColor: BRAND }}>
             <RowIcon tint="var(--color-warning)">
               <LinksGlyph name="hourglass" size={15} />
@@ -385,10 +384,9 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           language={language}
           id="link-edit-rights"
           title={translateInvite(language, 'linkDetail.edit.rights')}
-          subtitle={null}
+          subtitle={translateLinkFamilies(language, 'links.create.section.permissions.subtitle')}
           icon={<LinksGlyph name="chatCircle" size={13} />}
           rules={PERMISSION_RULES}
-          note={permissionsScopeHint(language)}
           draft={draft}
           onToggle={(key: RuleKey, next) => edit({ [key]: next })}
         />
@@ -430,6 +428,9 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
         >
           {translateInvite(language, 'linkDetail.edit.delete')}
         </button>
+        <p data-share-link-actions-note className="col-span-2 text-caption" style={{ color: INK_2 }}>
+          {translateInvite(language, 'linkDetail.edit.actions.note')}
+        </p>
       </div>
     </section>
   );

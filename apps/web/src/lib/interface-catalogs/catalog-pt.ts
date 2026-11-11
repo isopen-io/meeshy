@@ -667,6 +667,7 @@ const pt = {
   'a11y.floating.rung.discover.requests.other': 'Descobrir, {count} pedidos recebidos',
 
   'links.hub.share.title': 'Compartilhamento',
+  'links.hub.share.description': 'Convide contatos para entrar nas suas conversas',
   'links.hub.share.create': 'Criar um link de compartilhamento',
   'links.share.back': 'Voltar para Meus links',
   'links.share.stats.total': 'Links',
@@ -676,6 +677,7 @@ const pt = {
   'links.share.joined.other': '{count} entraram',
   'links.share.copy': 'Copiar o link',
   'links.share.empty.title': 'Nenhum link de compartilhamento',
+  'links.share.empty.subtitle': 'Crie um link para convidar pessoas para uma conversa',
   'links.share.loading': 'Carregando links',
   'links.share.allLoaded': 'Todos os seus links foram carregados',
   'links.status.active': 'Ativo',

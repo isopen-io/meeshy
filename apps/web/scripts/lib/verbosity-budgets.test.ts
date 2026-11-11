@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { budgetsFromMeasure, socleProblems, verbosityProblems } from './verbosity-budgets.mjs';
+import { budgetsFromMeasure, socleProblems, verbosityProblems, type VerbosityBudgets } from './verbosity-budgets.mjs';
 
 const expectOne = (problems: readonly string[], fragment: string): void => {
   expect(problems).toHaveLength(1);
@@ -74,7 +74,7 @@ describe('le relèvement motivé d’un budget', () => {
   const socle = measure({ links: { total: 86, firstScreen: 86 } });
   const raisedTo = (total: number, firstScreen: number) => measure({ links: { total, firstScreen } });
   const releve = { de: { total: 39, firstScreen: 39 }, a: { total: 70, firstScreen: 70 }, motif: 'Les repères des types de lien reviennent', issue: 17641 };
-  const problemsOf = (budgets: object, base = socle) => verbosityProblems({ listed: ['links'], measured: raisedTo(70, 70), budgets, previous, socle: base });
+  const problemsOf = (budgets: VerbosityBudgets, base = socle) => verbosityProblems({ listed: ['links'], measured: raisedTo(70, 70), budgets, previous, socle: base });
 
   test('un relèvement inscrit pour cette vue et ce couple de valeurs passe', () => {
     expect(problemsOf({ ...raisedTo(70, 70), releves: { links: releve } })).toEqual([]);

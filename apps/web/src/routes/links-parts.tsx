@@ -170,6 +170,10 @@ export function ShareLinksStats({ language, summary }: { readonly language: Inte
  * #10381 — miroir `ShareLinkDetailCopy.rowExpiry` : la ligne dit l'échéance
  * choisie à la création ; un lien sans échéance n'ajoute rien à sa ligne.
  */
+/** « Créé le 10 sept. 2026 » — de quoi reconnaître un lien dans sa liste (#17641). */
+export const linkCreatedLabel = (language: InterfaceLanguage, createdAt: string): string =>
+  `${translate(language, 'links.detail.createdAt')} ${new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(createdAt))}`;
+
 export function shareLinkExpiryLabel(language: InterfaceLanguage, expiresAt: string | null, now: Date = new Date()): string | null {
   if (expiresAt === null) return null;
   const deadline = new Date(expiresAt);
@@ -192,11 +196,13 @@ export function ShareLinkRow({
   const name = displayNameOf(link);
   const joined = joinedLabel(language, link.currentUses);
   const expiry = shareLinkExpiryLabel(language, link.expiresAt);
+  const created = linkCreatedLabel(language, link.createdAt);
   const label = new Intl.ListFormat(language, { type: 'unit', style: 'short' }).format([
     name,
     statusLabel(language, link.isActive),
     joined,
     ...(link.conversationTitle === null ? [] : [link.conversationTitle]),
+    created,
     ...(expiry === null ? [] : [expiry]),
   ]);
   return (
@@ -217,6 +223,19 @@ export function ShareLinkRow({
             <span data-share-link-joined className={`shrink-0 font-medium ${SECTION_BRAND_INK}`}>
               {joined}
             </span>
+            {link.isActive ? null : (
+              <span data-share-link-status className="shrink-0 font-medium" style={{ color: INK_2 }}>
+                · {statusLabel(language, false)}
+              </span>
+            )}
+            {link.conversationTitle === null ? null : (
+              <span data-share-link-conversation className="truncate" style={{ color: INK_2 }}>
+                · {link.conversationTitle}
+              </span>
+            )}
+          </span>
+          <span data-share-link-created className="truncate text-caption" style={{ color: INK_2 }}>
+            {created}
           </span>
           {expiry === null ? null : (
             <span data-share-link-expiry className="truncate text-caption" style={{ color: INK_2 }}>
@@ -255,7 +274,7 @@ export function ShareLinksSkeleton({ language, rows = 3 }: { readonly language: 
   );
 }
 
-/** Miroir `ShareLinksView.emptyState` — nommer, offrir le geste : une ligne et une action (épure, règle 4). */
+/** Miroir `ShareLinksView.emptyState` — nommer, dire ce qu'est un lien de partage, offrir le geste (épure, règle 7). */
 export function ShareLinksEmpty({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <div data-share-links-empty className="grid justify-items-center gap-4 px-6 py-10 text-center">
@@ -264,6 +283,9 @@ export function ShareLinksEmpty({ language }: { readonly language: InterfaceLang
       </span>
       <p className="text-thread font-bold" style={{ color: INK }}>
         {translate(language, 'links.share.empty.title')}
+      </p>
+      <p data-share-links-empty-subtitle className="text-caption" style={{ color: INK_2 }}>
+        {translate(language, 'links.share.empty.subtitle')}
       </p>
       <Link
         to="shareLinkNew"
