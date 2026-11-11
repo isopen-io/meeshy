@@ -104,7 +104,7 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
         let rangee = try XCTUnwrap(barre.range(of: "controlCapsule\n"))
         let curseur = try XCTUnwrap(barre.range(of: "ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity"))
         XCTAssertLessThan(rangee.lowerBound, curseur.lowerBound, "sous la capsule, donc sous le flash")
-        XCTAssertTrue(barre.contains("capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode)"),
+        XCTAssertTrue(barre.contains("capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode, position: cameraPosition)"),
                       "le curseur n'existe que sous un flash montré et allumé")
         XCTAssertFalse(barre.contains("Exposure"), "plus de curseur de luminosité permanent")
         let vue = try Self.code("Meeshy/Features/Composer/ComposerFlashIntensitySlider.swift")

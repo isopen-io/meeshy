@@ -54,6 +54,8 @@ struct ComposerSceneCameraBar: View {
     var holding = false
     var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
     var onFlashIntensity: (Double) -> Void = { _ in }
+    /// L'objectif qui vise : la jauge du flash ne sert que l'avant (#17463).
+    var cameraPosition: AVCaptureDevice.Position = .back
     /// Une bascule d'objectif est en cours, ou la prise précédente se
     /// finalise : le bouton se tait (#9464, #9351).
     var flipping = false
@@ -82,6 +84,7 @@ struct ComposerSceneCameraBar: View {
         /// L'objectif bascule — la barre des zooms morphe (#9753).
         var switchingCamera = false
         var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
+        var cameraPosition: AVCaptureDevice.Position = .back
     }
 
     /// **Reduce Motion coupe le battement, jamais le témoin** : le point rouge
@@ -94,6 +97,8 @@ struct ComposerSceneCameraBar: View {
     @State private var recordingBlink: Double = 1
     /// Le curseur du flash paraît à l'interaction et s'efface 2 s après (#9753).
     @State private var sliderTimer = ComposerFlashSliderTimer()
+    /// Le centre du bouton flash dans la barre : la jauge se pose dessous (#17463).
+    @State private var flashMidX: CGFloat = .nan
 
     private var row: ComposerCaptureTopRow.Input {
         ComposerCaptureTopRow.Input(stage: stage, editing: editing, pendingSegments: segments.count,
@@ -105,7 +110,8 @@ struct ComposerSceneCameraBar: View {
     private var capsuleItems: [ComposerCaptureTopItem] { ComposerCaptureTopRow.capsule(row) }
 
     private var showsFlashSlider: Bool {
-        capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode) && sliderTimer.visible
+        capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode, position: cameraPosition)
+            && sliderTimer.visible
     }
 
     /// La prise est-elle à l'écran ? Dès la tenue (#17268).
@@ -142,17 +148,21 @@ struct ComposerSceneCameraBar: View {
             if showsFlashSlider {
                 ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity,
                                              onInteraction: { sliderTimer.hold($0) })
+                    .padding(.leading, ComposerFlashIntensity.sliderLeading(flashMidX: flashMidX,
+                                                                            sliderWidth: MeeshyControlSize.tapTarget))
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, MeeshySpacing.sm)
                     .transition(.opacity)
             }
         }
+        .coordinateSpace(name: Self.barSpace)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.top, MeeshySpacing.md)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsFlashSlider)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: trailingItems)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: capsuleItems)
         .adaptiveOnChange(of: flashMode) { _, mode in
-            guard ComposerFlashIntensity.showsSlider(flash: mode) else { return sliderTimer.hide() }
+            guard ComposerFlashIntensity.showsSlider(flash: mode, position: cameraPosition) else { return sliderTimer.hide() }
             sliderTimer.touch()
         }
         .task(id: sliderTimer.generation) { @MainActor in
@@ -226,13 +236,17 @@ struct ComposerSceneCameraBar: View {
         }
     }
 
-    /// **Le flash.** Le toucher change son mode et, allumé, fait paraître le
-    /// curseur d'intensité SOUS lui (#9566) pour 2 s (#9753).
+    private static let barSpace = "composer.camera.bar"
+
+    /// **Le flash.** Le toucher change son mode ; allumé, l'éclair joue DANS
+    /// l'icône (#17463) et, caméra avant, la jauge paraît SOUS lui pour 2 s (#9566, #9753).
     private var flashCluster: some View {
         capsuleControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
                        label: ComposerCameraFlash.label(for: flashMode),
                        tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
                        action: onCycleFlash)
+            .overlay { ComposerFlashIconStrike(flash: flashMode, recording: stage == .recording) }
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.barSpace)).midX } action: { flashMidX = $0 }
     }
 
     /// **Le retardateur, d'un toucher** (A8) : désactivé → 3 s → 10 s →
