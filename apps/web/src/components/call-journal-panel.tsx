@@ -113,7 +113,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
   const [away, setAway] = useState(false);
   const [view, setView] = useState<JournalView>('translated');
   const clock = useMemo(() => new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' }), [language]);
-  const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'message.author.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
+  const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
   const last = captions.at(-1);
   const entries = journalEntries(captions, notes);
 

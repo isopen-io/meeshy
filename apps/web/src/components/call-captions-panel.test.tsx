@@ -187,7 +187,36 @@ describe('les gestes', () => {
     expect(text?.getAttribute('lang')).toBe('en');
     expect(view.host.querySelector('[data-call-caption-line="w-1"]')?.getAttribute('aria-expanded')).toBe('true');
     view.press('[data-call-caption-line="w-1"]');
+    expect(view.host.querySelector('[data-call-caption-line="w-1"]')?.getAttribute('aria-expanded')).toBe('false');
+    view.done();
+  });
+
+  const settle = (ms: number) => act(async () => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+
+  test('rien n’apparaît ni ne disparaît d’un coup : l’original déplié repart sous la phrase le temps d’un fondu, inerte, puis ne laisse rien', async () => {
+    const view = mount();
+    view.press('[data-call-caption-line="w-1"]');
+    expect(view.host.querySelector('[data-call-caption-original]')?.hasAttribute('data-leaving')).toBe(false);
+    view.press('[data-call-caption-line="w-1"]');
+    const leaving = view.host.querySelector('[data-call-caption-original]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.getAttribute('aria-hidden')).toBe('true');
+    await settle(260);
     expect(view.host.querySelector('[data-call-caption-original]')).toBeNull();
+    view.done();
+  });
+
+  test('les trois points retombent en fondu à l’échéance, et le lecteur d’écran n’entend plus l’attente', async () => {
+    const view = mount({ captions: [caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: Date.now() + 40 } })] });
+    expect(view.host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(false);
+    expect(view.host.textContent).toContain('Traduction en cours');
+    await settle(80);
+    expect(view.host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(true);
+    expect(view.host.textContent).not.toContain('Traduction en cours');
+    await settle(260);
+    expect(view.host.querySelector('[data-call-caption-waiting]')).toBeNull();
+    expect(view.host.querySelector('[data-call-caption-languages]')?.textContent).toBe('ES');
     view.done();
   });
 
@@ -243,8 +272,8 @@ describe('la phrase dit sa langue d’origine et son attente de traduction', () 
 
   test('une traduction attendue ajoute trois points, cachés, et le dit au lecteur d’écran', () => {
     const html = panel({ captions: [spanish(soon())] });
-    expect(html).toMatch(/data-call-caption-waiting=""[^>]*><i[^>]*><\/i><i[^>]*><\/i><i[^>]*><\/i>/);
-    expect(html).toContain('aria-hidden="true" class="ms-1.5 inline-flex');
+    const dots = html.match(/data-call-caption-waiting=""><span class="inline-flex[^"]*" aria-hidden="true">((?:<span[^>]*><\/span>)+)<\/span>/)?.[1] ?? '';
+    expect(dots.match(/<span[^>]*typingDot[^>]*><\/span>/g)).toHaveLength(3);
     expect(html).toContain('<span class="sr-only">, Traduction en cours</span>');
   });
 
@@ -294,7 +323,7 @@ describe('la phrase dit sa langue d’origine et son attente de traduction', () 
 
   test('les nouveaux textes existent dans les sept langues', async () => {
     await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadInterfaceCatalog(language)));
-    const keys = ['callCaptions.self', 'callCaptions.regionLabel', 'callCaptions.translating', 'callCaptions.footer.translating', 'callCaptions.footer.translatedLanguages'] as const;
+    const keys = ['callCaptions.self', 'callCaptions.regionLabel', 'callCaptions.translating', 'callCaptions.footer.translating', 'callCaptions.footer.translatedLanguages.other', 'callCaptions.footer.translatedLanguages.one'] as const;
     for (const key of keys) {
       const texts = SUPPORTED_INTERFACE_LANGUAGES.map((language) => translate(language, key, { language: 'ES', count: '3' }));
       expect(texts.every((text) => text !== '' && !text.includes('{'))).toBe(true);

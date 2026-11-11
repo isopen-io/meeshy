@@ -1,3 +1,6 @@
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
 import { captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from './call-captions';
 
 /**
@@ -46,4 +49,39 @@ export function callCaptionsFooter(lines: readonly FooterLine[]): CaptionsFooter
   if (newest === undefined) return null;
   if (new Set(pairs.map(([from, to]) => `${from}>${to}`)).size <= 1) return { kind: 'touchForOriginal', pair: `${newest[0]} → ${newest[1]}` };
   return { kind: 'translatedLanguages', count: new Set(pairs.flat()).size };
+}
+
+/**
+ * « Traduit · N langues », accordé par la catégorie ICU du nombre dans la langue de
+ * l'interface (`Intl.PluralRules`, miroir de la variation plurielle d'iOS) : le
+ * catalogue porte la même forme dans les sept langues, et seule celle que la langue
+ * élit se lit (le duel « لغتان » de l'arabe ; « zero » n'y a pas de forme à lui).
+ */
+const TRANSLATED_LANGUAGES = {
+  zero: 'callCaptions.footer.translatedLanguages.other',
+  one: 'callCaptions.footer.translatedLanguages.one',
+  two: 'callCaptions.footer.translatedLanguages.two',
+  few: 'callCaptions.footer.translatedLanguages.few',
+  many: 'callCaptions.footer.translatedLanguages.many',
+  other: 'callCaptions.footer.translatedLanguages.other',
+} as const satisfies Readonly<Record<Intl.LDMLPluralRule, string>>;
+
+const pluralRules = new Map<InterfaceLanguage, Intl.PluralRules>();
+
+function pluralOf(language: InterfaceLanguage, count: number): Intl.LDMLPluralRule {
+  const rules = pluralRules.get(language) ?? new Intl.PluralRules(language);
+  pluralRules.set(language, rules);
+  return rules.select(count);
+}
+
+/** Ce que dit le pied : la paire et le geste, les langues comptées, ou la traduction attendue. */
+export function callCaptionsFooterLabel(language: InterfaceLanguage, footer: CaptionsFooter): string {
+  switch (footer.kind) {
+    case 'translating':
+      return translate(language, 'callCaptions.footer.translating', { language: footer.language });
+    case 'touchForOriginal':
+      return translate(language, 'callCaptions.footer.touchForOriginal', { pair: footer.pair });
+    case 'translatedLanguages':
+      return translate(language, TRANSLATED_LANGUAGES[pluralOf(language, footer.count)], { count: String(footer.count) });
+  }
 }

@@ -1,8 +1,9 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
+import { TypingDots } from '@/components/typing-dots';
 import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
-import { callCaptionsFooter, captionFooterLine, EVENT_FOOTER_LINE, type CaptionsFooter } from '@/lib/calls/call-captions-footer';
+import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
@@ -10,6 +11,8 @@ import { useRailPresence } from '@/lib/calls/use-rail-presence';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+
+import '@/styles/call-captions.css';
 
 /**
  * **LES SOUS-TITRES D'UN APPEL** (#8048, #8393, #17343) — les deux dernières
@@ -53,17 +56,35 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * l'enregistrement consenti, sans pseudo.
  */
 
-/** Les trois points d'attente : un battement d'opacité décalé (`glass.css`), fixes sous « Réduire les animations ». */
-function WaitingDots({ label }: { readonly label: string }) {
+/**
+ * Les trois points d'attente : l'atome de la frappe (`TypingDots`), à l'encre secondaire.
+ * Ils arrivent et retombent en fondu (`PILL_TEXT_EXIT`, `glass.css`) ; pendant qu'ils
+ * repartent, le lecteur d'écran n'entend déjà plus l'attente.
+ */
+function WaitingDots({ waiting, label }: { readonly waiting: boolean; readonly label: string }) {
+  const present = useRailPresence(waiting, PILL_TEXT_EXIT).mounted;
+  if (!present) return null;
   return (
     <>
-      <span aria-hidden="true" className="ms-1.5 inline-flex gap-0.5 align-middle" data-call-caption-waiting="">
-        {[0, 1, 2].map((dot) => (
-          <i key={dot} className="inline-block h-1 w-1 rounded-full bg-current" style={{ animationDelay: `${dot * 150}ms` }} />
-        ))}
+      <span className="ms-1.5 inline-flex align-middle" data-call-caption-waiting="" {...(waiting ? {} : { 'data-leaving': '' })}>
+        <TypingDots color={INK_2} />
       </span>
-      <span className="sr-only">{`, ${label}`}</span>
+      {waiting ? <span className="sr-only">{`, ${label}`}</span> : null}
     </>
+  );
+}
+
+/** « Original · … » déplié sous la phrase : il en descend, et y remonte en fondu, inerte, avant de ne rien laisser. */
+function UnfoldedOriginal({ open, caption, language }: { readonly open: boolean; readonly caption: CallCaption; readonly language: InterfaceLanguage }) {
+  const present = useRailPresence(open, PILL_TEXT_EXIT).mounted;
+  if (!present) return null;
+  return (
+    <span className="block ps-3 text-mini" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-caption-original="" {...(open ? {} : PILL_TEXT_LEAVING)}>
+      {`${translateCallControls(language, 'callControls.journal.original')} · `}
+      <span dir="auto" lang={caption.pair?.from} data-call-caption-original-text="">
+        {caption.original}
+      </span>
+    </span>
   );
 }
 
@@ -143,7 +164,7 @@ const CaptionLine = memo(function CaptionLine({
           {languages}
         </span>
       )}
-      {waiting ? <WaitingDots label={translate(language, 'callCaptions.translating')} /> : null}
+      <WaitingDots waiting={waiting} label={translate(language, 'callCaptions.translating')} />
     </>
   );
   return (
@@ -157,14 +178,7 @@ const CaptionLine = memo(function CaptionLine({
           {content}
         </p>
       )}
-      {unfoldable && open ? (
-        <span className="block ps-3 text-mini" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-caption-original="">
-          {`${translateCallControls(language, 'callControls.journal.original')} · `}
-          <span dir="auto" lang={caption.pair?.from} data-call-caption-original-text="">
-            {caption.original}
-          </span>
-        </span>
-      ) : null}
+      <UnfoldedOriginal open={unfoldable && open} caption={caption} language={language} />
     </div>
   );
 });
@@ -202,18 +216,6 @@ export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'su
   );
 }
 
-/** Ce que dit le pied : la paire et le geste, les langues comptées, ou la traduction attendue. */
-function footerLabel(language: InterfaceLanguage, footer: CaptionsFooter): string {
-  switch (footer.kind) {
-    case 'translating':
-      return translate(language, 'callCaptions.footer.translating', { language: footer.language });
-    case 'touchForOriginal':
-      return translate(language, 'callCaptions.footer.touchForOriginal', { pair: footer.pair });
-    case 'translatedLanguages':
-      return translate(language, 'callCaptions.footer.translatedLanguages', { count: String(footer.count) });
-  }
-}
-
 export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal }: PanelProps) {
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
   const mode = call.captionsMode;
@@ -224,7 +226,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
   const toggle = useCallback((id: string) => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id]))), []);
   const now = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))));
   const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, mode, now))));
-  const footerText = footer === null ? null : footerLabel(language, footer);
+  const footerText = footer === null ? null : callCaptionsFooterLabel(language, footer);
 
   return (
     <section
