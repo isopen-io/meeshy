@@ -190,6 +190,36 @@ class MeeshyGlassButtonTest {
         assertThat(destructive.inkColor(THEME_INK, THEME_INVERSE)).isEqualTo(MeeshyMediaChromeColors.OnMedia)
     }
 
+    @Test
+    fun `le doux se lit au plancher de 3 a 1 et aux valeurs mesurees des vecteurs`() {
+        val contrast = vectors().getValue("contrast").jsonObject
+        val floor = contrast.float("glyphMin").toDouble()
+        val tolerance = contrast.float("tolerance").toDouble()
+
+        val onDense = softContrast(MeeshyGlassTone.Deep, MeeshyGlassDensity.Dense)
+        val onLight = softContrast(MeeshyGlassTone.OnLight, MeeshyGlassDensity.Regular)
+
+        assertThat(onDense).isWithin(tolerance).of(contrast.float("softOnDense").toDouble())
+        assertThat(onLight).isWithin(tolerance).of(contrast.float("softOnLight").toDouble())
+        assertThat(onDense).isAtLeast(floor)
+        assertThat(onLight).isAtLeast(floor)
+    }
+
+    /** Le glyphe blanc contre le voile doux posé sur un verre sombre, au pire : une image blanche dessous. */
+    private fun softContrast(tone: MeeshyGlassTone, density: MeeshyGlassDensity): Double {
+        val glass = MeeshyGlassRecipe.resolve(
+            tone = tone, density = density, isTinted = false, isInteractive = false, isPressed = false,
+            material = MeeshyGlassMaterial.Drawn, reduceMotion = false,
+        )
+        val veil = recipe(MeeshyGlassButtonKind.Soft).fillOpacity
+        val underVeil = 1f - glass.fillOpacity
+        val channel = (underVeil * (1f - veil) + veil).toDouble()
+        return CanvasChromeScheme.contrastRatio(
+            CanvasChromeScheme.luminance(1.0, 1.0, 1.0),
+            CanvasChromeScheme.luminance(channel, channel, channel),
+        )
+    }
+
     // endregion
 
     // region L'activation et ce que le lecteur d'ecran entend

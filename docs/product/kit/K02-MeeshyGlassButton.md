@@ -161,3 +161,18 @@ Choix retenus (mode autonome ; alternatives entre parenthèses) :
 16. Aucun jumeau rebranché dans K02 : I1, I2, I4 et I10 s'en chargent, avec captures (#17508). (Faire de `CallPillButton` un renvoi dès K02.)
 17. Le contraste du doux se vérifie au plancher commun de 3:1 ; chaque plateforme inscrit sa valeur mesurée dans les vecteurs, tant que le sombre du verre n'a pas un seul jeton. (Une seule valeur imposée aux trois.)
 18. K02 Android et K02 web partent de `dev` une fois leur K01 fusionné, jamais empilés sur sa branche. (Empiler sur la branche de K01.)
+
+## 10. Android : ce que la reprise fixe (2026-11-11, issue #17466)
+Le composant vit à `apps/android/sdk-ui/src/main/kotlin/me/meeshy/ui/component/kit/` : `MeeshyGlassButtonRecipe.kt` (les types et la recette en valeurs, JVM pure) et `MeeshyGlassButton.kt` (`MeeshyGlassButton`, `MeeshyGlassButtonFace`, avec une surcharge `icon: ImageVector`). Témoins : `MeeshyGlassButtonTest` (recette, lecteur d'écran, loi du doigt, gardes de source ; lit `K02-MeeshyGlassButton.vectors.json`) et `MeeshyGlassButtonBehaviorTest` (Robolectric : nom, rôle, valeur, cible tactile, appui long, `onPressChange`, aucune recomposition à l'appui). Catalogue : `KitCatalogK02.kt`, les douze états d'iOS.
+
+Ce qu'Android transpose, et pourquoi :
+- Pas de Liquid Glass : les lignes `liquid` des vecteurs ne s'appliquent pas, la recette ne dépend pas de la matière (verre dessiné et fond plein de « réduire la transparence » rendent les mêmes valeurs), et le destructif est toujours le rouge plein `ErrorStrong` (3,76:1), jamais un verre teinté.
+- Cible de 48 dp (Material, TalkBack), débord de 6, 4, 2, 0 dp pour 36, 40, 44, 48. Le débord est celui de Compose pour un nœud de pointeur plus petit que sa cible minimale : l'encombrement reste le diamètre.
+- Le nom est le `contentDescription` d'un nœud fusionné, rôle `Button` ; la bascule pose `toggleableState` ET `stateDescription` (« Activé / Désactivé » des chaînes existantes `a11y_kit_toggle_on` et `a11y_kit_toggle_off`, suivies de `value`) ; la sélection pose `selected` ; l'aide est le libellé de l'action ; l'appui long est toujours une action nommée (`onLongClickLabel`).
+- L'appui long dure 500 ms avec 10 dp de jeu : le bouton qui en porte un fournit à son sous-arbre un `ViewConfiguration` à ces deux valeurs.
+- Le fondu de 200 ms est celui de K01 (`TONE_FADE_MILLIS`), sec sous « réduire les animations ». Le fond plein, son voile d'appui et le survol se lisent en phase de dessin ; l'ombre de l'actif a pour rayon la moitié du flou de la planche (7 dp).
+- Le doigt posé, levé, et levé à la disparition passe par un collecteur de la source d'interaction qui n'existe que si l'hôte donne `onPressChange`.
+- Contraste du doux, calculé depuis la recette de K01 au pire (une image blanche dessous) : 5,34:1 sur verre dense, 4,68:1 sur `onLight` ; ce sont les valeurs des vecteurs.
+- Le glyphe reçoit sa taille en paramètre (`glyph: @Composable (Dp) -> Unit`) : le « Aa » la prend en `sp` équivalent, le glyphe ne grandit pas avec la police.
+- Les chaînes réutilisent le catalogue de l'app (`a11y_kit_toggle_*`) : K02 n'ajoute aucune chaîne à `:sdk-ui`.
+- Partage du débord de deux 40 accolés (↶ ↷) : reste à l'hôte (K16), comme sur iOS.
