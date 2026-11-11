@@ -132,6 +132,7 @@ const rowsOf = (page) =>
         role: scroller?.getAttribute('role'),
         overflowX: style?.overflowX,
         snap: style?.scrollSnapType ?? '',
+        fade: ((style?.maskImage || style?.webkitMaskImage || 'none').match(/transparent|rgba\(0, 0, 0, 0\)/g) ?? []).length,
         wrap: style?.flexWrap,
         oneLine: new Set(tops).size <= 1,
         above: more !== undefined && box.bottom <= more.top + 1,
@@ -468,6 +469,7 @@ try {
       await openActions(page);
       const groupRows = await rowsOf(page);
       check(JSON.stringify(groupRows.map((row) => row.side)) === JSON.stringify(['mine', 'call']) && groupRows.every((row) => row.title.length > 0 && row.role === 'toolbar' && row.overflowX === 'auto' && row.wrap === 'nowrap' && row.oneLine && row.above && row.inside), `${label} : à plusieurs, deux rangées titrées DANS la pilule, qui défilent sur une ligne (${JSON.stringify(groupRows.map((row) => [row.side, row.title]))})`);
+      check(groupRows.every((row) => row.fade === 2), `${label} : chaque rangée s'efface en fondu à ses deux bords (#17700)`);
       check((await page.$('[data-call-control-pill="grown"]')) !== null && (await page.$('[data-call-rail]')) === null, `${label} : la pilule grandit et aucun rail ne sort`);
       check((await page.$('[data-call-screen] button[aria-label="Couper le micro"]')) !== null, `${label} : mon micro est ouvert`);
       await page.evaluate(() => window.__meeshyFixtureCallPeer?.muteMe());

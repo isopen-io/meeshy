@@ -332,7 +332,7 @@ try {
       check(footJournal.ok, `${label} : « Journal » du pied fait au moins ${TAP_FLOOR} (${JSON.stringify(footJournal.size)})`);
       await page.click('[data-call-captions-journal]');
       check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : « Journal » ouvre tout l'appel DANS la pilule`);
-      check((await page.$('[data-call-captions-panel]')) === null, `${label} : à la place des sous-titres`);
+      check(await vanishes(page, '[data-call-captions-panel]'), `${label} : à la place des sous-titres (ils repartent en fondu, #17700)`);
       check(await page.$eval('[data-call-control-pill] [data-call-more]', (more) => more.getBoundingClientRect().bottom > (document.querySelector('[data-call-journal]')?.getBoundingClientRect().bottom ?? 0)), `${label} : au-dessus de la rangée de base, qui reste là`);
       await page.click('[data-call-control-pill] [data-call-more]');
       check(await vanishes(page, '[data-call-journal-panel]'), `${label} : (…) range le journal`);
