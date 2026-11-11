@@ -122,7 +122,6 @@ internal fun RulesGlossary(modifier: Modifier = Modifier) {
     val tokens = MeeshyTheme.tokens
     Column(modifier.fillMaxWidth().testTag(RULES_CONCEPTS_TAG), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         SectionTitle(stringResource(R.string.game_rules_section_concepts))
-        Text(stringResource(R.string.game_rules_concepts_intro), style = MaterialTheme.typography.bodyMedium, color = tokens.textMuted)
         GameRulesBook.glossary.forEach { key ->
             Column(
                 Modifier

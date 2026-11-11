@@ -6,26 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "game2.door.league",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.door.showcase",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.door.atlas",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.door.atlas.count",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.door.prestige",
           "status": "adopted"
         },
@@ -42,11 +22,6 @@
         {
           "catalog": "app",
           "iosKey": "game2.unavailable",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.doors.label",
           "status": "adopted"
         },
         {
@@ -226,11 +201,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.showcase.empty",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.showcase.awarded",
           "status": "adopted"
         },
@@ -241,22 +211,12 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.showcase.visibility_hint",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.atlas.title",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "game2.atlas.intro",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.atlas.count",
           "status": "adopted"
         },
         {
@@ -282,16 +242,6 @@
         {
           "catalog": "app",
           "iosKey": "game2.atlas.pending.received",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.atlas.empty",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.atlas.privacy",
           "status": "adopted"
         },
         {
@@ -397,11 +347,6 @@
         {
           "catalog": "app",
           "iosKey": "game2.settings.visibility.title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.settings.visibility.body",
           "status": "adopted"
         },
         {

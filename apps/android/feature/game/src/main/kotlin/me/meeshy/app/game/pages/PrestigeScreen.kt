@@ -95,7 +95,6 @@ private fun PrestigeContent(game: GameBlock, gestures: GameGesturesUiState, onPa
                     busy = gestures.passingPrestige,
                     enabled = gestures.online,
                 )
-                GameNote(stringResource(R.string.game2_prestige_confirm_keeps))
             }
             GameErrorLine(gestureMessage(gestures.failures[GameGesture.Prestige]))
             GameOfflineNote(online = gestures.online)

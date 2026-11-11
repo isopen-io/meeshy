@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">¿Cómo usarlo?</string>
+    <string name="game2_showcase_empty">Aún no hay trofeos: aquí se colocan copas, Renacimiento y Llama.</string>
+    <string name="game2_showcase_visibility_hint">Un visitante solo ve el mes de obtención, nunca la fecha exacta.</string>
+    <string name="game2_atlas_empty">Aún no hay sellos: escribe en otro idioma.</string>
+    <string name="game2_atlas_privacy">Tu Atlas es privado por defecto: un idioma puede decir mucho de ti. El juego guarda el idioma, los dos sentidos y la fecha, nunca al interlocutor ni la conversación.</string>
+    <string name="game2_settings_visibility_body">Fuera de los amigos aceptados, nadie ve si estás en línea ni cuándo juegas.</string>
+    <string name="game2_league_pseudonym_invalid">Este nombre de justa no es válido: letras, números, punto, guion, guion bajo.</string>
+    <string name="game_rules_2_body">Juntas, tus chispas forman tu luz, y tu nivel se lee en ella. Un millón de chispas para el nivel 100, y una prueba cada diez niveles: mientras no se supere, tu luz espera. Veinte estados. Los niveles suben hasta 499; el rango Embajador los abre hasta 1000, y el rango Oráculo, sin límite. Cada nivel pide un poco más que el anterior.</string>
+    <string name="game_state_elans_idle">%1$s estos días: aún sin impulso.</string>
+</resources>

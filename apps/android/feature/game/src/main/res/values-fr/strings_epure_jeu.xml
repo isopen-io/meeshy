@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">Comment m’en servir ?</string>
+    <string name="game2_showcase_empty">Pas encore de trophée : coupes, Renaissance et Flamme s’y rangent.</string>
+    <string name="game2_showcase_visibility_hint">Un visiteur ne voit que le mois d’obtention, jamais la date exacte.</string>
+    <string name="game2_atlas_empty">Pas encore de tampon : écris dans une autre langue.</string>
+    <string name="game2_atlas_privacy">Ton Atlas est privé par défaut : une langue peut en dire long sur toi. Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation.</string>
+    <string name="game2_settings_visibility_body">Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.</string>
+    <string name="game2_league_pseudonym_invalid">Ce nom de joute n’est pas valable : lettres, chiffres, point, tiret, tiret bas.</string>
+    <string name="game_rules_2_body">Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle. Un million d’étincelles pour le niveau 100, et une épreuve tous les dix niveaux : tant qu’elle n’est pas réussie, ta lumière attend. Vingt états. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.</string>
+    <string name="game_state_elans_idle">%1$s ces jours-ci : pas d’élan pour l’instant.</string>
+</resources>

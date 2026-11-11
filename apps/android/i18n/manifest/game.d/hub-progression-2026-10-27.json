@@ -299,11 +299,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.card.a11y",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.fiche.what",
           "status": "adopted"
         },
@@ -314,27 +309,12 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.fiche.use",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.fiche.more",
           "status": "adopted"
         },
         {
           "catalog": "app",
           "iosKey": "game.concept.level.name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.level.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.level.how",
           "status": "adopted"
         },
         {
@@ -364,16 +344,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.points.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.points.how",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.points.tip.1",
           "status": "adopted"
         },
@@ -395,16 +365,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.meesh.name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.meesh.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.meesh.how",
           "status": "adopted"
         },
         {
@@ -434,16 +394,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.glory.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.glory.how",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.glory.tip.1",
           "status": "adopted"
         },
@@ -465,16 +415,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.flame.name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.flame.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.flame.how",
           "status": "adopted"
         },
         {
@@ -504,16 +444,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.missions.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.missions.how",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.missions.tip.1",
           "status": "adopted"
         },
@@ -535,16 +465,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.league.name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.league.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.league.how",
           "status": "adopted"
         },
         {
@@ -574,16 +494,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.season.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.season.how",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.season.tip.1",
           "status": "adopted"
         },
@@ -605,16 +515,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.prestige.name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.prestige.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.prestige.how",
           "status": "adopted"
         },
         {
@@ -644,16 +544,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.elans.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.elans.how",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.elans.tip.1",
           "status": "adopted"
         },
@@ -675,16 +565,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.badges.name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.badges.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.badges.how",
           "status": "adopted"
         },
         {
@@ -714,16 +594,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.defis.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.defis.how",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.defis.tip.1",
           "status": "adopted"
         },
@@ -745,16 +615,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.succes.name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.succes.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.succes.how",
           "status": "adopted"
         },
         {
@@ -784,16 +644,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.showcase.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.showcase.how",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.showcase.tip.1",
           "status": "adopted"
         },
@@ -815,16 +665,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.atlas.name",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.atlas.why",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.atlas.how",
           "status": "adopted"
         },
         {

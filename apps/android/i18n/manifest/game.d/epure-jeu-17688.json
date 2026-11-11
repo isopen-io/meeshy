@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "androidName": "game2_atlas_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_atlas_privacy",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_league_pseudonym_invalid",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_settings_visibility_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_showcase_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game2_showcase_visibility_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_rules_2_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_state_elans_idle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "game_concept_use_question",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

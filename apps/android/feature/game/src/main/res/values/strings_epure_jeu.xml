@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">How do I use it?</string>
+    <string name="game2_showcase_empty">No trophy yet: cups, Rebirth and Flame trophies are kept here.</string>
+    <string name="game2_showcase_visibility_hint">A visitor only sees the month you won a trophy, never the exact date.</string>
+    <string name="game2_atlas_empty">No stamp yet: write in another language.</string>
+    <string name="game2_atlas_privacy">Your Atlas is private by default: a language can say a lot about you. The game keeps the language, both directions and the date — never the other person or the conversation.</string>
+    <string name="game2_settings_visibility_body">Outside accepted friends, nobody sees whether you are online or when you play.</string>
+    <string name="game2_league_pseudonym_invalid">This joust name isn’t valid: letters, digits, dot, dash, underscore.</string>
+    <string name="game_rules_2_body">Together, your sparks form your light, and your level is read from it. A million sparks for level 100, and a trial every ten levels: until it is passed, your light waits. Twenty phases. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before.</string>
+    <string name="game_state_elans_idle">%1$s these days: no momentum yet.</string>
+</resources>

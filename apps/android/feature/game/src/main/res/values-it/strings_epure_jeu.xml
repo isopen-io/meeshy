@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">Come usarlo?</string>
+    <string name="game2_showcase_empty">Ancora nessun trofeo: qui si sistemano coppe, Rinascita e Fiamma.</string>
+    <string name="game2_showcase_visibility_hint">Un visitatore vede solo il mese in cui l’hai ottenuto, mai la data esatta.</string>
+    <string name="game2_atlas_empty">Ancora nessun timbro: scrivi in un’altra lingua.</string>
+    <string name="game2_atlas_privacy">Il tuo Atlante è privato per impostazione predefinita: una lingua può dire molto di te. Il gioco conserva la lingua, i due sensi e la data — mai l’interlocutore né la conversazione.</string>
+    <string name="game2_settings_visibility_body">Fuori dagli amici accettati nessuno vede se sei online né quando giochi.</string>
+    <string name="game2_league_pseudonym_invalid">Questo nome di torneo non è valido: lettere, cifre, punto, trattino, trattino basso.</string>
+    <string name="game_rules_2_body">Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei. Un milione di scintille per il livello 100, e una prova ogni dieci livelli: finché non è superata, la tua luce aspetta. Venti stati. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente.</string>
+    <string name="game_state_elans_idle">%1$s in questi giorni: ancora nessuno slancio.</string>
+</resources>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">كيف أستعمله؟</string>
+    <string name="game2_showcase_empty">لا كؤوس بعد: المبارزة والرحلة والانبعاث واللهب تُصفّ هنا.</string>
+    <string name="game2_showcase_visibility_hint">يرى الزائر شهر الحصول فقط، لا التاريخ الدقيق أبدًا.</string>
+    <string name="game2_atlas_empty">لا أختام بعد: اكتب بلغة أخرى.</string>
+    <string name="game2_atlas_privacy">أطلسك خاص افتراضيًا: قد تكشف اللغة الكثير عنك. تحتفظ اللعبة باللغة والاتجاهين والتاريخ فقط — لا بالطرف الآخر ولا بالمحادثة.</string>
+    <string name="game2_settings_visibility_body">خارج الأصدقاء المقبولين لا أحد يرى إن كنت متصلًا ولا متى تلعب.</string>
+    <string name="game2_league_pseudonym_invalid">اسم المبارزة هذا غير صالح: حروف وأرقام ونقطة وشرطة وشرطة سفلية.</string>
+    <string name="game_rules_2_body">شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك. مليون شرارة للمستوى 100، واختبار كل عشرة مستويات: ما لم تجتزه، ينتظر نورك. عشرون حالة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله.</string>
+    <string name="game_state_elans_idle">%1$s هذه الأيام: لا زخم بعد.</string>
+</resources>

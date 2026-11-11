@@ -37,7 +37,7 @@ class ConceptWhatSectionComposeTest {
     @Test
     fun `au repos le titre et la phrase sont lus, la note est repliee`() {
         show()
-        compose.onNodeWithText("C’est quoi ?").assertIsDisplayed()
+        compose.onNodeWithText("C’EST QUOI ?").assertIsDisplayed()
         compose.onNodeWithText("Ta lumière est la somme de tes étincelles.").assertIsDisplayed()
         compose.onNodeWithText("Ta lumière ouvre le rêve au niveau 5.").assertDoesNotExist()
     }

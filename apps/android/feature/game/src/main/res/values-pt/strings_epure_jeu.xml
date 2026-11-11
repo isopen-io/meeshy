@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">Como usar?</string>
+    <string name="game2_showcase_empty">Ainda sem troféus: taças, Renascimento e Chama se guardam aqui.</string>
+    <string name="game2_showcase_visibility_hint">Um visitante só vê o mês de obtenção, nunca a data exata.</string>
+    <string name="game2_atlas_empty">Ainda sem carimbos: escreva em outro idioma.</string>
+    <string name="game2_atlas_privacy">Seu Atlas é privado por padrão: um idioma pode dizer muito sobre você. O jogo guarda o idioma, os dois sentidos e a data — nunca o interlocutor nem a conversa.</string>
+    <string name="game2_settings_visibility_body">Fora dos amigos aceitos, ninguém vê se você está online nem quando joga.</string>
+    <string name="game2_league_pseudonym_invalid">Este nome de torneio não é válido: letras, números, ponto, hífen, sublinhado.</string>
+    <string name="game_rules_2_body">Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela. Um milhão de faíscas para o nível 100, e uma prova a cada dez níveis: enquanto ela não for vencida, sua luz espera. Vinte estados. Os níveis vão até 499; o título Embaixador os abre até 1.000, e o título Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior.</string>
+    <string name="game_state_elans_idle">%1$s nestes dias: ainda sem impulso.</string>
+</resources>

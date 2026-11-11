@@ -88,7 +88,6 @@ private fun ShowcaseContent(game: GameBlock, state: GameArrangementUiState, arra
         if (shown.isEmpty()) {
             GameNote(stringResource(R.string.game2_showcase_empty))
         } else {
-            GameNote(stringResource(R.string.game2_showcase_order_hint))
             shown.chunked(COLUMNS).forEachIndexed { rowIndex, keys ->
                 Row(
                     Modifier.fillMaxWidth().staggeredAppear(minOf(rowIndex, MAX_STAGGER_ROW)),

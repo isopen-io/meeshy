@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">Wie nutze ich es?</string>
+    <string name="game2_showcase_empty">Noch keine Trophäe: Pokale, Wiedergeburt und Flamme kommen hierher.</string>
+    <string name="game2_showcase_visibility_hint">Besucher sehen nur den Monat, nie das genaue Datum.</string>
+    <string name="game2_atlas_empty">Noch kein Stempel: Schreibe in einer anderen Sprache.</string>
+    <string name="game2_atlas_privacy">Dein Atlas ist standardmäßig privat: Eine Sprache kann viel über dich verraten. Das Spiel speichert die Sprache, beide Richtungen und das Datum — nie das Gegenüber oder die Unterhaltung.</string>
+    <string name="game2_settings_visibility_body">Außerhalb bestätigter Freunde sieht niemand, ob du online bist oder wann du spielst.</string>
+    <string name="game2_league_pseudonym_invalid">Dieser Turniername ist ungültig: Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich.</string>
+    <string name="game_rules_2_body">Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus. Eine Million Funken für Level 100, und alle zehn Level eine Prüfung: Solange sie nicht bestanden ist, wartet dein Licht. Zwanzig Gestalten. Die Level steigen bis 499; der Rang Botschafter öffnet sie bis 1.000, der Rang Orakel ohne Grenze. Jedes Level verlangt etwas mehr als das vorherige.</string>
+    <string name="game_state_elans_idle">%1$s in diesen Tagen: noch kein Schwung.</string>
+</resources>

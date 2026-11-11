@@ -49,10 +49,10 @@
       "explanations": 30
     },
     "android:feature/game": {
-      "labels": 1335,
-      "words": 10107,
-      "long": 165,
-      "explanations": 117
+      "labels": 1289,
+      "words": 9546,
+      "long": 154,
+      "explanations": 116
     },
     "android:feature/notifications": {
       "labels": 65,
