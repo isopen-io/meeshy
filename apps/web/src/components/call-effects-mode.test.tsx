@@ -8,7 +8,7 @@ import type { ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CallMember } from '@/lib/calls/call-store';
 import type { CaptureFile } from '@/lib/calls/call-capture-save';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
-import { loadPillMotion } from '@/lib/calls/use-pill-motion';
+import { loadModeMotion } from '@/lib/calls/use-mode-motion';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 import type { EffectsCompanion } from './call-effects-companions';
@@ -199,7 +199,7 @@ describe('CallEffectsMode', () => {
     await later(260);
     expect(view.find('[data-call-mode-carousel]')).toBeNull();
     expect(view.find('[data-call-effects-categories]')).toBeNull();
-    expect(view.find('[data-call-effects-settings-toggle]')?.className).toContain('bg-on-media');
+    expect(view.find('[data-call-effects-settings-toggle] > span')?.className).toContain('bg-on-media');
     view.press('[data-call-effects-settings-toggle]');
     expect(view.find('[data-call-mode-carousel]')).not.toBeNull();
     expect(view.find('[data-call-mode-bar] [data-call-effects-categories]')).not.toBeNull();
@@ -275,7 +275,7 @@ describe('CallEffectsMode', () => {
     let before: unknown;
 
     beforeAll(async () => {
-      await loadPillMotion();
+      await loadModeMotion();
     });
     beforeEach(() => {
       before = proto().animate;

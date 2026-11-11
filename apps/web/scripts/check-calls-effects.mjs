@@ -383,13 +383,14 @@ try {
       check(toggles.filter((t) => t.event === 'call:toggle-audio').at(-1)?.enabled === false, `${label} : le pair sait le micro coupé`);
       await page.click('[data-call-effects-settings-toggle]');
       check(await appears(page, '[data-call-effects-settings] input[type="range"]'), `${label} : « Réglages » ouvre la luminosité`);
-      check((await page.$('[data-call-mode="effects"] [data-carousel-item]')) === null, `${label} : à la place du carrousel`);
+      check(await vanishes(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : à la place du carrousel, qui repart en fondu`);
       await page.click('[data-call-effects-settings-toggle]');
       check(await appears(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : un second appui rend le carrousel`);
 
-      // ------------------------------------------------ 6. valider, puis quitter sans garder
-      await page.click('[data-call-effects-validate]');
-      check(await vanishes(page, '[data-call-mode]'), `${label} : Valider quitte le mode`);
+      // ------------------------------------------------ 6. ‹ garde le look et rend l'appel ; Échap aussi
+      check((await page.$('[data-call-effects-validate]')) === null, `${label} : ni Valider ni ✕ (P8b.5)`);
+      await page.click('[data-call-mode-quit]');
+      check(await vanishes(page, '[data-call-mode]'), `${label} : ‹ quitte le mode`);
       check(await appears(page, '[data-call-control-pill]'), `${label} : la pilule revient`);
       check(await until(page, () => document.activeElement?.hasAttribute('data-call-more') === true), `${label} : le focus revient au (…)`);
       await openActions(page);
@@ -406,7 +407,7 @@ try {
       await appears(page, '[data-call-mode="effects"]');
       await page.click('[data-call-effects-category="color"]');
       const restored = await page.getAttribute('[data-call-mode="effects"] [data-carousel-item][aria-checked="true"]', 'data-carousel-item');
-      check(restored === 'golden', `${label} : quitter rend les effets d'avant (« Doré », pas « Ciel » : ${restored})`);
+      check(restored === 'sky', `${label} : Échap garde le look posé (« Ciel » : ${restored}), rien n'est restauré (P8b.5)`);
       await page.click('[data-call-mode-quit]');
       await vanishes(page, '[data-call-mode]');
 

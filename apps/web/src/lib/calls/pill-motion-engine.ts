@@ -1,6 +1,6 @@
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-import { MORPH_MS, morphKeyframes, type GlassSize, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes } from './call-pill-motion';
+import { MORPH_MS, morphKeyframes, type GlassSize, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs } from './call-pill-motion';
 
 /**
  * **LE MOTEUR DOM DU MOUVEMENT DU VERRE** (#17536, lois dans `call-pill-motion.ts`) — il mesure
@@ -89,4 +89,22 @@ export function fadeStow(element: HTMLElement, stowed: boolean): void {
   if (!prefersReducedMotion()) return;
   const targets = [...(element.matches(STOW_TARGETS) ? [element] : []), ...element.querySelectorAll<HTMLElement>(STOW_TARGETS)];
   for (const target of targets) if (typeof target.animate === 'function') target.animate([...stowFadeKeyframes(stowed)], { duration: STOW_REDUCED_MS, easing: 'linear' });
+}
+
+/**
+ * Ce qui prend la place d'un autre (Réglages du mode Effets, P8b.6) arrive en fondu et en montée,
+ * ce qui lui cède la place repart de même, ou en fondu seul sous « Réduire les animations ».
+ * Interruptible : un mouvement repris en route annule le précédent et part de l'opacité affichée
+ * à cet instant. Ce qui repart reste invisible jusqu'à son démontage (`fill`).
+ */
+export function playSwap(element: HTMLElement, entering: boolean, previous: Animation | null): Animation | null {
+  if (typeof element.animate !== 'function') return null;
+  const reduced = prefersReducedMotion();
+  const [from = {}, to = {}] = swapKeyframes(entering, reduced);
+  const resumed = (previous?.effect as KeyframeEffect | null | undefined)?.target === element;
+  const shown = resumed ? { ...from, opacity: getComputedStyle(element).opacity } : from;
+  previous?.cancel();
+  const playing = element.animate([shown, to], { duration: swapMs(reduced), easing: EASING, fill: entering ? 'none' : 'forwards' });
+  playing.finished?.catch(() => undefined);
+  return playing;
 }
