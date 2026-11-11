@@ -50,7 +50,25 @@ type Vectors = {
 };
 
 const vectors = JSON.parse(readFileSync(join(ROOT, 'docs', 'product', 'kit', 'K01-MeeshyGlassTone.vectors.json'), 'utf8')) as Vectors;
-const glassCss = readFileSync(join(APP, 'src', 'styles', 'glass.css'), 'utf8');
+const glassCss = readFileSync(join(APP, 'src', 'styles', 'glass-kit.css'), 'utf8');
+
+const percent = (fraction: number): number => Math.round(fraction * 10000) / 100;
+
+const bodiesOf = (css: string, opener: RegExp): readonly string[] => {
+  const flags = opener.flags.includes('g') ? opener.flags : `${opener.flags}g`;
+  return [...css.matchAll(new RegExp(opener.source, flags))].map((match) => {
+    const open = css.indexOf('{', match.index);
+    const close = [...css.slice(open)].reduce(
+      (state, char, offset) => {
+        if (state.end !== -1) return state;
+        const depth = state.depth + (char === '{' ? 1 : char === '}' ? -1 : 0);
+        return depth === 0 ? { depth, end: open + offset } : { ...state, depth };
+      },
+      { depth: 0, end: -1 },
+    ).end;
+    return css.slice(open + 1, close).replace(/\s+/g, ' ').trim();
+  });
+};
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -82,7 +100,7 @@ const mount = (element: ReactElement): HTMLElement => {
 };
 
 const surface = (container: HTMLElement, index = 0): HTMLElement => {
-  const found = container.querySelectorAll<HTMLElement>('[data-glass-tone]');
+  const found = container.querySelectorAll<HTMLElement>('.glass-tone');
   const element = found[index];
   if (element === undefined) throw new Error('surface absente');
   return element;
@@ -96,8 +114,10 @@ describe('la loi du ton', () => {
     expect(resolveMeeshyGlassTone(vectors.tone.deepCeiling + 0.001)).toBe('onLight');
   });
 
-  test.each(vectors.tone.cases.map((entry, index) => [index, entry] as const))('vecteur %i : luminance, ton précédent, ton élu', (_, entry) => {
-    expect(resolveMeeshyGlassTone(entry.luminance, entry.previous)).toBe(entry.tone);
+  vectors.tone.cases.forEach((entry, index) => {
+    test(`vecteur ${index} : luminance ${String(entry.luminance)}, après ${String(entry.previous)} ⇒ ${entry.tone}`, () => {
+      expect(resolveMeeshyGlassTone(entry.luminance, entry.previous)).toBe(entry.tone);
+    });
   });
 
   test('luminance inconnue ⇒ deep, quel que soit le ton précédent', () => {
@@ -113,7 +133,7 @@ describe('la loi du ton', () => {
 describe('la recette, lue comme des valeurs', () => {
   const rest = { isInteractive: false, isPressed: false, material: 'drawn', reduceMotion: false } as const;
 
-  test.each(vectors.recipe.drawn)('verre dessiné $tone $density : remplissage et liseré de la planche', (expected) => {
+  vectors.recipe.drawn.forEach((expected) => test(`verre dessiné ${expected.tone} ${expected.density} : remplissage et liseré de la planche`, () => {
     const recipe = meeshyGlassRecipe({ tone: expected.tone, density: expected.density, ...rest });
     expect(recipe.material).toBe('drawn');
     expect(recipe.fill).toBe(expected.fill);
@@ -124,7 +144,7 @@ describe('la recette, lue comme des valeurs', () => {
     expect(recipe.topLight).toBe(vectors.recipe.topLight);
     expect(recipe.shadowOpacity).toBe(vectors.recipe.shadowOpacity);
     expect(recipe.shadowY).toBe(vectors.recipe.shadowOffsetY);
-  });
+  }));
 
   test('la matière web est dessinée ou pleine : aucun Liquid Glass, aucun paramètre ne force autre chose', () => {
     expect(meeshyGlassRecipe({ tone: 'deep', ...rest }).material).toBe('drawn');
@@ -192,8 +212,8 @@ describe('la recette, lue comme des valeurs', () => {
     const regular = meeshyGlassRecipe({ tone: 'theme', ...rest });
     const dense = meeshyGlassRecipe({ tone: 'theme', density: 'dense', ...rest });
     const densities = loadGlassDensities();
-    expect(regular.fillOpacity * 100).toBe(densities.glass);
-    expect(dense.fillOpacity * 100).toBe(densities['glass-prominent']);
+    expect(percent(regular.fillOpacity)).toBe(densities.glass);
+    expect(percent(dense.fillOpacity)).toBe(densities['glass-prominent']);
     expect(regular.rim).toBe(0);
     expect(regular.shadowOpacity).toBe(0);
     expect(meeshyGlassRecipe({ tone: 'theme', ...rest, isNested: true }).fillOpacity).toBe(regular.fillOpacity);
@@ -211,18 +231,20 @@ describe('la recette, lue comme des valeurs', () => {
 describe('la matière de glass.css porte les valeurs de la recette', () => {
   const tones = loadKitGlassTones();
 
-  test.each(vectors.recipe.drawn)('$tone $density : fond et liseré lus dans la feuille', (expected) => {
-    const found = tones[expected.tone][expected.density];
-    expect(found.fill).toBe(expected.fill);
-    expect(found.alpha).toBe(expected.fillOpacity * 100);
-    expect(found.rim).toBe(expected.rim * 100);
-  });
+  vectors.recipe.drawn.forEach((expected) =>
+    test(`${expected.tone} ${expected.density} : fond et liseré lus dans la feuille`, () => {
+      const found = tones[expected.tone][expected.density];
+      expect(found.fill).toBe(expected.fill);
+      expect(found.alpha).toBe(percent(expected.fillOpacity));
+      expect(found.rim).toBe(percent(expected.rim));
+    }),
+  );
 
   test('flou, saturation, reflet, ombre : une seule valeur, celle de la planche', () => {
     expect(tones.blur).toBe(vectors.recipe.blurRadius);
-    expect(tones.saturate).toBe(vectors.recipe.saturation * 100);
-    expect(tones.topLight).toBe(vectors.recipe.topLight * 100);
-    expect(tones.shadowAlpha).toBe(vectors.recipe.shadowOpacity * 100);
+    expect(tones.saturate).toBe(percent(vectors.recipe.saturation));
+    expect(tones.topLight).toBe(percent(vectors.recipe.topLight));
+    expect(tones.shadowAlpha).toBe(percent(vectors.recipe.shadowOpacity));
     expect(tones.shadowOffsetY).toBe(vectors.recipe.shadowOffsetY);
     expect(tones.pressScale).toBe(vectors.recipe.pressScale);
     expect(tones.toneFadeMs).toBe(vectors.recipe.toneFadeMs);
@@ -240,23 +262,30 @@ describe('la matière de glass.css porte les valeurs de la recette', () => {
   });
 
   test('réduire les animations coupe l’échelle, le ressort et le fondu', () => {
-    const block = /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.glass-touch[\s\S]*?\}\s*\}/.exec(glassCss);
-    expect(block).not.toBeNull();
-    expect(block?.[0]).toContain('transform: none');
-    expect(block?.[0]).toContain('transition: none');
+    const blocks = bodiesOf(glassCss, /@media \(prefers-reduced-motion: reduce\)/).filter((body) => body.includes('.glass-touch'));
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toContain('transform: none');
+    expect(blocks[0]).toContain('transition: none');
+    expect(blocks[0]).toContain('.glass-tone { transition: none; }');
   });
 
   test('réduire la transparence : fond plein sans flou, par le réglage du système et par la matière posée', () => {
-    expect(glassCss).toMatch(/@media \(prefers-reduced-transparency: reduce\)\s*\{[\s\S]*?\.glass-tone[\s\S]*?backdrop-filter: none/);
-    expect(glassCss).toMatch(/\.glass-tone\[data-glass-material='opaque'\]/);
+    const blocks = bodiesOf(glassCss, /@media \(prefers-reduced-transparency: reduce\)/).filter((body) => body.includes('.glass-tone'));
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toContain('backdrop-filter: none');
+    expect(blocks[0]).toContain('color-mix(in srgb, var(--glass-fill) 100%, transparent)');
+    const [forced] = bodiesOf(glassCss, /\.glass-tone\[data-glass-material='opaque'\]\[data-glass-tone\] \{/);
+    expect(forced).toContain('backdrop-filter: none');
+    expect(forced).toContain('color-mix(in srgb, var(--glass-fill) 100%, transparent)');
   });
 
   test('l’appui n’anime que transform et opacity ; le fondu de ton n’anime que la teinte', () => {
-    const touch = /\.glass-touch\s*\{[^}]*\}/.exec(glassCss)?.[0] ?? '';
+    const [touch] = bodiesOf(glassCss, /\.glass-touch \{/);
     expect(touch).toContain('transition: transform');
-    expect(touch).not.toMatch(/transition:[^;]*(?:blur|box-shadow|filter|width|height)/);
-    const glow = /\.glass-touch::after\s*\{[^}]*\}/.exec(glassCss)?.[0] ?? '';
+    expect(touch).not.toMatch(/blur|box-shadow|filter|width|height/);
+    const [glow] = bodiesOf(glassCss, /\.glass-touch::after \{/);
     expect(glow).toContain('transition: opacity');
+    expect(glow).not.toMatch(/transition:[^;]*(?:blur|filter|width|height)/);
   });
 
   test('le focus clavier est visible sur les quatre tons : contour de 2 px décalé de 2 px', () => {
@@ -381,7 +410,7 @@ describe('MeeshyGlass', () => {
     expect(surface(container, 1).hasAttribute('data-glass-nested')).toBe(false);
   });
 
-  test('le ton hérité theme garde aussi sa matière dans un verre dessiné', () => {
+  test('le ton d’un verre dessiné descend à ses surfaces, qui n’ont plus de matière à elles', () => {
     const container = mount(
       <MeeshyGlassScope tone="theme">
         <MeeshyGlass tone="deep">
@@ -417,7 +446,7 @@ describe('MeeshyGlass', () => {
 
   test('la classe de l’appelant s’ajoute à celles du verre', () => {
     const container = mount(<MeeshyGlass className="rounded-full size-11">x</MeeshyGlass>);
-    expect(surface(container).className.split(' ')).toEqual(expect.arrayContaining(['glass-tone', 'rounded-full', 'size-11']));
+    expect(['glass-tone', 'rounded-full', 'size-11'].every((name) => surface(container).classList.contains(name))).toBe(true);
   });
 
   test('le ton theme pose les classes du verre actuel, la teinte carte ou accent', () => {

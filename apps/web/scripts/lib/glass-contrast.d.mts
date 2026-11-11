@@ -38,6 +38,7 @@ export type DerivedGlassInkPair = {
 
 export declare const IOS_TOKENS_PATH: string;
 export declare const GLASS_CSS_PATH: string;
+export declare const GLASS_KIT_CSS_PATH: string;
 export declare const IOS_ALIAS_PATH: string;
 export declare const WORST_CASE_CANVAS: Readonly<Record<Scheme, RGBA>>;
 export declare const GLASS_CONTRAST_INVENTORY: readonly GlassContrastEntry[];
@@ -65,3 +66,30 @@ export declare function glassContrastCoverage(
   sources: readonly GlassInkSource[],
   inventory?: readonly GlassContrastEntry[],
 ): readonly DerivedGlassInkPair[];
+
+export type KitGlassToneName = 'plain' | 'deep' | 'onLight' | 'theme';
+export type KitGlassToneDensity = 'regular' | 'dense';
+export type KitGlassToneValues = { readonly fill: 'light' | 'dark' | 'system'; readonly alpha: number; readonly rim: number };
+export type KitGlassTones = Readonly<Record<KitGlassToneName, Readonly<Record<KitGlassToneDensity, KitGlassToneValues>>>> & {
+  readonly blur: number;
+  readonly saturate: number;
+  readonly topLight: number;
+  readonly shadowAlpha: number;
+  readonly shadowOffsetY: number;
+  readonly pressScale: number;
+  readonly toneFadeMs: number;
+  readonly hoverGlow: number;
+  readonly pressGlow: number;
+};
+export type KitGlassToneContrastResult = {
+  readonly tone: 'plain' | 'deep' | 'onLight';
+  readonly density: KitGlassToneDensity;
+  readonly kind: GlassContrastKind;
+  readonly ratio: number;
+  readonly minRatio: number;
+  readonly passes: boolean;
+};
+
+export declare const PLAIN_WORST_LUMINANCE: number;
+export declare function loadKitGlassTones(): KitGlassTones;
+export declare function kitGlassToneContrast(): readonly KitGlassToneContrastResult[];
