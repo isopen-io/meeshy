@@ -133,6 +133,8 @@ const en = {
   'links.create.access.birthday.caption': 'Enables age checks',
   'links.create.access.birthday.question': 'What is the date of birth for?',
   'links.create.section.permissions': 'Allow',
+  'links.create.section.permissions.question': 'Who do these permissions apply to?',
+  'links.create.section.permissions.note': 'To guests who join without a Meeshy account.',
   'links.create.permission.messages': 'Messages',
   'links.create.permission.images': 'Images',
   'links.create.permission.files': 'Files',

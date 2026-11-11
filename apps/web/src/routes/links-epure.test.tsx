@@ -181,7 +181,15 @@ describe('la création d’un lien de partage', () => {
     const button = infoButton(host, 'À quoi sert la date de naissance ?');
     expect(controlledBy(button)?.textContent).toBe('Permet le contrôle d’âge');
     expect(controlledBy(button)?.className).toContain('sr-only');
-    expect(host.querySelectorAll('button[aria-expanded]')).toHaveLength(1);
+  });
+
+  test('« Autoriser » dit derrière un (i) à qui s’appliquent ses bascules : aux invités sans compte', async () => {
+    const host = await mount(<ShareLinkNewScreen />);
+    const button = infoButton(host, 'À qui s’appliquent ces autorisations ?');
+    expect(controlledBy(button)?.textContent).toBe('Aux invités qui rejoignent sans compte Meeshy.');
+    expect(seen(host).join(' | ')).not.toContain('sans compte Meeshy');
+    await click(button);
+    expect(seen(host)).toContain('Aux invités qui rejoignent sans compte Meeshy.');
   });
 
   test('les huit bascules restent atteintes et nommées par leur mot court', () => {

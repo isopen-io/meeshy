@@ -13,7 +13,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { editDraftOf, validateEditDraft, type EditDraftField, type ShareLinkEditDraft, type ShareLinkExpirationChoice } from '@/lib/links/edit-draft';
 import { canReactivate } from '@/lib/links/view';
 import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT, linksHint } from '@/routes/links-parts';
-import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, type RuleKey } from '@/routes/share-link-form';
+import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, permissionsScopeHint, type RuleKey } from '@/routes/share-link-form';
 
 /**
  * **L'ÉDITION D'UN LIEN D'INVITATION** (#7797) — la colonne de droite de la
@@ -382,6 +382,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           subtitle={null}
           icon={<LinksGlyph name="chatCircle" size={13} />}
           rules={PERMISSION_RULES}
+          note={permissionsScopeHint(language)}
           draft={draft}
           onToggle={(key: RuleKey, next) => edit({ [key]: next })}
         />

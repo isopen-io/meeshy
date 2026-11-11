@@ -133,6 +133,8 @@ const ar = {
   'links.create.access.birthday.caption': 'يتيح التحقّق من العمر',
   'links.create.access.birthday.question': 'ما فائدة تاريخ الميلاد؟',
   'links.create.section.permissions': 'السماح',
+  'links.create.section.permissions.question': 'على من تنطبق هذه الأذونات؟',
+  'links.create.section.permissions.note': 'على الضيوف الذين ينضمون دون حساب Meeshy.',
   'links.create.permission.messages': 'الرسائل',
   'links.create.permission.images': 'الصور',
   'links.create.permission.files': 'الملفات',

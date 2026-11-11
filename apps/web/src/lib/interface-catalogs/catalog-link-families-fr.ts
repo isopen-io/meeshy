@@ -141,6 +141,8 @@ const fr = {
   'links.create.access.birthday.caption': 'Permet le contrôle d’âge',
   'links.create.access.birthday.question': 'À quoi sert la date de naissance ?',
   'links.create.section.permissions': 'Autoriser',
+  'links.create.section.permissions.question': 'À qui s’appliquent ces autorisations ?',
+  'links.create.section.permissions.note': 'Aux invités qui rejoignent sans compte Meeshy.',
   'links.create.permission.messages': 'Messages',
   'links.create.permission.images': 'Images',
   'links.create.permission.files': 'Fichiers',

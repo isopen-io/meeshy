@@ -29,6 +29,7 @@ import {
   PERMISSION_RULES,
   RulesSection,
   TextRow,
+  permissionsScopeHint,
   type PickableConversation,
 } from '@/routes/share-link-form';
 
@@ -154,6 +155,7 @@ export default function ShareLinkNewScreen() {
               subtitle={null}
               icon={<LinksGlyph name="slidersHorizontal" size={12} />}
               rules={PERMISSION_RULES}
+              note={permissionsScopeHint(language)}
               draft={draft}
               onToggle={(key, next) => edit(key, next)}
             />

@@ -185,6 +185,10 @@ export function RuleToggle({
   );
 }
 
+/** « Autoriser » ne dit pas à QUI : ses bascules ne gouvernent que les invités sans compte (`allowAnonymous…`). */
+export const permissionsScopeHint = (language: InterfaceLanguage): InfoHint =>
+  linksHint(translateLinkFamilies(language, 'links.create.section.permissions.question'), translateLinkFamilies(language, 'links.create.section.permissions.note'));
+
 /** Une section de bascules — « compte requis » grise et éteint les trois exigences voisines. */
 export function RulesSection({
   language,
@@ -193,6 +197,7 @@ export function RulesSection({
   subtitle,
   icon,
   rules,
+  note,
   draft,
   onToggle,
 }: {
@@ -202,13 +207,15 @@ export function RulesSection({
   readonly subtitle: string | null;
   readonly icon: ReactNode;
   readonly rules: readonly RuleSpec[];
+  /** Ce que le titre de la section ne dit pas (à QUI ses bascules s'appliquent), derrière un (i). */
+  readonly note?: InfoHint;
   /** Les huit bascules seulement : la création (`ShareLinkDraft`) et l'édition
    * (`ShareLinkEditDraft`, #7797) les portent toutes deux. */
   readonly draft: Pick<ShareLinkDraft, RuleKey>;
   readonly onToggle: (key: RuleKey, next: boolean) => void;
 }) {
   return (
-    <FormSection id={id} title={title} subtitle={subtitle} icon={icon}>
+    <FormSection id={id} title={title} subtitle={subtitle} icon={icon} {...(note === undefined ? {} : { note })}>
       {rules.map((rule) => {
         const overridden = draft.requireAccount && ACCESS_RULES.some((access) => access.key === rule.key) && rule.key !== 'requireAccount';
         return (

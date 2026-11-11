@@ -267,6 +267,11 @@ describe('le formulaire « Modifier le lien »', () => {
     expect(text).toContain('Maximum');
     expect(text.join(' | ')).not.toContain('Limiter les utilisations');
   });
+
+  test('« Autoriser » garde, derrière un (i), qu’il ne gouverne que les invités sans compte', async () => {
+    const host = await mountForm();
+    expect(controlledBy(infoButton(host, 'À qui s’appliquent ces autorisations ?'))?.textContent).toBe('Aux invités qui rejoignent sans compte Meeshy.');
+  });
 });
 
 describe('les tuiles de statistiques', () => {

@@ -133,6 +133,8 @@ const it = {
   'links.create.access.birthday.caption': 'Consente il controllo dell’età',
   'links.create.access.birthday.question': 'A cosa serve la data di nascita?',
   'links.create.section.permissions': 'Consenti',
+  'links.create.section.permissions.question': 'A chi si applicano questi permessi?',
+  'links.create.section.permissions.note': 'Agli ospiti che entrano senza un account Meeshy.',
   'links.create.permission.messages': 'Messaggi',
   'links.create.permission.images': 'Immagini',
   'links.create.permission.files': 'File',
