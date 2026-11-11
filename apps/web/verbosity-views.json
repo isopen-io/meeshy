@@ -1,0 +1,26 @@
+{
+  "viewport": { "width": 390, "height": 844 },
+  "views": [
+    { "name": "chats", "path": "/chats" },
+    { "name": "community-new", "path": "/communities/new" },
+    { "name": "discover", "path": "/discover" },
+    { "name": "download", "path": "/download" },
+    { "name": "feed", "path": "/feed" },
+    { "name": "forgot-password", "path": "/forgot-password" },
+    { "name": "keypad", "path": "/calls/keypad" },
+    { "name": "link-share-new", "path": "/links/share/new" },
+    { "name": "links", "path": "/links" },
+    { "name": "login", "path": "/login" },
+    { "name": "magic-link", "path": "/auth/magic-link" },
+    { "name": "notifications", "path": "/notifications" },
+    { "name": "profile-me", "path": "/me" },
+    { "name": "prog-reglages", "path": "/me/progression/reglages" },
+    { "name": "prog-saison", "path": "/me/progression/saison" },
+    { "name": "progression", "path": "/me/progression" },
+    { "name": "settings", "path": "/settings" },
+    { "name": "signup", "path": "/signup" },
+    { "name": "sounds", "path": "/me/sounds" },
+    { "name": "thread", "path": "/c/c-deploiement" },
+    { "name": "welcome", "path": "/welcome" }
+  ]
+}
