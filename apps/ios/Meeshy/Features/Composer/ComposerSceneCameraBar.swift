@@ -134,12 +134,8 @@ struct ComposerSceneCameraBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if showsBudgetBar {
-                budgetBar
-            } else if !segments.isEmpty, !editing {
-                segmentBar
-            }
-            topControls
+            if showsProgressRow { progressRow }
+            if ComposerCaptureTopRow.showsHeader(row) { topControls }
             if !capsuleItems.isEmpty {
                 controlCapsule
                     .padding(.top, MeeshySpacing.sm)
@@ -172,22 +168,32 @@ struct ComposerSceneCameraBar: View {
         }
     }
 
+    private var showsSegmentBar: Bool { !segments.isEmpty && !editing }
+
+    private var showsProgressRow: Bool {
+        ComposerCaptureTopRow.showsChrono(row) || showsBudgetBar || showsSegmentBar
+    }
+
+    /// **Le chrono et le nombre de segments, juste à GAUCHE de la barre** (#17469,
+    /// porteur) : une seule ligne porte la prise, l'en-tête ne la porte plus.
+    private var progressRow: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            if ComposerCaptureTopRow.showsChrono(row) { chronoChip }
+            progressBar
+        }
+        .padding(.bottom, MeeshySpacing.xs)
+    }
+
     // MARK: - En tête de la carte
 
     /// **L'en-tête, disposé par sa loi** (A8, #17109) : « Quitter » à gauche,
-    /// « ✓ Valider » à droite, le chrono au centre dès qu'une vidéo se prend.
-    /// En filmant, l'en-tête se retire (`showsHeader`, A9) : le chrono reste
-    /// seul, centré, et la prise se clôt au déclencheur rouge.
+    /// « ✓ Valider » à droite. En filmant, il se retire (`showsHeader`, A9) et
+    /// la prise se clôt au déclencheur rouge.
     private var topControls: some View {
-        ZStack {
-            if ComposerCaptureTopRow.showsHeader(row) {
-                HStack(spacing: ComposerCaptureTopRow.spacing) {
-                    ForEach(ComposerCaptureTopRow.leading(row), id: \.self) { control($0) }
-                    Spacer(minLength: 0)
-                    ForEach(trailingItems, id: \.self) { control($0) }
-                }
-            }
-            if ComposerCaptureTopRow.showsChrono(row) { chronoChip }
+        HStack(spacing: ComposerCaptureTopRow.spacing) {
+            ForEach(ComposerCaptureTopRow.leading(row), id: \.self) { control($0) }
+            Spacer(minLength: 0)
+            ForEach(trailingItems, id: \.self) { control($0) }
         }
         .frame(minHeight: MeeshyControlSize.tapTarget)
     }
@@ -456,7 +462,19 @@ struct ComposerSceneCameraBar: View {
 
     // MARK: - La bande des segments (#4099, vue `4b`) et la puce du chrono (#9753)
 
-    /// La part de chaque segment, sous la rangée haute ; le dernier en rouge.
+    /// La barre de la ligne de progression : le maximum dès la prise, sinon les segments.
+    @ViewBuilder
+    private var progressBar: some View {
+        if showsBudgetBar {
+            budgetBar
+        } else if showsSegmentBar {
+            segmentBar
+        } else {
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// La part de chaque segment ; le dernier en rouge.
     private var segmentBar: some View {
         GeometryReader { geo in
             HStack(spacing: MeeshySpacing.xxs) {
@@ -470,7 +488,6 @@ struct ComposerSceneCameraBar: View {
             }
         }
         .frame(height: 3)
-        .padding(.top, MeeshySpacing.smPlus)
         .accessibilityHidden(true)
     }
 
@@ -493,7 +510,6 @@ struct ComposerSceneCameraBar: View {
             }
         }
         .frame(height: 4)
-        .padding(.bottom, MeeshySpacing.sm)
         .animation(reduceMotion ? nil : .linear(duration: 0.2), value: budgetSpans)
         .accessibilityHidden(true)
     }
@@ -504,8 +520,8 @@ struct ComposerSceneCameraBar: View {
         ComposerCaptureSegments.elapsed(segments: segments, live: liveDuration, recording: stage == .recording)
     }
 
-    /// **La puce du chrono et de l'indicateur de segment, à DROITE de (x)**
-    /// (#9753). **Le témoin d'enregistrement BAT** : un point rouge fixe ne
+    /// **La puce du chrono et de l'indicateur de segment, à GAUCHE de la barre**
+    /// (#9753, #17469). **Le témoin d'enregistrement BAT** : un point rouge fixe ne
     /// distingue pas « ça tourne » de « il y a des segments ».
     private var chronoChip: some View {
         let compte = ComposerCaptureTopRow.segmentCount(pending: segments.count, recording: stage == .recording)
@@ -532,7 +548,7 @@ struct ComposerSceneCameraBar: View {
         .frame(height: 32)
         .adaptiveLiquidGlass(in: Capsule())
         .frame(minHeight: MeeshyControlSize.tapTarget)
-        // L'écran montre « 3 – » ; VoiceOver dit « 3 segments » (#10310), puis
+        // L'écran montre « 3 » ; VoiceOver dit « 3 segments » (#10310), puis
         // la minuterie EN MOTS — il lirait « 0:12 » comme une heure.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ComposerSceneCameraCopy.segmentCount(compte))
