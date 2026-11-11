@@ -62226,7 +62226,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ohne Passwort melden Sie sich immer über einen Link per E-Mail an."
+            "value": "Ohne Passwort meldest du dich immer über einen Link per E-Mail an."
           }
         },
         "en": {
@@ -175922,13 +175922,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Not you who changed it? Reset it right away."
+            "value": "Didn't change it? Reset it right away."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿No fuiste tú quien lo cambió? Restablécela de inmediato."
+            "value": "¿No fuiste tú quien la cambió? Restablécela de inmediato."
           }
         },
         "fr": {
@@ -312155,7 +312155,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This link opens ANOTHER account than %2$@: %1$@. Only open it if it is yours."
+            "value": "This link opens an account OTHER than %2$@: %1$@. Only open it if it is yours."
           }
         },
         "es": {
@@ -312202,7 +312202,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This link opens ANOTHER account than the open one: %@. Only open it if it is yours."
+            "value": "This link opens an account OTHER than the open one: %@. Only open it if it is yours."
           }
         },
         "es": {
