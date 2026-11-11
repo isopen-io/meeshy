@@ -209,6 +209,10 @@ private struct MeeshyChipGroupTraits: ViewModifier {
     let isTabs: Bool
 
     func body(content: Content) -> some View {
-        content.accessibilityAddTraits(isTabs ? .isTabBar : [])
+        if #available(iOS 17.0, *) {
+            content.accessibilityAddTraits(isTabs ? .isTabBar : [])
+        } else {
+            content
+        }
     }
 }
