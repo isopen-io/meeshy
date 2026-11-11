@@ -45,26 +45,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "call_effects_preset_natural",
-          "status": "android-only"
-        },
-        {
-          "androidName": "call_effects_preset_warm",
-          "status": "android-only"
-        },
-        {
-          "androidName": "call_effects_preset_cool",
-          "status": "android-only"
-        },
-        {
-          "androidName": "call_effects_preset_vivid",
-          "status": "android-only"
-        },
-        {
-          "androidName": "call_effects_preset_muted",
-          "status": "android-only"
-        },
-        {
           "androidName": "call_effects_settings",
           "status": "android-only"
         },
