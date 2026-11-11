@@ -314,7 +314,9 @@ struct GroupCallStageView: View {
                 VStack(spacing: Self.spacing) { stripTiles(others) }
             }
         }
-        .mask { CallEdgeFadeMask(axis: axis) }
+        // P14.9 — le bandeau s'efface en fondu à ses deux bords, à l'horizontale
+        // en portrait, à la verticale en paysage.
+        .mask { ScrollEdgeFadeMask(axis: axis, start: true, end: true) }
     }
 
     private func stripTiles(_ others: [GroupCallStageTile]) -> some View {
@@ -367,7 +369,12 @@ struct GroupCallTileView: View {
                 RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                     .stroke(speakerColor.opacity(tile.isSpeaking ? 1 : 0.55), lineWidth: tile.isSpeaking ? 3 : 1.5)
             )
-            .background { speakerHalo }
+            .modifier(CallSpeakerHalo(
+                shape: RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous),
+                color: speakerColor,
+                spread: 1.04,
+                isSpeaking: tile.isSpeaking
+            ))
             .animation(
                 .easeInOut(duration: CallRemoteVideoFade.duration(reduceMotion: reduceMotion)),
                 value: tile.isSpeaking
@@ -381,18 +388,6 @@ struct GroupCallTileView: View {
     /// La couleur de la personne : la même que ses sous-titres et que son anneau en duo.
     private var speakerColor: Color {
         Color(uiColor: HexColor(hex: CallPeerSpeech.colorHex(forPeer: tile.colorKey))?.uiColor ?? .white)
-    }
-
-    /// P11.5 · P14.4 — qui parle s'illumine de sa couleur : un halo derrière la
-    /// vignette, absent au repos mais jamais retiré de l'arbre, qui se fond avec
-    /// la durée partagée (plus courte sous « Réduire les animations »).
-    private var speakerHalo: some View {
-        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-            .fill(speakerColor.opacity(MeeshyOpacity.medium))
-            .scaleEffect(1.04)
-            .blur(radius: 14)
-            .opacity(tile.isSpeaking ? 1 : 0)
-            .allowsHitTesting(false)
     }
 
     private var accessibilityName: String {

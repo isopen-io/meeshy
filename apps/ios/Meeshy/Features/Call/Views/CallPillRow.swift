@@ -79,43 +79,11 @@ struct CallPillRow<Content: View>: View {
             }
             .callRowScrollTargetBehavior()
             .modifier(CallRowScrollInteraction())
-            .mask { CallEdgeFadeMask(axis: .horizontal) }
+            // P12.8 — une rangée qui défile s'efface en fondu à ses deux bords.
+            .mask { ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true) }
         }
         .padding(.vertical, MeeshySpacing.sm)
         .accessibilityElement(children: .contain)
-    }
-}
-
-/// P12.8 · P14.9 — une rangée qui défile n'est jamais coupée net : elle s'efface en
-/// fondu à ses deux bords, de la même longueur des deux côtés (rien à inverser en
-/// droite à gauche). Le fondu est un masque : il ne prend aucun toucher.
-enum CallEdgeFade {
-    static let length: CGFloat = 24
-}
-
-struct CallEdgeFadeMask: View {
-    let axis: Axis
-
-    var body: some View {
-        let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 0)) : AnyLayout(VStackLayout(spacing: 0))
-        layout {
-            ramp(from: .clear, to: .black)
-            Color.black
-            ramp(from: .black, to: .clear)
-        }
-        .allowsHitTesting(false)
-    }
-
-    private func ramp(from: Color, to: Color) -> some View {
-        LinearGradient(
-            colors: [from, to],
-            startPoint: axis == .horizontal ? .leading : .top,
-            endPoint: axis == .horizontal ? .trailing : .bottom
-        )
-        .frame(
-            width: axis == .horizontal ? CallEdgeFade.length : nil,
-            height: axis == .vertical ? CallEdgeFade.length : nil
-        )
     }
 }
 

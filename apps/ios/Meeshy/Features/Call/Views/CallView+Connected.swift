@@ -591,13 +591,7 @@ struct CallPeerSpeechRing<Avatar: View>: View {
         let hex = CallPeerSpeech.colorHex(forPeer: peerUserId)
         let color = Color(uiColor: HexColor(hex: hex)?.uiColor ?? .white)
         avatar(hex)
-            .background {
-                Circle()
-                    .fill(color.opacity(MeeshyOpacity.medium))
-                    .scaleEffect(1.25)
-                    .blur(radius: 14)
-                    .opacity(isSpeaking ? 1 : 0)
-            }
+            .modifier(CallSpeakerHalo(shape: Circle(), color: color, spread: 1.25, isSpeaking: isSpeaking))
             .overlay {
                 Circle()
                     .stroke(color, lineWidth: 3)
@@ -620,6 +614,27 @@ struct CallPeerSpeechRing<Avatar: View>: View {
             speech = speech.recording(level: await sampleLevel(), at: Date())
             if speech.isSpeaking != sampledSpeaking { sampledSpeaking = speech.isSpeaking }
             guard await cancellableSleep(for: .milliseconds(400)) else { return }
+        }
+    }
+}
+
+/// P9.6 · P11.5 · P14.4 — le halo de qui parle, à SA couleur : UNE loi pour le
+/// disque du duo et pour la vignette d'un groupe. Il reste dans l'arbre en opacité 0
+/// au repos ; l'hôte en règle le fondu (`CallRemoteVideoFade`). Il ne prend aucun toucher.
+struct CallSpeakerHalo<HaloShape: Shape>: ViewModifier {
+    let shape: HaloShape
+    let color: Color
+    let spread: CGFloat
+    let isSpeaking: Bool
+
+    func body(content: Content) -> some View {
+        content.background {
+            shape
+                .fill(color.opacity(MeeshyOpacity.medium))
+                .scaleEffect(spread)
+                .blur(radius: 14)
+                .opacity(isSpeaking ? 1 : 0)
+                .allowsHitTesting(false)
         }
     }
 }
