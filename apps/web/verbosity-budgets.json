@@ -357,8 +357,8 @@
       "firstScreen": 23
     },
     "world": {
-      "total": 38,
-      "firstScreen": 38
+      "total": 35,
+      "firstScreen": 35
     }
   },
   "uncovered": {
@@ -500,10 +500,10 @@
         "firstScreen": 25
       },
       "a": {
-        "total": 38,
-        "firstScreen": 38
+        "total": 35,
+        "firstScreen": 35
       },
-      "motif": "Une ligne d’orientation sous « World Wide » dit ce qu’est la conversation ouverte, puis la phrase de l’entrée sans compte",
+      "motif": "Une ligne d’orientation sous « World Wide » dit ce qu’est la conversation ouverte au monde, puis la phrase de l’entrée sans compte ; la traduction n’est dite qu’une fois, par la phrase de la langue",
       "issue": 17666
     }
   }
