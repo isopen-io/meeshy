@@ -3,7 +3,7 @@
     <string name="activation_email_sent">Code sent to %1$s.</string>
     <string name="activation_invite_days_left">%1$d days left: after that, signing in will require a code.</string>
     <string name="activation_invite_days_left_one">1 day left: after that, signing in will require a code.</string>
-    <string name="activation_invite_lead">Verify your email or phone to keep signing in without a code.</string>
+    <string name="activation_invite_lead">Verify your email to keep signing in without a code.</string>
     <string name="auth_forgot_sent_title">Link sent</string>
     <string name="auth_magic_sent_title">Code and link sent</string>
     <string name="auth_magic_subtitle">No password: we email you a link.</string>
