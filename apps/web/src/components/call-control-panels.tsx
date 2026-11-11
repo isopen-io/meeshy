@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { CALL_REACTION_EMOJIS, type CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
 import type { CallRecordingKind } from '@meeshy/shared/types/call-recording';
 
+import type { CallButton } from '@/components/call-glass-button';
 import { CallPanelFrame, CHIP, chipStyle, PanelRow, type PanelBack } from '@/components/call-panel-frame';
 import { callActions } from '@/lib/calls/call-actions';
 import { callRecording } from '@/lib/calls/call-recording-live';
@@ -33,6 +34,7 @@ type PanelBase = {
   readonly closeGlyph: ReactNode;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
+  readonly Button: typeof CallButton;
   readonly back?: PanelBack | undefined;
 };
 
@@ -41,7 +43,7 @@ const ITEM = 'grid place-items-center rounded-full transition-transform hover:bg
 export function CallReactionPalette({ react = callActions.react, ...base }: PanelBase & { readonly react?: (emoji: CallReactionEmoji) => void }) {
   const title = t(base.language, 'callControls.react.palette');
   return (
-    <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} back={base.back} data={{ 'data-call-react-panel': '' }}>
+    <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} Button={base.Button} back={base.back} data={{ 'data-call-react-panel': '' }}>
       <PanelRow title={title} role="toolbar" onRowKeyDown={onRowKeyDown} onRowWheel={onRowWheel}>
         {CALL_REACTION_EMOJIS.map((emoji, index) => (
           <button
@@ -78,7 +80,7 @@ const CHOICES: readonly { readonly kind: CallRecordingKind; readonly label: 'cal
 export function CallRecordChoice({ request = (kind) => void callRecording.request(kind), videoAvailable = canRecordVideo(), ...base }: PanelBase & { readonly request?: (kind: CallRecordingKind) => void; readonly videoAvailable?: boolean }) {
   const title = t(base.language, 'callControls.record.title');
   return (
-    <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} back={base.back} data={{ 'data-call-record-choice': '' }}>
+    <CallPanelFrame id={base.id} title={title} closeLabel={t(base.language, 'callControls.close')} closeGlyph={base.closeGlyph} onClose={base.onClose} Button={base.Button} back={base.back} data={{ 'data-call-record-choice': '' }}>
       <p className="px-3 text-center text-mini" style={{ color: 'var(--color-on-media-3)' }} data-call-record-consent="">
         {t(base.language, 'callControls.record.consent')}
       </p>

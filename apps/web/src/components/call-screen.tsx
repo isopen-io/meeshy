@@ -29,7 +29,7 @@ import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore }
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
-import { formatCallClock, type ActiveCall, type CallMember } from '@/lib/calls/call-store';
+import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
@@ -47,7 +47,6 @@ import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered, effectsUsedOf, videoEffectsStore } from '@/lib/calls/video-effects';
 import { useMediaSystemBars } from '@/lib/use-media-system-bars';
 
-import type { EffectsCompanion } from './call-effects-companions';
 import '@/styles/call-motion.css';
 
 /**
@@ -552,6 +551,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       id: CALL_PANEL_ID[open],
       closeGlyph,
       language,
+      Button: CallButton,
       onClose: () => send({ type: 'close' }),
       back: { label: translateCallControls(language, 'callControls.back'), onPress: () => send({ type: 'back' }) },
     };
@@ -568,19 +568,6 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     }
   };
   const exitMode = () => send({ type: 'exit-mode' });
-  /* Les autres, qui accompagnent mon image en mode Effets (#8737), dans leur ordre d'arrivée. */
-  const companionOf = (member: CallMember): EffectsCompanion => {
-    const stream = call.remoteStreams[member.userId] ?? null;
-    const shows = (member.cameraOn || member.screenSharing) && hasVideo(stream);
-    return {
-      id: member.userId,
-      name: member.name,
-      color: speakerColor(member.userId),
-      render: (width) =>
-        shows ? <StreamVideo stream={stream} mirrored={false} fit={member.screenSharing ? 'contain' : 'cover'} className="absolute inset-0 size-full" label={member.name} /> : <Portrait name={member.name} avatar={member.avatar} size={Math.round(width / 2)} pulse={member.link === 'ringing'} presenceKey={member.userId} />,
-    };
-  };
-  const callAudio = (): readonly MediaStream[] => [call.localStream, ...Object.values(call.remoteStreams)].filter((stream): stream is MediaStream => stream !== null);
   const mode =
     chrome.mode === 'effects' ? (
       <CallEffectsMode
@@ -589,14 +576,13 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         blurAvailable={support.blur}
         preview={<StreamVideo stream={call.localStream} mirrored={selfPreviewMirrored(call)} className="size-full" videoRef={myPreview} />}
         selfVideo={() => myPreview.current}
-        companions={Object.values(call.members).map(companionOf)}
+        others={{ ...call, Portrait, colorOf: speakerColor }}
         captions={call.captions}
         quitGlyph={closeGlyph}
         onExit={exitMode}
-        audio={callAudio}
       />
     ) : chrome.mode === 'montage' ? (
-      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} audio={callAudio} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} />
+      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} />
     ) : null;
   /* LE CHROME SE RANGE VERS SES BORDS, ET REVIENT PAR LE MÊME CHEMIN (G1.11, G2.8, #17406) : l'en-tête par le haut, la pilule par le bas, les bandeaux en fondu (`data-call-stow`, `call-motion.css`). Il ne retire JAMAIS le doigt à un bouton encore visible (#8735) : rangés d'un toucher, ils deviennent `invisible` à la FIN du mouvement, et reviennent d'un coup. Sous « Réduire les animations » : un fondu court, sans déplacement (`useStowFade`). */
   useStowFade(root, hidden);
@@ -711,7 +697,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         ) : null}
         {column.shown ? (
           <Suspense fallback={null}>
-            <CallJournalInColumn width={JOURNAL_COLUMN_WIDTH} gutter={JOURNAL_COLUMN_GUTTER} id={CALL_PANEL_ID.journal} closeGlyph={closeGlyph} language={language} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />
+            <CallJournalInColumn width={JOURNAL_COLUMN_WIDTH} gutter={JOURNAL_COLUMN_GUTTER} id={CALL_PANEL_ID.journal} closeGlyph={closeGlyph} language={language} Button={CallButton} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />
           </Suspense>
         ) : null}
         {chrome.panel !== null && !panelInThePill(chrome.panel) ? <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense> : null}

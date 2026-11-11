@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 
+import type { CallButton } from '@/components/call-glass-button';
+
 /**
  * **UN SOUS-MENU DE L'APPEL, DANS LE CADRE DE LA PILULE** (#8550, #8578) — la
  * forme commune des panneaux que le `(…)` ouvre : Réagir, Enregistrer,
@@ -7,10 +9,10 @@ import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type Wheel
  * rangées d'actions (une chose à la fois), sous un petit en-tête (‹ Retour ·
  * titre centré · Fermer) : ‹ revient aux rangées, ✕ referme tout. Un fond à peine
  * plus clair le distingue ; ‹ et ✕ sont des disques de verre de 44, comme chaque
- * bouton de la pilule (`CallButton` ton `disc`, #17345, G3.6) : un voile et un liseré
- * (`.glass-call-disc`), sans flou à eux, donc sans verre dans le verre. Le disque est
- * redessiné ici, avec la MÊME classe, parce que `CallButton` vit dans `call_overlay`
- * (`dynamic_only`) et que ce module, chargé à part, n'en importe rien.
+ * bouton de la pilule : c'est le MÊME bouton, `CallButton` ton `disc` (#17345, G3.6),
+ * un voile et un liseré (`.glass-call-disc`) sans flou à eux, donc sans verre dans le
+ * verre. L'écran le REMET (`Button`), comme il remet le glyphe de Fermer : il vit dans
+ * `call_overlay` (`dynamic_only`), et ce module, chargé à part, n'en importe rien.
  *
  * Échap le ferme sans réduire l'appel ; à l'ouverture, le focus va au choix
  * coché ou au premier bouton ; en fermant, l'écran le rend au bouton qui l'a
@@ -42,6 +44,8 @@ type FrameProps = {
   readonly closeLabel: string;
   readonly closeGlyph: ReactNode;
   readonly onClose: () => void;
+  /** Le bouton rond de l'appel (`CallButton`), remis par l'écran : ‹ et ✕ en sont deux disques. */
+  readonly Button: typeof CallButton;
   readonly children: ReactNode;
   readonly data: Readonly<Record<`data-${string}`, string>>;
   readonly closeData?: Readonly<Record<`data-${string}`, string>>;
@@ -55,22 +59,13 @@ type FrameProps = {
 
 export type PanelBack = { readonly label: string; readonly onPress: () => void };
 
-/** Un bouton rond de l'en-tête : le disque de verre de l'appel (`CallButton`, ton `disc`), 44 de côté. */
-function Disc({ label, glyph, onPress, data }: { readonly label: string; readonly glyph: ReactNode; readonly onPress: () => void; readonly data: Readonly<Record<`data-${string}`, string>> }) {
-  return (
-    <button type="button" aria-label={label} title={label} onClick={onPress} className="glass-call-disc grid shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none" style={{ width: 44, height: 44, color: 'var(--color-on-media)' }} {...data}>
-      {glyph}
-    </button>
-  );
-}
-
 const chevron = (
   <svg aria-hidden viewBox="0 0 24 24" className="size-5 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="m15 5-7 7 7 7" />
   </svg>
 );
 
-export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, children, data, closeData = {}, back, fill = false, trailing = null }: FrameProps) {
+export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, Button, children, data, closeData = {}, back, fill = false, trailing = null }: FrameProps) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = `${id}-title`;
   useLayoutEffect(() => {
@@ -98,13 +93,13 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, chi
         {back === undefined ? (
           <span aria-hidden className="size-11 shrink-0" />
         ) : (
-          <Disc label={back.label} glyph={chevron} onPress={back.onPress} data={{ 'data-panel-back': '' }} />
+          <Button label={back.label} glyph={chevron} onPress={back.onPress} size={44} data={{ 'data-panel-back': '' }} />
         )}
         <h2 id={titleId} className="min-w-0 flex-1 truncate text-center text-body font-semibold">
           {title}
         </h2>
         {trailing}
-        <Disc label={closeLabel} glyph={closeGlyph} onPress={onClose} data={{ 'data-panel-close': '', ...closeData }} />
+        <Button label={closeLabel} glyph={closeGlyph} onPress={onClose} size={44} data={{ 'data-panel-close': '', ...closeData }} />
       </div>
       {children}
     </div>

@@ -11,6 +11,7 @@ import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 import { CallModerationMenu } from './call-moderation-menu';
+import { CallButton } from './call-glass-button';
 import { CallRecordChoice, CallReactionPalette } from './call-control-panels';
 import { CallScreen } from './call-screen';
 
@@ -176,7 +177,7 @@ describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
 describe('les panneaux « Réagir » et « Enregistrer »', () => {
   test('chaque réaction part aussitôt, et la palette reste ouverte pour enchaîner', () => {
     const sent: string[] = [];
-    const view = mount(<CallReactionPalette id="p" closeGlyph="x" language="fr" onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
+    const view = mount(<CallReactionPalette Button={CallButton} id="p" closeGlyph="x" language="fr" onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
     view.press('[data-call-react="🎉"]');
     view.press('[data-call-react="👍"]');
     expect(sent).toEqual(['🎉', '👍']);
@@ -185,7 +186,7 @@ describe('les panneaux « Réagir » et « Enregistrer »', () => {
   });
 
   test('G3.2 — « Enregistrer l’appel » : titre centré, phrase d’accord, deux puces larges Audio | Vidéo, sans légende de rangée ni détail', () => {
-    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={() => undefined} videoAvailable />);
+    const view = mount(<CallRecordChoice Button={CallButton} id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={() => undefined} videoAvailable />);
     const group = view.find('[data-call-record-choice]');
     const title = group?.querySelector('h2');
     expect(title?.textContent).toBe('Enregistrer l’appel');
@@ -200,7 +201,7 @@ describe('les panneaux « Réagir » et « Enregistrer »', () => {
   });
 
   test('G3.6 — ‹ Retour et Fermer sont des disques de verre de 44 px, comme les boutons de la pilule', () => {
-    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => undefined} back={{ label: 'Retour', onPress: () => undefined }} request={() => undefined} videoAvailable />);
+    const view = mount(<CallRecordChoice Button={CallButton} id="r" closeGlyph="x" language="fr" onClose={() => undefined} back={{ label: 'Retour', onPress: () => undefined }} request={() => undefined} videoAvailable />);
     for (const selector of ['[data-panel-back]', '[data-panel-close]']) {
       const button = view.find(selector);
       expect(button?.className).toContain('glass-call-disc');
@@ -212,13 +213,13 @@ describe('les panneaux « Réagir » et « Enregistrer »', () => {
   test('« Vidéo » lance aussitôt la demande d’accord puis referme l’option ; sans canevas filmable, elle n’est pas offerte', () => {
     const asked: string[] = [];
     const closed: string[] = [];
-    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
+    const view = mount(<CallRecordChoice Button={CallButton} id="r" closeGlyph="x" language="fr" onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
     view.press('[data-call-record-kind="video"]');
     view.press('[data-call-record-kind="audio"]');
     expect(asked).toEqual(['video', 'audio']);
     expect(closed).toHaveLength(2);
     view.done();
-    const bare = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
+    const bare = mount(<CallRecordChoice Button={CallButton} id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
     expect(bare.find('[data-call-record-kind="video"]')?.hasAttribute('disabled')).toBe(true);
     bare.done();
   });

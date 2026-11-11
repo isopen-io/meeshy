@@ -3,6 +3,7 @@ import { memo, useCallback, useLayoutEffect, useRef, useState, type CSSPropertie
 import { CallJournalColumn, type JournalColumnGeometry } from '@/components/call-journal-column';
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { CallJournalViewSwitch, type JournalView } from '@/components/call-journal-view-switch';
+import type { CallButton } from '@/components/call-glass-button';
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { captionLanguageLabel, captionText, type CallCaption } from '@/lib/calls/call-captions';
@@ -49,6 +50,7 @@ type JournalProps = {
   readonly closeGlyph: ReactNode;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
+  readonly Button: typeof CallButton;
   readonly back?: PanelBack | undefined;
   readonly captions: readonly CallCaption[];
   readonly notes: readonly CallJournalNote[];
@@ -134,7 +136,7 @@ const listSize = (windowHeight: number | undefined): CSSProperties => (windowHei
 
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
-export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, notes, colorOf, listening, onListen, startedAt, fill = false, windowHeight }: JournalProps) {
+export function CallJournalPanel({ id, closeGlyph, language, onClose, Button, back, captions, notes, colorOf, listening, onListen, startedAt, fill = false, windowHeight }: JournalProps) {
   const list = useRef<HTMLOListElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
@@ -173,6 +175,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
       closeLabel={t(language, 'callControls.close')}
       closeGlyph={closeGlyph}
       onClose={onClose}
+      Button={Button}
       back={back}
       fill={fill}
       trailing={captions.some((caption) => !caption.mine && caption.translated !== null) ? <CallJournalViewSwitch language={language} view={view} onChange={setView} /> : null}
