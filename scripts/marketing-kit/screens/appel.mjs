@@ -24,7 +24,7 @@ const controle = (nom, legende, { actif = false, rouge = false } = {}) =>
 export const appelControles = (ctx) =>
   html`<div class="call-controls glass">
     ${controle('mic', ctx.ui('call.control.mute.caption'))}
-    ${controle('video', ctx.ui('call.control.video.caption'))}
+    ${controle('video', ctx.ui('call.control.camera.caption'))}
     ${controle('captions', ctx.ui('call.control.transcript.caption'), { actif: true })}
     ${controle('speaker', ctx.ui('call.control.output.caption'))}
     ${controle('hangup', '', { rouge: true })}

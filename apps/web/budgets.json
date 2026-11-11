@@ -1100,9 +1100,9 @@
       "pattern": "^assets/pack-shop-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 3,
+        "value": 4,
         "status": "CIBLE -- MESUREE PAR #10149, NON ARBITREE",
-        "source": "Mesure du 2026-10-11 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 1,17 Ko pour la boutique GENERIQUE des packs (`components/pack-shop.tsx` : liste, Installer/Retirer optimiste, un geste en vol par pack, retour arriere sur refus), partagee par la Boutique des stickers (`composer-sticker-shop.tsx`) et la Boutique des cadres (`frame-pack-shop.tsx`), chacune par un import() — jamais un import statique. La premiere peinture ne bouge pas : 90,33 Ko avant, 90,31 Ko apres (meme arbre, sans puis avec le lot ; le depassement de 90 est anterieur au lot). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+        "source": "Mesure du 2026-10-11 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 1,17 Ko pour la boutique GENERIQUE des packs (`components/pack-shop.tsx` : liste, Installer/Retirer optimiste, un geste en vol par pack, retour arriere sur refus), partagee par la Boutique des stickers (`composer-sticker-shop.tsx`) et la Boutique des cadres (`frame-pack-shop.tsx`), chacune par un import() — jamais un import statique. La premiere peinture ne bouge pas : 90,33 Ko avant, 90,31 Ko apres (meme arbre, sans puis avec le lot ; le depassement de 90 est anterieur au lot). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge. RELEVE du 2026-11-11 (#17594, epure #17584) : 3,17 Ko, ET UN DE MARGE (4), pour la fiche de details (`components/pack-details-sheet.tsx`) : la rangee ne porte plus la description (tronquee sur deux lignes), l'auteur ni les genres ; toucher la rangee ouvre cette fiche, qui les dit en entier avec le meme geste Installer / Acheter. Elle voyage avec la boutique generique, jamais avec la premiere peinture."
       }
     },
     "glory_painter": {

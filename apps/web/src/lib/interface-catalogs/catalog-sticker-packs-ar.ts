@@ -33,6 +33,7 @@ const arStickerPacks = {
   'stickerPacks.submit.instant': 'لحظة',
   'stickerPacks.submit.removeItem': 'إزالة هذا الملصق',
   'stickerPacks.submit.zoneHint': 'ارسم على الصورة المنطقة التي سيُكتب فيها النص. تعرض المعاينة أطول نص مسموح.',
+  'stickerPacks.submit.zoneHint.question': 'كيف أضع النص؟',
   'stickerPacks.submit.zoneDefault': 'النص الافتراضي',
   'stickerPacks.submit.zoneLength': 'الطول الأقصى',
   'stickerPacks.submit.send': 'إرسال للمراجعة',
