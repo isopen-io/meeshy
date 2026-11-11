@@ -361,7 +361,7 @@ struct MeeshyColorDotDisc: View {
     private func glyph(diameter: Double) -> some View {
         if let systemImage = dot.systemImage {
             Image(systemName: systemImage)
-                .font(.system(size: diameter * MeeshyColorDotsRecipe.glyphScale, weight: .semibold))
+                .font(MeeshyColorDotsRecipe.glyphFont(diameter: diameter))
                 .foregroundStyle(MeeshyColorDotsRecipe.glyphInk(on: dot.fill, groupInk: ink))
                 .accessibilityHidden(true)
         }

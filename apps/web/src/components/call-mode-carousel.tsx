@@ -422,9 +422,9 @@ function GlassBar({ above, rider, children }: { readonly above: ReactNode; reado
 }
 
 /** La barre d'un mode : ✕ Quitter (‹ en Effets) · le centre · les options ; posée sur son verre quand `glass`. */
-export function CallModeBar({ quit, center = null, options, glass = false, above = null, rider }: BarProps) {
+export function CallModeBar({ quit, center = null, options, glass: onGlass = false, above = null, rider }: BarProps) {
   const row = (
-    <div className={`grid w-full grid-cols-[1fr_auto_1fr] items-center gap-4 ${glass ? '' : 'px-6'}`} {...(glass ? {} : { 'data-call-mode-bar': '' })}>
+    <div className={`grid w-full grid-cols-[1fr_auto_1fr] items-center gap-4 ${onGlass ? '' : 'px-6'}`} {...(onGlass ? {} : { 'data-call-mode-bar': '' })}>
       <div className="flex justify-start">
         <button type="button" aria-label={quit.label} title={quit.label} onClick={quit.onPress} className={`glass-call ${SIDE}`} {...(quit.data ?? {})}>
           {quit.glyph}
@@ -434,7 +434,7 @@ export function CallModeBar({ quit, center = null, options, glass = false, above
       <div className="flex justify-end gap-2">{options}</div>
     </div>
   );
-  return glass ? (
+  return onGlass ? (
     <GlassBar above={above} rider={rider}>
       {row}
     </GlassBar>

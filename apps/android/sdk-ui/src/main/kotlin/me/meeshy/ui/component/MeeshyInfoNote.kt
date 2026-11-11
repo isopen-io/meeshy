@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,6 +24,7 @@ import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import me.meeshy.ui.icons.MeeshyIcons
 
 /**
  * UNE NOTE DERRIÈRE UN (i) — l'atome de l'épure des interfaces (#17587, épure #17584), le même que
@@ -72,7 +70,7 @@ public fun MeeshyInfoNoteButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = if (expanded) Icons.Filled.Info else Icons.Outlined.Info,
+            imageVector = if (expanded) MeeshyIcons.InfoFilled else MeeshyIcons.Info,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.size(18.dp),

@@ -250,6 +250,7 @@ private struct MeeshySegmentedKeyboard: ViewModifier {
         }
     }
 
+    @available(iOS 17.0, macOS 14.0, *)
     private static func lawKey(_ key: KeyEquivalent) -> MeeshySegmentedLaw.Key? {
         switch key {
         case .leftArrow: return .left

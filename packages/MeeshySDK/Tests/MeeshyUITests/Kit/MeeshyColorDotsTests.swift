@@ -117,7 +117,7 @@ struct MeeshyColorDotsTests {
     @Test("l'encre suit le ton : celle du média, celle du thème sous le ton theme")
     func ink_followsTheTone() throws {
         for row in try Self.rows("ink") {
-            let tone = try #require(MeeshyGlassTone(rawValue: try #require(row["tone"] as? String)))
+            let tone = try #require(MeeshyGlassTone(rawValue: try kitRequired(row["tone"] as? String)))
             let recipe = MeeshyColorDotsRecipe.resolve(count: 1, available: 342, size: .s28, layout: .wrap, tone: tone)
             #expect(recipe.ink.rawValue == row["ink"] as? String, "\(row)")
         }
@@ -281,11 +281,11 @@ struct MeeshyColorDotsTests {
     }
 
     private static func size(_ name: Any?) throws -> MeeshyColorDotSize {
-        try #require(MeeshyColorDotSize(rawValue: try #require(name as? String)))
+        try #require(MeeshyColorDotSize(rawValue: try kitRequired(name as? String)))
     }
 
     private static func layout(_ name: Any?) throws -> MeeshyColorDotsLayout {
-        try #require(MeeshyColorDotsLayout(rawValue: try #require(name as? String)))
+        try #require(MeeshyColorDotsLayout(rawValue: try kitRequired(name as? String)))
     }
 
     /// La table d'une langue : `bundle` choisit la table, `locale` ses règles.
