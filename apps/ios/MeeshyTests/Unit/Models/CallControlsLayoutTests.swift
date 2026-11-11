@@ -140,4 +140,14 @@ final class CallControlsLayoutTests: XCTestCase {
         let flattened = all.familyRows.flatMap(\.actions)
         XCTAssertEqual(Set(flattened).count, flattened.count)
     }
+
+    // MARK: - Légende du bouton Caméra de « Mon image » (#17459)
+
+    func test_cameraCaptionKey_cameraOn_isCameraNotVideo() {
+        XCTAssertEqual(CallControlsCopy.cameraCaptionKey(isPaused: false), "call.control.camera.caption")
+    }
+
+    func test_cameraCaptionKey_pausedVideo_isPausedCaption() {
+        XCTAssertEqual(CallControlsCopy.cameraCaptionKey(isPaused: true), "call.control.video.paused.caption")
+    }
 }
