@@ -1,5 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
+import { STOW_REDUCED_MS, SWAP_MS, type SwapShape } from './call-pill-motion';
+import { useRailPresence } from './use-rail-presence';
+
 /**
  * **LE MOUVEMENT DU VERRE, CHARGÉ À PART** (#17536) — les crochets minces que l'écran d'appel
  * branche ; le moteur (`pill-motion-engine.ts`) vit dans son chunk et se charge dès qu'un
@@ -63,4 +66,24 @@ export function useOpacityFade(ref: RefObject<HTMLElement | null>, on: boolean, 
     if (running.current === null) done?.();
     else running.current.finished.then(done, () => undefined);
   }, [on]);
+}
+
+/**
+ * Un élément qui en remplace un autre (Réglages du mode Effets, la capsule de l'en-tête) : monté
+ * dès qu'il est demandé et jusqu'à la fin de son départ ; arrive en fondu et en montée (`rise`) ou
+ * en échelle (`scale`), repart de même — en fondu seul sous « Réduire les animations » —, joué par
+ * le moteur : la règle générale qui coupe les transitions CSS ne l'éteint pas. La première peinture
+ * ne joue rien ; tant que le moteur n'est pas là, l'élément se pose d'un coup.
+ */
+export function useSwapPresence<E extends HTMLElement>(open: boolean, shape: SwapShape = 'rise'): { readonly mounted: boolean; readonly ref: RefObject<E | null> } {
+  const engine = usePillEngine();
+  const { mounted } = useRailPresence(open, { exitMs: SWAP_MS, reducedExitMs: STOW_REDUCED_MS });
+  const ref = useRef<E | null>(null);
+  const running = useRef<Animation | null>(null);
+  const painted = useRef(false);
+  useLayoutEffect(() => {
+    if (painted.current && ref.current !== null) running.current = engine?.playSwap(ref.current, open, running.current, shape) ?? null;
+    painted.current = true;
+  }, [open]);
+  return { mounted, ref };
 }

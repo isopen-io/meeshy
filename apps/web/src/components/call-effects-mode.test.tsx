@@ -9,6 +9,7 @@ import type { CallMember } from '@/lib/calls/call-store';
 import type { CaptureFile } from '@/lib/calls/call-capture-save';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
 import { loadModeMotion } from '@/lib/calls/use-mode-motion';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 import type { EffectsCompanion } from './call-effects-companions';
@@ -277,6 +278,7 @@ describe('CallEffectsMode', () => {
 
     beforeAll(async () => {
       await loadModeMotion();
+      await loadPillMotion();
     });
     beforeEach(() => {
       before = Object.getOwnPropertyDescriptor(proto(), 'animate');

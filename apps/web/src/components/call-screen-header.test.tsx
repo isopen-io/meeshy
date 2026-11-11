@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { readFileSync } from 'node:fs';
 
 import type { ActiveCall } from '@/lib/calls/call-store';
-import { loadModeMotion } from '@/lib/calls/use-mode-motion';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CallScreenHeader } from './call-screen-header';
@@ -58,7 +58,7 @@ describe('la capsule de l’en-tête (P9.8)', () => {
   beforeAll(async () => {
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
-    await loadModeMotion();
+    await loadPillMotion();
   });
   beforeEach(() => {
     before = Object.getOwnPropertyDescriptor(proto(), 'animate');

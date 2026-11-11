@@ -81,8 +81,23 @@ const SWAP_RISE_PX = 20;
 
 export const swapMs = (reducedMotion: boolean): number => (reducedMotion ? STOW_REDUCED_MS : SWAP_MS);
 
-export function swapKeyframes(entering: boolean, reducedMotion: boolean): readonly Keyframe[] {
-  const shown: Keyframe = reducedMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0)' };
-  const hidden: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: `translateY(${SWAP_RISE_PX}px)` };
+/**
+ * LA FORME DU DÉPART ET DE L'ARRIVÉE — `rise` : le panneau monte depuis la barre ; `scale` : la
+ * capsule de l'en-tête grandit depuis son bord de fin (P9.8, `.scale(scale: 0.8, anchor: .trailing)`
+ * d'iOS ; l'ancre est `transform-origin`, dans `call-motion.css`).
+ */
+export type SwapShape = 'rise' | 'scale';
+
+const SCALE_FROM = 0.8;
+
+const SWAP_SHAPES: Readonly<Record<SwapShape, { readonly shown: string; readonly hidden: string }>> = {
+  rise: { shown: 'translateY(0)', hidden: `translateY(${SWAP_RISE_PX}px)` },
+  scale: { shown: 'scale(1)', hidden: `scale(${SCALE_FROM})` },
+};
+
+export function swapKeyframes(entering: boolean, reducedMotion: boolean, shape: SwapShape = 'rise'): readonly Keyframe[] {
+  const { shown: at, hidden: away } = SWAP_SHAPES[shape];
+  const shown: Keyframe = reducedMotion ? { opacity: 1 } : { opacity: 1, transform: at };
+  const hidden: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: away };
   return entering ? [hidden, shown] : [shown, hidden];
 }
