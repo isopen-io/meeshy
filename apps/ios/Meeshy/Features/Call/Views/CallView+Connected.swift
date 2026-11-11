@@ -563,7 +563,7 @@ extension CallView {
     // its camera off, so the user sees the peer's avatar rather than a frozen
     // last frame.
     private var remoteCameraOffPlaceholder: some View {
-        CallRemoteCameraOffPlaceholder(peerUserId: callManager.remoteUserId, relayedSpeaking: CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds, peer: callManager.remoteUserId), sampleLevel: { await callManager.primaryAudioLevel() }) {
+        CallRemoteCameraOffPlaceholder(peerUserId: callManager.remoteUserId, relayedSpeaking: CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds, peer: callManager.remoteUserId), sampleLevel: { await callManager.primaryAudioLevels()?.primary }) {
             avatarFace(size: 96, accentHex: $0)
         }
     }
@@ -591,13 +591,7 @@ struct CallPeerSpeechRing<Avatar: View>: View {
         let hex = CallPeerSpeech.colorHex(forPeer: peerUserId)
         let color = Color(uiColor: HexColor(hex: hex)?.uiColor ?? .white)
         avatar(hex)
-            .background {
-                Circle()
-                    .fill(color.opacity(MeeshyOpacity.medium))
-                    .scaleEffect(1.25)
-                    .blur(radius: 14)
-                    .opacity(isSpeaking ? 1 : 0)
-            }
+            .modifier(CallSpeakerHalo(shape: Circle(), color: color, spread: 1.25, isSpeaking: isSpeaking))
             .overlay {
                 Circle()
                     .stroke(color, lineWidth: 3)
@@ -624,6 +618,27 @@ struct CallPeerSpeechRing<Avatar: View>: View {
     }
 }
 
+/// P9.6 · P11.5 · P14.4 — le halo de qui parle, à SA couleur : UNE loi pour le
+/// disque du duo et pour la vignette d'un groupe. Il reste dans l'arbre en opacité 0
+/// au repos ; l'hôte en règle le fondu (`CallRemoteVideoFade`). Il ne prend aucun toucher.
+struct CallSpeakerHalo<HaloShape: Shape>: ViewModifier {
+    let shape: HaloShape
+    let color: Color
+    let spread: CGFloat
+    let isSpeaking: Bool
+
+    func body(content: Content) -> some View {
+        content.background {
+            shape
+                .fill(color.opacity(MeeshyOpacity.medium))
+                .scaleEffect(spread)
+                .blur(radius: 14)
+                .opacity(isSpeaking ? 1 : 0)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
 extension CallPeerSpeechRing {
     /// Le duo audio : la parole de l'autre vient du maillage quand un groupe est encore
     /// montré en duo, sinon elle se relève ici, et seulement une fois l'audio établi.
@@ -638,7 +653,7 @@ extension CallPeerSpeechRing {
             peerUserId: callManager.remoteUserId,
             relayedSpeaking: CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds, peer: callManager.remoteUserId),
             follows: established,
-            sampleLevel: { await callManager.primaryAudioLevel() },
+            sampleLevel: { await callManager.primaryAudioLevels()?.primary },
             avatar: avatar
         )
     }

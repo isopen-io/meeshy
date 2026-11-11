@@ -67,3 +67,13 @@ enum GroupCallSpotlight {
         return .spotlight(tileId: sharer, isScreenShare: true)
     }
 }
+
+/// P14.10 — le passage grille ↔ à la une : la vignette choisie grandit depuis sa
+/// case, les autres glissent vers le bandeau (une identité par personne). Sous
+/// « Réduire les animations » rien ne se déplace : un fondu court, celui de la loi
+/// unique `CallRemoteVideoFade`.
+enum GroupCallStageMotion {
+    static func movesTiles(reduceMotion: Bool) -> Bool { !reduceMotion }
+
+    static var fadeDuration: TimeInterval { CallRemoteVideoFade.duration(reduceMotion: true) }
+}

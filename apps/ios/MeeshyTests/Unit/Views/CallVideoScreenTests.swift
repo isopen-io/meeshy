@@ -80,7 +80,11 @@ final class CallRemoteVideoSurfaceTests: XCTestCase {
     func test_speechRing_appearsOnlyWhileSpeaking_fadesWithTheSharedDuration_aboveTheKeptProfileDecor() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
         let ring = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallPeerSpeechRing<Avatar: View>: View", in: source))
-        XCTAssertEqual(ring.components(separatedBy: ".opacity(isSpeaking ? 1 : 0)").count - 1, 2, "halo et anneau, absents au repos, jamais retirés de l'arbre")
+        XCTAssertEqual(ring.components(separatedBy: ".opacity(isSpeaking ? 1 : 0)").count - 1, 1, "l'anneau, absent au repos, jamais retiré de l'arbre")
+        XCTAssertTrue(ring.contains(".modifier(CallSpeakerHalo(shape: Circle(), color: color, spread: 1.25, isSpeaking: isSpeaking))"), "le halo, la loi partagée avec la vignette de groupe")
+        let halo = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallSpeakerHalo<HaloShape: Shape>: ViewModifier", in: source))
+        XCTAssertTrue(halo.contains(".opacity(isSpeaking ? 1 : 0)"), "le halo, absent au repos, jamais retiré de l'arbre")
+        XCTAssertTrue(halo.contains(".allowsHitTesting(false)"))
         XCTAssertTrue(ring.contains("CallPeerSpeech.colorHex(forPeer: peerUserId)"))
         XCTAssertTrue(ring.contains("CallRemoteVideoFade.duration(reduceMotion: reduceMotion)"), "le fondu de l'anneau suit la loi unique, plus court sous Réduire les animations")
         XCTAssertTrue(ring.contains("value: isSpeaking"))
