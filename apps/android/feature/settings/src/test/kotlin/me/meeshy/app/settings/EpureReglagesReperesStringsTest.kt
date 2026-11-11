@@ -56,6 +56,7 @@ class EpureReglagesReperesStringsTest {
         assertThat(fr("crash_reports_note"))
             .isEqualTo("Si l'application se ferme de façon inattendue, un rapport est enregistré ici pour le support.")
         assertThat(fr("crash_reports_privacy")).isEqualTo("Rien ne quitte l'appareil sans votre partage.")
+        assertThat(fr("crash_reports_question")).isEqualTo("Quand un rapport est-il enregistré ?")
     }
 
     @Test

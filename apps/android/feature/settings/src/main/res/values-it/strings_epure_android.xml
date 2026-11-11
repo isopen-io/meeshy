@@ -11,7 +11,7 @@
     <string name="crash_reports_empty">Nessun rapporto.</string>
     <string name="crash_reports_note">Se l\'app si chiude in modo imprevisto, qui viene salvato un rapporto per l\'assistenza.</string>
     <string name="crash_reports_privacy">Nulla lascia il dispositivo senza la tua condivisione.</string>
-    <string name="crash_reports_question">Cosa contiene un rapporto?</string>
+    <string name="crash_reports_question">Quando viene salvato un rapporto?</string>
     <string name="data_export_info_body">Esportazione GDPR dei tuoi dati personali.</string>
     <string name="data_storage_cache_question">A cosa serve la cache?</string>
     <string name="data_storage_cache_size">Dimensione</string>

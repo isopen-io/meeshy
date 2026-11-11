@@ -11,7 +11,7 @@
     <string name="crash_reports_empty">Sin informes.</string>
     <string name="crash_reports_note">Si la aplicación se cierra inesperadamente, se guarda aquí un informe para soporte.</string>
     <string name="crash_reports_privacy">Nada sale del dispositivo sin que lo compartas.</string>
-    <string name="crash_reports_question">¿Qué contiene un informe?</string>
+    <string name="crash_reports_question">¿Cuándo se guarda un informe?</string>
     <string name="data_export_info_body">Exportación RGPD de tus datos personales.</string>
     <string name="data_storage_cache_question">¿Para qué sirve la caché?</string>
     <string name="data_storage_cache_size">Tamaño</string>

@@ -11,7 +11,7 @@
     <string name="crash_reports_empty">Keine Berichte.</string>
     <string name="crash_reports_note">Wenn die App unerwartet beendet wird, wird hier ein Bericht für den Support gespeichert.</string>
     <string name="crash_reports_privacy">Nichts verlässt das Gerät ohne Ihr Teilen.</string>
-    <string name="crash_reports_question">Was enthält ein Bericht?</string>
+    <string name="crash_reports_question">Wann wird ein Bericht gespeichert?</string>
     <string name="data_export_info_body">DSGVO-Export Ihrer persönlichen Daten.</string>
     <string name="data_storage_cache_question">Wofür ist der Cache da?</string>
     <string name="data_storage_cache_size">Größe</string>

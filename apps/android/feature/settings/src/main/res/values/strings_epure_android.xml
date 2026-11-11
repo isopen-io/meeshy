@@ -11,7 +11,7 @@
     <string name="crash_reports_empty">No reports.</string>
     <string name="crash_reports_note">If the app closes unexpectedly, a report is saved here for support.</string>
     <string name="crash_reports_privacy">Nothing leaves your device unless you share it.</string>
-    <string name="crash_reports_question">What does a report contain?</string>
+    <string name="crash_reports_question">When is a report saved?</string>
     <string name="data_export_info_body">GDPR export of your personal data.</string>
     <string name="data_storage_cache_question">What is the cache for?</string>
     <string name="data_storage_cache_size">Size</string>

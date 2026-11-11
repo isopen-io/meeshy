@@ -11,7 +11,7 @@
     <string name="crash_reports_empty">Aucun rapport.</string>
     <string name="crash_reports_note">Si l\'application se ferme de façon inattendue, un rapport est enregistré ici pour le support.</string>
     <string name="crash_reports_privacy">Rien ne quitte l\'appareil sans votre partage.</string>
-    <string name="crash_reports_question">Que contient un rapport ?</string>
+    <string name="crash_reports_question">Quand un rapport est-il enregistré ?</string>
     <string name="data_export_info_body">Export RGPD de vos données personnelles.</string>
     <string name="data_storage_cache_question">À quoi sert le cache ?</string>
     <string name="data_storage_cache_size">Taille</string>

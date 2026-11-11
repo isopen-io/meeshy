@@ -11,7 +11,7 @@
     <string name="crash_reports_empty">لا توجد تقارير.</string>
     <string name="crash_reports_note">إذا أُغلق التطبيق بشكل غير متوقع، يُحفظ هنا تقرير للدعم.</string>
     <string name="crash_reports_privacy">لا يغادر شيء الجهاز دون مشاركتك.</string>
-    <string name="crash_reports_question">ماذا يحتوي التقرير؟</string>
+    <string name="crash_reports_question">متى يُحفظ التقرير؟</string>
     <string name="data_export_info_body">تصدير بياناتك الشخصية وفق اللائحة العامة لحماية البيانات.</string>
     <string name="data_storage_cache_question">ما فائدة ذاكرة التخزين المؤقت؟</string>
     <string name="data_storage_cache_size">الحجم</string>
