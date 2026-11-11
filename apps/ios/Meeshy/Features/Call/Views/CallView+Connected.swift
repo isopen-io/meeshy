@@ -569,45 +569,95 @@ extension CallView {
     }
 }
 
-/// G4.2 — la caméra du pair est coupée : son avatar, et l'anneau et le halo de SA
-/// couleur quand il parle (rien au repos). La décoration de profil reste sous
-/// l'anneau, dans le visage. Le niveau reçu est relevé tant que l'écran est là,
-/// sauf quand le maillage d'un groupe le relève déjà (`relayedSpeaking`).
-struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {
+/// P9.6 — l'anneau et le halo de la personne, de SA couleur, à la parole seulement :
+/// la loi unique du duo audio et de la caméra coupée. Ils restent dans l'arbre en
+/// opacité 0 au repos et se fondent (`CallRemoteVideoFade`, plus court sous « Réduire
+/// les animations »). La décoration de profil reste sous l'anneau, dans le visage.
+/// Le niveau reçu est relevé tant que l'écran le suit (`follows`), sauf quand le
+/// maillage d'un groupe le relève déjà (`relayedSpeaking`).
+struct CallPeerSpeechRing<Avatar: View>: View {
     let peerUserId: String?
     let relayedSpeaking: Bool?
+    let follows: Bool
     let sampleLevel: @MainActor () async -> Double?
     @ViewBuilder let avatar: (String) -> Avatar
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sampledSpeaking = false
 
-    private var isSpeaking: Bool { relayedSpeaking ?? sampledSpeaking }
+    private var isSpeaking: Bool { follows && (relayedSpeaking ?? sampledSpeaking) }
 
     var body: some View {
         let hex = CallPeerSpeech.colorHex(forPeer: peerUserId)
         let color = Color(uiColor: HexColor(hex: hex)?.uiColor ?? .white)
+        avatar(hex)
+            .background {
+                Circle()
+                    .fill(color.opacity(MeeshyOpacity.medium))
+                    .scaleEffect(1.25)
+                    .blur(radius: 14)
+                    .opacity(isSpeaking ? 1 : 0)
+            }
+            .overlay {
+                Circle()
+                    .stroke(color, lineWidth: 3)
+                    .padding(-6)
+                    .opacity(isSpeaking ? 1 : 0)
+            }
+            .animation(
+                .easeInOut(duration: CallRemoteVideoFade.duration(reduceMotion: reduceMotion)),
+                value: isSpeaking
+            )
+            .task(id: follows && relayedSpeaking == nil) {
+                guard follows, relayedSpeaking == nil else { return }
+                await followSpeech()
+            }
+    }
+
+    private func followSpeech() async {
+        var speech = CallPeerSpeech()
+        while !Task.isCancelled {
+            speech = speech.recording(level: await sampleLevel(), at: Date())
+            if speech.isSpeaking != sampledSpeaking { sampledSpeaking = speech.isSpeaking }
+            guard await cancellableSleep(for: .milliseconds(400)) else { return }
+        }
+    }
+}
+
+extension CallPeerSpeechRing {
+    /// Le duo audio : la parole de l'autre vient du maillage quand un groupe est encore
+    /// montré en duo, sinon elle se relève ici, et seulement une fois l'audio établi.
+    @MainActor
+    init(callManager: CallManager, mesh: GroupCallMeshCoordinator, @ViewBuilder avatar: @escaping (String) -> Avatar) {
+        let established: Bool
+        switch callManager.callState {
+        case .connected, .reconnecting: established = true
+        default: established = false
+        }
+        self.init(
+            peerUserId: callManager.remoteUserId,
+            relayedSpeaking: CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds, peer: callManager.remoteUserId),
+            follows: established,
+            sampleLevel: { await callManager.primaryAudioLevel() },
+            avatar: avatar
+        )
+    }
+}
+
+/// G4.2 — la caméra du pair est coupée : son avatar, et l'anneau et le halo de SA
+/// couleur quand il parle (rien au repos, `CallPeerSpeechRing`).
+struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {
+    let peerUserId: String?
+    let relayedSpeaking: Bool?
+    let sampleLevel: @MainActor () async -> Double?
+    @ViewBuilder let avatar: (String) -> Avatar
+
+    var body: some View {
         ZStack {
             Color.black.opacity(MeeshyOpacity.strong)
             VStack(spacing: MeeshySpacing.mdPlus) {
-                avatar(hex)
-                    .background {
-                        Circle()
-                            .fill(color.opacity(MeeshyOpacity.medium))
-                            .scaleEffect(1.25)
-                            .blur(radius: 14)
-                            .opacity(isSpeaking ? 1 : 0)
-                    }
-                    .overlay {
-                        Circle()
-                            .stroke(color, lineWidth: 3)
-                            .padding(-6)
-                            .opacity(isSpeaking ? 1 : 0)
-                    }
-                    .animation(
-                        .easeInOut(duration: CallRemoteVideoFade.duration(reduceMotion: reduceMotion)),
-                        value: isSpeaking
-                    )
+                CallPeerSpeechRing(peerUserId: peerUserId, relayedSpeaking: relayedSpeaking, follows: true,
+                                   sampleLevel: sampleLevel, avatar: avatar)
                     .accessibilityHidden(true)
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "video.slash.fill")
@@ -621,19 +671,6 @@ struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task(id: relayedSpeaking == nil) {
-            guard relayedSpeaking == nil else { return }
-            await followSpeech()
-        }
-    }
-
-    private func followSpeech() async {
-        var speech = CallPeerSpeech()
-        while !Task.isCancelled {
-            speech = speech.recording(level: await sampleLevel(), at: Date())
-            if speech.isSpeaking != sampledSpeaking { sampledSpeaking = speech.isSpeaking }
-            guard await cancellableSleep(for: .milliseconds(400)) else { return }
-        }
     }
 }
 
