@@ -58,7 +58,7 @@ class GameRulesScreenComposeTest {
     @Test
     fun `opened at the medals, the book scrolls to its medals section`() {
         show(focused = GameRulesSection.Badges)
-        val medals = compose.onNodeWithText(context.getString(R.string.game_rules_badges_intro))
+        val medals = compose.onNodeWithText(context.getString(R.string.game_rules_badges_ladder))
         compose.waitUntil(timeoutMillis = 5_000) { medals.isDisplayed() }
         medals.assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.game_rules_1_title)).assertIsNotDisplayed()
