@@ -187,3 +187,19 @@ function WithNote({
     </>
   );
 }
+
+/**
+ * UN (i) POSÉ SEUL, SANS TEXTE À CÔTÉ (épure #17584, règle 1) — la page ou la
+ * fiche dont le titre dit déjà l'objet et dont l'explication ne tient pas à un
+ * libellé : l'icône seule porte la QUESTION comme nom accessible, la note reste
+ * lue repliée.
+ */
+export function InfoAlone({ hint, className }: { readonly hint: InfoHint; readonly className?: string }) {
+  const state = useInfoHint();
+  return (
+    <div className={['grid justify-items-center', className].filter((part) => part !== undefined).join(' ')}>
+      <InfoHintButton hint={hint} state={state} />
+      <InfoHintText hint={hint} state={state} />
+    </div>
+  );
+}

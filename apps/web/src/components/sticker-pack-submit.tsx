@@ -4,6 +4,8 @@ import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { STICKER_PACK_LIMITS } from '@meeshy/shared/types/sticker-pack';
 import type { StickerPackDetail, StickerTextZone } from '@meeshy/shared/types/sticker-pack';
 
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoAlone, type InfoHint } from '@/components/info-hint';
 import { apiDeps } from '@/lib/api/deps';
 import { submitPack } from '@/lib/api/sticker-packs';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
@@ -31,6 +33,12 @@ const CODE_KEYS: Readonly<Record<string, PlainStickerPacksKey>> = {
   STICKER_PACK_ASSET_REFUSED: 'stickerPacks.submit.assetRefused',
   STICKER_PACK_TOO_LARGE: 'stickerPacks.submit.tooLarge',
 };
+
+const packHint = (language: InterfaceLanguage, question: PlainStickerPacksKey, text: PlainStickerPacksKey): InfoHint => ({
+  label: translateStickerPacks(language, question),
+  text: translateStickerPacks(language, text),
+  glyph: SETTINGS_GLYPHS.info,
+});
 
 const INPUT = 'min-h-11 rounded-xl px-3 text-body';
 const INPUT_STYLE = { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' } as const;
@@ -280,9 +288,7 @@ function DraftItemRow({
       </div>
       {item.instant && zone !== undefined ? (
         <div className="flex flex-col gap-2">
-          <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translateStickerPacks(language, 'stickerPacks.submit.zoneHint')}
-          </p>
+          <InfoAlone hint={packHint(language, 'stickerPacks.submit.zoneHint.question', 'stickerPacks.submit.zoneHint')} />
           <div className="flex gap-2">
             <Field label={translateStickerPacks(language, 'stickerPacks.submit.zoneDefault')}>
               <input

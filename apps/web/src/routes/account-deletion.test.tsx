@@ -105,7 +105,7 @@ describe('le lien de l’e-mail — la conséquence d’abord, le clic ensuite',
 
     await click(buttonNamed(host, 'Confirmer la suppression'));
     expect(host.querySelector('h1')?.textContent).toBe('Ce lien ne sert plus');
-    expect(host.textContent).toContain('Ce lien a expiré.');
+    expect(host.textContent).toContain('Ce lien a expiré. Refaites la demande depuis les réglages.');
     expect(buttonNamed(host, 'Confirmer la suppression')).toBeNull();
   });
 
@@ -114,7 +114,7 @@ describe('le lien de l’e-mail — la conséquence d’abord, le clic ensuite',
     const host = await mount(<AccountDeletionPage link={CONFIRM} signedIn={false} online language="fr" deps={script.deps} />);
 
     await click(buttonNamed(host, 'Confirmer la suppression'));
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain('momentanément indisponible');
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Meeshy ne répond pas');
     expect(buttonNamed(host, 'Confirmer la suppression')).not.toBeNull();
   });
 
@@ -123,7 +123,7 @@ describe('le lien de l’e-mail — la conséquence d’abord, le clic ensuite',
     const host = await mount(<AccountDeletionPage link={CONFIRM} signedIn={false} online={false} language="fr" deps={script.deps} />);
 
     expect(buttonNamed(host, 'Confirmer la suppression')?.disabled).toBe(true);
-    expect(host.textContent).toContain('Reconnectez-vous à Internet, puis réessayez.');
+    expect(host.textContent).toContain('Hors ligne');
   });
 
 });

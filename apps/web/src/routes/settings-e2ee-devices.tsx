@@ -1,5 +1,5 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -26,6 +26,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { e2eeDeviceFields, e2eeDeviceTitle } from '@/lib/view/e2ee-devices';
 import { Link } from '@/routes/route-table';
+import { MoreFields } from '@/routes/settings-more-fields';
 import { SECURITY_PANEL, SECURITY_PANEL_PARAM } from '@/routes/settings-sections';
 
 /**
@@ -235,6 +236,14 @@ export function SettingsE2eeDevicesScreen({
   );
 }
 
+/**
+ * Ce qui permet de RECONNAÎTRE un appareil, lu sans geste (règle 7 de l'épure,
+ * #17594, retour porteur du 2026-11-11) : sa plateforme, la date où il a été
+ * enregistré et son dernier usage — la pastille « Cet appareil » est au titre.
+ * Seul le numéro d'appareil, technique, vit derrière « Plus ».
+ */
+const E2EE_DEVICE_REST_FIELDS: ReadonlySet<string> = new Set(['platform', 'enrolled', 'lastSeen']);
+
 function DeviceCard({
   device,
   language,
@@ -251,6 +260,7 @@ function DeviceCard({
   readonly onRetire: () => void;
 }) {
   const title = e2eeDeviceTitle(device, t);
+  const titleId = useId();
   const tint = device.current ? 'var(--color-success)' : 'var(--color-ios-brand)';
   return (
     <li
@@ -259,7 +269,7 @@ function DeviceCard({
       style={{ ...SECTION_CARD_STYLE, borderColor: `color-mix(in srgb, ${tint} 40%, transparent)` }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 break-words text-body font-semibold" style={{ color: SECTION_INK }} dir="auto">
+        <span id={titleId} className="min-w-0 flex-1 break-words text-body font-semibold" style={{ color: SECTION_INK }} dir="auto">
           {title}
         </span>
         {device.current ? (
@@ -271,16 +281,20 @@ function DeviceCard({
           </span>
         ) : null}
       </div>
-      <dl className="grid gap-1 text-caption" style={{ gridTemplateColumns: 'auto 1fr', columnGap: 12 }}>
-        {e2eeDeviceFields(device, { language, now, t }).map((field) => (
+      <MoreFields
+        fields={e2eeDeviceFields(device, { language, now, t })}
+        rest={E2EE_DEVICE_REST_FIELDS}
+        moreLabel={t('sessions.more')}
+        subjectId={titleId}
+        rowOf={(field) => (
           <div key={field.key} data-e2ee-device-field={field.key} style={{ display: 'contents' }}>
             <dt style={{ color: SECTION_INK_2 }}>{field.label}</dt>
             <dd className="min-w-0 break-words" style={{ color: SECTION_INK }} {...(field.ltr ? { dir: 'ltr' } : {})}>
               {field.value}
             </dd>
           </div>
-        ))}
-      </dl>
+        )}
+      />
       {device.current || device.registrationId === null ? null : (
         <button
           type="button"

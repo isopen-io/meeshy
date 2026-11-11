@@ -33,6 +33,7 @@ const ptStickerPacks = {
   'stickerPacks.submit.instant': 'Instante',
   'stickerPacks.submit.removeItem': 'Remover esta figurinha',
   'stickerPacks.submit.zoneHint': 'Desenhe na imagem a área onde o texto será escrito. A pré-visualização mostra o texto mais longo permitido.',
+  'stickerPacks.submit.zoneHint.question': 'Como posicionar o texto?',
   'stickerPacks.submit.zoneDefault': 'Texto padrão',
   'stickerPacks.submit.zoneLength': 'Comprimento máximo',
   'stickerPacks.submit.send': 'Enviar para revisão',
