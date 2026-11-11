@@ -102,7 +102,9 @@ struct MeeshyStatusCapsuleHost: ViewModifier {
     let edge: MeeshyStatusCapsuleEdge
     let haptic: MeeshyStatusCapsuleHostHaptic
 
-    @State private var session = MeeshyStatusCapsuleSession()
+    /// Créée à la première capsule, pas à chaque rendu de l'hôte : la valeur
+    /// initiale d'un `@State` se réévalue à chaque construction du modificateur.
+    @State private var session: MeeshyStatusCapsuleSession?
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userReduceMotion
 
@@ -141,7 +143,9 @@ struct MeeshyStatusCapsuleHost: ViewModifier {
 
     private func present(_ current: MeeshyStatusCapsuleItem?) async {
         guard let current else { return }
-        await session.run(current, haptic: haptic) { retire($0) }
+        let running = session ?? MeeshyStatusCapsuleSession()
+        if session == nil { session = running }
+        await running.run(current, haptic: haptic) { retire($0) }
     }
 
     /// Retire la capsule `id` — et elle seule : un successeur déjà posé reste.

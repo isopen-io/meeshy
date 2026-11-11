@@ -106,6 +106,14 @@ struct MeeshyStatusCapsuleTests {
         #expect(MeeshyStatusCapsuleRecipe.takesTouches(hasAction: false, hasDismiss: true))
     }
 
+    @Test("le lecteur d'écran lit le texte, puis l'action, puis ✕, même quand l'action passe dessous")
+    func face_readingOrder_textThenActionThenClose() {
+        let order = MeeshyStatusCapsulePart.allCases.sorted {
+            MeeshyStatusCapsuleRecipe.readingOrder($0) > MeeshyStatusCapsuleRecipe.readingOrder($1)
+        }
+        #expect(order == [.text, .action, .close])
+    }
+
     // MARK: - Glisser pour fermer
 
     @Test("elle suit le doigt vers son bord seulement ; 24 pt ferment, en deçà elle revient")
@@ -200,6 +208,31 @@ struct MeeshyStatusCapsuleTests {
         #expect(base != MeeshyStatusCapsuleItem(id: "limit.other", message: "Dix scènes au maximum"))
         #expect(base != MeeshyStatusCapsuleItem(id: "limit.scene", message: "Onze scènes"))
         #expect(base != MeeshyStatusCapsuleItem(id: "limit.scene", message: "Dix scènes au maximum", duration: .persistent))
+    }
+
+    @MainActor
+    @Test("un même refus reposé avec une nouvelle occurrence est un autre élément : l'hôte relance son minuteur, le silence de 2 s tient")
+    func item_occurrence_distinguishesARepresentation() {
+        let first = MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning)
+        #expect(first.occurrence == 0)
+        let again = MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning, occurrence: 1)
+        #expect(first != again)
+        #expect(again == MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning, occurrence: 1))
+    }
+
+    @MainActor
+    @Test("reposé dans les 2 s sous une nouvelle occurrence : ni vibration ni annonce, mais le minuteur repart")
+    func session_representedWithinTwoSeconds_restartsTheTimerSilently() async {
+        let spy = SessionSpy()
+        let session = spy.session()
+        let first = MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning)
+        await session.run(first, haptic: .automatic, retire: spy.retire)
+        spy.events = []
+        spy.advance(milliseconds: 500)
+        let again = MeeshyStatusCapsuleItem(id: "limit.text", message: "1000 caractères au maximum", kind: .warning, occurrence: 1)
+        await session.run(again, haptic: .automatic, retire: spy.retire)
+        #expect(spy.events.isEmpty)
+        #expect(spy.sleeps == [4000, 4000])
     }
 
     // MARK: - La séance d'un hôte
