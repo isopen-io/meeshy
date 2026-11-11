@@ -26,7 +26,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -133,8 +133,8 @@ public fun MeeshyGlass(
     var position by remember { mutableStateOf<Offset?>(null) }
     val wash = tint ?: if (tone == MeeshyGlassTone.Theme && glass == MeeshyGlassMaterial.Opaque) MeeshyPalette.Indigo500 else null
     val rim = remember(rest) { rest.rimBrush() }
-    val restSheen = remember(rest.sheen) { sheenBrush(rest.sheen) }
-    val restTopLight = remember(rest.topLight) { sheenBrush(rest.topLight) }
+    val sheens = remember(rest.sheen, full.sheen) { GlowBrushes(rest.sheen, full.sheen) }
+    val topLights = remember(rest.topLight, full.topLight) { GlowBrushes(rest.topLight, full.topLight) }
 
     Box(
         modifier
@@ -155,33 +155,30 @@ public fun MeeshyGlass(
             )
             .clip(shape)
             .then(if (blurs) Modifier.onGloballyPositioned { position = it.positionInWindow() } else Modifier)
-            .drawWithContent {
-                if (blurLayer != null && backdrop != null) {
-                    val origin = backdrop.origin
+            .drawWithCache {
+                val outline = if (topLights.reaches) shape.createOutline(size, layoutDirection, this) else null
+                val hairline = Stroke(width = 1.dp.toPx())
+                if (blurLayer != null) {
+                    val radius = rest.blurRadiusDp.dp.toPx()
+                    blurLayer.renderEffect = BlurEffect(radius, radius, TileMode.Clamp)
+                }
+                onDrawWithContent {
                     val at = position
-                    if (at != null) {
-                        val radius = rest.blurRadiusDp.dp.toPx()
-                        blurLayer.renderEffect = BlurEffect(radius, radius, TileMode.Clamp)
+                    if (blurLayer != null && backdrop != null && at != null) {
+                        val origin = backdrop.origin
                         blurLayer.record(this, layoutDirection, size.toIntSize()) {
                             translate(left = origin.x - at.x, top = origin.y - at.y) { drawLayer(backdrop.layer) }
                         }
                         drawLayer(blurLayer)
                     }
-                }
-                val glow = response.value
-                val filled = fill.value
-                if (filled.alpha > 0f) drawRect(filled)
-                if (wash != null && rest.tintWash > 0f) drawRect(wash.copy(alpha = rest.tintWash))
-                val sheen = rest.sheen + (full.sheen - rest.sheen) * glow
-                if (sheen > 0f) drawRect(if (glow == 0f) restSheen else sheenBrush(sheen))
-                drawContent()
-                val topLight = rest.topLight + (full.topLight - rest.topLight) * glow
-                if (topLight > 0f) {
-                    strokeOutline(
-                        outline = shape.createOutline(size, layoutDirection, this),
-                        brush = if (glow == 0f) restTopLight else sheenBrush(topLight),
-                        stroke = Stroke(width = 1.dp.toPx()),
-                    )
+                    val glow = response.value
+                    val filled = fill.value
+                    if (filled.alpha > 0f) drawRect(filled)
+                    if (wash != null && rest.tintWash > 0f) drawRect(wash.copy(alpha = rest.tintWash))
+                    sheens.brush(glow)?.let { drawRect(brush = it, alpha = sheens.alpha(glow)) }
+                    drawContent()
+                    val topLight = topLights.brush(glow)
+                    if (outline != null && topLight != null) strokeOutline(outline, topLight, topLights.alpha(glow), hairline)
                 }
             }
             .then(if (rim != null) Modifier.border(1.dp, rim, shape) else Modifier),
@@ -261,6 +258,24 @@ private fun sheenBrush(alpha: Float): Brush = Brush.verticalGradient(
     0.5f to MeeshyMediaChromeColors.OnMedia.copy(alpha = 0f),
 )
 
+/**
+ * Un reflet du repos à l'appui sans pinceau neuf par image : le dégradé est linéaire en opacité, donc le reflet
+ * intermédiaire est celui de l'appui dessiné à l'opacité `valeur / pleine`. Au repos, le pinceau du repos tel quel.
+ */
+private class GlowBrushes(private val rest: Float, private val full: Float) {
+    private val restBrush: Brush? = if (rest > 0f) sheenBrush(rest) else null
+    private val fullBrush: Brush? = if (full > 0f) sheenBrush(full) else null
+
+    val reaches: Boolean get() = restBrush != null || fullBrush != null
+
+    fun brush(glow: Float): Brush? = if (glow == 0f) restBrush else fullBrush
+
+    fun alpha(glow: Float): Float {
+        if (glow == 0f || glow >= 1f) return 1f
+        return ((rest + (full - rest) * glow) / full).coerceIn(0f, 1f)
+    }
+}
+
 /** Le liseré, plus clair du côté éclairé (haut-gauche) que du côté ombre ; `null` quand la recette n'en porte pas. */
 private fun MeeshyGlassRecipe.rimBrush(): Brush? {
     if (rimLit <= 0f && rimShade <= 0f && rimTail <= 0f) return null
@@ -273,12 +288,13 @@ private fun MeeshyGlassRecipe.rimBrush(): Brush? {
 }
 
 /** Trace le contour d'une forme quelconque : Compose n'expose pas de `drawOutline` public. */
-private fun DrawScope.strokeOutline(outline: Outline, brush: Brush, stroke: Stroke) {
+private fun DrawScope.strokeOutline(outline: Outline, brush: Brush, alpha: Float, stroke: Stroke) {
     when (outline) {
         is Outline.Rectangle -> drawRect(
             brush = brush,
             topLeft = Offset(outline.rect.left, outline.rect.top),
             size = outline.rect.size,
+            alpha = alpha,
             style = stroke,
         )
         is Outline.Rounded -> drawRoundRect(
@@ -286,8 +302,9 @@ private fun DrawScope.strokeOutline(outline: Outline, brush: Brush, stroke: Stro
             topLeft = Offset(outline.roundRect.left, outline.roundRect.top),
             size = Size(outline.roundRect.width, outline.roundRect.height),
             cornerRadius = outline.roundRect.topLeftCornerRadius,
+            alpha = alpha,
             style = stroke,
         )
-        is Outline.Generic -> drawPath(path = outline.path, brush = brush, style = stroke)
+        is Outline.Generic -> drawPath(path = outline.path, brush = brush, alpha = alpha, style = stroke)
     }
 }
