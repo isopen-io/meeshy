@@ -32,7 +32,7 @@ const en = {
   'onboarding.email.failed': 'The link didn’t go out. Try again.',
 
   'onboarding.age.title': 'Your date of birth',
-  'onboarding.age.body': 'So we can suggest the right spaces for you. You can skip this.',
+  'onboarding.age.body': 'So we can suggest the right spaces for you.',
   'onboarding.age.skip': 'Skip',
   'onboarding.age.check': 'Check your date of birth.',
   'onboarding.age.failed': 'Your date wasn’t saved. Try again.',
@@ -68,7 +68,7 @@ const en = {
   'onboarding.story.verify': 'To post your story, confirm your email address first.',
 
   'onboarding.friends.title': 'Find your crew',
-  'onboarding.friends.body': 'Add 3 people who vibe like you. When they accept, you both get at least\u00A0+{points}.',
+  'onboarding.friends.body': 'Add 3 people who vibe like you.',
   'onboarding.friends.add': 'Add',
   'onboarding.friends.addNamed': 'Add {name}',
   'onboarding.friends.added': 'Sent',

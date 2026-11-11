@@ -197,6 +197,7 @@ const en = {
   'linkDetail.announce.deleteFailed': 'The link wasn’t deleted.',
   'linkDetail.announce.offline': 'Offline: nothing was sent.',
   'world.enter': 'Enter {title}',
+  'world.about': 'The conversation open to everyone, translated into your language.',
   'world.name.anonymous': 'Joining without an account: others will see this name.',
   'world.name.label': 'Your name',
   'world.name.placeholder': 'e.g. Awa',

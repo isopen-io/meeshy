@@ -3,7 +3,7 @@ import type { OnboardingProfileCatalog } from '@/lib/i18n-onboarding-profile-cat
 /** « Montre-toi » — voir `catalog-onboarding-profile-fr.ts`. */
 const ar = {
   'onboarding.profile.title': 'أظهِر نفسك',
-  'onboarding.profile.body': 'وجهٌ ولافتة يجعلان ملفك أكثر ظهورًا: يتعرّف عليك الآخرون في الاقتراحات والمحادثات والقصص، وتتلقى طلبات تواصل أكثر.',
+  'onboarding.profile.body': 'وجهٌ ولافتة: يتعرّف عليك الآخرون بسرعة أكبر.',
   'onboarding.profile.addBanner': 'أضف لافتة',
   'onboarding.profile.pickBanner': 'اختر لافتة',
   'onboarding.profile.pickAvatar': 'اختر صورة الملف الشخصي',

@@ -26,7 +26,7 @@ const frPublicEntry = {
   'login.noAccount': 'Pas de compte ?',
   'login.createAccount': 'Créer un compte',
   'magicLink.title': 'Votre adresse e-mail',
-  'magicLink.lead': 'Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.',
+  'magicLink.lead': 'Pas de mot de passe : nous vous envoyons un lien de connexion par e-mail.',
   'magicLink.howItWorks': 'Combien de temps le lien reste valable ?',
   'magicLink.howItWorks.text': 'Le lien est valable 10 minutes et ne sert qu’une fois.',
   'magicLink.email.label': 'Adresse email',

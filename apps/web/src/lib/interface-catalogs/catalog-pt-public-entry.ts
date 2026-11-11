@@ -23,7 +23,7 @@ const ptPublicEntry = {
   'login.noAccount': 'Não tem conta?',
   'login.createAccount': 'Criar uma conta',
   'magicLink.title': 'Seu endereço de e-mail',
-  'magicLink.lead': 'Nenhuma senha para lembrar: enviamos um link por e-mail. Abra-o e você estará conectado.',
+  'magicLink.lead': 'Sem senha: enviamos um link de acesso por e-mail.',
   'magicLink.howItWorks': 'Por quanto tempo o link é válido?',
   'magicLink.howItWorks.text': 'O link é válido por 10 minutos e só pode ser usado uma vez.',
   'magicLink.email.label': 'Endereço de e-mail',

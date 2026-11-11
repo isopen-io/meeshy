@@ -23,7 +23,7 @@ const enPublicEntry = {
   'login.noAccount': 'No account?',
   'login.createAccount': 'Create an account',
   'magicLink.title': 'Your email address',
-  'magicLink.lead': 'No password to remember: we email you a link. Open it and you’re signed in.',
+  'magicLink.lead': 'No password: we email you a sign-in link.',
   'magicLink.howItWorks': 'How long is the link valid?',
   'magicLink.howItWorks.text': 'The link is valid for 10 minutes and can be used once.',
   'magicLink.email.label': 'Email address',

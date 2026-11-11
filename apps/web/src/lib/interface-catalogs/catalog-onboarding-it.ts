@@ -32,7 +32,7 @@ const it = {
   'onboarding.email.failed': 'Il link non è partito. Riprova.',
 
   'onboarding.age.title': 'La tua data di nascita',
-  'onboarding.age.body': 'Per proporti gli spazi giusti. Puoi saltare.',
+  'onboarding.age.body': 'Per proporti gli spazi giusti.',
   'onboarding.age.skip': 'Salta',
   'onboarding.age.check': 'Controlla la tua data di nascita.',
   'onboarding.age.failed': 'La tua data non è stata salvata. Riprova.',
@@ -68,7 +68,7 @@ const it = {
   'onboarding.story.verify': 'Per pubblicare la tua story, conferma prima il tuo indirizzo e-mail.',
 
   'onboarding.friends.title': 'Trova la tua gente',
-  'onboarding.friends.body': 'Aggiungi 3 persone simili a te. Quando accettano, guadagnate almeno\u00A0+{points} entrambi.',
+  'onboarding.friends.body': 'Aggiungi 3 persone simili a te.',
   'onboarding.friends.add': 'Aggiungi',
   'onboarding.friends.addNamed': 'Aggiungi {name}',
   'onboarding.friends.added': 'Inviata',

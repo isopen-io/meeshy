@@ -23,7 +23,7 @@ const esPublicEntry = {
   'login.noAccount': '¿No tienes cuenta?',
   'login.createAccount': 'Crear una cuenta',
   'magicLink.title': 'Tu dirección de correo',
-  'magicLink.lead': 'Ninguna contraseña que recordar: te enviamos un enlace por correo. Ábrelo y habrás iniciado sesión.',
+  'magicLink.lead': 'Sin contraseña: te enviamos un enlace de acceso por correo.',
   'magicLink.howItWorks': '¿Cuánto tiempo es válido el enlace?',
   'magicLink.howItWorks.text': 'El enlace es válido 10 minutos y solo se puede usar una vez.',
   'magicLink.email.label': 'Dirección de correo',

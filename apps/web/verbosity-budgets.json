@@ -89,8 +89,8 @@
       "firstScreen": 14
     },
     "auth-magic-link": {
-      "total": 34,
-      "firstScreen": 34
+      "total": 29,
+      "firstScreen": 29
     },
     "auth-magic-link-validate": {
       "total": 26,
@@ -201,8 +201,8 @@
       "firstScreen": 37
     },
     "login": {
-      "total": 57,
-      "firstScreen": 57
+      "total": 52,
+      "firstScreen": 52
     },
     "me": {
       "total": 122,
@@ -357,8 +357,8 @@
       "firstScreen": 23
     },
     "world": {
-      "total": 29,
-      "firstScreen": 29
+      "total": 38,
+      "firstScreen": 38
     }
   },
   "uncovered": {
@@ -488,10 +488,10 @@
         "firstScreen": 37
       },
       "a": {
-        "total": 57,
-        "firstScreen": 57
+        "total": 52,
+        "firstScreen": 52
       },
-      "motif": "La phrase « nous vous envoyons un lien par e-mail » se lit au repos sous le titre ; le (i) ne garde que la durée du lien",
+      "motif": "La phrase « nous vous envoyons un lien de connexion par e-mail » se lit au repos sous le titre ; le (i) ne garde que la durée du lien",
       "issue": 17666
     },
     "auth-magic-link": {
@@ -500,10 +500,10 @@
         "firstScreen": 14
       },
       "a": {
-        "total": 34,
-        "firstScreen": 34
+        "total": 29,
+        "firstScreen": 29
       },
-      "motif": "La phrase « nous vous envoyons un lien par e-mail » se lit au repos sous le titre ; le (i) ne garde que la durée du lien",
+      "motif": "La phrase « nous vous envoyons un lien de connexion par e-mail » se lit au repos sous le titre ; le (i) ne garde que la durée du lien",
       "issue": 17666
     },
     "forgot-password": {
@@ -524,10 +524,10 @@
         "firstScreen": 25
       },
       "a": {
-        "total": 34,
-        "firstScreen": 34
+        "total": 38,
+        "firstScreen": 38
       },
-      "motif": "Une phrase dit que l’entrée se fait sans compte et que les autres verront ce nom",
+      "motif": "Une ligne d’orientation sous « World Wide » dit ce qu’est la conversation ouverte, puis la phrase de l’entrée sans compte",
       "issue": 17666
     }
   }

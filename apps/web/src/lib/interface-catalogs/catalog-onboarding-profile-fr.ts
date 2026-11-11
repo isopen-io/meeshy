@@ -8,7 +8,7 @@
  */
 const fr = {
   'onboarding.profile.title': 'Montre-toi',
-  'onboarding.profile.body': 'Un visage et une bannière rendent ton profil plus visible : on te reconnaît dans les suggestions, les conversations et les stories, et tu reçois plus de demandes de contact.',
+  'onboarding.profile.body': 'Un visage et une bannière : on te reconnaît plus vite.',
   'onboarding.profile.addBanner': 'Ajouter une bannière',
   'onboarding.profile.pickBanner': 'Choisir une bannière',
   'onboarding.profile.pickAvatar': 'Choisir une photo de profil',

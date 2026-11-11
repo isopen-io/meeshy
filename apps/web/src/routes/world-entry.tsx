@@ -320,6 +320,9 @@ export function WorldGuestEntry({
           <h1 id="world-name-title" className="mt-3 text-[28px] font-bold" style={{ color: 'var(--color-ios-brand)' }}>
             {title}
           </h1>
+          <p data-world-about className="mt-1 text-[15px]" style={{ color: INK_2 }}>
+            {translateInvite(language, 'world.about')}
+          </p>
           <label className="mt-4 flex w-full flex-col gap-1.5 text-start text-[14px]" style={{ color: INK_2 }}>
             {translateInvite(language, 'world.name.label')}
             <input

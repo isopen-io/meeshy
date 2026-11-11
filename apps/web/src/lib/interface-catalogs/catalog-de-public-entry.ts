@@ -23,7 +23,7 @@ const dePublicEntry = {
   'login.noAccount': 'Kein Konto?',
   'login.createAccount': 'Konto erstellen',
   'magicLink.title': 'Deine E-Mail-Adresse',
-  'magicLink.lead': 'Kein Passwort zum Merken: Wir schicken dir einen Link per E-Mail. Öffne ihn und du bist angemeldet.',
+  'magicLink.lead': 'Kein Passwort: Wir schicken dir einen Anmeldelink per E-Mail.',
   'magicLink.howItWorks': 'Wie lange ist der Link gültig?',
   'magicLink.howItWorks.text': 'Der Link ist 10 Minuten gültig und lässt sich nur einmal verwenden.',
   'magicLink.email.label': 'E-Mail-Adresse',

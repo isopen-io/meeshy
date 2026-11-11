@@ -23,7 +23,7 @@ const arPublicEntry = {
   'login.noAccount': 'ليس لديك حساب؟',
   'login.createAccount': 'إنشاء حساب',
   'magicLink.title': 'عنوان بريدك الإلكتروني',
-  'magicLink.lead': 'لا كلمة مرور لتتذكرها: نرسل إليك رابطًا عبر البريد الإلكتروني. افتحه وستكون قد سجّلت الدخول.',
+  'magicLink.lead': 'بلا كلمة مرور: نرسل إليك رابط تسجيل الدخول عبر البريد الإلكتروني.',
   'magicLink.howItWorks': 'ما مدة صلاحية الرابط؟',
   'magicLink.howItWorks.text': 'الرابط صالح لمدة 10 دقائق ويُستخدم مرة واحدة فقط.',
   'magicLink.email.label': 'عنوان البريد الإلكتروني',
