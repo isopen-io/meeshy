@@ -272,22 +272,26 @@ describe('CallEffectsMode', () => {
   describe('rien n’apparaît ni ne disparaît d’un coup (P8b.6)', () => {
     const proto = (): { animate?: unknown } => HTMLElement.prototype as unknown as { animate?: unknown };
     const played: Array<{ what: string; keyframes: Keyframe[]; duration: unknown }> = [];
-    let before: unknown;
+    let before: PropertyDescriptor | undefined;
+    let media: PropertyDescriptor | undefined;
 
     beforeAll(async () => {
       await loadModeMotion();
     });
     beforeEach(() => {
-      before = proto().animate;
+      before = Object.getOwnPropertyDescriptor(proto(), 'animate');
+      media = Object.getOwnPropertyDescriptor(window, 'matchMedia');
       played.length = 0;
-      proto().animate = function (this: HTMLElement, keyframes: Keyframe[], options: { duration: number }) {
+      Object.defineProperty(proto(), 'animate', { configurable: true, writable: true, value: function (this: HTMLElement, keyframes: Keyframe[], options: { duration: number }) {
         played.push({ what: this.getAttribute('data-call-effects-settings') !== null ? 'panel' : this.hasAttribute('data-call-effects-looks') ? 'looks' : this.hasAttribute('data-call-effects-categories-row') ? 'puces' : 'other', keyframes, duration: options.duration });
         return { cancel: () => undefined, finished: Promise.resolve(), onfinish: null };
-      };
+      } });
     });
     afterEach(() => {
-      proto().animate = before;
-      Reflect.deleteProperty(window, 'matchMedia');
+      if (before === undefined) Reflect.deleteProperty(proto(), 'animate');
+      else Object.defineProperty(proto(), 'animate', before);
+      if (media === undefined) Reflect.deleteProperty(window, 'matchMedia');
+      else Object.defineProperty(window, 'matchMedia', media);
     });
 
     test('le panneau monte en fondu depuis la barre pendant que la bande et les puces repartent en fondu', () => {

@@ -397,8 +397,10 @@ const SIDE_SHAPE = 'grid size-12 place-items-center rounded-full transition-tran
 
 const SIDE = `${SIDE_SHAPE} text-on-media`;
 
-/** La largeur de la barre de verre : celle de la pilule de l'appel, un liseré de chaque côté. */
-const GLASS_BAR = 'relative isolate flex w-[calc(100%-2rem)] max-w-[560px] flex-col items-center rounded-[32px] p-2';
+/** La largeur de la barre de verre, et du panneau qui la surmonte : celle de la pilule de l'appel, un liseré de chaque côté. */
+export const GLASS_WIDTH = 'w-[calc(100%-2rem)] max-w-[560px]';
+
+const GLASS_BAR = `relative isolate flex ${GLASS_WIDTH} flex-col items-center rounded-[24px] p-2`;
 
 /** Le verre de la barre : un élément à lui, seul mis à l'échelle par le morphisme (`createPillGlass`) — le contenu garde ses proportions. */
 function GlassBar({ above, children }: { readonly above: ReactNode; readonly children: ReactNode }) {
@@ -407,7 +409,7 @@ function GlassBar({ above, children }: { readonly above: ReactNode; readonly chi
   useModeGlass(box, skin);
   return (
     <div ref={box} className={GLASS_BAR} data-call-mode-bar="">
-      <span ref={skin} aria-hidden className="glass-call absolute inset-0 -z-10 rounded-[32px]" data-call-mode-bar-skin="" />
+      <span ref={skin} aria-hidden className="glass-call absolute inset-0 -z-10 rounded-[24px]" data-call-mode-bar-skin="" />
       {above}
       {children}
     </div>

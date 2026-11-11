@@ -19,7 +19,7 @@ import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop
 import { CallEffectsCompanions, type EffectsCompanion } from './call-effects-companions';
 import type { Portrait } from './call-grid';
 import { StreamVideo } from './call-media-elements';
-import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
+import { CallModeBar, GLASS_WIDTH, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 
 /**
  * **LE MODE EFFETS** (#8442, #8551, #8578) — « Effets » (rangée Mon image, ou
@@ -252,8 +252,8 @@ const gear = (
 
 const TEXT_TAB = 'min-h-11 rounded-full px-3 text-mini font-semibold transition-colors motion-reduce:transition-none';
 
-/** La largeur du panneau et de la barre : celle de la pilule de l'appel, un liseré de chaque côté. */
-const GLASS_WIDTH = 'w-[calc(100%-2rem)] max-w-[560px]';
+/** Les deux moitiés d'un remplacement se posent l'une sur l'autre, au même endroit : rien ne saute pendant le fondu. */
+const STACKED = { gridArea: '1 / 1' } as const;
 
 type TextOf = <K extends CallStudioCatalogKey>(key: K, ...params: TranslateCallStudioArgs<K>) => string;
 
@@ -316,7 +316,7 @@ function EffectsCategories({ category, onPick, t }: { readonly category: Effects
           </span>
         ))}
       </div>
-      <span aria-hidden className="h-px w-full bg-[var(--color-media-hairline)]" />
+      <span aria-hidden className="h-px w-full" style={{ background: 'var(--color-media-hairline)' }} />
     </>
   );
 }
@@ -384,9 +384,9 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
       <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3">
         <CaptureStatus status={studio.status} />
-        <div className="grid w-full items-end justify-items-center [&>*]:[grid-area:1/1]">
+        <div className="grid w-full items-end justify-items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
           {looks.mounted ? (
-            <div ref={looks.ref} className={`flex w-full flex-col items-center gap-3 ${settings ? 'pointer-events-none' : ''}`} data-call-effects-looks="">
+            <div ref={looks.ref} className={`flex w-full flex-col items-center gap-3 ${settings ? 'pointer-events-none' : ''}`} style={STACKED} data-call-effects-looks="">
               <CaptureHint language={language} />
               <ModeCarousel
                 key={category}
@@ -400,7 +400,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
             </div>
           ) : null}
           {panel.mounted ? (
-            <div ref={panel.ref} role="group" aria-label={t('callStudio.effects.settings')} className={`glass-call flex ${GLASS_WIDTH} flex-col gap-1 rounded-[24px] px-4 py-3 ${settings ? '' : 'pointer-events-none'}`} data-call-effects-settings="">
+            <div ref={panel.ref} role="group" aria-label={t('callStudio.effects.settings')} className={`glass-call flex ${GLASS_WIDTH} flex-col gap-1 rounded-[24px] px-4 py-3 ${settings ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
               <EffectsSettings language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} />
             </div>
           ) : null}
