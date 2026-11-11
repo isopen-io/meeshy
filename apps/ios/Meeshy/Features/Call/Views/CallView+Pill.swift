@@ -199,7 +199,7 @@ extension CallView {
         let isShown = isChromeVisible || pillText.staysWhenChromeStowed
         return callControlsPill
             .callChromeVisibility(isShown)
-            .modifier(CallEdgeStow(travel: CallChromeStow.pillTravel(bottomInset: Self.chromeBottomInset), isVisible: isShown, reduceMotion: reduceMotion))
+            .modifier(CallEdgeStow(edge: .bottom, margin: Self.chromeBottomInset, isVisible: isShown, reduceMotion: reduceMotion))
     }
 
     private func unfoldedRows<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {

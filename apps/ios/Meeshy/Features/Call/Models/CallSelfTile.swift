@@ -64,6 +64,12 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
         resting(chosen, isChromeVisible: isChromeVisible).width / chosen.width
     }
 
+    /// Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins, badge) : divisé par
+    /// le facteur d'échelle, il est dessiné à sa taille de petite vignette (lois 4, 11).
+    static func counterScaled(_ length: CGFloat, by factor: CGFloat) -> CGFloat {
+        factor.isFinite && factor > 0 ? length / factor : length
+    }
+
     /// L'ancre du rangement : le coin de l'écran le plus proche du centre de la vignette, qui garde
     /// ainsi sa marge pendant la réduction.
     static func anchor(of center: CGPoint, in container: CGSize) -> UnitPoint {

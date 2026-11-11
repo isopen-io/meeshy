@@ -50,6 +50,9 @@ extension CallView {
         return CallSelfTileScale.fitted(CallSelfTileScale.liveSize(pinch: selfTilePinch, from: selfTileScale), in: available)
     }
 
+    /// G1.11 — rangée, ma vignette garde son cadre et passe à sa petite taille par une échelle.
+    var selfTileStowFactor: CGFloat { CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible) }
+
     /// Nearest corner to a point — used to snap on drag end.
     private func nearestCorner(to point: CGPoint, in container: CGSize, safeArea: EdgeInsets = .init()) -> PiPCorner {
         let size = pipTileSize(in: container, safeArea: safeArea)
@@ -69,19 +72,15 @@ extension CallView {
                 // primary). Swap flips both with one tap.
                 videoStream(local: !effectiveSwapStreams, contentMode: .scaleAspectFill)
                     .frame(width: size.width, height: size.height)
-                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                            .stroke(CallSelfTileStroke.color(forKey: CallSelfTileStroke.colorKey(showsLocal: !effectiveSwapStreams, myId: AuthManager.shared.currentUser?.id, peerId: callManager.remoteUserId)), lineWidth: CallSelfTileStroke.lineWidth)
-                    )
+                    .modifier(CallSelfTileOutline(color: CallSelfTileStroke.color(forKey: CallSelfTileStroke.colorKey(showsLocal: !effectiveSwapStreams, myId: AuthManager.shared.currentUser?.id, peerId: callManager.remoteUserId)), lineWidth: CallSelfTileStroke.lineWidth, stowFactor: selfTileStowFactor))
                     .overlay(alignment: .topTrailing) { selfTileZoomSlot(tileSize: size) }
                     .overlay(alignment: .bottomLeading) {
                         if showsPeerMutedBadge && effectiveSwapStreams {
-                            CallPeerMutedBadge(compact: true).padding(MeeshySpacing.xs)
+                            CallPeerMutedBadge(compact: true).padding(MeeshySpacing.xs).scaleEffect(CallSelfTileScale.counterScaled(1, by: selfTileStowFactor), anchor: .bottomLeading)
                         }
                     }
                     .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
-                    .modifier(CallSelfTileStow(factor: CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible), anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
+                    .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
                     .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
                     .gesture(
                         DragGesture()
@@ -162,13 +161,9 @@ extension CallView {
             let base = pipCenter(pipCorner, in: geo.size, size: size, safeArea: geo.safeAreaInsets)
             videoSuspendedTileBody
                 .frame(width: size.width, height: size.height)
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                        .stroke(MeeshyColors.warning.opacity(MeeshyOpacity.heavy), lineWidth: 1)
-                )
+                .modifier(CallSelfTileOutline(color: MeeshyColors.warning.opacity(MeeshyOpacity.heavy), lineWidth: 1, stowFactor: selfTileStowFactor))
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
-                .modifier(CallSelfTileStow(factor: CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible), anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
+                .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
                 .position(x: base.x, y: base.y)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))

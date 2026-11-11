@@ -38,8 +38,6 @@ extension CallChromeVisibility {
 /// un fondu court, sans déplacement.
 enum CallChromeStow {
     static let reducedFadeDuration: TimeInterval = 0.15
-    /// La hauteur de la rangée d'en-tête sous l'encart haut : de quoi la sortir de l'écran.
-    static let headerRowHeight: CGFloat = 52
 
     static func leavesByItsEdge(isVisible: Bool, reduceMotion: Bool) -> Bool {
         !isVisible && !reduceMotion
@@ -49,14 +47,12 @@ enum CallChromeStow {
         .easeInOut(duration: reduceMotion ? reducedFadeDuration : CallChromeVisibility.fadeDuration)
     }
 
-    /// La translation de l'en-tête rangé : vers le haut, au-delà de l'encart haut.
-    static func headerTravel(topInset: CGFloat) -> CGFloat {
-        -(topInset + headerRowHeight)
-    }
-
-    /// La translation de la pilule rangée : vers le bas, au-delà de l'encart bas.
-    static func pillTravel(bottomInset: CGFloat) -> CGFloat {
-        CallRailsLayout.pillHeight + CallRailsLayout.pillGap + bottomInset
+    /// La translation d'un élément rangé vers SON bord : toute sa hauteur MESURÉE (`extent`) plus
+    /// sa marge à ce bord, si bien qu'une pilule dépliée (rangées, journal) quitte l'écran aussi
+    /// entièrement que la pilule nue. Une hauteur pas encore mesurée ne compte pas.
+    static func travel(toward edge: VerticalEdge, extent: CGFloat, margin: CGFloat) -> CGFloat {
+        let distance = (extent.isFinite ? max(extent, 0) : 0) + margin
+        return edge == .top ? -distance : distance
     }
 }
 
