@@ -224,4 +224,3 @@ nonisolated enum ComposerSlideTextRole: Equatable {
         }
     }
 }
-
