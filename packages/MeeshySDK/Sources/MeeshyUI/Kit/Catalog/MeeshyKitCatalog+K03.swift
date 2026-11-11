@@ -22,12 +22,14 @@ extension MeeshyKitCatalog {
     }
 }
 
-/// L'échantillon d'un état : le choix posé sur un panneau opaque, comme dans sa
-/// planche. L'état porte ses options, sa sélection initiale, son ton ; `presse`
-/// fige l'appui sur le premier segment non courant.
+/// L'échantillon d'un état : le choix posé sur un panneau opaque, aux libellés et
+/// à la sélection de sa vue de la planche (S2, A3, A10, A14, A2), à la largeur
+/// d'un panneau de téléphone ; `presse` fige l'appui sur le premier segment non courant.
 private struct MeeshySegmentedSpecimen: View {
     let stateID: String
     let isPressed: Bool
+
+    private static let trackWidth: CGFloat = 320
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var selection: Int
@@ -44,12 +46,12 @@ private struct MeeshySegmentedSpecimen: View {
             "Choix",
             selection: $selection,
             options: spec.titles.enumerated().map { MeeshySegmentedOption(id: $0.offset, title: $0.element) },
-            role: .choice,
+            role: Self.role(for: stateID),
             tone: spec.tone,
             pressed: isPressed ? spec.titles.indices.first { $0 != selection } : nil
         )
         .disabled(!spec.enabled)
-        .frame(maxWidth: 320)
+        .frame(width: Self.trackWidth)
         .padding(MeeshySpacing.sm)
         .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg).fill(panelFill))
     }
@@ -58,13 +60,18 @@ private struct MeeshySegmentedSpecimen: View {
         MeeshyColors.backgroundPrimary(isDark: stateID == "theme" ? colorScheme == .dark : true)
     }
 
+    /// `tabs` pour ce qui change le contenu voisin (A3, A10), `choice` sinon.
+    private static func role(for stateID: String) -> MeeshySegmentedRole {
+        ["deux-second", "trois-long"].contains(stateID) ? .tabs : .choice
+    }
+
     private static func spec(for stateID: String) -> (titles: [String], selected: Int, tone: MeeshySegmentedTone, enabled: Bool) {
         switch stateID {
         case "deux": return (["Ajuster", "Remplir"], 0, .media, true)
-        case "deux-second": return (["Fond", "Contour"], 1, .media, true)
-        case "trois-long": return (["Tout", "Peau", "Éclairage du visage"], 0, .media, true)
-        case "trois-milieu": return (["Uni", "Dégradé", "Image"], 1, .media, true)
-        case "quatre": return (["Normal", "Italique", "Souligné", "Gras"], 3, .media, true)
+        case "deux-second": return (["Texte", "Contour"], 1, .media, true)
+        case "trois-long": return (["Filtres", "Cadres", "Effets de visage"], 0, .media, true)
+        case "trois-milieu": return (["Sur la scène", "Fond de la scène", "Pièce du post"], 1, .media, true)
+        case "quatre": return (["Fin", "Normal", "Semi-gras", "Gras"], 3, .media, true)
         case "theme": return (["Clair", "Sombre"], 0, .theme, true)
         default: return (["Ajuster", "Remplir"], 0, .media, false)
         }
