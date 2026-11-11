@@ -68,7 +68,7 @@ final class EntryScreensEpureTests: XCTestCase {
         "emailVerification.subtitle.activationRequired": "Activez votre compte : un code a été envoyé à **%@** pour prouver cette adresse.",
         "sessionClosed.admin.title": "Session fermée par l'équipe Meeshy",
         "sessionClosed.admin.message": "Pour protéger votre compte.",
-        "sessionClosed.userRevoke.message": "Fermée depuis un autre de vos appareils. Pas vous ? Changez votre mot de passe.",
+        "sessionClosed.userRevoke.message": "Session fermée depuis un autre appareil. Pas vous ? Changez votre mot de passe.",
         "sessionClosed.password.message": "Pas vous à l'origine du changement ? Réinitialisez-le tout de suite.",
         "sessionClosed.allSignedOut.message": "Toutes les sessions du compte sont fermées.",
         "sessionClosed.activation.message": "Reconnectez-vous puis saisissez le code reçu par e-mail.",

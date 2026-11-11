@@ -28,7 +28,7 @@ struct SessionClosedNoticeCopy: Equatable {
             offersContact = true
         case .userRevoke:
             title = String(localized: "sessionClosed.userRevoke.title", defaultValue: "Cet appareil a été déconnecté", bundle: .main)
-            message = String(localized: "sessionClosed.userRevoke.message", defaultValue: "Fermée depuis un autre de vos appareils. Pas vous ? Changez votre mot de passe.", bundle: .main)
+            message = String(localized: "sessionClosed.userRevoke.message", defaultValue: "Session fermée depuis un autre appareil. Pas vous ? Changez votre mot de passe.", bundle: .main)
             systemImage = "iphone.slash"
             offersContact = false
         case .passwordChanged:

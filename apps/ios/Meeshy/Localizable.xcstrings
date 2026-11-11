@@ -175816,43 +175816,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أُغلقت من جهاز آخر لديك. لست أنت؟ غيّر كلمة المرور."
+            "value": "أُغلقت الجلسة من جهاز آخر. لست أنت؟ غيّر كلمة المرور."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Von einem deiner anderen Geräte beendet. Nicht du? Ändere dein Passwort."
+            "value": "Sitzung von einem anderen Gerät beendet. Nicht du? Ändere dein Passwort."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Closed from another of your devices. Not you? Change your password."
+            "value": "Session closed from another device. Not you? Change your password."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cerrada desde otro de tus dispositivos. ¿No fuiste tú? Cambia tu contraseña."
+            "value": "Sesión cerrada desde otro dispositivo. ¿No fuiste tú? Cambia tu contraseña."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fermée depuis un autre de vos appareils. Pas vous ? Changez votre mot de passe."
+            "value": "Session fermée depuis un autre appareil. Pas vous ? Changez votre mot de passe."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiusa da un altro dei tuoi dispositivi. Non sei stato tu? Cambia la password."
+            "value": "Sessione chiusa da un altro dispositivo. Non sei stato tu? Cambia la password."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encerrada em outro aparelho seu. Não foi você? Altere sua senha."
+            "value": "Sessão encerrada em outro aparelho. Não foi você? Altere sua senha."
           }
         }
       }
