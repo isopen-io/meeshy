@@ -2,7 +2,7 @@
 <resources>
     <string name="a11y_composer_language_hint">اختر لغة إرسال الرسالة</string>
     <string name="a11y_message_location">موقع مشارَك</string>
-    <string name="action_more">المزيد…</string>
+    <string name="action_more">المزيد</string>
     <string name="add_participant_add_button">إضافة</string>
     <string name="add_participant_close">إغلاق</string>
     <string name="add_participant_member_badge">عضو</string>

@@ -2,7 +2,7 @@
 <resources>
     <string name="a11y_composer_language_hint">Sprache wählen, in der die Nachricht gesendet wird</string>
     <string name="a11y_message_location">geteilter Standort</string>
-    <string name="action_more">Mehr…</string>
+    <string name="action_more">Mehr</string>
     <string name="add_participant_add_button">Hinzufügen</string>
     <string name="add_participant_close">Schließen</string>
     <string name="add_participant_member_badge">Mitglied</string>
