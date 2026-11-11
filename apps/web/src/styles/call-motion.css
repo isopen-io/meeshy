@@ -45,7 +45,9 @@
 /* ET IL REPART COMME IL EST VENU (#17406) — le texte qui quitte la pilule reste à
    sa place le temps de ce fondu (`PILL_TEXT_EXIT`, `call-pill-text-exit.ts`), redescend
    vers la rangée de base et ne prend plus le doigt : un bouton touché pendant la
-   sortie répond. Sous « Réduire les animations », la pilule ne l'attend pas. */
+   sortie répond. Sous « Réduire les animations », la règle générale ramène ce fondu à
+   un instant : les sous-titres, eux, y partent en fondu court joué par le moteur
+   (`CAPTIONS_EXIT`, `useRailFade`, #17700). */
 [data-call-pill-text][data-leaving] {
   animation: call-pill-text-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
   pointer-events: none;

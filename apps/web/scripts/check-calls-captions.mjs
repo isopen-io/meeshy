@@ -332,7 +332,7 @@ try {
       check(footJournal.ok, `${label} : « Journal » du pied fait au moins ${TAP_FLOOR} (${JSON.stringify(footJournal.size)})`);
       await page.click('[data-call-captions-journal]');
       check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : « Journal » ouvre tout l'appel DANS la pilule`);
-      check((await page.$('[data-call-captions-panel]')) === null, `${label} : à la place des sous-titres`);
+      check(await vanishes(page, '[data-call-captions-panel]'), `${label} : à la place des sous-titres (ils repartent en fondu, #17700)`);
       check(await page.$eval('[data-call-control-pill] [data-call-more]', (more) => more.getBoundingClientRect().bottom > (document.querySelector('[data-call-journal]')?.getBoundingClientRect().bottom ?? 0)), `${label} : au-dessus de la rangée de base, qui reste là`);
       await page.click('[data-call-control-pill] [data-call-more]');
       check(await vanishes(page, '[data-call-journal-panel]'), `${label} : (…) range le journal`);
@@ -341,6 +341,28 @@ try {
       check(await appears(page, '[data-call-control-pill] [data-call-journal-panel]'), `${label} : refermer les actions rend le journal`);
       await page.click('[data-panel-close]');
       check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : ✕ rend les sous-titres`);
+
+      // ---- 4 ter. sous « Réduire les animations », (…) ne les coupe pas net (#17700) :
+      // la règle générale de la feuille éteint leur fondu CSS, le moteur le rejoue court.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.click('[data-call-control-pill] [data-call-more]');
+      const reducedOut = await page
+        .waitForFunction(
+          () => {
+            const leaving = document.querySelector('[data-call-pill-text^="captions"][data-leaving]');
+            const fade = leaving?.getAnimations().find((animation) => !('animationName' in animation));
+            const frames = fade?.effect?.getKeyframes() ?? [];
+            return fade === undefined ? null : { duration: fade.effect?.getTiming().duration, opacity: frames.map((frame) => Number(frame.opacity)), moves: frames.some((frame) => frame.transform !== undefined) };
+          },
+          undefined,
+          { timeout: 2000 },
+        )
+        .then((handle) => handle.jsonValue(), () => null);
+      check(reducedOut !== null && reducedOut.opacity.join() === '1,0' && !reducedOut.moves && Number(reducedOut.duration) > 0 && Number(reducedOut.duration) <= 200, `${label} : sous « Réduire les animations », (…) range les sous-titres en fondu COURT, opacité seule (${JSON.stringify(reducedOut)})`);
+      check(await vanishes(page, '[data-call-captions-panel]'), `${label} : puis ils ne laissent rien`);
+      await page.click('[data-call-control-pill] [data-call-more]');
+      check(await appears(page, '[data-call-control-pill] [data-call-captions-panel]'), `${label} : refermer les actions les rend`);
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
 
       await openActions(page);
       await cc.click();
