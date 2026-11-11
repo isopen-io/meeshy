@@ -133,3 +133,10 @@ Choix retenus (mode autonome ; alternatives entre parenthèses) :
 15. 350 de large au plus sur tout écran. (Largeur proportionnelle.)
 16. Synchronisation, notification riche, `CallStatusPill` et lois sans vue ne sont pas absorbés. (Les absorber.)
 17. Aucun jumeau rebranché dans K14 : I1, I2, I7 et I10 s'en chargent, avec captures. (Renvoyer `ComposerLimitCapsuleView` vers K14 dès ce lot.)
+
+## 10. Livraison iOS (lot K14, branche `claude/kit-k14-ios`)
+- Fichiers : `MeeshyUI/Kit/MeeshyStatusCapsuleRecipe.swift` (nature, durée, action, élément, loi du temps, recette et contraste en valeurs), `MeeshyUI/Kit/MeeshyStatusCapsule.swift` (la face, sa disposition de largeur, le style de l'action), `MeeshyUI/Kit/MeeshyStatusCapsuleHost.swift` (la séance — haptique, annonce, minuteur, effets injectables — et `.meeshyStatusCapsule(_:edge:haptic:)`), `Kit/Catalog/MeeshyKitCatalog+K14.swift`. Le nom de l'action « Fermer » réutilise la clé `common.close` de MeeshyUI.
+- Témoins : `MeeshyStatusCapsuleTests` (recette et jetons, vecteurs de durée, de silence, de nature et de contraste, face, glisser, séance avec horloge, sommeil et effets injectés, gardes de source) et `MeeshyStatusCapsuleSnapshotTests` (sept états, `echec` pressé, `grande-police`, `rtl`).
+- Jumeau : `ComposerLimitNotice.speaks` (app) lit désormais la loi du kit, `MeeshyStatusCapsuleTiming.speaks` (l'`id` est le nom de la borne) ; les trois autres types du jumeau et le montage restent jusqu'à I2, parce que les rebrancher changerait l'écran (verre dense, texte aligné au début, 4 s).
+- Choix de l'hôte iOS (décision #17649) : la fermeture vit dans l'élément (`onDismiss` active le glisser, `closeLabel` dessine le ✕ avec lui) ; `leading` reste à la face ; un élément identique reposé sous le même `id` ne rejoue rien, la séance se rejoue quand un champ change ou après `nil`.
+- Limite du contraste : la fiche chiffre l'action à 15,99:1 ; avec `indigo950` (`1E1B4B`) le calcul rend 15,97:1. Le vecteur inscrit le plancher 15,9 et le dit.
