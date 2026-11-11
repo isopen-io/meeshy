@@ -1,5 +1,9 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +27,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -32,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallRemoteVideoFade
 import me.meeshy.sdk.model.call.CallRemoteVideoSurface
 import me.meeshy.ui.theme.MeeshySpacing
 import org.webrtc.EglBase
@@ -46,6 +52,10 @@ private const val AVATAR_COMPACT_DP = 36
  * L'image du correspondant, selon [surface] : le flux en direct, son avatar « Caméra désactivée »
  * (jamais l'image gelée ni un chargement sans fin), ou « Connexion vidéo… ». [compact] sert la
  * vignette (après une permutation) : avatar réduit, sans phrase.
+ *
+ * G4.6 : l'image cède la place à l'avatar (et revient) en fondu. L'image reste posée dessous ; c'est le VOILE
+ * (l'avatar ou l'attente) dont l'opacité s'anime, au rythme de [CallRemoteVideoFade] — interruptible, plus court
+ * sous « Réduire les animations ». L'image n'est retirée qu'une fois couverte.
  */
 @Composable
 internal fun CallRemoteVideoSurfaceView(
@@ -58,21 +68,36 @@ internal fun CallRemoteVideoSurfaceView(
     fit: Boolean = false,
     compact: Boolean = false,
     overlay: Boolean = false,
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
+    val fade = tween<Float>(CallRemoteVideoFade.durationMillis(rememberCallReduceMotion()), easing = LinearEasing)
+    val veil by animateFloatAsState(CallRemoteVideoFade.veilOpacity(surface, hasTrack = track != null), fade, label = "call-remote-veil")
+    var veiled by remember { mutableStateOf(if (surface == CallRemoteVideoSurface.Connecting) surface else CallRemoteVideoSurface.CameraOff) }
+    LaunchedEffect(surface) { if (surface != CallRemoteVideoSurface.Live) veiled = surface }
     Box(modifier) {
-        when {
-            surface == CallRemoteVideoSurface.Live && track != null -> {
-                val live = stringResource(R.string.call_stage_remote_live)
-                VideoRenderer(
-                    track = track,
-                    eglContext = eglContext,
-                    modifier = Modifier.fillMaxSize().semantics { contentDescription = live },
-                    overlay = overlay,
-                    fit = fit,
-                )
+        if (track != null && CallRemoteVideoFade.keepsLiveImage(hasTrack = true, veil = veil)) {
+            val live = stringResource(R.string.call_stage_remote_live)
+            VideoRenderer(
+                track = track,
+                eglContext = eglContext,
+                modifier = Modifier.fillMaxSize().semantics { contentDescription = live },
+                overlay = overlay,
+                fit = fit,
+            )
+        }
+        if (CallRemoteVideoFade.showsVeil(veil)) {
+            Crossfade(
+                targetState = veiled,
+                modifier = Modifier.fillMaxSize().graphicsLayer { alpha = veil },
+                animationSpec = fade,
+                label = "call-remote-veiled",
+            ) { kind ->
+                if (kind == CallRemoteVideoSurface.Connecting) {
+                    CallRemoteConnectingPlaceholder(compact)
+                } else {
+                    CallRemoteCameraOffPlaceholder(peerName, avatarUrl, compact, peerSpeech)
+                }
             }
-            surface == CallRemoteVideoSurface.Connecting -> CallRemoteConnectingPlaceholder(compact)
-            else -> CallRemoteCameraOffPlaceholder(peerName, avatarUrl, compact)
         }
     }
 }
@@ -96,6 +121,7 @@ internal fun CallRemoteVideoStage(
     fit: Boolean = false,
     compact: Boolean = false,
     overlay: Boolean = false,
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     var elapsedForCallKey by remember { mutableStateOf<String?>(null) }
     val surface = CallRemoteVideoSurface.resolve(
@@ -113,12 +139,19 @@ internal fun CallRemoteVideoStage(
             if (established) announce(context.getString(R.string.call_stage_remote_off))
         }
     }
-    CallRemoteVideoSurfaceView(surface, track, eglContext, peerName, avatarUrl, modifier, fit, compact, overlay)
+    CallRemoteVideoSurfaceView(surface, track, eglContext, peerName, avatarUrl, modifier, fit, compact, overlay, peerSpeech)
 }
 
 /** Le pair a coupé sa caméra (ou n'envoie rien) : son avatar et « Caméra désactivée ». */
 @Composable
-internal fun CallRemoteCameraOffPlaceholder(peerName: String, avatarUrl: String?, compact: Boolean) {
+internal fun CallRemoteCameraOffPlaceholder(
+    peerName: String,
+    avatarUrl: String?,
+    compact: Boolean,
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
+) {
+    val speaking = rememberPeerSpeaking(peerSpeech)
+    val reduceMotion = rememberCallReduceMotion()
     val label = stringResource(R.string.call_stage_remote_off)
     Box(
         modifier = Modifier
@@ -131,10 +164,14 @@ internal fun CallRemoteCameraOffPlaceholder(peerName: String, avatarUrl: String?
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.mdPlus),
         ) {
-            CallAvatarDisc(
+            CallSpeakingAvatar(
                 name = peerName,
                 size = (if (compact) AVATAR_COMPACT_DP else AVATAR_FULL_DP).dp,
                 avatarUrl = avatarUrl,
+                colorHex = CallTileRim.peerFace(peerSpeech.peerUserId),
+                speaking = speaking,
+                reduceMotion = reduceMotion,
+                compact = compact,
                 modifier = Modifier.clearAndSetSemantics { },
             )
             if (compact) {

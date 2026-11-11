@@ -24,6 +24,9 @@ internal object CallTileRim {
     /** Une vignette de la grille de groupe, « moi » compris : sa clé de couleur est l'identifiant du membre. */
     fun groupTile(colorKey: String): String = CallSpeakerColor.hex(colorKey)
 
+    /** Le visage du pair caméra coupée (G4.2) : sa couleur d'auteur, celle de ses sous-titres ; `null` sans identifiant (la marque reste). */
+    fun peerFace(peerUserId: String): String? = peerUserId.takeIf { it.isNotBlank() }?.let(CallSpeakerColor::hex)
+
     /** Le fond d'avatar du pair hors de l'écran d'appel (l'appel réduit) : la couleur de son PROFIL, l'identifiant primant. */
     fun peerAvatar(peerUserId: String, peerName: String): String = DynamicColorGenerator.profileAccentHex(peerUserId, peerName)
 
