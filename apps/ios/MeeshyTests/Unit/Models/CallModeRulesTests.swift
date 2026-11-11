@@ -209,6 +209,14 @@ final class CallModeRulesTests: XCTestCase {
         XCTAssertEqual(cumulated.activePreset, .golden)
     }
 
+    /// P8b.6 — le panneau de Réglages monte depuis la barre en ≈ 200 ms et y redescend ;
+    /// « Réduire les animations » garde un fondu court, sans montée, et ne supprime
+    /// jamais le mouvement d'un coup.
+    func test_settingsPanel_risesFromTheBar_andOnlyFadesUnderReduceMotion() {
+        XCTAssertGreaterThan(CallEffectsSettingsMotion.panelRise(reduceMotion: false), 0)
+        XCTAssertEqual(CallEffectsSettingsMotion.panelRise(reduceMotion: true), 0)
+    }
+
     /// P8b.6 — la bande et le panneau se croisent en ≈ 200 ms ; « Réduire les
     /// animations » garde un fondu court, elle ne supprime jamais le mouvement d'un coup.
     func test_settingsMotion_isAShortCrossfade_neverInstant() {
