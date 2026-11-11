@@ -50,8 +50,8 @@
     },
     "android:feature/game": {
       "labels": 1335,
-      "words": 10107,
-      "long": 165,
+      "words": 9413,
+      "long": 141,
       "explanations": 117
     },
     "android:feature/notifications": {
@@ -506,14 +506,14 @@
     },
     "ios:Meeshy/game": {
       "labels": 963,
-      "words": 7758,
-      "long": 126,
+      "words": 7260,
+      "long": 113,
       "explanations": 105
     },
     "ios:Meeshy/game2": {
       "labels": 287,
-      "words": 1996,
-      "long": 37,
+      "words": 1841,
+      "long": 27,
       "explanations": 7
     },
     "ios:Meeshy/guest": {
