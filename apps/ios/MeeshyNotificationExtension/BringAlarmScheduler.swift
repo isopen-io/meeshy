@@ -99,7 +99,7 @@ nonisolated enum BringAlarmLog {
         try? FileManager.default.createDirectory(at: caches, withIntermediateDirectories: true)
         let file = caches.appendingPathComponent("bring-alarm.log")
         let previous = (try? String(contentsOf: file, encoding: .utf8))?.split(separator: "\n").map(String.init) ?? []
-        let line = "\(ISO8601DateFormatter().string(from: Date())) [\(ProcessInfo.processInfo.processName)] \(message)"
+        let line = "\(WireDate.string(from: Date())) [\(ProcessInfo.processInfo.processName)] \(message)"
         try? (previous + [line]).suffix(journalLimit).joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
     }
 }

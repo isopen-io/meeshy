@@ -1,11 +1,14 @@
 package me.meeshy.sdk.model.call
 
-/** A panel the call screen can open; mirrors iOS `CallScreenPanel`. */
+/**
+ * A panel the call screen can open; mirrors iOS `CallScreenPanel`. #17343 — Record, React AND the Journal are drawn in
+ * the pill; Add people, which presents the friends list, stays a sheet under the rows.
+ */
 enum class CallScreenPanel(val action: CallAction, val isDrawnInThePill: Boolean) {
     React(CallAction.React, true),
     Record(CallAction.Recording, true),
     People(CallAction.AddPeople, false),
-    Journal(CallAction.Journal, false),
+    Journal(CallAction.Journal, true),
 }
 
 /** A mode that frees the screen; mirrors iOS `CallScreenMode`. */
@@ -21,31 +24,37 @@ enum class CallScreenMode(val action: CallAction) {
 sealed interface CallScreenLayer {
     data object Idle : CallScreenLayer
     data object Menu : CallScreenLayer
+
+    /** #17343 — the (…) opened OVER a journal: the journal is stowed, not closed; closing the actions gives it back. */
+    data object MenuOverJournal : CallScreenLayer
     data class Panel(val panel: CallScreenPanel) : CallScreenLayer
     data class Mode(val mode: CallScreenMode) : CallScreenLayer
 
     val openPanel: CallScreenPanel? get() = (this as? Panel)?.panel
     val activeMode: CallScreenMode? get() = (this as? Mode)?.mode
 
-    val isExpanded: Boolean get() = this is Menu || this is Panel
+    val isExpanded: Boolean get() = this is Menu || this is MenuOverJournal || this is Panel
 
     val pillPanel: CallScreenPanel? get() = openPanel?.takeIf { it.isDrawnInThePill }
 
     val showsFamilyRows: Boolean
         get() = when (this) {
-            Menu -> true
+            Menu, MenuOverJournal -> true
             is Panel -> !panel.isDrawnInThePill
             Idle, is Mode -> false
         }
 
     val freesTheScreen: Boolean get() = activeMode != null
 
-    val mayAutoHide: Boolean get() = this is Idle || this is Menu
+    val mayAutoHide: Boolean get() = this is Idle || this is Menu || this is MenuOverJournal
 
-    fun togglingMenu(): CallScreenLayer = when (this) {
-        Idle -> Menu
-        Menu, is Panel -> Idle
-        is Mode -> this
+    fun togglingMenu(): CallScreenLayer = when {
+        this is Idle -> Menu
+        this is Menu -> Idle
+        this is Panel && panel == CallScreenPanel.Journal -> MenuOverJournal
+        this is MenuOverJournal -> Panel(CallScreenPanel.Journal)
+        this is Panel -> Idle
+        else -> this
     }
 
     fun opening(panel: CallScreenPanel): CallScreenLayer = when {
@@ -64,6 +73,7 @@ sealed interface CallScreenLayer {
 
     fun reconciled(actions: CallActionSet): CallScreenLayer = when (this) {
         is Panel -> if (panel.action !in actions) Menu else this
+        MenuOverJournal -> if (CallScreenPanel.Journal.action !in actions) Menu else this
         is Mode -> if (mode.action !in actions) Idle else this
         Idle, Menu -> this
     }

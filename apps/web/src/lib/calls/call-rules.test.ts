@@ -6,7 +6,7 @@ import type { Attachment } from '@/lib/api/types';
 import { callNoticeTarget } from './call-notice';
 import { formatCallClock, meshPhase, type CallMember } from './call-store';
 import { bindCallTransport, listenCallEvents, resetCallTransportForTests, setCallEngineWake } from './call-transport';
-import { callLayout, callStatusKey, canRetry, gridColumns, orderedMembers, statusPills } from './call-view';
+import { callLayout, callStatusKey, canRetry, gridColumns, orderedMembers, statusPills, visibleStatusPills } from './call-view';
 
 /**
  * LES RÈGLES DE L'APPEL SANS ÉCRAN (#6382, #8044) — ce que la passerelle
@@ -96,6 +96,14 @@ describe('ce que l’écran dit', () => {
   test('pastilles : micro coupé, pair muet (en direct seulement), réseau faible', () => {
     expect(statusPills({ micMuted: true, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: quality('poor'), isGroup: false })).toEqual(['mic-muted', 'peer-muted', 'poor-network']);
     expect(statusPills({ micMuted: false, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: quality('good'), isGroup: true })).toEqual([]);
+  });
+
+  test('« Micro coupé » reste à l’appel audio À DEUX : en vidéo comme dans la grille, le bouton Micro le dit déjà (P7.4, iOS `audioCallLayout`, que la scène de groupe ne monte pas)', () => {
+    const muted = { micMuted: true, screenSharing: false, members: { a: member() }, quality: quality('poor'), isGroup: false };
+    expect(visibleStatusPills(muted, 'portrait')).toEqual(['mic-muted', 'poor-network']);
+    expect(visibleStatusPills(muted, 'video-duo')).toEqual(['poor-network']);
+    expect(visibleStatusPills(muted, 'screen')).toEqual(['poor-network']);
+    expect(visibleStatusPills(muted, 'grid')).toEqual(['poor-network']);
   });
 
   test('pastilles de survie (#8047) : ma vidéo ralentie, puis en pause, tant que le réseau est faible', () => {

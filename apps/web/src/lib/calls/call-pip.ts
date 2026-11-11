@@ -60,6 +60,23 @@ export function requestCallPip(): void {
   void opener?.();
 }
 
+/** Une fenêtre d'image dans l'image flotte (document ou vidéo seule) : le bouton de l'en-tête y voit une sortie à offrir. Écrit par `call-pip-window.tsx`. */
+export const pipOpenStore = createStore<{ readonly open: boolean }>(() => ({ open: false }));
+
+let closer: (() => void) | null = null;
+
+/** La fenêtre PiP enregistre ici sa sortie : le bouton de l'en-tête la ferme dans le geste, sans charger son chunk. */
+export function registerPipCloser(next: () => void): () => void {
+  closer = next;
+  return () => {
+    if (closer === next) closer = null;
+  };
+}
+
+export function requestCallPipExit(): void {
+  closer?.();
+}
+
 /** `contain` pour un écran partagé (#8164) : un document ou un tableau se lit ENTIER, sur le fond neutre ; une caméra reste recadrée. */
 export type PipSource = { readonly stream: MediaStream; readonly mirrored: boolean; readonly fit: 'cover' | 'contain' };
 

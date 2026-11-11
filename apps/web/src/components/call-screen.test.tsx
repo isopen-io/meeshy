@@ -124,6 +124,11 @@ describe('CallScreen', () => {
     expect(screen({ phase: { kind: 'ended', reason: 'local', detail: null } })).not.toContain('Réessayer');
   });
 
+  test('« Micro coupé » reste à l’appel audio : en duo vidéo, aucune pastille au-dessus de la scène (P7.4)', () => {
+    expect(screen({ micMuted: true, members: { 'u-peer': member() } })).toContain('data-call-pill="mic-muted"');
+    expect(screen({ micMuted: true, cameraOn: true, members: { 'u-peer': member() } })).not.toContain('data-call-pill="mic-muted"');
+  });
+
   test('le micro coupé du pair se lit en pastille', () => {
     expect(screen({ members: { 'u-peer': member({ micMuted: true }) } })).toContain('data-call-pill="peer-muted"');
   });
@@ -160,9 +165,27 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
     expect(html).not.toContain('data-call-row');
   });
 
-  test('la puce « Nom · durée » de l’en-tête, une fois connecté', () => {
-    expect(screen({ members: { 'u-peer': member() } })).toContain('data-call-chip=""');
-    expect(screen({ phase: { kind: 'outgoing' }, connectedAt: null })).not.toContain('data-call-chip');
+  test('la capsule de l’en-tête : vidéo « nom · durée » une fois connecté, rien avant (#17341)', () => {
+    expect(screen({ cameraOn: true, members: { 'u-peer': member() } })).toContain('data-call-chip=""');
+    expect(screen({ cameraOn: true, phase: { kind: 'outgoing' }, connectedAt: null })).not.toContain('data-call-chip');
+  });
+
+  test('en audio, la capsule n’existe que si le réseau se dégrade — nom et durée sont déjà sous l’avatar (#17341)', () => {
+    const level = (name: 'good' | 'poor') => ({ level: name, packetLoss: 0, rtt: 0, jitter: 0, audioKbps: 0, videoKbps: 0, survival: 'sending' as const });
+    expect(screen({ members: { 'u-peer': member() }, quality: level('good') })).not.toContain('data-call-chip');
+    expect(screen({ members: { 'u-peer': member() }, quality: level('poor') })).toContain('data-call-chip=""');
+  });
+
+  test('en groupe, la capsule porte le nom, le nombre de participants (moi compris) et la durée', () => {
+    const html = screen({ isGroup: true, title: 'Famille', members: { 'u-a': member({ userId: 'u-a' }), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } });
+    expect(html).toContain('data-call-chip=""');
+    expect(html).toContain('Famille');
+    expect(html).toMatch(/data-call-chip-count[^>]*>.*?3<\/span>/);
+  });
+
+  test('en groupe, un invité qui sonne encore n’entre pas dans le nombre (comme iOS, #17493)', () => {
+    const html = screen({ isGroup: true, title: 'Famille', members: { 'u-a': member({ userId: 'u-a' }), 'u-b': member({ userId: 'u-b', name: 'Bintou' }), 'u-c': member({ userId: 'u-c', name: 'Codou', link: 'ringing' }) } });
+    expect(html).toMatch(/data-call-chip-count[^>]*>.*?3<\/span>/);
   });
 
   test('Réduire est un bouton de verre isolé', () => {
@@ -728,20 +751,27 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   const tapStage = (view: ReturnType<typeof mount>) => act(() => (view.find('[data-call-stage-surface]') as HTMLElement | null)?.click());
 
-  test('les sous-titres ne s’effacent pas avec les commandes — même sortis du cadre d’une pilule de groupe', async () => {
+  test('les sous-titres vivent DANS la pilule, (…) les range, et ils ne s’effacent pas avec les commandes : la pilule rangée les laisse dans un verre à eux (#17343, loi 11)', async () => {
     const view = mount({ isGroup: true, cameraOn: true, members: peers, captionsMode: 'translated' });
-    view.press('[data-call-more]');
     await act(async () => {
       await import('./call-captions-panel');
     });
     const panel = () => view.find('[data-call-captions-panel]');
     expect(panel()?.getAttribute('data-call-captions-surface')).toBe('inset');
+    expect(panel()?.closest('[data-call-control-pill]')).not.toBeNull();
+    view.press('[data-call-more]');
+    expect(panel()?.closest('[data-leaving][inert]')).not.toBeNull();
+    view.press('[data-call-more]');
+    expect(panel()?.getAttribute('data-call-captions-surface')).toBe('inset');
+    expect(panel()?.closest('[data-leaving]')).toBeNull();
     tapStage(view);
     await act(async () => {});
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
-    expect(panel()).not.toBeNull();
-    expect(panel()?.closest('[aria-hidden="true"]')).toBeNull();
-    expect(panel()?.getAttribute('data-call-captions-surface')).toBe('glass');
+    const alone = view.find('[data-call-captions-band] [data-call-captions-panel]');
+    expect(alone).not.toBeNull();
+    expect(alone?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(alone?.closest('[data-call-control-pill]')).toBeNull();
+    expect(alone?.getAttribute('data-call-captions-surface')).toBe('glass');
     view.done();
   });
 
@@ -894,7 +924,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   test('la durée de la puce avance chaque seconde (#8735)', () =>
     onFakeClock(() => {
-      const view = mount({ connectedAt: Date.now(), members: { 'u-peer': member() } });
+      const view = mount({ connectedAt: Date.now(), cameraOn: true, members: { 'u-peer': member() } });
       const chip = () => view.find('[data-call-chip]')?.textContent ?? '';
       expect(chip()).toContain('0:00');
       act(() => jest.advanceTimersByTime(2000));

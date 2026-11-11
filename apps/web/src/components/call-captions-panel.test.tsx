@@ -7,10 +7,13 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
 import type { ActiveCall } from '@/lib/calls/call-store';
-import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
 import { CallCaptionsPanel } from './call-captions-panel';
+
+const footerOf = (html: string): string => html.slice(html.indexOf('data-call-captions-footer'));
 
 const colorOf = (line: Pick<CallCaption, 'speakerId' | 'speakerName'>): string => speakerColor(line.speakerId, line.speakerName);
 
@@ -144,7 +147,8 @@ describe('#16665 — la capture dans le bandeau (R1)', () => {
 describe('les gestes', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    await loadCallControlsCatalog('fr');
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
@@ -175,13 +179,63 @@ describe('les gestes', () => {
     expect(view.host.querySelector('[data-call-caption-original]')).toBeNull();
     view.press('[data-call-caption-line="w-1"]');
     const original = view.host.querySelector('[data-call-caption-original]');
-    expect(original?.textContent).toBe('Hello everyone');
-    expect(original?.getAttribute('dir')).toBe('auto');
-    expect(original?.getAttribute('lang')).toBe('en');
+    expect(original?.textContent).toBe('Original · Hello everyone');
+    expect(original?.getAttribute('dir')).toBe('ltr');
+    const text = view.host.querySelector('[data-call-caption-original-text]');
+    expect(text?.textContent).toBe('Hello everyone');
+    expect(text?.getAttribute('dir')).toBe('auto');
+    expect(text?.getAttribute('lang')).toBe('en');
     expect(view.host.querySelector('[data-call-caption-line="w-1"]')?.getAttribute('aria-expanded')).toBe('true');
     view.press('[data-call-caption-line="w-1"]');
+    expect(view.host.querySelector('[data-call-caption-line="w-1"]')?.getAttribute('aria-expanded')).toBe('false');
+    view.done();
+  });
+
+  const settle = (ms: number) => act(async () => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+
+  test('rien n’apparaît ni ne disparaît d’un coup : l’original déplié repart sous la phrase le temps d’un fondu, inerte, puis ne laisse rien', async () => {
+    const view = mount();
+    view.press('[data-call-caption-line="w-1"]');
+    expect(view.host.querySelector('[data-call-caption-original]')?.hasAttribute('data-leaving')).toBe(false);
+    view.press('[data-call-caption-line="w-1"]');
+    const leaving = view.host.querySelector('[data-call-caption-original]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.getAttribute('aria-hidden')).toBe('true');
+    await settle(260);
     expect(view.host.querySelector('[data-call-caption-original]')).toBeNull();
     view.done();
+  });
+
+  test('les trois points retombent en fondu à l’échéance, et le lecteur d’écran n’entend plus l’attente', async () => {
+    const view = mount({ captions: [caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: Date.now() + 40 } })] });
+    expect(view.host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(false);
+    expect(view.host.textContent).toContain('Traduction en cours');
+    await settle(80);
+    expect(view.host.querySelector('[data-call-caption-waiting]')?.hasAttribute('data-leaving')).toBe(true);
+    expect(view.host.textContent).not.toContain('Traduction en cours');
+    await settle(260);
+    expect(view.host.querySelector('[data-call-caption-waiting]')).toBeNull();
+    expect(view.host.querySelector('[data-call-caption-languages]')?.textContent).toBe('ES');
+    view.done();
+  });
+
+  test('le pied pose le bouton Journal quand l’appel peut l’ouvrir, et il l’ouvre (#17346)', () => {
+    const opened: string[] = [];
+    const view = mount();
+    expect(view.host.querySelector('[data-call-captions-journal]')).toBeNull();
+    view.done();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<CallCaptionsPanel call={call()} language="fr" colorOf={colorOf} onOpenJournal={() => opened.push('journal')} />));
+    const button = host.querySelector('[data-call-captions-journal]') as HTMLElement | null;
+    expect(button?.textContent).toBe('Journal');
+    expect(host.querySelector('[data-call-captions-footer]')?.contains(button)).toBe(true);
+    act(() => button?.click());
+    expect(opened).toEqual(['journal']);
+    act(() => root.unmount());
+    host.remove();
   });
 
   test('une ligne qui EST l’original ne promet rien à déplier', () => {
@@ -198,6 +252,86 @@ describe('les gestes', () => {
   });
 });
 
+/**
+ * LA PHRASE DIT SA LANGUE, SON ATTENTE ET « MOI » (planche P3-P5, miroir d'iOS
+ * `CallCaptionLine`) : l'original d'une langue hors du Prisme part tout de suite,
+ * étiqueté « EN », avec trois points tant qu'une traduction est attendue ; ma ligne
+ * se dit « Moi » ; la région annonce « Sous-titres de l'appel ».
+ */
+describe('la phrase dit sa langue d’origine et son attente de traduction', () => {
+  const spanish = (until: number | null, overrides: Partial<CallCaption> = {}) =>
+    caption({ id: 'w-es', original: 'Hola a todos', translated: null, pair: null, origin: { language: 'es', foreign: true, awaitingUntil: until }, ...overrides });
+  const soon = () => Date.now() + 60_000;
+
+  test('l’original d’une langue étrangère porte sa langue seule, sans flèche', () => {
+    const html = panel({ captions: [spanish(null)] });
+    expect(html).toMatch(/data-call-caption-languages="">ES</);
+    expect(html).not.toContain('→');
+    expect(html).not.toContain('data-call-caption-waiting');
+  });
+
+  test('une traduction attendue ajoute trois points, cachés, et le dit au lecteur d’écran', () => {
+    const html = panel({ captions: [spanish(soon())] });
+    const dots = html.match(/data-call-caption-waiting=""><span class="inline-flex[^"]*" aria-hidden="true">((?:<span[^>]*><\/span>)+)<\/span>/)?.[1] ?? '';
+    expect(dots.match(/<span[^>]*typingDot[^>]*><\/span>/g)).toHaveLength(3);
+    expect(html).toContain('<span class="sr-only">, Traduction en cours</span>');
+  });
+
+  test('l’échéance passée, les points tombent et l’étiquette de la langue reste', () => {
+    const html = panel({ captions: [spanish(Date.now() - 1)] });
+    expect(html).not.toContain('data-call-caption-waiting');
+    expect(html).toMatch(/data-call-caption-languages="">ES</);
+  });
+
+  test('une phrase non finale n’attend rien et reste pâle ; une langue du lecteur n’est pas étiquetée', () => {
+    expect(panel({ captions: [spanish(null, { isFinal: false })] })).toContain('opacity:0.7');
+    const html = panel({ captions: [spanish(null, { original: 'Bonjour', origin: { language: 'fr', foreign: false, awaitingUntil: null } })] });
+    expect(html).not.toContain('data-call-caption-languages');
+  });
+
+  test('la traduction arrivée remplace l’original sur place : « EN → FR », plus de points', () => {
+    const html = panel({ captions: [caption({ origin: { language: 'en', foreign: true, awaitingUntil: null } })] });
+    expect(html).toContain('EN → FR');
+    expect(html).not.toContain('data-call-caption-waiting');
+  });
+
+  test('ma ligne se dit « Moi » (« Me » en anglais), sans étiquette de langue ; le fil garde « Vous »', async () => {
+    const mine = caption({ id: 'w-me', speakerId: 'u-me', mine: true, translated: null, pair: null, original: 'Salut', origin: null });
+    expect(panel({ captions: [mine] })).toContain('Moi · </strong>');
+    expect(panel({ captions: [mine] })).not.toContain('Vous');
+    expect(panel({ captions: [mine] })).not.toContain('data-call-caption-languages');
+    await loadInterfaceCatalog('en');
+    expect(renderToStaticMarkup(<CallCaptionsPanel call={call({ captions: [mine] })} language="en" colorOf={colorOf} />)).toContain('Me · </strong>');
+    expect(translate('fr', 'message.author.self')).toBe('Vous');
+  });
+
+  test('la région annonce « Sous-titres de l’appel », pas la légende du bouton', () => {
+    const html = panel();
+    expect(html).toContain('aria-label="Sous-titres de l’appel"');
+    expect(html).not.toContain('aria-label="Sous-titres"');
+  });
+
+  test('le pied dit la traduction attendue, puis les langues comptées quand il y en a plusieurs', () => {
+    expect(footerOf(panel({ captions: [spanish(soon())] }))).toContain('ES · traduction en cours');
+    const mixed = [caption({ id: 'a', at: 1 }), caption({ id: 'b', at: 2, translated: 'Hola', pair: { from: 'es', to: 'fr' }, original: 'Hola a todos' })];
+    expect(footerOf(panel({ captions: mixed }))).toContain('Traduit · 3 langues');
+  });
+
+  test('toute la bande retient son toucher : elle ne range pas les commandes d’une scène vidéo', () => {
+    expect(panel()).toMatch(/<section[^>]*data-call-chrome-keep=""/);
+  });
+
+  test('les nouveaux textes existent dans les sept langues', async () => {
+    await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadInterfaceCatalog(language)));
+    const keys = ['callCaptions.self', 'callCaptions.regionLabel', 'callCaptions.translating', 'callCaptions.footer.translating', 'callCaptions.footer.translatedLanguages.other', 'callCaptions.footer.translatedLanguages.one'] as const;
+    for (const key of keys) {
+      const texts = SUPPORTED_INTERFACE_LANGUAGES.map((language) => translate(language, key, { language: 'ES', count: '3' }));
+      expect(texts.every((text) => text !== '' && !text.includes('{'))).toBe(true);
+      expect(new Set(texts).size).toBeGreaterThan(5);
+    }
+  });
+});
+
 describe('la voix non transcrite (#9142)', () => {
   test('la note ne nomme pas le navigateur : la coque Android n’en a pas, et la note y est permanente', async () => {
     await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadInterfaceCatalog(language)));
@@ -206,5 +340,39 @@ describe('la voix non transcrite (#9142)', () => {
     );
     expect(notes.every((note) => note !== '')).toBe(true);
     expect(notes.filter((note) => /navigateur|browser|navegador|المتصفح/i.test(note))).toEqual([]);
+  });
+});
+
+/**
+ * #17343 · #17473 — LE PIED, COMME SUR iOS (`CallCaptionsFooter`) : il dit la paire
+ * de la dernière phrase TRADUITE et le geste qui montre l'original, dans les sept
+ * langues ; sans phrase traduite, il ne dit rien de plus — aucune étiquette de mode
+ * qu'iOS ne pose pas. La note de la voix non transcrite (#9142) y reste.
+ */
+describe('le pied des sous-titres, aligné sur iOS (#17473)', () => {
+  test('une phrase traduite : « EN → FR · toucher = original », sur une ligne', () => {
+    const footer = footerOf(panel());
+    expect(footer).toContain('EN → FR · toucher = original');
+    expect(footer).toMatch(/<span class="truncate"[^>]*data-call-captions-pair="EN → FR">/);
+  });
+
+  test('sans phrase traduite, le pied ne pose aucune étiquette de mode', () => {
+    for (const html of [panel({ captionsMode: 'original' }), panel({ captions: [caption({ translated: null, pair: null })] }), panel({ captions: [] })]) {
+      const footer = footerOf(html);
+      expect(footer).not.toContain('data-call-captions-pair');
+      expect(footer).not.toContain('Traduits dans votre langue');
+      expect(footer).not.toContain('Dans la langue d’origine');
+    }
+  });
+
+  test('la note de la voix non transcrite reste au pied', () => {
+    expect(footerOf(panel({ transcription: 'unsupported', captionsMode: 'original' }))).toContain('data-call-captions-note="unsupported"');
+  });
+
+  test('le geste est dit dans les sept langues, avec la paire en tête comme sur iOS', async () => {
+    await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadInterfaceCatalog(language)));
+    const footers = SUPPORTED_INTERFACE_LANGUAGES.map((language) => renderToStaticMarkup(<CallCaptionsPanel call={call()} language={language} colorOf={colorOf} />).match(/data-call-captions-pair="EN → FR"[^>]*>([^<]*)</)?.[1] ?? '');
+    expect(footers).toHaveLength(7);
+    expect(footers.every((footer) => footer.startsWith('EN → FR · ') && footer.length > 'EN → FR · '.length)).toBe(true);
   });
 });

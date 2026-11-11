@@ -56,6 +56,8 @@ fun CallScreen(
     config: CallConfig,
     onClose: () -> Unit,
     onMinimize: () -> Unit = {},
+    /** #17329 — le bouton Conversation de l'en-tête OUVRE la conversation (il ne réduit pas l'appel). */
+    onOpenConversation: () -> Unit = onMinimize,
     /** Bouton « Répondre » de la notification : décrocher dès l'arrivée (gated permissions). */
     autoAnswer: Boolean = false,
     viewModel: CallViewModel = hiltViewModel(),
@@ -79,6 +81,8 @@ fun CallScreen(
     val pipViewModel: CallPictureInPictureViewModel = hiltViewModel()
     val autoAnswerGate: IncomingAutoAnswerViewModel = hiltViewModel()
     val inPip by pipViewModel.inPip.collectAsStateWithLifecycle()
+    val headerConversationId = config.conversationId.ifBlank { viewModel.activeConfig.conversationId }
+    val headerNames by rememberCallHeaderNames(headerConversationId)
     DisposableEffect(pipViewModel) {
         pipViewModel.callScreenShown(true)
         onDispose { pipViewModel.callScreenShown(false) }
@@ -341,8 +345,8 @@ fun CallScreen(
                 )
             }
 
-            // En-tête (miroir de iOS `topChrome`) : Réduire · Conversation à gauche, puce durée · signal à
-            // droite en vidéo établie. Il s'efface avec la pilule d'un toucher sur la scène.
+            // En-tête (miroir de iOS `topChrome`) : Réduire · Image dans l'image · Conversation à gauche, capsule à
+            // droite (nom · durée en vidéo, réseau dégradé seul en audio). Il s'efface avec la pilule d'un toucher sur la scène.
             var qualityDetailOpen by remember { mutableStateOf(false) }
             if (qualityDetailOpen) CallQualitySheet(onDismiss = { qualityDetailOpen = false })
             if (CallPillPresenter.isMinimizable(state.status)) {
@@ -353,12 +357,19 @@ fun CallScreen(
                 ) {
                     CallHeaderBar(
                         state = state,
-                        conversationId = config.conversationId.ifBlank { viewModel.activeConfig.conversationId },
+                        conversationId = headerConversationId,
                         showsMinimize = true,
                         onMinimize = onMinimize,
                         modifier = Modifier.padding(top = MeeshySpacing.xs),
                         isVideoStage = duo.videoStage,
                         onOpenQualityDetail = { qualityDetailOpen = true },
+                        isGroupStage = groupShown,
+                        names = headerNames,
+                        participantCount = groupMesh.roster.participantCount,
+                        canEnterPictureInPicture = pipViewModel.offers(state),
+                        isPictureInPictureActive = inPip,
+                        onEnterPictureInPicture = pipViewModel::enter,
+                        onOpenConversation = onOpenConversation,
                     )
                 }
             }
@@ -399,11 +410,6 @@ fun CallScreen(
                     mesh = groupMesh,
                     onDismiss = chrome::backToMenu,
                 )
-            }
-
-            // Le journal de la transcription : une feuille, comme iOS ; la fermer rend le menu de la pilule.
-            if (chromeState.layer.openPanel == CallScreenPanel.Journal) {
-                CallCaptionsJournalSheet(onDismiss = chrome::backToMenu, viewModel = captionsViewModel, captures = state.liveCaptures, peerName = state.peerName)
             }
 
             CallToastHost(

@@ -9,6 +9,7 @@ import { IDLE, layerChrome, layerOffered, nextLayer, type CallScreenLayer } from
  */
 
 const menu: CallScreenLayer = { kind: 'menu' };
+const menuOverJournal: CallScreenLayer = { kind: 'menu', stowed: 'journal' };
 const panel = (name: 'react' | 'record' | 'people' | 'journal'): CallScreenLayer => ({ kind: 'panel', panel: name });
 const mode = (name: 'effects' | 'montage'): CallScreenLayer => ({ kind: 'mode', mode: name });
 
@@ -18,8 +19,23 @@ describe('nextLayer', () => {
     expect(nextLayer(menu, { type: 'toggle-menu' })).toEqual(IDLE);
   });
 
-  test('(…) sur un panneau ferme tout', () => {
+  test('(…) sur un panneau ferme tout — sauf le journal, qu’il RANGE (#17343)', () => {
     expect(nextLayer(panel('react'), { type: 'toggle-menu' })).toEqual(IDLE);
+    expect(nextLayer(panel('record'), { type: 'toggle-menu' })).toEqual(IDLE);
+    expect(nextLayer(panel('people'), { type: 'toggle-menu' })).toEqual(IDLE);
+  });
+
+  test('#17343 — (…) sur un journal ouvert le range derrière le menu : il ne ferme rien, et refermer les actions le rend', () => {
+    expect(nextLayer(panel('journal'), { type: 'toggle-menu' })).toEqual(menuOverJournal);
+    expect(nextLayer(menuOverJournal, { type: 'toggle-menu' })).toEqual(panel('journal'));
+  });
+
+  test('#17343 — le menu ouvert par-dessus un journal est un menu : ouvrir une option l’ouvre, ✕ ferme tout, ‹ ne change rien', () => {
+    expect(nextLayer(menuOverJournal, { type: 'open-panel', panel: 'journal' })).toEqual(panel('journal'));
+    expect(nextLayer(menuOverJournal, { type: 'open-panel', panel: 'react' })).toEqual(panel('react'));
+    expect(nextLayer(menuOverJournal, { type: 'close' })).toEqual(IDLE);
+    expect(nextLayer(menuOverJournal, { type: 'back' })).toEqual(menuOverJournal);
+    expect(nextLayer(menuOverJournal, { type: 'enter-mode', mode: 'effects' })).toEqual(mode('effects'));
   });
 
   test('un panneau REMPLACE les rangées ; rouvrir le même revient au menu', () => {
@@ -77,6 +93,11 @@ describe('layerOffered', () => {
   test('un panneau qui n’est plus offert rend le menu', () => {
     expect(layerOffered(panel('record'), { ...all, record: false })).toEqual(menu);
   });
+
+  test('#17343 — un journal rangé dont le journal n’est plus offert rend le menu, sans journal à rendre', () => {
+    expect(layerOffered(menuOverJournal, all)).toEqual(menuOverJournal);
+    expect(layerOffered(menuOverJournal, { ...all, journal: false })).toEqual(menu);
+  });
 });
 
 describe('layerChrome', () => {
@@ -89,6 +110,14 @@ describe('layerChrome', () => {
 
   test('menu : les rangées au-dessus de la pilule', () => {
     expect(layerChrome(menu)).toEqual({ header: true, pill: true, rows: true, panel: null, mode: null, selfZoom: true });
+  });
+
+  test('#17343 — le menu par-dessus un journal est un menu : les rangées sortent, aucun panneau n’est ouvert', () => {
+    expect(layerChrome(menuOverJournal)).toEqual(layerChrome(menu));
+  });
+
+  test('#17343 — le journal ouvert ne libère pas l’écran : l’en-tête et le zoom de ma vignette restent', () => {
+    expect(layerChrome(panel('journal'))).toEqual({ header: true, pill: true, rows: false, panel: 'journal', mode: null, selfZoom: true });
   });
 
   test('panneau : il remplace les rangées', () => {

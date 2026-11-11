@@ -45,7 +45,7 @@ const EXEMPTIONS: readonly Exemption[] = [
   { fichier: 'routes/onboarding-profile.tsx', combien: 1, pourquoi: 'l’aperçu de « Montre-toi » (#17237) — la photo que le nouveau compte pose, sans décor équipé à ce stade' },
   { fichier: 'components/call-bubble.tsx', combien: 1, pourquoi: `appels — ${NON_SERVI}` },
   { fichier: 'components/call-grid.tsx', combien: 2, pourquoi: `appels — ${NON_SERVI}` },
-  { fichier: 'components/call-overlay.tsx', combien: 1, pourquoi: `appels — ${NON_SERVI}` },
+  { fichier: 'components/call-waiting-banner.tsx', combien: 1, pourquoi: `appels — ${NON_SERVI}` },
   { fichier: 'components/call-pip-window.tsx', combien: 1, pourquoi: `appels — ${NON_SERVI}` },
   { fichier: 'routes/call-detail-parts.tsx', combien: 1, pourquoi: `appels — ${NON_SERVI}` },
   { fichier: 'routes/calls-parts.tsx', combien: 1, pourquoi: `appels — ${NON_SERVI}` },
