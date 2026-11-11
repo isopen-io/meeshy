@@ -21,7 +21,8 @@ extension CallView {
             isLocal: segment.speakerId == localUserId,
             speakerName: speakerName(for: segment, localUserId: localUserId),
             prefersOriginal: showOriginalText,
-            isRevealed: revealedCaptionIds.contains(segment.id)
+            isRevealed: revealedCaptionIds.contains(segment.id),
+            readerPrism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         )
     }
 
@@ -33,9 +34,7 @@ extension CallView {
     /// confiance), puis l'interlocuteur du duo, puis ce que le fil transporte.
     func speakerName(for segment: CallTranscriptionSegment, localUserId: String) -> String {
         if segment.speakerId == localUserId {
-            return AuthManager.shared.currentUser?.displayName
-                ?? AuthManager.shared.currentUser?.username
-                ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+            return String(localized: "common.me", defaultValue: "Moi", bundle: .main)
         }
         if isGroupStage,
            let member = mesh.roster.members.first(where: { $0.userId == segment.speakerId }),
@@ -56,8 +55,8 @@ extension CallView {
     }
 
     /// Les sous-titres : les deux dernières phrases, puis leur pied. Ils vivent dans
-    /// la pilule (`hasOwnGlass: false`, #17343) ; seuls les sous-titres rangés (la
-    /// pilule est cachée) et ceux d'un mode (Effets, Montage) ont un verre à eux.
+    /// la pilule (`hasOwnGlass: false`, #17343), rangée ou non (le même verre se resserre,
+    /// #17532) ; seuls ceux d'un mode (Effets, Montage) ont un verre à eux.
     func captionsBand(hasOwnGlass: Bool, opensJournal: Bool = true) -> some View {
         CallCaptionsBand(
             lines: journal.items.suffix(2).map(journal.line),
@@ -70,17 +69,6 @@ extension CallView {
     /// #17343 — ce que la pilule porte de texte au-dessus de sa rangée de base.
     var pillText: CallPillText {
         CallPillText.resolve(isCaptionsEnabled: showTranscript, layer: layer, isChromeRevealed: isChromeVisible)
-    }
-
-    /// Loi 11 — un toucher range la pilule, les sous-titres restent dans un verre
-    /// sans sa rangée de base, à la place qu'elle occupait.
-    @ViewBuilder
-    var stowedCaptions: some View {
-        if pillText == .captionsAlone {
-            captionsBand(hasOwnGlass: true)
-                .frame(maxWidth: CallPillWidth.maxWidth(for: .captionsAlone))
-                .transition(.opacity)
-        }
     }
 
     func journalActionButton(captioned: Bool, diameter: CGFloat) -> some View {
@@ -122,8 +110,8 @@ extension CallView {
         guard showTranscript, UIAccessibility.isVoiceOverRunning,
               let id = latestFinalRemoteSegmentId,
               let segment = transcriptionService.displayedSegments.last(where: { $0.id == id }),
-              let announcement = captionLine(for: segment).announcement else { return }
-        UIAccessibility.post(notification: .announcement, argument: announcement)
+              let queued = captionLine(for: segment).queuedAnnouncement else { return }
+        UIAccessibility.post(notification: .announcement, argument: queued)
     }
 
     // MARK: - Captions mode

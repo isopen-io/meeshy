@@ -65,7 +65,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         let families = try XCTUnwrap(pill.range(of: "familyRows(disposition.pillRows(actions, layer: layer))"))
         let base = try XCTUnwrap(pill.range(of: "baseRow"))
         let glass = try XCTUnwrap(pill.range(of: ".callControlsGlass(in:"))
-        XCTAssertTrue(pill.contains("if disposition.unfoldsPill(for: layer) {"), "La pilule se déplie par la loi, pas par l'état seul du (…)")
+        XCTAssertTrue(pill.contains("if text.hasBaseRow, disposition.unfoldsPill(for: layer) {"), "La pilule se déplie par la loi, pas par l'état seul du (…)")
         XCTAssertTrue(pill.contains("let disposition = controlsDisposition"))
         XCTAssertTrue(pill.contains("if let panel = layer.pillPanel {"), "Le panneau se lit dans CallScreenLayer")
         let alternative = String(pill[panel.upperBound ..< families.lowerBound])
@@ -342,7 +342,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(pip.contains("tapCameraMenu"), "Plus de grille repliée dans la vignette")
         XCTAssertFalse(code.contains("foldedCameraButton"))
         XCTAssertFalse(code.contains("cameraControlsGrid"))
-        XCTAssertTrue(pip.contains(".onTapGesture { swapPictureInPicture() }"), "Toucher la vignette permute")
+        XCTAssertTrue(pip.contains(".onTapGesture { tapPictureInPicture() }"), "Toucher la vignette permute (contrôles rendus d’abord, G1.9)")
         XCTAssertTrue(pip.contains("selfTilePinchGesture"))
         let center = try block("func pipCenter(", until: "func pipTileSize(", in: code)
         XCTAssertFalse(center.contains("restingCenter"), "La vignette ne réserve plus la place de rangées")
@@ -385,5 +385,27 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(code.contains("case .systemPiP: enterSystemPiP()"))
         XCTAssertTrue(code.contains("CallPiPPolicy.shouldFallBackToPill("))
         XCTAssertTrue(code.contains("CallPiPPolicy.swipeDownOutcome("))
+    }
+
+    /// G3.2 — l'option Enregistrer : titre centré, phrase d'accord, deux puces larges
+    /// Audio | Vidéo côte à côte qui lancent la demande ; aucune rangée défilante.
+    func test_recordingPanel_isCenteredTitle_consentLine_andTwoWideChoices() throws {
+        let recording = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Recording.swift"))
+        let launch = try block("var recordingPanelRows: some View {", until: "\n    }\n", in: recording)
+        XCTAssertTrue(launch.contains("callManager.recording.request(kind: kind)"), "Un choix lance aussitôt la demande d'accord")
+        XCTAssertTrue(launch.contains("closePanel()"))
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
+        let panel = try block("struct CallRecordingPanel: View {", until: "/// La couche d'enregistrement", in: try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
+        XCTAssertFalse(panel.contains("CallPillRow"), "Deux puces larges côte à côte, pas une rangée défilante de 68 pt")
+        XCTAssertFalse(panel.contains("CallPillChip"))
+        XCTAssertTrue(panel.contains("CallRecordingCopy.consent"), "Tout le monde doit accepter : la phrase est écrite")
+        XCTAssertTrue(panel.contains("CallRecordingChoiceChip("))
+        XCTAssertTrue(controls.contains("callChipGlass("), "La puce est le verre adaptatif, jamais un verre dessiné")
+        let row = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallPillRow.swift"))
+        let header = try block("struct CallPanelHeader: View {", until: "struct CallPanelHeaderButton", in: row)
+        XCTAssertFalse(header.contains("Spacer(minLength: 0)"), "Le titre est centré, il ne suit pas le Retour")
+        XCTAssertTrue(header.contains(".frame(maxWidth: .infinity)"))
+        let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        XCTAssertTrue(pill.contains("layer.captionsBaseRow"), "La rangée de base n'est pas légendée sous une option")
     }
 }

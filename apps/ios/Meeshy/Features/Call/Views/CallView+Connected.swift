@@ -276,7 +276,7 @@ extension CallView {
     /// la racine, il recalculerait tout l'écran d'appel.
     func noteChromeInteraction(_ interaction: CallChromeInteraction) {
         guard interaction.revealsChrome, !showControls else { return }
-        withAnimation(.easeInOut(duration: CallChromeVisibility.fadeDuration)) { showControls = true }
+        withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { showControls = true }
     }
 
     func toggleControls() {
@@ -284,7 +284,7 @@ extension CallView {
             return tapCameraMenu(.elsewhere)
         }
         guard CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage) else { return }
-        withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
+        withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { showControls.toggle() }
     }
 
     /// Whether to render the full-screen LOCAL self-preview as the call
@@ -494,17 +494,23 @@ extension CallView {
             // reversed text/scene — bug k).
             LocalCameraVideoView(track: callManager.localVideoTrack, intendedFront: callManager.isUsingFrontCamera, contentMode: contentMode)
         } else {
-            switch remoteVideoSurface {
-            case .live:
-                CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
-            case .cameraOff:
-                // Peer turned its camera off (or sends no image at
-                // all): avatar placeholder, never the frozen last
-                // frame nor an endless spinner.
-                remoteCameraOffPlaceholder
-            case .connecting:
-                connectingVideoPlaceholder
+            ZStack {
+                switch remoteVideoSurface {
+                case .live:
+                    CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
+                        .transition(.opacity)
+                case .cameraOff:
+                    // Peer turned its camera off (or sends no image at
+                    // all): avatar placeholder, never the frozen last
+                    // frame nor an endless spinner.
+                    remoteCameraOffPlaceholder
+                        .transition(.opacity)
+                case .connecting:
+                    connectingVideoPlaceholder
+                        .transition(.opacity)
+                }
             }
+            .animation(.easeInOut(duration: CallRemoteVideoFade.duration(reduceMotion: reduceMotion)), value: remoteVideoSurface)
         }
     }
 
@@ -557,10 +563,51 @@ extension CallView {
     // its camera off, so the user sees the peer's avatar rather than a frozen
     // last frame.
     private var remoteCameraOffPlaceholder: some View {
+        CallRemoteCameraOffPlaceholder(peerUserId: callManager.remoteUserId, relayedSpeaking: CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds, peer: callManager.remoteUserId), sampleLevel: { await callManager.primaryAudioLevel() }) {
+            avatarFace(size: 96, accentHex: $0)
+        }
+    }
+}
+
+/// G4.2 — la caméra du pair est coupée : son avatar, et l'anneau et le halo de SA
+/// couleur quand il parle (rien au repos). La décoration de profil reste sous
+/// l'anneau, dans le visage. Le niveau reçu est relevé tant que l'écran est là,
+/// sauf quand le maillage d'un groupe le relève déjà (`relayedSpeaking`).
+struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {
+    let peerUserId: String?
+    let relayedSpeaking: Bool?
+    let sampleLevel: () async -> Double?
+    @ViewBuilder let avatar: (String) -> Avatar
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sampledSpeaking = false
+
+    private var isSpeaking: Bool { relayedSpeaking ?? sampledSpeaking }
+
+    var body: some View {
+        let hex = CallPeerSpeech.colorHex(forPeer: peerUserId)
+        let color = Color(uiColor: HexColor(hex: hex)?.uiColor ?? .white)
         ZStack {
             Color.black.opacity(MeeshyOpacity.strong)
             VStack(spacing: MeeshySpacing.mdPlus) {
-                avatarCircle(size: 96)
+                avatar(hex)
+                    .background {
+                        Circle()
+                            .fill(color.opacity(MeeshyOpacity.medium))
+                            .scaleEffect(1.25)
+                            .blur(radius: 14)
+                            .opacity(isSpeaking ? 1 : 0)
+                    }
+                    .overlay {
+                        Circle()
+                            .stroke(color, lineWidth: 3)
+                            .padding(-6)
+                            .opacity(isSpeaking ? 1 : 0)
+                    }
+                    .animation(
+                        .easeInOut(duration: CallRemoteVideoFade.duration(reduceMotion: reduceMotion)),
+                        value: isSpeaking
+                    )
                     .accessibilityHidden(true)
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "video.slash.fill")
@@ -574,6 +621,19 @@ extension CallView {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task(id: relayedSpeaking == nil) {
+            guard relayedSpeaking == nil else { return }
+            await followSpeech()
+        }
+    }
+
+    private func followSpeech() async {
+        var speech = CallPeerSpeech()
+        while !Task.isCancelled {
+            speech = speech.recording(level: await sampleLevel(), at: Date())
+            if speech.isSpeaking != sampledSpeaking { sampledSpeaking = speech.isSpeaking }
+            guard await cancellableSleep(for: .milliseconds(400)) else { return }
+        }
     }
 }
 

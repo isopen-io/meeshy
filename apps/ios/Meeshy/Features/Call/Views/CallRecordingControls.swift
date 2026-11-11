@@ -49,8 +49,13 @@ enum CallRecordingCopy {
     /// #8437 — les deux choix du bouton Enregistrer.
     static func kindLabel(_ kind: CallRecordingKind) -> String {
         kind == .video
-            ? String(localized: "call.recording.kind.video", defaultValue: "Audio et vidéo", bundle: .main)
-            : String(localized: "call.recording.kind.audio", defaultValue: "Audio seulement", bundle: .main)
+            ? String(localized: "call.recording.kind.video", defaultValue: "Vidéo", bundle: .main)
+            : String(localized: "call.recording.kind.audio", defaultValue: "Audio", bundle: .main)
+    }
+
+    /// G3.2 — ce que l'option dit avant les deux choix.
+    static var consent: String {
+        String(localized: "call.recording.consent", defaultValue: "Tout le monde doit accepter. L’enregistrement s’arrête si quelqu’un rejoint.", bundle: .main)
     }
 
     static var kindHint: String {
@@ -97,6 +102,59 @@ enum CallRecordingCopy {
 
     static var bubbleLabel: String {
         String(localized: "bubble.call.recording.label", defaultValue: "Enregistrement de l’appel", bundle: .main)
+    }
+}
+
+/// G3.2 — un choix de l'option Enregistrer : une puce large de verre, qui lance aussitôt la demande.
+struct CallRecordingChoiceChip: View {
+    let title: String
+    let hint: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Capsule())
+                .callChipGlass(isActive: false, tint: .white)
+        }
+        .buttonStyle(CallPressButtonStyle(glassPressesItself: true))
+        .accessibilityLabel(title)
+        .accessibilityHint(hint)
+    }
+}
+
+/// G3.2 — l'option Enregistrer, DANS la pilule : le titre centré, la phrase d'accord,
+/// puis deux puces larges Audio | Vidéo qui lancent aussitôt la demande.
+struct CallRecordingPanel: View {
+    let onBack: () -> Void
+    let onClose: () -> Void
+    let onChoose: (CallRecordingKind) -> Void
+
+    var body: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            CallPanelHeader(title: CallRecordingCopy.label(isActive: false), onBack: onBack, onClose: onClose)
+            Text(CallRecordingCopy.consent)
+                .font(.footnote)
+                .foregroundStyle(MeeshyColors.mediaChromeSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, MeeshySpacing.lg)
+            AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
+                HStack(spacing: MeeshySpacing.sm) {
+                    ForEach([CallRecordingKind.audio, .video], id: \.self) { kind in
+                        CallRecordingChoiceChip(title: CallRecordingCopy.kindLabel(kind), hint: CallRecordingCopy.kindHint) {
+                            onChoose(kind)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.sm)
+        }
     }
 }
 

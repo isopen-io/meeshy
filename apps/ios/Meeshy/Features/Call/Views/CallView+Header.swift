@@ -41,6 +41,7 @@ extension CallView {
                 .animation(disclosureAnimation, value: headerActions)
                 .animation(disclosureAnimation, value: headerCapsule != nil)
             }
+            .modifier(CallEdgeStow(edge: .top, margin: Self.chromeTopInset, isVisible: isChromeVisible, reduceMotion: reduceMotion))
             Spacer()
         }
         .padding(.horizontal, MeeshySpacing.lg)

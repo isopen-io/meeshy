@@ -262,16 +262,20 @@ final class CallViewAccessibilityTests: XCTestCase {
         // conveys the state), and the icon+text row must read as one
         // VoiceOver stop, not two disjoint announcements.
         let source = try callViewSource()
-        guard let range = source.range(of: "private var remoteCameraOffPlaceholder: some View {") else {
+        // G4.2 : le placeholder est devenu `CallRemoteCameraOffPlaceholder` (anneau et
+        // halo de parole) ; `remoteCameraOffPlaceholder` ne fait plus que le monter
+        // avec le visage `avatarFace(size: 96, …)`.
+        guard let mount = source.range(of: "private var remoteCameraOffPlaceholder: some View {"),
+              let range = source.range(of: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {"),
+              let end = source.range(of: "private func followSpeech()", range: range.lowerBound ..< source.endIndex) else {
             XCTFail("CallView must define remoteCameraOffPlaceholder")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("avatarCircle(size: 96)"),
+            String(source[mount.lowerBound ..< range.lowerBound]).contains("avatarFace(size: 96"),
             "remoteCameraOffPlaceholder must show the peer's avatar in place of a frozen last frame."
         )
+        let body = String(source[range.lowerBound ..< end.lowerBound])
         XCTAssertTrue(
             body.contains(".accessibilityHidden(true)"),
             "The decorative avatar in remoteCameraOffPlaceholder must be hidden from VoiceOver — " +
