@@ -301,32 +301,32 @@
       "firstScreen": 27
     },
     "settings": {
-      "total": 131,
-      "firstScreen": 63
+      "total": 311,
+      "firstScreen": 106
     },
     "settings-appareils-chiffres": {
-      "total": 48,
-      "firstScreen": 48
+      "total": 121,
+      "firstScreen": 121
     },
     "settings-data-export": {
       "total": 5,
       "firstScreen": 5
     },
     "settings-notifications": {
-      "total": 5,
-      "firstScreen": 5
+      "total": 16,
+      "firstScreen": 16
     },
     "settings-packs": {
-      "total": 53,
-      "firstScreen": 53
+      "total": 76,
+      "firstScreen": 76
     },
     "settings-securite": {
-      "total": 46,
-      "firstScreen": 46
+      "total": 64,
+      "firstScreen": 64
     },
     "settings-verify-email-change": {
-      "total": 6,
-      "firstScreen": 6
+      "total": 20,
+      "firstScreen": 20
     },
     "share": {
       "total": 329,
