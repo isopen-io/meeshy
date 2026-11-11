@@ -159,7 +159,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
     func test_lImageIgnoreLesMarges_quandLeChromeLesRespecte() throws {
         // #9351 — le montage a quitté l'hôte pour `ComposerCaptureMount`, que la
         // barre de conversation monte aussi : ce que le témoin garde n'a pas bougé.
-        let hote = compact(try source("MeeshyComposerHost+Viewfinder.swift"))
+        let hote = compact(try source("ComposerSceneViewfinderMount.swift"))
         XCTAssertTrue(hote.contains("ComposerCaptureMount("), "le composer monte le montage unique")
         let code = compact(try source("ComposerCaptureMount.swift"))
         guard let début = code.range(of: "varbody:someView{"),
