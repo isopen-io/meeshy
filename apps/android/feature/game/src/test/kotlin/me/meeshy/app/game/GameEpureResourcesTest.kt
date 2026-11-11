@@ -212,7 +212,7 @@ class GameEpureResourcesTest {
         "game_concept_missions_use" to 120,
         "game2_prestige_confirm_access" to 60,
         "game2_league_pseudonym_drawn" to 80,
-        "game2_league_snapshot" to 80,
+        "game2_league_snapshot" to 115,
         "game_progression_empty" to 70,
         "game_photo_camera_denied" to 70,
         "game_photo_camera_unsupported" to 60,
@@ -248,7 +248,8 @@ class GameEpureResourcesTest {
         assertThat(text(R.string.game2_prestige_confirm_access)).isEqualTo("Ta joute et ton alliance restent ouvertes.")
         assertThat(text(R.string.game2_prestige_confirm_consent)).isEqualTo("Ton accord pour la joute publique reste enregistré.")
         assertThat(text(R.string.game2_league_pseudonym_drawn)).isEqualTo("Ton nom de joute est tiré au sort et change à chaque voyage.")
-        assertThat(text(R.string.game2_league_snapshot)).isEqualTo("Classement figé chaque jour à 4 h ; seule ta ligne est en direct.")
+        assertThat(text(R.string.game2_league_snapshot))
+            .isEqualTo("Classement figé chaque jour à 4 h : personne ne voit qui joue en ce moment. Seule ta ligne est en direct.")
     }
 
     @Test

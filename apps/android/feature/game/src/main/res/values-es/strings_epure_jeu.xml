@@ -32,7 +32,7 @@
     <string name="game_concept_missions_use">Abre un acto para ver por dónde vas. Puedes cambiar uno al día con una Meesh.</string>
     <string name="game2_prestige_confirm_access">Tu justa y tu alianza siguen abiertas.</string>
     <string name="game2_league_pseudonym_drawn">Tu nombre de justa se sortea y cambia con cada viaje.</string>
-    <string name="game2_league_snapshot">Clasificación fijada cada día a las 4 h; solo tu fila está en directo.</string>
+    <string name="game2_league_snapshot">Clasificación fijada cada día a las 4 h: nadie ve quién está jugando ahora. Solo tu fila está en directo.</string>
     <string name="game2_season_how">Los actos y las alianzas te hacen avanzar unos pasos. Todo el viaje es gratis.</string>
     <string name="game2_settings_celebrations_switch">Signos de los ancestros</string>
     <string name="game_guide_step_welcome_what">El juego en siete cartas</string>

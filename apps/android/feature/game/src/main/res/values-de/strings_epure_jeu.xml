@@ -32,7 +32,7 @@
     <string name="game_concept_missions_use">Öffne einen Akt, um zu sehen, wo du stehst. Einen pro Tag kannst du mit einer Meesh tauschen.</string>
     <string name="game2_prestige_confirm_access">Dein Turnier und dein Bündnis bleiben offen.</string>
     <string name="game2_league_pseudonym_drawn">Dein Turniername wird zugelost und wechselt mit jeder Reise.</string>
-    <string name="game2_league_snapshot">Rangliste täglich um 4 Uhr festgehalten; nur deine Zeile ist live.</string>
+    <string name="game2_league_snapshot">Rangliste täglich um 4 Uhr festgehalten: Niemand sieht, wer gerade spielt. Nur deine Zeile ist live.</string>
     <string name="game2_season_how">Akte und Bündnisse bringen dich ein paar Schritte voran. Die ganze Reise ist kostenlos.</string>
     <string name="game2_settings_celebrations_switch">Zeichen der Ahnen</string>
     <string name="game_guide_step_welcome_what">Das Spiel in sieben Karten</string>

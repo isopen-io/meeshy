@@ -32,7 +32,7 @@
     <string name="game_concept_missions_use">Apri un atto per vedere a che punto sei. Puoi cambiarne uno al giorno con una Meesh.</string>
     <string name="game2_prestige_confirm_access">Il tuo torneo e la tua alleanza restano aperti.</string>
     <string name="game2_league_pseudonym_drawn">Il tuo nome di torneo è estratto a sorte e cambia a ogni viaggio.</string>
-    <string name="game2_league_snapshot">Classifica fissata ogni giorno alle 4; solo la tua riga è in diretta.</string>
+    <string name="game2_league_snapshot">Classifica fissata ogni giorno alle 4: nessuno vede chi sta giocando ora. Solo la tua riga è in diretta.</string>
     <string name="game2_season_how">Atti e alleanze ti fanno avanzare di qualche passo. Tutto il viaggio è gratuito.</string>
     <string name="game2_settings_celebrations_switch">Segni degli antenati</string>
     <string name="game_guide_step_welcome_what">Il gioco in sette carte</string>

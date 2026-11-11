@@ -32,7 +32,7 @@
     <string name="game_concept_missions_use">Ouvre un acte pour voir où tu en es. Tu peux en changer un par jour avec une Meesh.</string>
     <string name="game2_prestige_confirm_access">Ta joute et ton alliance restent ouvertes.</string>
     <string name="game2_league_pseudonym_drawn">Ton nom de joute est tiré au sort et change à chaque voyage.</string>
-    <string name="game2_league_snapshot">Classement figé chaque jour à 4 h ; seule ta ligne est en direct.</string>
+    <string name="game2_league_snapshot">Classement figé chaque jour à 4 h : personne ne voit qui joue en ce moment. Seule ta ligne est en direct.</string>
     <string name="game2_season_how">Les actes et les alliances te font avancer de quelques pas. Tout le voyage est gratuit.</string>
     <string name="game2_settings_celebrations_switch">Signes des aïeux</string>
     <string name="game_guide_step_welcome_what">Le jeu en sept cartes</string>
