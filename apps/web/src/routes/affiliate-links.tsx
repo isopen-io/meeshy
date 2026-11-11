@@ -19,7 +19,7 @@ import { useOnline } from '@/lib/net/online';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
-import { AFFILIATE_TINT, CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySection, FamilySkeleton, FamilyStats, RowAction, SEPARATOR } from '@/routes/link-families-parts';
+import { AFFILIATE_TINT, CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySection, FamilySkeleton, FamilyStats, RowMore, SEPARATOR } from '@/routes/link-families-parts';
 import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice, statusLabel } from '@/routes/links-parts';
 
 /**
@@ -98,12 +98,13 @@ export function AffiliateTokenRow({
       actions={
         <span className="flex shrink-0 items-center">
           <CopyRowAction language={language} label={translateLinkFamilies(language, 'linkFamilies.affiliate.copy')} tint={AFFILIATE_TINT} copied={copied} onCopy={onCopy} />
-          <RowAction name="share" label={translateLinkFamilies(language, 'linkFamilies.affiliate.share')} tint={AFFILIATE_TINT} onClick={onShare}>
-            <LinksGlyph name="export" size={18} />
-          </RowAction>
-          <RowAction name="delete" label={translateLinkFamilies(language, 'linkFamilies.affiliate.delete')} tint="var(--color-error)" onClick={onDelete}>
-            <LinksGlyph name="trash" size={18} />
-          </RowAction>
+          <RowMore
+            label={translateLinkFamilies(language, 'linkFamilies.more')}
+            items={[
+              { name: 'share', label: translateLinkFamilies(language, 'linkFamilies.affiliate.share'), glyph: <LinksGlyph name="export" size={18} />, tint: AFFILIATE_TINT, onSelect: onShare },
+              { name: 'delete', label: translateLinkFamilies(language, 'linkFamilies.affiliate.delete'), glyph: <LinksGlyph name="trash" size={18} />, tint: 'var(--color-error)', onSelect: onDelete },
+            ]}
+          />
         </span>
       }
     />

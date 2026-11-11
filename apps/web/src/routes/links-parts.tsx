@@ -173,7 +173,7 @@ export function ShareLinksStats({ language, summary }: { readonly language: Inte
 export function shareLinkExpiryLabel(language: InterfaceLanguage, expiresAt: string | null, now: Date = new Date()): string | null {
   if (expiresAt === null) return null;
   const deadline = new Date(expiresAt);
-  if (deadline.getTime() <= now.getTime()) return translate(language, 'conversation.card.expired');
+  if (deadline.getTime() <= now.getTime()) return translate(language, 'links.status.expired');
   return `${translate(language, 'links.detail.expiresAt')} ${new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(deadline)}`;
 }
 
@@ -217,16 +217,6 @@ export function ShareLinkRow({
             <span data-share-link-joined className={`shrink-0 font-medium ${SECTION_BRAND_INK}`}>
               {joined}
             </span>
-            {link.isActive ? null : (
-              <span data-share-link-status className="shrink-0 font-medium" style={{ color: INK_2 }}>
-                · {statusLabel(language, false)}
-              </span>
-            )}
-            {link.conversationTitle === null ? null : (
-              <span data-share-link-conversation className="truncate" style={{ color: INK_2 }}>
-                · {link.conversationTitle}
-              </span>
-            )}
           </span>
           {expiry === null ? null : (
             <span data-share-link-expiry className="truncate text-caption" style={{ color: INK_2 }}>

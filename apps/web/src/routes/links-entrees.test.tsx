@@ -110,7 +110,7 @@ describe('la rangée d’un lien de partage', () => {
   test('expiré : « Expiré » seul, jamais « Lien expiré » en plus d’un état redit', async () => {
     const host = await mount(
       <ul>
-        <ShareLinkRow language="fr" link={shareLink({ isActive: false, inactiveReason: 'EXPIRED', expiresAt: '2000-01-01T00:00:00.000Z' })} copied={false} onCopy={noop} />
+        <ShareLinkRow language="fr" link={shareLink({ isActive: false, inactiveReason: 'LINK_EXPIRED', expiresAt: '2000-01-01T00:00:00.000Z' })} copied={false} onCopy={noop} />
       </ul>,
     );
     const text = seen(host);
@@ -218,10 +218,10 @@ describe('les clés qui n’ont plus de lecteur sont supprimées des sept langue
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       await Promise.all([loadLinkFamiliesCatalog(language), loadInviteCatalog(language)]);
       for (const key of ['linkFamilies.community.stats.communities', 'linkFamilies.community.section']) {
-        expect(translateLinkFamilies(language, key as never)).toBe(key);
+        expect(translateLinkFamilies(language, key as never) as unknown).toBeUndefined();
       }
       for (const key of ['linkDetail.config.asked', 'linkDetail.config.asked.none']) {
-        expect(translateInvite(language, key as never)).toBe(key);
+        expect(translateInvite(language, key as never) as unknown).toBeUndefined();
       }
     }
   });
@@ -347,9 +347,6 @@ describe('la fiche d’un lien : la configuration, puis le formulaire derrière 
     const saved: string[] = [];
     const host = await mountConfiguration((outcome) => saved.push(outcome));
     await click(host.querySelector('[data-share-link-edit-anchor]'));
-    await act(async () => {
-      document.querySelector('[data-link-edit-form]')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    });
     await click(document.querySelector('[data-link-rule="allowAnonymousFiles"]'));
     await act(async () => {
       document.querySelector('[data-link-edit-form]')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));

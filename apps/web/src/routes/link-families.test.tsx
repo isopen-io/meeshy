@@ -149,12 +149,11 @@ describe('les liens de suivi', () => {
 });
 
 describe('les liens de parrainage', () => {
-  test('un jeton n’a pas de détail : la ligne n’est pas un lien, ses trois gestes sont nommés', () => {
+  test('un jeton n’a pas de détail : la ligne n’est pas un lien, sa copie est nommée, le reste est rangé derrière « Plus »', () => {
     const html = renderToStaticMarkup(<AffiliateTokenRow language="fr" token={affiliateToken()} copied={false} onCopy={noop} onShare={noop} onDelete={noop} />);
     expect(html).not.toContain('<a');
     expect(html).toContain('aria-label="Copier le lien de parrainage"');
-    expect(html).toContain('aria-label="Partager le lien de parrainage"');
-    expect(html).toContain('aria-label="Supprimer le lien de parrainage"');
+    expect(html).toContain('aria-label="Plus"');
   });
 
   test('un plafond se lit « utilisés sur maximum », et un lien complet se dit inactif', () => {
@@ -175,16 +174,16 @@ describe('les liens de parrainage', () => {
 });
 
 describe('les liens communauté', () => {
-  test('la ligne ouvre le détail et dit membres, rôle et visibilité', () => {
+  test('la ligne ouvre le détail et dit membres et rôle', () => {
     const html = renderToStaticMarkup(<CommunityLinkRow language="fr" link={community()} copied={false} onCopy={noop} />);
     expect(html).toContain('href="/links/communities/cm1"');
-    expect(html).toContain('248 membres\u00a0· Administrateur\u00a0· Publique');
+    expect(html).toContain('248 membres\u00a0· Administrateur');
   });
 
   test('un nombre de membres non servi ne s’invente pas', () => {
     const html = renderToStaticMarkup(<CommunityLinkRow language="fr" link={community({ memberCount: null, role: 'moderator', isPrivate: true })} copied={false} onCopy={noop} />);
     expect(html).not.toContain('membre');
-    expect(html).toContain('Modérateur\u00a0· Privée');
+    expect(html).toContain('Modérateur');
   });
 
   test('le détail montre l’adresse complète, et pas de date qu’on n’a pas', () => {

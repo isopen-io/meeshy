@@ -209,8 +209,9 @@ try {
       await page.waitForTimeout(250);
       check(JSON.stringify(await shownLinks(page)) === JSON.stringify(ALL), `${label} : les cinq liens, dans l'ordre servi (${JSON.stringify(await shownLinks(page))})`);
       check(JSON.stringify(await textsOf(page, '[data-share-links-stat] strong')) === JSON.stringify(['5', '2', '175']), `${label} : les agrégats de la passerelle — liens, actifs, rejoints`);
-      const inactive = await page.$$eval('[data-share-link]', (els) => els.filter((el) => el.querySelector('[data-share-link-status]') !== null).map((el) => el.getAttribute('data-share-link')));
-      check(JSON.stringify(inactive) === JSON.stringify(INACTIVE), `${label} : « Inactif » s'écrit sur les trois liens inactifs, et seulement eux (${JSON.stringify(inactive)})`);
+      const inactive = await page.$$eval('[data-share-link]', (els) => els.filter((el) => el.querySelector('a')?.getAttribute('aria-label')?.includes('Inactif') === true).map((el) => el.getAttribute('data-share-link')));
+      check(JSON.stringify(inactive) === JSON.stringify(INACTIVE), `${label} : « Inactif » se lit (lecteur d'écran) sur les trois liens inactifs, et seulement eux (${JSON.stringify(inactive)})`);
+      check((await page.$('[data-share-link-status], [data-share-link-conversation]')) === null, `${label} : la rangée n'écrit ni « Inactif » ni le titre de la conversation, tronqué`);
       check((await textOf(page, `[data-share-link="${ANNONCES}"] [data-share-link-name]`)) === 'annonces-produit', `${label} : un lien sans nom se nomme par son identifiant`);
       check(
         (await page.getAttribute(`[data-share-link="${DEPLOIEMENT}"] a`, 'aria-label')) === 'Invitation de l’équipe, Actif, 12 rejoints et Équipe déploiement',
@@ -229,8 +230,6 @@ try {
         'agrégat, libellé': '[data-share-links-stat] .text-chip',
         nom: `[data-share-link="${DEPLOIEMENT}"] [data-share-link-name]`,
         rejoints: `[data-share-link="${DEPLOIEMENT}"] [data-share-link-joined]`,
-        conversation: `[data-share-link="${DEPLOIEMENT}"] [data-share-link-conversation]`,
-        inactif: '[data-share-link-status]',
       });
 
       // ------------------------------------------------ 3. copier, avec l'origine publique
@@ -252,9 +251,10 @@ try {
       await page.waitForSelector('[data-share-link-hero]');
       check((await textOf(page, 'header h1')) === 'Invitation de l’équipe', `${label} : le détail porte le nom du lien`);
       check(
-        JSON.stringify(await actionsOf(page)) === JSON.stringify(['share', 'copy', 'disable', 'delete']),
-        `${label} : Partager et Copier le lien sur la carte, Désactiver et Supprimer sous l'édition (#7797) — ${JSON.stringify(await actionsOf(page))}`,
+        JSON.stringify(await actionsOf(page)) === JSON.stringify(['share', 'copy']),
+        `${label} : au repos, Partager et Copier le lien sur la carte ; Désactiver et Supprimer restent derrière « Modifier » — ${JSON.stringify(await actionsOf(page))}`,
       );
+
       check((await textOf(page, '[data-share-link-url]')) === 'meeshy.me/chat/equipe-deploiement', `${label} : l'adresse du lien se lit, sans protocole`);
       check(await servedText(page, '[data-share-link-stat="arrivals"] strong', '412'), `${label} : les arrivées servies se lisent (${await textOf(page, '[data-share-link-stat="arrivals"] strong')})`);
       check((await textOf(page, '[data-share-link-config="uses"] dd')) === '12 / 50', `${label} : utilisations et maximum dans la configuration`);
@@ -309,6 +309,13 @@ try {
       /* ENREGISTRER EST OPTIMISTE (#7797) : le nom change dans la configuration
          AU GESTE, puis l'enregistrement s'annonce. Le nom est remis ensuite pour
          que la suite du parcours relise le lien d'origine. */
+      check((await page.$('[data-link-edit-form]')) === null, `${label} : au repos, le formulaire qui redit la configuration n'est pas monté`);
+      await page.click('[data-share-link-edit-anchor]');
+      await page.waitForSelector('[data-link-edit-form]');
+      check(
+        JSON.stringify(await actionsOf(page)) === JSON.stringify(['share', 'copy', 'disable', 'delete']),
+        `${label} : « Modifier » rend Désactiver et Supprimer (#7797) — ${JSON.stringify(await actionsOf(page))}`,
+      );
       await page.fill('#link-edit-message', 'Message du gate');
       await page.click('[data-share-link-save]');
       const savedAtOnce = await page
@@ -316,6 +323,9 @@ try {
         .then(() => true, () => false);
       check(savedAtOnce, `${label} : « Enregistrer » change la carte AU GESTE`);
       check(await announced(page, 'Modifications enregistrées.'), `${label} : l'enregistrement s'annonce`);
+      check(await page.waitForSelector('[data-link-edit-form]', { state: 'detached', timeout: 2000 }).then(() => true, () => false), `${label} : enregistrer referme la fiche`);
+      await page.click('[data-share-link-edit-anchor]');
+      await page.waitForSelector('[data-share-link-action="disable"]');
 
       /* UN DOUBLE TAP (#6417) : « Désactiver » devient « Activer » au premier
          tap, À LA MÊME PLACE ; le second tap, 120 ms plus tard, ne doit pas le
@@ -341,6 +351,8 @@ try {
       );
       check(await announced(page, 'Lien désactivé'), `${label} : la désactivation s'annonce`);
       check((await textOf(page, '[data-share-link-reason]')) === 'Vous avez désactivé ce lien.', `${label} : la cause se lit sous l'état`);
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-link-edit-form]', { state: 'detached' });
       await capture(page, `detail-desactive-${slug}`);
       await page.click('[data-links-back]');
       await page.waitForURL('**/links/share');
@@ -348,15 +360,25 @@ try {
       check((await page.getAttribute(`[data-share-link="${DEPLOIEMENT}"]`, 'data-share-link-active')) === 'false', `${label} : la liste relit la désactivation`);
       check((await textsOf(page, '[data-share-links-stat] strong'))[1] === '1', `${label} : le compte des actifs baisse`);
       await page.click(`[data-share-link="${DEPLOIEMENT}"] a`);
+      await page.waitForSelector('[data-share-link-edit-anchor]');
+      await page.click('[data-share-link-edit-anchor]');
       await page.waitForSelector('[data-share-link-action="activate"]');
       await page.click('[data-share-link-action="activate"]');
       check(await announced(page, 'Lien activé'), `${label} : « Activer » rend le lien`);
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-link-edit-form]', { state: 'detached' });
+      await page.waitForTimeout(300);
       check((await textOf(page, '[data-share-link-status]')) === 'Actif', `${label} : et l'état redevient « Actif »`);
 
       // ------------------------------------------------ 5. conversation fermée, lien inconnu
       await page.goto(`${BASE}/links/share/${SALON}`, { waitUntil: 'load' });
       await page.waitForSelector('[data-share-link-hero]');
+      await page.click('[data-share-link-edit-anchor]');
+      await page.waitForSelector('[data-share-link-action="delete"]');
       check(JSON.stringify(await actionsOf(page)) === JSON.stringify(['share', 'copy', 'delete']), `${label} : conversation fermée, ni « Activer » ni « Désactiver »`);
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('[data-link-edit-form]', { state: 'detached' });
+      await page.waitForTimeout(300);
       check((await textOf(page, '[data-share-link-reason]')) === 'La conversation est fermée : ce lien ne permet plus d’entrer.', `${label} : et la cause se lit`);
       await page.goto(`${BASE}/links/share/mshy_inconnu`, { waitUntil: 'load' });
       await page.waitForSelector('[data-share-link-refused]');
@@ -428,6 +450,8 @@ try {
       check((await shownLinks(page)).length === 6, `${label} : hors ligne, la liste reste lisible et le dit`);
       await assertInks(label, 'hors ligne', page, { annonce: '[data-links-offline] .text-caption' });
       await page.click(`[data-share-link="${ANNONCES}"] a`);
+      await page.waitForSelector('[data-share-link-edit-anchor]');
+      await page.click('[data-share-link-edit-anchor]');
       await page.waitForSelector('[data-share-link-action="disable"]');
       await page.click('[data-share-link-action="disable"]');
       check(await announced(page, 'Hors ligne : rien n’a été envoyé.'), `${label} : hors ligne, « Désactiver » le dit`);

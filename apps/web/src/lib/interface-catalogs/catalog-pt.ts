@@ -680,6 +680,7 @@ const pt = {
   'links.share.allLoaded': 'Todos os seus links foram carregados',
   'links.status.active': 'Ativo',
   'links.status.inactive': 'Inativo',
+  'links.status.expired': 'Expirado',
   'links.unlimited': 'Ilimitado',
   'links.error.title': 'Não foi possível carregar seus links',
   'links.error.body': 'Verifique sua conexão e tente novamente.',

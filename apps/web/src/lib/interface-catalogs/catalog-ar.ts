@@ -674,6 +674,7 @@ const ar = {
   'links.share.allLoaded': 'تم تحميل كل روابطك',
   'links.status.active': 'نشط',
   'links.status.inactive': 'غير نشط',
+  'links.status.expired': 'منتهي',
   'links.unlimited': 'غير محدود',
   'links.error.title': 'تعذّر تحميل روابطك',
   'links.error.body': 'تحقّق من اتصالك ثم أعد المحاولة.',

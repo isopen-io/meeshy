@@ -676,6 +676,7 @@ const de = {
   'links.share.allLoaded': 'Alle deine Links sind geladen',
   'links.status.active': 'Aktiv',
   'links.status.inactive': 'Inaktiv',
+  'links.status.expired': 'Abgelaufen',
   'links.unlimited': 'Unbegrenzt',
   'links.error.title': 'Deine Links konnten nicht geladen werden',
   'links.error.body': 'Prüfe deine Verbindung und versuche es erneut.',

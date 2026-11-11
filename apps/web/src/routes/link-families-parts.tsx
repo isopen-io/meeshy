@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
 import { Glyph } from '@/components/glyph';
@@ -348,6 +348,75 @@ export function CopyRowAction({
     <RowAction name="copy" label={copied ? translate(language, 'links.detail.copied') : label} tint={copied ? 'var(--color-success)' : tint} onClick={onCopy}>
       {copied ? <Glyph name="check" size={18} /> : <LinksGlyph name="copy" size={18} />}
     </RowAction>
+  );
+}
+
+export type RowMoreItem = {
+  readonly name: string;
+  readonly label: string;
+  readonly glyph: ReactNode;
+  readonly tint: string;
+  readonly onSelect: () => void;
+};
+
+/**
+ * LE RARE DERRIÈRE « PLUS » (épure #17584, règle 6) — au repos, la rangée porte
+ * l'action nominale ; le reste se range ici, atteignable en deux gestes. Le menu
+ * se referme à Échap, à un toucher hors de lui, et après le choix.
+ */
+export function RowMore({ label, items }: { readonly label: string; readonly items: readonly RowMoreItem[] }) {
+  const [open, setOpen] = useState(false);
+  const wrapper = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    const closeOutside = (event: Event): void => {
+      if (!(event.target instanceof Node) || wrapper.current?.contains(event.target) !== true) setOpen(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('pointerdown', closeOutside);
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('pointerdown', closeOutside);
+    };
+  }, [open]);
+  return (
+    <span ref={wrapper} className="relative z-[1] shrink-0">
+      <button
+        type="button"
+        data-row-action="more"
+        aria-label={label}
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => setOpen((current) => !current)}
+        className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2`}
+        style={{ color: INK_2, outlineColor: BRAND }}
+      >
+        <Glyph name="dotsThreeVertical" size={18} />
+      </button>
+      {open ? (
+        <span role="group" aria-label={label} className="absolute end-0 top-full z-20 grid min-w-48 overflow-hidden rounded-card py-1" style={{ ...CARD_STYLE, boxShadow: '0 8px 24px color-mix(in srgb, var(--color-media-backdrop) 24%, transparent)' }}>
+          {items.map((item) => (
+            <button
+              key={item.name}
+              type="button"
+              data-row-action={item.name}
+              onClick={() => {
+                setOpen(false);
+                item.onSelect();
+              }}
+              className="flex items-center gap-3 px-3.5 text-start text-body font-medium focus-visible:outline-2 focus-visible:-outline-offset-2"
+              style={{ minHeight: 44, color: item.tint, outlineColor: BRAND }}
+            >
+              <span aria-hidden="true">{item.glyph}</span>
+              {item.label}
+            </button>
+          ))}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

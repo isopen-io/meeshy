@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Glyph } from '@/components/glyph';
+import { InfoNoted } from '@/components/info-hint';
 import { RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { endonymOf } from '@/components/language-share-bar';
 import { MAX_USES_CEILING, SHARE_LINK_EXPIRATIONS, type MyShareLink, type ShareLinkPatch, type ShareLinkPolicy } from '@/lib/api/links';
@@ -11,7 +12,7 @@ import { translateInvite } from '@/lib/i18n-invite-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { editDraftOf, validateEditDraft, type EditDraftField, type ShareLinkEditDraft, type ShareLinkExpirationChoice } from '@/lib/links/edit-draft';
 import { canReactivate } from '@/lib/links/view';
-import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT } from '@/routes/links-parts';
+import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT, linksHint } from '@/routes/links-parts';
 import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, type RuleKey } from '@/routes/share-link-form';
 
 /**
@@ -117,7 +118,7 @@ function LanguageChoices({
       <RuleToggle
         id="allLanguages"
         label={translateInvite(language, 'linkDetail.edit.languages.all')}
-        caption={translateInvite(language, 'linkDetail.edit.languages.hint')}
+        note={linksHint(translateInvite(language, 'linkDetail.edit.languages.question'), translateInvite(language, 'linkDetail.edit.languages.hint'))}
         icon={<Glyph name="translate" size={15} />}
         tint={SHARE_TINT}
         checked={draft.allLanguages}
@@ -168,6 +169,8 @@ export type EditLinkFormProps = {
   readonly onSave: (patch: ShareLinkPatch) => Promise<ShareLinkUpdateOutcome>;
   readonly onToggleActive: () => void;
   readonly onDelete: () => void;
+  /** Posé dans une fiche qui porte déjà le titre : le formulaire ne le redit pas. */
+  readonly bare?: boolean;
 };
 
 /**
@@ -176,7 +179,7 @@ export type EditLinkFormProps = {
  * ce que le lien était avant le geste : le cache est revenu en arrière
  * (`performUpdateShareLink`), le brouillon aussi.
  */
-export function EditLinkForm({ language, link, policy, now, onSave, onToggleActive, onDelete }: EditLinkFormProps) {
+export function EditLinkForm({ language, link, policy, now, onSave, onToggleActive, onDelete, bare = false }: EditLinkFormProps) {
   const [draft, setDraft] = useState<ShareLinkEditDraft>(() => editDraftOf(link, policy));
   const [invalid, setInvalid] = useState<EditDraftField | null>(null);
   const [saving, setSaving] = useState(false);
@@ -204,10 +207,18 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
   const numberError = translateInvite(language, 'linkDetail.edit.number.invalid', { max: format.format(MAX_USES_CEILING) });
 
   return (
-    <section id="link-edit" aria-labelledby="link-edit-title" data-share-link-edit className="grid scroll-mt-4 gap-4 rounded-sheet p-4 md:p-6" style={SECTION_CARD_STYLE}>
-      <h2 id="link-edit-title" className="text-thread font-extrabold" style={{ color: INK }}>
-        {translateInvite(language, 'linkDetail.edit.title')}
-      </h2>
+    <section
+      id="link-edit"
+      {...(bare ? { 'aria-label': translateInvite(language, 'linkDetail.edit.title') } : { 'aria-labelledby': 'link-edit-title' })}
+      data-share-link-edit
+      className={`grid scroll-mt-4 gap-4 p-4 md:p-6 ${bare ? '' : 'rounded-sheet'}`}
+      style={bare ? undefined : SECTION_CARD_STYLE}
+    >
+      {bare ? null : (
+        <h2 id="link-edit-title" className="text-thread font-extrabold" style={{ color: INK }}>
+          {translateInvite(language, 'linkDetail.edit.title')}
+        </h2>
+      )}
       <form
         noValidate
         data-link-edit-form
@@ -218,34 +229,50 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
         }}
       >
         <div className="grid gap-3">
-          <label htmlFor="link-edit-name" className="grid gap-1.5 text-caption font-bold" style={{ color: INK_2 }}>
-            {translateInvite(language, 'linkDetail.edit.name')}
+          <div className="grid gap-1.5">
+            <InfoNoted
+              note={linksHint(translateInvite(language, 'linkDetail.edit.name.question'), translateInvite(language, 'linkDetail.edit.name.note'))}
+              noteId="link-edit-name-note"
+            >
+              <label htmlFor="link-edit-name" className="text-caption font-bold" style={{ color: INK_2 }}>
+                {translateInvite(language, 'linkDetail.edit.name')}
+              </label>
+            </InfoNoted>
             <input
               id="link-edit-name"
               dir="auto"
               value={draft.name}
               maxLength={100}
               autoComplete="off"
+              aria-describedby="link-edit-name-note"
               placeholder={translateInvite(language, 'linkDetail.edit.name.placeholder')}
               onInput={(event) => edit({ name: event.currentTarget.value })}
               className={TEXT_INPUT}
               style={TEXT_INPUT_STYLE}
             />
-          </label>
-          <label htmlFor="link-edit-message" className="grid gap-1.5 text-caption font-bold" style={{ color: INK_2 }}>
-            {translateInvite(language, 'linkDetail.edit.message')}
+          </div>
+          <div className="grid gap-1.5">
+            <InfoNoted
+              note={linksHint(translateInvite(language, 'linkDetail.edit.message.question'), translateInvite(language, 'linkDetail.edit.message.note'))}
+              noteId="link-edit-message-note"
+            >
+              <label htmlFor="link-edit-message" className="text-caption font-bold" style={{ color: INK_2 }}>
+                {translateInvite(language, 'linkDetail.edit.message')}
+              </label>
+            </InfoNoted>
             <textarea
               id="link-edit-message"
               dir="auto"
               value={draft.description}
               rows={3}
               maxLength={500}
+              aria-describedby="link-edit-message-note"
               placeholder={translateInvite(language, 'linkDetail.edit.message.placeholder')}
               onInput={(event) => edit({ description: event.currentTarget.value })}
               className={`${TEXT_INPUT} py-3 leading-relaxed`}
               style={{ ...TEXT_INPUT_STYLE, resize: 'vertical' }}
             />
-          </label>
+          </div>
         </div>
 
         <FormSection id="link-edit-limits" title={translateInvite(language, 'linkDetail.edit.limits')} subtitle={null} icon={<LinksGlyph name="hourglass" size={13} />}>
@@ -282,7 +309,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             label={translateInvite(language, 'linkDetail.edit.maxUses')}
             caption={
               draft.limitUses && Number.isFinite(draft.maxUses)
-                ? translateLinkFamilies(language, draft.maxUses === 1 ? 'links.create.limit.max.one' : 'links.create.limit.max.other', { count: format.format(draft.maxUses) })
+                ? translateLinkFamilies(language, 'links.create.limit.max', { count: format.format(draft.maxUses) })
                 : translate(language, 'links.unlimited')
             }
             icon={<Glyph name="users" size={15} />}

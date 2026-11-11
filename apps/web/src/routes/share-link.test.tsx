@@ -178,7 +178,7 @@ describe('la configuration, en lecture', () => {
     const html = renderToStaticMarkup(<ConfigurationCard language="fr" link={link()} policy={POLICY} />);
     const text = plain(html);
     expect(text).toContain('Compte Meeshy Facultatif');
-    expect(text).toContain('Demandé à l’arrivée Prénom');
+    expect(text).toContain('Demander aux invités Compte Meeshy Facultatif Pseudo Obligatoire');
     expect(text).toContain('Utilisations 412 / illimité');
     expect(text).toContain('En même temps 50 max');
     expect(text).toMatch(/Expire le 1 oct\. 2026/u);
@@ -187,10 +187,11 @@ describe('la configuration, en lecture', () => {
     expect(html).toContain('href="#link-edit"');
   });
 
-  test('compte obligatoire : plus rien n’est « demandé à l’arrivée »', () => {
+  test('compte obligatoire : plus aucune rangée « demandée » ne s’ajoute au compte', () => {
     const text = plain(renderToStaticMarkup(<ConfigurationCard language="fr" link={link()} policy={{ ...POLICY, requireAccount: true }} />));
     expect(text).toContain('Compte Meeshy Obligatoire');
-    expect(text).toContain('Demandé à l’arrivée Rien');
+    expect(text).not.toContain('Pseudo');
+    expect(text).not.toContain('Rien');
   });
 
   test('sans politique lue : elle le dit, sans rien inventer', () => {

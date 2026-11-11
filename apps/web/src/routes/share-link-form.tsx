@@ -369,7 +369,7 @@ export function LimitsFields({
 }) {
   const count = new Intl.NumberFormat(language).format(draft.maxUses);
   const caption = draft.limitUses
-    ? translateLinkFamilies(language, draft.maxUses === 1 ? 'links.create.limit.max.one' : 'links.create.limit.max.other', { count: Number.isFinite(draft.maxUses) ? count : '—' })
+    ? translateLinkFamilies(language, 'links.create.limit.max', { count: Number.isFinite(draft.maxUses) ? count : '—' })
     : translate(language, 'links.unlimited');
   return (
     <>

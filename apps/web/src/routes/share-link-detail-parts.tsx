@@ -389,16 +389,28 @@ function RightMark({ language, label, granted }: { readonly language: InterfaceL
  * d'entrée, limites, langues autorisées ; « Modifier » mène au formulaire.
  * Sans politique lue (cache d'avant #7797), elle le dit le temps de la relire.
  */
-export function ConfigurationCard({ language, link, policy }: { readonly language: InterfaceLanguage; readonly link: MyShareLink; readonly policy: ShareLinkPolicy | null }) {
+export function ConfigurationCard({
+  language,
+  link,
+  policy,
+  onEdit,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly link: MyShareLink;
+  readonly policy: ShareLinkPolicy | null;
+  /** Ouvre le formulaire dans sa fiche ; sans lui, « Modifier » reste une simple ancre `#link-edit`. */
+  readonly onEdit?: () => void;
+}) {
   const format = new Intl.NumberFormat(language);
   const list = new Intl.ListFormat(language, { type: 'conjunction' });
-  const asked = policy === null
-    ? []
-    : [
-        ...(policy.requireNickname && !policy.requireAccount ? [translateInvite(language, 'linkDetail.config.asked.nickname')] : []),
-        ...(policy.requireEmail && !policy.requireAccount ? [translateInvite(language, 'linkDetail.config.asked.email')] : []),
-        ...(policy.requireBirthday && !policy.requireAccount ? [translateInvite(language, 'linkDetail.config.asked.birthday')] : []),
-      ];
+  const asked =
+    policy === null || policy.requireAccount
+      ? []
+      : [
+          ...(policy.requireNickname ? [{ row: 'nickname', label: translateInvite(language, 'linkDetail.config.asked.nickname') }] : []),
+          ...(policy.requireEmail ? [{ row: 'email', label: translateInvite(language, 'linkDetail.config.asked.email') }] : []),
+          ...(policy.requireBirthday ? [{ row: 'birthday', label: translateInvite(language, 'linkDetail.config.asked.birthday') }] : []),
+        ];
   return (
     <section aria-labelledby="link-configuration" data-share-link-configuration className={CARD_CLASS} style={SECTION_CARD_STYLE}>
       <div className="flex items-center justify-between gap-3">
@@ -408,6 +420,14 @@ export function ConfigurationCard({ language, link, policy }: { readonly languag
         <a
           href="#link-edit"
           data-share-link-edit-anchor
+          {...(onEdit === undefined
+            ? {}
+            : {
+                onClick: (event: { preventDefault: () => void }) => {
+                  event.preventDefault();
+                  onEdit();
+                },
+              })}
           className={`grid place-items-center rounded-tile px-2 text-body font-bold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
           style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
         >
@@ -436,9 +456,11 @@ export function ConfigurationCard({ language, link, policy }: { readonly languag
             <ConfigRow row="account" label={translateInvite(language, 'linkDetail.config.account')}>
               {translateInvite(language, policy.requireAccount ? 'linkDetail.config.account.required' : 'linkDetail.config.account.optional')}
             </ConfigRow>
-            <ConfigRow row="asked" label={translateInvite(language, 'linkDetail.config.asked')}>
-              {asked.length === 0 ? translateInvite(language, 'linkDetail.config.asked.none') : list.format(asked)}
-            </ConfigRow>
+            {asked.map((field) => (
+              <ConfigRow key={field.row} row={field.row} label={field.label}>
+                {translateInvite(language, 'linkDetail.config.account.required')}
+              </ConfigRow>
+            ))}
           </dl>
           <h3 className={SUB_TITLE_CLASS} style={{ color: INK_2 }}>
             {translateInvite(language, 'linkDetail.config.limits')}

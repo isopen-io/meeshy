@@ -681,6 +681,7 @@ const fr = {
   'links.share.allLoaded': 'Tous vos liens sont chargés',
   'links.status.active': 'Actif',
   'links.status.inactive': 'Inactif',
+  'links.status.expired': 'Expiré',
   'links.unlimited': 'Illimité',
   'links.error.title': 'Impossible de charger vos liens',
   'links.error.body': 'Vérifiez votre connexion, puis réessayez.',

@@ -26,8 +26,8 @@ import { useParams } from '@/lib/router';
 import { useTapGate } from '@/lib/view/tap-gate';
 import { LinksAnnouncement, LinksHeader, LinksLoadError, LinksOfflineNotice, ShareLinkDetailSkeleton, ShareLinkRefused } from '@/routes/links-parts';
 import { href, navigate } from '@/routes/route-table';
-import { ArrivalLanguages, ConfigurationCard, InviteLinkCard, LinkBreadcrumb, LinkStatTiles, RecentArrivals } from '@/routes/share-link-detail-parts';
-import { EditLinkForm } from '@/routes/share-link-edit';
+import { LinkConfiguration } from '@/routes/share-link-configuration';
+import { ArrivalLanguages, InviteLinkCard, LinkBreadcrumb, LinkStatTiles, RecentArrivals } from '@/routes/share-link-detail-parts';
 
 /**
  * **LA PAGE DU CRÉATEUR D'UN LIEN D'INVITATION** (#7797, maquette validée) —
@@ -152,7 +152,7 @@ export default function ShareLinkScreen() {
           </h1>
           {online ? null : <LinksOfflineNotice language={language} />}
           {link !== undefined ? (
-            <div data-share-link-layout className="grid gap-5 md:grid-cols-2 md:items-start md:gap-7">
+            <div data-share-link-layout className="grid gap-5 md:max-w-xl">
               <div className="grid gap-3.5">
                 <InviteLinkCard
                   language={language}
@@ -169,10 +169,7 @@ export default function ShareLinkScreen() {
                     <RecentArrivals language={language} linkId={link.linkId} stats={served} now={now} />
                   </>
                 )}
-                <ConfigurationCard language={language} link={link} policy={link.policy} />
-              </div>
-              {link.policy === null ? null : (
-                <EditLinkForm
+                <LinkConfiguration
                   key={link.linkId}
                   language={language}
                   link={link}
@@ -182,7 +179,7 @@ export default function ShareLinkScreen() {
                   onToggleActive={() => toggle(link)}
                   onDelete={() => setConfirming(true)}
                 />
-              )}
+              </div>
               {/* **UNE SEULE CONFIRMATION, PARTOUT** (revue-correction #6149,
                   défaut majeur 2, issue #7858) — `ConfirmDelete` était la
                   TROISIÈME copie divergente, et la seule avec un rayon écrit
