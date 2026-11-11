@@ -147,6 +147,39 @@ struct MeeshyGlassButtonTests {
         #expect(MeeshyGlassButtonRecipe.resolve(kind: .soft, size: .s44).solidContrast(isDark: false) == nil)
     }
 
+    @Test("doux : glyphe blanc lisible sur un verre dense ou onLight, au repos comme appuyé, calculé depuis les deux recettes")
+    func contrast_soft_holdsOnItsHosts() throws {
+        let vectors = try Self.object("contrast")
+        let tolerance = try #require(vectors["tolerance"] as? Double)
+        let glyphMin = try #require(vectors["glyphMin"] as? Double)
+        let hosts: [(key: String, tone: MeeshyGlassTone, density: MeeshyGlassDensity)] = [
+            ("softOnDense", .deep, .dense),
+            ("softOnLight", .onLight, .regular),
+        ]
+        for host in hosts {
+            let expected = try #require(vectors[host.key] as? Double)
+            let rest = Self.softContrast(tone: host.tone, density: host.density, pressed: false)
+            #expect(abs(rest - expected) < tolerance, "\(host.key) mesuré \(rest)")
+            #expect(Self.softContrast(tone: host.tone, density: host.density, pressed: true) >= glyphMin, "\(host.key)")
+        }
+    }
+
+    // MARK: - Réduire les animations
+
+    @Test("sous « réduire les animations », K01 garde l'échelle à 1 et l'appui se voit encore", arguments: MeeshyGlassButtonKind.allCases)
+    func reduceMotion_keepsThePressVisible(kind: MeeshyGlassButtonKind) {
+        let glass = MeeshyGlassRecipe.resolve(
+            tone: .deep, density: .regular, isTinted: false, isInteractive: true,
+            isPressed: true, material: .drawn, reduceMotion: true, isNested: true
+        )
+        #expect(glass.scale == 1)
+        let rest = MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44, material: .drawn, isNested: true)
+        let pressed = MeeshyGlassButtonRecipe.resolve(
+            kind: kind, size: .s44, material: .drawn, isNested: true, isPressed: true
+        )
+        #expect(rest != pressed)
+    }
+
     // MARK: - Désactivé
 
     @Test("désactivé : ni action, ni haptique, ni appui, ni voile ; l'opacité suit les vecteurs")
@@ -206,7 +239,29 @@ struct MeeshyGlassButtonTests {
         #expect(events.isEmpty)
     }
 
+    // MARK: - Doigt posé, doigt levé
+
+    @MainActor
+    @Test("onPressChange : vrai au doigt posé, faux au doigt levé, faux si le bouton disparaît doigt posé, rien sinon")
+    func pressReport_followsTheVectors() throws {
+        let rows = try Self.rows("pressReport")
+        #expect(rows.count == 6)
+        for row in rows {
+            let from = try #require(row["from"] as? Bool)
+            let report = MeeshyGlassPressReport.report(from: from, to: row["to"] as? Bool)
+            #expect(report == row["report"] as? Bool, "\(row)")
+        }
+    }
+
     // MARK: - Appui long, fondu
+
+    @Test("l'appui long a toujours son action nommée : son libellé, sinon le nom du bouton")
+    func accessibility_longPressAction_isAlwaysNamed() {
+        let name = MeeshyGlassButtonAccessibilityState.longPressActionName
+        #expect(name("Tout effacer", "Effacer") == "Tout effacer")
+        #expect(name(nil, "Effacer") == "Effacer")
+        #expect(name("", "Effacer") == "Effacer")
+    }
 
     @Test("l'appui long dure 500 ms et s'annule au-delà de 10 pt")
     func longPress_followsTheVectors() throws {
@@ -378,6 +433,23 @@ struct MeeshyGlassButtonTests {
         case "expanded(false)": return .expanded(false)
         default: return .none
         }
+    }
+
+    /// Le glyphe blanc d'un doux posé sur le verre dessiné de l'hôte, au-dessus
+    /// du pire fond (blanc), composé en sRGB encodé comme le fait K01.
+    private static func softContrast(tone: MeeshyGlassTone, density: MeeshyGlassDensity, pressed: Bool) -> Double {
+        let host = MeeshyGlassRecipe.resolve(
+            tone: tone, density: density, isTinted: false, isInteractive: false,
+            isPressed: false, material: .drawn, reduceMotion: false
+        )
+        let soft = MeeshyGlassButtonRecipe.resolve(
+            kind: .soft, size: .s44, tone: tone, material: .drawn, isNested: true, isPressed: pressed
+        )
+        let hostInk: Double = host.fill == .light ? 1 : 0
+        let covered = (1 - host.fillOpacity) + hostInk * host.fillOpacity
+        let veiled = covered * (1 - soft.fillOpacity) + soft.fillOpacity
+        let luminance = CanvasChromeScheme.luminance(red: veiled, green: veiled, blue: veiled)
+        return CanvasChromeScheme.contrastRatio(Double(soft.inkColor(isDark: false).luminance), luminance)
     }
 
     private static func vectorName(_ fill: MeeshyGlassButtonFill) -> String {

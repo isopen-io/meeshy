@@ -258,6 +258,13 @@ public nonisolated struct MeeshyGlassButtonAccessibilityState: Equatable, Sendab
         }
     }
 
+    /// Le nom de l'action d'appui long : celui que l'hôte donne, sinon le nom du
+    /// bouton. Un appui long existe toujours aussi en action nommée.
+    public static func longPressActionName(longPressLabel: String?, label: String) -> String {
+        guard let longPressLabel, !longPressLabel.isEmpty else { return label }
+        return longPressLabel
+    }
+
     /// La valeur dite : le mot de la bascule, puis ce que le contrôle porte déjà
     /// (« Activé, AirPods »).
     public static func composeValue(toggleWord: String?, value: String?) -> String {

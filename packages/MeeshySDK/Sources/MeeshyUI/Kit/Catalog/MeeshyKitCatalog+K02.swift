@@ -27,6 +27,35 @@ extension MeeshyKitCatalog {
     }
 }
 
+/// La pilule hôte de l'état `normal` (R2), le temps que K10 la livre : sous
+/// le Liquid Glass, ce sont les verres des boutons qui se fondent en pilule
+/// dans le groupe, et la pilule ne porte aucun verre (jamais de verre sur du
+/// verre) ; ailleurs, la pilule est le verre dessiné de K01 et les boutons s'y
+/// posent sans matière.
+private struct MeeshyGlassButtonSamplePill: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.meeshyGlassForcesDrawn) private var forcesDrawn
+    @Environment(\.meeshyGlassForcesOpaque) private var forcesOpaque
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if material == .liquid {
+            content
+        } else {
+            content.meeshyGlass(in: Capsule(), tone: .deep)
+        }
+    }
+
+    private var material: MeeshyGlassMaterial {
+        MeeshyGlassMaterial.resolve(
+            isLiquidAvailable: Platform.isIOS26OrLater,
+            reduceTransparency: reduceTransparency,
+            forcesDrawn: forcesDrawn || MeeshyGlassDebug.launchForcesDrawn,
+            forcesOpaque: forcesOpaque
+        )
+    }
+}
+
 /// L'échantillon d'un état : le vrai bouton au repos, son disque figé sous le
 /// doigt pour la tuile « pressé » (un bouton ne se tient pas pressé hors écran).
 private struct MeeshyGlassButtonSample: View {
@@ -60,7 +89,7 @@ private struct MeeshyGlassButtonSample: View {
                 cell("ellipsis", size: .s48, pressable: false)
             }
             .padding(MeeshySpacing.xs)
-            .meeshyGlass(in: Capsule(), tone: .deep)
+            .modifier(MeeshyGlassButtonSamplePill())
         }
     }
 

@@ -86,6 +86,7 @@ public struct MeeshyGlassButtonFace<Glyph: View, Badge: View>: View {
             .frame(width: recipe.diameter, height: recipe.diameter)
             .background { MeeshyGlassButtonFillLayer(recipe: recipe, isDark: isDark) }
             .modifier(MeeshyGlassButtonGlassLayer(request: recipe.glass, tone: tone, tint: tint, isPressed: isPressed))
+            .meeshyAnimation(.easeInOut(duration: MeeshyGlassButtonRecipe.toneFadeDuration), value: recipe.kind)
             .onHover { isHovered = $0 }
             .overlay(alignment: .topTrailing) { badge.accessibilityHidden(true) }
             .opacity(recipe.opacity)
@@ -210,7 +211,8 @@ private struct MeeshyGlassButtonFillLayer: View {
 
 /// La demande faite à K01, l'unique entrée de verre : aucune quand le fond est
 /// plein, un verre interactif sinon (teinté de rouge pour le destructif sous
-/// Liquid Glass).
+/// Liquid Glass). Changer de demande change l'identité du disque : le fondu de
+/// la tenue, posé AU-DESSUS de ce modificateur, en fait un fondu enchaîné.
 private struct MeeshyGlassButtonGlassLayer: ViewModifier {
     let request: MeeshyGlassButtonGlassRequest
     let tone: MeeshyGlassTone?
@@ -321,14 +323,19 @@ public struct MeeshyGlassButton<Glyph: View, Badge: View>: View {
         let state = MeeshyGlassButtonAccessibilityState.resolve(activation: spec.activation)
         return Button(action: activate) { face }
             .buttonStyle(MeeshyGlassButtonStyle(longPressFired: $longPressFired, onPressChange: onPressChange))
-            .modifier(MeeshyGlassLongPress(isOn: onLongPress != nil && isEnabled, perform: fireLongPress))
+            .modifier(MeeshyGlassLongPress(isOn: onLongPress != nil, perform: fireLongPress))
             .accessibilityLabel(spec.label)
             .accessibilityHint(spec.hint ?? "")
             .accessibilityValue(MeeshyGlassButtonAccessibilityState.composeValue(
                 toggleWord: state.toggleIsOn.map(MeeshyGlassButtonWords.toggle), value: spec.value
             ))
             .modifier(MeeshyGlassTraits(state: state))
-            .modifier(MeeshyGlassLongPressAction(label: spec.longPressLabel, perform: onLongPress))
+            .modifier(MeeshyGlassLongPressAction(
+                name: MeeshyGlassButtonAccessibilityState.longPressActionName(
+                    longPressLabel: spec.longPressLabel, label: spec.label
+                ),
+                perform: onLongPress
+            ))
             .accessibilityShowsLargeContentViewer {
                 Label { Text(spec.label) } icon: { glyph }
             }
@@ -351,8 +358,8 @@ public struct MeeshyGlassButton<Glyph: View, Badge: View>: View {
     }
 
     private func fireLongPress() {
+        guard let onLongPress, isEnabled else { return }
         longPressFired = true
-        guard let onLongPress else { return }
         MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled, haptic: spec.haptic, action: onLongPress)
     }
 }
@@ -465,19 +472,29 @@ private struct MeeshyGlassPressLabel<Content: View>: View {
     var body: some View {
         content()
             .environment(\.meeshyGlassIsPressed, isPressed)
-            .adaptiveOnChange(of: isPressed) { _, pressed in
+            .adaptiveOnChange(of: isPressed) { wasPressed, pressed in
                 if pressed, longPressFired.wrappedValue { longPressFired.wrappedValue = false }
-                onPressChange?(pressed)
+                if let report = MeeshyGlassPressReport.report(from: wasPressed, to: pressed) { onPressChange?(report) }
             }
             .onDisappear {
-                guard isPressed else { return }
-                onPressChange?(false)
+                if let report = MeeshyGlassPressReport.report(from: isPressed, to: nil) { onPressChange?(report) }
             }
     }
 }
 
+/// Ce que l'hôte entend du doigt (`onPressChange`) : posé, levé, et levé si le
+/// bouton quitte l'écran doigt posé (`to == nil`). Rien quand rien ne change.
+/// Une loi pure, testée sans écran.
+enum MeeshyGlassPressReport {
+    static func report(from wasPressed: Bool, to isPressed: Bool?) -> Bool? {
+        guard let isPressed else { return wasPressed ? false : nil }
+        return wasPressed == isPressed ? nil : isPressed
+    }
+}
+
 /// L'appui long : 500 ms, annulé au-delà de 10 pt. N'existe que si l'hôte en
-/// donne un (et que le bouton répond au toucher).
+/// donne un ; désactivé, il ne fait rien (`fireLongPress`). L'identité du
+/// bouton ne dépend donc pas de `.disabled`.
 private struct MeeshyGlassLongPress: ViewModifier {
     let isOn: Bool
     let perform: () -> Void
@@ -523,14 +540,16 @@ private struct MeeshyGlassTraits: ViewModifier {
     }
 }
 
+/// L'appui long offert au lecteur d'écran dès qu'il existe : sans
+/// `longPressLabel`, il porte le nom du bouton plutôt que de disparaître.
 private struct MeeshyGlassLongPressAction: ViewModifier {
-    let label: String?
+    let name: String
     let perform: (() -> Void)?
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if let label, let perform {
-            content.accessibilityAction(named: Text(label), perform)
+        if let perform {
+            content.accessibilityAction(named: Text(name), perform)
         } else {
             content
         }

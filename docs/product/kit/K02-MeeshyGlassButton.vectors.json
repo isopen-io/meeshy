@@ -409,7 +409,9 @@
     "glyphMin": 3.0,
     "active": 15.99,
     "destructive": 3.76,
-    "tolerance": 0.05
+    "tolerance": 0.05,
+    "softOnDense": 5.34,
+    "softOnLight": 4.68
   },
   "activation": [
     {
@@ -498,6 +500,38 @@
       "haptic": false,
       "touchResponse": false,
       "opacity": 0.4
+    }
+  ],
+  "pressReport": [
+    {
+      "from": false,
+      "to": true,
+      "report": true
+    },
+    {
+      "from": true,
+      "to": false,
+      "report": false
+    },
+    {
+      "from": true,
+      "to": true,
+      "report": null
+    },
+    {
+      "from": false,
+      "to": false,
+      "report": null
+    },
+    {
+      "from": true,
+      "to": null,
+      "report": false
+    },
+    {
+      "from": false,
+      "to": null,
+      "report": null
     }
   ]
 }

@@ -71,7 +71,7 @@ Loi 13 :
 - Dynamic Type, `fontScale`, zoom : glyphe figé dans son disque. iOS ajoute le Large Content Viewer (glyphe et nom) ; le web mesure en `rem` et tient à 200 %.
 - Web, clavier : `<button type="button">`, Tab, Entrée et Espace, anneau `:focus-visible` de K01 visible aussi sur blanc et sur rouge, `title` égal au nom. Android et iPad au clavier : même anneau.
 - RTL : rien à refléter dans le disque ; la pastille suit le bord de fin ; un glyphe directionnel est l'affaire de l'hôte.
-- Contraste, calculé depuis la recette : encre sombre sur blanc 15,99:1 ; glyphe blanc sur rouge 3,76:1 ; glyphe blanc sur doux 4,63:1 (verre dense) et 3,96:1 (`onLight`) ; normal : valeurs de K01. Le doux se pose sur un verre dense ou un fond sombre : sur `deep` simple et image blanche il tombe à 2,66:1.
+- Contraste, calculé depuis la recette : encre sombre sur blanc 15,99:1 ; glyphe blanc sur rouge 3,76:1 ; glyphe blanc sur doux 5,34:1 (verre dense) et 4,68:1 (`onLight`) au repos, 4,19:1 et 3,76:1 appuyé (relevé du 2026-11-11 : la recette de K01 composée en sRGB encodé sur le pire fond, blanc ; la première rédaction disait 4,63 et 3,96) ; normal : valeurs de K01. Le doux se pose sur un verre dense ou un fond sombre : sur `deep` simple et image blanche il tombe à 2,89:1.
 - « Réduire la transparence » : K01 rend opaque ; les fonds pleins ne changent pas.
 
 ## 5 bis. Performance
@@ -163,3 +163,9 @@ Choix retenus (mode autonome ; alternatives entre parenthèses) :
 - Sous le Liquid Glass la recette ne bouge ni à l'appui ni au survol : le système répond.
 - Le ton `theme` : l'encre est `MeeshyColors.textPrimary(isDark:)`, l'actif y est le disque de cette encre et le glyphe `backgroundPrimary(isDark:)`.
 - Pas d'état occupé : la fiche du 2026-11-11 ne le porte pas (un état de plus sans vue).
+- Relecture du 2026-11-11 :
+  - le fondu normal ↔ actif se pose AU-DESSUS de la demande faite à K01 : sur le verre dessiné, passer de « verre » à « fond plein » change l'identité du disque, et le fondu posé dessous ne jouait pas (bascule sèche) ; c'est désormais un fondu enchaîné de 200 ms, immédiat sous « réduire les animations », l'ombre de l'actif restant hors animation ;
+  - l'appui long garde son action nommée sans `longPressLabel` (elle prend le nom du bouton) : sans cela, il était hors d'atteinte du lecteur d'écran ;
+  - `.disabled` ne change plus l'identité du bouton (le geste d'appui long ne dépend que de sa présence ; désactivé, il ne fait rien) ;
+  - `onPressChange` suit une loi pure, `MeeshyGlassPressReport`, lue dans les vecteurs (`pressReport`) ;
+  - l'échantillon `normal` (R2) du catalogue ne pose plus de verre de pilule sous le Liquid Glass : les verres des boutons s'y fondent en groupe, jamais de verre sur du verre ; le verre de la pilule n'existe que dessiné (K10 en héritera).
