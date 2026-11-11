@@ -93,7 +93,7 @@
     <string name="game2_duo_invited_inviter">Invito inviato a %1$s. In attesa della risposta.</string>
     <string name="game2_duo_locked">L’alleanza si apre al livello %1$s, per entrambi. Sei al livello %2$s.</string>
     <string name="game2_duo_no_friends">Ti serve un amico accettato per stringere un’alleanza.</string>
-    <string name="game2_duo_none">Scegli un amico con cui allearti: se ciascuno compie la sua parte entro la settimana, la ricompensa raddoppia.</string>
+    <string name="game2_duo_none">Stringi un’alleanza con un amico accettato: se ciascuno compie la sua parte entro la settimana, la ricompensa raddoppia.</string>
     <string name="game2_duo_pick">Scegli un amico</string>
     <string name="game2_duo_progress_common">Insieme: %1$s su %2$s</string>
     <string name="game2_duo_progress_me">Tu: %1$s su %2$s</string>
@@ -371,7 +371,7 @@
     <string name="game_concept_atlas_name">L’Atlante</string>
     <string name="game_concept_atlas_tip_1">Scrivi a qualcuno in una lingua diversa dalla tua.</string>
     <string name="game_concept_atlas_tip_2">Aspetta la risposta: serve un messaggio in ogni direzione.</string>
-    <string name="game_concept_atlas_use">Guarda gli scambi a metà: manca un messaggio inviato o uno ricevuto per posare il timbro. Il tuo Atlante è privato per impostazione predefinita: scegli tu chi lo vede.</string>
+    <string name="game_concept_atlas_use">Guarda gli scambi a metà. Il tuo Atlante è privato per impostazione predefinita: scegli tu chi lo vede.</string>
     <string name="game_concept_atlas_what">L’Atlante è il tuo passaporto delle lingue: le terre che la tua voce ha attraversato, un timbro per ogni lingua davvero scambiata.</string>
     <string name="game_concept_atlas_why">L’Atlante conserva un timbro per ogni lingua in cui hai conversato.</string>
     <string name="game_concept_badges_how">Ripeti un gesto: la sua medaglia cambia materia, dal rame al prisma.</string>
@@ -402,7 +402,7 @@
     <string name="game_concept_defis_name">Sfide</string>
     <string name="game_concept_defis_tip_1">Guarda il prossimo gradino e avanza verso di lui.</string>
     <string name="game_concept_defis_tip_2">Prova gesti nuovi: ognuno ha le sue sfide.</string>
-    <string name="game_concept_defis_use">Apri l’elenco, trova il gradino più vicino e avanza verso di lui. Ogni gradino dice la sua rarità.</string>
+    <string name="game_concept_defis_use">Apri l’elenco: ogni gradino dice la sua rarità.</string>
     <string name="game_concept_defis_what">Una sfida è un gradino numerato in una famiglia di gesti: un numero da raggiungere.</string>
     <string name="game_concept_defis_why">Le sfide sono gradini da superare, uno dopo l’altro.</string>
     <string name="game_concept_elans_how">Fai gesti di più famiglie in questi giorni per attivarlo.</string>
@@ -446,11 +446,11 @@
     <string name="game_concept_fact_window">Finestra</string>
     <string name="game_concept_fact_yes">Sì</string>
     <string name="game_concept_fact_zone">Zona</string>
-    <string name="game_concept_flame_how">Un gesto al giorno la alimenta; una Lucerna la custodisce per un giorno.</string>
+    <string name="game_concept_flame_how">Cresce di un giorno per ogni giorno in cui fai un gesto.</string>
     <string name="game_concept_flame_name">La Fiamma</string>
     <string name="game_concept_flame_tip_1">Fai almeno un gesto ogni giorno.</string>
     <string name="game_concept_flame_tip_2">Tieni una Lucerna per i giorni senza.</string>
-    <string name="game_concept_flame_use" formatted="false">Ogni giorno di Fiamma aggiunge il 2 % alle scintille dei tuoi sogni, fino al 50 %. Una Lucerna la custodisce per un giorno di assenza. Spenta, si riaccende con le Meesh entro 48 ore.</string>
+    <string name="game_concept_flame_use" formatted="false">Ogni giorno di Fiamma aggiunge il 2 % alle scintille dei tuoi sogni, fino al 50 %. Spenta, si riaccende con le Meesh entro 48 ore.</string>
     <string name="game_concept_flame_what">La tua Fiamma è il fuoco che i tuoi antenati ti affidano: cresce ogni giorno in cui fai almeno un gesto, e cambia forma crescendo, dalla Brace al Sole.</string>
     <string name="game_concept_flame_why">La tua Fiamma racconta i tuoi giorni di fila, e nutre i tuoi sogni.</string>
     <string name="game_concept_glory_how">Coni, nuovi livelli e imprese fanno crescere la tua gloria.</string>
@@ -494,13 +494,13 @@
     <string name="game_concept_missions_name">Il Sogno</string>
     <string name="game_concept_missions_tip_1">Comincia dall’atto più facile.</string>
     <string name="game_concept_missions_tip_2">Un atto non ti piace? Cambialo, una volta al giorno.</string>
-    <string name="game_concept_missions_use">Apri un atto per vedere a che punto sei. Puoi cambiarne uno al giorno con una Meesh. Compiuti tutti e tre, apri l’Offerta: scintille, gloria, a volte un premio, un frammento di stella o una Lucerna.</string>
+    <string name="game_concept_missions_use">Apri un atto per vedere a che punto sei. L’Offerta dà scintille, gloria, a volte un premio, un frammento di stella o una Lucerna.</string>
     <string name="game_concept_missions_what">Ogni notte, un sogno in tre atti: piccoli obiettivi da compiere in giornata, sempre più ricchi di gloria. L’Offerta lo accompagna.</string>
     <string name="game_concept_missions_why">Ogni notte, i tuoi antenati ti mandano un sogno da compiere.</string>
     <string name="game_concept_photo_offer">Immortala questo momento</string>
     <string name="game_concept_points_how">Ogni vero scambio le fa scaturire: scrivi, parli, pubblichi, reagisci.</string>
     <string name="game_concept_points_name">Scintille</string>
-    <string name="game_concept_points_tip_1">Pubblica, commenta, reagisci: ogni gesto fa scaturire le sue.</string>
+    <string name="game_concept_points_tip_1">Torna ogni giorno: una Fiamma accesa nutre le tue scintille.</string>
     <string name="game_concept_points_tip_2">Attiva uno slancio per moltiplicare le tue scintille.</string>
     <string name="game_concept_points_use">La tua luce conia le Meesh della tua eredità. Coniare una Meesh ne fissa una parte nella moneta: la tua luce, e quindi il tuo livello, scende di altrettanto.</string>
     <string name="game_concept_points_what">Ogni vero scambio fa scaturire scintille: insieme, formano la tua luce. Più cresce, più brilla, e il suo splendore è il tuo livello.</string>
@@ -517,7 +517,7 @@
     <string name="game_concept_season_name">Il Viaggio</string>
     <string name="game_concept_season_tip_1">Compi gli atti del tuo sogno per avanzare di qualche passo.</string>
     <string name="game_concept_season_tip_2">Stringi un’alleanza con un amico: la ricompensa raddoppia.</string>
-    <string name="game_concept_season_use">Avanza di qualche passo, poi riscatta ogni sosta raggiunta: scintille, un frammento di stella, una Lucerna. Il viaggio compiuto dà la coppa del viaggio. Il Sigillo del viaggio è un oggetto da collezione, preso con le Meesh.</string>
+    <string name="game_concept_season_use">Riscatta ogni sosta raggiunta: scintille, un frammento di stella, una Lucerna. Il viaggio compiuto dà la coppa del viaggio. Il Sigillo del viaggio è un oggetto da collezione, preso con le Meesh.</string>
     <string name="game_concept_season_what">Un viaggio dura otto settimane, in una terra di lingua, con quaranta soste e i loro doni gratuiti.</string>
     <string name="game_concept_season_why">Il viaggio dura otto settimane in terra di lingua, e finisce in coppa.</string>
     <string name="game_concept_section_act">Tocca a te</string>
@@ -525,14 +525,14 @@
     <string name="game_concept_showcase_name">Trofei</string>
     <string name="game_concept_showcase_tip_1">Finisci in cima al tuo torneo per vincere una coppa.</string>
     <string name="game_concept_showcase_tip_2">Porta a termine un viaggio o rinasci.</string>
-    <string name="game_concept_showcase_use">Sistema i tuoi trofei nell’ordine che vuoi e scegli chi li vede: tutti, i tuoi amici o solo tu. Un trofeo non porta nulla: si mostra.</string>
+    <string name="game_concept_showcase_use">Un trofeo non porta nulla: si mostra. I livelli di visibilità sono tutti, i tuoi amici o solo tu.</string>
     <string name="game_concept_showcase_what">Lo scaffale dei tuoi trofei: coppe del torneo e del viaggio, trofei di rinascita e della Fiamma.</string>
     <string name="game_concept_showcase_why">I tuoi trofei custodiscono il ricordo delle tue vittorie.</string>
     <string name="game_concept_succes_how">Si compie in un colpo solo, quando riunisci ciò che chiede.</string>
     <string name="game_concept_succes_name">Imprese</string>
     <string name="game_concept_succes_tip_1">Esplora l’app: alcune imprese sono nascoste.</string>
     <string name="game_concept_succes_tip_2">Le più rare fanno crescere di più la tua gloria.</string>
-    <string name="game_concept_succes_use">Apri un’impresa per leggere che cosa chiede. Compiuta, fa crescere la tua gloria: più è rara, più cresce.</string>
+    <string name="game_concept_succes_use">Apri un’impresa per leggere che cosa chiede. Compiuta, fa crescere la tua gloria.</string>
     <string name="game_concept_succes_what">Un’impresa è un riconoscimento che si compie una sola volta, con la sua data e la sua rarità.</string>
     <string name="game_concept_succes_why">Un’impresa segna un momento raro della tua leggenda.</string>
     <string name="game_concept_value_factor">×%1$s</string>
@@ -725,7 +725,7 @@
     <string name="game_flame_panel_relight">Riaccendi la Fiamma · %1$s</string>
     <string name="game_flame_panel_relight_closed">Questa Fiamma non può più essere riaccesa. Una nuova Fiamma inizia con il tuo prossimo gesto.</string>
     <string name="game_flame_panel_relight_intro">La tua Fiamma si è spenta: riaccendila adesso, riparte da dove si era fermata.</string>
-    <string name="game_flame_panel_relight_missing_window">Per riaccenderla ti serve %1$s, se si è spenta meno di 48 ore fa.</string>
+    <string name="game_flame_panel_relight_missing_window">Puoi riaccenderla nelle 48 ore successive allo spegnimento.</string>
     <string name="game_flame_panel_title">Vegliare sulla tua Fiamma</string>
     <string name="game_flame_status_at_risk">Fai un gesto prima di mezzanotte</string>
     <string name="game_flame_status_covered">Una Lucerna la custodisce</string>
@@ -969,7 +969,7 @@
     <string name="game_notebook_catch_up">Da recuperare</string>
     <string name="game_notebook_catch_up_locked">Prima scatta: %1$s</string>
     <string name="game_notebook_device_only">Le tue foto vivono su questo dispositivo.</string>
-    <string name="game_notebook_empty">La tua Cronaca aspetta la sua prima pagina. A ogni segno dei tuoi antenati, una foto con Mee e Meo, conservata su questo dispositivo.</string>
+    <string name="game_notebook_empty">La tua Cronaca aspetta la sua prima pagina: a ogni segno dei tuoi antenati, una foto con Mee e Meo.</string>
     <string name="game_notebook_kept">Foto conservate</string>
     <string name="game_notebook_page_title">La Cronaca</string>
     <string name="game_notebook_pending">In attesa</string>

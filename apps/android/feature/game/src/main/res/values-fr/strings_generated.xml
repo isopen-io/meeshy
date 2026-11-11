@@ -93,7 +93,7 @@
     <string name="game2_duo_invited_inviter">Invitation envoyée à %1$s. Elle attend sa réponse.</string>
     <string name="game2_duo_locked">L’alliance s’ouvre au niveau %1$s, pour vous deux. Tu es au niveau %2$s.</string>
     <string name="game2_duo_no_friends">Il te faut un ami accepté pour faire alliance.</string>
-    <string name="game2_duo_none">Choisis un ami pour faire alliance : si chacun réalise sa part dans la semaine, la récompense double.</string>
+    <string name="game2_duo_none">Fais alliance avec un ami accepté : si chacun réalise sa part dans la semaine, la récompense double.</string>
     <string name="game2_duo_pick">Choisis un ami</string>
     <string name="game2_duo_progress_common">À deux : %1$s sur %2$s</string>
     <string name="game2_duo_progress_me">Toi : %1$s sur %2$s</string>
@@ -371,7 +371,7 @@
     <string name="game_concept_atlas_name">L’Atlas</string>
     <string name="game_concept_atlas_tip_1">Écris à quelqu’un dans une autre langue que la tienne.</string>
     <string name="game_concept_atlas_tip_2">Attends sa réponse : il faut un message dans chaque sens.</string>
-    <string name="game_concept_atlas_use">Regarde les échanges à moitié faits : il manque un message envoyé ou un message reçu pour poser le tampon. Ton Atlas est privé par défaut : tu choisis qui le voit.</string>
+    <string name="game_concept_atlas_use">Regarde les échanges à moitié faits. Ton Atlas est privé par défaut : tu choisis qui le voit.</string>
     <string name="game_concept_atlas_what">L’Atlas est ton passeport des langues : les terres que ta voix a traversées, un tampon par langue vraiment échangée.</string>
     <string name="game_concept_atlas_why">L’Atlas garde un tampon pour chaque langue dans laquelle tu as échangé.</string>
     <string name="game_concept_badges_how">Répète un geste : sa médaille change de matière, du cuivre au prisme.</string>
@@ -402,7 +402,7 @@
     <string name="game_concept_defis_name">Défis</string>
     <string name="game_concept_defis_tip_1">Regarde le prochain palier et avance vers lui.</string>
     <string name="game_concept_defis_tip_2">Essaie des gestes nouveaux : chacun a ses défis.</string>
-    <string name="game_concept_defis_use">Ouvre la liste, repère le palier le plus proche et avance vers lui. Chaque palier dit sa rareté.</string>
+    <string name="game_concept_defis_use">Ouvre la liste : chaque palier dit sa rareté.</string>
     <string name="game_concept_defis_what">Un défi est un palier chiffré dans une famille de gestes : un nombre à atteindre.</string>
     <string name="game_concept_defis_why">Les défis sont des paliers à franchir, l’un après l’autre.</string>
     <string name="game_concept_elans_how">Fais des gestes de plusieurs familles ces jours-ci pour le déclencher.</string>
@@ -446,11 +446,11 @@
     <string name="game_concept_fact_window">Fenêtre</string>
     <string name="game_concept_fact_yes">Oui</string>
     <string name="game_concept_fact_zone">Zone</string>
-    <string name="game_concept_flame_how">Un geste par jour l’entretient ; une Veilleuse la garde un jour.</string>
+    <string name="game_concept_flame_how">Elle grandit d’un jour à chaque jour où tu fais un geste.</string>
     <string name="game_concept_flame_name">La Flamme</string>
     <string name="game_concept_flame_tip_1">Fais au moins un geste chaque jour.</string>
     <string name="game_concept_flame_tip_2">Garde une Veilleuse pour les jours sans.</string>
-    <string name="game_concept_flame_use" formatted="false">Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Une Veilleuse la garde un jour d’absence. Éteinte, elle se rallume avec des Meeshes pendant 48 h.</string>
+    <string name="game_concept_flame_use" formatted="false">Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Éteinte, elle se rallume avec des Meeshes pendant 48 h.</string>
     <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant, de la Braise au Soleil.</string>
     <string name="game_concept_flame_why">Ta Flamme dit tes jours d’affilée, et elle nourrit tes rêves.</string>
     <string name="game_concept_glory_how">Frappes, nouveaux niveaux et hauts faits font grandir ta gloire.</string>
@@ -494,13 +494,13 @@
     <string name="game_concept_missions_name">Le Rêve</string>
     <string name="game_concept_missions_tip_1">Commence par l’acte le plus facile.</string>
     <string name="game_concept_missions_tip_2">Un acte ne te plaît pas ? Change-le, une fois par jour.</string>
-    <string name="game_concept_missions_use">Ouvre un acte pour voir où tu en es. Tu peux en changer un par jour avec une Meesh. Les trois réalisés, ouvre l’Offrande : des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.</string>
+    <string name="game_concept_missions_use">Ouvre un acte pour voir où tu en es. L’Offrande donne des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.</string>
     <string name="game_concept_missions_what">Chaque nuit, un rêve en trois actes : de petits buts à réaliser dans la journée, de plus en plus riches en gloire. L’Offrande l’accompagne.</string>
     <string name="game_concept_missions_why">Chaque nuit, tes aïeux t’envoient un rêve à réaliser.</string>
     <string name="game_concept_photo_offer">Immortaliser ce moment</string>
     <string name="game_concept_points_how">Chaque vrai échange en fait jaillir : écrire, parler, publier, réagir.</string>
     <string name="game_concept_points_name">Étincelles</string>
-    <string name="game_concept_points_tip_1">Publie, commente, réagis : chaque geste fait jaillir les siennes.</string>
+    <string name="game_concept_points_tip_1">Reviens chaque jour : une Flamme allumée nourrit tes étincelles.</string>
     <string name="game_concept_points_tip_2">Déclenche un élan pour multiplier tes étincelles.</string>
     <string name="game_concept_points_use">Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant.</string>
     <string name="game_concept_points_what">Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière. Plus elle grandit, plus elle brille, et son éclat, c’est ton niveau.</string>
@@ -517,7 +517,7 @@
     <string name="game_concept_season_name">Le Voyage</string>
     <string name="game_concept_season_tip_1">Réalise les actes de ton rêve pour avancer de quelques pas.</string>
     <string name="game_concept_season_tip_2">Fais alliance avec un ami : la récompense double.</string>
-    <string name="game_concept_season_use">Avance de quelques pas, puis réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.</string>
+    <string name="game_concept_season_use">Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.</string>
     <string name="game_concept_season_what">Un voyage dure huit semaines, dans une terre de langue, avec quarante haltes et leurs présents gratuits.</string>
     <string name="game_concept_season_why">Le voyage dure huit semaines en terre de langue, avec une coupe au bout.</string>
     <string name="game_concept_section_act">À toi de jouer</string>
@@ -525,14 +525,14 @@
     <string name="game_concept_showcase_name">Trophées</string>
     <string name="game_concept_showcase_tip_1">Finis en haut de ta joute pour gagner une coupe.</string>
     <string name="game_concept_showcase_tip_2">Achève un voyage ou renais.</string>
-    <string name="game_concept_showcase_use">Range tes trophées dans l’ordre que tu veux et choisis qui les voit : tout le monde, tes amis ou toi seul. Un trophée ne rapporte rien : il se montre.</string>
+    <string name="game_concept_showcase_use">Un trophée ne rapporte rien : il se montre. Les niveaux de visibilité sont tout le monde, tes amis ou toi seul.</string>
     <string name="game_concept_showcase_what">L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme.</string>
     <string name="game_concept_showcase_why">Tes trophées gardent la trace de tes victoires.</string>
     <string name="game_concept_succes_how">Il s’accomplit d’un coup, quand tu réunis ce qu’il demande.</string>
     <string name="game_concept_succes_name">Hauts faits</string>
     <string name="game_concept_succes_tip_1">Explore l’application : certains hauts faits se cachent.</string>
     <string name="game_concept_succes_tip_2">Les plus rares font le plus grandir ta gloire.</string>
-    <string name="game_concept_succes_use">Ouvre un haut fait pour lire ce qu’il demande. Accompli, il fait grandir ta gloire : plus il est rare, plus elle grandit.</string>
+    <string name="game_concept_succes_use">Ouvre un haut fait pour lire ce qu’il demande. Accompli, il fait grandir ta gloire.</string>
     <string name="game_concept_succes_what">Un haut fait est une distinction qui s’accomplit une seule fois, avec sa date et sa rareté.</string>
     <string name="game_concept_succes_why">Un haut fait marque un moment rare de ta légende.</string>
     <string name="game_concept_value_factor">×%1$s</string>
@@ -725,7 +725,7 @@
     <string name="game_flame_panel_relight">Rallumer la Flamme · %1$s</string>
     <string name="game_flame_panel_relight_closed">Cette Flamme ne peut plus être rallumée. Une nouvelle Flamme commence dès ton prochain geste.</string>
     <string name="game_flame_panel_relight_intro">Ta Flamme s’est éteinte : rallume-la maintenant, elle repart là où elle s’était arrêtée.</string>
-    <string name="game_flame_panel_relight_missing_window">Il te faut %1$s pour la rallumer, si elle s’est éteinte il y a moins de 48 h.</string>
+    <string name="game_flame_panel_relight_missing_window">Rallumage possible dans les 48 h qui suivent l’extinction.</string>
     <string name="game_flame_panel_title">Veiller sur ta Flamme</string>
     <string name="game_flame_status_at_risk">Fais un geste avant minuit</string>
     <string name="game_flame_status_covered">Une Veilleuse la garde</string>
@@ -969,7 +969,7 @@
     <string name="game_notebook_catch_up">À rattraper</string>
     <string name="game_notebook_catch_up_locked">Prends d’abord : %1$s</string>
     <string name="game_notebook_device_only">Tes photos vivent sur cet appareil.</string>
-    <string name="game_notebook_empty">Ta Chronique attend sa première page. À chaque signe de tes aïeux, une photo avec Mee et Meo, gardée sur cet appareil.</string>
+    <string name="game_notebook_empty">Ta Chronique attend sa première page : à chaque signe de tes aïeux, une photo avec Mee et Meo.</string>
     <string name="game_notebook_kept">Photos gardées</string>
     <string name="game_notebook_page_title">La Chronique</string>
     <string name="game_notebook_pending">En attente</string>

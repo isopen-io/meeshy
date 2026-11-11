@@ -263684,43 +263684,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تحتاج إلى %@ لإعادة إشعاله إذا انطفأ قبل أقل من 48 ساعة."
+            "value": "يمكن إعادة إشعاله خلال 48 ساعة من انطفائه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zum Neuentzünden brauchst du %@, falls sie vor weniger als 48 h erloschen ist."
+            "value": "Neu entzünden ist in den 48 h nach dem Erlöschen möglich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You need %@ to relight it, if it went out less than 48 h ago."
+            "value": "Relighting is possible within 48 h of it going out."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Necesitas %@ para volver a encenderla, si se apagó hace menos de 48 h."
+            "value": "Se puede volver a encender en las 48 h siguientes a que se apague."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il te faut %@ pour la rallumer, si elle s’est éteinte il y a moins de 48 h."
+            "value": "Rallumage possible dans les 48 h qui suivent l’extinction."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Per riaccenderla ti serve %@, se si è spenta meno di 48 ore fa."
+            "value": "Puoi riaccenderla nelle 48 ore successive allo spegnimento."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você precisa de %@ para reacendê-la, se ela se apagou há menos de 48 h."
+            "value": "Dá para reacender nas 48 h seguintes ao apagamento."
           }
         }
       }
@@ -271674,43 +271674,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سيرتك تنتظر صفحتها الأولى. مع كل علامة من أجدادك، صورة مع مي وميو، تبقى على جهازك."
+            "value": "سيرتك تنتظر صفحتها الأولى: مع كل علامة من أجدادك، صورة مع مي وميو."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Chronik wartet auf ihre erste Seite. Bei jedem Zeichen deiner Ahnen ein Foto mit Mee und Meo, gespeichert auf diesem Gerät."
+            "value": "Deine Chronik wartet auf ihre erste Seite: bei jedem Zeichen deiner Ahnen ein Foto mit Mee und Meo."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your Chronicle is waiting for its first page. At each sign from your ancestors, a photo with Mee and Meo, kept on this device."
+            "value": "Your Chronicle is waiting for its first page: at each sign from your ancestors, a photo with Mee and Meo."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu Crónica espera su primera página. En cada señal de tus ancestros, una foto con Mee y Meo, guardada en este dispositivo."
+            "value": "Tu Crónica espera su primera página: en cada señal de tus ancestros, una foto con Mee y Meo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta Chronique attend sa première page. À chaque signe de tes aïeux, une photo avec Mee et Meo, gardée sur cet appareil."
+            "value": "Ta Chronique attend sa première page : à chaque signe de tes aïeux, une photo avec Mee et Meo."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua Cronaca aspetta la sua prima pagina. A ogni segno dei tuoi antenati, una foto con Mee e Meo, conservata su questo dispositivo."
+            "value": "La tua Cronaca aspetta la sua prima pagina: a ogni segno dei tuoi antenati, una foto con Mee e Meo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua Crônica espera a primeira página. A cada sinal dos seus ancestrais, uma foto com Mee e Meo, guardada neste aparelho."
+            "value": "Sua Crônica espera a primeira página: a cada sinal dos seus ancestrais, uma foto com Mee e Meo."
           }
         }
       }
@@ -289912,43 +289912,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اختر صديقًا لتتحالف معه: إن حقّق كلٌّ منكما حصته خلال الأسبوع، تتضاعف المكافأة."
+            "value": "اعقد تحالفًا مع صديق مقبول: إن حقّق كلٌّ منكما حصته خلال الأسبوع، تتضاعف المكافأة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wähle einen Freund für ein Bündnis: Wenn jeder in der Woche seinen Teil erfüllt, verdoppelt sich die Belohnung."
+            "value": "Schließe ein Bündnis mit einem bestätigten Freund: Wenn jeder in der Woche seinen Teil erfüllt, verdoppelt sich die Belohnung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose a friend to form an alliance: if each of you does your part within the week, the reward doubles."
+            "value": "Form an alliance with an accepted friend: if each of you does your part within the week, the reward doubles."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Elige a un amigo para sellar una alianza: si cada uno hace realidad su parte en la semana, la recompensa se duplica."
+            "value": "Haz una alianza con un amigo aceptado: si cada uno hace realidad su parte en la semana, la recompensa se duplica."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisis un ami pour faire alliance : si chacun réalise sa part dans la semaine, la récompense double."
+            "value": "Fais alliance avec un ami accepté : si chacun réalise sa part dans la semaine, la récompense double."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scegli un amico con cui allearti: se ciascuno compie la sua parte entro la settimana, la ricompensa raddoppia."
+            "value": "Stringi un’alleanza con un amico accettato: se ciascuno compie la sua parte entro la settimana, la ricompensa raddoppia."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escolha um amigo para fazer aliança: se cada um realizar a sua parte na semana, a recompensa dobra."
+            "value": "Faça aliança com um amigo aceito: se cada um realizar a sua parte na semana, a recompensa dobra."
           }
         }
       }
@@ -298419,43 +298419,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انشر، علّق، تفاعل: كل إجراء يُطلق شراراته."
+            "value": "عُد كل يوم: لهب مشتعل يغذّي شراراتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Poste, kommentiere, reagiere: Jede Aktion lässt ihre eigenen Funken sprühen."
+            "value": "Komm jeden Tag wieder: Eine brennende Flamme nährt deine Funken."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Post, comment, react: each move makes its own sparks fly."
+            "value": "Come back every day: a lit Flame feeds your sparks."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publica, comenta, reacciona: cada gesto hace brotar las suyas."
+            "value": "Vuelve cada día: una Llama encendida alimenta tus chispas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publie, commente, réagis : chaque geste fait jaillir les siennes."
+            "value": "Reviens chaque jour : une Flamme allumée nourrit tes étincelles."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pubblica, commenta, reagisci: ogni gesto fa scaturire le sue."
+            "value": "Torna ogni giorno: una Fiamma accesa nutre le tue scintille."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publique, comente, reaja: cada gesto faz saltar as suas."
+            "value": "Volte todo dia: uma Chama acesa alimenta suas faíscas."
           }
         }
       }
@@ -299077,43 +299077,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إجراء واحد في اليوم يُبقيه متّقدًا؛ والقنديل يحرسه يومًا."
+            "value": "ينمو يومًا عن كل يوم تقوم فيه بإجراء."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Aktion pro Tag nährt sie; eine Hüterin wacht einen Tag über sie."
+            "value": "Sie wächst um einen Tag für jeden Tag, an dem du eine Aktion ausführst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "One move a day tends it; a Vigil guards it for a day."
+            "value": "It grows by one day for each day you make a move."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un gesto al día la mantiene; una Vela la guarda un día."
+            "value": "Crece un día por cada día en que haces un gesto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un geste par jour l’entretient ; une Veilleuse la garde un jour."
+            "value": "Elle grandit d’un jour à chaque jour où tu fais un geste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un gesto al giorno la alimenta; una Lucerna la custodisce per un giorno."
+            "value": "Cresce di un giorno per ogni giorno in cui fai un gesto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um gesto por dia a mantém; uma Lamparina cuida dela por um dia."
+            "value": "Ela cresce um dia a cada dia em que você faz um gesto."
           }
         }
       }
@@ -315680,43 +315680,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل يوم من اللهب يضيف ⁦2%⁩ إلى شرارات أحلامك، حتى ⁦50%⁩. القنديل يحرسه يوم غيابك. وإن انطفأ، يُعاد إشعاله بعملات Meesh خلال 48 ساعة."
+            "value": "كل يوم من اللهب يضيف ⁦2%⁩ إلى شرارات أحلامك، حتى ⁦50%⁩. وإن انطفأ، يُعاد إشعاله بعملات Meesh خلال 48 ساعة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeder Tag deiner Flamme schenkt den Funken deiner Träume 2 % mehr, bis zu 50 %. Eine Hüterin hält sie einen Tag deiner Abwesenheit am Brennen. Ist sie erloschen, entzündest du sie 48 Stunden lang mit Meeshes neu."
+            "value": "Jeder Tag deiner Flamme schenkt den Funken deiner Träume 2 % mehr, bis zu 50 %. Ist sie erloschen, entzündest du sie 48 Stunden lang mit Meeshes neu."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Each day of Flame adds 2 % to the sparks of your dreams, up to 50 %. A Vigil guards it for one day away. Once out, it can be relit with Meeshes for 48 hours."
+            "value": "Each day of Flame adds 2 % to the sparks of your dreams, up to 50 %. Once out, it can be relit with Meeshes for 48 hours."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada día de Llama añade un 2 % a las chispas de tus sueños, hasta un 50 %. Una Vela la guarda un día de ausencia. Apagada, se vuelve a encender con Meeshes durante 48 h."
+            "value": "Cada día de Llama añade un 2 % a las chispas de tus sueños, hasta un 50 %. Apagada, se vuelve a encender con Meeshes durante 48 h."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Une Veilleuse la garde un jour d’absence. Éteinte, elle se rallume avec des Meeshes pendant 48 h."
+            "value": "Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Éteinte, elle se rallume avec des Meeshes pendant 48 h."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni giorno di Fiamma aggiunge il 2 % alle scintille dei tuoi sogni, fino al 50 %. Una Lucerna la custodisce per un giorno di assenza. Spenta, si riaccende con le Meesh entro 48 ore."
+            "value": "Ogni giorno di Fiamma aggiunge il 2 % alle scintille dei tuoi sogni, fino al 50 %. Spenta, si riaccende con le Meesh entro 48 ore."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada dia de Chama soma 2% às faíscas dos seus sonhos, até 50%. Uma Lamparina cuida dela num dia de ausência. Apagada, ela se reacende com Meeshes durante 48 h."
+            "value": "Cada dia de Chama soma 2% às faíscas dos seus sonhos, até 50%. Apagada, ela se reacende com Meeshes durante 48 h."
           }
         }
       }
@@ -315774,43 +315774,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "افتح فصلًا لترى أين وصلت. يمكنك تبديل فصل واحد في اليوم بعملة Meesh. وحين تتحقّق الثلاثة، افتح العطيّة: شرارات، ومجد، وأحيانًا علاوة، أو شظية نجم، أو قنديل."
+            "value": "افتح فصلًا لترى أين وصلت. العطيّة تمنح شرارات ومجدًا، وأحيانًا علاوة أو شظية نجم أو قنديلًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffne einen Akt, um zu sehen, wo du stehst. Einen pro Tag kannst du mit einer Meesh tauschen. Sind alle drei erfüllt, öffne die Gabe: Funken, Ruhm, manchmal ein Bonus, ein Sternfragment oder eine Hüterin."
+            "value": "Öffne einen Akt, um zu sehen, wo du stehst. Die Gabe schenkt Funken, Ruhm, manchmal einen Bonus, ein Sternfragment oder eine Hüterin."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open an act to see where you stand. You can change one a day with a Meesh. Once all three are complete, open the Offering: sparks, glory, sometimes a bonus, a star fragment or a Vigil."
+            "value": "Open an act to see where you stand. The Offering gives sparks, glory, sometimes a bonus, a star fragment or a Vigil."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abre un acto para ver por dónde vas. Puedes cambiar uno al día con una Meesh. Con los tres hechos realidad, abre la Ofrenda: chispas, gloria y, a veces, una prima, un fragmento de estrella o una Vela."
+            "value": "Abre un acto para ver por dónde vas. La Ofrenda da chispas, gloria y, a veces, una prima, un fragmento de estrella o una Vela."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre un acte pour voir où tu en es. Tu peux en changer un par jour avec une Meesh. Les trois réalisés, ouvre l’Offrande : des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse."
+            "value": "Ouvre un acte pour voir où tu en es. L’Offrande donne des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apri un atto per vedere a che punto sei. Puoi cambiarne uno al giorno con una Meesh. Compiuti tutti e tre, apri l’Offerta: scintille, gloria, a volte un premio, un frammento di stella o una Lucerna."
+            "value": "Apri un atto per vedere a che punto sei. L’Offerta dà scintille, gloria, a volte un premio, un frammento di stella o una Lucerna."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abra um ato para ver onde você está. Você pode trocar um por dia com uma Meesh. Com os três realizados, abra a Oferenda: faíscas, glória, às vezes um prêmio, um fragmento de estrela ou uma Lamparina."
+            "value": "Abra um ato para ver onde você está. A Oferenda dá faíscas, glória, às vezes um prêmio, um fragmento de estrela ou uma Lamparina."
           }
         }
       }
@@ -315962,43 +315962,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تقدّم بضع خطوات، ثم استلم كل محطة بلغتها: شرارات، أو شظية نجم، أو قنديل. والرحلة المكتملة تمنح كأس الرحلة. وخاتم الرحلة قطعة للجمع تُؤخذ بعملات Meesh."
+            "value": "استلم كل محطة بلغتها: شرارات، أو شظية نجم، أو قنديل. والرحلة المكتملة تمنح كأس الرحلة. وخاتم الرحلة قطعة للجمع تُؤخذ بعملات Meesh."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Komm ein paar Schritte voran, dann hol dir jede erreichte Rast: Funken, ein Sternfragment, eine Hüterin. Die vollendete Reise bringt den Reisepokal. Das Siegel der Reise ist ein Sammelobjekt, das du mit Meeshes holst."
+            "value": "Hol dir jede erreichte Rast: Funken, ein Sternfragment, eine Hüterin. Die vollendete Reise bringt den Reisepokal. Das Siegel der Reise ist ein Sammelobjekt, das du mit Meeshes holst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Move a few strides, then claim each stop you reach: sparks, a star fragment, a Vigil. The finished journey gives the journey cup. The Journey Seal is a collectible, taken with Meeshes."
+            "value": "Claim each stop you reach: sparks, a star fragment, a Vigil. The finished journey gives the journey cup. The Journey Seal is a collectible, taken with Meeshes."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avanza unos pasos y reclama cada parada a la que llegues: chispas, un fragmento de estrella, una Vela. El viaje terminado da la copa del viaje. El Sello del viaje es un objeto de colección, que se consigue con Meeshes."
+            "value": "Reclama cada parada a la que llegues: chispas, un fragmento de estrella, una Vela. El viaje terminado da la copa del viaje. El Sello del viaje es un objeto de colección, que se consigue con Meeshes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avance de quelques pas, puis réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes."
+            "value": "Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avanza di qualche passo, poi riscatta ogni sosta raggiunta: scintille, un frammento di stella, una Lucerna. Il viaggio compiuto dà la coppa del viaggio. Il Sigillo del viaggio è un oggetto da collezione, preso con le Meesh."
+            "value": "Riscatta ogni sosta raggiunta: scintille, un frammento di stella, una Lucerna. Il viaggio compiuto dà la coppa del viaggio. Il Sigillo del viaggio è un oggetto da collezione, preso con le Meesh."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avance alguns passos, depois resgate cada parada alcançada: faíscas, um fragmento de estrela, uma Lamparina. A viagem concluída dá a taça da viagem. O Selo da viagem é um objeto de coleção, obtido com Meeshes."
+            "value": "Resgate cada parada alcançada: faíscas, um fragmento de estrela, uma Lamparina. A viagem concluída dá a taça da viagem. O Selo da viagem é um objeto de coleção, obtido com Meeshes."
           }
         }
       }
@@ -316338,43 +316338,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "افتح القائمة، وحدّد أقرب درجة وتقدّم نحوها. كل درجة تبيّن ندرتها."
+            "value": "افتح القائمة: كل درجة تبيّن ندرتها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffne die Liste, such die nächste Stufe und arbeite darauf hin. Jede Stufe zeigt ihre Seltenheit."
+            "value": "Öffne die Liste: Jede Stufe zeigt ihre Seltenheit."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open the list, spot the closest tier and work towards it. Each tier shows its rarity."
+            "value": "Open the list: each tier shows its rarity."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abre la lista, localiza el escalón más cercano y avanza hacia él. Cada escalón dice su rareza."
+            "value": "Abre la lista: cada escalón dice su rareza."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre la liste, repère le palier le plus proche et avance vers lui. Chaque palier dit sa rareté."
+            "value": "Ouvre la liste : chaque palier dit sa rareté."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apri l’elenco, trova il gradino più vicino e avanza verso di lui. Ogni gradino dice la sua rarità."
+            "value": "Apri l’elenco: ogni gradino dice la sua rarità."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abra a lista, encontre o patamar mais próximo e avance até ele. Cada patamar mostra a sua raridade."
+            "value": "Abra a lista: cada patamar mostra a sua raridade."
           }
         }
       }
@@ -316432,43 +316432,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "افتح مأثرة لتقرأ ما تطلبه. وحين تتحقّق، تُنمّي مجدك: كلما كانت أندر، نما أكثر."
+            "value": "افتح مأثرة لتقرأ ما تطلبه. وحين تتحقّق، تُنمّي مجدك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffne eine Heldentat, um zu lesen, was sie verlangt. Vollbracht, lässt sie deinen Ruhm wachsen: Je seltener sie ist, desto mehr wächst er."
+            "value": "Öffne eine Heldentat, um zu lesen, was sie verlangt. Vollbracht, lässt sie deinen Ruhm wachsen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open a great deed to read what it asks for. Once done, it makes your glory grow: the rarer it is, the more it grows."
+            "value": "Open a great deed to read what it asks for. Once done, it makes your glory grow."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abre una hazaña para leer lo que pide. Lograda, hace crecer tu gloria: cuanto más rara, más crece."
+            "value": "Abre una hazaña para leer lo que pide. Lograda, hace crecer tu gloria."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre un haut fait pour lire ce qu’il demande. Accompli, il fait grandir ta gloire : plus il est rare, plus elle grandit."
+            "value": "Ouvre un haut fait pour lire ce qu’il demande. Accompli, il fait grandir ta gloire."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apri un’impresa per leggere che cosa chiede. Compiuta, fa crescere la tua gloria: più è rara, più cresce."
+            "value": "Apri un’impresa per leggere che cosa chiede. Compiuta, fa crescere la tua gloria."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abra uma façanha para ler o que ela pede. Cumprida, ela faz a sua glória crescer: quanto mais rara, mais ela cresce."
+            "value": "Abra uma façanha para ler o que ela pede. Cumprida, ela faz a sua glória crescer."
           }
         }
       }
@@ -316526,43 +316526,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "رتّب كؤوسك كما تشاء واختر من يراها: الجميع، أو أصدقاؤك، أو أنت وحدك. الكأس لا تكسبك شيئًا: هي للعرض."
+            "value": "الكأس لا تكسبك شيئًا: هي للعرض. مستويات الظهور: الجميع، أو أصدقاؤك، أو أنت وحدك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordne deine Trophäen, wie du willst, und bestimme, wer sie sieht: alle, deine Freunde oder nur du. Eine Trophäe bringt nichts ein: Sie wird gezeigt."
+            "value": "Eine Trophäe bringt nichts ein: Sie wird gezeigt. Die Sichtbarkeitsstufen sind alle, deine Freunde oder nur du."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Arrange your trophies in the order you like and choose who sees them: everyone, your friends or only you. A trophy brings nothing: it is there to be shown."
+            "value": "A trophy brings nothing: it is there to be shown. The visibility levels are everyone, your friends or only you."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ordena tus trofeos como quieras y elige quién los ve: todo el mundo, tus amigos o solo tú. Un trofeo no da nada: se muestra."
+            "value": "Un trofeo no da nada: se muestra. Los niveles de visibilidad son todo el mundo, tus amigos o solo tú."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Range tes trophées dans l’ordre que tu veux et choisis qui les voit : tout le monde, tes amis ou toi seul. Un trophée ne rapporte rien : il se montre."
+            "value": "Un trophée ne rapporte rien : il se montre. Les niveaux de visibilité sont tout le monde, tes amis ou toi seul."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sistema i tuoi trofei nell’ordine che vuoi e scegli chi li vede: tutti, i tuoi amici o solo tu. Un trofeo non porta nulla: si mostra."
+            "value": "Un trofeo non porta nulla: si mostra. I livelli di visibilità sono tutti, i tuoi amici o solo tu."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Arrume seus troféus na ordem que quiser e escolha quem os vê: todo mundo, seus amigos ou só você. Um troféu não rende nada: ele se mostra."
+            "value": "Um troféu não rende nada: ele se mostra. Os níveis de visibilidade são todo mundo, seus amigos ou só você."
           }
         }
       }
@@ -316620,43 +316620,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انظر إلى التبادلات غير المكتملة: تنقص رسالة مُرسلة أو رسالة مستقبَلة ليوضع الختم. أطلسك خاص افتراضيًا: أنت تختار من يراه."
+            "value": "انظر إلى التبادلات غير المكتملة. أطلسك خاص افتراضيًا: أنت تختار من يراه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sieh dir die halben Austausche an: Es fehlt eine gesendete oder eine empfangene Nachricht für den Stempel. Dein Atlas ist standardmäßig privat: Du bestimmst, wer ihn sieht."
+            "value": "Sieh dir die halben Austausche an. Dein Atlas ist standardmäßig privat: Du bestimmst, wer ihn sieht."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Look at the half-finished exchanges: one sent or one received message is missing to place the stamp. Your Atlas is private by default: you choose who sees it."
+            "value": "Look at the half-finished exchanges. Your Atlas is private by default: you choose who sees it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mira los intercambios a medias: falta un mensaje enviado o uno recibido para estampar el sello. Tu Atlas es privado por defecto: tú eliges quién lo ve."
+            "value": "Mira los intercambios a medias. Tu Atlas es privado por defecto: tú eliges quién lo ve."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Regarde les échanges à moitié faits : il manque un message envoyé ou un message reçu pour poser le tampon. Ton Atlas est privé par défaut : tu choisis qui le voit."
+            "value": "Regarde les échanges à moitié faits. Ton Atlas est privé par défaut : tu choisis qui le voit."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guarda gli scambi a metà: manca un messaggio inviato o uno ricevuto per posare il timbro. Il tuo Atlante è privato per impostazione predefinita: scegli tu chi lo vede."
+            "value": "Guarda gli scambi a metà. Il tuo Atlante è privato per impostazione predefinita: scegli tu chi lo vede."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Veja as trocas pela metade: falta uma mensagem enviada ou uma recebida para o carimbo aparecer. Seu Atlas é privado por padrão: você escolhe quem o vê."
+            "value": "Veja as trocas pela metade. Seu Atlas é privado por padrão: você escolhe quem o vê."
           }
         }
       }

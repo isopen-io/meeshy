@@ -93,7 +93,7 @@
     <string name="game2_duo_invited_inviter">Convite enviado a %1$s. Aguardando a resposta.</string>
     <string name="game2_duo_locked">A aliança se abre no nível %1$s, para vocês dois. Você está no nível %2$s.</string>
     <string name="game2_duo_no_friends">Você precisa de um amigo aceito para fazer aliança.</string>
-    <string name="game2_duo_none">Escolha um amigo para fazer aliança: se cada um realizar a sua parte na semana, a recompensa dobra.</string>
+    <string name="game2_duo_none">Faça aliança com um amigo aceito: se cada um realizar a sua parte na semana, a recompensa dobra.</string>
     <string name="game2_duo_pick">Escolha um amigo</string>
     <string name="game2_duo_progress_common">Juntos: %1$s de %2$s</string>
     <string name="game2_duo_progress_me">Você: %1$s de %2$s</string>
@@ -371,7 +371,7 @@
     <string name="game_concept_atlas_name">O Atlas</string>
     <string name="game_concept_atlas_tip_1">Escreva para alguém em um idioma diferente do seu.</string>
     <string name="game_concept_atlas_tip_2">Espere a resposta: é preciso uma mensagem em cada sentido.</string>
-    <string name="game_concept_atlas_use">Veja as trocas pela metade: falta uma mensagem enviada ou uma recebida para o carimbo aparecer. Seu Atlas é privado por padrão: você escolhe quem o vê.</string>
+    <string name="game_concept_atlas_use">Veja as trocas pela metade. Seu Atlas é privado por padrão: você escolhe quem o vê.</string>
     <string name="game_concept_atlas_what">O Atlas é o seu passaporte de idiomas: as terras que a sua voz atravessou, um carimbo por idioma realmente trocado.</string>
     <string name="game_concept_atlas_why">O Atlas guarda um carimbo para cada idioma em que você conversou.</string>
     <string name="game_concept_badges_how">Repita um gesto: a medalha dele muda de material, do cobre ao prisma.</string>
@@ -402,7 +402,7 @@
     <string name="game_concept_defis_name">Desafios</string>
     <string name="game_concept_defis_tip_1">Olhe o próximo patamar e avance até ele.</string>
     <string name="game_concept_defis_tip_2">Experimente gestos novos: cada um tem seus desafios.</string>
-    <string name="game_concept_defis_use">Abra a lista, encontre o patamar mais próximo e avance até ele. Cada patamar mostra a sua raridade.</string>
+    <string name="game_concept_defis_use">Abra a lista: cada patamar mostra a sua raridade.</string>
     <string name="game_concept_defis_what">Um desafio é um patamar com número numa família de gestos: um número a alcançar.</string>
     <string name="game_concept_defis_why">Os desafios são patamares a vencer, um depois do outro.</string>
     <string name="game_concept_elans_how">Faça gestos de várias famílias nestes dias para ativá-lo.</string>
@@ -446,11 +446,11 @@
     <string name="game_concept_fact_window">Janela</string>
     <string name="game_concept_fact_yes">Sim</string>
     <string name="game_concept_fact_zone">Zona</string>
-    <string name="game_concept_flame_how">Um gesto por dia a mantém; uma Lamparina cuida dela por um dia.</string>
+    <string name="game_concept_flame_how">Ela cresce um dia a cada dia em que você faz um gesto.</string>
     <string name="game_concept_flame_name">A Chama</string>
     <string name="game_concept_flame_tip_1">Faça pelo menos um gesto todos os dias.</string>
     <string name="game_concept_flame_tip_2">Guarde uma Lamparina para os dias sem.</string>
-    <string name="game_concept_flame_use" formatted="false">Cada dia de Chama soma 2% às faíscas dos seus sonhos, até 50%. Uma Lamparina cuida dela num dia de ausência. Apagada, ela se reacende com Meeshes durante 48 h.</string>
+    <string name="game_concept_flame_use" formatted="false">Cada dia de Chama soma 2% às faíscas dos seus sonhos, até 50%. Apagada, ela se reacende com Meeshes durante 48 h.</string>
     <string name="game_concept_flame_what">Sua Chama é o fogo que seus ancestrais confiam a você: ela cresce a cada dia em que você faz pelo menos um gesto, e muda de forma ao crescer, da Brasa ao Sol.</string>
     <string name="game_concept_flame_why">Sua Chama mostra os seus dias seguidos, e ela alimenta seus sonhos.</string>
     <string name="game_concept_glory_how">Cunhagens, novos níveis e façanhas fazem a sua glória crescer.</string>
@@ -494,13 +494,13 @@
     <string name="game_concept_missions_name">O Sonho</string>
     <string name="game_concept_missions_tip_1">Comece pelo ato mais fácil.</string>
     <string name="game_concept_missions_tip_2">Não gostou de um ato? Troque-o, uma vez por dia.</string>
-    <string name="game_concept_missions_use">Abra um ato para ver onde você está. Você pode trocar um por dia com uma Meesh. Com os três realizados, abra a Oferenda: faíscas, glória, às vezes um prêmio, um fragmento de estrela ou uma Lamparina.</string>
+    <string name="game_concept_missions_use">Abra um ato para ver onde você está. A Oferenda dá faíscas, glória, às vezes um prêmio, um fragmento de estrela ou uma Lamparina.</string>
     <string name="game_concept_missions_what">Toda noite, um sonho em três atos: pequenas metas para realizar durante o dia, cada vez mais ricas em glória. A Oferenda o acompanha.</string>
     <string name="game_concept_missions_why">Toda noite, seus ancestrais enviam um sonho para você realizar.</string>
     <string name="game_concept_photo_offer">Eternizar este momento</string>
     <string name="game_concept_points_how">Cada troca de verdade faz saltar faíscas: escrever, falar, publicar.</string>
     <string name="game_concept_points_name">Faíscas</string>
-    <string name="game_concept_points_tip_1">Publique, comente, reaja: cada gesto faz saltar as suas.</string>
+    <string name="game_concept_points_tip_1">Volte todo dia: uma Chama acesa alimenta suas faíscas.</string>
     <string name="game_concept_points_tip_2">Ative um impulso para multiplicar suas faíscas.</string>
     <string name="game_concept_points_use">Sua luz cunha as Meeshes da sua herança. Cunhar uma Meesh cristaliza uma parte dela na moeda: sua luz, e portanto seu nível, baixa na mesma medida.</string>
     <string name="game_concept_points_what">Cada troca de verdade faz saltar faíscas: juntas, elas formam a sua luz. Quanto mais ela cresce, mais ela brilha, e o brilho dela é o seu nível.</string>
@@ -517,7 +517,7 @@
     <string name="game_concept_season_name">A Viagem</string>
     <string name="game_concept_season_tip_1">Realize os atos do seu sonho para avançar alguns passos.</string>
     <string name="game_concept_season_tip_2">Faça aliança com um amigo: a recompensa dobra.</string>
-    <string name="game_concept_season_use">Avance alguns passos, depois resgate cada parada alcançada: faíscas, um fragmento de estrela, uma Lamparina. A viagem concluída dá a taça da viagem. O Selo da viagem é um objeto de coleção, obtido com Meeshes.</string>
+    <string name="game_concept_season_use">Resgate cada parada alcançada: faíscas, um fragmento de estrela, uma Lamparina. A viagem concluída dá a taça da viagem. O Selo da viagem é um objeto de coleção, obtido com Meeshes.</string>
     <string name="game_concept_season_what">Uma viagem dura oito semanas, numa terra de idioma, com quarenta paradas e os seus presentes gratuitos.</string>
     <string name="game_concept_season_why">A viagem dura oito semanas em terra de idioma, com uma taça no fim.</string>
     <string name="game_concept_section_act">Sua vez</string>
@@ -525,14 +525,14 @@
     <string name="game_concept_showcase_name">Troféus</string>
     <string name="game_concept_showcase_tip_1">Termine no alto do seu torneio para ganhar uma taça.</string>
     <string name="game_concept_showcase_tip_2">Complete uma viagem ou renasça.</string>
-    <string name="game_concept_showcase_use">Arrume seus troféus na ordem que quiser e escolha quem os vê: todo mundo, seus amigos ou só você. Um troféu não rende nada: ele se mostra.</string>
+    <string name="game_concept_showcase_use">Um troféu não rende nada: ele se mostra. Os níveis de visibilidade são todo mundo, seus amigos ou só você.</string>
     <string name="game_concept_showcase_what">A prateleira dos seus troféus: taças de torneio e de viagem, troféus de renascimento e de Chama.</string>
     <string name="game_concept_showcase_why">Seus troféus guardam o rastro das suas vitórias.</string>
     <string name="game_concept_succes_how">Ela se cumpre de uma vez, quando você reúne o que ela pede.</string>
     <string name="game_concept_succes_name">Façanhas</string>
     <string name="game_concept_succes_tip_1">Explore o aplicativo: algumas façanhas estão escondidas.</string>
     <string name="game_concept_succes_tip_2">As mais raras são as que mais fazem a sua glória crescer.</string>
-    <string name="game_concept_succes_use">Abra uma façanha para ler o que ela pede. Cumprida, ela faz a sua glória crescer: quanto mais rara, mais ela cresce.</string>
+    <string name="game_concept_succes_use">Abra uma façanha para ler o que ela pede. Cumprida, ela faz a sua glória crescer.</string>
     <string name="game_concept_succes_what">Uma façanha é uma distinção que se cumpre uma única vez, com a sua data e a sua raridade.</string>
     <string name="game_concept_succes_why">Uma façanha marca um momento raro da sua lenda.</string>
     <string name="game_concept_value_factor">×%1$s</string>
@@ -725,7 +725,7 @@
     <string name="game_flame_panel_relight">Reacender a Chama · %1$s</string>
     <string name="game_flame_panel_relight_closed">Esta Chama não pode mais ser reacendida. Uma nova Chama começa com a sua próxima ação.</string>
     <string name="game_flame_panel_relight_intro">Sua Chama se apagou: reacenda-a agora, ela recomeça de onde parou.</string>
-    <string name="game_flame_panel_relight_missing_window">Você precisa de %1$s para reacendê-la, se ela se apagou há menos de 48 h.</string>
+    <string name="game_flame_panel_relight_missing_window">Dá para reacender nas 48 h seguintes ao apagamento.</string>
     <string name="game_flame_panel_title">Cuidar da sua Chama</string>
     <string name="game_flame_status_at_risk">Faça uma ação antes da meia-noite</string>
     <string name="game_flame_status_covered">Uma Lamparina cuida dela</string>
@@ -969,7 +969,7 @@
     <string name="game_notebook_catch_up">Para recuperar</string>
     <string name="game_notebook_catch_up_locked">Tire antes: %1$s</string>
     <string name="game_notebook_device_only">Suas fotos ficam neste aparelho.</string>
-    <string name="game_notebook_empty">Sua Crônica espera a primeira página. A cada sinal dos seus ancestrais, uma foto com Mee e Meo, guardada neste aparelho.</string>
+    <string name="game_notebook_empty">Sua Crônica espera a primeira página: a cada sinal dos seus ancestrais, uma foto com Mee e Meo.</string>
     <string name="game_notebook_kept">Fotos guardadas</string>
     <string name="game_notebook_page_title">A Crônica</string>
     <string name="game_notebook_pending">Pendentes</string>

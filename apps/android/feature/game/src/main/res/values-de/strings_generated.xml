@@ -93,7 +93,7 @@
     <string name="game2_duo_invited_inviter">Einladung an %1$s gesendet. Die Antwort steht noch aus.</string>
     <string name="game2_duo_locked">Das Bündnis öffnet bei Level %1$s, für euch beide. Du bist auf Level %2$s.</string>
     <string name="game2_duo_no_friends">Für ein Bündnis brauchst du einen bestätigten Freund.</string>
-    <string name="game2_duo_none">Wähle einen Freund für ein Bündnis: Wenn jeder in der Woche seinen Teil erfüllt, verdoppelt sich die Belohnung.</string>
+    <string name="game2_duo_none">Schließe ein Bündnis mit einem bestätigten Freund: Wenn jeder in der Woche seinen Teil erfüllt, verdoppelt sich die Belohnung.</string>
     <string name="game2_duo_pick">Wähle einen Freund</string>
     <string name="game2_duo_progress_common">Gemeinsam: %1$s von %2$s</string>
     <string name="game2_duo_progress_me">Du: %1$s von %2$s</string>
@@ -371,7 +371,7 @@
     <string name="game_concept_atlas_name">Der Atlas</string>
     <string name="game_concept_atlas_tip_1">Schreib jemandem in einer anderen Sprache als deiner.</string>
     <string name="game_concept_atlas_tip_2">Warte auf die Antwort: Es braucht eine Nachricht in jede Richtung.</string>
-    <string name="game_concept_atlas_use">Sieh dir die halben Austausche an: Es fehlt eine gesendete oder eine empfangene Nachricht für den Stempel. Dein Atlas ist standardmäßig privat: Du bestimmst, wer ihn sieht.</string>
+    <string name="game_concept_atlas_use">Sieh dir die halben Austausche an. Dein Atlas ist standardmäßig privat: Du bestimmst, wer ihn sieht.</string>
     <string name="game_concept_atlas_what">Der Atlas ist dein Sprachenpass: die Länder, die deine Stimme durchquert hat, ein Stempel für jede Sprache, in der du dich wirklich ausgetauscht hast.</string>
     <string name="game_concept_atlas_why">Der Atlas bewahrt einen Stempel für jede Sprache deiner Gespräche.</string>
     <string name="game_concept_badges_how">Wiederhole die Aktion: Die Medaille wird von Kupfer bis Prisma veredelt.</string>
@@ -402,7 +402,7 @@
     <string name="game_concept_defis_name">Herausforderungen</string>
     <string name="game_concept_defis_tip_1">Sieh dir die nächste Stufe an und arbeite darauf hin.</string>
     <string name="game_concept_defis_tip_2">Probier neue Aktionen aus: Jede hat ihre Herausforderungen.</string>
-    <string name="game_concept_defis_use">Öffne die Liste, such die nächste Stufe und arbeite darauf hin. Jede Stufe zeigt ihre Seltenheit.</string>
+    <string name="game_concept_defis_use">Öffne die Liste: Jede Stufe zeigt ihre Seltenheit.</string>
     <string name="game_concept_defis_what">Eine Herausforderung ist eine Stufe mit einer Zahl in einer Aktionsfamilie: eine Zahl, die du erreichst.</string>
     <string name="game_concept_defis_why">Herausforderungen sind Stufen, die du eine nach der anderen nimmst.</string>
     <string name="game_concept_elans_how">Mach in diesen Tagen Aktionen aus mehreren Familien, um ihn auszulösen.</string>
@@ -446,11 +446,11 @@
     <string name="game_concept_fact_window">Zeitraum</string>
     <string name="game_concept_fact_yes">Ja</string>
     <string name="game_concept_fact_zone">Bereich</string>
-    <string name="game_concept_flame_how">Eine Aktion pro Tag nährt sie; eine Hüterin wacht einen Tag über sie.</string>
+    <string name="game_concept_flame_how">Sie wächst um einen Tag für jeden Tag, an dem du eine Aktion ausführst.</string>
     <string name="game_concept_flame_name">Die Flamme</string>
     <string name="game_concept_flame_tip_1">Mach jeden Tag mindestens eine Aktion.</string>
     <string name="game_concept_flame_tip_2">Halte eine Hüterin bereit für Tage ohne.</string>
-    <string name="game_concept_flame_use" formatted="false">Jeder Tag deiner Flamme schenkt den Funken deiner Träume 2 % mehr, bis zu 50 %. Eine Hüterin hält sie einen Tag deiner Abwesenheit am Brennen. Ist sie erloschen, entzündest du sie 48 Stunden lang mit Meeshes neu.</string>
+    <string name="game_concept_flame_use" formatted="false">Jeder Tag deiner Flamme schenkt den Funken deiner Träume 2 % mehr, bis zu 50 %. Ist sie erloschen, entzündest du sie 48 Stunden lang mit Meeshes neu.</string>
     <string name="game_concept_flame_what">Deine Flamme ist das Feuer, das dir deine Ahnen anvertrauen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst, und wechselt dabei ihre Form, von der Glut bis zur Sonne.</string>
     <string name="game_concept_flame_why">Deine Flamme erzählt deine Tage am Stück, und sie nährt deine Träume.</string>
     <string name="game_concept_glory_how">Prägungen, neue Level und Heldentaten lassen deinen Ruhm wachsen.</string>
@@ -494,13 +494,13 @@
     <string name="game_concept_missions_name">Der Traum</string>
     <string name="game_concept_missions_tip_1">Beginne mit dem leichtesten Akt.</string>
     <string name="game_concept_missions_tip_2">Ein Akt gefällt dir nicht? Tausche ihn, einmal pro Tag.</string>
-    <string name="game_concept_missions_use">Öffne einen Akt, um zu sehen, wo du stehst. Einen pro Tag kannst du mit einer Meesh tauschen. Sind alle drei erfüllt, öffne die Gabe: Funken, Ruhm, manchmal ein Bonus, ein Sternfragment oder eine Hüterin.</string>
+    <string name="game_concept_missions_use">Öffne einen Akt, um zu sehen, wo du stehst. Die Gabe schenkt Funken, Ruhm, manchmal einen Bonus, ein Sternfragment oder eine Hüterin.</string>
     <string name="game_concept_missions_what">Jede Nacht ein Traum in drei Akten: kleine Ziele für den Tag, die immer mehr Ruhm bringen. Die Gabe begleitet ihn.</string>
     <string name="game_concept_missions_why">Jede Nacht schicken dir deine Ahnen einen Traum, den du erfüllen sollst.</string>
     <string name="game_concept_photo_offer">Diesen Moment festhalten</string>
     <string name="game_concept_points_how">Echter Austausch sprüht Funken: schreiben, sprechen, posten, reagieren.</string>
     <string name="game_concept_points_name">Funken</string>
-    <string name="game_concept_points_tip_1">Poste, kommentiere, reagiere: Jede Aktion lässt ihre eigenen Funken sprühen.</string>
+    <string name="game_concept_points_tip_1">Komm jeden Tag wieder: Eine brennende Flamme nährt deine Funken.</string>
     <string name="game_concept_points_tip_2">Löse einen Schwung aus, um deine Funken zu vervielfachen.</string>
     <string name="game_concept_points_use">Dein Licht prägt die Meeshes deines Erbes. Eine Meesh zu prägen bannt einen Teil davon in die Münze: Dein Licht, und damit dein Level, sinkt um ebenso viel.</string>
     <string name="game_concept_points_what">Jeder echte Austausch lässt Funken sprühen: Zusammen bilden sie dein Licht. Je mehr es wächst, desto heller strahlt es, und sein Glanz ist dein Level.</string>
@@ -517,7 +517,7 @@
     <string name="game_concept_season_name">Die Reise</string>
     <string name="game_concept_season_tip_1">Erfülle die Akte deines Traums, um ein paar Schritte voranzukommen.</string>
     <string name="game_concept_season_tip_2">Schließ ein Bündnis mit einem Freund: Die Belohnung verdoppelt sich.</string>
-    <string name="game_concept_season_use">Komm ein paar Schritte voran, dann hol dir jede erreichte Rast: Funken, ein Sternfragment, eine Hüterin. Die vollendete Reise bringt den Reisepokal. Das Siegel der Reise ist ein Sammelobjekt, das du mit Meeshes holst.</string>
+    <string name="game_concept_season_use">Hol dir jede erreichte Rast: Funken, ein Sternfragment, eine Hüterin. Die vollendete Reise bringt den Reisepokal. Das Siegel der Reise ist ein Sammelobjekt, das du mit Meeshes holst.</string>
     <string name="game_concept_season_what">Eine Reise dauert acht Wochen in einem Sprachland, mit vierzig Rasten und ihren kostenlosen Geschenken.</string>
     <string name="game_concept_season_why">Die Reise führt acht Wochen durch ein Sprachland, mit Pokal am Ende.</string>
     <string name="game_concept_section_act">Du bist dran</string>
@@ -525,14 +525,14 @@
     <string name="game_concept_showcase_name">Trophäen</string>
     <string name="game_concept_showcase_tip_1">Lande ganz oben in deinem Turnier, um einen Pokal zu gewinnen.</string>
     <string name="game_concept_showcase_tip_2">Vollende eine Reise oder werde wiedergeboren.</string>
-    <string name="game_concept_showcase_use">Ordne deine Trophäen, wie du willst, und bestimme, wer sie sieht: alle, deine Freunde oder nur du. Eine Trophäe bringt nichts ein: Sie wird gezeigt.</string>
+    <string name="game_concept_showcase_use">Eine Trophäe bringt nichts ein: Sie wird gezeigt. Die Sichtbarkeitsstufen sind alle, deine Freunde oder nur du.</string>
     <string name="game_concept_showcase_what">Das Regal deiner Trophäen: Pokale aus Turnier und Reise, Trophäen der Wiedergeburt und der Flamme.</string>
     <string name="game_concept_showcase_why">Deine Trophäen bewahren die Spur deiner Siege.</string>
     <string name="game_concept_succes_how">Sie gelingt auf einmal, wenn du erfüllst, was sie verlangt.</string>
     <string name="game_concept_succes_name">Heldentaten</string>
     <string name="game_concept_succes_tip_1">Erkunde die App: Manche Heldentaten sind versteckt.</string>
     <string name="game_concept_succes_tip_2">Die seltensten lassen deinen Ruhm am meisten wachsen.</string>
-    <string name="game_concept_succes_use">Öffne eine Heldentat, um zu lesen, was sie verlangt. Vollbracht, lässt sie deinen Ruhm wachsen: Je seltener sie ist, desto mehr wächst er.</string>
+    <string name="game_concept_succes_use">Öffne eine Heldentat, um zu lesen, was sie verlangt. Vollbracht, lässt sie deinen Ruhm wachsen.</string>
     <string name="game_concept_succes_what">Eine Heldentat ist eine Auszeichnung, die nur einmal gelingt, mit Datum und Seltenheit.</string>
     <string name="game_concept_succes_why">Eine Heldentat hält einen seltenen Moment deiner Legende fest.</string>
     <string name="game_concept_value_factor">×%1$s</string>
@@ -725,7 +725,7 @@
     <string name="game_flame_panel_relight">Flamme neu entzünden · %1$s</string>
     <string name="game_flame_panel_relight_closed">Diese Flamme kann nicht mehr neu entzündet werden. Eine neue Flamme beginnt mit deiner nächsten Aktion.</string>
     <string name="game_flame_panel_relight_intro">Deine Flamme ist erloschen: entzünde sie jetzt neu, sie macht dort weiter, wo sie aufgehört hat.</string>
-    <string name="game_flame_panel_relight_missing_window">Zum Neuentzünden brauchst du %1$s, falls sie vor weniger als 48 h erloschen ist.</string>
+    <string name="game_flame_panel_relight_missing_window">Neu entzünden ist in den 48 h nach dem Erlöschen möglich.</string>
     <string name="game_flame_panel_title">Über deine Flamme wachen</string>
     <string name="game_flame_status_at_risk">Handle vor Mitternacht</string>
     <string name="game_flame_status_covered">Eine Hüterin wacht über sie</string>
@@ -969,7 +969,7 @@
     <string name="game_notebook_catch_up">Nachzuholen</string>
     <string name="game_notebook_catch_up_locked">Zuerst: %1$s</string>
     <string name="game_notebook_device_only">Deine Fotos leben auf diesem Gerät.</string>
-    <string name="game_notebook_empty">Deine Chronik wartet auf ihre erste Seite. Bei jedem Zeichen deiner Ahnen ein Foto mit Mee und Meo, gespeichert auf diesem Gerät.</string>
+    <string name="game_notebook_empty">Deine Chronik wartet auf ihre erste Seite: bei jedem Zeichen deiner Ahnen ein Foto mit Mee und Meo.</string>
     <string name="game_notebook_kept">Gespeicherte Fotos</string>
     <string name="game_notebook_page_title">Die Chronik</string>
     <string name="game_notebook_pending">Ausstehend</string>

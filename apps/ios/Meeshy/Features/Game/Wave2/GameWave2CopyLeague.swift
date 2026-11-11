@@ -115,7 +115,7 @@ extension GameText {
         String(localized: "game2.duo.locked", defaultValue: "L’alliance s’ouvre au niveau \(level), pour vous deux. Tu es au niveau \(current).", bundle: .main)
     }
 
-    static var duoNone: String { String(localized: "game2.duo.none", defaultValue: "Choisis un ami pour faire alliance : si chacun réalise sa part dans la semaine, la récompense double.", bundle: .main) }
+    static var duoNone: String { String(localized: "game2.duo.none", defaultValue: "Fais alliance avec un ami accepté : si chacun réalise sa part dans la semaine, la récompense double.", bundle: .main) }
 
     static func duoInvite(name: String) -> String {
         String(localized: "game2.duo.invite", defaultValue: "Inviter \(name)", bundle: .main)
@@ -123,7 +123,6 @@ extension GameText {
 
     static var duoPick: String { String(localized: "game2.duo.pick", defaultValue: "Choisis un ami", bundle: .main) }
 
-    static var duoNoFriends: String { String(localized: "game2.duo.no_friends", defaultValue: "Il te faut un ami accepté pour faire alliance.", bundle: .main) }
 
     static func duoInvitedInviter(name: String) -> String {
         String(localized: "game2.duo.invited.inviter", defaultValue: "Invitation envoyée à \(name). Elle attend sa réponse.", bundle: .main)

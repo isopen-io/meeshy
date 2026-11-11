@@ -93,7 +93,7 @@
     <string name="game2_duo_invited_inviter">Invitation sent to %1$s. Waiting for the answer.</string>
     <string name="game2_duo_locked">The alliance opens at level %1$s, for both of you. You are at level %2$s.</string>
     <string name="game2_duo_no_friends">You need an accepted friend to form an alliance.</string>
-    <string name="game2_duo_none">Choose a friend to form an alliance: if each of you does your part within the week, the reward doubles.</string>
+    <string name="game2_duo_none">Form an alliance with an accepted friend: if each of you does your part within the week, the reward doubles.</string>
     <string name="game2_duo_pick">Choose a friend</string>
     <string name="game2_duo_progress_common">Together: %1$s of %2$s</string>
     <string name="game2_duo_progress_me">You: %1$s of %2$s</string>
@@ -371,7 +371,7 @@
     <string name="game_concept_atlas_name">The Atlas</string>
     <string name="game_concept_atlas_tip_1">Write to someone in a language other than yours.</string>
     <string name="game_concept_atlas_tip_2">Wait for the reply: it takes a message each way.</string>
-    <string name="game_concept_atlas_use">Look at the half-finished exchanges: one sent or one received message is missing to place the stamp. Your Atlas is private by default: you choose who sees it.</string>
+    <string name="game_concept_atlas_use">Look at the half-finished exchanges. Your Atlas is private by default: you choose who sees it.</string>
     <string name="game_concept_atlas_what">The Atlas is your passport of languages: the lands your voice has crossed, one stamp for each language truly exchanged.</string>
     <string name="game_concept_atlas_why">The Atlas keeps a stamp for every language you’ve chatted in.</string>
     <string name="game_concept_badges_how">Repeat a move: its medal changes material, from copper to prism.</string>
@@ -402,7 +402,7 @@
     <string name="game_concept_defis_name">Challenges</string>
     <string name="game_concept_defis_tip_1">Look at the next tier and work towards it.</string>
     <string name="game_concept_defis_tip_2">Try new actions: each one has its challenges.</string>
-    <string name="game_concept_defis_use">Open the list, spot the closest tier and work towards it. Each tier shows its rarity.</string>
+    <string name="game_concept_defis_use">Open the list: each tier shows its rarity.</string>
     <string name="game_concept_defis_what">A challenge is a numbered tier in a family of actions: a number to reach.</string>
     <string name="game_concept_defis_why">Challenges are tiers to clear, one after another.</string>
     <string name="game_concept_elans_how">Do actions from several families these days to trigger it.</string>
@@ -446,11 +446,11 @@
     <string name="game_concept_fact_window">Window</string>
     <string name="game_concept_fact_yes">Yes</string>
     <string name="game_concept_fact_zone">Zone</string>
-    <string name="game_concept_flame_how">One move a day tends it; a Vigil guards it for a day.</string>
+    <string name="game_concept_flame_how">It grows by one day for each day you make a move.</string>
     <string name="game_concept_flame_name">The Flame</string>
     <string name="game_concept_flame_tip_1">Do at least one action every day.</string>
     <string name="game_concept_flame_tip_2">Keep a Vigil for the days off.</string>
-    <string name="game_concept_flame_use" formatted="false">Each day of Flame adds 2 % to the sparks of your dreams, up to 50 %. A Vigil guards it for one day away. Once out, it can be relit with Meeshes for 48 hours.</string>
+    <string name="game_concept_flame_use" formatted="false">Each day of Flame adds 2 % to the sparks of your dreams, up to 50 %. Once out, it can be relit with Meeshes for 48 hours.</string>
     <string name="game_concept_flame_what">Your Flame is the fire your ancestors entrust to you: it grows every day you make at least one move, and changes form as it grows, from Ember to Sun.</string>
     <string name="game_concept_flame_why">Your Flame tells your days in a row, and it feeds your dreams.</string>
     <string name="game_concept_glory_how">Mints, new levels and great deeds make your glory grow.</string>
@@ -494,13 +494,13 @@
     <string name="game_concept_missions_name">The Dream</string>
     <string name="game_concept_missions_tip_1">Start with the easiest act.</string>
     <string name="game_concept_missions_tip_2">Don’t like an act? Change it, once a day.</string>
-    <string name="game_concept_missions_use">Open an act to see where you stand. You can change one a day with a Meesh. Once all three are complete, open the Offering: sparks, glory, sometimes a bonus, a star fragment or a Vigil.</string>
+    <string name="game_concept_missions_use">Open an act to see where you stand. The Offering gives sparks, glory, sometimes a bonus, a star fragment or a Vigil.</string>
     <string name="game_concept_missions_what">Each night, a dream in three acts: small goals to fulfill during the day, richer and richer in glory. The Offering comes with it.</string>
     <string name="game_concept_missions_why">Each night, your ancestors send you a dream to fulfill.</string>
     <string name="game_concept_photo_offer">Capture this moment</string>
     <string name="game_concept_points_how">Every real exchange makes them fly: writing, talking, posting, reacting.</string>
     <string name="game_concept_points_name">Sparks</string>
-    <string name="game_concept_points_tip_1">Post, comment, react: each move makes its own sparks fly.</string>
+    <string name="game_concept_points_tip_1">Come back every day: a lit Flame feeds your sparks.</string>
     <string name="game_concept_points_tip_2">Build momentum to multiply your sparks.</string>
     <string name="game_concept_points_use">Your light mints the Meeshes of your legacy. Minting a Meesh binds part of it into the coin: your light, and so your level, drops by as much.</string>
     <string name="game_concept_points_what">Every real exchange makes sparks fly: together, they form your light. The more it grows, the brighter it shines, and how bright it shines is your level.</string>
@@ -517,7 +517,7 @@
     <string name="game_concept_season_name">The Journey</string>
     <string name="game_concept_season_tip_1">Complete the acts of your dream to move a few strides.</string>
     <string name="game_concept_season_tip_2">Form an alliance with a friend: the reward doubles.</string>
-    <string name="game_concept_season_use">Move a few strides, then claim each stop you reach: sparks, a star fragment, a Vigil. The finished journey gives the journey cup. The Journey Seal is a collectible, taken with Meeshes.</string>
+    <string name="game_concept_season_use">Claim each stop you reach: sparks, a star fragment, a Vigil. The finished journey gives the journey cup. The Journey Seal is a collectible, taken with Meeshes.</string>
     <string name="game_concept_season_what">A journey lasts eight weeks, in the land of a language, with forty stops and their free gifts.</string>
     <string name="game_concept_season_why">Eight weeks in the land of a language, with a cup at the end.</string>
     <string name="game_concept_section_act">Your move</string>
@@ -525,14 +525,14 @@
     <string name="game_concept_showcase_name">Trophies</string>
     <string name="game_concept_showcase_tip_1">Finish at the top of your joust to win a cup.</string>
     <string name="game_concept_showcase_tip_2">Complete a journey or be reborn.</string>
-    <string name="game_concept_showcase_use">Arrange your trophies in the order you like and choose who sees them: everyone, your friends or only you. A trophy brings nothing: it is there to be shown.</string>
+    <string name="game_concept_showcase_use">A trophy brings nothing: it is there to be shown. The visibility levels are everyone, your friends or only you.</string>
     <string name="game_concept_showcase_what">The shelf of your trophies: joust and journey cups, rebirth and Flame trophies.</string>
     <string name="game_concept_showcase_why">Your trophies keep the memory of your victories.</string>
     <string name="game_concept_succes_how">It is done in one go, when you gather what it asks for.</string>
     <string name="game_concept_succes_name">Great Deeds</string>
     <string name="game_concept_succes_tip_1">Explore the app: some great deeds are hidden.</string>
     <string name="game_concept_succes_tip_2">The rarest ones make your glory grow the most.</string>
-    <string name="game_concept_succes_use">Open a great deed to read what it asks for. Once done, it makes your glory grow: the rarer it is, the more it grows.</string>
+    <string name="game_concept_succes_use">Open a great deed to read what it asks for. Once done, it makes your glory grow.</string>
     <string name="game_concept_succes_what">A great deed is a distinction done only once, with its date and its rarity.</string>
     <string name="game_concept_succes_why">A great deed marks a rare moment in your legend.</string>
     <string name="game_concept_value_factor">×%1$s</string>
@@ -725,7 +725,7 @@
     <string name="game_flame_panel_relight">Relight the Flame · %1$s</string>
     <string name="game_flame_panel_relight_closed">This Flame can no longer be relit. A new Flame starts with your next action.</string>
     <string name="game_flame_panel_relight_intro">Your Flame went out: relight it now, it picks up where it stopped.</string>
-    <string name="game_flame_panel_relight_missing_window">You need %1$s to relight it, if it went out less than 48 h ago.</string>
+    <string name="game_flame_panel_relight_missing_window">Relighting is possible within 48 h of it going out.</string>
     <string name="game_flame_panel_title">Watch over your Flame</string>
     <string name="game_flame_status_at_risk">Do something before midnight</string>
     <string name="game_flame_status_covered">A Vigil guards it</string>
@@ -969,7 +969,7 @@
     <string name="game_notebook_catch_up">To catch up</string>
     <string name="game_notebook_catch_up_locked">Take %1$s first</string>
     <string name="game_notebook_device_only">Your photos live on this device.</string>
-    <string name="game_notebook_empty">Your Chronicle is waiting for its first page. At each sign from your ancestors, a photo with Mee and Meo, kept on this device.</string>
+    <string name="game_notebook_empty">Your Chronicle is waiting for its first page: at each sign from your ancestors, a photo with Mee and Meo.</string>
     <string name="game_notebook_kept">Kept photos</string>
     <string name="game_notebook_page_title">The Chronicle</string>
     <string name="game_notebook_pending">Pending</string>

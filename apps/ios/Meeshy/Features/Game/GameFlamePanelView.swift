@@ -105,7 +105,7 @@ struct GameFlamePanelView: View {
         } else if isOut && cannotPayRelight {
             GameNote(text: String(
                 localized: "game.flame_panel.relight_missing_window",
-                defaultValue: "Il te faut \(GameCopy.meeshes(flame.relightPrice)) pour la rallumer, si elle s’est éteinte il y a moins de 48 h.",
+                defaultValue: "Rallumage possible dans les 48 h qui suivent l’extinction.",
                 bundle: .main
             ))
             spendRow(relightSpend, identifier: "game.flame.relight.spend", missing: { ConceptText.spendMissingRelight(missing: $0) })

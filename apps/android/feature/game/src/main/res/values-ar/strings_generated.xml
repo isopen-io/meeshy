@@ -93,7 +93,7 @@
     <string name="game2_duo_invited_inviter">أُرسلت الدعوة إلى %1$s. بانتظار الرد.</string>
     <string name="game2_duo_locked">يُفتح التحالف عند المستوى ⁦%1$s⁩ لكليكما. أنت في المستوى ⁦%2$s⁩.</string>
     <string name="game2_duo_no_friends">تحتاج إلى صديق مقبول لتعقد تحالفًا.</string>
-    <string name="game2_duo_none">اختر صديقًا لتتحالف معه: إن حقّق كلٌّ منكما حصته خلال الأسبوع، تتضاعف المكافأة.</string>
+    <string name="game2_duo_none">اعقد تحالفًا مع صديق مقبول: إن حقّق كلٌّ منكما حصته خلال الأسبوع، تتضاعف المكافأة.</string>
     <string name="game2_duo_pick">اختر صديقًا</string>
     <string name="game2_duo_progress_common">معًا: ⁦%1$s⁩ من ⁦%2$s⁩</string>
     <string name="game2_duo_progress_me">أنت: ⁦%1$s⁩ من ⁦%2$s⁩</string>
@@ -371,7 +371,7 @@
     <string name="game_concept_atlas_name">الأطلس</string>
     <string name="game_concept_atlas_tip_1">اكتب لشخص بلغة غير لغتك.</string>
     <string name="game_concept_atlas_tip_2">انتظر ردّه: لا بد من رسالة في كل اتجاه.</string>
-    <string name="game_concept_atlas_use">انظر إلى التبادلات غير المكتملة: تنقص رسالة مُرسلة أو رسالة مستقبَلة ليوضع الختم. أطلسك خاص افتراضيًا: أنت تختار من يراه.</string>
+    <string name="game_concept_atlas_use">انظر إلى التبادلات غير المكتملة. أطلسك خاص افتراضيًا: أنت تختار من يراه.</string>
     <string name="game_concept_atlas_what">الأطلس جواز لغاتك: الأراضي التي عبرها صوتك، ختم لكل لغة تبادلت بها الرسائل فعلًا.</string>
     <string name="game_concept_atlas_why">الأطلس يحفظ ختمًا لكل لغة تبادلت بها الرسائل.</string>
     <string name="game_concept_badges_how">كرّر إجراءً: يتغيّر معدن وسامه، من النحاس إلى المنشور.</string>
@@ -402,7 +402,7 @@
     <string name="game_concept_defis_name">التحديات</string>
     <string name="game_concept_defis_tip_1">انظر إلى الدرجة التالية وتقدّم نحوها.</string>
     <string name="game_concept_defis_tip_2">جرّب إجراءات جديدة: لكل منها تحدياته.</string>
-    <string name="game_concept_defis_use">افتح القائمة، وحدّد أقرب درجة وتقدّم نحوها. كل درجة تبيّن ندرتها.</string>
+    <string name="game_concept_defis_use">افتح القائمة: كل درجة تبيّن ندرتها.</string>
     <string name="game_concept_defis_what">التحدي درجة برقم في فئة من الإجراءات: عدد عليك بلوغه.</string>
     <string name="game_concept_defis_why">التحديات درجات تتجاوزها، واحدة بعد أخرى.</string>
     <string name="game_concept_elans_how">قم بإجراءات من عدة فئات في هذه الأيام لتفعيله.</string>
@@ -446,11 +446,11 @@
     <string name="game_concept_fact_window">الفترة</string>
     <string name="game_concept_fact_yes">نعم</string>
     <string name="game_concept_fact_zone">المنطقة</string>
-    <string name="game_concept_flame_how">إجراء واحد في اليوم يُبقيه متّقدًا؛ والقنديل يحرسه يومًا.</string>
+    <string name="game_concept_flame_how">ينمو يومًا عن كل يوم تقوم فيه بإجراء.</string>
     <string name="game_concept_flame_name">اللهب</string>
     <string name="game_concept_flame_tip_1">قم بإجراء واحد على الأقل كل يوم.</string>
     <string name="game_concept_flame_tip_2">احتفظ بقنديل لأيام الغياب.</string>
-    <string name="game_concept_flame_use" formatted="false">كل يوم من اللهب يضيف ⁦2%⁩ إلى شرارات أحلامك، حتى ⁦50%⁩. القنديل يحرسه يوم غيابك. وإن انطفأ، يُعاد إشعاله بعملات Meesh خلال 48 ساعة.</string>
+    <string name="game_concept_flame_use" formatted="false">كل يوم من اللهب يضيف ⁦2%⁩ إلى شرارات أحلامك، حتى ⁦50%⁩. وإن انطفأ، يُعاد إشعاله بعملات Meesh خلال 48 ساعة.</string>
     <string name="game_concept_flame_what">لهبك هو النار التي يأتمنك عليها أجدادك: يكبر في كل يوم تقوم فيه بإجراء واحد على الأقل، ويتغيّر شكله كلما كبر، من الجمرة إلى الشمس.</string>
     <string name="game_concept_flame_why">لهبك يروي أيامك المتتالية، ويغذّي أحلامك.</string>
     <string name="game_concept_glory_how">السكّ والمستويات الجديدة والمآثر تُنمّي مجدك.</string>
@@ -494,13 +494,13 @@
     <string name="game_concept_missions_name">الحلم</string>
     <string name="game_concept_missions_tip_1">ابدأ بأسهل فصل.</string>
     <string name="game_concept_missions_tip_2">لم يعجبك فصل؟ بدّله، مرة واحدة في اليوم.</string>
-    <string name="game_concept_missions_use">افتح فصلًا لترى أين وصلت. يمكنك تبديل فصل واحد في اليوم بعملة Meesh. وحين تتحقّق الثلاثة، افتح العطيّة: شرارات، ومجد، وأحيانًا علاوة، أو شظية نجم، أو قنديل.</string>
+    <string name="game_concept_missions_use">افتح فصلًا لترى أين وصلت. العطيّة تمنح شرارات ومجدًا، وأحيانًا علاوة أو شظية نجم أو قنديلًا.</string>
     <string name="game_concept_missions_what">كل ليلة، حلم من ثلاثة فصول: أهداف صغيرة تحقّقها خلال النهار، وكل فصل أغنى بالمجد من سابقه. وترافقه العطيّة.</string>
     <string name="game_concept_missions_why">كل ليلة، يرسل إليك أجدادك حلمًا لتحقّقه.</string>
     <string name="game_concept_photo_offer">خلّد هذه اللحظة</string>
     <string name="game_concept_points_how">كل تبادل حقيقي يُطلقها: الكتابة، والكلام، والنشر، والتفاعل.</string>
     <string name="game_concept_points_name">الشرارات</string>
-    <string name="game_concept_points_tip_1">انشر، علّق، تفاعل: كل إجراء يُطلق شراراته.</string>
+    <string name="game_concept_points_tip_1">عُد كل يوم: لهب مشتعل يغذّي شراراتك.</string>
     <string name="game_concept_points_tip_2">ابنِ زخمًا لتضاعف شراراتك.</string>
     <string name="game_concept_points_use">نورك يسكّ عملات Meesh لإرثك. وسكّ Meesh يصوغ جزءًا منه في القطعة: فينخفض نورك، ومعه مستواك، بقدره.</string>
     <string name="game_concept_points_what">كل تبادل حقيقي يُطلق شرارات: ومعًا تصنع نورك. وكلما نما، اشتدّ سطوعه، وتألّقه هو مستواك.</string>
@@ -517,7 +517,7 @@
     <string name="game_concept_season_name">الرحلة</string>
     <string name="game_concept_season_tip_1">حقّق فصول حلمك لتتقدّم بضع خطوات.</string>
     <string name="game_concept_season_tip_2">تحالف مع صديق: المكافأة تتضاعف.</string>
-    <string name="game_concept_season_use">تقدّم بضع خطوات، ثم استلم كل محطة بلغتها: شرارات، أو شظية نجم، أو قنديل. والرحلة المكتملة تمنح كأس الرحلة. وخاتم الرحلة قطعة للجمع تُؤخذ بعملات Meesh.</string>
+    <string name="game_concept_season_use">استلم كل محطة بلغتها: شرارات، أو شظية نجم، أو قنديل. والرحلة المكتملة تمنح كأس الرحلة. وخاتم الرحلة قطعة للجمع تُؤخذ بعملات Meesh.</string>
     <string name="game_concept_season_what">تدوم الرحلة ثمانية أسابيع، في أرض لغة، فيها أربعون محطة وهداياها المجانية.</string>
     <string name="game_concept_season_why">تدوم الرحلة ثمانية أسابيع في أرض لغة، وفي نهايتها كأس.</string>
     <string name="game_concept_section_act">دورك الآن</string>
@@ -525,14 +525,14 @@
     <string name="game_concept_showcase_name">الكؤوس</string>
     <string name="game_concept_showcase_tip_1">أنهِ في قمة مبارزتك لتفوز بكأس.</string>
     <string name="game_concept_showcase_tip_2">أتمّ رحلة أو انبعث.</string>
-    <string name="game_concept_showcase_use">رتّب كؤوسك كما تشاء واختر من يراها: الجميع، أو أصدقاؤك، أو أنت وحدك. الكأس لا تكسبك شيئًا: هي للعرض.</string>
+    <string name="game_concept_showcase_use">الكأس لا تكسبك شيئًا: هي للعرض. مستويات الظهور: الجميع، أو أصدقاؤك، أو أنت وحدك.</string>
     <string name="game_concept_showcase_what">رفّ كؤوسك: كؤوس المبارزة والرحلة والانبعاث واللهب.</string>
     <string name="game_concept_showcase_why">كؤوسك تحفظ أثر انتصاراتك.</string>
     <string name="game_concept_succes_how">تتحقّق دفعة واحدة، حين تجمع ما تطلبه.</string>
     <string name="game_concept_succes_name">المآثر</string>
     <string name="game_concept_succes_tip_1">استكشف التطبيق: بعض المآثر مخفية.</string>
     <string name="game_concept_succes_tip_2">أندرها تُنمّي مجدك أكثر من غيرها.</string>
-    <string name="game_concept_succes_use">افتح مأثرة لتقرأ ما تطلبه. وحين تتحقّق، تُنمّي مجدك: كلما كانت أندر، نما أكثر.</string>
+    <string name="game_concept_succes_use">افتح مأثرة لتقرأ ما تطلبه. وحين تتحقّق، تُنمّي مجدك.</string>
     <string name="game_concept_succes_what">المأثرة تقدير يتحقّق مرة واحدة فقط، مع تاريخه وندرته.</string>
     <string name="game_concept_succes_why">المأثرة تُخلّد لحظة نادرة من أسطورتك.</string>
     <string name="game_concept_value_factor">×%1$s</string>
@@ -725,7 +725,7 @@
     <string name="game_flame_panel_relight">أعد إشعال اللهب · %1$s</string>
     <string name="game_flame_panel_relight_closed">لا يمكن إعادة إشعال هذا اللهب بعد الآن. يبدأ لهب جديد مع إجرائك التالي.</string>
     <string name="game_flame_panel_relight_intro">انطفأ لهبك: أعد إشعاله الآن، فيستأنف من حيث توقّف.</string>
-    <string name="game_flame_panel_relight_missing_window">تحتاج إلى %1$s لإعادة إشعاله إذا انطفأ قبل أقل من 48 ساعة.</string>
+    <string name="game_flame_panel_relight_missing_window">يمكن إعادة إشعاله خلال 48 ساعة من انطفائه.</string>
     <string name="game_flame_panel_title">اسهر على لهبك</string>
     <string name="game_flame_status_at_risk">قم بإجراء قبل منتصف الليل</string>
     <string name="game_flame_status_covered">قنديل يحرسه</string>
@@ -969,7 +969,7 @@
     <string name="game_notebook_catch_up">للاستدراك</string>
     <string name="game_notebook_catch_up_locked">التقط أولاً: %1$s</string>
     <string name="game_notebook_device_only">صورك موجودة على هذا الجهاز.</string>
-    <string name="game_notebook_empty">سيرتك تنتظر صفحتها الأولى. مع كل علامة من أجدادك، صورة مع مي وميو، تبقى على جهازك.</string>
+    <string name="game_notebook_empty">سيرتك تنتظر صفحتها الأولى: مع كل علامة من أجدادك، صورة مع مي وميو.</string>
     <string name="game_notebook_kept">الصور المحفوظة</string>
     <string name="game_notebook_page_title">السيرة</string>
     <string name="game_notebook_pending">قيد الانتظار</string>

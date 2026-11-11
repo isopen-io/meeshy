@@ -70,7 +70,7 @@ struct GameNotebookPage: View {
             MeeshyInfoNoted(note: whenNote, openNoteID: $openNoteID, tint: theme.textMuted) {
                 Text(String(
                     localized: "game.notebook.empty",
-                    defaultValue: "Ta Chronique attend sa première page. À chaque signe de tes aïeux, une photo avec Mee et Meo, gardée sur cet appareil.",
+                    defaultValue: "Ta Chronique attend sa première page : à chaque signe de tes aïeux, une photo avec Mee et Meo.",
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
