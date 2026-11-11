@@ -85,6 +85,27 @@ final class CallRemoteVideoSurfaceTests: XCTestCase {
         XCTAssertTrue(body.contains("CallPeerSpeech.colorHex(forPeer: peerUserId)"))
         XCTAssertTrue(try AppSourceGuard.callViewSource().contains(".avatarRingWithin(ProfileDecorResolver.ring("), "la décoration de profil reste dans le visage")
     }
+
+    // MARK: - G4.2 — un seul relevé du niveau reçu par appel
+
+    func test_peerSpeech_inADuo_isSampledHere() {
+        XCTAssertNil(CallPeerSpeech.relayed(meshActive: false, speakers: ["karim"], peer: "karim"))
+    }
+
+    func test_peerSpeech_inAGroupStillShownAsADuo_isRelayedFromTheMesh_neverSampledTwice() {
+        XCTAssertEqual(CallPeerSpeech.relayed(meshActive: true, speakers: ["karim"], peer: "karim"), true)
+        XCTAssertEqual(CallPeerSpeech.relayed(meshActive: true, speakers: ["amina"], peer: "karim"), false)
+        XCTAssertEqual(CallPeerSpeech.relayed(meshActive: true, speakers: ["karim"], peer: nil), false)
+    }
+
+    func test_cameraOffPlaceholder_samplesOnlyWhenTheMeshDoesNot() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let mount = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var remoteCameraOffPlaceholder: some View", in: source))
+        XCTAssertTrue(mount.contains("CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds"))
+        let placeholder = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View", in: source))
+        XCTAssertTrue(placeholder.contains(".task(id: relayedSpeaking == nil)"), "le relevé local s'arrête dès que le maillage relaie")
+        XCTAssertTrue(placeholder.contains("relayedSpeaking ?? sampledSpeaking"))
+    }
 }
 
 @MainActor
