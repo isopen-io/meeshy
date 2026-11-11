@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// L'encre d'un anneau : celle du média, ou celle du thème quand l'hôte pose le
 /// ton `theme`.
@@ -34,12 +35,18 @@ public nonisolated struct MeeshyProgressRingRecipe: Sendable, Equatable {
     /// La piste à 30 % de l'encre, 60 % sous « Augmenter le contraste ».
     public static let trackOpacity: Double = MeeshyOpacity.medium
     public static let trackOpacityHighContrast: Double = 0.6
+    /// Le chiffre se réduit jusqu'à 60 % plutôt que déborder du cercle intérieur.
+    public static let digitsMinimumScale: CGFloat = 0.6
+    /// Le contraste minimal de l'arc (objet graphique) contre son fond.
+    public static let arcMinContrast: Double = 3
 
     /// La fraction bornée, `nil` quand la progression est inconnue.
     public let fraction: Double?
     public let diameter: Double
     public let stroke: Double
     public let radius: Double
+    /// Le cercle intérieur au trait : la boîte du chiffre et de `center`.
+    public let innerDiameter: Double
     /// La part du cercle que l'arc dessine (balayage pour l'indéterminé).
     public let arcFraction: Double
     /// Le pourcentage entier, `nil` en indéterminé.
@@ -78,6 +85,7 @@ public nonisolated struct MeeshyProgressRingRecipe: Sendable, Equatable {
             diameter: bounded,
             stroke: stroke,
             radius: (bounded - stroke) / 2,
+            innerDiameter: bounded - 2 * stroke,
             arcFraction: arc,
             percent: percent,
             digits: shown,
@@ -102,15 +110,60 @@ public nonisolated struct MeeshyProgressRingRecipe: Sendable, Equatable {
         value.isFinite ? min(max(value, 0), 1) : 0
     }
 
+    /// L'encre de l'anneau : celle du média, ou celle du thème.
+    public func inkColor(isDark: Bool) -> Color {
+        switch ink {
+        case .onMedia: return MeeshyColors.onMedia
+        case .themeInk: return MeeshyColors.textPrimary(isDark: isDark)
+        }
+    }
+
     /// L'arrivée d'une nouvelle valeur : linéaire 200 ms ; aucune sous « réduire
     /// les animations ».
     public var animation: Animation? {
-        reduceMotion ? nil : .linear(duration: Self.transitionDuration)
+        Self.arcAnimation(animates: !reduceMotion)
     }
 
-    /// La durée d'un tour du balayage.
-    public var spinAnimation: Animation {
-        .linear(duration: Self.sweepDuration).repeatForever(autoreverses: false)
+    /// L'arc rejoint sa valeur en 200 ms, linéaire, ou y saute.
+    public static func arcAnimation(animates: Bool) -> Animation? {
+        animates ? .linear(duration: transitionDuration) : nil
+    }
+
+    /// Un tour du balayage : 1,1 s, linéaire, sans fin.
+    public static var spinAnimation: Animation {
+        .linear(duration: sweepDuration).repeatForever(autoreverses: false)
+    }
+
+    /// Le pourcentage dans les chiffres et la ponctuation de la langue
+    /// (« 62 % », « 62% », « ٦٢٪ »).
+    public static func percentText(_ percent: Int, locale: Locale) -> String {
+        FloatingPointFormatStyle<Double>.Percent(locale: locale)
+            .precision(.fractionLength(0))
+            .format(Double(percent) / 100)
+    }
+
+    /// Le chiffre affiché : nombre seul de 22 à 39, pourcentage localisé dès 40.
+    public static func digitsText(_ digits: Int, showsSign: Bool, locale: Locale) -> String {
+        showsSign ? percentText(digits, locale: locale) : IntegerFormatStyle<Int>(locale: locale).format(digits)
+    }
+
+    /// Le contraste WCAG d'une encre posée sur le disque d'ombre, au pire cas :
+    /// le disque au-dessus d'une image blanche.
+    public static func scrimContrast(of ink: Color) -> Double {
+        let scrim = UIColor(MeeshyColors.scrim)
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        guard scrim.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return 0 }
+        func over(_ channel: CGFloat) -> Double { Double(alpha * channel + (1 - alpha)) }
+        let backdrop = CanvasChromeScheme.luminance(red: over(red), green: over(green), blue: over(blue))
+        return CanvasChromeScheme.contrastRatio(Double(ink.luminance), backdrop)
+    }
+
+    /// Le contraste WCAG le plus faible d'une encre sur des arrêts de couleur.
+    public static func worstContrast(of ink: Color, on stops: [Color]) -> Double {
+        let inkLuminance = Double(ink.luminance)
+        return stops
+            .map { CanvasChromeScheme.contrastRatio(inkLuminance, Double($0.luminance)) }
+            .min() ?? 0
     }
 }
 
@@ -118,7 +171,8 @@ public nonisolated struct MeeshyProgressRingRecipe: Sendable, Equatable {
 public enum MeeshyProgressRingWords {
 
     /// La valeur dite, dans cet ordre : `valueText`, puis le pourcentage
-    /// (« 62 % », chiffres du lecteur), puis « En cours » en indéterminé.
+    /// (« 62 % », chiffres et ponctuation du lecteur), puis « En cours » en
+    /// indéterminé. Jamais dans le nom.
     public static func spokenValue(percent: Int?,
                                    valueText: String?,
                                    bundle: Bundle? = nil,
@@ -132,6 +186,6 @@ public enum MeeshyProgressRingWords {
                 locale: locale
             )
         }
-        return "\(IntegerFormatStyle<Int>(locale: locale).format(percent)) %"
+        return MeeshyProgressRingRecipe.percentText(percent, locale: locale)
     }
 }

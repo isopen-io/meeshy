@@ -51,7 +51,7 @@ Loi 13 : pas d'anneau sans opération ; pas de chiffre en indéterminé, sous 22
 - Rôle : un `ProgressView` représenté (`accessibilityRepresentation`), trait `.updatesFrequently`.
 - Dynamic Type : diamètre figé ; le chiffre se réduit jusqu'à 60 %.
 - RTL : l'arc part de midi, sens horaire, sans reflet.
-- Contraste : l'encre contre le fond de marque 4,5:1 ; « Augmenter le contraste » : piste à 60 %.
+- Contraste, calculé depuis la recette (`worstContrast`, `scrimContrast`) : l'arc et le chiffre à l'encre du média tiennent 3:1 contre le fond de marque (indigo500 → indigo700) et contre le disque d'ombre posé sur une image blanche. Le chiffre de 12 gras sur indigo500 mesure 4,47:1, sous les 4,5:1 visés : écart du jeton de marque, déjà suivi par #8933, que K09 ne tranche pas. Une teinte passée par l'hôte reste sous sa responsabilité. « Augmenter le contraste » : piste à 60 %.
 
 ## 5 bis. Performance
 - Le chiffre ne change qu'au pourcentage entier.

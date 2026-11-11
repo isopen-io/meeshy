@@ -1,7 +1,7 @@
 {
   "composant": "MeeshyProgressRing",
   "cle": "K09",
-  "note": "Vecteurs de parité lus par les trois suites (iOS MeeshyProgressRingTests, Android, web). Trait, rayon, chiffre et signe selon la fiche K09 § 6.",
+  "note": "Vecteurs de parité lus par les trois suites (iOS MeeshyProgressRingTests, Android MeeshyProgressRingTest, web meeshy-progress-ring.test.tsx). Trait, rayon, chiffre et signe selon la fiche K09 § 6. Les textes se comparent espaces insécables (U+00A0, U+202F) ramenés à une espace.",
   "trait": [
     { "diametre": 14, "trait": 1.5, "rayon": 6.25 },
     { "diametre": 22, "trait": 3, "rayon": 9.5 },
@@ -12,28 +12,46 @@
     { "diametre": 102, "trait": 6, "rayon": 48 }
   ],
   "pourcentage": [
-    { "progres": 0.62, "pourcentage": 62, "chiffre": 62, "signe": true, "chiffreTaille": "small" },
+    { "progres": 0.62, "diametre": 44, "pourcentage": 62, "chiffre": 62, "signe": true, "chiffreTaille": "small" },
+    { "progres": 0.62, "diametre": 40, "pourcentage": 62, "chiffre": 62, "signe": true, "chiffreTaille": "small" },
     { "progres": 0.60, "diametre": 22, "pourcentage": 60, "chiffre": 60, "signe": false, "chiffreTaille": "micro" },
-    { "progres": 1.7, "pourcentage": 100, "chiffre": 100 },
-    { "progres": -0.5, "pourcentage": 0, "chiffre": 0 },
-    { "progres": null, "chiffre": null, "balayage": true, "valeurDite": "En cours" }
+    { "progres": 0.60, "diametre": 14, "pourcentage": 60, "chiffre": null, "signe": false },
+    { "progres": 0.5, "diametre": 102, "pourcentage": 50, "chiffre": 50, "signe": true, "chiffreTaille": "small" },
+    { "progres": 0.625, "diametre": 44, "pourcentage": 63, "chiffre": 63, "signe": true, "chiffreTaille": "small" },
+    { "progres": 1.7, "diametre": 44, "pourcentage": 100, "chiffre": 100, "signe": true, "chiffreTaille": "small" },
+    { "progres": -0.5, "diametre": 44, "pourcentage": 0, "chiffre": 0, "signe": true, "chiffreTaille": "small" },
+    { "progres": null, "diametre": 44, "pourcentage": null, "chiffre": null, "signe": false, "balayage": true }
   ],
   "centre": [
-    { "progres": 0.5, "centre": true, "chiffre": null }
+    { "progres": 0.5, "centre": true, "chiffre": null, "valeurDite": "50 %" }
   ],
   "arc": [
     { "progres": 0, "arcPlancher": 0.001 }
   ],
+  "chiffreAffiche": [
+    { "langue": "fr", "chiffre": 60, "signe": false, "texte": "60" },
+    { "langue": "fr", "chiffre": 62, "signe": true, "texte": "62 %" },
+    { "langue": "en", "chiffre": 62, "signe": true, "texte": "62%" }
+  ],
   "balayage": { "fraction": 0.18, "dureeSecondes": 1.1, "transitionSecondes": 0.2 },
   "opacites": { "piste": 0.3, "pisteContrasteAccru": 0.6 },
   "encre": [
+    { "ton": "plain", "encre": "onMedia" },
     { "ton": "deep", "encre": "onMedia" },
+    { "ton": "onLight", "encre": "onMedia" },
     { "ton": "theme", "encre": "themeInk" }
   ],
+  "contraste": {
+    "arcMin": 3,
+    "disqueOmbreMin": 3,
+    "note": "L'arc et le chiffre à l'encre du média tiennent 3:1 contre le fond de marque (indigo500 → indigo700) et contre le disque d'ombre posé sur une image blanche. Le chiffre de 12 gras sur indigo500 mesure 4,47:1 (cible 4,5:1) : écart du jeton de marque, suivi par #8933."
+  },
   "valeursDites": [
     { "langue": "fr", "pourcentage": 62, "texte": "62 %" },
+    { "langue": "en", "pourcentage": 62, "texte": "62%" },
     { "langue": "fr", "texte": "En cours", "indetermine": true },
     { "langue": "en", "texte": "In progress", "indetermine": true },
-    { "langue": "ar", "indetermine": true, "texte": "قيد التنفيذ" }
+    { "langue": "ar", "texte": "قيد التنفيذ", "indetermine": true },
+    { "langue": "ar_SA", "pourcentage": 62, "chiffresDuLecteur": true }
   ]
 }

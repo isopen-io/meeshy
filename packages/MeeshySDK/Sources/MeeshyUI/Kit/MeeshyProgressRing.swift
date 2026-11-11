@@ -2,10 +2,30 @@ import SwiftUI
 
 /// La teinte de l'arc : l'encre du ton (par défaut), une couleur unie (un accent,
 /// le rouge de la prise) ou un dégradé. La piste reprend la teinte à 30 %.
-public enum MeeshyProgressRingTint: Sendable, Equatable {
+public nonisolated enum MeeshyProgressRingTint: Sendable, Equatable {
     case ink
     case solid(Color)
     case gradient([Color])
+}
+
+extension MeeshyProgressRingTint {
+    /// La couleur de la piste : l'encre, la teinte unie, ou le premier arrêt.
+    func trackColor(ink: Color) -> Color {
+        switch self {
+        case .ink: return ink
+        case .solid(let color): return color
+        case .gradient(let colors): return colors.first ?? ink
+        }
+    }
+
+    /// Le style de l'arc : l'encre, la teinte unie, ou un dégradé angulaire.
+    func arcStyle(ink: Color) -> AnyShapeStyle {
+        switch self {
+        case .ink: return AnyShapeStyle(ink)
+        case .solid(let color): return AnyShapeStyle(color)
+        case .gradient(let colors): return AnyShapeStyle(AngularGradient(colors: colors, center: .center))
+        }
+    }
 }
 
 /// **L'anneau de progression (K09)** : un seul anneau dit où en est une opération
@@ -16,6 +36,10 @@ public enum MeeshyProgressRingTint: Sendable, Equatable {
 /// le nom de l'opération déjà traduit (`nil` = décoratif, l'hôte parle à sa
 /// place), `valueText` remplace la valeur dite. Aucun verre, aucun geste, aucune
 /// couleur en dur : l'encre vient du ton, la teinte de l'hôte.
+///
+/// Performance : l'arc, le balayage et le chiffre sont trois feuilles
+/// `Equatable` ; seul le changement de leurs VALEURS les redessine, et le chiffre
+/// ne change qu'au pourcentage entier.
 public struct MeeshyProgressRing<Center: View>: View {
     private let progress: Double?
     private let label: String?
@@ -32,12 +56,12 @@ public struct MeeshyProgressRing<Center: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var colorSchemeContrast
-    @State private var spin: Double = 0
+    @Environment(\.locale) private var locale
 
     public init(progress: Double?,
                 label: String?,
                 valueText: String? = nil,
-                diameter: CGFloat = 44,
+                diameter: CGFloat = MeeshyControlSize.tapTarget,
                 tint: MeeshyProgressRingTint = .ink,
                 showsPercent: Bool = true,
                 sweeps: Bool = false,
@@ -58,100 +82,63 @@ public struct MeeshyProgressRing<Center: View>: View {
 
     public var body: some View {
         let recipe = recipeValue
-        let ink = recipe.ink == .themeInk ? MeeshyColors.textPrimary(isDark: colorScheme == .dark) : MeeshyColors.onMedia
+        let ink = recipe.inkColor(isDark: colorScheme == .dark)
         ZStack {
             if scrim {
-                Circle()
-                    .fill(MeeshyColors.scrim)
-                    .frame(width: recipe.diameter, height: recipe.diameter)
+                Circle().fill(MeeshyColors.scrim)
             }
-            track(recipe: recipe, ink: ink)
+            Circle()
+                .stroke(tint.trackColor(ink: ink).opacity(recipe.trackOpacity), lineWidth: recipe.stroke)
+                .frame(width: recipe.radius * 2, height: recipe.radius * 2)
             if !recipe.isIndeterminate {
-                progressArc(recipe: recipe, ink: ink)
+                MeeshyProgressRingArc(fraction: recipe.arcFraction, radius: recipe.radius, stroke: recipe.stroke,
+                                      tint: tint, ink: ink, animates: !recipe.reduceMotion)
+                    .equatable()
             }
             if recipe.sweeps {
-                sweepArc(recipe: recipe, ink: ink)
+                MeeshyProgressRingSweep(radius: recipe.radius, stroke: recipe.stroke, tint: tint, ink: ink,
+                                        spins: recipe.spins)
+                    .equatable()
+                    .id(recipe.spins)
             }
-            digitsOrCenter(recipe: recipe, ink: ink)
+            centerContent(recipe: recipe, ink: ink)
         }
         .frame(width: recipe.diameter, height: recipe.diameter)
         .allowsHitTesting(false)
-        .onAppear {
-            guard recipe.spins else { return }
-            withAnimation(recipe.spinAnimation) { spin = 360 }
-        }
         .modifier(MeeshyProgressRingAccessibility(label: label,
                                                   valueText: valueText,
                                                   percent: recipe.percent,
                                                   progress: recipe.fraction))
     }
 
+    private var hasCenter: Bool { Center.self != EmptyView.self }
+
     private var recipeValue: MeeshyProgressRingRecipe {
         MeeshyProgressRingRecipe.resolve(progress: progress,
                                          diameter: Double(diameter),
                                          sweeps: sweeps,
                                          showsPercent: showsPercent,
-                                         hasCenter: Center.self != EmptyView.self,
+                                         hasCenter: hasCenter,
                                          tone: tone ?? hostTone,
                                          reduceMotion: reduceMotion,
                                          increasedContrast: colorSchemeContrast == .increased)
     }
 
-    private func track(recipe: MeeshyProgressRingRecipe, ink: Color) -> some View {
-        Circle()
-            .stroke(trackColor(ink: ink).opacity(recipe.trackOpacity), lineWidth: recipe.stroke)
-            .frame(width: recipe.radius * 2, height: recipe.radius * 2)
-    }
-
-    private func progressArc(recipe: MeeshyProgressRingRecipe, ink: Color) -> some View {
-        Circle()
-            .trim(from: 0, to: recipe.arcFraction)
-            .stroke(style: StrokeStyle(lineWidth: recipe.stroke, lineCap: .round))
-            .foregroundStyle(strokeStyle(ink: ink))
-            .frame(width: recipe.radius * 2, height: recipe.radius * 2)
-            .rotationEffect(.degrees(-90))
-            .animation(recipe.animation, value: recipe.arcFraction)
-    }
-
-    private func sweepArc(recipe: MeeshyProgressRingRecipe, ink: Color) -> some View {
-        Circle()
-            .trim(from: 0, to: MeeshyProgressRingRecipe.sweepFraction)
-            .stroke(style: StrokeStyle(lineWidth: recipe.stroke, lineCap: .round))
-            .foregroundStyle(strokeStyle(ink: ink))
-            .frame(width: recipe.radius * 2, height: recipe.radius * 2)
-            .rotationEffect(.degrees(-90 + (recipe.spins ? spin : 0)))
-    }
-
     @ViewBuilder
-    private func digitsOrCenter(recipe: MeeshyProgressRingRecipe, ink: Color) -> some View {
-        if Center.self != EmptyView.self {
+    private func centerContent(recipe: MeeshyProgressRingRecipe, ink: Color) -> some View {
+        if hasCenter {
             center
+                .frame(width: recipe.innerDiameter, height: recipe.innerDiameter)
+                .clipShape(Circle())
                 .accessibilityHidden(true)
-                .frame(width: recipe.diameter - 2 * recipe.stroke, height: recipe.diameter - 2 * recipe.stroke)
         } else if let digits = recipe.digits, let size = recipe.digitSize {
-            (Text(IntegerFormatStyle<Int>().format(digits)) + Text(recipe.showsSign ? "%" : ""))
-                .font(.system(size: size, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .accessibilityHidden(true)
-        }
-    }
-
-    private func trackColor(ink: Color) -> Color {
-        switch tint {
-        case .ink: return ink
-        case .solid(let color): return color
-        case .gradient(let colors): return colors.first ?? ink
-        }
-    }
-
-    private func strokeStyle(ink: Color) -> AnyShapeStyle {
-        switch tint {
-        case .ink: return AnyShapeStyle(ink)
-        case .solid(let color): return AnyShapeStyle(color)
-        case .gradient(let colors): return AnyShapeStyle(AngularGradient(colors: colors, center: .center))
+            MeeshyProgressRingDigits(
+                text: MeeshyProgressRingRecipe.digitsText(digits, showsSign: recipe.showsSign, locale: locale),
+                size: size,
+                ink: ink
+            )
+            .equatable()
+            .frame(width: recipe.innerDiameter)
         }
     }
 }
@@ -160,7 +147,7 @@ extension MeeshyProgressRing where Center == EmptyView {
     public init(progress: Double?,
                 label: String?,
                 valueText: String? = nil,
-                diameter: CGFloat = 44,
+                diameter: CGFloat = MeeshyControlSize.tapTarget,
                 tint: MeeshyProgressRingTint = .ink,
                 showsPercent: Bool = true,
                 sweeps: Bool = false,
@@ -171,8 +158,81 @@ extension MeeshyProgressRing where Center == EmptyView {
     }
 }
 
+/// L'arc qui avance depuis midi : il rejoint chaque nouvelle valeur en 200 ms,
+/// linéaire, ou y saute sous « réduire les animations ». Seule la longueur du
+/// tracé s'anime, jamais la mise en page.
+struct MeeshyProgressRingArc: View, Equatable {
+    let fraction: Double
+    let radius: Double
+    let stroke: Double
+    let tint: MeeshyProgressRingTint
+    let ink: Color
+    let animates: Bool
+
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: fraction)
+            .stroke(tint.arcStyle(ink: ink), style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+            .frame(width: radius * 2, height: radius * 2)
+            .rotationEffect(.degrees(-90))
+            .animation(MeeshyProgressRingRecipe.arcAnimation(animates: animates), value: fraction)
+    }
+}
+
+/// Le balayage : un arc de 18 % qui tourne en 1,1 s, sans fin. La phase est
+/// MONOTONE (jamais remise à zéro, patron de `StorySaveProgressRing`) : un
+/// `@State` déjà à sa valeur finale ne relancerait aucune animation à la
+/// réapparition suivante. Immobile à midi sous « réduire les animations ».
+struct MeeshyProgressRingSweep: View, Equatable {
+    let radius: Double
+    let stroke: Double
+    let tint: MeeshyProgressRingTint
+    let ink: Color
+    let spins: Bool
+
+    @State private var phase: Double = 0
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.radius == rhs.radius && lhs.stroke == rhs.stroke && lhs.tint == rhs.tint
+            && lhs.ink == rhs.ink && lhs.spins == rhs.spins
+    }
+
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: MeeshyProgressRingRecipe.sweepFraction)
+            .stroke(tint.arcStyle(ink: ink), style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+            .frame(width: radius * 2, height: radius * 2)
+            .rotationEffect(.degrees(phase * 360 - 90))
+            .animation(spins ? MeeshyProgressRingRecipe.spinAnimation : nil, value: phase)
+            .onAppear {
+                guard spins else { return }
+                phase += 1
+            }
+    }
+}
+
+/// Le chiffre : gras, tabulaire, figé au diamètre (pas au Dynamic Type), réduit
+/// jusqu'à 60 % plutôt que déborder. Masqué aux lecteurs d'écran : la valeur
+/// est dite par l'anneau.
+struct MeeshyProgressRingDigits: View, Equatable {
+    let text: String
+    let size: CGFloat
+    let ink: Color
+
+    var body: some View {
+        Text(verbatim: text)
+            .font(.system(size: size, weight: .bold))
+            .monospacedDigit()
+            .foregroundStyle(ink)
+            .lineLimit(1)
+            .minimumScaleFactor(MeeshyProgressRingRecipe.digitsMinimumScale)
+            .accessibilityHidden(true)
+    }
+}
+
 /// Un seul élément d'accessibilité : rôle d'indicateur (un `ProgressView`
-/// représenté), nom, valeur dite. Sans nom (`label` nil), l'anneau sort de l'arbre.
+/// représenté), nom, valeur dite. Sans nom (`label` nil), l'anneau sort de
+/// l'arbre. Jamais une zone vivante : l'hôte annonce le début et la fin.
 private struct MeeshyProgressRingAccessibility: ViewModifier {
     let label: String?
     let valueText: String?
