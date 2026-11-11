@@ -1,0 +1,39 @@
+{
+  "composant": "MeeshyProgressRing",
+  "cle": "K09",
+  "note": "Vecteurs de parité lus par les trois suites (iOS MeeshyProgressRingTests, Android, web). Trait, rayon, chiffre et signe selon la fiche K09 § 6.",
+  "trait": [
+    { "diametre": 14, "trait": 1.5, "rayon": 6.25 },
+    { "diametre": 22, "trait": 3, "rayon": 9.5 },
+    { "diametre": 32, "trait": 3, "rayon": 14.5 },
+    { "diametre": 40, "trait": 4, "rayon": 18 },
+    { "diametre": 44, "trait": 4, "rayon": 20 },
+    { "diametre": 76, "trait": 6, "rayon": 35 },
+    { "diametre": 102, "trait": 6, "rayon": 48 }
+  ],
+  "pourcentage": [
+    { "progres": 0.62, "pourcentage": 62, "chiffre": 62, "signe": true, "chiffreTaille": "small" },
+    { "progres": 0.60, "diametre": 22, "pourcentage": 60, "chiffre": 60, "signe": false, "chiffreTaille": "micro" },
+    { "progres": 1.7, "pourcentage": 100, "chiffre": 100 },
+    { "progres": -0.5, "pourcentage": 0, "chiffre": 0 },
+    { "progres": null, "chiffre": null, "balayage": true, "valeurDite": "En cours" }
+  ],
+  "centre": [
+    { "progres": 0.5, "centre": true, "chiffre": null }
+  ],
+  "arc": [
+    { "progres": 0, "arcPlancher": 0.001 }
+  ],
+  "balayage": { "fraction": 0.18, "dureeSecondes": 1.1, "transitionSecondes": 0.2 },
+  "opacites": { "piste": 0.3, "pisteContrasteAccru": 0.6 },
+  "encre": [
+    { "ton": "deep", "encre": "onMedia" },
+    { "ton": "theme", "encre": "themeInk" }
+  ],
+  "valeursDites": [
+    { "langue": "fr", "pourcentage": 62, "texte": "62 %" },
+    { "langue": "fr", "texte": "En cours", "indetermine": true },
+    { "langue": "en", "texte": "In progress", "indetermine": true },
+    { "langue": "ar", "indetermine": true, "texte": "قيد التنفيذ" }
+  ]
+}
