@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 
-import { callPillText, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS } from './call-pill-text';
+import { callPillText, pillHasBaseRow, pillShowsCaptionsBand, pillStaysWhenChromeStowed, PILL_TEXT_MAX_WIDTH, PILL_TEXT_WIDTH_CLASS } from './call-pill-text';
 import { PILL_TEXT_EXIT } from './call-pill-text-exit';
 import { IDLE, nextLayer, type CallScreenLayer } from './call-screen-layer';
 
@@ -82,6 +82,34 @@ describe('un toucher range la pilule : les sous-titres restent, sans rangée (lo
     expect(text(mode('effects'))).toBe('captionsAlone');
     expect(text(mode('montage'), { chromeShown: false })).toBe('captionsAlone');
     expect(text(mode('effects'), { captionsOn: false })).toBe('none');
+  });
+});
+
+/**
+ * G1.3 · G1.11 (#17536, miroir de `CallPillText.staysWhenChromeStowed` d'iOS, #17534) —
+ * UN seul verre : la pilule rangée ne s'efface pas quand elle porte des sous-titres ; elle
+ * perd sa rangée de base et se resserre autour d'eux. Jamais un second verre à côté.
+ */
+describe('un seul verre : la pilule rangée garde ses sous-titres (G1.3)', () => {
+  test('seuls les sous-titres laissés seuls restent à l’écran quand les commandes se rangent', () => {
+    expect(pillStaysWhenChromeStowed('captionsAlone')).toBe(true);
+    expect((['none', 'captions', 'journal'] as const).every((text) => !pillStaysWhenChromeStowed(text))).toBe(true);
+  });
+
+  test('les sous-titres sont dans le verre : au repos, ou seuls quand la pilule est rangée', () => {
+    expect(pillShowsCaptionsBand('captions')).toBe(true);
+    expect(pillShowsCaptionsBand('captionsAlone')).toBe(true);
+    expect(pillShowsCaptionsBand('none')).toBe(false);
+    expect(pillShowsCaptionsBand('journal')).toBe(false);
+  });
+
+  test('la rangée de base se retire pour les sous-titres seuls, à chaque couche', () => {
+    for (const layer of [IDLE, menu, panel('journal'), panel('react')]) {
+      const stowed = text(layer, { chromeShown: false });
+      expect(pillStaysWhenChromeStowed(stowed)).toBe(true);
+      expect(pillHasBaseRow(stowed)).toBe(false);
+    }
+    expect((['none', 'captions', 'journal'] as const).every(pillHasBaseRow)).toBe(true);
   });
 });
 
