@@ -71,7 +71,6 @@ const pt = {
   'callControls.cameraPicker': 'Câmara',
   'callControls.cameraPicker.label': 'Escolher a câmara',
   'callControls.cameraPicker.unnamed': 'Câmara {n}',
-  'callControls.pip': 'PiP',
   'callControls.camera.options': 'Opções da minha câmara',
   'callControls.selfTile.small': 'A minha miniatura: pequena',
   'callControls.selfTile.medium': 'A minha miniatura: média',

@@ -19,7 +19,6 @@ class CallControlsDispositionTest {
             hasSelectableCameras = false,
             isConnected = true,
             mayRecord = true,
-            canPictureInPicture = false,
         ),
     )
 
@@ -66,8 +65,13 @@ class CallControlsDispositionTest {
     }
 
     @Test
+    fun `the journal drawn in the pill hides the rails and the stowed journal brings them back`() {
+        assertThat(CallControlsDisposition.Rails.railRows(actions(), CallScreenLayer.Panel(CallScreenPanel.Journal))).isEmpty()
+        assertThat(CallControlsDisposition.Rails.railRows(actions(), CallScreenLayer.MenuOverJournal)).hasSize(2)
+    }
+
+    @Test
     fun `a sheet panel keeps the rails`() {
-        assertThat(CallControlsDisposition.Rails.railRows(actions(), CallScreenLayer.Panel(CallScreenPanel.Journal))).hasSize(2)
         assertThat(CallControlsDisposition.Rails.railRows(actions(), CallScreenLayer.Panel(CallScreenPanel.People))).hasSize(2)
     }
 
@@ -115,6 +119,7 @@ class CallControlsDispositionTest {
         listOf(
             CallScreenLayer.Idle,
             CallScreenLayer.Menu,
+            CallScreenLayer.MenuOverJournal,
             CallScreenLayer.Panel(CallScreenPanel.Journal),
             CallScreenLayer.Panel(CallScreenPanel.React),
             CallScreenLayer.Mode(CallScreenMode.Montage),
@@ -139,6 +144,8 @@ class CallControlsDispositionTest {
 
     @Test
     fun `an option drawn in the pill grows it in both dispositions`() {
+        assertThat(CallControlsDisposition.Rails.unfoldsPill(CallScreenLayer.Panel(CallScreenPanel.Journal))).isTrue()
+        assertThat(CallControlsDisposition.Rows.unfoldsPill(CallScreenLayer.Panel(CallScreenPanel.Journal))).isTrue()
         assertThat(CallControlsDisposition.Rails.unfoldsPill(CallScreenLayer.Panel(CallScreenPanel.React))).isTrue()
         assertThat(CallControlsDisposition.Rows.unfoldsPill(CallScreenLayer.Panel(CallScreenPanel.Record))).isTrue()
     }

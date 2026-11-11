@@ -71,7 +71,6 @@ const es = {
   'callControls.cameraPicker': 'Cámara',
   'callControls.cameraPicker.label': 'Elegir la cámara',
   'callControls.cameraPicker.unnamed': 'Cámara {n}',
-  'callControls.pip': 'PiP',
   'callControls.camera.options': 'Opciones de mi cámara',
   'callControls.selfTile.small': 'Mi miniatura: pequeña',
   'callControls.selfTile.medium': 'Mi miniatura: mediana',

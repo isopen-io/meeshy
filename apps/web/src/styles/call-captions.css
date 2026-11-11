@@ -1,0 +1,67 @@
+/* LES SOUS-TITRES D'UN APPEL — feuille de leur chunk (`call-captions-panel.tsx`) : elle
+   ne pèse que sur l'appel qui les montre, jamais sur la première peinture
+   (`budgets.json` › `first_paint`). */
+
+/* CE QUI SE POSE SUR UNE PHRASE DES SOUS-TITRES ARRIVE ET REPART EN FONDU (planche P3-P5,
+   #17406) — les trois points d'une traduction attendue (`TypingDots`, leur battement est
+   celui de la frappe) ; l'original déplié, qui DESCEND de sa phrase et y remonte, inerte,
+   le temps de `PILL_TEXT_EXIT` ; la traduction qui remplace l'original à la même place.
+   Seules la transformation et l'opacité bougent ; la règle 32 (`app.css`) les ramène à
+   un instant sous « Réduire les animations », où la sortie n'attend pas. */
+[data-call-caption-waiting],
+button[data-call-caption-line] > span[dir='auto'] {
+  animation: call-caption-in 200ms ease-out both;
+}
+
+[data-call-caption-waiting][data-leaving] {
+  animation: call-caption-out 180ms ease-in both;
+}
+
+[data-call-caption-original] {
+  animation: call-caption-unfold-in 220ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+[data-call-caption-original][data-leaving] {
+  animation: call-caption-unfold-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+@keyframes call-caption-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes call-caption-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes call-caption-unfold-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+}
+
+@keyframes call-caption-unfold-out {
+  to {
+    opacity: 0;
+    transform: translateY(-0.25rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes call-caption-unfold-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes call-caption-unfold-out {
+    to {
+      opacity: 0;
+    }
+  }
+}
