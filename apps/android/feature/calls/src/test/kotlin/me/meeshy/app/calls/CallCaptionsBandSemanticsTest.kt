@@ -12,6 +12,9 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.onNodeWithTag
@@ -214,4 +217,24 @@ class CallCaptionsBandSemanticsTest {
     private fun collectLabels(node: androidx.compose.ui.semantics.SemanticsNode): List<String> =
         listOfNotNull(node.config.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull()) +
             node.children.flatMap(::collectLabels)
+
+    @Test
+    fun `in a mode the band shows its sentences without the Journal button, with it everywhere else`() {
+        var opens by mutableStateOf(false)
+        rule.setContent {
+            MeeshyTheme {
+                CallCaptionsBand(
+                    lines = listOf(line("a", "Bonjour")),
+                    onToggleOriginal = {},
+                    onOpenJournal = {},
+                    opensJournal = opens,
+                )
+            }
+        }
+
+        rule.onNodeWithText("Ada · Bonjour", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Journal").assertDoesNotExist()
+        rule.runOnIdle { opens = true }
+        rule.onNodeWithText("Journal").assertIsDisplayed()
+    }
 }

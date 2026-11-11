@@ -23,6 +23,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -47,8 +48,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.BRIGHTNESS_LIMIT
 import me.meeshy.sdk.model.call.CallEffectsCompanionRule
-import me.meeshy.sdk.model.call.CallEffectsDuoPeer
 import me.meeshy.sdk.model.call.CallFaceEffect
+import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.sdk.model.call.SMOOTHING_INTENSITY_MAX
 import me.meeshy.sdk.model.call.SMOOTHING_INTENSITY_MIN
 import me.meeshy.sdk.model.call.VideoFilterPreset
@@ -91,6 +92,8 @@ internal fun CallEffectsMode(
     eglContext: EglBase.Context,
     reduceMotion: Boolean,
     onClose: () -> Unit,
+    peerUserId: String? = null,
+    peerAvatarUrl: String? = null,
 ) {
     val effects = hiltViewModel<CallEffectsViewModel>().effects
     val captureViewModel: CallCaptureViewModel = hiltViewModel()
@@ -100,17 +103,21 @@ internal fun CallEffectsMode(
     val mode by session.state.collectAsStateWithLifecycle()
     val setMode: (CallEffectsModeState) -> Unit = { next -> session.change { next } }
     val finish: (Boolean) -> Unit = { validated -> if (session.finish(validated)) onClose() }
-    val companions = remember(state.peerName, state.isCameraOn, state.isPeerCameraOff, state.isPeerMuted, state.isMuted) {
-        CallEffectsCompanionRule.layout(
-            CallEffectsCompanionRule.duoTiles(
-                CallEffectsDuoPeer(null, "", null, isVideoOn = state.isCameraOn, isMicMuted = state.isMuted),
-                CallEffectsDuoPeer(null, state.peerName, null, isVideoOn = !state.isPeerCameraOff, isMicMuted = state.isPeerMuted),
-            ),
-            featuredId = null,
-            capacity = CallEffectsCompanionRule.MAX_COMPANIONS,
-        ).companions
+    val companions = remember(peerUserId, peerAvatarUrl, state.peerName, state.isCameraOn, state.isPeerCameraOff, state.isPeerMuted, state.isMuted) {
+        CallEffectsCompanionRule.duoCompanions(
+            peerUserId = peerUserId,
+            peerName = state.peerName,
+            peerAvatarUrl = peerAvatarUrl,
+            isCameraOn = state.isCameraOn,
+            isMuted = state.isMuted,
+            isPeerCameraOff = state.isPeerCameraOff,
+            isPeerMuted = state.isPeerMuted,
+        )
     }
     BackHandler { finish(false) }
+    // Le mode peut disparaître autrement que par Quitter ou Valider (l'appel se termine, la couche change) : mon
+    // image d'avant revient alors aussi ; une session déjà validée ne se défait pas (elle ne se termine qu'une fois).
+    DisposableEffect(session) { onDispose { session.finish(false) } }
 
     val self = remember(state.isCameraOn, state.isFrontCamera) {
         val me = frameViewModel.controller.people(state.peerName, null).filter { it.isSelf }
@@ -141,37 +148,66 @@ internal fun CallEffectsMode(
             reduceMotion = reduceMotion,
             modifier = Modifier.systemBarsPadding().padding(bottom = BAR_RESERVE),
         )
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
-                .systemBarsPadding()
-                .padding(bottom = MeeshySpacing.lg),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-        ) {
-            AnimatedContent(
-                targetState = mode.showsSettings,
-                transitionSpec = { fadeIn(tween(if (reduceMotion) 0 else 200)) togetherWith fadeOut(tween(if (reduceMotion) 0 else 200)) },
-                label = "effects-settings",
-            ) { settings ->
-                if (settings) {
-                    EffectsSettings(mode, onChange = setMode)
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-                        CategoryPicker(mode.category) { setMode(mode.showing(it)) }
-                        EffectsCarousel(mode, reduceMotion, shots, hint, onChange = setMode)
-                    }
+        EffectsControls(
+            state = state,
+            mode = mode,
+            reduceMotion = reduceMotion,
+            shots = shots,
+            hint = hint,
+            onChange = setMode,
+            onFinish = finish,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+/**
+ * Le bas du mode, de haut en bas : les sous-titres (ils restent, sans bouton Journal — iOS `captionsBand(opensJournal:
+ * false)`), le choix de la catégorie et du carrousel ou les réglages, puis Quitter · Réglages · Valider.
+ */
+@Composable
+private fun EffectsControls(
+    state: CallUiState,
+    mode: CallEffectsModeState,
+    reduceMotion: Boolean,
+    shots: CallModeShots,
+    hint: String?,
+    onChange: (CallEffectsModeState) -> Unit,
+    onFinish: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
+            .systemBarsPadding()
+            .padding(bottom = MeeshySpacing.lg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        if (state.captions.mode != CaptionsMode.Off) {
+            CallCaptionsBandHost(state = state, hasOwnGlass = true, opensJournal = false, modifier = Modifier.padding(horizontal = MeeshySpacing.lg))
+        }
+        AnimatedContent(
+            targetState = mode.showsSettings,
+            transitionSpec = { fadeIn(tween(if (reduceMotion) 0 else 200)) togetherWith fadeOut(tween(if (reduceMotion) 0 else 200)) },
+            label = "effects-settings",
+        ) { settings ->
+            if (settings) {
+                EffectsSettings(mode, onChange = onChange)
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+                    CategoryPicker(mode.category) { onChange(mode.showing(it)) }
+                    EffectsCarousel(mode, reduceMotion, shots, hint, onChange = onChange)
                 }
             }
-            EffectsActionBar(
-                showsSettings = mode.showsSettings,
-                onQuit = { finish(false) },
-                onSettings = { setMode(mode.togglingSettings()) },
-                onValidate = { finish(true) },
-            )
         }
+        EffectsActionBar(
+            showsSettings = mode.showsSettings,
+            onQuit = { onFinish(false) },
+            onSettings = { onChange(mode.togglingSettings()) },
+            onValidate = { onFinish(true) },
+        )
     }
 }
 
@@ -372,19 +408,34 @@ private fun faceGlyph(effect: CallFaceEffect): String = when (effect) {
     CallFaceEffect.Volcano -> "🌋"
 }
 
+/** Les noms des ambiances viennent du catalogue d'iOS (`video.filter.preset.*`), les mêmes qu'ailleurs dans l'appel. */
 private fun presetLabel(preset: VideoFilterPreset): Int = when (preset) {
-    VideoFilterPreset.Natural -> R.string.call_effects_preset_natural
-    VideoFilterPreset.Warm -> R.string.call_effects_preset_warm
-    VideoFilterPreset.Cool -> R.string.call_effects_preset_cool
-    VideoFilterPreset.Vivid -> R.string.call_effects_preset_vivid
-    VideoFilterPreset.Muted -> R.string.call_effects_preset_muted
+    VideoFilterPreset.Natural -> R.string.video_filter_preset_natural
+    VideoFilterPreset.Warm -> R.string.video_filter_preset_warm
+    VideoFilterPreset.Cool -> R.string.video_filter_preset_cool
+    VideoFilterPreset.Vivid -> R.string.video_filter_preset_vivid
+    VideoFilterPreset.Muted -> R.string.video_filter_preset_muted
+    VideoFilterPreset.Golden -> R.string.video_filter_preset_golden
+    VideoFilterPreset.Film -> R.string.video_filter_preset_film
+    VideoFilterPreset.SoftNight -> R.string.video_filter_preset_softNight
+    VideoFilterPreset.Bright -> R.string.video_filter_preset_bright
+    VideoFilterPreset.Velvet -> R.string.video_filter_preset_velvet
+    VideoFilterPreset.Sky -> R.string.video_filter_preset_sky
+    VideoFilterPreset.Monochrome -> R.string.video_filter_preset_monochrome
 }
 
-/** iOS `presetSymbol` (feuille, soleil, flocon, étincelles, nuage), rendu en glyphes. */
+/** iOS `presetSymbol` (feuille, horizon, pellicule, lune, soleil bas, étincelle, nuage-soleil, demi-disque), rendu en glyphes. */
 private fun presetGlyph(preset: VideoFilterPreset): String = when (preset) {
     VideoFilterPreset.Natural -> "🍃"
     VideoFilterPreset.Warm -> "☀️"
     VideoFilterPreset.Cool -> "❄️"
     VideoFilterPreset.Vivid -> "✨"
     VideoFilterPreset.Muted -> "☁️"
+    VideoFilterPreset.Golden -> "🌅"
+    VideoFilterPreset.Film -> "🎞️"
+    VideoFilterPreset.SoftNight -> "🌙"
+    VideoFilterPreset.Bright -> "🔅"
+    VideoFilterPreset.Velvet -> "✦"
+    VideoFilterPreset.Sky -> "⛅"
+    VideoFilterPreset.Monochrome -> "◐"
 }

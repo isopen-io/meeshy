@@ -60,13 +60,15 @@ private val CAPTION_TARGET = 48.dp
 
 /**
  * The captions as the pill carries them (#17343): they read the live state themselves, so the pill and the stowed glass
- * ([hasOwnGlass]) draw the same band. Touching « Journal » asks the screen to open the journal in the pill.
+ * ([hasOwnGlass]) draw the same band. Touching « Journal » asks the screen to open the journal in the pill; a mode
+ * that frees the screen (Effects, Montage) shows the band without that button ([opensJournal] = false, iOS `opensJournal`).
  */
 @Composable
 internal fun CallCaptionsBandHost(
     state: CallUiState,
     hasOwnGlass: Boolean,
     modifier: Modifier = Modifier,
+    opensJournal: Boolean = true,
     viewModel: CallCaptionsViewModel = hiltViewModel(),
 ) {
     val captions by viewModel.state.collectAsStateWithLifecycle()
@@ -81,6 +83,7 @@ internal fun CallCaptionsBandHost(
         captures = state.liveCaptures,
         peerName = state.peerName,
         hasOwnGlass = hasOwnGlass,
+        opensJournal = opensJournal,
     )
 }
 
@@ -121,6 +124,7 @@ internal fun CallCaptionsBand(
     captures: List<CallLiveCapture> = emptyList(),
     peerName: String = "",
     hasOwnGlass: Boolean = false,
+    opensJournal: Boolean = true,
 ) {
     val region = stringResource(R.string.call_captions_region)
     val swallowsTouch = Modifier.pointerInput(Unit) { detectTapGestures { } }
@@ -131,6 +135,7 @@ internal fun CallCaptionsBand(
             onOpenJournal = onOpenJournal,
             captures = captures,
             peerName = peerName,
+            opensJournal = opensJournal,
             modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         )
     }
@@ -150,6 +155,7 @@ private fun CallCaptionsContent(
     onOpenJournal: () -> Unit,
     captures: List<CallLiveCapture>,
     peerName: String,
+    opensJournal: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val you = stringResource(R.string.call_avatar_you)
@@ -190,7 +196,7 @@ private fun CallCaptionsContent(
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
             CallCaptionsFootNote(footer, modifier = Modifier.weight(1f))
-            CallJournalChip(onOpenJournal)
+            if (opensJournal) CallJournalChip(onOpenJournal)
         }
     }
 }
