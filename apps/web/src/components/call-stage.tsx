@@ -2,7 +2,7 @@ import { lazy, Suspense, useId, useRef, useState, type KeyboardEvent, type React
 import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
-import { CameraOffStage } from '@/components/call-camera-off';
+import { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallModerationSlot } from '@/components/call-control-slots';
 import type { CallGridKit } from '@/components/call-grid';
 import { Portrait } from '@/components/call-portrait';
@@ -40,7 +40,8 @@ import { autoSharer, resolveSpotlight, type SpotlightChoice } from '@/lib/calls/
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import type { ActiveCall } from '@/lib/calls/call-store';
-import { hasVideo, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
+import { hasVideo, membersInArrival, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
+import { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -108,6 +109,7 @@ export const CALL_GRID_KIT: CallGridKit = {
   colorOf: (userId) => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId)),
   resolveSpotlight,
   autoSharer,
+  SpeechRing: PeerSpeechRing,
 };
 
 /** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */
@@ -271,11 +273,9 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   };
   const cornerFrame = useRef<HTMLDivElement>(null);
   /* G1.9 (loi 15) : contrôles rangés, toucher ma vignette les rend d'abord, comme une tuile du groupe. La décision se prend à la DESCENTE : le focus que le pointeur donne au bouton rend le chrome avant le clic, qui sinon permuterait. */
-  const pressedHidden = useRef<boolean | null>(null);
+  const pressed = usePressedChrome(chromeVisible);
   const tap = (): void => {
-    const hidden = pressedHidden.current ?? !chromeVisible;
-    pressedHidden.current = null;
-    if (hidden) onRevealChrome();
+    if (pressed.release()) onRevealChrome();
     else self.onToggle();
   };
   useFlip(cornerFrame, {
@@ -329,10 +329,10 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
             type="button"
             aria-label={translate(language, 'call.video.swap')}
             aria-describedby={swapped ? undefined : hint}
-            onPointerDownCapture={() => (pressedHidden.current = !chromeVisible)}
+            onPointerDownCapture={pressed.press}
             onClick={tap}
             onKeyDown={(event) => {
-              pressedHidden.current = null;
+              pressed.clear();
               onArrow(event);
             }}
             className={`relative z-10 grid size-full place-items-center overflow-hidden border-2 shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
@@ -365,12 +365,13 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
 
 export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: StageProps) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
+  const viewport = useCallViewport();
   if (layout === 'grid') {
     return (
       <Suspense fallback={null}>
         <CallGrid
           kit={CALL_GRID_KIT}
-          members={orderedMembers(call.members)}
+          members={membersInArrival(call.members)}
           remoteStreams={call.remoteStreams}
           self={{ id: me?.id ?? null, stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
           choice={choice}
@@ -381,6 +382,7 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
           language={language}
           chromeVisible={chromeVisible}
           onRevealChrome={onRevealChrome}
+          landscape={viewport.width > viewport.height}
           selfZoom={self.local === undefined || self.zoom !== 'capsule' ? null : { local: self.local, column: self.column }}
         />
       </Suspense>

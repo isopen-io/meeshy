@@ -28,7 +28,7 @@ import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
-import { callLayout, callStatusKey, type PlainCallKey, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
+import { callLayout, callStatusKey, type PlainCallKey, canShareScreen, hasVideo, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
@@ -338,7 +338,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const spotlight =
     layout === 'grid'
       ? resolveSpotlight({
-          members: orderedMembers(call.members),
+          members: membersInArrival(call.members),
           choice,
           remoteStreams: call.remoteStreams,
         })
@@ -647,7 +647,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                 {pillRow}
               </div>
             )}
-            <div ref={stageRef} className="flex min-h-0 flex-1 flex-col" style={reserveEnd} data-call-stage-surface="" {...reserve}>
+            <div ref={stageRef} className="flex min-h-[140px] flex-1 flex-col" style={reserveEnd} data-call-stage-surface="" {...reserve}>
               {stage}
             </div>
           </>

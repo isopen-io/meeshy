@@ -247,3 +247,35 @@
 [data-call-camera-off-speech] {
   box-shadow: 0 0 0 3px var(--call-tint), 0 0 24px 6px color-mix(in srgb, var(--call-tint) 50%, transparent);
 }
+
+/* La vignette d'un groupe (P11.5, P14.4) : le MÊME calque, resserré — un liseré renforcé et un halo qui
+   reste sous les 8 de l'espace entre deux vignettes (6 de portée, l'air que garde le bandeau). */
+[data-call-camera-off-speech][data-call-speech-shape='tile'] {
+  box-shadow: 0 0 0 2px var(--call-tint), 0 0 4px 2px color-mix(in srgb, var(--call-tint) 50%, transparent);
+}
+
+/* HAUTEUR COMPACTE (P12.7, `CallGroupStageSizing` d'iOS) — un iPhone en paysage, une fenêtre basse : les rangées
+   légendées que le `(…)` déplie dans la pilule d'un groupe ne recouvrent plus la grille. Elles se replient en UNE
+   ligne sans légendes (chaque rangée garde son nom pour le lecteur d'écran), qui défile à l'horizontale et
+   s'efface en fondu à ses deux bords, sur le liseré de 8 qu'elle garde. */
+[data-call-deck][data-call-compact] [data-call-actions='rows'] {
+  flex-direction: row;
+  gap: 0.5rem;
+  overflow-x: auto;
+  overscroll-behavior-x: none;
+  padding-inline: 8px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, transparent, #000 8px, #000 calc(100% - 8px), transparent);
+}
+[data-call-deck][data-call-compact] [data-call-actions='rows']::-webkit-scrollbar {
+  display: none;
+}
+[data-call-deck][data-call-compact] [data-call-row] {
+  flex: none;
+}
+[data-call-deck][data-call-compact] [data-call-row-title] {
+  display: none;
+}
+[data-call-deck][data-call-compact] [data-call-row-scroll] {
+  overflow: visible;
+}
