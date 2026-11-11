@@ -57,7 +57,7 @@
     <string name="settings_interface_reading_modes">Reading mode</string>
     <string name="settings_interface_riviere_mode">Rivière mode</string>
     <string name="settings_interface_riviere_mode_subtitle">In active groups, the conversation reads in lanes, one per voice.</string>
-    <string name="settings_languages_orientation">Messages are translated into your display language, then your regional one.</string>
+    <string name="settings_languages_orientation">Messages are translated into your primary language, then your regional one.</string>
     <string name="settings_media_autosave_note">Once only, images and videos. Never an ephemeral, blurred or view-once media.</string>
     <string name="settings_media_autosave_question">Which media are saved?</string>
     <string name="settings_media_autosave_subtitle">Received media joins the Meeshy album, except ephemeral or view-once.</string>

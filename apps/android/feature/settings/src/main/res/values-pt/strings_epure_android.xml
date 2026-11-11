@@ -57,7 +57,7 @@
     <string name="settings_interface_reading_modes">Modo de leitura</string>
     <string name="settings_interface_riviere_mode">Modo Rivière</string>
     <string name="settings_interface_riviere_mode_subtitle">Nos grupos ativos, a conversa é lida em faixas, uma por voz.</string>
-    <string name="settings_languages_orientation">As mensagens são traduzidas para o idioma de exibição e depois para o regional.</string>
+    <string name="settings_languages_orientation">As mensagens são traduzidas para o idioma principal e depois para o regional.</string>
     <string name="settings_media_autosave_note">Uma única vez, imagens e vídeos. Nunca uma mídia efêmera, desfocada ou de visualização única.</string>
     <string name="settings_media_autosave_question">Quais mídias são salvas?</string>
     <string name="settings_media_autosave_subtitle">As mídias recebidas vão para o álbum Meeshy, exceto efêmeras ou de visualização única.</string>

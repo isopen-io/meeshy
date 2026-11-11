@@ -71,6 +71,17 @@ class EpureReglagesReperesStringsTest {
     }
 
     @Test
+    fun `the appearance orientation names the primary language, not the interface language that translates nothing`() {
+        assertThat(fr("settings_languages_orientation"))
+            .isEqualTo("Les messages sont traduits dans votre langue principale, puis régionale.")
+        allLocales.forEach { locale ->
+            val text = Tree.entriesOf(locale).getValue("settings_languages_orientation").text
+            assertWithMessage("settings_languages_orientation en ${locale ?: "en"}").that(text.lowercase())
+                .doesNotContain(Tree.entriesOf(locale).getValue("settings_interface_language").text.lowercase())
+        }
+    }
+
+    @Test
     fun `every new string exists in all seven locales and the french is never copied`() {
         val names = listOf("settings_privacy_calls_non_contacts_subtitle", "data_storage_cache_size")
         allLocales.forEach { locale ->

@@ -57,7 +57,7 @@
     <string name="settings_interface_reading_modes">وضع القراءة</string>
     <string name="settings_interface_riviere_mode">وضع Rivière</string>
     <string name="settings_interface_riviere_mode_subtitle">في المجموعات النشطة تُقرأ المحادثة في مسارات، مسار لكل صوت.</string>
-    <string name="settings_languages_orientation">تُترجم الرسائل إلى لغة العرض ثم إلى اللغة الإقليمية.</string>
+    <string name="settings_languages_orientation">تُترجم الرسائل إلى لغتك الأساسية ثم إلى اللغة الإقليمية.</string>
     <string name="settings_media_autosave_note">مرة واحدة فقط، الصور ومقاطع الفيديو. لا تُحفظ أبدًا الوسائط المؤقتة أو الضبابية أو ذات العرض الواحد.</string>
     <string name="settings_media_autosave_question">ما الوسائط التي تُحفظ؟</string>
     <string name="settings_media_autosave_subtitle">تُضاف الوسائط المستلمة إلى ألبوم Meeshy، ما عدا المؤقتة أو ذات المشاهدة الواحدة.</string>
