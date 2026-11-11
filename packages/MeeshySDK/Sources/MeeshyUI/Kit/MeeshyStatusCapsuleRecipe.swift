@@ -176,6 +176,10 @@ public nonisolated enum MeeshyStatusCapsuleTiming {
 /// **La recette de K14 en VALEURS** : toute mesure de la capsule vit ici, nulle
 /// part ailleurs. Un `View` ne s'inspecte pas, sa recette si.
 public nonisolated enum MeeshyStatusCapsuleRecipe {
+    public static func font(size: CGFloat, weight: Font.Weight) -> Font {
+        .system(size: size, weight: weight)
+    }
+
     public static let radius: CGFloat = MeeshyRadius.xlPlus
     public static let maxWidth: CGFloat = 350
     public static let paddingVertical: CGFloat = MeeshySpacing.smPlus
