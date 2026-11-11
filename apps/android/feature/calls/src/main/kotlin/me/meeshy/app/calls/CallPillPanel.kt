@@ -63,7 +63,7 @@ internal fun CallPillPanel(
     }
 }
 
-/** The « Close » of a panel drawn in the pill (a 48 dp target): the reaction and recording panels and the journal share it. */
+/** The « Close » of a panel drawn in the pill (a 48 dp target): the reaction and recording panels share it (the journal has none: « Journal » on the left, the switch on the right, plate P6). */
 @Composable
 internal fun CallPanelCloseButton(onClose: () -> Unit) {
     PanelHeaderButton(onClose) {
