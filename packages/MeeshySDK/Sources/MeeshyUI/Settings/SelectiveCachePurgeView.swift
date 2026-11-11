@@ -472,7 +472,7 @@ public struct SelectiveCachePurgeView: View {
         case .indivisibleFromPosts:
             return String(
                 localized: "settings.cache.limitation.indivisible",
-                defaultValue: "Même stockage que Publications : videz-la.",
+                defaultValue: "Même stockage que Publications : videz la ligne Publications.",
                 bundle: .module
             )
         case .notApplicable:

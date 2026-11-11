@@ -37445,43 +37445,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نفس تخزين المنشورات: أفرغ الصف هناك."
+            "value": "نفس تخزين المنشورات: أفرغ صف المنشورات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gleicher Speicher wie Beiträge: dort leeren."
+            "value": "Gleicher Speicher wie Beiträge: leere die Zeile Beiträge."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Same storage as Posts: clear it."
+            "value": "Same storage as Posts: clear the Posts row."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mismo almacenamiento que Publicaciones: vacíala."
+            "value": "Mismo almacenamiento que Publicaciones: vacía la fila Publicaciones."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Même stockage que Publications : videz-la."
+            "value": "Même stockage que Publications : videz la ligne Publications."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stesso archivio dei Post: svuota quella."
+            "value": "Stesso archivio dei Post: svuota la riga Post."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesmo armazenamento que Publicações: limpe-a."
+            "value": "Mesmo armazenamento que Publicações: limpe a linha Publicações."
           }
         }
       }
