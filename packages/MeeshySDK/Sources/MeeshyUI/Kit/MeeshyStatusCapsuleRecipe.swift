@@ -46,6 +46,13 @@ public nonisolated enum MeeshyStatusCapsuleEdge: String, Sendable, Equatable, Ca
     case top
 }
 
+/// Ce que le lecteur d'écran lit d'une capsule visible.
+public nonisolated enum MeeshyStatusCapsulePart: String, Sendable, Equatable, CaseIterable {
+    case text
+    case action
+    case close
+}
+
 /// L'haptique de l'hôte : `none` laisse l'app jouer le sien.
 public nonisolated enum MeeshyStatusCapsuleHostHaptic: String, Sendable, Equatable, CaseIterable {
     case automatic
@@ -79,7 +86,10 @@ public struct MeeshyStatusCapsuleAction: Equatable {
 
 /// Ce que l'hôte présente : l'`id` (opaque, stable pour un même refus) et les
 /// champs de la face. Égal par valeurs, jamais par fermetures : un hôte qui
-/// repose le même élément ne rejoue rien.
+/// repose le même élément ne rejoue rien. `occurrence` dit qu'un même refus est
+/// redit (la borne heurtée de nouveau pendant la frappe) : l'élément change, le
+/// minuteur de l'hôte repart, et le silence de 2 s par `id` tait l'haptique et
+/// l'annonce.
 public struct MeeshyStatusCapsuleItem: Equatable, Identifiable {
     public let id: String
     public let message: String
@@ -92,6 +102,7 @@ public struct MeeshyStatusCapsuleItem: Equatable, Identifiable {
     public let tone: MeeshyGlassTone?
     public let tint: Color?
     public let duration: MeeshyStatusCapsuleDuration
+    public let occurrence: Int
 
     public init(id: String,
                 message: String,
@@ -103,7 +114,8 @@ public struct MeeshyStatusCapsuleItem: Equatable, Identifiable {
                 onDismiss: (() -> Void)? = nil,
                 tone: MeeshyGlassTone? = nil,
                 tint: Color? = nil,
-                duration: MeeshyStatusCapsuleDuration = .automatic) {
+                duration: MeeshyStatusCapsuleDuration = .automatic,
+                occurrence: Int = 0) {
         self.id = id
         self.message = message
         self.detail = detail
@@ -115,6 +127,7 @@ public struct MeeshyStatusCapsuleItem: Equatable, Identifiable {
         self.tone = tone
         self.tint = tint
         self.duration = duration
+        self.occurrence = occurrence
     }
 
     public static func == (lhs: MeeshyStatusCapsuleItem, rhs: MeeshyStatusCapsuleItem) -> Bool {
@@ -122,6 +135,7 @@ public struct MeeshyStatusCapsuleItem: Equatable, Identifiable {
             && lhs.systemImage == rhs.systemImage && lhs.kind == rhs.kind && lhs.action == rhs.action
             && lhs.closeLabel == rhs.closeLabel && (lhs.onDismiss == nil) == (rhs.onDismiss == nil)
             && lhs.tone == rhs.tone && lhs.tint == rhs.tint && lhs.duration == rhs.duration
+            && lhs.occurrence == rhs.occurrence
     }
 }
 
@@ -135,7 +149,7 @@ public nonisolated enum MeeshyStatusCapsuleTiming {
     public static let silenceMilliseconds = 2000
 
     /// Ce que l'hôte a dit en dernier : l'`id` et l'instant.
-    public struct Spoken: Equatable, Sendable {
+    public nonisolated struct Spoken: Equatable, Sendable {
         public let id: String
         public let at: Date
 
@@ -248,6 +262,16 @@ public nonisolated enum MeeshyStatusCapsuleRecipe {
     /// traverse jusqu'à la scène.
     public static func takesTouches(hasAction: Bool, hasDismiss: Bool) -> Bool {
         hasAction || hasDismiss
+    }
+
+    /// L'ordre de lecture, quelle que soit la disposition : le texte, puis
+    /// l'action, puis ✕ — même quand la grande police pose l'action dessous.
+    public static func readingOrder(_ part: MeeshyStatusCapsulePart) -> Double {
+        switch part {
+        case .text: return 3
+        case .action: return 2
+        case .close: return 1
+        }
     }
 
     // MARK: Glisser pour fermer

@@ -139,6 +139,7 @@ public struct MeeshyStatusCapsule<Leading: View>: View {
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(MeeshyStatusCapsuleRecipe.spokenText(message: message, detail: detail))
+        .accessibilitySortPriority(MeeshyStatusCapsuleRecipe.readingOrder(.text))
     }
 
     private var lines: Int {
@@ -167,6 +168,7 @@ public struct MeeshyStatusCapsule<Leading: View>: View {
                 if let glyph = action.systemImage {
                     Image(systemName: glyph)
                         .font(.system(size: actionGlyphSize, weight: .bold))
+                        .environment(\.layoutDirection, .leftToRight)
                         .accessibilityHidden(true)
                 }
                 Text(action.label)
@@ -175,6 +177,7 @@ public struct MeeshyStatusCapsule<Leading: View>: View {
         }
         .buttonStyle(MeeshyStatusCapsuleActionStyle(forcedPressed: isPressed))
         .accessibilityLabel(action.label)
+        .accessibilitySortPriority(MeeshyStatusCapsuleRecipe.readingOrder(.action))
     }
 
     @ViewBuilder
@@ -189,6 +192,7 @@ public struct MeeshyStatusCapsule<Leading: View>: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(closeLabel)
+            .accessibilitySortPriority(MeeshyStatusCapsuleRecipe.readingOrder(.close))
         }
     }
 

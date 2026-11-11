@@ -106,6 +106,14 @@ struct MeeshyStatusCapsuleTests {
         #expect(MeeshyStatusCapsuleRecipe.takesTouches(hasAction: false, hasDismiss: true))
     }
 
+    @Test("le lecteur d'écran lit le texte, puis l'action, puis ✕, même quand l'action passe dessous")
+    func face_readingOrder_textThenActionThenClose() {
+        let order = MeeshyStatusCapsulePart.allCases.sorted {
+            MeeshyStatusCapsuleRecipe.readingOrder($0) > MeeshyStatusCapsuleRecipe.readingOrder($1)
+        }
+        #expect(order == [.text, .action, .close])
+    }
+
     // MARK: - Glisser pour fermer
 
     @Test("elle suit le doigt vers son bord seulement ; 24 pt ferment, en deçà elle revient")
