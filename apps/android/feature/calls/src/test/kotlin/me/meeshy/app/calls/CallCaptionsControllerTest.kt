@@ -119,6 +119,49 @@ class CallCaptionsControllerTest {
     }
 
     @Test
+    fun `the journal survives a reconnection and the captions closed again, and dies with the call (#17342)`() = runController { controller ->
+        controller.connected()
+        controller.advance()
+        relayed.tryEmit(relay())
+
+        controller.onTransition(CallState.Connected, CallState.Reconnecting(1), info)
+        controller.onTransition(CallState.Reconnecting(1), CallState.Connected, info)
+        controller.advance()
+        controller.advance()
+
+        assertThat(controller.state.value.isPanelOpen).isFalse()
+        assertThat(controller.state.value.journal.segments).hasSize(1)
+
+        controller.onTransition(CallState.Connected, CallState.Ended(CallEndReason.Local), info)
+        assertThat(controller.state.value.journal.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `the call clock starts when the media first flows and a reconnection does not restart it (#17342)`() = runController { controller ->
+        assertThat(controller.state.value.callStartedAtMs).isNull()
+
+        controller.connected()
+        controller.onTransition(CallState.Connected, CallState.Reconnecting(1), info)
+        controller.onTransition(CallState.Reconnecting(1), CallState.Connected, info)
+
+        assertThat(controller.state.value.callStartedAtMs).isEqualTo(5_000L)
+
+        controller.onTransition(CallState.Connected, CallState.Ended(CallEndReason.Local), info)
+        assertThat(controller.state.value.callStartedAtMs).isNull()
+    }
+
+    @Test
+    fun `a peer's words arrive in the journal on both transports while my captions have never been opened (#17342)`() = runController { controller ->
+        controller.connected()
+
+        dataChannel.tryEmit(DataChannelCodec.encodeTranscriptEntry(CallTranscriptEntry("w1", "call-1", "peer", "", "How are", "en", 900, isFinal = false)))
+        relayed.tryEmit(relay())
+
+        assertThat(controller.state.value.isPanelOpen).isFalse()
+        assertThat(controller.state.value.journal.segments.single().translatedText).isEqualTo("Comment vas-tu ?")
+    }
+
+    @Test
     fun `an end-to-end conversation never opens the captions, says why, and never asks the peer for its words`() =
         runController(endToEnd = true) { controller ->
             controller.connected()
