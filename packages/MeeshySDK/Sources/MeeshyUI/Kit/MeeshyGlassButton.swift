@@ -237,6 +237,7 @@ private struct MeeshyGlassButtonGlassLayer: ViewModifier {
 /// Ce qui se passe quand un bouton est activé : désactivé, rien ; sinon UN
 /// impact (sauf `none`, quand l'hôte joue le sien), puis l'action. Une loi
 /// pure, testée sans écran.
+@MainActor
 enum MeeshyGlassButtonTrigger {
     @discardableResult
     static func perform(
