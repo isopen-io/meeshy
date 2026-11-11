@@ -884,6 +884,7 @@ struct MeeshyComposerHost: View {
         // la feuille de partage. Une seconde y serait silencieusement
         // avalée — le mode de panne qui ne rougit nulle part.
         withComposerAutosave(withSceneCameraViewfinder(sceneMenuPresented(composerStackNode)))
+        .overlay { ComposerHostAnchoredSheetLayer(host: self, observation: observation, aboveViewfinder: true) }
         .background(tint.color.ignoresSafeArea())
         .environment(\.composerChromeIsConcealed, sceneChromeIsConcealedServed)
     }
