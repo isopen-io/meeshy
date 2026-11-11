@@ -263,7 +263,7 @@ private fun EffectsLooksOrPanel(
  * rangée de base (iOS `CallEffectsBar`) ; sous « Réduire les animations », le cadre se redimensionne en fondu court.
  */
 @Composable
-private fun EffectsBar(
+internal fun EffectsBar(
     mode: CallEffectsModeState,
     reduceMotion: Boolean,
     onBack: () -> Unit,
@@ -353,7 +353,7 @@ internal fun EffectsCarousel(
  * est choisi, Luminosité (un titre et son curseur), puis Flou du fond (une ligne titrée à interrupteur).
  */
 @Composable
-private fun EffectsSettingsPanel(mode: CallEffectsModeState, onChange: (CallEffectsModeState) -> Unit) {
+internal fun EffectsSettingsPanel(mode: CallEffectsModeState, onChange: (CallEffectsModeState) -> Unit) {
     CallControlsGlass(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg)) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
