@@ -6,6 +6,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.SideEffect
+import androidx.compose.material3.Text
+import java.time.Duration
+import me.meeshy.sdk.model.call.group.ActiveSpeakerDetector
+import org.robolectric.shadows.ShadowSystemClock
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -32,6 +37,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+
+private const val LOUD_LEVEL = 0.5
+private const val SPEAKING_SAMPLES = 8
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -92,6 +100,29 @@ class CallStageSemanticsTest {
             }
         }
         rule.onNodeWithTag(CALL_SPEAKING_RING_TAG, useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun `a peer who keeps speaking lights the ring once without recomposing the stage at every sample`() {
+        var compositions = 0
+        val source = CallPeerSpeechSource(
+            peerUserId = "u-awa",
+            level = {
+                ShadowSystemClock.advanceBy(Duration.ofMillis(ActiveSpeakerDetector.SAMPLING_INTERVAL_MILLIS))
+                LOUD_LEVEL
+            },
+            relayed = null,
+        )
+        rule.setContent {
+            val speaking = rememberPeerSpeaking(source)
+            SideEffect { compositions++ }
+            Text(if (speaking) "speaking" else "silent")
+        }
+
+        rule.mainClock.advanceTimeBy(ActiveSpeakerDetector.SAMPLING_INTERVAL_MILLIS * SPEAKING_SAMPLES)
+
+        rule.onNodeWithText("speaking").assertExists()
+        assertThat(compositions).isAtMost(2)
     }
 
     @Test
