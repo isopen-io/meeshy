@@ -144,7 +144,7 @@ enum SettingsOrientation {
     }
 
     static var riviereMode: String {
-        String(localized: "settings.interface.riviere_mode.summary", defaultValue: "Les messages défilent comme un flux continu, sans bulles séparées.", bundle: .main)
+        String(localized: "settings.interface.riviere_mode.summary", defaultValue: "Dans les groupes actifs, la conversation se lit en couloirs, un par voix.", bundle: .main)
     }
 
     static var riviereUnavailable: String {

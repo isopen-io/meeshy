@@ -337400,43 +337400,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تتضخم البطاقة في وسط القائمة أثناء التمرير."
+            "value": "كل محادثة في القائمة تُقرأ بلغتك، بنظرة واحدة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Karte in der Mitte der Liste wächst beim Scrollen."
+            "value": "Jede Unterhaltung der Liste liest sich auf einen Blick in deiner Sprache."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The card at the centre of the list grows as you scroll."
+            "value": "Every conversation in the list reads in your language, at a glance."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tarjeta del centro de la lista se agranda al desplazarte."
+            "value": "Cada conversación de la lista se lee en tu idioma, de un vistazo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La carte au centre de la liste s'agrandit quand vous défilez."
+            "value": "Chaque conversation de la liste se lit dans votre langue, d'un coup d'œil."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La scheda al centro dell'elenco si ingrandisce mentre scorri."
+            "value": "Ogni conversazione dell'elenco si legge nella tua lingua, a colpo d'occhio."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O cartão no centro da lista cresce enquanto você rola."
+            "value": "Cada conversa da lista se lê no seu idioma, num relance."
           }
         }
       }
