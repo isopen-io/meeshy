@@ -88,7 +88,7 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `the settings panel rises from the bar in 200 ms and only fades, shorter, under Reduce Motion (P8b.6)`() {
+    fun `the settings panel rises from the bar in 200 ms and only fades, shorter, under Reduce Motion (P8b_6)`() {
         assertThat(CallEffectsSettingsMotion.durationMillis(reduceMotion = false)).isEqualTo(200)
         assertThat(CallEffectsSettingsMotion.riseDp(reduceMotion = false)).isEqualTo(20)
         assertThat(CallEffectsSettingsMotion.durationMillis(reduceMotion = true)).isEqualTo(150)
