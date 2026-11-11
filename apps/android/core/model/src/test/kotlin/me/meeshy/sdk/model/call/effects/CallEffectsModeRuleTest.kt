@@ -70,12 +70,29 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `quitting restores the image as it was, validating keeps the trial`() {
-        val original = VideoFilterConfig(backgroundBlurEnabled = true)
-        val tried = CallEffectsModeState.opening(original).selecting(VideoFilterPreset.Vivid).togglingBlur()
-        assertThat(tried.exiting(validated = false)).isEqualTo(original)
-        assertThat(tried.exiting(validated = true)).isEqualTo(tried.current)
+    fun `every try is kept as it is, nothing is restored on leaving (P8b, no Quit, no Validate)`() {
+        val tried = CallEffectsModeState.opening(VideoFilterConfig(backgroundBlurEnabled = true)).selecting(VideoFilterPreset.Vivid).togglingBlur()
         assertThat(tried.current.backgroundBlurEnabled).isFalse()
+        assertThat(tried.color).isEqualTo(VideoFilterPreset.Vivid)
+    }
+
+    @Test
+    fun `(+) opens the looks of the other kind to stack on the one in hand, and closes the settings`() {
+        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Face)).isEqualTo(CallEffectsCategory.Color)
+        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Color)).isEqualTo(CallEffectsCategory.Face)
+        val open = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Angel).togglingSettings()
+        val added = open.addingLook()
+        assertThat(added.showsSettings).isFalse()
+        assertThat(added.category).isEqualTo(CallEffectsCategory.Color)
+        assertThat(added.face).isEqualTo(CallFaceEffect.Angel)
+    }
+
+    @Test
+    fun `the settings panel rises from the bar in 200 ms and only fades, shorter, under Reduce Motion (P8b.6)`() {
+        assertThat(CallEffectsSettingsMotion.durationMillis(reduceMotion = false)).isEqualTo(200)
+        assertThat(CallEffectsSettingsMotion.riseDp(reduceMotion = false)).isEqualTo(20)
+        assertThat(CallEffectsSettingsMotion.durationMillis(reduceMotion = true)).isEqualTo(150)
+        assertThat(CallEffectsSettingsMotion.riseDp(reduceMotion = true)).isEqualTo(0)
     }
 
     @Test

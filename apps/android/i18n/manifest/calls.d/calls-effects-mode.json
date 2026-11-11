@@ -53,19 +53,19 @@
           "status": "android-only"
         },
         {
-          "androidName": "call_effects_validate",
+          "androidName": "call_effects_back",
           "status": "android-only"
         },
         {
-          "androidName": "call_effects_validate_hint",
+          "androidName": "call_effects_back_hint",
           "status": "android-only"
         },
         {
-          "androidName": "call_effects_quit",
+          "androidName": "call_effects_add_look",
           "status": "android-only"
         },
         {
-          "androidName": "call_effects_quit_hint",
+          "androidName": "call_effects_add_look_hint",
           "status": "android-only"
         },
         {

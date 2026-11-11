@@ -31,9 +31,11 @@ object CallEffectsModeRule {
     fun applying(color: VideoFilterPreset, to: VideoFilterConfig): VideoFilterConfig =
         to.applyingPreset(if (color == VideoFilterPreset.Natural) null else color)
 
-    /** Quitting restores the image as it was; validating keeps the current one. */
-    fun exiting(validated: Boolean, current: VideoFilterConfig, original: VideoFilterConfig): VideoFilterConfig =
-        if (validated) current else original
+    /** P8b law 14 — « (+) Ajouter un autre look » opens the other kind, to stack on the look in hand (face and colour accumulate). iOS `addingLook`. */
+    fun addingLook(from: CallEffectsCategory): CallEffectsCategory = when (from) {
+        CallEffectsCategory.Face -> CallEffectsCategory.Color
+        CallEffectsCategory.Color -> CallEffectsCategory.Face
+    }
 
     /** The carousel step of TalkBack's « next / previous »: bounded, never wrapping (iOS `stepping`). */
     fun <T> stepping(selection: T, items: List<T>, by: Int): T {
@@ -44,12 +46,25 @@ object CallEffectsModeRule {
 }
 
 /**
- * What the « Effets » mode holds while it is open: the config being tried ([current], applied live to the
- * sent camera) and the one it started from ([original]), restored by « Quitter ». Pure reducer.
+ * P8b.6 — with Settings open, the looks strip and the chips fade out while the panel rises from the tightened bar
+ * (≈ 200 ms, transform + opacity), and back down on the way out. Reduce Motion keeps a short fade, no rise: the screen
+ * never changes at once. iOS `CallEffectsSettingsMotion`.
+ */
+object CallEffectsSettingsMotion {
+    private const val RISE_DP = 20
+    private const val DURATION_MILLIS = 200
+    private const val REDUCED_DURATION_MILLIS = 150
+
+    fun durationMillis(reduceMotion: Boolean): Int = if (reduceMotion) REDUCED_DURATION_MILLIS else DURATION_MILLIS
+    fun riseDp(reduceMotion: Boolean): Int = if (reduceMotion) 0 else RISE_DP
+}
+
+/**
+ * What the « Effets » mode holds while it is open: the config being tried ([current]), applied live to the sent
+ * camera and kept as it is when the mode closes (no Quit, no Validate: law 14). Pure reducer.
  */
 data class CallEffectsModeState(
     val current: VideoFilterConfig,
-    val original: VideoFilterConfig,
     val category: CallEffectsCategory = CallEffectsCategory.Face,
     val showsSettings: Boolean = false,
 ) {
@@ -65,10 +80,10 @@ data class CallEffectsModeState(
     fun withSmoothing(value: Float): CallEffectsModeState = copy(current = current.withSmoothingIntensity(value))
     fun togglingBlur(): CallEffectsModeState = copy(current = current.withBackgroundBlur(!current.backgroundBlurEnabled))
 
-    /** The config the call keeps once the mode closes. */
-    fun exiting(validated: Boolean): VideoFilterConfig = CallEffectsModeRule.exiting(validated, current, original)
+    /** (+): the other kind of look, the settings closed. */
+    fun addingLook(): CallEffectsModeState = copy(category = CallEffectsModeRule.addingLook(category), showsSettings = false)
 
     companion object {
-        fun opening(config: VideoFilterConfig): CallEffectsModeState = CallEffectsModeState(current = config, original = config)
+        fun opening(config: VideoFilterConfig): CallEffectsModeState = CallEffectsModeState(current = config)
     }
 }

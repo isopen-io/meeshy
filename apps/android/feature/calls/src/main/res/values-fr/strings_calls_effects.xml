@@ -12,10 +12,10 @@
     <string name="call_effects_face_volcano">Éruption</string>
     <string name="call_effects_settings">Réglages</string>
     <string name="call_effects_settings_hint">Affiche la luminosité et le flou du fond à la place des effets</string>
-    <string name="call_effects_validate">Valider</string>
-    <string name="call_effects_validate_hint">Garde cet effet et revient à l\'appel</string>
-    <string name="call_effects_quit">Quitter</string>
-    <string name="call_effects_quit_hint">Rend votre image telle qu\'elle était et revient à l\'appel</string>
+    <string name="call_effects_back">Retour à l\'appel</string>
+    <string name="call_effects_back_hint">Garde votre look et revient à l\'appel</string>
+    <string name="call_effects_add_look">Ajouter un autre look</string>
+    <string name="call_effects_add_look_hint">Passe aux looks d\'un autre genre, à cumuler avec le vôtre</string>
     <string name="call_effects_blur">Flou du fond</string>
     <string name="call_effects_smoothing_strength">Force du lissage</string>
     <string name="call_effects_brightness">Luminosité</string>
