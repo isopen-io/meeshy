@@ -5,11 +5,11 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -201,10 +201,11 @@ private fun CallCaptionOriginalBelow(original: String?, reduceMotion: Boolean) {
     }
 }
 
+/** Opacity and translation only (iOS `.opacity.combined(with: .move(edge: .top))`); a short fade under Reduce motion. */
 private fun unfoldTransition(reduceMotion: Boolean): ContentTransform {
     val fade = fadeMillis(reduceMotion)
-    val enter: EnterTransition = if (reduceMotion) fadeIn(tween(fade)) else fadeIn(tween(fade)) + expandVertically(tween(fade))
-    val exit: ExitTransition = if (reduceMotion) fadeOut(tween(fade)) else fadeOut(tween(fade)) + shrinkVertically(tween(fade))
+    val enter: EnterTransition = if (reduceMotion) fadeIn(tween(fade)) else fadeIn(tween(fade)) + slideInVertically(tween(fade)) { -it }
+    val exit: ExitTransition = if (reduceMotion) fadeOut(tween(fade)) else fadeOut(tween(fade)) + slideOutVertically(tween(fade)) { -it }
     return enter togetherWith exit
 }
 
