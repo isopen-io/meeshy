@@ -12,10 +12,10 @@
     <string name="call_effects_face_volcano">Erupción</string>
     <string name="call_effects_settings">Ajustes</string>
     <string name="call_effects_settings_hint">Muestra el brillo y el desenfoque del fondo en lugar de los efectos</string>
-    <string name="call_effects_validate">Aplicar</string>
-    <string name="call_effects_validate_hint">Mantiene este efecto y vuelve a la llamada</string>
-    <string name="call_effects_quit">Salir</string>
-    <string name="call_effects_quit_hint">Devuelve tu imagen tal como estaba y vuelve a la llamada</string>
+    <string name="call_effects_back">Volver a la llamada</string>
+    <string name="call_effects_back_hint">Conserva tu look y vuelve a la llamada</string>
+    <string name="call_effects_add_look">Añadir otro look</string>
+    <string name="call_effects_add_look_hint">Pasa a otro tipo de look, para combinarlo con el tuyo</string>
     <string name="call_effects_blur">Fondo desenfocado</string>
     <string name="call_effects_smoothing_strength">Intensidad del suavizado</string>
     <string name="call_effects_brightness">Brillo</string>
