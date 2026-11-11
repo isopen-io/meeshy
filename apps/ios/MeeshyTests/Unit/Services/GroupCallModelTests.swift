@@ -248,9 +248,24 @@ final class GroupCallModelTests: XCTestCase {
         XCTAssertEqual(stats.inboundAudioLevel, 0.4, accuracy: 0.0001)
     }
 
+    /// P11.5 — mon propre niveau vient de la source média sortante (`media-source`
+    /// audio) ; il ne se confond jamais avec le niveau reçu.
+    func test_callStatsReduce_readsMyOwnLevelFromTheOutgoingAudioSource() {
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "a1", type: "inbound-rtp", kind: "audio", values: ["audioLevel": 0.4]),
+            CallStats.RawEntry(id: "s1", type: "media-source", kind: "audio", values: ["audioLevel": 0.25]),
+            CallStats.RawEntry(id: "s2", type: "media-source", kind: "video", values: ["audioLevel": 0.9])
+        ])
+
+        XCTAssertEqual(stats.outboundAudioLevel, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(stats.inboundAudioLevel, 0.4, accuracy: 0.0001)
+    }
+
     // MARK: - Tuiles
 
-    func test_stageTiles_localFirst_thenMembersInArrivalOrder() {
+    /// P11.3 — la planche range ma vignette EN DERNIER : les autres dans leur ordre
+    /// d'arrivée, puis moi. Ce témoin figeait « moi d'abord », antérieur à la planche.
+    func test_stageTiles_membersInArrivalOrder_thenLocalLast() {
         let roster = GroupCallRoster(localUserId: "me")
             .admitting(arrival("b", name: "Bob"), isPrimary: true)
             .admitting(arrival("c", name: "Chloé", audio: false, video: true))
@@ -264,11 +279,43 @@ final class GroupCallModelTests: XCTestCase {
             isPrimaryVideoActive: false
         )
 
-        XCTAssertEqual(tiles.map(\.id), [GroupCallStage.localTileId, "b", "c"])
-        XCTAssertFalse(tiles[1].showsVideo, "le principal suit l'état vidéo que CallManager tient")
-        XCTAssertTrue(tiles[2].showsVideo)
-        XCTAssertTrue(tiles[2].isSpeaking)
-        XCTAssertTrue(tiles[2].isMicMuted)
+        XCTAssertEqual(tiles.map(\.id), ["b", "c", GroupCallStage.localTileId])
+        XCTAssertFalse(tiles[0].showsVideo, "le principal suit l'état vidéo que CallManager tient")
+        XCTAssertTrue(tiles[1].showsVideo)
+        XCTAssertTrue(tiles[1].isSpeaking)
+        XCTAssertTrue(tiles[1].isMicMuted)
+        XCTAssertTrue(tiles[2].isLocal)
+    }
+
+    func test_stageTiles_localLast_whoeverSpeaks_theOrderNeverMoves() {
+        let roster = GroupCallRoster(localUserId: "me")
+            .admitting(arrival("b"), isPrimary: true)
+            .admitting(arrival("c"))
+        func ids(speaking: Set<String>) -> [String] {
+            GroupCallStage.tiles(
+                roster: roster, speakingUserIds: speaking, localName: "Vous",
+                isLocalMicMuted: false, isLocalVideoEnabled: false, isPrimaryVideoActive: false
+            ).map(\.id)
+        }
+
+        XCTAssertEqual(ids(speaking: []), ids(speaking: ["c"]))
+        XCTAssertEqual(ids(speaking: ["me"]), ids(speaking: ["b", "c"]))
+        XCTAssertEqual(ids(speaking: []).last, GroupCallStage.localTileId)
+    }
+
+    /// P11.5 — ma tuile s'illumine aussi quand JE parle : la planche dit « qui parle »
+    /// sans m'exclure. Le maillage nomme mon identifiant parmi ceux qui parlent.
+    func test_stageTiles_myTileSpeaks_whenTheMeshNamesMe() {
+        let roster = GroupCallRoster(localUserId: "me")
+            .admitting(arrival("b"), isPrimary: true)
+            .admitting(arrival("c"))
+
+        let tiles = GroupCallStage.tiles(
+            roster: roster, speakingUserIds: ["me"], localName: "Vous",
+            isLocalMicMuted: false, isLocalVideoEnabled: false, isPrimaryVideoActive: false
+        )
+
+        XCTAssertEqual(tiles.filter(\.isSpeaking).map(\.id), [GroupCallStage.localTileId])
     }
 
     func test_stage_shownOnlyFromTwoRemoteMembers() {
