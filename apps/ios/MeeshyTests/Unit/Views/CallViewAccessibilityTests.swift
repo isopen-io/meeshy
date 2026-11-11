@@ -267,7 +267,7 @@ final class CallViewAccessibilityTests: XCTestCase {
         // avec le visage `avatarFace(size: 96, …)`.
         guard let mount = source.range(of: "private var remoteCameraOffPlaceholder: some View {"),
               let range = source.range(of: "struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {"),
-              let end = source.range(of: "private func followSpeech()", range: range.lowerBound ..< source.endIndex) else {
+              let end = source.range(of: "private nonisolated struct CallGroupStageHeightKey", range: range.lowerBound ..< source.endIndex) else {
             XCTFail("CallView must define remoteCameraOffPlaceholder")
             return
         }
@@ -415,8 +415,8 @@ final class CallViewAccessibilityTests: XCTestCase {
         XCTAssertFalse(effects.contains("if showsConnectedLayout"), "Les commandes d'effets ne dépendent pas de l'appel établi")
 
         let controls = try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
-        XCTAssertTrue(controls.contains("config = config.withBackgroundBlur(!config.backgroundBlurEnabled)"), "Le flou du fond se règle dans le mode Effets")
-        XCTAssertTrue(controls.contains("caption: CallEffectsCopy.blur"))
+        XCTAssertTrue(controls.contains("config = config.withBackgroundBlur(blurs)"), "Le flou du fond se règle dans le mode Effets")
+        XCTAssertTrue(controls.contains("Text(CallEffectsCopy.blur)"), "Une ligne titrée « Flou du fond »")
     }
 
     // MARK: - Video toggle accessibility value (audit fix — inverted state, 2026-08-13)
@@ -532,7 +532,7 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     func test_minimizeChevron_hitTargetMeetsHIGMinimum() throws {
         let source = try callViewSource()
-        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: false, tint: .white)") else {
+        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: isActive, tint: .white)") else {
             XCTFail("Minimize chevron's 40pt glass circle must exist")
             return
         }

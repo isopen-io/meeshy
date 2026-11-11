@@ -22,6 +22,14 @@
 
 export type CallPanelKind = 'react' | 'record' | 'people' | 'journal';
 
+/**
+ * Où se dessine une option (G3.5, loi 14, miroir de `isDrawnInThePill` d'iOS) :
+ * Réagir, Enregistrer et le Journal DANS la pilule, qu'elles agrandissent et dont
+ * elles remplacent les rangées ; Ajouter, qui présente la liste des amis, s'ouvre
+ * en FEUILLE par-dessus l'écran et laisse les rangées (ou les rails) sous elle.
+ */
+export const panelInThePill = (panel: CallPanelKind): boolean => panel !== 'people';
+
 export type CallModeKind = 'effects' | 'montage';
 
 /** Ce que `(…)` a RANGÉ derrière le menu (#17343) : le journal n'est pas fermé, refermer les actions le rend. */
@@ -105,7 +113,7 @@ export function layerChrome(layer: CallScreenLayer): LayerChrome {
   return {
     header: true,
     pill: true,
-    rows: layer.kind === 'menu',
+    rows: layer.kind === 'menu' || (layer.kind === 'panel' && !panelInThePill(layer.panel)),
     panel: layer.kind === 'panel' ? layer.panel : null,
     mode: null,
     selfZoom: true,

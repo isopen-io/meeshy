@@ -92,7 +92,7 @@ class CallCaptionsViewModelTest {
     }
 
     @Test
-    fun `each sentence of the journal reads the hour IN the call, since the media first flowed, never a wall clock (P6.4)`() = runViewModel { viewModel ->
+    fun `each sentence of the journal reads the hour IN the call, since the media first flowed, never a wall clock (P6_4)`() = runViewModel { viewModel ->
         relayed.tryEmit(relay("w1", "Hello", "Bonjour", capturedAtMs = 5_000L + 75_000L))
         relayed.tryEmit(relay("w2", "Bye", "Salut", capturedAtMs = 5_000L + 3_725_000L))
 

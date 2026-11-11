@@ -34,7 +34,7 @@ const frCallScreen = {
   'call.effects.close': 'Fermer les effets',
   'call.effects.presets': 'Préréglages',
   'call.effects.brightness': 'Luminosité',
-  'call.effects.blur': 'Flou d’arrière-plan',
+  'call.effects.blur': 'Flou du fond',
   'call.zoom': 'Zoom de ma caméra',
   'call.zoom.in': 'Zoomer',
   'call.zoom.out': 'Dézoomer',

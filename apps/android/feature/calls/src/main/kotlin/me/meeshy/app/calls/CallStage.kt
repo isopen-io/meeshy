@@ -83,6 +83,7 @@ internal fun CallDuoVideoStage(
     framed: Boolean = false,
     selfUserId: String = "",
     peerUserId: String = "",
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     Box(modifier.fillMaxSize()) {
         if (!connected) {
@@ -107,6 +108,7 @@ internal fun CallDuoVideoStage(
                         avatarUrl = peerAvatarUrl,
                         modifier = Modifier.fillMaxSize(),
                         fit = fit,
+                        peerSpeech = peerSpeech,
                     )
                 }
             }
@@ -190,6 +192,7 @@ internal fun CallDuoVideoStage(
                             modifier = Modifier.fillMaxSize(),
                             compact = true,
                             overlay = true,
+                            peerSpeech = peerSpeech,
                         )
                         localTrack != null -> VideoRenderer(
                             track = localTrack,

@@ -197,4 +197,30 @@ nonisolated enum ComposerSlideTextRole: Equatable {
             keyed[porteur.id] = texte
         }
     }
+
+    /// **La légende d'une scène reste celle de son VISUEL quand la scène part
+    /// en post** (décision porteur, #13640). Une story écrit sa légende sur la
+    /// slide ; publiée aussi en post, elle devient la légende du média qui
+    /// porte la scène, que le fil et le plein écran peignent par-dessus lui.
+    /// Une légende écrite sur le média lui-même l'emporte. Un réel n'est pas
+    /// visé : il publie déjà sa légende de scène (`ReelPublishedContent`).
+    static func carryingSlideLegends(_ captions: ComposerMediaCaptions,
+                                     format: ComposerFormat,
+                                     slideIdByMediaURL: [URL: String],
+                                     objectIdBySource: [URL: String],
+                                     slides: [StorySlide]) -> ComposerMediaCaptions {
+        guard format == .post else { return captions }
+        return slideIdByMediaURL.reduce(into: captions) { sortie, entree in
+            let (url, slideId) = entree
+            let dejaEcrite = !(sortie[url] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            guard !dejaEcrite,
+                  let slide = slides.first(where: { $0.id == slideId }),
+                  let legende = slide.content,
+                  !legende.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  let porteur = slide.effects.resolvedBackgroundMedia ?? slide.effects.mediaObjects?.first,
+                  objectIdBySource[url] == porteur.id
+            else { return }
+            sortie[url] = legende
+        }
+    }
 }

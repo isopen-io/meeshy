@@ -255,7 +255,50 @@ class CallControlsPillSemanticsTest {
     }
 
     @Test
-    fun `a stowed pill keeps ONE glass: the captions stay and the base row folds out (G1_3)`() {
+    fun `opening an option from the open menu fades the rows into it in the same glass, never at once (G3_2)`() {
+        var layer by mutableStateOf<CallScreenLayer>(CallScreenLayer.Menu)
+        val state = ui()
+        val items = CallPillModel.items(state, offered)
+        val set = CallPillModel.available(state, items) { false }
+        val rows = CallGroupStageSizing.rows(CallControlsDisposition.Rows.pillRows(set, CallScreenLayer.Menu), isCompactHeight = false)
+        rule.setContent {
+            MeeshyTheme {
+                CallControlsPill(
+                    state = state,
+                    layer = layer,
+                    disposition = CallControlsDisposition.Rows,
+                    rows = rows,
+                    items = items,
+                    outputIcon = Icons.Filled.VolumeUp,
+                    onToggleMenu = {},
+                    onToggleMute = {},
+                    onOutput = {},
+                    onHangUp = {},
+                    onAction = {},
+                    onBackToMenu = {},
+                    onClosePanel = {},
+                    panelContent = { Text("Audio | Vidéo") },
+                )
+            }
+        }
+        rule.onNodeWithText("My image".uppercase()).assertExists()
+
+        rule.mainClock.autoAdvance = false
+        layer = CallScreenLayer.Panel(CallScreenPanel.Record)
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(100)
+
+        rule.onNodeWithText("My image".uppercase()).assertExists()
+        rule.onNodeWithText("Audio | Vidéo").assertExists()
+
+        rule.mainClock.advanceTimeBy(1_000)
+
+        rule.onNodeWithText("My image".uppercase()).assertDoesNotExist()
+        rule.onNodeWithText("Audio | Vidéo").assertIsDisplayed()
+    }
+
+    @Test
+    fun `a stowed pill keeps ONE glass, the captions stay and the base row folds out (G1_3)`() {
         var text by mutableStateOf(CallPillText.Captions)
         val state = ui()
         rule.setContent {
@@ -323,6 +366,7 @@ class CallControlsPillSemanticsTest {
 
         rule.mainClock.autoAdvance = false
         layer = CallScreenLayer.Idle
+        rule.waitForIdle()
         rule.mainClock.advanceTimeBy(100)
         val folding = rule.onNodeWithTag("pill").fetchSemanticsNode().size.height
         rule.mainClock.advanceTimeBy(1_000)

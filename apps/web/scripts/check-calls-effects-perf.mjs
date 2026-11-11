@@ -312,7 +312,7 @@ try {
     await page.click('[data-call-effects-settings-toggle]');
   }
 
-  await page.click('[data-call-effects-validate]');
+  await page.click('[data-call-mode-quit]');
   await until(page, () => document.querySelector('[data-call-mode]') === null);
   const step = '[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]';
   const zoomOffered = (await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local';

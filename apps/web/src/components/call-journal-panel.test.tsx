@@ -9,6 +9,7 @@ import type { CallCaption } from '@/lib/calls/call-captions';
 import type { CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
+import { CallButton } from './call-glass-button';
 import { CallJournalPanel } from './call-journal-panel';
 
 /**
@@ -56,6 +57,7 @@ describe('CallJournalPanel', () => {
       act(() =>
         root.render(
           <CallJournalPanel
+          Button={CallButton}
             id="call-journal-panel"
             closeGlyph={null}
             language="fr"

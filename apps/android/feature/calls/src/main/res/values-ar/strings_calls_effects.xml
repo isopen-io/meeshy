@@ -12,10 +12,10 @@
     <string name="call_effects_face_volcano">ثوران</string>
     <string name="call_effects_settings">الإعدادات</string>
     <string name="call_effects_settings_hint">يعرض السطوع وتمويه الخلفية بدلاً من المؤثرات</string>
-    <string name="call_effects_validate">تطبيق</string>
-    <string name="call_effects_validate_hint">يحتفظ بهذا المؤثر ويعود إلى المكالمة</string>
-    <string name="call_effects_quit">خروج</string>
-    <string name="call_effects_quit_hint">يعيد صورتك كما كانت ويعود إلى المكالمة</string>
+    <string name="call_effects_back">العودة إلى المكالمة</string>
+    <string name="call_effects_back_hint">يحتفظ بمظهرك ويعود إلى المكالمة</string>
+    <string name="call_effects_add_look">إضافة مظهر آخر</string>
+    <string name="call_effects_add_look_hint">ينتقل إلى نوع آخر من المظاهر لدمجه مع مظهرك</string>
     <string name="call_effects_blur">تمويه الخلفية</string>
     <string name="call_effects_smoothing_strength">قوة التنعيم</string>
     <string name="call_effects_brightness">السطوع</string>

@@ -79,6 +79,10 @@ export function hasVideo(stream: MediaStream | undefined | null): boolean {
   return stream !== undefined && stream !== null && stream.getVideoTracks().some((track) => track.readyState !== 'ended');
 }
 
+/** Le son de l'appel qu'un mode filme : mon micro, puis la voix de chacun des autres ; rien sans appel. */
+export const callAudioOf = ({ localStream = null, remoteStreams = {} }: Partial<Pick<ActiveCall, 'localStream' | 'remoteStreams'>> = {}): readonly MediaStream[] =>
+  [localStream, ...Object.values(remoteStreams)].filter((stream): stream is MediaStream => stream !== null);
+
 /** Le pair dont l'écran est partagé — celui que nomme la bannière. */
 export function screenSharer(members: Readonly<Record<string, CallMember>>): CallMember | null {
   return Object.values(members).find((member) => member.screenSharing) ?? null;
