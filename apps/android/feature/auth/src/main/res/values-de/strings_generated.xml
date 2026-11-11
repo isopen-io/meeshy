@@ -272,7 +272,6 @@
         <item quantity="other">+%1$d Funken · erste Story</item>
     </plurals>
     <string name="onboarding_story_sending">Deine Story ist unterwegs …</string>
-    <string name="onboarding_story_title">Zeig dich</string>
     <string name="registration_back">Zurück</string>
     <string name="session_closed_activation_title">Bestätige deine E-Mail-Adresse</string>
     <string name="session_closed_contact">Dem Meeshy-Team schreiben</string>

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">Como usar?</string>
+    <string name="game2_showcase_empty">Ainda sem troféus: taças, Renascimento e Chama se guardam aqui.</string>
+    <string name="game2_showcase_visibility_hint">Um visitante só vê o mês de obtenção, nunca a data exata.</string>
+    <string name="game2_atlas_empty">Ainda sem carimbos: escreva em outro idioma.</string>
+    <string name="game2_atlas_privacy">Privado por padrão: o jogo guarda o idioma e a data, nunca o interlocutor nem a conversa.</string>
+    <string name="game2_settings_visibility_body">Fora dos amigos aceitos, ninguém vê se você está online nem quando joga.</string>
+    <string name="game2_league_pseudonym_invalid">Não válido.</string>
+    <string name="game_rules_2_body">Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela. Um milhão de faíscas para o nível 100, e uma prova a cada dez níveis: enquanto ela não for vencida, sua luz espera. Vinte estados. Os níveis vão até 499; o título Embaixador os abre até 1.000, e o título Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior.</string>
+    <string name="game_state_elans_idle">%1$s nestes dias: ainda sem impulso.</string>
+    <string name="game2_prestige_meo">Seu nível recomeça em 1 e suas faíscas em 0; seu título, sua glória e suas Meeshes ficam. Seus ancestrais oferecem a você um troféu numerado e %1$s de glória.</string>
+    <string name="game2_season_seal_body">Puramente decorativo: um objeto de coleção a cada %1$s paradas.</string>
+    <string name="game2_settings_notifications_body">No máximo uma por dia, em todos os seus aparelhos.</string>
+    <string name="game2_settings_notifications_switch">Notificações</string>
+    <string name="game2_settings_friends_league_body">Seus amigos aceitos e você se veem na classificação semanal; o interruptor remove os dois sentidos.</string>
+    <string name="game_rules_section_rules">Regras</string>
+    <string name="game_rules_section_concepts">Conceitos</string>
+    <string name="game_rules_4_body">Seu nível baixa na mesma medida; seu título e suas medalhas não baixam.</string>
+    <string name="game_rules_5_body">Cunhagens, novos níveis e façanhas fazem a sua glória crescer, e ela dá o seu título.</string>
+    <string name="game_rules_6_body">Guardar as Meeshes faz a herança crescer; gastá-las cuida da Chama.</string>
+    <string name="game_rules_7_body">Um sonho a cada noite, uma Oferenda, uma Chama que cresce enquanto você volta.</string>
+    <string name="game_detail_coin_what">A Meesh é a sua luz cristalizada numa moeda numerada.</string>
+    <string name="game_detail_fact_mint_next">Uma em cem é de ouro, uma em mil de prisma.</string>
+    <string name="game_flame_panel_freeze_full">Todas as suas Lamparinas estão aqui.</string>
+    <string name="game_notebook_empty">Cada sinal dos seus ancestrais pode virar uma foto aqui.</string>
+    <string name="game_error_league_pseudonym_invalid">Não válido.</string>
+    <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres (letras, números, . - _). Nem seu nome, nem seu usuário.</string>
+    <string name="game_concept_level_what">Seu nível é o número no centro do seu anel: ele se lê na sua luz.</string>
+    <string name="game_concept_flame_use">Uma Lamparina cuida dela num dia de ausência.</string>
+    <string name="game_concept_missions_use">Abra um ato para ver onde você está. Você pode trocar um por dia com uma Meesh.</string>
+    <string name="game2_prestige_confirm_access">Seu torneio e sua aliança continuam abertos.</string>
+    <string name="game2_league_pseudonym_drawn">Seu nome de torneio é sorteado e muda a cada viagem.</string>
+    <string name="game2_league_snapshot">Classificação fixada todo dia às 4 h: ninguém vê quem está jogando agora. Só a sua linha é ao vivo.</string>
+    <string name="game2_season_how">Atos e alianças fazem você avançar alguns passos. A viagem inteira é gratuita.</string>
+    <string name="game2_settings_celebrations_switch">Sinais dos ancestrais</string>
+    <string name="game_guide_step_welcome_what">O jogo em sete cartas</string>
+    <string name="game_guide_more">O que significa este momento?</string>
+    <string name="game_progression_empty">Sua primeira medalha se acende no primeiro gesto.</string>
+    <string name="game_photo_camera_denied">A câmera foi negada: permita-a nos ajustes.</string>
+    <string name="game_photo_camera_unsupported">Este aparelho não permite a câmera aqui.</string>
+    <string name="game_photo_camera_unavailable">A câmera não está disponível.</string>
+    <string name="game_mint_blocked_debt_plain">Uma sombra cobre sua luz: suas próximas faíscas vão dissipá-la, e então você poderá cunhar.</string>
+    <string name="game_sparks_cumul_record">%1$s nesta Era · %2$s ao todo</string>
+</resources>

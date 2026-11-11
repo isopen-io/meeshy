@@ -63,8 +63,8 @@ internal object GameElementKindCopy {
     /** « C'est quoi » : la phrase de la famille ; d'une donnée, SA phrase, ou à défaut celle de son concept. */
     @StringRes
     fun what(detail: GameElementDetail): Int = when (detail.kind) {
-        GameElementKind.Fact -> detail.factKey?.let(GameDetailFactCopy::sentence) ?: ConceptCopy.why(detail.concept)
-        else -> what(detail.kind) ?: ConceptCopy.why(detail.concept)
+        GameElementKind.Fact -> detail.factKey?.let(GameDetailFactCopy::sentence) ?: ConceptCopy.what(detail.concept)
+        else -> what(detail.kind) ?: ConceptCopy.what(detail.concept)
     }
 
     @StringRes

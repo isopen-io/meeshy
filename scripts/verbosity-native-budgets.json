@@ -1,15 +1,15 @@
 {
   "families": {
     "android:app": {
-      "labels": 320,
-      "words": 972,
+      "labels": 319,
+      "words": 970,
       "long": 6,
       "explanations": 26
     },
     "android:feature/auth": {
-      "labels": 440,
-      "words": 2232,
-      "long": 16,
+      "labels": 438,
+      "words": 2218,
+      "long": 15,
       "explanations": 18
     },
     "android:feature/calls": {
@@ -49,10 +49,10 @@
       "explanations": 30
     },
     "android:feature/game": {
-      "labels": 1335,
-      "words": 9413,
-      "long": 141,
-      "explanations": 117
+      "labels": 1269,
+      "words": 8279,
+      "long": 119,
+      "explanations": 116
     },
     "android:feature/notifications": {
       "labels": 65,
@@ -73,10 +73,10 @@
       "explanations": 5
     },
     "android:feature/settings": {
-      "labels": 680,
-      "words": 2804,
-      "long": 36,
-      "explanations": 72
+      "labels": 648,
+      "words": 2710,
+      "long": 25,
+      "explanations": 59
     },
     "android:feature/stories": {
       "labels": 818,
@@ -878,7 +878,7 @@
     },
     "ios:Meeshy/sessionClosed": {
       "labels": 13,
-      "words": 79,
+      "words": 78,
       "long": 0,
       "explanations": 0
     },

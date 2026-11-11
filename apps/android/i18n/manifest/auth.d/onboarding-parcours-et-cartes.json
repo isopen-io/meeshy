@@ -156,11 +156,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.story.title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.story.create",
           "status": "adopted"
         },

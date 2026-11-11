@@ -89,7 +89,7 @@ private fun AtlasContent(game: GameBlock, state: GameArrangementUiState, arrange
 @Composable
 private fun AtlasHeader(atlas: GameAtlasBlock) {
     val line = pluralStringResource(R.plurals.game_atlas_languages, atlas.stamped, count(atlas.stamped), count(atlas.total))
-    GameCard(title = stringResource(R.string.game2_atlas_title), tint = MeeshyPalette.Indigo500) {
+    GameCard(tint = MeeshyPalette.Indigo500) {
         Text(line, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = MeeshyTheme.tokens.textPrimary)
         GameProgressBar(atlas.stamped.toFloat() / maxOf(1, atlas.total), MeeshyPalette.Indigo500, line)
         GameNote(stringResource(R.string.game2_atlas_intro))

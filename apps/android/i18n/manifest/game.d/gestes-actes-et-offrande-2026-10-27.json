@@ -21,11 +21,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.missions.offline",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.mission.reroll",
           "status": "adopted"
         },
