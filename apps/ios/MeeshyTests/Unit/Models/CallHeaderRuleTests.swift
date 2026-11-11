@@ -70,7 +70,7 @@ final class CallHeaderRuleTests: XCTestCase {
 
     func test_capsule_videoDuo_networkShowsOnlyWhenDegraded() {
         XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: "Awa"))?.showsNetwork, false)
-        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: "Awa", isNetworkDegraded: true))?.showsNetwork, true)
+        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, isNetworkDegraded: true, givenName: "Awa"))?.showsNetwork, true)
     }
 
     func test_capsule_audio_healthyLink_hasNoCapsule() {

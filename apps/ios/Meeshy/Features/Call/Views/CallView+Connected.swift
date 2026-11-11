@@ -119,8 +119,8 @@ extension CallView {
                     // aucun panneau ne remplace l'avatar ; le journal le resserre.
                     VStack(spacing: MeeshySpacing.md) {
                         if pillText.compactsAudioLayout {
-                            CallCompactAudioHeader(avatar: callAvatarPair(size: 56), name: peerDisplayName, signalStrength: signalStrength,
-                                                   durationColor: durationColor, duration: { callManager.formattedDuration },
+                            CallCompactAudioHeader(avatar: callAvatarPair(size: 56), name: peerDisplayName,
+                                                   duration: { callManager.formattedDuration },
                                                    spokenDuration: { callManager.spokenDuration }, showsQualityDetail: $showQualityDetail)
                                 .padding(.top, CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset))
                             Spacer()
@@ -328,10 +328,8 @@ extension CallView {
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundStyle(Color.white)
 
-            // Duration + glyphe signal code couleur :
-            // invisible sur lien sain, apparaît à la dégradation, persiste en
-            // vert `recoveryLingerSeconds` après récupération puis se retire
-            // (cycle de vie dans TransientCallSignalGlyph).
+            // La durée, sous le nom. Le réseau dégradé n'est plus ici : il vit
+            // dans la capsule de droite de l'en-tête (#17341, `headerCapsule`).
             CallDurationClock {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(callManager.formattedDuration)
@@ -417,9 +415,9 @@ extension CallView {
             participants: capsule?.participantCount,
             includesDuration: capsule?.showsDuration ?? true,
             signalDegraded: signalStrength.isDegraded ? signalStrength.accessibilityLabel : nil,
-            peerMuted: capsule?.showsDuration != false && !callManager.isRemoteAudioEnabled,
+            peerMuted: !callManager.isRemoteAudioEnabled && capsule?.showsDuration != false,
             peerNetworkWeak: callManager.isRemoteQualityDegraded,
-            reconnecting: reconnecting
+            reconnecting: reconnecting && capsule?.showsDuration != false
         )
     }
 
@@ -594,8 +592,6 @@ private nonisolated struct CallGroupStageHeightKey: PreferenceKey {
 struct CallCompactAudioHeader<Avatar: View>: View {
     let avatar: Avatar
     let name: String
-    let signalStrength: CallSignalStrength
-    let durationColor: Color
     let duration: () -> String
     let spokenDuration: () -> String
     @Binding var showsQualityDetail: Bool
@@ -612,18 +608,15 @@ struct CallCompactAudioHeader<Avatar: View>: View {
                     .lineLimit(1)
 
                 CallDurationClock {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        TransientCallSignalGlyph(strength: signalStrength)
-                        Text(duration())
-                            .font(.caption.weight(.medium).monospacedDigit())
-                            .foregroundStyle(durationColor)
-                    }
-                    // Aucune rangée d'états ici : la durée s'annonce nommée,
-                    // « Durée de l'appel, 0:34 », jamais un « 0:34 » nu.
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                    .accessibilityValue(spokenDuration())
-                    .accessibilityAddTraits(.updatesFrequently)
+                    Text(duration())
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundStyle(MeeshyColors.indigo400)
+                        // Aucune rangée d'états ici : la durée s'annonce nommée,
+                        // « Durée de l'appel, 0:34 », jamais un « 0:34 » nu.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(spokenDuration())
+                        .accessibilityAddTraits(.updatesFrequently)
                 }
                 .callQualityDetailTrigger(isPresented: $showsQualityDetail)
             }
