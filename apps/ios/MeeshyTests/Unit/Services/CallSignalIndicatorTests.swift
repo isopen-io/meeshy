@@ -460,46 +460,43 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_connectedView_audioPath_usesStructuralTranscriptPanel_notFloatingOverlay() throws {
+    /// #17343 — en audio aussi, les sous-titres vivent DANS la pilule : l'avatar garde sa
+    /// place, plus aucun panneau de transcription ne le remplace hors de la pilule (la
+    /// géométrie d'avant la décision, qui exigeait l'inverse, est retournée).
+    func test_connectedView_audioPath_keepsTheAvatar_theCaptionsLiveInThePill() throws {
         let view = try AppSourceGuard.callViewSource()
-        // #8394 — la disposition 1:1 (vidéo plein écran ou duo d'avatars) vit
-        // dans `duoLayout`, que `connectedView` monte hors scène de groupe.
         guard let range = view.range(of: "private var duoLayout: some View {") else {
             XCTFail("CallView must define duoLayout, the 1:1 layout of connectedView")
             return
         }
         let end = view.index(range.lowerBound, offsetBy: 4000, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
-        XCTAssertTrue(
-            body.contains("compactAudioCallHeader"),
-            "connectedView must show a compacted header (avatar + name, no status pills) " +
-            "when captions are active on an audio call — user-requested 2026-07-11."
-        )
-        XCTAssertTrue(
-            body.contains("transcriptPanel"),
-            "connectedView must show the structural (non-overlay) transcriptPanel " +
-            "for the audio-call captions layout."
-        )
+        XCTAssertFalse(body.contains("compactAudioCallHeader"), "L'avatar ne se réduit plus pour faire place à un panneau")
+        XCTAssertFalse(body.contains("transcriptPanel"), "Aucun panneau de transcription hors de la pilule")
+        XCTAssertTrue(body.contains("audioCallLayout"), "L'avatar et le nom restent au centre")
+        XCTAssertTrue(body.contains("callControlsBlock"), "Les sous-titres vivent avec la pilule, en audio comme en vidéo")
     }
 
-    /// #8396 — en vidéo, les sous-titres sont un bandeau de verre posé juste
-    /// au-dessus de la pilule, et seulement là : l'ancien bandeau flottant
-    /// (`transcriptOverlay`) a disparu, et l'audio garde son panneau.
-    func test_videoCaptionsBand_sitsAboveThePill_andTheFloatingOverlayIsGone() throws {
+    /// #17343 — les sous-titres vivent DANS la pilule, au-dessus de sa rangée de base,
+    /// dans le même verre, en duo comme en groupe : le bandeau à verre propre posé AU-DESSUS
+    /// de la pilule (géométrie d'avant #17343) a disparu ; le seul verre à eux est celui de
+    /// la pilule RANGÉE (loi 11), posé à sa place.
+    func test_captions_liveInThePill_aboveItsBaseRow_inTheSameGlass() throws {
         let view = try AppSourceGuard.callViewSource()
-        XCTAssertFalse(
-            view.contains("transcriptOverlay"),
-            "Le bandeau flottant a disparu : les sous-titres vidéo vivent au-dessus de la pilule."
-        )
-        guard let band = view.range(of: "captionsBand(hasOwnGlass: true)"),
-              let pill = view.range(of: "callControlsPill", range: band.upperBound ..< view.endIndex) else {
-            XCTFail("Le bandeau des sous-titres vidéo doit précéder la pilule dans la pile verticale")
+        XCTAssertFalse(view.contains("transcriptOverlay"), "Le bandeau flottant a disparu.")
+        guard let pillStart = view.range(of: "var callControlsPill: some View {"),
+              let pillEnd = view.range(of: "var pillHairline: some View", range: pillStart.upperBound ..< view.endIndex) else {
+            XCTFail("Les sous-titres se lisent dans callControlsPill")
             return
         }
-        XCTAssertLessThan(
-            view.distance(from: band.upperBound, to: pill.lowerBound), 600,
-            "…et la précéder IMMÉDIATEMENT : juste au-dessus de la pilule."
-        )
+        let pill = String(view[pillStart.upperBound ..< pillEnd.lowerBound])
+        guard let band = pill.range(of: "captionsBand(hasOwnGlass: false)"),
+              let base = pill.range(of: "baseRow") else {
+            XCTFail("La pilule porte les sous-titres sans verre à eux, puis sa rangée de base")
+            return
+        }
+        XCTAssertLessThan(band.lowerBound, base.lowerBound, "Au-dessus de la rangée de base")
+        XCTAssertFalse(pill.contains("isGroupStage"), "En duo comme en groupe : la même pilule")
     }
 
     /// Chaque ligne porte un horodatage, et il vient de `segment.capturedAt`
