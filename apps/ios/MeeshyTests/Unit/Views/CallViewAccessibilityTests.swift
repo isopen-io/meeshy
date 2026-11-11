@@ -532,7 +532,7 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     func test_minimizeChevron_hitTargetMeetsHIGMinimum() throws {
         let source = try callViewSource()
-        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: false, tint: .white)") else {
+        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: isActive, tint: .white)") else {
             XCTFail("Minimize chevron's 40pt glass circle must exist")
             return
         }

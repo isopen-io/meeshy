@@ -134,6 +134,14 @@ struct CallRecordingPanel: View {
     let onClose: () -> Void
     let onChoose: (CallRecordingKind) -> Void
 
+    private var kindChips: [AsyncRenderRow<CallRecordingKind, CallRecordingChoiceChip>] {
+        [CallRecordingKind.audio, .video].map { kind in
+            AsyncRenderRow(id: kind, content: CallRecordingChoiceChip(title: CallRecordingCopy.kindLabel(kind), hint: CallRecordingCopy.kindHint) {
+                onChoose(kind)
+            })
+        }
+    }
+
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
             CallPanelHeader(title: CallRecordingCopy.label(isActive: false), onBack: onBack, onClose: onClose)
@@ -145,11 +153,7 @@ struct CallRecordingPanel: View {
                 .padding(.horizontal, MeeshySpacing.lg)
             AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
                 HStack(spacing: MeeshySpacing.sm) {
-                    ForEach([CallRecordingKind.audio, .video], id: \.self) { kind in
-                        CallRecordingChoiceChip(title: CallRecordingCopy.kindLabel(kind), hint: CallRecordingCopy.kindHint) {
-                            onChoose(kind)
-                        }
-                    }
+                    ForEach(kindChips, content: asyncRenderRowContent)
                 }
             }
             .padding(.horizontal, MeeshySpacing.lg)
