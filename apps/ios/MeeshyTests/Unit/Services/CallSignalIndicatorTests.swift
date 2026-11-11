@@ -430,6 +430,42 @@ final class CallHangupFastPathTests: XCTestCase {
         XCTAssertFalse(view.contains("UIAccessibility.post(notification: .announcement, argument: announcement)"))
     }
 
+    /// L'arrivée de la traduction ne change pas l'IDENTITÉ de la phrase : un seul
+    /// `TimelineView`, en pause hors attente, jamais deux branches qui se relaient
+    /// (elles occuperaient la place ensemble le temps du fondu, et la bande sauterait).
+    func test_captionRow_keepsOneIdentity_whenTheTranslationReplacesTheWait() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "struct CallCaptionRow: View {"),
+              let end = view.range(of: "struct CallCaptionsBand: View {", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionRow must exist")
+            return
+        }
+        let row = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(row.contains("TimelineView(.animation(minimumInterval:"), "Les trois points se mettent en pause, ils ne changent pas de vue.")
+        XCTAssertFalse(row.contains("TimelineView(.periodic"))
+        XCTAssertFalse(row.contains("if isWaiting && !reduceMotion"))
+    }
+
+    /// Le pied change d'état (attente, paire, N langues) en fondu, jamais d'un coup.
+    func test_captionsFooter_changesInAFade() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "private var footer: some View {"),
+              let end = view.range(of: "private func journalButton(", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionsBand.footer must exist")
+            return
+        }
+        let footer = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(footer.contains(".contentTransition(.opacity)") && footer.contains(".transition(.opacity)"))
+        XCTAssertTrue(footer.contains(".animation(fade, value: note)"))
+    }
+
+    /// L'écran verrouillé étiquette la langue comme l'écran d'appel : par le Prisme du
+    /// lecteur, sans quoi une phrase déjà dans ma langue y porterait « FR ».
+    func test_liveActivityCaption_descendsTheReaderPrism() throws {
+        let coordinator = try AppSourceGuard.unit("Meeshy/Features/LiveActivity/CallLiveActivityCoordinator.swift")
+        XCTAssertTrue(coordinator.contains("readerPrism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)"))
+    }
+
     func test_advanceCaptionsMode_off_startsTranscriptionAndLandsOnTranslated() throws {
         let view = try AppSourceGuard.callViewSource()
         guard let range = view.range(of: "func advanceCaptionsMode() {") else {
