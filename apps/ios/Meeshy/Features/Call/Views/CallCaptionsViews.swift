@@ -54,6 +54,10 @@ enum CallCaptionsCopy {
     static var newLines: String {
         String(localized: "call.captions.journal.newLines", defaultValue: "Nouvelles phrases", bundle: .main)
     }
+
+    static func touchForOriginal(pair: String) -> String {
+        String(format: String(localized: "call.captions.footer.touchForOriginal", defaultValue: "%@ · toucher = original", bundle: .main), pair)
+    }
 }
 
 /// Une phrase : le nom du locuteur ET son texte dans SA couleur d'auteur (la
@@ -140,9 +144,21 @@ struct CallCaptionRow: View {
     }
 }
 
-/// Le bandeau : les deux dernières phrases, et le Journal. En duo il est son
-/// propre verre, juste au-dessus de la pilule ; en groupe il se pose en haut
-/// du cadre de verre de la pilule, qui le porte déjà (`hasOwnGlass: false`).
+/// Une phrase qui arrive ne redessine que sa ligne : les autres se comparent par ce
+/// qu'elles MONTRENT (la ligne résolue, l'heure), et leur couleur d'auteur ne se
+/// recalcule pas pendant le défilement. L'action ne compte pas : elle ne fait que
+/// relayer l'identifiant de la ligne.
+extension CallCaptionRow: Equatable {
+    static func == (lhs: CallCaptionRow, rhs: CallCaptionRow) -> Bool {
+        lhs.line == rhs.line && lhs.showsTime == rhs.showsTime
+    }
+}
+
+/// Les sous-titres : les deux dernières phrases, puis un pied (ce que la ligne dit de
+/// sa traduction) et le bouton Journal. Ils vivent DANS la pilule, au-dessus de sa
+/// rangée de base, dans le même verre (`hasOwnGlass: false`, #17343) ; ils ne
+/// prennent un verre à eux que rangés (la pilule est cachée) ou sous un mode
+/// (Effets, Montage), où il n'y a pas de pilule.
 struct CallCaptionsBand: View {
     let lines: [CallCaptionLine]
     let hasOwnGlass: Bool
@@ -152,17 +168,18 @@ struct CallCaptionsBand: View {
     var body: some View {
         if hasOwnGlass {
             content
-                .padding(.leading, MeeshySpacing.mdPlus)
-                .padding(.trailing, MeeshySpacing.xs)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.xsPlus)
                 .callChromeGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         } else {
             content
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.top, MeeshySpacing.xsPlus)
         }
     }
 
     private var content: some View {
-        HStack(alignment: .top, spacing: MeeshySpacing.xs) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 if lines.isEmpty {
                     Text(CallCaptionsCopy.waiting)
@@ -172,25 +189,49 @@ struct CallCaptionsBand: View {
                 } else {
                     ForEach(lines) { line in
                         CallCaptionRow(line: line) { onToggleOriginal(line.id) }
+                            .equatable()
                     }
                 }
             }
             .padding(.vertical, MeeshySpacing.xsPlus)
-            if let onOpenJournal {
-                Button(action: onOpenJournal) {
-                    Image(systemName: "list.bullet.rectangle")
-                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                        .foregroundColor(MeeshyColors.mediaChromeSecondary)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(CallCaptionsCopy.journal)
-                .accessibilityHint(CallCaptionsCopy.journalHint)
-            }
+            footer
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(CallCaptionsCopy.title)
+    }
+
+    @ViewBuilder
+    private var footer: some View {
+        let note = CallCaptionsFooter.resolve(lines: lines)
+        if note != .none || onOpenJournal != nil {
+            HStack(spacing: MeeshySpacing.sm) {
+                if case .touchForOriginal(let pair) = note {
+                    Text(CallCaptionsCopy.touchForOriginal(pair: pair))
+                        .font(.footnote)
+                        .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                Spacer(minLength: 0)
+                if let onOpenJournal {
+                    journalButton(onOpenJournal)
+                }
+            }
+        }
+    }
+
+    private func journalButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(CallCaptionsCopy.journal)
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(.white)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .frame(minHeight: 44)
+                .callChipGlass(isActive: false, tint: .white)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(CallPressButtonStyle(glassPressesItself: true))
+        .accessibilityHint(CallCaptionsCopy.journalHint)
     }
 }
 
@@ -220,6 +261,7 @@ struct CallJournalList: View {
                         ForEach(items) { item in
                             let resolved = line(item)
                             CallCaptionRow(line: resolved, showsTime: true) { onToggleOriginal(resolved.id) }
+                                .equatable()
                         }
                         Color.clear
                             .frame(height: 1)
@@ -348,37 +390,50 @@ private nonisolated struct CallJournalScrollKey: PreferenceKey {
     }
 }
 
-/// Tout l'appel, Traduit ou Original — le réglage est celui du bouton
+/// Tout l'appel, DANS la pilule, à la place des sous-titres (#17343) : un en-tête
+/// (le titre, la bascule Traduit / Original, Fermer), puis la liste, qui défile
+/// et offre « Revenir au direct ». Le réglage Traduit / Original est celui du bouton
 /// Sous-titres (`showOriginalText`), un toucher par phrase l'inverse.
-struct CallCaptionsJournalSheet: View {
+struct CallJournalPanel: View {
     let items: [CallJournalItem<CallTranscriptionSegment>]
     let line: (CallJournalItem<CallTranscriptionSegment>) -> CallCaptionLine
     @Binding var showsOriginal: Bool
+    let height: CGFloat
     let onToggleOriginal: (UUID) -> Void
+    let onClose: () -> Void
 
-    @Environment(\.dismiss) private var dismiss
+    @AccessibilityFocusState private var titleHasFocus: Bool
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            header
             CallJournalList(items: items, line: line, onToggleOriginal: onToggleOriginal)
-                .navigationTitle(CallCaptionsCopy.journalTitle)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        Picker(CallCaptionsCopy.journalTitle, selection: $showsOriginal) {
-                            Text(CallCaptionsCopy.translated).tag(false)
-                            Text(CallCaptionsCopy.original).tag(true)
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(maxWidth: 240)
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
-                    }
-                }
+                .frame(height: height)
         }
-        .presentationDetents([.medium, .large])
-        .adaptiveSheetGlassBackground()
-        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(CallCaptionsCopy.journalTitle)
+        .onAppear { titleHasFocus = true }
+    }
+
+    private var header: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Text(CallCaptionsCopy.journal)
+                .font(.headline)
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($titleHasFocus)
+            Spacer(minLength: 0)
+            Picker(CallCaptionsCopy.journalTitle, selection: $showsOriginal) {
+                Text(CallCaptionsCopy.translated).tag(false)
+                Text(CallCaptionsCopy.original).tag(true)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 200)
+            CallPanelHeaderButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
+        }
+        .padding(.leading, MeeshySpacing.mdPlus)
+        .padding(.trailing, MeeshySpacing.xsPlus)
+        .padding(.top, MeeshySpacing.xxs)
     }
 }
