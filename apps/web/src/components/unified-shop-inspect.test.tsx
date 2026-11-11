@@ -79,7 +79,7 @@ describe('UnifiedShop — fiche et plein écran', () => {
     const { deps } = gateway((request) => (request.path.startsWith('/api/v1/packs/shop') ? shop : { ok: false, status: 404, error: 'absent' }));
     await mount(deps);
     await until(() => q('[data-shop-open="avatar-ring:contours-essentiels"]') !== null);
-    expect(q('[data-shop-open="sticker:mes-stickers"]')).toBeNull();
+    expect(q('[data-shop-preview="sticker:mes-stickers"]')).toBeNull();
     await mounter.click(q('[data-shop-open="avatar-ring:contours-essentiels"]'));
     await until(() => q('[data-pack-sheet] [data-pack-sheet-item="filet"]') !== null);
     expect(q('[data-pack-sheet]')?.getAttribute('data-pack-sheet')).toBe('avatar-ring:contours-essentiels');

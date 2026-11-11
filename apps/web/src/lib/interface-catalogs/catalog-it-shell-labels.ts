@@ -77,8 +77,9 @@ const itShellLabels = {
   'media.policy.wifiAndGoodCellular': 'Wi-Fi + buona rete mobile',
   'media.policy.wifiOnly': 'Solo Wi-Fi',
   'media.policy.never': 'Mai',
-  'settings.media_download': 'Download automatico dei media',
+  'settings.media_download': 'Download automatico',
   'settings.media_download.info': 'Altrimenti, un tocco lo scarica. Sotto i 100 KB, un media si scarica sempre da solo.',
+  'settings.media_download.question': 'E se il download non è automatico?',
   'settings.media_download.images': 'Immagini',
   'settings.media_download.videos': 'Video',
 

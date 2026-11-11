@@ -99,6 +99,7 @@ function RowText({
   noteId,
 }: {
   readonly label: string;
+  /** La phrase LUE AU REPOS (règle 7 de l'épure, #17594) : ce que fait un réglage propre à Meeshy. `note` ne porte alors que le détail secondaire. */
   readonly caption?: string;
   readonly captionId?: string;
   readonly note?: InfoHint;
@@ -107,12 +108,12 @@ function RowText({
   return (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
       <InfoNoted note={note} inline {...(noteId === undefined ? {} : { noteId })}>
-        <span className="break-words text-body font-medium" style={{ color: SECTION_INK }}>
+        <span className="block break-words text-body font-medium" style={{ color: SECTION_INK }}>
           {label}
         </span>
       </InfoNoted>
       {caption === undefined ? null : (
-        <span id={captionId} className="text-caption" style={{ color: SECTION_INK_2 }}>
+        <span id={captionId} data-row-caption className="text-caption" style={{ color: SECTION_INK_2 }}>
           {caption}
         </span>
       )}
@@ -241,6 +242,7 @@ function LocalToggleRow({
   setting,
   name,
   caption,
+  note,
   icon,
   tint,
   enabled,
@@ -250,6 +252,7 @@ function LocalToggleRow({
   readonly setting: string;
   readonly name: string;
   readonly caption: string;
+  readonly note: InfoHint;
   readonly icon: IconSpec;
   readonly tint?: string;
   readonly enabled: boolean;
@@ -257,18 +260,19 @@ function LocalToggleRow({
   readonly onToggle: (enabled: boolean) => void;
 }) {
   const captionId = useId();
+  const noteId = useId();
   return (
     <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
       <RowIcon {...(tint === undefined ? {} : { tint })}>
         <IconOf icon={icon} size={15} />
       </RowIcon>
-      <RowText label={name} caption={caption} captionId={captionId} />
+      <RowText label={name} caption={caption} captionId={captionId} note={note} noteId={noteId} />
       <button
         type="button"
         role="switch"
         aria-checked={enabled}
         aria-label={name}
-        aria-describedby={captionId}
+        aria-describedby={`${captionId} ${noteId}`}
         data-setting={setting}
         {...(disabled ? { disabled: true } : {})}
         onClick={() => onToggle(!enabled)}
@@ -322,7 +326,12 @@ function DeviceTranslationRow({ language, toggle }: { readonly language: Interfa
     <LocalToggleRow
       setting="deviceTranslation"
       name={translateDeviceTranslation(language, 'settings.device_translation')}
-      caption={translateDeviceTranslation(language, 'settings.device_translation.info')}
+      caption={translateDeviceTranslation(language, 'settings.device_translation.summary')}
+      note={{
+        label: translateDeviceTranslation(language, 'settings.device_translation.question'),
+        text: translateDeviceTranslation(language, 'settings.device_translation.info'),
+        glyph: SETTINGS_GLYPHS.info,
+      }}
       icon={{ set: 'socle', name: 'translate' }}
       enabled={toggle.enabled}
       disabled={!toggle.ready}

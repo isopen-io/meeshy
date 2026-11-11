@@ -347,7 +347,7 @@ describe('le téléchargement automatique des médias (#6333)', () => {
   test('la section Données porte une politique par type, images puis vidéos, aux défauts d’iOS', () => {
     const host = dom(<DataSection language="fr" />);
     const row = host.querySelector('[data-settings-media-download]');
-    expect(row?.textContent).toContain('Téléchargement automatique des médias');
+    expect(row?.textContent).toContain('Téléchargement auto');
     expect(row?.textContent).toContain('Sous 100 Ko');
     const images = host.querySelector<HTMLSelectElement>('[data-media-download="image"]');
     const videos = host.querySelector<HTMLSelectElement>('[data-media-download="video"]');
@@ -386,9 +386,12 @@ describe('la traduction sur l’appareil (#9898)', () => {
   test('la rangée est légendée : la légende est lue avec la bascule', () => {
     const host = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: false, onToggle: noop }} />);
     const toggle = switchNamed(host, 'Traduire sur cet appareil');
-    const captionId = toggle?.getAttribute('aria-describedby') ?? '';
-    expect(captionId).not.toBe('');
-    expect(host.querySelector(`[id="${captionId}"]`)?.textContent).toContain('110 Mo');
+    const described = (toggle?.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => host.querySelector(`[id="${id}"]`)?.textContent ?? '')
+      .join(' ');
+    expect(described).toContain('Les messages sont traduits ici');
+    expect(described).toContain('110 Mo');
   });
 
   test('chaque langue d’interface la dit, depuis son catalogue chargé à la demande', async () => {
