@@ -8,17 +8,17 @@ import MeeshyUI
 /// (elle juge le niveau, dès Ami, le blocage et le service coupé) ; tant que ça sonne, il ANNULE sans confirmation ;
 /// quota épuisé, il reste et le dit dans un bandeau.
 struct ConversationHeaderBringButton: View {
-    @StateObject private var viewModel: ProfileBringViewModel
+    @StateObject private var bring: ProfileBringViewModel
     let peerName: String
     @State private var confirming = false
 
     init(userId: String, peerName: String) {
-        _viewModel = StateObject(wrappedValue: ProfileBringViewModel(userId: userId))
+        _bring = StateObject(wrappedValue: ProfileBringViewModel(userId: userId))
         self.peerName = peerName
     }
 
     private var state: BringHeaderState {
-        BringHeaderState.resolve(availability: viewModel.availability, ringing: viewModel.ringing != nil)
+        BringHeaderState.resolve(availability: bring.availability, ringing: bring.ringing != nil)
     }
 
     /// Une pile, jamais un `Group` : vide tant que le Bring n'est pas proposé, elle existe quand même et porte le
@@ -29,7 +29,7 @@ struct ConversationHeaderBringButton: View {
                 Button(action: press) { glyph }
                     .buttonStyle(.plain)
                     .meeshyTapTarget()
-                    .disabled(viewModel.isSending)
+                    .disabled(bring.isSending)
                     .transition(.scale.combined(with: .opacity))
                     .accessibilityLabel(label)
                     .accessibilityAddTraits(state == .ringing ? [.isButton, .updatesFrequently] : .isButton)
@@ -37,30 +37,30 @@ struct ConversationHeaderBringButton: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.75), value: state)
-        .task(id: viewModel.userId) { await viewModel.load() }
+        .task(id: bring.userId) { await bring.load() }
         .confirmationDialog(
             ProfileBringWording.confirmTitle(name: peerName),
             isPresented: $confirming,
             titleVisibility: .visible
         ) {
             Button(ProfileBringWording.confirmSend, role: .destructive) {
-                Task { await viewModel.send(name: peerName) }
+                Task { await bring.send(name: peerName) }
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
             Text(ProfileBringWording.confirmBody(name: peerName))
         }
-        .adaptiveOnChange(of: viewModel.notice) { _, new in
+        .adaptiveOnChange(of: bring.notice) { _, new in
             guard let new else { return }
             FeedbackToastManager.shared.showError(new)
-            viewModel.notice = nil
+            bring.notice = nil
         }
     }
 
     private func press() {
         HapticFeedback.medium()
         switch state {
-        case .ringing: viewModel.cancel()
+        case .ringing: bring.cancel()
         case .exhausted: FeedbackToastManager.shared.showError(ProfileBringWording.quota(name: peerName))
         case .send: confirming = true
         case .hidden: break
