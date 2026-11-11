@@ -224,7 +224,7 @@ struct CallCaptionsBand: View {
         Button(action: action) {
             Text(CallCaptionsCopy.journal)
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .frame(minHeight: 44)
                 .callChipGlass(isActive: false, tint: .white)
@@ -344,7 +344,7 @@ struct CallJournalList: View {
                         .accessibilityHidden(true)
                 }
             }
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(minHeight: 44)
             .background(Capsule().fill(Color.black.opacity(MeeshyOpacity.heavy)))
@@ -419,7 +419,7 @@ struct CallJournalPanel: View {
         HStack(spacing: MeeshySpacing.sm) {
             Text(CallCaptionsCopy.journal)
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityFocused($titleHasFocus)
