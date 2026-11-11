@@ -1,6 +1,6 @@
 import { createElement, type ReactNode, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
-import type { SwapShape } from './call-pill-motion';
+import type { MorphRect, SwapShape } from './call-pill-motion';
 
 /**
  * **LE MOUVEMENT DU VERRE, CHARGÉ À PART** (#17536) — les crochets minces que l'écran d'appel
@@ -108,4 +108,26 @@ function useHeldSwap<T>(value: T | null, shape: SwapShape): { readonly held: T |
 export function HeldSwap<T>({ value, shape = 'scale', children, ...attributes }: { readonly value: T | null; readonly shape?: SwapShape; readonly children: (held: T) => ReactNode; readonly className?: string } & { readonly [data: `data-${string}`]: string }) {
   const { held, leaving, ref } = useHeldSwap(value, shape);
   return held === null ? null : createElement('div', { ref, ...attributes, ...leaving }, children(held));
+}
+
+/**
+ * La scène audio du duo, pleine ou compacte (#17529, P9b) : quand `compact` change, l'avatar est relevé
+ * AU RENDU qui le change, le DOM montrant encore l'état d'avant (un passage en cours compris), puis le
+ * moteur le fait glisser vers sa nouvelle place. La première peinture ne joue rien. La mesure vit dans le
+ * moteur : ce crochet n'importe que des types, et l'écran ne précharge aucun chunk de plus.
+ */
+export function useStageMorph(stage: RefObject<HTMLElement | null>, compact: boolean): void {
+  const engine = usePillEngine();
+  const committed = useRef<boolean | null>(null);
+  const first = useRef<MorphRect | null>(null);
+  const running = useRef<readonly Animation[]>([]);
+  if (committed.current !== null && committed.current !== compact) first.current = engine?.stagePortraitRect(stage.current) ?? null;
+  useLayoutEffect(() => {
+    const before = committed.current;
+    const from = first.current;
+    committed.current = compact;
+    first.current = null;
+    if (before === null || before === compact || stage.current === null || engine === null) return;
+    running.current = engine.playStageMorph(stage.current, from, running.current);
+  }, [compact]);
 }
