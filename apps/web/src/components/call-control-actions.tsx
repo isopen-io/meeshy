@@ -12,7 +12,7 @@ import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
 import type { CallPanelKind, CallPanels } from '@/lib/calls/call-screen-layer';
 import { callRecording } from '@/lib/calls/call-recording-live';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
-import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
+import { onRowKeyDown, onRowWheel, ROW_EDGE_FADE, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -273,9 +273,9 @@ function RecordButton({ language, panels, kit, variant }: { readonly language: I
   return (
     <kit.Button
       label={translate(language, idle ? 'callRecording.start' : 'callRecording.stop')}
-      glyph={<span aria-hidden className={idle ? 'size-4 rounded-full border-2 border-current' : 'size-3.5 rounded-[3px]'} style={idle ? undefined : { background: 'var(--ios-error-strong)' }} />}
+      glyph={<span aria-hidden className={idle ? 'size-4 rounded-full border-2 border-current' : 'size-3.5 rounded-[3px] bg-current'} />}
       onPress={() => (idle ? panels.toggle('record') : void callRecording.stop())}
-      tone={kind === 'recording' || choosing ? 'active' : 'disc'}
+      tone={idle ? (choosing ? 'active' : 'disc') : 'danger'}
       {...(idle ? { expanded: choosing, controls: kit.panelIds.record, popup: true } : { pressed: kind === 'recording' })}
       disabled={kind === 'asking'}
       {...(variant === 'rail' ? { size: RAIL_BUTTON } : { caption: translate(language, 'call.record.short') })}
@@ -314,7 +314,7 @@ function Family({ actions, context, variant }: { readonly actions: readonly (Min
  * rangée courte, le bout est atteint à chaque glissé, et la fin du rebond
  * local qu'autorisait `contain` terminait le glissé suivant (#8619).
  */
-export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-none px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
+export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-none px-2 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 /** La légende d'une rangée, en petites capitales. */
 export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-on-media-3 [font-variant-caps:all-small-caps]';
@@ -361,7 +361,7 @@ export function CallActionRows({ call, rows, language, panels, kit }: { readonly
           <span id={`call-row-${family}`} className={ROW_TITLE} data-call-row-title="">
             {translate(language, FAMILY_LEGEND[family])}
           </span>
-          <div role="toolbar" aria-labelledby={`call-row-${family}`} aria-orientation="horizontal" onKeyDown={onRowKeyDown} onWheel={onRowWheel} className={ROW_SCROLL} data-call-row-scroll="">
+          <div role="toolbar" aria-labelledby={`call-row-${family}`} aria-orientation="horizontal" onKeyDown={onRowKeyDown} onWheel={onRowWheel} className={ROW_SCROLL} style={ROW_EDGE_FADE} data-call-row-scroll="">
             <Family actions={actions} context={context} variant="row" />
           </div>
         </div>
