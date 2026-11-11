@@ -627,7 +627,7 @@ struct CallEffectsBar<Looks: View>: View {
     private var baseRow: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
             CallPillButton(
-                symbol: "chevron.left",
+                symbol: "chevron.backward",
                 kind: .normal,
                 label: CallModeCopy.backToCall,
                 hint: CallModeCopy.backToCallHint,

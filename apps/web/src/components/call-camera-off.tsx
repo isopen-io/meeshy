@@ -43,7 +43,7 @@ export function CameraOffStage({ videoOn, video, name, avatar, presenceKey, colo
   return (
     <>
       {videoOn || settledOn ? <div className="absolute inset-0 overflow-hidden">{video}</div> : null}
-      <div ref={veil} className={`absolute inset-0 grid place-items-center bg-black ${videoOn && settledOn ? 'invisible' : ''}`} style={{ '--call-tint': color } as CSSProperties} data-call-camera-off="">
+      <div ref={veil} className={`absolute inset-0 grid place-items-center bg-media-backdrop ${videoOn && settledOn ? 'invisible' : ''}`} style={{ '--call-tint': color } as CSSProperties} data-call-camera-off="">
         <div className="flex flex-col items-center gap-3">
           <Portrait name={name} avatar={avatar} size={96} pulse={false} presenceKey={presenceKey} tint={color}>
             <span ref={ring} className="absolute inset-3 rounded-full" data-call-camera-off-speech="" />

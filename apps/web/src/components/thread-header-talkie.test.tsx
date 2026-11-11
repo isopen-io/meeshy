@@ -218,7 +218,7 @@ describe('la barre élargie', () => {
     expect(html).toContain('Hors ligne');
     expect(html).toContain('data-talkie-wave="tape"');
     expect(html).toContain('data-talkie-playhead');
-    expect(html).toContain('rgba(0, 0, 0, 0.38)');
+    expect(html).toContain('var(--color-scrim-soft)');
     expect(html).toContain('dashed');
   });
 

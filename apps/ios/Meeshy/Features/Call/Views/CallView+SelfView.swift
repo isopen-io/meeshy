@@ -39,6 +39,9 @@ extension CallView {
         }
     }
 
+    /// G1.11 — rangée, ma vignette garde son cadre et passe à sa petite taille par une échelle.
+    var selfTileStowFactor: CGFloat { CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible) }
+
     /// #8577 — la taille de la vignette : son palier, suivi du pincement en
     /// cours, et bornée à la zone sûre de l'écran.
     func pipTileSize(in container: CGSize, safeArea: EdgeInsets) -> CGSize {
@@ -49,9 +52,6 @@ extension CallView {
         )
         return CallSelfTileScale.fitted(CallSelfTileScale.liveSize(pinch: selfTilePinch, from: selfTileScale), in: available)
     }
-
-    /// G1.11 — rangée, ma vignette garde son cadre et passe à sa petite taille par une échelle.
-    var selfTileStowFactor: CGFloat { CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible) }
 
     /// Nearest corner to a point — used to snap on drag end.
     private func nearestCorner(to point: CGPoint, in container: CGSize, safeArea: EdgeInsets = .init()) -> PiPCorner {

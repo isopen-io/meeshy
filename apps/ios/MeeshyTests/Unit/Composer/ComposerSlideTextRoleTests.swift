@@ -229,4 +229,55 @@ final class ComposerSlideTextRoleTests: XCTestCase {
         XCTAssertTrue(sortie.isEmpty,
                       "Aucune des trois entrées n'a de destinataire — aucune ne doit produire de clé.")
     }
+
+    // MARK: - #13640 — la légende d'une scène reste celle de son VISUEL quand elle part en post
+
+    private func scene(_ id: String, legende: String?, objet: String = "obj-fond") -> StorySlide {
+        var effets = StoryEffects()
+        effets.mediaObjects = [StoryMediaObject(id: objet, postMediaId: "", mediaType: "image",
+                                                aspectRatio: nil, isBackground: true)]
+        return StorySlide(id: id, content: legende, effects: effets)
+    }
+
+    func test_carryingSlideLegends_post_givesTheSlideLegendToItsVisual() {
+        let url = URL(fileURLWithPath: "/tmp/quai.jpg")
+        let sortie = ComposerSlideTextRole.carryingSlideLegends(
+            [:], format: .post, slideIdByMediaURL: [url: "s1"],
+            objectIdBySource: [url: "obj-fond"], slides: [scene("s1", legende: "Le quai")])
+        XCTAssertEqual(sortie, [url: "Le quai"], "la légende de la scène devient celle de son visuel")
+    }
+
+    func test_carryingSlideLegends_ownMediaCaption_wins() {
+        let url = URL(fileURLWithPath: "/tmp/quai.jpg")
+        let sortie = ComposerSlideTextRole.carryingSlideLegends(
+            [url: "Légende du média"], format: .post, slideIdByMediaURL: [url: "s1"],
+            objectIdBySource: [url: "obj-fond"], slides: [scene("s1", legende: "Le quai")])
+        XCTAssertEqual(sortie, [url: "Légende du média"])
+    }
+
+    func test_carryingSlideLegends_foregroundMedia_getsNothing() {
+        let url = URL(fileURLWithPath: "/tmp/devant.jpg")
+        let sortie = ComposerSlideTextRole.carryingSlideLegends(
+            [:], format: .post, slideIdByMediaURL: [url: "s1"],
+            objectIdBySource: [url: "obj-devant"], slides: [scene("s1", legende: "Le quai")])
+        XCTAssertTrue(sortie.isEmpty, "seul le visuel qui porte la scène reçoit sa légende")
+    }
+
+    func test_carryingSlideLegends_blankLegend_orReel_changesNothing() {
+        let url = URL(fileURLWithPath: "/tmp/quai.jpg")
+        let vide = ComposerSlideTextRole.carryingSlideLegends(
+            [:], format: .post, slideIdByMediaURL: [url: "s1"],
+            objectIdBySource: [url: "obj-fond"], slides: [scene("s1", legende: "  ")])
+        XCTAssertTrue(vide.isEmpty)
+        let reel = ComposerSlideTextRole.carryingSlideLegends(
+            [:], format: .reel, slideIdByMediaURL: [url: "s1"],
+            objectIdBySource: [url: "obj-fond"], slides: [scene("s1", legende: "Le quai")])
+        XCTAssertTrue(reel.isEmpty, "un réel publie déjà sa légende de scène (ReelPublishedContent)")
+    }
+
+    func test_host_documentDraft_carriesTheSlideLegends() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        XCTAssertTrue(source.contains("mediaCaptions: ComposerSlideTextRole.carryingSlideLegends("),
+                      "le brouillon de post emporte la légende des scènes sur leur visuel")
+    }
 }

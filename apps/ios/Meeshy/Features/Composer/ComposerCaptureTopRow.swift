@@ -5,7 +5,7 @@ import CoreGraphics
 nonisolated enum ComposerCaptureTopItem: Equatable, Hashable, Sendable {
     /// « Quitter » : quitte le viseur, ou abandonne la retouche.
     case close
-    /// La puce du chrono et de l'indicateur de segment, centrée.
+    /// La puce du chrono et de l'indicateur de segment, à gauche de la barre des segments.
     case chrono
     /// `[ ]` : carte ↔ plein écran — en retouche ; au viseur, il vit dans ⋯.
     case size
@@ -35,10 +35,10 @@ nonisolated enum ComposerCaptureTopItem: Equatable, Hashable, Sendable {
 /// centrée sous l'en-tête : Flash · Retardateur · Objectif · ⋯.
 ///
 /// Des segments en attente ajoutent « retirer le dernier » à gauche de
-/// Valider, et le chrono paraît au centre de l'en-tête.
+/// Valider ; le chrono vit à gauche de la barre des segments (#17469).
 ///
-/// **En filmant, plus d'en-tête ni de capsule** (A9, révoque #8653) : seul le
-/// chrono reste, centré, et la prise se clôt au déclencheur rouge.
+/// **En filmant, plus d'en-tête ni de capsule** (A9, révoque #8653) : seuls
+/// le chrono et sa barre restent, et la prise se clôt au déclencheur rouge.
 nonisolated enum ComposerCaptureTopRow {
 
     /// L'écart entre deux contrôles de la rangée.
@@ -77,7 +77,7 @@ nonisolated enum ComposerCaptureTopRow {
         return [.flash, .selfTimer, .flip, .more]
     }
 
-    /// La puce paraît, centrée, dès qu'une vidéo se prend : en filmant, ou
+    /// La puce paraît dès qu'une vidéo se prend : en filmant, ou
     /// segments en attente. Jamais en retouche.
     static func showsChrono(_ input: Input) -> Bool {
         !input.editing && (input.stage == .recording || input.pendingSegments > 0)
@@ -89,12 +89,12 @@ nonisolated enum ComposerCaptureTopRow {
         max(0, pending) + (recording ? 1 : 0)
     }
 
-    /// **L'indicateur se LIT d'un coup d'œil : « 3 – »** (#10310, porteur
-    /// 2026-10-12). Le chiffre et un trait, sans le mot : la puce tient à côté
-    /// du chrono sur un iPhone étroit. Le mot reste à VoiceOver, au pluriel de
-    /// la langue (`ComposerSceneCameraCopy.segmentCount`).
+    /// **L'indicateur se LIT d'un coup d'œil : « 3 »** (#10310, #17469). Le
+    /// chiffre seul, ni mot ni trait : la puce tient à côté du chrono sur un
+    /// iPhone étroit. Le mot reste à VoiceOver, au pluriel de la langue
+    /// (`ComposerSceneCameraCopy.segmentCount`).
     static func segmentBadge(_ count: Int, locale: Locale = .current) -> String {
-        "\(LocalizedNumber.exact(max(0, count), locale: locale)) \u{2013}"
+        LocalizedNumber.exact(max(0, count), locale: locale)
     }
 }
 
