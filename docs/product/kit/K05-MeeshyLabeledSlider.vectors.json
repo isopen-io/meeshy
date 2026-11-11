@@ -1,0 +1,24 @@
+{
+  "composant": "MeeshyLabeledSlider",
+  "cle": "K05",
+  "loi": [
+    { "nom": "snap-bornes", "range": [0, 100], "step": null, "entree": -3, "attendu": 0 },
+    { "nom": "snap-bornes-haut", "range": [0, 100], "step": null, "entree": 130, "attendu": 100 },
+    { "nom": "snap-pas", "range": [0, 10], "step": 2, "entree": 5.1, "attendu": 6 },
+    { "nom": "fraction-milieu", "range": [0, 200], "step": null, "entree": 100, "attendu": 0.5 },
+    { "nom": "valeur-fraction-rtl", "range": [0, 100], "step": null, "fraction": 0.25, "rtl": true, "attendu": 75 },
+    { "nom": "fleche-continue-fine", "range": [0, 200], "step": null, "valeur": 100, "haut": true, "grossier": false, "attendu": 102 },
+    { "nom": "balayage-pas", "range": [0, 100], "step": 1, "valeur": 10, "haut": false, "grossier": true, "attendu": 5 },
+    { "nom": "franchit-neutre", "range": [-10, 10], "neutre": 0, "de": -0.5, "a": 0.5, "tic": true },
+    { "nom": "franchit-borne", "range": [0, 10], "neutre": null, "de": 9, "a": 10, "tic": true },
+    { "nom": "entre-crans", "range": [0, 10], "neutre": 5, "de": 2, "a": 3, "tic": false },
+    { "nom": "meme-cran-pas-emis", "range": [0, 10], "step": 1, "de": 4, "a": 4.2, "emet": false }
+  ],
+  "recette": [
+    { "nom": "repos", "tenu": false, "actif": true, "halo": 0, "echelle": 1 },
+    { "nom": "tenu", "tenu": true, "actif": true, "halo": 0.32, "echelle": 1.2 },
+    { "nom": "tenu-reduire-animations", "tenu": true, "actif": true, "reduire": true, "halo": 0.32, "echelle": 1 },
+    { "nom": "desactive", "tenu": true, "actif": false, "halo": 0, "contenu": 0.4 }
+  ],
+  "cible_minimale": { "ios_pt": 44, "android_dp": 48, "web_px": 44 }
+}
