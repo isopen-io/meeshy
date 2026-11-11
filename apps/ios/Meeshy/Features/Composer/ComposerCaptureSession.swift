@@ -239,7 +239,7 @@ final class ComposerCaptureSession: ObservableObject {
             zoomPresets: ComposerCaptureZoomScale.presets(in: camera.zoomRange),
             flipping: camera.isSwitchingCamera || camera.recordingIsPending,
             switchingCamera: camera.isSwitchingCamera,
-            flashIntensity: flashIntensity)
+            flashIntensity: flashIntensity, cameraPosition: controls.currentPosition)
     }
 
     // MARK: - L'armement et la sortie

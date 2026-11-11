@@ -273,7 +273,6 @@ struct ComposerCaptureChrome: View {
             cropPresets
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
             ComposerCaptureGestureHint(session: session)
-            ComposerFlashStrikeLayer(flash: session.flash, recording: session.stage == .recording)
             VStack(spacing: 0) {
                 // Toujours montée : une rangée retirée peut rester peinte le temps
                 // d'une transition, et porte la croix qui présente l'alerte.
@@ -406,6 +405,7 @@ struct ComposerCaptureChrome: View {
             holding: session.barCapture.holding,
             flashIntensity: session.barCapture.flashIntensity,
             onFlashIntensity: { session.setFlashIntensity($0) },
+            cameraPosition: session.barCapture.cameraPosition,
             flipping: session.barCapture.flipping,
             editing: session.phase.isEditing,
             rendering: session.isRenderingLook || session.takeSaveState == .saving,
