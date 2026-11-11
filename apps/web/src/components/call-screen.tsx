@@ -4,21 +4,18 @@ import { useStore } from 'zustand/react';
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill, loadDeck } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
-import { CallIncomingAnswer } from '@/components/call-incoming-answer';
-import { RoundButton } from '@/components/call-round-button';
 import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveFrameShown, useLiveFrameState } from '@/components/call-live-frame-slots';
 import { PeerSpeechRing } from '@/components/call-camera-off';
-import { Portrait } from '@/components/call-grid';
+import { Portrait } from '@/components/call-portrait';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
 import { CALL_CAPTURE_ROW_CLEARANCE, CallCaptureAlerts, CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
-import { CallStage, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
-import { Glyph, GlyphSvg } from '@/components/glyph';
-import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
+import { CallStage, callGridView, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
+import { GlyphSvg } from '@/components/glyph';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
-import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
+import { once, preloadedView } from '@/lib/calls/preloaded-view';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
 import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
 import { JOURNAL_COLUMN_GUTTER, JOURNAL_COLUMN_WIDTH, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
@@ -27,11 +24,11 @@ import { callPillText, PILL_TEXT_WIDTH_CLASS, pillCompactsAudioStage, pillStaysW
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, panelInThePill, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
-import { speakerColor } from '@/lib/calls/call-speaker-color';
+import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
-import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
+import { callLayout, callStatusKey, type PlainCallKey, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
@@ -44,7 +41,6 @@ import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
-import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered, effectsUsedOf, videoEffectsStore } from '@/lib/calls/video-effects';
 import { useMediaSystemBars } from '@/lib/use-media-system-bars';
 
@@ -100,19 +96,23 @@ const INK_2 = 'var(--color-on-media-3)';
 const BACKDROP = 'linear-gradient(180deg, var(--ios-indigo-950) 0%, var(--color-media-backdrop) 100%)';
 
 /**
- * Un chunk chargé UNE fois — et rechargé après un échec : un préchargement
- * raté (réseau coupé) ne condamne pas le premier toucher qui en a besoin.
+ * LA RÉPONSE À UN APPEL ENTRANT, CHARGÉE À PART (#17650, P17) — l'appelant et
+ * l'appel connecté ne la paient jamais. Sans frontière à elle : la sonnerie se
+ * montre ENTIÈRE, portrait et réponses ensemble (`ActiveCallView`), jamais un
+ * portrait sans ses boutons.
  */
-function once<T>(load: () => Promise<T>): () => Promise<T> {
-  const memo: { pending: Promise<T> | null } = { pending: null };
-  return () => {
-    memo.pending ??= load().catch((error: unknown) => {
-      memo.pending = null;
-      throw error;
-    });
-    return memo.pending;
-  };
-}
+const incomingAnswer = preloadedView(() => import('./call-ring-and-end').then((module) => module.CallIncomingAnswer));
+const CallIncomingAnswer = incomingAnswer.View;
+
+/** Les réponses de l'écran de fin (#17650) : l'appel vivant les précharge quand le navigateur souffle (`PREFETCH`) ; jusque-là, l'écran de fin se montre sans attendre, ses boutons le rejoignent. */
+const endedControls = preloadedView(() => import('./call-ring-and-end').then((module) => module.CallEndedControls));
+const CallEndedControls = endedControls.View;
+
+/** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, la fin. */
+export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), endedControls.load()]);
+
+/** La couleur STABLE d'une personne, remise aux vues chargées à part — `null` : moi sans identifiant, le liseré neutre. */
+const personColor = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
 
 const loadCaptions = once(() => import('./call-captions-panel'));
 const CallCaptionsSlot = lazy(() => loadCaptions().then((module) => ({ default: module.CallCaptionsSlot })));
@@ -190,6 +190,8 @@ const PREFETCH: readonly (() => Promise<unknown>)[] = [
   () => import('./call-quality-detail'),
   () => import('./call-waiting-banner'),
   loadFloatingPill,
+  callGridView.load,
+  endedControls.load,
 ];
 
 const prefetchCallChunks = (): void => PREFETCH.forEach((load) => void load().catch(() => undefined));
@@ -270,8 +272,6 @@ const CallDeclineSheet = lazy(() =>
     default: module.ConnectedCallDeclineSheet,
   })),
 );
-
-const screenGlyph = (name: CallScreenGlyphName, size = 24) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
 const browserCanShare = (): boolean => typeof navigator !== 'undefined' && canShareScreen(navigator.mediaDevices);
 
@@ -405,6 +405,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     if (expanded) prefetchCallChunks();
   }, [expanded]);
 
+  /* Un groupe sonne avant de se connecter : sa grille arrive pendant ce temps (#17650). */
+  useEffect(() => {
+    if (call.isGroup) void callGridView.load().catch(() => undefined);
+  }, [call.isGroup]);
+
   useEffect(() => {
     if (shown !== layer) setLayer(shown);
   }, [shown.kind, shown.kind === 'panel' ? shown.panel : shown.kind === 'mode' ? shown.mode : '']);
@@ -535,19 +540,12 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     />
   );
 
-  const incomingControls = <CallIncomingAnswer call={call} language={language} onAccept={callActions.accept} onDecline={callActions.decline} onDeclineMessage={() => setDeclineOpen(true)} />;
+  const incomingControls = <CallIncomingAnswer call={call} language={language} onAccept={callActions.accept} onDecline={callActions.decline} onDeclineMessage={() => setDeclineOpen(true)} colorOf={personColor} />;
 
-  const openAppSettings = appSettingsOpener();
-  const endedControls = (
-    <div className="flex items-start justify-center gap-10 px-8">
-      <RoundButton label={t('call.close')} caption={t('call.close')} size={60} glyph={screenGlyph('arrowsInSimple', 24)} onPress={callActions.dismiss} />
-      {canRetry(call) ? <RoundButton label={t('call.retry')} caption={t('call.retry')} tone="accept" size={60} glyph={<Glyph name="phone" size={26} />} onPress={callActions.retry} /> : null}
-      {/* UN REFUS DÉFINITIF DU MICRO MÈNE AUX RÉGLAGES DE L'APP (#9033, comme le
-          composeur #8882) : dans la coque Android, il ne se redemande plus. */}
-      {call.phase.kind === 'ended' && call.phase.reason === 'permission' && openAppSettings !== null ? (
-        <RoundButton label={t('call.openSettings')} caption={t('call.openSettings')} size={60} glyph={<GlyphSvg glyph={FLOATING_GLYPHS.gear} size={24} />} onPress={openAppSettings} />
-      ) : null}
-    </div>
+  const endedView = (
+    <Suspense fallback={null}>
+      <CallEndedControls call={call} language={language} />
+    </Suspense>
   );
 
   const overlayVideo = layout === 'video-duo' || layout === 'screen';
@@ -697,7 +695,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
             )}
           </div>
         ) : (
-          <div className="pb-6">{phase === 'incoming' ? incomingControls : endedControls}</div>
+          <div className="pb-6">{phase === 'incoming' ? incomingControls : endedView}</div>
         )}
         {live && chrome.mode === null ? (
           <Suspense fallback={null}>

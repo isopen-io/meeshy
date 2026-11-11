@@ -3,7 +3,9 @@ import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { CameraOffStage } from '@/components/call-camera-off';
-import { CallGrid, Portrait } from '@/components/call-grid';
+import { CallModerationSlot } from '@/components/call-control-slots';
+import type { CallGridKit } from '@/components/call-grid';
+import { Portrait } from '@/components/call-portrait';
 import { StageBleed, StreamVideo } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
@@ -34,7 +36,7 @@ import {
   type TileSize,
 } from '@/lib/calls/call-self-tile';
 import type { ZoomControl } from '@/lib/calls/call-self-controls';
-import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
+import { autoSharer, resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import type { ActiveCall } from '@/lib/calls/call-store';
@@ -43,6 +45,7 @@ import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { cameraMirrored } from '@/lib/media/camera-mirror';
+import { preloadedView } from '@/lib/calls/preloaded-view';
 import { sessionStore } from '@/lib/api/session';
 import { peerSpeakingOnCameraOff } from '@/lib/calls/call-camera-off';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
@@ -88,6 +91,24 @@ export type SelfView = {
 const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
 
 const CallZoomStep = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallZoomStep })));
+
+/**
+ * LA GRILLE D'UN GROUPE, CHARGÉE À PART (#17650) — un duo ne la paie jamais.
+ * L'écran la précharge dès qu'un appel de GROUPE se montre (il sonne avant de
+ * se connecter, et la grille n'est que la disposition d'un appel connecté) ;
+ * arrivée, elle se dessine dans le même rendu que la scène.
+ */
+export const callGridView = preloadedView(() => import('./call-grid').then((module) => module.CallGrid));
+const CallGrid = callGridView.View;
+
+export const CALL_GRID_KIT: CallGridKit = {
+  Portrait,
+  Button: CallButton,
+  ModerationSlot: CallModerationSlot,
+  colorOf: (userId) => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId)),
+  resolveSpotlight,
+  autoSharer,
+};
 
 /** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */
 const ZOOM_STEP_ROOM = 52;
@@ -346,20 +367,23 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   if (layout === 'grid') {
     return (
-      <CallGrid
-        members={orderedMembers(call.members)}
-        remoteStreams={call.remoteStreams}
-        self={{ id: me?.id ?? null, stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
-        choice={choice}
-        onChoose={onChoose}
-        immersive={immersive}
-        onToggleImmersive={onToggleImmersive}
-        moderation={moderation}
-        language={language}
-        chromeVisible={chromeVisible}
-        onRevealChrome={onRevealChrome}
-        selfZoom={self.local === undefined || self.zoom !== 'capsule' ? null : { local: self.local, column: self.column }}
-      />
+      <Suspense fallback={null}>
+        <CallGrid
+          kit={CALL_GRID_KIT}
+          members={orderedMembers(call.members)}
+          remoteStreams={call.remoteStreams}
+          self={{ id: me?.id ?? null, stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
+          choice={choice}
+          onChoose={onChoose}
+          immersive={immersive}
+          onToggleImmersive={onToggleImmersive}
+          moderation={moderation}
+          language={language}
+          chromeVisible={chromeVisible}
+          onRevealChrome={onRevealChrome}
+          selfZoom={self.local === undefined || self.zoom !== 'capsule' ? null : { local: self.local, column: self.column }}
+        />
+      </Suspense>
     );
   }
   if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;

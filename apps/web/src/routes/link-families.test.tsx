@@ -115,7 +115,7 @@ describe('les liens de suivi', () => {
   test('la ligne ouvre le détail, dit son état et ses clics au lecteur d’écran', () => {
     const html = renderToStaticMarkup(<TrackingLinkRow language="fr" link={trackingLink({ isActive: false })} copied={false} onCopy={noop} />);
     expect(html).toContain('href="/links/tracking/rentree"');
-    expect(html).toMatch(/aria-label="Rentrée, Inactif, 1 clic et 1 unique"/);
+    expect(html).toMatch(/aria-label="Rentrée, Inactif, 1 clic, 1 unique et Créé le [^"]+"/);
     expect(html).toContain('aria-label="Copier le lien de suivi"');
   });
 

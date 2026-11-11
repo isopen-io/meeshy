@@ -663,6 +663,7 @@ const fr = {
   'a11y.floating.rung.discover.requests.other': 'Découvrir, {count} demandes reçues',
 
   'links.hub.share.title': 'Partage',
+  'links.hub.share.description': 'Invitez des contacts à rejoindre vos conversations',
   'links.hub.share.create': 'Créer un lien de partage',
   'links.share.back': 'Revenir à Mes liens',
   'links.share.stats.total': 'Liens',
@@ -672,6 +673,7 @@ const fr = {
   'links.share.joined.other': '{count} rejoints',
   'links.share.copy': 'Copier le lien',
   'links.share.empty.title': 'Aucun lien de partage',
+  'links.share.empty.subtitle': 'Créez un lien pour inviter des personnes dans une conversation',
   'links.share.loading': 'Chargement des liens',
   'links.share.allLoaded': 'Tous vos liens sont chargés',
   'links.status.active': 'Actif',

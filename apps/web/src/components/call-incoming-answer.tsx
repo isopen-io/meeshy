@@ -6,7 +6,6 @@ import { RoundButton } from '@/components/call-round-button';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { sessionStore } from '@/lib/api/session';
-import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import type { AcceptOptions } from '@/lib/calls/engine';
 import { browserSelfPreview, callerFirstName, incomingAcceptOptions, incomingConsentKey, startSelfPreview, type IncomingChoice, type SelfPreviewDeps } from '@/lib/calls/incoming-self-preview';
@@ -36,6 +35,8 @@ type Props = {
   readonly onAccept: (options: AcceptOptions) => void;
   readonly onDecline: () => void;
   readonly onDeclineMessage: () => void;
+  /** La couleur STABLE d'une personne, remise par l'écran (#17650 : ce chunk n'importe rien de `call_overlay`) — `null` : moi sans identifiant, le liseré neutre. */
+  readonly colorOf: (userId: string | null) => string;
   readonly selfPreview?: SelfPreviewDeps<MediaStream>;
 };
 
@@ -59,9 +60,9 @@ function useSelfPreview(active: boolean, deps: SelfPreviewDeps<MediaStream>): Se
   return { stream: active ? stream : null, stop };
 }
 
-function SelfTile({ stream, label }: { readonly stream: MediaStream; readonly label: string }) {
+function SelfTile({ stream, label, colorOf }: { readonly stream: MediaStream; readonly label: string; readonly colorOf: Props['colorOf'] }) {
   const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
-  const color = me === null ? SELF_SPEAKER_COLOR : speakerColor(me.id);
+  const color = colorOf(me?.id ?? null);
   return (
     <div aria-hidden="true" className="pointer-events-none absolute bottom-full end-3 z-10 mb-6 h-32 w-[5.75rem] overflow-hidden rounded-card border-2 shadow-lg" style={{ background: 'var(--color-scrim-soft)', borderColor: color }} data-call-incoming-self="">
       <StreamVideo stream={stream} mirrored className="size-full" self />
@@ -108,7 +109,7 @@ function ConsentBar({ name, choice, language, onMic, onCamera }: { readonly name
   );
 }
 
-export function CallIncomingAnswer({ call, language, onAccept, onDecline, onDeclineMessage, selfPreview = browserSelfPreview }: Props) {
+export function CallIncomingAnswer({ call, language, onAccept, onDecline, onDeclineMessage, colorOf, selfPreview = browserSelfPreview }: Props) {
   const video = call.media === 'video';
   const [choice, setChoice] = useState<IncomingChoice>({ micOn: true, cameraOn: video });
   const [answered, setAnswered] = useState(false);
@@ -123,7 +124,7 @@ export function CallIncomingAnswer({ call, language, onAccept, onDecline, onDecl
   return (
     <div className="relative flex flex-col gap-6">
       {/* Hors du flux, au-dessus des réponses : la vignette qui arrive ne déplace rien. */}
-      {video && choice.cameraOn && mine !== null ? <SelfTile stream={mine} label={translateCallControls(language, 'callControls.incoming.me')} /> : null}
+      {video && choice.cameraOn && mine !== null ? <SelfTile stream={mine} label={translateCallControls(language, 'callControls.incoming.me')} colorOf={colorOf} /> : null}
       <div className="flex justify-center">
         <RoundButton label={translate(language, 'callDecline.title')} caption={translate(language, 'callDecline.open')} size={48} glyph={screenGlyph('chatCircleText', 22)} onPress={onDeclineMessage} popup control="decline-message" />
       </div>
