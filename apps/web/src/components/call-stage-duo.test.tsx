@@ -6,7 +6,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { AuthenticatedSession } from '@/lib/api/session';
 import { sessionStore } from '@/lib/api/session';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
-import { DEFAULT_SELF_CORNER, DEFAULT_SELF_TILE, selfTileSize, selfTileStore } from '@/lib/calls/call-self-tile';
+import { DEFAULT_SELF_CORNER, DEFAULT_SELF_TILE, selfTileRestingFactor, selfTileSize, selfTileStore } from '@/lib/calls/call-self-tile';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
@@ -74,7 +74,7 @@ afterAll(async () => {
 
 const fresh = () => selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
 
-function Harness({ active, onSwap, chromeVisible = true }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly chromeVisible?: boolean }) {
+function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = true }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly onReveal?: () => void; readonly chromeVisible?: boolean }) {
   const [full, setFull] = useState(false);
   const self = {
     full,
@@ -85,7 +85,7 @@ function Harness({ active, onSwap, chromeVisible = true }: { readonly active: Ac
     zoom: 'step' as const,
     column: () => null,
   };
-  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} />;
+  return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} />;
 }
 
 /** Espionne `animate` et pose un rectangle qui suit le coin : le FLIP se lit sans moteur de mise en page. */
@@ -125,7 +125,8 @@ const mount = (active: ActiveCall = call(), { chromeVisible = true }: { readonly
   document.body.appendChild(host);
   const root = createRoot(host);
   const swaps = { count: 0 };
-  const render = (visible: boolean) => act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} chromeVisible={visible} />));
+  const reveals = { count: 0 };
+  const render = (visible: boolean) => act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} />));
   render(chromeVisible);
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
   const tile = () => find('[data-call-corner]') as HTMLElement;
@@ -144,7 +145,7 @@ const mount = (active: ActiveCall = call(), { chromeVisible = true }: { readonly
     act(() => root.unmount());
     host.remove();
   };
-  return { find, tile, frame, drag, key, swaps, done, render };
+  return { find, tile, frame, drag, key, swaps, reveals, done, render };
 };
 
 describe('ma vignette se glisse de coin en coin (#8747)', () => {
@@ -297,14 +298,83 @@ describe('la couleur de la vignette du coin (#16635)', () => {
 });
 
 describe('un toucher range tout : ma vignette passe à sa petite taille (#16663)', () => {
-  test('chrome retiré, ma vignette prend la petite taille ; chrome rendu, elle reprend la taille choisie', () => {
+  const screenOf = () => ({ width: window.innerWidth, height: window.innerHeight });
+
+  test('G1.11 — rangée, ma vignette GARDE son cadre et se met à l’échelle de sa petite taille depuis son coin ; rendue, elle reprend son échelle', () => {
+    fresh();
+    const full = screenOf();
+    const view = mount(call(), { chromeVisible: false });
+    expect(view.frame().style.width).toBe(`${selfTileSize(DEFAULT_SELF_TILE, full).width}px`);
+    expect(view.frame().style.height).toBe(`${selfTileSize(DEFAULT_SELF_TILE, full).height}px`);
+    expect(view.frame().getAttribute('data-call-self-tile-compact')).toBe('');
+    expect(Number(view.frame().style.getPropertyValue('scale'))).toBeCloseTo(selfTileRestingFactor(DEFAULT_SELF_TILE, false, full), 4);
+    expect(view.frame().style.transformOrigin).toBe('top right');
+    view.render(true);
+    expect(view.frame().style.width).toBe(`${selfTileSize(DEFAULT_SELF_TILE, full).width}px`);
+    expect(view.frame().getAttribute('data-call-self-tile-compact')).toBeNull();
+    expect(view.frame().style.getPropertyValue('scale')).toBe('1');
+    view.done();
+  });
+
+  test('G1.11 — le liseré et les coins gardent leur taille de petite vignette : ils sont contre-mis à l’échelle', () => {
+    fresh();
+    const full = screenOf();
+    const view = mount(call(), { chromeVisible: false });
+    const factor = selfTileRestingFactor(DEFAULT_SELF_TILE, false, full);
+    expect(parseFloat(view.tile().style.borderWidth) * factor).toBeCloseTo(2, 3);
+    view.done();
+  });
+
+  test('G1.11 — ranger ou rendre ne passe que par la transformation : le cadre ne change jamais de largeur ni de hauteur', () => {
+    fresh();
+    const full = screenOf();
+    const view = mount(call(), { chromeVisible: true });
+    const before = [view.frame().style.width, view.frame().style.height];
+    view.render(false);
+    expect([view.frame().style.width, view.frame().style.height]).toEqual(before);
+    view.done();
+  });
+});
+
+describe('toucher ma vignette contrôles cachés rend d’abord les contrôles (G1.9, loi 15)', () => {
+  test('chrome rangé, le toucher rend les contrôles et ne permute pas les flux', () => {
     fresh();
     const view = mount(call(), { chromeVisible: false });
-    expect(view.frame().style.width).toBe(`${selfTileSize(1, { width: window.innerWidth, height: window.innerHeight }).width}px`);
-    expect(view.frame().getAttribute('data-call-self-tile-compact')).toBe('');
+    act(() => view.tile().click());
+    expect(view.reveals.count).toBe(1);
+    expect(view.swaps.count).toBe(0);
+    view.done();
+  });
+
+  test('chrome visible, le toucher permute les flux comme avant', () => {
+    fresh();
+    const view = mount(call(), { chromeVisible: true });
+    act(() => view.tile().click());
+    expect(view.swaps.count).toBe(1);
+    expect(view.reveals.count).toBe(0);
+    view.done();
+  });
+
+  test('le focus que le pointeur donne à la vignette rend le chrome AVANT le clic : le clic reste un toucher qui rend, il ne permute pas', () => {
+    fresh();
+    const view = mount(call(), { chromeVisible: false });
+    act(() => {
+      view.tile().dispatchEvent(new PointerEvent('pointerdown', { pointerId: 3, clientX: 10, clientY: 10, button: 0, bubbles: true }));
+    });
     view.render(true);
-    expect(view.frame().style.width).toBe(`${selfTileSize(DEFAULT_SELF_TILE, { width: window.innerWidth, height: window.innerHeight }).width}px`);
-    expect(view.frame().getAttribute('data-call-self-tile-compact')).toBeNull();
+    act(() => {
+      view.tile().dispatchEvent(new PointerEvent('pointerup', { pointerId: 3, clientX: 10, clientY: 10, button: 0, bubbles: true }));
+      view.tile().click();
+    });
+    expect(view.swaps.count).toBe(0);
+    view.done();
+  });
+
+  test('au clavier, le focus a déjà rendu le chrome : Entrée permute (VoiceOver garde la permutation directe)', () => {
+    fresh();
+    const view = mount(call(), { chromeVisible: true });
+    act(() => view.tile().click());
+    expect(view.swaps.count).toBe(1);
     view.done();
   });
 });
