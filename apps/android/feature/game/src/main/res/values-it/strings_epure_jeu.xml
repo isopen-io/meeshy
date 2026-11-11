@@ -11,7 +11,6 @@
     <string name="game_rules_2_body">Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei. Un milione di scintille per il livello 100, e una prova ogni dieci livelli: finché non è superata, la tua luce aspetta. Venti stati. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente.</string>
     <string name="game_state_elans_idle">%1$s in questi giorni: ancora nessuno slancio.</string>
     <string name="game2_prestige_meo">Il tuo livello riparte da 1 e le tue scintille da 0; il tuo rango, la tua gloria e le tue Meesh restano.</string>
-    <string name="game2_season_how">Atti e alleanze ti fanno avanzare di qualche passo. Tutto il viaggio è gratuito.</string>
     <string name="game2_season_seal_body">Puramente decorativo: un oggetto da collezione ogni %1$s soste.</string>
     <string name="game2_settings_notifications_body">Al massimo una al giorno, su tutti i tuoi dispositivi.</string>
     <string name="game2_settings_notifications_switch">Notifiche</string>
@@ -28,4 +27,20 @@
     <string name="game_notebook_empty">Ogni segno dei tuoi antenati può diventare qui una foto.</string>
     <string name="game_error_league_pseudonym_invalid">Non valido.</string>
     <string name="game2_league_pseudonym_hint_change">Da 3 a 20 caratteri (lettere, cifre, . - _). Né il tuo nome né il tuo nome utente.</string>
+    <string name="game_concept_level_what">Il tuo livello è il numero al centro del tuo anello: si legge sulla tua luce.</string>
+    <string name="game_concept_flame_use">Una Lucerna la custodisce per un giorno di assenza.</string>
+    <string name="game_concept_missions_use">Apri un atto per vedere a che punto sei. Puoi cambiarne uno al giorno con una Meesh.</string>
+    <string name="game2_prestige_confirm_access">Il tuo torneo e la tua alleanza restano aperti.</string>
+    <string name="game2_league_pseudonym_drawn">Il tuo nome di torneo è estratto a sorte e cambia a ogni viaggio.</string>
+    <string name="game2_league_snapshot">Classifica fissata ogni giorno alle 4; solo la tua riga è in diretta.</string>
+    <string name="game2_season_how">Atti e alleanze ti fanno avanzare di qualche passo.</string>
+    <string name="game2_settings_celebrations_switch">Segni degli antenati</string>
+    <string name="game_guide_step_welcome_what">Il gioco in sette carte</string>
+    <string name="game_guide_more">Cosa significa questo momento?</string>
+    <string name="game_progression_empty">La tua prima medaglia si accende al primo gesto.</string>
+    <string name="game_photo_camera_denied">La fotocamera è negata: consentila nelle impostazioni.</string>
+    <string name="game_photo_camera_unsupported">Questo dispositivo non consente la fotocamera qui.</string>
+    <string name="game_photo_camera_unavailable">La fotocamera non è disponibile.</string>
+    <string name="game_mint_blocked_debt_plain">Un’ombra vela la tua luce: le tue prossime scintille la dissiperanno, poi potrai coniare.</string>
+    <string name="game_sparks_cumul_record">%1$s · %2$s in tutto</string>
 </resources>

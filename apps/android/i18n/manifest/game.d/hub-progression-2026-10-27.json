@@ -270,12 +270,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "progression.empty",
-          "status": "adopted",
-          "androidName": "game_progression_empty"
-        },
-        {
-          "catalog": "app",
           "iosKey": "progression.offline",
           "status": "adopted",
           "androidName": "game_progression_offline"
@@ -325,11 +319,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.level.tip.2",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.level.what",
           "status": "adopted"
         },
         {
@@ -419,11 +408,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.concept.flame.use",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.missions.name",
           "status": "adopted"
         },
@@ -435,11 +419,6 @@
         {
           "catalog": "app",
           "iosKey": "game.concept.missions.what",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.concept.missions.use",
           "status": "adopted"
         },
         {

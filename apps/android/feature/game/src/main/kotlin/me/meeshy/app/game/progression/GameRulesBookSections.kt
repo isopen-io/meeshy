@@ -173,7 +173,6 @@ private fun RulesStepCard(step: OnboardingStep, position: String) {
             Text(position.uppercase(LocalConfiguration.current.locales[0]), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = tokens.textMuted)
             Text(stringResource(copy.what), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = tokens.textPrimary)
             Text(stringResource(copy.means), style = MaterialTheme.typography.bodyMedium, color = tokens.textPrimary)
-            Text(stringResource(copy.next), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = tokens.textPrimary)
         }
     }
 }

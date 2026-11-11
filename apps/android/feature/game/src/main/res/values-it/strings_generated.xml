@@ -168,12 +168,10 @@
     <string name="game2_league_name_rubis">Rubino</string>
     <string name="game2_league_name_saphir">Zaffiro</string>
     <string name="game2_league_pseudonym_current">Giochi con il nome %1$s.</string>
-    <string name="game2_league_pseudonym_drawn">Il tuo nome di torneo è estratto a sorte: né il tuo nome né il tuo nome utente. Cambia a ogni viaggio.</string>
     <string name="game2_league_pseudonym_new">Nuovo nome di torneo</string>
     <string name="game2_league_pseudonym_save">Cambia nome di torneo</string>
     <string name="game2_league_pseudonym_title">Il tuo nome di torneo</string>
     <string name="game2_league_rank_line">Posto %1$s su %2$s</string>
-    <string name="game2_league_snapshot">La classifica degli altri si fissa ogni giorno alle 4: nessuno vede chi sta giocando ora. Solo la tua riga è in diretta.</string>
     <string name="game2_league_tab_friends">Amici</string>
     <string name="game2_league_tab_mine">Il mio torneo</string>
     <string name="game2_league_title">Torneo</string>
@@ -185,7 +183,6 @@
     <string name="game2_league_zone_safe">Salvezza</string>
     <string name="game2_offline_action">Offline: questo gesto riprenderà con la connessione.</string>
     <string name="game2_photo_kicker_prestige">Rinascita</string>
-    <string name="game2_prestige_confirm_access">Buona notizia: il tuo torneo (livello 10) e la tua alleanza (livello 20) restano aperti, perché leggono la tua luce più alta.</string>
     <string name="game2_prestige_confirm_consent">Il tuo consenso al torneo pubblico resta registrato.</string>
     <string name="game2_prestige_confirm_keeps">Ciò che resta: le tue scintille ricevute da sempre, la tua luce più alta, il tuo rango, la tua gloria, le tue Meesh, la tua Fiamma e i tuoi trofei.</string>
     <string name="game2_prestige_confirm_resets">Ciò che riparte: il tuo livello (da 1) e le scintille della tua luce (da 0).</string>
@@ -231,7 +228,6 @@
     <string name="game2_season_to_next">%1$s fino alla sosta successiva</string>
     <string name="game2_season_upcoming">Il viaggio %1$s parte il %2$s.</string>
     <string name="game2_settings_celebrations_body">Le carte di Mee e Meo e i segni degli antenati che compaiono in Progressi. Questa impostazione vale solo per questo dispositivo.</string>
-    <string name="game2_settings_celebrations_switch">Mostra i segni degli antenati</string>
     <string name="game2_settings_celebrations_title">Mee e Meo</string>
     <string name="game2_settings_friends_league_switch">Non partecipare più al Torneo degli amici</string>
     <string name="game2_settings_friends_league_title">Torneo degli amici</string>
@@ -413,7 +409,6 @@
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_name">La Fiamma</string>
     <string name="game_concept_flame_tip_1">Fai almeno un gesto ogni giorno.</string>
-    <string name="game_concept_flame_use" formatted="false">Ogni giorno di Fiamma aggiunge il 2 % alle scintille dei tuoi sogni, fino al 50 %. Una Lucerna la custodisce per un giorno di assenza. Spenta, si riaccende con le Meesh entro 48 ore.</string>
     <string name="game_concept_flame_what">La tua Fiamma è il fuoco che i tuoi antenati ti affidano: cresce ogni giorno in cui fai almeno un gesto, e cambia forma crescendo, dalla Brace al Sole.</string>
     <string name="game_concept_glory_name">Il Rango</string>
     <string name="game_concept_glory_tip_1">Conia una Meesh: ogni conio fa crescere la tua gloria.</string>
@@ -430,7 +425,6 @@
     <string name="game_concept_level_tip_1">Compi il sogno di ogni notte: i suoi atti fanno scaturire molte scintille.</string>
     <string name="game_concept_level_tip_2">Tieni accesa la tua Fiamma: nutre i tuoi sogni.</string>
     <string name="game_concept_level_use">La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova. Coniare una Meesh fissa una parte della tua luce e abbassa il tuo livello, ma il torneo e l’alleanza, una volta aperti, restano aperti.</string>
-    <string name="game_concept_level_what">Il tuo livello è il numero al centro del tuo anello. Si legge sulla tua luce: 10 000 scintille per il livello 10, un milione per il livello 100. Coniare una Meesh ne fissa una parte, quindi abbassa il tuo livello; ciò che hai ricevuto resta ricevuto.</string>
     <string name="game_concept_link_atlas">Vedere i miei timbri</string>
     <string name="game_concept_link_badges">Tutte le medaglie</string>
     <string name="game_concept_link_defis">Tutte le sfide</string>
@@ -444,7 +438,6 @@
     <string name="game_concept_meesh_what">Una Meesh è la tua luce fissata in una moneta numerata, che coni tu stesso. Una su cento è d’oro, una su mille di prisma.</string>
     <string name="game_concept_missions_name">Il Sogno</string>
     <string name="game_concept_missions_tip_1">Comincia dall’atto più facile.</string>
-    <string name="game_concept_missions_use">Apri un atto per vedere a che punto sei. Puoi cambiarne uno al giorno con una Meesh. Compiuti tutti e tre, apri l’Offerta: scintille, gloria, a volte un premio, un frammento di stella o una Lucerna.</string>
     <string name="game_concept_missions_what">Ogni notte, un sogno in tre atti: piccoli obiettivi da compiere in giornata, sempre più ricchi di gloria. L’Offerta lo accompagna.</string>
     <string name="game_concept_photo_offer">Immortala questo momento</string>
     <string name="game_concept_points_name">Scintille</string>
@@ -753,7 +746,6 @@
     <string name="game_guide_moment_treasury_tier_next_top">Tienilo, oppure spendi le tue Meesh.</string>
     <string name="game_guide_moment_treasury_tier_short">Eredità: %1$s.</string>
     <string name="game_guide_moment_treasury_tier_what">La tua Eredità cambia custodia: ecco il tuo %1$s.</string>
-    <string name="game_guide_more">Vedi la spiegazione completa</string>
     <string name="game_guide_next_label">Poi</string>
     <string name="game_guide_photo">Immortala questo momento</string>
     <string name="game_guide_skip">Salta</string>
@@ -782,7 +774,6 @@
     <string name="game_guide_step_rank_what">Il tuo rango non scende mai.</string>
     <string name="game_guide_step_welcome_means">Ogni gesto utile fa guadagnare scintille: scrivere, parlare, pubblicare, reagire, invitare.</string>
     <string name="game_guide_step_welcome_next">Fai il tuo primo gesto: aspetto le tue prime scintille.</string>
-    <string name="game_guide_step_welcome_what">Ciao, sono Mee! Con Meo ti spieghiamo il gioco in sette carte.</string>
     <string name="game_hero_earn_a11y">%1$s, fino a %2$s per gesto</string>
     <string name="game_hero_earn_chip">fino a %1$s</string>
     <string name="game_hero_earn_title">Come guadagnare</string>
@@ -817,7 +808,6 @@
     <string name="game_meeshes_other">%1$s Meeshes</string>
     <string name="game_mint_action">Conia con Mee e Meo</string>
     <string name="game_mint_blocked_debt">Un’ombra vela %1$s scintille della tua luce: le tue prossime scintille la dissiperanno, poi potrai coniare.</string>
-    <string name="game_mint_blocked_debt_plain">Un’ombra vela la tua luce: le tue prossime scintille la dissiperanno. Finché c’è, non si conia.</string>
     <string name="game_mint_blocked_reserve">Questa Meesh aprirebbe la riserva «%1$s»: serve il rango %2$s.</string>
     <string name="game_mint_chip_glory">+%1$s di gloria</string>
     <string name="game_mint_minted_line">Meesh n. %1$s coniata, %2$s.</string>
@@ -911,9 +901,6 @@
     <string name="game_photo_author_label_achievement">Impresa di %1$s</string>
     <string name="game_photo_author_label_mission">Sogno compiuto da %1$s</string>
     <string name="game_photo_author_label_rank">Rango raggiunto da %1$s</string>
-    <string name="game_photo_camera_denied">La fotocamera è negata. Consentila nelle impostazioni del dispositivo, oppure scegli una foto dalla galleria.</string>
-    <string name="game_photo_camera_unavailable">La fotocamera non è disponibile (la sta usando un’altra app?). Scegli una foto dalla galleria, oppure tieni solo la carta.</string>
-    <string name="game_photo_camera_unsupported">Questo dispositivo non consente la fotocamera qui. Scegli una foto dalla galleria, oppure tieni solo la carta.</string>
     <string name="game_photo_card_only">Solo la carta</string>
     <string name="game_photo_close">Chiudi</string>
     <string name="game_photo_failed">Non è stato possibile comporre la foto.</string>
@@ -957,7 +944,6 @@
     <string name="game_photo_title_prestige">Rinascita %1$s</string>
     <string name="game_photo_title_start">La mia partenza su Meeshy</string>
     <string name="game_photo_title_tier">La tua luce come %1$s</string>
-    <string name="game_progression_empty">Nessuna attività per ora. Invia un messaggio, pubblica una storia… la tua prima medaglia si accende al primo gesto.</string>
     <string name="game_progression_load_error">Impossibile caricare i progressi</string>
     <string name="game_progression_loading">Caricamento dei progressi</string>
     <string name="game_progression_offline">Offline — progressi come all’ultima apertura</string>
@@ -1022,7 +1008,6 @@
         <item quantity="many">%1$d scintille</item>
         <item quantity="other">%1$d scintille</item>
     </plurals>
-    <string name="game_sparks_cumul_record">%1$s in quest’Era · %2$s in tutto</string>
     <string name="game_sparks_debt">Un’ombra su %1$s scintille</string>
     <string name="game_sparks_level_label">Livello attuale</string>
     <string name="game_sparks_level_max_label">Al più alto</string>

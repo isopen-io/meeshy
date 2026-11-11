@@ -168,12 +168,10 @@
     <string name="game2_league_name_rubis">Ruby</string>
     <string name="game2_league_name_saphir">Sapphire</string>
     <string name="game2_league_pseudonym_current">You play under the name %1$s.</string>
-    <string name="game2_league_pseudonym_drawn">Your joust name is drawn at random: not your name, not your username. It changes with every journey.</string>
     <string name="game2_league_pseudonym_new">New joust name</string>
     <string name="game2_league_pseudonym_save">Change joust name</string>
     <string name="game2_league_pseudonym_title">Your joust name</string>
     <string name="game2_league_rank_line">Place %1$s of %2$s</string>
-    <string name="game2_league_snapshot">The others’ places are set every day at 4 a.m.: nobody sees who is playing right now. Only your own row is live.</string>
     <string name="game2_league_tab_friends">Friends</string>
     <string name="game2_league_tab_mine">My joust</string>
     <string name="game2_league_title">Joust</string>
@@ -185,7 +183,6 @@
     <string name="game2_league_zone_safe">Safe</string>
     <string name="game2_offline_action">Offline: this action will resume when you are back online.</string>
     <string name="game2_photo_kicker_prestige">Rebirth</string>
-    <string name="game2_prestige_confirm_access">Good news: your joust (level 10) and your alliance (level 20) stay open, because they read your highest light.</string>
     <string name="game2_prestige_confirm_consent">Your consent to the public joust stays on file.</string>
     <string name="game2_prestige_confirm_keeps">What stays: the sparks received since the beginning, your highest light, your rank, your glory, your Meeshes, your Flame and your trophies.</string>
     <string name="game2_prestige_confirm_resets">What starts over: your level (at 1) and the sparks of your light (at 0).</string>
@@ -231,7 +228,6 @@
     <string name="game2_season_to_next">%1$s to the next stop</string>
     <string name="game2_season_upcoming">Journey %1$s sets off on %2$s.</string>
     <string name="game2_settings_celebrations_body">Mee and Meo’s cards and the signs from your ancestors that appear on Progress. This setting applies to this device only.</string>
-    <string name="game2_settings_celebrations_switch">Show the signs from your ancestors</string>
     <string name="game2_settings_celebrations_title">Mee and Meo</string>
     <string name="game2_settings_friends_league_switch">Stop taking part in the Friends’ Joust</string>
     <string name="game2_settings_friends_league_title">Friends’ Joust</string>
@@ -413,7 +409,6 @@
     <string name="game_concept_fact_zone">Zone</string>
     <string name="game_concept_flame_name">The Flame</string>
     <string name="game_concept_flame_tip_1">Do at least one action every day.</string>
-    <string name="game_concept_flame_use" formatted="false">Each day of Flame adds 2 % to the sparks of your dreams, up to 50 %. A Vigil guards it for one day away. Once out, it can be relit with Meeshes for 48 hours.</string>
     <string name="game_concept_flame_what">Your Flame is the fire your ancestors entrust to you: it grows every day you make at least one move, and changes form as it grows, from Ember to Sun.</string>
     <string name="game_concept_glory_name">Rank</string>
     <string name="game_concept_glory_tip_1">Mint a Meesh: every mint makes your glory grow.</string>
@@ -430,7 +425,6 @@
     <string name="game_concept_level_tip_1">Fulfill each night’s dream: its acts make lots of sparks fly.</string>
     <string name="game_concept_level_tip_2">Keep your Flame lit: it feeds your dreams.</string>
     <string name="game_concept_level_use">Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial. Minting a Meesh binds part of your light and lowers your level, but the joust and the alliance, once open, stay open.</string>
-    <string name="game_concept_level_what">Your level is the number at the centre of your ring. It is read from your light: 10,000 sparks for level 10, a million for level 100. Minting a Meesh binds part of it, so it lowers your level; what you received stays received.</string>
     <string name="game_concept_link_atlas">See my stamps</string>
     <string name="game_concept_link_badges">All medals</string>
     <string name="game_concept_link_defis">All challenges</string>
@@ -444,7 +438,6 @@
     <string name="game_concept_meesh_what">A Meesh is your light bound into a numbered coin, which you mint yourself. One in a hundred is gold, one in a thousand is prism.</string>
     <string name="game_concept_missions_name">The Dream</string>
     <string name="game_concept_missions_tip_1">Start with the easiest act.</string>
-    <string name="game_concept_missions_use">Open an act to see where you stand. You can change one a day with a Meesh. Once all three are complete, open the Offering: sparks, glory, sometimes a bonus, a star fragment or a Vigil.</string>
     <string name="game_concept_missions_what">Each night, a dream in three acts: small goals to fulfill during the day, richer and richer in glory. The Offering comes with it.</string>
     <string name="game_concept_photo_offer">Capture this moment</string>
     <string name="game_concept_points_name">Sparks</string>
@@ -753,7 +746,6 @@
     <string name="game_guide_moment_treasury_tier_next_top">Keep it, or spend your Meeshes.</string>
     <string name="game_guide_moment_treasury_tier_short">Legacy: %1$s.</string>
     <string name="game_guide_moment_treasury_tier_what">Your Legacy changes container: here is your %1$s.</string>
-    <string name="game_guide_more">See the full explanation</string>
     <string name="game_guide_next_label">Next</string>
     <string name="game_guide_photo">Capture this moment</string>
     <string name="game_guide_skip">Skip</string>
@@ -782,7 +774,6 @@
     <string name="game_guide_step_rank_what">Your rank never drops.</string>
     <string name="game_guide_step_welcome_means">Every useful action earns sparks: writing, talking, publishing, reacting, inviting.</string>
     <string name="game_guide_step_welcome_next">Make your first move: I’m watching for your first sparks.</string>
-    <string name="game_guide_step_welcome_what">Hi, I am Mee! With Meo, we will explain the game in seven cards.</string>
     <string name="game_hero_earn_a11y">%1$s, up to %2$s per action</string>
     <string name="game_hero_earn_chip">up to %1$s</string>
     <string name="game_hero_earn_title">How to earn</string>
@@ -817,7 +808,6 @@
     <string name="game_meeshes_other">%1$s Meeshes</string>
     <string name="game_mint_action">Mint with Mee and Meo</string>
     <string name="game_mint_blocked_debt">A shadow veils %1$s sparks of your light: your next sparks will clear it, then you can mint.</string>
-    <string name="game_mint_blocked_debt_plain">A shadow veils your light: your next sparks will clear it. While it’s there, no Meesh can be minted.</string>
     <string name="game_mint_blocked_reserve">This Meesh would open the “%1$s” reserve: it takes the %2$s rank.</string>
     <string name="game_mint_chip_glory">+%1$s glory</string>
     <string name="game_mint_minted_line">Meesh no. %1$s minted, %2$s.</string>
@@ -911,9 +901,6 @@
     <string name="game_photo_author_label_achievement">Great deed of %1$s</string>
     <string name="game_photo_author_label_mission">Dream fulfilled by %1$s</string>
     <string name="game_photo_author_label_rank">Rank reached by %1$s</string>
-    <string name="game_photo_camera_denied">The camera is denied. Allow it in your device settings, or pick a photo from your gallery.</string>
-    <string name="game_photo_camera_unavailable">The camera is not available (is another app using it?). Pick a photo from your gallery, or keep the card only.</string>
-    <string name="game_photo_camera_unsupported">This device does not allow the camera here. Pick a photo from your gallery, or keep the card only.</string>
     <string name="game_photo_card_only">Card only</string>
     <string name="game_photo_close">Close</string>
     <string name="game_photo_failed">The photo could not be composed.</string>
@@ -957,7 +944,6 @@
     <string name="game_photo_title_prestige">Rebirth %1$s</string>
     <string name="game_photo_title_start">My start on Meeshy</string>
     <string name="game_photo_title_tier">Your light as %1$s</string>
-    <string name="game_progression_empty">No activity yet. Send a message, post a story… your first medal lights up with your very first move.</string>
     <string name="game_progression_load_error">Couldn’t load your progress</string>
     <string name="game_progression_loading">Loading your progress</string>
     <string name="game_progression_offline">Offline — progress as of the last opening</string>
@@ -1020,7 +1006,6 @@
         <item quantity="one">%1$d spark</item>
         <item quantity="other">%1$d sparks</item>
     </plurals>
-    <string name="game_sparks_cumul_record">%1$s this Age · %2$s in all</string>
     <string name="game_sparks_debt">A shadow on %1$s sparks</string>
     <string name="game_sparks_level_label">Current level</string>
     <string name="game_sparks_level_max_label">At your highest</string>

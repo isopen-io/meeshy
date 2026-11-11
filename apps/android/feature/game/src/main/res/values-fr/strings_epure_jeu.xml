@@ -11,7 +11,6 @@
     <string name="game_rules_2_body">Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle. Un million d’étincelles pour le niveau 100, et une épreuve tous les dix niveaux : tant qu’elle n’est pas réussie, ta lumière attend. Vingt états. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.</string>
     <string name="game_state_elans_idle">%1$s ces jours-ci : pas d’élan pour l’instant.</string>
     <string name="game2_prestige_meo">Ton niveau repart à 1 et tes étincelles à 0 ; ton rang, ta gloire et tes Meeshes restent.</string>
-    <string name="game2_season_how">Les actes et les alliances te font avancer de quelques pas. Tout le voyage est gratuit.</string>
     <string name="game2_season_seal_body">Purement décoratif : un objet à collectionner toutes les %1$s haltes.</string>
     <string name="game2_settings_notifications_body">Une par jour au plus, sur tous tes appareils.</string>
     <string name="game2_settings_notifications_switch">Notifications</string>
@@ -28,4 +27,20 @@
     <string name="game_notebook_empty">Chaque signe de tes aïeux peut devenir une photo ici.</string>
     <string name="game_error_league_pseudonym_invalid">Non valable.</string>
     <string name="game2_league_pseudonym_hint_change">3 à 20 caractères (lettres, chiffres, . - _). Ni ton nom, ni ton identifiant.</string>
+    <string name="game_concept_level_what">Ton niveau est le chiffre au centre de ton anneau : il se lit sur ta lumière.</string>
+    <string name="game_concept_flame_use">Une Veilleuse la garde un jour d’absence.</string>
+    <string name="game_concept_missions_use">Ouvre un acte pour voir où tu en es. Tu peux en changer un par jour avec une Meesh.</string>
+    <string name="game2_prestige_confirm_access">Ta joute et ton alliance restent ouvertes.</string>
+    <string name="game2_league_pseudonym_drawn">Ton nom de joute est tiré au sort et change à chaque voyage.</string>
+    <string name="game2_league_snapshot">Classement figé chaque jour à 4 h ; seule ta ligne est en direct.</string>
+    <string name="game2_season_how">Les actes et les alliances te font avancer de quelques pas.</string>
+    <string name="game2_settings_celebrations_switch">Signes des aïeux</string>
+    <string name="game_guide_step_welcome_what">Le jeu en sept cartes</string>
+    <string name="game_guide_more">Que veut dire ce moment ?</string>
+    <string name="game_progression_empty">Ta première médaille s’allume dès le premier geste.</string>
+    <string name="game_photo_camera_denied">La caméra est refusée : autorise-la dans les réglages.</string>
+    <string name="game_photo_camera_unsupported">Cet appareil ne permet pas la caméra ici.</string>
+    <string name="game_photo_camera_unavailable">La caméra n’est pas disponible.</string>
+    <string name="game_mint_blocked_debt_plain">Une ombre voile ta lumière : tes prochaines étincelles la dissiperont, puis tu pourras frapper.</string>
+    <string name="game_sparks_cumul_record">%1$s · %2$s en tout</string>
 </resources>

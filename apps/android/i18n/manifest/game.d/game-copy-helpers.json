@@ -765,11 +765,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.mint.blocked.debt_plain",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.error.treasury_locked",
           "status": "adopted"
         },

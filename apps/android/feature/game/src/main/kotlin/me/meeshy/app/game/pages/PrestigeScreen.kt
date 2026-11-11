@@ -76,7 +76,7 @@ private fun PrestigeContent(game: GameBlock, gestures: GameGesturesUiState, onPa
         var confirming by rememberSaveable { mutableStateOf(false) }
         GameCard {
             GameNote(stringResource(R.string.game2_prestige_mee), tone = MeeshyTheme.tokens.textPrimary)
-            GameNote(stringResource(R.string.game2_prestige_meo))
+            if (!confirming) GameNote(stringResource(R.string.game2_prestige_meo))
             if (confirming) {
                 PrestigeConfirmation(
                     next = prestige.stars + 1,

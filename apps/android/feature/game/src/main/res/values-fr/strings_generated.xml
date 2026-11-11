@@ -168,12 +168,10 @@
     <string name="game2_league_name_rubis">Rubis</string>
     <string name="game2_league_name_saphir">Saphir</string>
     <string name="game2_league_pseudonym_current">Tu joues sous le nom %1$s.</string>
-    <string name="game2_league_pseudonym_drawn">Ton nom de joute est tiré au sort : ni ton nom, ni ton identifiant. Il change à chaque voyage.</string>
     <string name="game2_league_pseudonym_new">Nouveau nom de joute</string>
     <string name="game2_league_pseudonym_save">Changer de nom de joute</string>
     <string name="game2_league_pseudonym_title">Ton nom de joute</string>
     <string name="game2_league_rank_line">Place %1$s sur %2$s</string>
-    <string name="game2_league_snapshot">Le classement des autres est figé chaque jour à 4 h : personne ne voit qui joue en ce moment. Seule ta ligne est en direct.</string>
     <string name="game2_league_tab_friends">Amis</string>
     <string name="game2_league_tab_mine">Ma joute</string>
     <string name="game2_league_title">Joute</string>
@@ -185,7 +183,6 @@
     <string name="game2_league_zone_safe">Maintien</string>
     <string name="game2_offline_action">Hors ligne : ce geste reprendra avec la connexion.</string>
     <string name="game2_photo_kicker_prestige">Renaissance</string>
-    <string name="game2_prestige_confirm_access">Bonne nouvelle : ta joute (niveau 10) et ton alliance (niveau 20) restent ouvertes, car elles lisent ta plus haute lumière.</string>
     <string name="game2_prestige_confirm_consent">Ton accord pour la joute publique reste enregistré.</string>
     <string name="game2_prestige_confirm_keeps">Ce qui reste : tes étincelles reçues depuis toujours, ta plus haute lumière, ton rang, ta gloire, tes Meeshes, ta Flamme et tes trophées.</string>
     <string name="game2_prestige_confirm_resets">Ce qui repart : ton niveau (à 1) et les étincelles de ta lumière (à 0).</string>
@@ -231,7 +228,6 @@
     <string name="game2_season_to_next">%1$s jusqu’à la halte suivante</string>
     <string name="game2_season_upcoming">Le voyage %1$s part le %2$s.</string>
     <string name="game2_settings_celebrations_body">Les cartes de Mee et Meo et les signes des aïeux qui apparaissent sur Progression. Ce réglage vaut pour cet appareil seulement.</string>
-    <string name="game2_settings_celebrations_switch">Afficher les signes des aïeux</string>
     <string name="game2_settings_celebrations_title">Mee et Meo</string>
     <string name="game2_settings_friends_league_switch">Ne plus participer à la joute des amis</string>
     <string name="game2_settings_friends_league_title">Joute des amis</string>
@@ -413,7 +409,6 @@
     <string name="game_concept_fact_zone">Zone</string>
     <string name="game_concept_flame_name">La Flamme</string>
     <string name="game_concept_flame_tip_1">Fais au moins un geste chaque jour.</string>
-    <string name="game_concept_flame_use" formatted="false">Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Une Veilleuse la garde un jour d’absence. Éteinte, elle se rallume avec des Meeshes pendant 48 h.</string>
     <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant, de la Braise au Soleil.</string>
     <string name="game_concept_glory_name">Le Rang</string>
     <string name="game_concept_glory_tip_1">Frappe une Meesh : chaque frappe fait grandir ta gloire.</string>
@@ -430,7 +425,6 @@
     <string name="game_concept_level_tip_1">Réalise le rêve de chaque nuit : ses actes font jaillir beaucoup d’étincelles.</string>
     <string name="game_concept_level_tip_2">Garde ta Flamme allumée : elle nourrit tes rêves.</string>
     <string name="game_concept_level_use">Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve. Frapper une Meesh fige une part de ta lumière et fait baisser ton niveau, mais la joute et l’alliance, une fois ouvertes, le restent.</string>
-    <string name="game_concept_level_what">Ton niveau est le chiffre au centre de ton anneau. Il se lit sur ta lumière : 10 000 étincelles pour le niveau 10, un million pour le niveau 100. Frapper une Meesh en fige une part, donc fait baisser ton niveau ; ce que tu as reçu reste reçu.</string>
     <string name="game_concept_link_atlas">Voir mes tampons</string>
     <string name="game_concept_link_badges">Toutes les médailles</string>
     <string name="game_concept_link_defis">Tous les défis</string>
@@ -444,7 +438,6 @@
     <string name="game_concept_meesh_what">Une Meesh, c’est ta lumière figée dans une pièce numérotée, que tu frappes toi-même. Une sur cent est d’or, une sur mille de prisme.</string>
     <string name="game_concept_missions_name">Le Rêve</string>
     <string name="game_concept_missions_tip_1">Commence par l’acte le plus facile.</string>
-    <string name="game_concept_missions_use">Ouvre un acte pour voir où tu en es. Tu peux en changer un par jour avec une Meesh. Les trois réalisés, ouvre l’Offrande : des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.</string>
     <string name="game_concept_missions_what">Chaque nuit, un rêve en trois actes : de petits buts à réaliser dans la journée, de plus en plus riches en gloire. L’Offrande l’accompagne.</string>
     <string name="game_concept_photo_offer">Immortaliser ce moment</string>
     <string name="game_concept_points_name">Étincelles</string>
@@ -753,7 +746,6 @@
     <string name="game_guide_moment_treasury_tier_next_top">Garde-le, ou dépense tes Meeshes.</string>
     <string name="game_guide_moment_treasury_tier_short">Héritage : %1$s.</string>
     <string name="game_guide_moment_treasury_tier_what">Ton Héritage change de contenant : voici ton %1$s.</string>
-    <string name="game_guide_more">Voir l’explication complète</string>
     <string name="game_guide_next_label">Ensuite</string>
     <string name="game_guide_photo">Immortaliser ce moment</string>
     <string name="game_guide_skip">Passer</string>
@@ -782,7 +774,6 @@
     <string name="game_guide_step_rank_what">Ton rang ne baisse jamais.</string>
     <string name="game_guide_step_welcome_means">Chaque geste utile rapporte des étincelles : écrire, parler, publier, réagir, inviter.</string>
     <string name="game_guide_step_welcome_next">Fais ton premier geste : je guette tes premières étincelles.</string>
-    <string name="game_guide_step_welcome_what">Salut, c’est Mee ! Avec Meo, on t’explique le jeu en sept cartes.</string>
     <string name="game_hero_earn_a11y">%1$s, jusqu’à %2$s par geste</string>
     <string name="game_hero_earn_chip">jusqu’à %1$s</string>
     <string name="game_hero_earn_title">Comment gagner</string>
@@ -817,7 +808,6 @@
     <string name="game_meeshes_other">%1$s Meeshes</string>
     <string name="game_mint_action">Frapper avec Mee et Meo</string>
     <string name="game_mint_blocked_debt">Une ombre voile %1$s étincelles de ta lumière : tes prochaines étincelles la dissiperont, puis tu pourras frapper.</string>
-    <string name="game_mint_blocked_debt_plain">Une ombre voile ta lumière : tes prochaines étincelles la dissiperont. Tant qu’elle est là, on ne frappe pas.</string>
     <string name="game_mint_blocked_reserve">Cette Meesh ouvrirait la réserve « %1$s » : il faut le rang %2$s.</string>
     <string name="game_mint_chip_glory">+%1$s de gloire</string>
     <string name="game_mint_minted_line">Meesh n° %1$s frappée, %2$s.</string>
@@ -911,9 +901,6 @@
     <string name="game_photo_author_label_achievement">Haut fait de %1$s</string>
     <string name="game_photo_author_label_mission">Rêve réalisé par %1$s</string>
     <string name="game_photo_author_label_rank">Rang atteint par %1$s</string>
-    <string name="game_photo_camera_denied">La caméra est refusée. Autorise-la dans les réglages de ton appareil, ou choisis une photo dans ta galerie.</string>
-    <string name="game_photo_camera_unavailable">La caméra n’est pas disponible (une autre application l’utilise ?). Choisis une photo dans ta galerie, ou garde la carte seule.</string>
-    <string name="game_photo_camera_unsupported">Cet appareil ne permet pas la caméra ici. Choisis une photo dans ta galerie, ou garde la carte seule.</string>
     <string name="game_photo_card_only">Carte seule</string>
     <string name="game_photo_close">Fermer</string>
     <string name="game_photo_failed">La photo n’a pas pu être composée.</string>
@@ -957,7 +944,6 @@
     <string name="game_photo_title_prestige">Renaissance %1$s</string>
     <string name="game_photo_title_start">Mon départ sur Meeshy</string>
     <string name="game_photo_title_tier">Ta lumière en %1$s</string>
-    <string name="game_progression_empty">Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste.</string>
     <string name="game_progression_load_error">Impossible de charger la progression</string>
     <string name="game_progression_loading">Progression en cours de chargement</string>
     <string name="game_progression_offline">Hors ligne — progression telle qu’à la dernière ouverture</string>
@@ -1022,7 +1008,6 @@
         <item quantity="many">%1$d étincelles</item>
         <item quantity="other">%1$d étincelles</item>
     </plurals>
-    <string name="game_sparks_cumul_record">%1$s cet Âge · %2$s en tout</string>
     <string name="game_sparks_debt">Une ombre sur %1$s étincelles</string>
     <string name="game_sparks_level_label">Niveau actuel</string>
     <string name="game_sparks_level_max_label">Au plus haut</string>

@@ -11,7 +11,6 @@
     <string name="game_rules_2_body">شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك. مليون شرارة للمستوى 100، واختبار كل عشرة مستويات: ما لم تجتزه، ينتظر نورك. عشرون حالة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله.</string>
     <string name="game_state_elans_idle">%1$s هذه الأيام: لا زخم بعد.</string>
     <string name="game2_prestige_meo">يعود مستواك إلى 1 وشراراتك إلى 0؛ وتبقى رتبتك ومجدك وعملات Meesh.</string>
-    <string name="game2_season_how">الفصول والتحالفات تُقدّمك بضع خطوات. الرحلة كلها مجانية.</string>
     <string name="game2_season_seal_body">للزينة فقط: قطعة للجمع كل ⁦%1$s⁩ محطات.</string>
     <string name="game2_settings_notifications_body">إشعار واحد في اليوم على الأكثر، على جميع أجهزتك.</string>
     <string name="game2_settings_notifications_switch">الإشعارات</string>
@@ -28,4 +27,20 @@
     <string name="game_notebook_empty">كل علامة من أجدادك يمكن أن تصبح هنا صورة.</string>
     <string name="game_error_league_pseudonym_invalid">غير صالح.</string>
     <string name="game2_league_pseudonym_hint_change">من 3 إلى 20 حرفًا (حروف وأرقام . - _). لا اسمك ولا معرّفك.</string>
+    <string name="game_concept_level_what">مستواك هو الرقم في وسط حلقتك: ويُقرأ من نورك.</string>
+    <string name="game_concept_flame_use">القنديل يحرسه يوم غيابك.</string>
+    <string name="game_concept_missions_use">افتح فصلًا لترى أين وصلت. يمكنك تبديل فصل واحد في اليوم بعملة Meesh.</string>
+    <string name="game2_prestige_confirm_access">مبارزتك وتحالفك يبقيان مفتوحين.</string>
+    <string name="game2_league_pseudonym_drawn">اسمك في المبارزة يُسحب بالقرعة ويتغيّر مع كل رحلة.</string>
+    <string name="game2_league_snapshot">يُجمَّد الترتيب كل يوم عند الساعة 4 صباحًا؛ سطرك وحده مباشر.</string>
+    <string name="game2_season_how">الفصول والتحالفات تُقدّمك بضع خطوات.</string>
+    <string name="game2_settings_celebrations_switch">علامات الأسلاف</string>
+    <string name="game_guide_step_welcome_what">اللعبة في سبع بطاقات</string>
+    <string name="game_guide_more">ماذا تعني هذه اللحظة؟</string>
+    <string name="game_progression_empty">يضيء وسامك الأول مع أول إجراء.</string>
+    <string name="game_photo_camera_denied">تم رفض الكاميرا: اسمح بها من الإعدادات.</string>
+    <string name="game_photo_camera_unsupported">لا يسمح هذا الجهاز بالكاميرا هنا.</string>
+    <string name="game_photo_camera_unavailable">الكاميرا غير متاحة.</string>
+    <string name="game_mint_blocked_debt_plain">ظلّ يحجب نورك: شراراتك القادمة ستبدّده، ثم يمكنك السكّ.</string>
+    <string name="game_sparks_cumul_record">⁦%1$s⁩ · ⁦%2$s⁩ في المجموع</string>
 </resources>

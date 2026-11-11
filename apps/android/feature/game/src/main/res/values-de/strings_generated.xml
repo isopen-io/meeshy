@@ -168,12 +168,10 @@
     <string name="game2_league_name_rubis">Rubin</string>
     <string name="game2_league_name_saphir">Saphir</string>
     <string name="game2_league_pseudonym_current">Du spielst unter dem Namen %1$s.</string>
-    <string name="game2_league_pseudonym_drawn">Dein Turniername wird zugelost: weder dein Name noch dein Benutzername. Er wechselt mit jeder Reise.</string>
     <string name="game2_league_pseudonym_new">Neuer Turniername</string>
     <string name="game2_league_pseudonym_save">Turniernamen ändern</string>
     <string name="game2_league_pseudonym_title">Dein Turniername</string>
     <string name="game2_league_rank_line">Platz %1$s von %2$s</string>
-    <string name="game2_league_snapshot">Die Plätze der anderen werden täglich um 4 Uhr festgehalten: Niemand sieht, wer gerade spielt. Nur deine Zeile ist live.</string>
     <string name="game2_league_tab_friends">Freunde</string>
     <string name="game2_league_tab_mine">Mein Turnier</string>
     <string name="game2_league_title">Turnier</string>
@@ -185,7 +183,6 @@
     <string name="game2_league_zone_safe">Klassenerhalt</string>
     <string name="game2_offline_action">Offline: Diese Aktion wird mit der Verbindung wieder möglich.</string>
     <string name="game2_photo_kicker_prestige">Wiedergeburt</string>
-    <string name="game2_prestige_confirm_access">Gut zu wissen: Dein Turnier (Level 10) und dein Bündnis (Level 20) bleiben offen, denn sie richten sich nach deinem hellsten Licht.</string>
     <string name="game2_prestige_confirm_consent">Deine Zustimmung zum öffentlichen Turnier bleibt gespeichert.</string>
     <string name="game2_prestige_confirm_keeps">Was bleibt: deine seit jeher empfangenen Funken, dein hellstes Licht, dein Rang, dein Ruhm, deine Meeshes, deine Flamme und deine Trophäen.</string>
     <string name="game2_prestige_confirm_resets">Was neu beginnt: dein Level (bei 1) und die Funken deines Lichts (bei 0).</string>
@@ -231,7 +228,6 @@
     <string name="game2_season_to_next">%1$s bis zur nächsten Rast</string>
     <string name="game2_season_upcoming">Reise %1$s bricht am %2$s auf.</string>
     <string name="game2_settings_celebrations_body">Die Karten von Mee und Meo und die Zeichen der Ahnen, die unter Fortschritt erscheinen. Diese Einstellung gilt nur für dieses Gerät.</string>
-    <string name="game2_settings_celebrations_switch">Zeichen der Ahnen anzeigen</string>
     <string name="game2_settings_celebrations_title">Mee und Meo</string>
     <string name="game2_settings_friends_league_switch">Nicht mehr am Turnier der Freunde teilnehmen</string>
     <string name="game2_settings_friends_league_title">Turnier der Freunde</string>
@@ -413,7 +409,6 @@
     <string name="game_concept_fact_zone">Bereich</string>
     <string name="game_concept_flame_name">Die Flamme</string>
     <string name="game_concept_flame_tip_1">Mach jeden Tag mindestens eine Aktion.</string>
-    <string name="game_concept_flame_use" formatted="false">Jeder Tag deiner Flamme schenkt den Funken deiner Träume 2 % mehr, bis zu 50 %. Eine Hüterin hält sie einen Tag deiner Abwesenheit am Brennen. Ist sie erloschen, entzündest du sie 48 Stunden lang mit Meeshes neu.</string>
     <string name="game_concept_flame_what">Deine Flamme ist das Feuer, das dir deine Ahnen anvertrauen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst, und wechselt dabei ihre Form, von der Glut bis zur Sonne.</string>
     <string name="game_concept_glory_name">Der Rang</string>
     <string name="game_concept_glory_tip_1">Präge eine Meesh: Jede Prägung lässt deinen Ruhm wachsen.</string>
@@ -430,7 +425,6 @@
     <string name="game_concept_level_tip_1">Erfülle den Traum jeder Nacht: Seine Akte lassen viele Funken sprühen.</string>
     <string name="game_concept_level_tip_2">Halte deine Flamme am Brennen: Sie nährt deine Träume.</string>
     <string name="game_concept_level_use">Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung. Eine Meesh zu prägen bannt einen Teil deines Lichts und senkt dein Level, aber Turnier und Bündnis bleiben offen, wenn sie einmal offen sind.</string>
-    <string name="game_concept_level_what">Dein Level ist die Zahl in der Mitte deines Rings. Es ergibt sich aus deinem Licht: 10.000 Funken für Level 10, eine Million für Level 100. Eine Meesh zu prägen bannt einen Teil davon und senkt damit dein Level; was du empfangen hast, bleibt empfangen.</string>
     <string name="game_concept_link_atlas">Meine Stempel ansehen</string>
     <string name="game_concept_link_badges">Alle Medaillen</string>
     <string name="game_concept_link_defis">Alle Herausforderungen</string>
@@ -444,7 +438,6 @@
     <string name="game_concept_meesh_what">Eine Meesh ist dein Licht, gebannt in eine nummerierte Münze, die du selbst prägst. Jede hundertste ist aus Gold, jede tausendste aus Prisma.</string>
     <string name="game_concept_missions_name">Der Traum</string>
     <string name="game_concept_missions_tip_1">Beginne mit dem leichtesten Akt.</string>
-    <string name="game_concept_missions_use">Öffne einen Akt, um zu sehen, wo du stehst. Einen pro Tag kannst du mit einer Meesh tauschen. Sind alle drei erfüllt, öffne die Gabe: Funken, Ruhm, manchmal ein Bonus, ein Sternfragment oder eine Hüterin.</string>
     <string name="game_concept_missions_what">Jede Nacht ein Traum in drei Akten: kleine Ziele für den Tag, die immer mehr Ruhm bringen. Die Gabe begleitet ihn.</string>
     <string name="game_concept_photo_offer">Diesen Moment festhalten</string>
     <string name="game_concept_points_name">Funken</string>
@@ -753,7 +746,6 @@
     <string name="game_guide_moment_treasury_tier_next_top">Behalte ihn oder gib deine Meeshes aus.</string>
     <string name="game_guide_moment_treasury_tier_short">Erbe: %1$s.</string>
     <string name="game_guide_moment_treasury_tier_what">Dein Erbe wechselt das Behältnis: %1$s!</string>
-    <string name="game_guide_more">Die ganze Erklärung ansehen</string>
     <string name="game_guide_next_label">Als Nächstes</string>
     <string name="game_guide_photo">Diesen Moment festhalten</string>
     <string name="game_guide_skip">Überspringen</string>
@@ -782,7 +774,6 @@
     <string name="game_guide_step_rank_what">Dein Rang sinkt nie.</string>
     <string name="game_guide_step_welcome_means">Jede nützliche Aktion bringt Funken: schreiben, sprechen, veröffentlichen, reagieren, einladen.</string>
     <string name="game_guide_step_welcome_next">Mach deine erste Aktion: Ich halte Ausschau nach deinen ersten Funken.</string>
-    <string name="game_guide_step_welcome_what">Hallo, ich bin Mee! Mit Meo erklären wir dir das Spiel in sieben Karten.</string>
     <string name="game_hero_earn_a11y">%1$s, bis zu %2$s pro Aktion</string>
     <string name="game_hero_earn_chip">bis zu %1$s</string>
     <string name="game_hero_earn_title">So sammelst du Funken</string>
@@ -817,7 +808,6 @@
     <string name="game_meeshes_other">%1$s Meeshes</string>
     <string name="game_mint_action">Mit Mee und Meo prägen</string>
     <string name="game_mint_blocked_debt">Ein Schatten verhüllt %1$s Funken deines Lichts: Deine nächsten Funken werden ihn vertreiben, dann kannst du prägen.</string>
-    <string name="game_mint_blocked_debt_plain">Ein Schatten verhüllt dein Licht: Deine nächsten Funken werden ihn vertreiben. Solange er da ist, wird nicht geprägt.</string>
     <string name="game_mint_blocked_reserve">Diese Meesh würde die Reserve „%1$s“ öffnen: Dafür brauchst du den Rang %2$s.</string>
     <string name="game_mint_chip_glory">+%1$s Ruhm</string>
     <string name="game_mint_minted_line">Meesh Nr. %1$s geprägt, %2$s.</string>
@@ -911,9 +901,6 @@
     <string name="game_photo_author_label_achievement">Heldentat von %1$s</string>
     <string name="game_photo_author_label_mission">Traum erfüllt von %1$s</string>
     <string name="game_photo_author_label_rank">Rang erreicht von %1$s</string>
-    <string name="game_photo_camera_denied">Die Kamera ist verweigert. Erlaube sie in den Geräteeinstellungen oder wähle ein Foto aus deiner Galerie.</string>
-    <string name="game_photo_camera_unavailable">Die Kamera ist nicht verfügbar (nutzt sie eine andere App?). Wähle ein Foto aus deiner Galerie oder behalte nur die Karte.</string>
-    <string name="game_photo_camera_unsupported">Dieses Gerät erlaubt hier keine Kamera. Wähle ein Foto aus deiner Galerie oder behalte nur die Karte.</string>
     <string name="game_photo_card_only">Nur die Karte</string>
     <string name="game_photo_close">Schließen</string>
     <string name="game_photo_failed">Das Foto konnte nicht erstellt werden.</string>
@@ -957,7 +944,6 @@
     <string name="game_photo_title_prestige">Wiedergeburt %1$s</string>
     <string name="game_photo_title_start">Mein Start auf Meeshy</string>
     <string name="game_photo_title_tier">Dein Licht als %1$s</string>
-    <string name="game_progression_empty">Noch keine Aktivität. Schreib eine Nachricht, poste eine Story … deine erste Medaille leuchtet bei der ersten Aktion auf.</string>
     <string name="game_progression_load_error">Fortschritt konnte nicht geladen werden</string>
     <string name="game_progression_loading">Fortschritt wird geladen</string>
     <string name="game_progression_offline">Offline – Fortschritt wie beim letzten Öffnen</string>
@@ -1020,7 +1006,6 @@
         <item quantity="one">%1$d Funke</item>
         <item quantity="other">%1$d Funken</item>
     </plurals>
-    <string name="game_sparks_cumul_record">%1$s in diesem Zeitalter · %2$s insgesamt</string>
     <string name="game_sparks_debt">Ein Schatten auf %1$s Funken</string>
     <string name="game_sparks_level_label">Aktuelles Level</string>
     <string name="game_sparks_level_max_label">Am hellsten</string>

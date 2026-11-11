@@ -276,11 +276,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.settings.celebrations.switch",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.settings.hidden.title",
           "status": "adopted"
         },
@@ -421,11 +416,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game2.league.pseudonym.drawn",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game2.league.pseudonym.current",
           "status": "adopted"
         },
@@ -477,11 +467,6 @@
         {
           "catalog": "app",
           "iosKey": "game2.league.cup.bronze",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game2.league.snapshot",
           "status": "adopted"
         },
         {

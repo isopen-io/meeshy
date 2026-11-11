@@ -186,12 +186,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.guide.step.welcome.what",
-          "androidName": "game_guide_step_welcome_what",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.guide.step.welcome.means",
           "androidName": "game_guide_step_welcome_means",
           "status": "adopted"

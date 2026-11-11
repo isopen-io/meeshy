@@ -168,12 +168,10 @@
     <string name="game2_league_name_rubis">ياقوت أحمر</string>
     <string name="game2_league_name_saphir">ياقوت أزرق</string>
     <string name="game2_league_pseudonym_current">تلعب باسم %1$s.</string>
-    <string name="game2_league_pseudonym_drawn">اسمك في المبارزة يُسحب بالقرعة: لا اسمك ولا معرّفك. ويتغيّر مع كل رحلة.</string>
     <string name="game2_league_pseudonym_new">اسم مبارزة جديد</string>
     <string name="game2_league_pseudonym_save">تغيير اسمك في المبارزة</string>
     <string name="game2_league_pseudonym_title">اسمك في المبارزة</string>
     <string name="game2_league_rank_line">المركز ⁦%1$s⁩ من ⁦%2$s⁩</string>
-    <string name="game2_league_snapshot">يُجمَّد ترتيب الآخرين كل يوم عند الساعة 4 صباحًا: لا أحد يرى من يلعب الآن. سطرك وحده مباشر.</string>
     <string name="game2_league_tab_friends">الأصدقاء</string>
     <string name="game2_league_tab_mine">مبارزتي</string>
     <string name="game2_league_title">المبارزة</string>
@@ -185,7 +183,6 @@
     <string name="game2_league_zone_safe">بقاء</string>
     <string name="game2_offline_action">غير متصل: سيُستأنف هذا الإجراء عند عودة الاتصال.</string>
     <string name="game2_photo_kicker_prestige">الانبعاث</string>
-    <string name="game2_prestige_confirm_access">خبر سار: مبارزتك (المستوى 10) وتحالفك (المستوى 20) يبقيان مفتوحين، لأنهما يقرآن ذروة نورك.</string>
     <string name="game2_prestige_confirm_consent">موافقتك على المبارزة العامة تبقى مسجّلة.</string>
     <string name="game2_prestige_confirm_keeps">ما يبقى: الشرارات التي تلقّيتها منذ البداية، وذروة نورك، ورتبتك، ومجدك، وعملات Meesh، ولهبك، وكؤوسك.</string>
     <string name="game2_prestige_confirm_resets">ما يعود إلى البداية: مستواك (إلى 1) وشرارات نورك (إلى 0).</string>
@@ -231,7 +228,6 @@
     <string name="game2_season_to_next">%1$s حتى المحطة التالية</string>
     <string name="game2_season_upcoming">تنطلق الرحلة ⁦%1$s⁩ في ⁦%2$s⁩.</string>
     <string name="game2_settings_celebrations_body">بطاقات مي وميو وعلامات الأجداد التي تظهر في التقدّم. يسري هذا الإعداد على هذا الجهاز فقط.</string>
-    <string name="game2_settings_celebrations_switch">عرض علامات الأجداد</string>
     <string name="game2_settings_celebrations_title">مي وميو</string>
     <string name="game2_settings_friends_league_switch">التوقف عن المشاركة في مبارزة الأصدقاء</string>
     <string name="game2_settings_friends_league_title">مبارزة الأصدقاء</string>
@@ -413,7 +409,6 @@
     <string name="game_concept_fact_zone">المنطقة</string>
     <string name="game_concept_flame_name">اللهب</string>
     <string name="game_concept_flame_tip_1">قم بإجراء واحد على الأقل كل يوم.</string>
-    <string name="game_concept_flame_use" formatted="false">كل يوم من اللهب يضيف ⁦2%⁩ إلى شرارات أحلامك، حتى ⁦50%⁩. القنديل يحرسه يوم غيابك. وإن انطفأ، يُعاد إشعاله بعملات Meesh خلال 48 ساعة.</string>
     <string name="game_concept_flame_what">لهبك هو النار التي يأتمنك عليها أجدادك: يكبر في كل يوم تقوم فيه بإجراء واحد على الأقل، ويتغيّر شكله كلما كبر، من الجمرة إلى الشمس.</string>
     <string name="game_concept_glory_name">الرتبة</string>
     <string name="game_concept_glory_tip_1">سُكّ Meesh: كل سكّ يُنمّي مجدك.</string>
@@ -430,7 +425,6 @@
     <string name="game_concept_level_tip_1">حقّق حلم كل ليلة: فصوله تُطلق شرارات كثيرة.</string>
     <string name="game_concept_level_tip_2">أبقِ لهبك مشتعلًا: فهو يغذّي أحلامك.</string>
     <string name="game_concept_level_use">نورك يفتح الحلم عند المستوى 5، والمبارزة عند 10، والتحالف عند 20، والانبعاث عند 100. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا. سكّ Meesh يصوغ جزءًا من نورك ويُخفض مستواك، لكن المبارزة والتحالف يبقيان مفتوحين متى فُتحا.</string>
-    <string name="game_concept_level_what">مستواك هو الرقم في وسط حلقتك. ويُقرأ من نورك: 10٬000 شرارة للمستوى 10، ومليون للمستوى 100. سكّ Meesh يصوغ جزءًا منه، فيُخفض مستواك؛ وما تلقّيته يبقى لك.</string>
     <string name="game_concept_link_atlas">عرض أختامي</string>
     <string name="game_concept_link_badges">كل الأوسمة</string>
     <string name="game_concept_link_defis">كل التحديات</string>
@@ -444,7 +438,6 @@
     <string name="game_concept_meesh_what">‏Meesh هي نورك مصوغًا في قطعة مرقّمة، تسكّها بنفسك. واحدة من كل مئة ذهبية، وواحدة من كل ألف منشورية.</string>
     <string name="game_concept_missions_name">الحلم</string>
     <string name="game_concept_missions_tip_1">ابدأ بأسهل فصل.</string>
-    <string name="game_concept_missions_use">افتح فصلًا لترى أين وصلت. يمكنك تبديل فصل واحد في اليوم بعملة Meesh. وحين تتحقّق الثلاثة، افتح العطيّة: شرارات، ومجد، وأحيانًا علاوة، أو شظية نجم، أو قنديل.</string>
     <string name="game_concept_missions_what">كل ليلة، حلم من ثلاثة فصول: أهداف صغيرة تحقّقها خلال النهار، وكل فصل أغنى بالمجد من سابقه. وترافقه العطيّة.</string>
     <string name="game_concept_photo_offer">خلّد هذه اللحظة</string>
     <string name="game_concept_points_name">الشرارات</string>
@@ -753,7 +746,6 @@
     <string name="game_guide_moment_treasury_tier_next_top">احتفظ به، أو أنفق Meesh.</string>
     <string name="game_guide_moment_treasury_tier_short">الإرث: %1$s.</string>
     <string name="game_guide_moment_treasury_tier_what">إرثك ينتقل إلى وعاء جديد: هذا %1$s خاصّتك.</string>
-    <string name="game_guide_more">عرض الشرح الكامل</string>
     <string name="game_guide_next_label">التالي</string>
     <string name="game_guide_photo">خلّد هذه اللحظة</string>
     <string name="game_guide_skip">تخطَّ</string>
@@ -782,7 +774,6 @@
     <string name="game_guide_step_rank_what">رتبتك لا تنخفض أبدًا.</string>
     <string name="game_guide_step_welcome_means">كل إجراء مفيد يمنحك شرارات: الكتابة، والكلام، والنشر، والتفاعل، والدعوة.</string>
     <string name="game_guide_step_welcome_next">قم بأول إجراء: أنا أترقّب شراراتك الأولى.</string>
-    <string name="game_guide_step_welcome_what">مرحبًا، أنا مي! مع ميو سنشرح لك اللعبة في سبع بطاقات.</string>
     <string name="game_hero_earn_a11y">%1$s، حتى %2$s لكل إجراء</string>
     <string name="game_hero_earn_chip">حتى ⁦%1$s⁩</string>
     <string name="game_hero_earn_title">كيف تكسب الشرارات</string>
@@ -817,7 +808,6 @@
     <string name="game_meeshes_other">%1$s Meesh</string>
     <string name="game_mint_action">اسكّها مع مي وميو</string>
     <string name="game_mint_blocked_debt">ظلّ يحجب %1$s شرارة من نورك: شراراتك القادمة ستبدّده، ثم يمكنك السكّ.</string>
-    <string name="game_mint_blocked_debt_plain">ظلّ يحجب نورك: شراراتك القادمة ستبدّده. وما دام قائمًا، لا سكّ.</string>
     <string name="game_mint_blocked_reserve">ستفتح هذه الـMeesh احتياطي «%1$s»: يلزمك رتبة %2$s.</string>
     <string name="game_mint_chip_glory">⁦+%1$s⁩ من المجد</string>
     <string name="game_mint_minted_line">تم سك Meesh رقم %1$s، %2$s.</string>
@@ -911,9 +901,6 @@
     <string name="game_photo_author_label_achievement">مأثرة ⁨%1$s⁩</string>
     <string name="game_photo_author_label_mission">حلم حقّقه ⁨%1$s⁩</string>
     <string name="game_photo_author_label_rank">رتبة بلغها ⁦%1$s⁩</string>
-    <string name="game_photo_camera_denied">تم رفض الكاميرا. اسمح بها من إعدادات جهازك، أو اختر صورة من المعرض.</string>
-    <string name="game_photo_camera_unavailable">الكاميرا غير متاحة (هل يستخدمها تطبيق آخر؟). اختر صورة من المعرض، أو احتفظ بالبطاقة فقط.</string>
-    <string name="game_photo_camera_unsupported">لا يسمح هذا الجهاز بالكاميرا هنا. اختر صورة من المعرض، أو احتفظ بالبطاقة فقط.</string>
     <string name="game_photo_card_only">البطاقة فقط</string>
     <string name="game_photo_close">إغلاق</string>
     <string name="game_photo_failed">تعذّر إنشاء الصورة.</string>
@@ -957,7 +944,6 @@
     <string name="game_photo_title_prestige">الانبعاث %1$s</string>
     <string name="game_photo_title_start">بدايتي على Meeshy</string>
     <string name="game_photo_title_tier">نورك في %1$s</string>
-    <string name="game_progression_empty">لا نشاط بعد. أرسل رسالة، انشر قصة… يضيء وسامك الأول مع أول إجراء.</string>
     <string name="game_progression_load_error">تعذّر تحميل التقدّم</string>
     <string name="game_progression_loading">جارٍ تحميل التقدّم</string>
     <string name="game_progression_offline">غير متصل — التقدّم كما كان عند آخر فتح</string>
@@ -1028,7 +1014,6 @@
         <item quantity="many">%1$d شرارةً</item>
         <item quantity="other">%1$d شرارة</item>
     </plurals>
-    <string name="game_sparks_cumul_record">⁦%1$s⁩ في هذا العصر · ⁦%2$s⁩ في المجموع</string>
     <string name="game_sparks_debt">ظلّ على ⁦%1$s⁩ شرارة</string>
     <string name="game_sparks_level_label">المستوى الحالي</string>
     <string name="game_sparks_level_max_label">الذروة</string>

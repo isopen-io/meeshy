@@ -11,7 +11,6 @@
     <string name="game_rules_2_body">Juntas, tus chispas forman tu luz, y tu nivel se lee en ella. Un millón de chispas para el nivel 100, y una prueba cada diez niveles: mientras no se supere, tu luz espera. Veinte estados. Los niveles suben hasta 499; el rango Embajador los abre hasta 1000, y el rango Oráculo, sin límite. Cada nivel pide un poco más que el anterior.</string>
     <string name="game_state_elans_idle">%1$s estos días: aún sin impulso.</string>
     <string name="game2_prestige_meo">Tu nivel vuelve a 1 y tus chispas a 0; tu rango, tu gloria y tus Meeshes se quedan.</string>
-    <string name="game2_season_how">Los actos y las alianzas te hacen avanzar unos pasos. Todo el viaje es gratis.</string>
     <string name="game2_season_seal_body">Puramente decorativo: un objeto de colección cada %1$s paradas.</string>
     <string name="game2_settings_notifications_body">Como máximo una al día, en todos tus dispositivos.</string>
     <string name="game2_settings_notifications_switch">Notificaciones</string>
@@ -28,4 +27,20 @@
     <string name="game_notebook_empty">Cada señal de tus ancestros puede convertirse aquí en una foto.</string>
     <string name="game_error_league_pseudonym_invalid">No válido.</string>
     <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres (letras, números, . - _). Ni tu nombre ni tu usuario.</string>
+    <string name="game_concept_level_what">Tu nivel es la cifra del centro de tu anillo: se lee en tu luz.</string>
+    <string name="game_concept_flame_use">Una Vela la guarda un día de ausencia.</string>
+    <string name="game_concept_missions_use">Abre un acto para ver por dónde vas. Puedes cambiar uno al día con una Meesh.</string>
+    <string name="game2_prestige_confirm_access">Tu justa y tu alianza siguen abiertas.</string>
+    <string name="game2_league_pseudonym_drawn">Tu nombre de justa se sortea y cambia con cada viaje.</string>
+    <string name="game2_league_snapshot">Clasificación fijada cada día a las 4 h; solo tu fila está en directo.</string>
+    <string name="game2_season_how">Los actos y las alianzas te hacen avanzar unos pasos.</string>
+    <string name="game2_settings_celebrations_switch">Signos de los ancestros</string>
+    <string name="game_guide_step_welcome_what">El juego en siete cartas</string>
+    <string name="game_guide_more">¿Qué significa este momento?</string>
+    <string name="game_progression_empty">Tu primera medalla se enciende con el primer gesto.</string>
+    <string name="game_photo_camera_denied">La cámara está denegada: permítela en los ajustes.</string>
+    <string name="game_photo_camera_unsupported">Este dispositivo no permite la cámara aquí.</string>
+    <string name="game_photo_camera_unavailable">La cámara no está disponible.</string>
+    <string name="game_mint_blocked_debt_plain">Una sombra cubre tu luz: tus próximas chispas la disiparán, y luego podrás acuñar.</string>
+    <string name="game_sparks_cumul_record">%1$s · %2$s en total</string>
 </resources>

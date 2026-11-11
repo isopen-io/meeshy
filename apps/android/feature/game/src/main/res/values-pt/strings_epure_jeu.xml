@@ -11,7 +11,6 @@
     <string name="game_rules_2_body">Juntas, suas faíscas formam a sua luz, e o seu nível se lê nela. Um milhão de faíscas para o nível 100, e uma prova a cada dez níveis: enquanto ela não for vencida, sua luz espera. Vinte estados. Os níveis vão até 499; o título Embaixador os abre até 1.000, e o título Oráculo, sem limite. Cada nível pede um pouco mais do que o anterior.</string>
     <string name="game_state_elans_idle">%1$s nestes dias: ainda sem impulso.</string>
     <string name="game2_prestige_meo">Seu nível recomeça em 1 e suas faíscas em 0; seu título, sua glória e suas Meeshes ficam.</string>
-    <string name="game2_season_how">Atos e alianças fazem você avançar alguns passos. A viagem inteira é gratuita.</string>
     <string name="game2_season_seal_body">Puramente decorativo: um objeto de coleção a cada %1$s paradas.</string>
     <string name="game2_settings_notifications_body">No máximo uma por dia, em todos os seus aparelhos.</string>
     <string name="game2_settings_notifications_switch">Notificações</string>
@@ -28,4 +27,20 @@
     <string name="game_notebook_empty">Cada sinal dos seus ancestrais pode virar uma foto aqui.</string>
     <string name="game_error_league_pseudonym_invalid">Não válido.</string>
     <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres (letras, números, . - _). Nem seu nome, nem seu usuário.</string>
+    <string name="game_concept_level_what">Seu nível é o número no centro do seu anel: ele se lê na sua luz.</string>
+    <string name="game_concept_flame_use">Uma Lamparina cuida dela num dia de ausência.</string>
+    <string name="game_concept_missions_use">Abra um ato para ver onde você está. Você pode trocar um por dia com uma Meesh.</string>
+    <string name="game2_prestige_confirm_access">Seu torneio e sua aliança continuam abertos.</string>
+    <string name="game2_league_pseudonym_drawn">Seu nome de torneio é sorteado e muda a cada viagem.</string>
+    <string name="game2_league_snapshot">Classificação fixada todo dia às 4 h; só a sua linha é ao vivo.</string>
+    <string name="game2_season_how">Atos e alianças fazem você avançar alguns passos.</string>
+    <string name="game2_settings_celebrations_switch">Sinais dos ancestrais</string>
+    <string name="game_guide_step_welcome_what">O jogo em sete cartas</string>
+    <string name="game_guide_more">O que significa este momento?</string>
+    <string name="game_progression_empty">Sua primeira medalha se acende no primeiro gesto.</string>
+    <string name="game_photo_camera_denied">A câmera foi negada: permita-a nos ajustes.</string>
+    <string name="game_photo_camera_unsupported">Este aparelho não permite a câmera aqui.</string>
+    <string name="game_photo_camera_unavailable">A câmera não está disponível.</string>
+    <string name="game_mint_blocked_debt_plain">Uma sombra cobre sua luz: suas próximas faíscas vão dissipá-la, e então você poderá cunhar.</string>
+    <string name="game_sparks_cumul_record">%1$s · %2$s ao todo</string>
 </resources>

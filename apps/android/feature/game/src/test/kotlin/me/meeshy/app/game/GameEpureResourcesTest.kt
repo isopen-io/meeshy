@@ -57,8 +57,7 @@ class GameEpureResourcesTest {
         "game_mint_offline",
         "game2_door_prestige",
     ) + listOf("level", "points", "meesh", "glory", "flame", "missions", "league", "season", "prestige")
-        .map { "game_rules_concept_${it}_body" } +
-        listOf("welcome", "first_points", "levels", "missions", "flame", "mint", "rank").map { "game_guide_step_${it}_next" }
+        .map { "game_rules_concept_${it}_body" }
 
     private val retiredLanguages = listOf("values", "values-fr", "values-es", "values-pt", "values-de", "values-it", "values-ar")
 

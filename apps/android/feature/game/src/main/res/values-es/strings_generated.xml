@@ -168,12 +168,10 @@
     <string name="game2_league_name_rubis">Rubí</string>
     <string name="game2_league_name_saphir">Zafiro</string>
     <string name="game2_league_pseudonym_current">Juegas con el nombre %1$s.</string>
-    <string name="game2_league_pseudonym_drawn">Tu nombre de justa se sortea: ni tu nombre ni tu usuario. Cambia con cada viaje.</string>
     <string name="game2_league_pseudonym_new">Nuevo nombre de justa</string>
     <string name="game2_league_pseudonym_save">Cambiar de nombre de justa</string>
     <string name="game2_league_pseudonym_title">Tu nombre de justa</string>
     <string name="game2_league_rank_line">Puesto %1$s de %2$s</string>
-    <string name="game2_league_snapshot">La clasificación de los demás se fija cada día a las 4 h: nadie ve quién está jugando ahora. Solo tu fila está en directo.</string>
     <string name="game2_league_tab_friends">Amigos</string>
     <string name="game2_league_tab_mine">Mi justa</string>
     <string name="game2_league_title">Justa</string>
@@ -185,7 +183,6 @@
     <string name="game2_league_zone_safe">Permanencia</string>
     <string name="game2_offline_action">Sin conexión: este gesto se retomará al volver la conexión.</string>
     <string name="game2_photo_kicker_prestige">Renacimiento</string>
-    <string name="game2_prestige_confirm_access">Buena noticia: tu justa (nivel 10) y tu alianza (nivel 20) siguen abiertas, porque leen tu luz más alta.</string>
     <string name="game2_prestige_confirm_consent">Tu consentimiento para la justa pública sigue registrado.</string>
     <string name="game2_prestige_confirm_keeps">Lo que se queda: tus chispas recibidas desde siempre, tu luz más alta, tu rango, tu gloria, tus Meeshes, tu Llama y tus trofeos.</string>
     <string name="game2_prestige_confirm_resets">Lo que vuelve a empezar: tu nivel (a 1) y las chispas de tu luz (a 0).</string>
@@ -231,7 +228,6 @@
     <string name="game2_season_to_next">%1$s hasta la parada siguiente</string>
     <string name="game2_season_upcoming">El viaje %1$s sale el %2$s.</string>
     <string name="game2_settings_celebrations_body">Las tarjetas de Mee y Meo y las señales de los ancestros que aparecen en Progreso. Este ajuste vale solo para este dispositivo.</string>
-    <string name="game2_settings_celebrations_switch">Mostrar las señales de los ancestros</string>
     <string name="game2_settings_celebrations_title">Mee y Meo</string>
     <string name="game2_settings_friends_league_switch">Dejar de participar en la Justa de los amigos</string>
     <string name="game2_settings_friends_league_title">Justa de los amigos</string>
@@ -413,7 +409,6 @@
     <string name="game_concept_fact_zone">Zona</string>
     <string name="game_concept_flame_name">La Llama</string>
     <string name="game_concept_flame_tip_1">Haz al menos un gesto cada día.</string>
-    <string name="game_concept_flame_use" formatted="false">Cada día de Llama añade un 2 % a las chispas de tus sueños, hasta un 50 %. Una Vela la guarda un día de ausencia. Apagada, se vuelve a encender con Meeshes durante 48 h.</string>
     <string name="game_concept_flame_what">Tu Llama es el fuego que tus ancestros te confían: crece cada día en que haces al menos un gesto, y cambia de forma al crecer, de la Brasa al Sol.</string>
     <string name="game_concept_glory_name">El Rango</string>
     <string name="game_concept_glory_tip_1">Acuña una Meesh: cada acuñación hace crecer tu gloria.</string>
@@ -430,7 +425,6 @@
     <string name="game_concept_level_tip_1">Haz realidad el sueño de cada noche: sus actos hacen brotar muchas chispas.</string>
     <string name="game_concept_level_tip_2">Mantén tu Llama encendida: alimenta tus sueños.</string>
     <string name="game_concept_level_use">Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba. Acuñar una Meesh fija una parte de tu luz y baja tu nivel, pero la justa y la alianza, una vez abiertas, siguen abiertas.</string>
-    <string name="game_concept_level_what">Tu nivel es la cifra del centro de tu anillo. Se lee en tu luz: 10.000 chispas para el nivel 10, un millón para el nivel 100. Acuñar una Meesh fija una parte de ella, así que baja tu nivel; lo recibido sigue recibido.</string>
     <string name="game_concept_link_atlas">Ver mis sellos</string>
     <string name="game_concept_link_badges">Todas las medallas</string>
     <string name="game_concept_link_defis">Todos los desafíos</string>
@@ -444,7 +438,6 @@
     <string name="game_concept_meesh_what">Una Meesh es tu luz fijada en una moneda numerada, que acuñas tú. Una de cada cien es de oro, una de cada mil de prisma.</string>
     <string name="game_concept_missions_name">El Sueño</string>
     <string name="game_concept_missions_tip_1">Empieza por el acto más fácil.</string>
-    <string name="game_concept_missions_use">Abre un acto para ver por dónde vas. Puedes cambiar uno al día con una Meesh. Con los tres hechos realidad, abre la Ofrenda: chispas, gloria y, a veces, una prima, un fragmento de estrella o una Vela.</string>
     <string name="game_concept_missions_what">Cada noche, un sueño en tres actos: pequeñas metas que hacer realidad durante el día, cada vez más ricas en gloria. La Ofrenda lo acompaña.</string>
     <string name="game_concept_photo_offer">Inmortalizar este momento</string>
     <string name="game_concept_points_name">Chispas</string>
@@ -753,7 +746,6 @@
     <string name="game_guide_moment_treasury_tier_next_top">Guárdalo, o gasta tus Meeshes.</string>
     <string name="game_guide_moment_treasury_tier_short">Legado: %1$s.</string>
     <string name="game_guide_moment_treasury_tier_what">Tu Legado cambia de recipiente: aquí está tu %1$s.</string>
-    <string name="game_guide_more">Ver la explicación completa</string>
     <string name="game_guide_next_label">Después</string>
     <string name="game_guide_photo">Inmortalizar este momento</string>
     <string name="game_guide_skip">Saltar</string>
@@ -782,7 +774,6 @@
     <string name="game_guide_step_rank_what">Tu rango nunca baja.</string>
     <string name="game_guide_step_welcome_means">Cada gesto útil da chispas: escribir, hablar, publicar, reaccionar, invitar.</string>
     <string name="game_guide_step_welcome_next">Haz tu primer gesto: yo vigilo tus primeras chispas.</string>
-    <string name="game_guide_step_welcome_what">¡Hola, soy Mee! Con Meo te explicamos el juego en siete tarjetas.</string>
     <string name="game_hero_earn_a11y">%1$s, hasta %2$s por gesto</string>
     <string name="game_hero_earn_chip">hasta %1$s</string>
     <string name="game_hero_earn_title">Cómo ganar</string>
@@ -817,7 +808,6 @@
     <string name="game_meeshes_other">%1$s Meeshes</string>
     <string name="game_mint_action">Acuñar con Mee y Meo</string>
     <string name="game_mint_blocked_debt">Una sombra cubre %1$s chispas de tu luz: tus próximas chispas la disiparán, y luego podrás acuñar.</string>
-    <string name="game_mint_blocked_debt_plain">Una sombra cubre tu luz: tus próximas chispas la disiparán. Mientras esté ahí, no se acuña.</string>
     <string name="game_mint_blocked_reserve">Esta Meesh abriría la reserva «%1$s»: hace falta el rango %2$s.</string>
     <string name="game_mint_chip_glory">+%1$s de gloria</string>
     <string name="game_mint_minted_line">Meesh n.º %1$s acuñada, %2$s.</string>
@@ -911,9 +901,6 @@
     <string name="game_photo_author_label_achievement">Hazaña de %1$s</string>
     <string name="game_photo_author_label_mission">Sueño hecho realidad por %1$s</string>
     <string name="game_photo_author_label_rank">Rango alcanzado por %1$s</string>
-    <string name="game_photo_camera_denied">La cámara está denegada. Permítela en los ajustes de tu dispositivo, o elige una foto de tu galería.</string>
-    <string name="game_photo_camera_unavailable">La cámara no está disponible (¿la usa otra aplicación?). Elige una foto de tu galería, o quédate solo con la tarjeta.</string>
-    <string name="game_photo_camera_unsupported">Este dispositivo no permite la cámara aquí. Elige una foto de tu galería, o quédate solo con la tarjeta.</string>
     <string name="game_photo_card_only">Solo la tarjeta</string>
     <string name="game_photo_close">Cerrar</string>
     <string name="game_photo_failed">No se pudo componer la foto.</string>
@@ -957,7 +944,6 @@
     <string name="game_photo_title_prestige">Renacimiento %1$s</string>
     <string name="game_photo_title_start">Mi comienzo en Meeshy</string>
     <string name="game_photo_title_tier">Tu luz en %1$s</string>
-    <string name="game_progression_empty">Aún no hay actividad. Envía un mensaje, publica una historia… tu primera medalla se enciende con el primer gesto.</string>
     <string name="game_progression_load_error">No se pudo cargar el progreso</string>
     <string name="game_progression_loading">Cargando el progreso</string>
     <string name="game_progression_offline">Sin conexión — progreso tal como en la última apertura</string>
@@ -1022,7 +1008,6 @@
         <item quantity="many">%1$d chispas</item>
         <item quantity="other">%1$d chispas</item>
     </plurals>
-    <string name="game_sparks_cumul_record">%1$s en esta Edad · %2$s en total</string>
     <string name="game_sparks_debt">Una sombra sobre %1$s chispas</string>
     <string name="game_sparks_level_label">Nivel actual</string>
     <string name="game_sparks_level_max_label">En lo más alto</string>
