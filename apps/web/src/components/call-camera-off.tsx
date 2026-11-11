@@ -1,6 +1,6 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
-import { Portrait } from '@/components/call-grid';
+import { Portrait } from '@/components/call-portrait';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { cameraOffFadeMs } from '@/lib/calls/call-camera-off';
