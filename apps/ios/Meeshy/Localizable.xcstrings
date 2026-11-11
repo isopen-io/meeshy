@@ -287609,43 +287609,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "من 3 إلى 20 حرفًا."
+            "value": "من 3 إلى 20 حرفًا. لا اسمك ولا معرّفك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "3 bis 20 Zeichen."
+            "value": "3 bis 20 Zeichen. Weder dein Name noch dein Benutzername."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "3 to 20 characters."
+            "value": "3 to 20 characters. Not your name or your username."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "De 3 a 20 caracteres."
+            "value": "De 3 a 20 caracteres. Ni tu nombre ni tu usuario."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "3 à 20 caractères."
+            "value": "3 à 20 caractères. Ni ton nom, ni ton identifiant."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Da 3 a 20 caratteri."
+            "value": "Da 3 a 20 caratteri. Né il tuo nome né il tuo nome utente."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "De 3 a 20 caracteres."
+            "value": "De 3 a 20 caracteres. Nem seu nome, nem seu usuário."
           }
         }
       }

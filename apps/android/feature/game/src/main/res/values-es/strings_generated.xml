@@ -178,7 +178,7 @@
     <string name="game2_league_name_saphir">Zafiro</string>
     <string name="game2_league_pseudonym_current">Juegas con el nombre %1$s.</string>
     <string name="game2_league_pseudonym_drawn">Tu nombre de justa se sortea: ni tu nombre ni tu usuario. Cambia con cada viaje.</string>
-    <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres.</string>
+    <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres. Ni tu nombre ni tu usuario.</string>
     <string name="game2_league_pseudonym_invalid">Nombre no válido: letras, números, punto, guion, guion bajo.</string>
     <string name="game2_league_pseudonym_new">Nuevo nombre de justa</string>
     <string name="game2_league_pseudonym_save">Cambiar de nombre de justa</string>

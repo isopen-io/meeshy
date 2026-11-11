@@ -178,7 +178,7 @@
     <string name="game2_league_name_saphir">ياقوت أزرق</string>
     <string name="game2_league_pseudonym_current">تلعب باسم %1$s.</string>
     <string name="game2_league_pseudonym_drawn">اسمك في المبارزة يُسحب بالقرعة: لا اسمك ولا معرّفك. ويتغيّر مع كل رحلة.</string>
-    <string name="game2_league_pseudonym_hint_change">من 3 إلى 20 حرفًا.</string>
+    <string name="game2_league_pseudonym_hint_change">من 3 إلى 20 حرفًا. لا اسمك ولا معرّفك.</string>
     <string name="game2_league_pseudonym_invalid">اسم غير صالح: حروف وأرقام ونقطة وشرطة وشرطة سفلية.</string>
     <string name="game2_league_pseudonym_new">اسم مبارزة جديد</string>
     <string name="game2_league_pseudonym_save">تغيير اسمك في المبارزة</string>

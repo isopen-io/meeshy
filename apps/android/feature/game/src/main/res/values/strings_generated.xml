@@ -178,7 +178,7 @@
     <string name="game2_league_name_saphir">Sapphire</string>
     <string name="game2_league_pseudonym_current">You play under the name %1$s.</string>
     <string name="game2_league_pseudonym_drawn">Your joust name is drawn at random: not your name, not your username. It changes with every journey.</string>
-    <string name="game2_league_pseudonym_hint_change">3 to 20 characters.</string>
+    <string name="game2_league_pseudonym_hint_change">3 to 20 characters. Not your name or your username.</string>
     <string name="game2_league_pseudonym_invalid">Invalid name: letters, digits, dot, dash, underscore.</string>
     <string name="game2_league_pseudonym_new">New joust name</string>
     <string name="game2_league_pseudonym_save">Change joust name</string>

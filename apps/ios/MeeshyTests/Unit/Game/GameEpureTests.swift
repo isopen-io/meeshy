@@ -57,7 +57,7 @@ final class GameEpureTests: XCTestCase {
         "game2.settings.visibility.body": "Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues.",
         "game2.settings.hidden.body": "Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.",
         "game2.league.pseudonym.invalid": "Nom non valable : lettres, chiffres, point, tiret, tiret bas.",
-        "game2.league.pseudonym.hint_change": "3 à 20 caractères.",
+        "game2.league.pseudonym.hint_change": "3 à 20 caractères. Ni ton nom, ni ton identifiant.",
         "game2.league.friends.body": "Étincelles de la semaine entre amis acceptés. Ouverte à tous, sans consentement.",
         "game2.season.how": "Actes et alliance font avancer le voyage : %@ pas par halte. Tout est gratuit.",
         "game2.season.seal.body": "Objet décoratif, une fois toutes les %@ haltes. Sans effet sur le jeu.",
@@ -106,7 +106,7 @@ final class GameEpureTests: XCTestCase {
         let limit: [String: Int] = [
             "game2.settings.celebrations.switch": 30, "game2.settings.notifications.switch": 30,
             "game2.settings.friends_league.switch": 30, "game2.league.pseudonym.invalid": 80,
-            "game2.league.pseudonym.hint_change": 30, "game2.atlas.empty": 80, "game2.showcase.empty": 120,
+            "game2.league.pseudonym.hint_change": 60, "game2.atlas.empty": 80, "game2.showcase.empty": 120,
             "game.flame_panel.freeze_full": 60, "game.photo.camera.unavailable": 100,
             "game.rules.concepts_intro": 60, "game2.atlas.intro": 100, "game2.league.friends.body": 100,
             "game2.season.how": 100, "game2.season.seal.body": 100, "game2.settings.notifications.body": 100,
@@ -160,11 +160,19 @@ final class GameEpureTests: XCTestCase {
         XCTAssertTrue(copy.contains("GameText.leaguePseudonymInvalid"))
     }
 
-    func test_pseudonymHint_saysAnonymityOnce_inTheHintAndTheDrawnLine() throws {
+    /// Le formulaire de changement de nom vit dans SA carte (« Ton nom de joute »), loin de l'accord où le nom tiré au
+    /// sort est dit : la règle qui protège l'identité dans une joute PUBLIQUE se lit là où l'on tape le nom.
+    func test_pseudonymChangeForm_saysTheNameMustNotBeYours_whereTheNameIsTyped() throws {
         let catalog = try Self.catalog()
-        XCTAssertFalse(try XCTUnwrap(catalog["game2.league.pseudonym.hint_change"]?["fr"]).contains("Ni ton nom"), "l'anonymat est dit dans hint et drawn")
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.league.pseudonym.hint_change"]?["fr"]).contains("Ni ton nom, ni ton identifiant"))
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(catalog["game2.league.pseudonym.hint_change"]?[language], language)
+            XCTAssertNotEqual(value, catalog["game2.league.pseudonym.hint_change"]?["fr"], language)
+            XCTAssertTrue(value.split(separator: ".").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }.count >= 2, "\(language) : la longueur ET l'anonymat")
+        }
+        let views = try code("Meeshy/Features/Game/Wave2/GameLeagueViews.swift")
+        XCTAssertTrue(views.contains("GameNote(text: GameText.leaguePseudonymHintChange)"), "le formulaire de changement lit la règle")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.league.pseudonym.hint"]?["fr"]).contains("Ni ton nom, ni ton identifiant"))
-        XCTAssertTrue(try XCTUnwrap(catalog["game2.league.pseudonym.drawn"]?["fr"]).contains("ni ton nom, ni ton identifiant"))
     }
 
     // MARK: - Le carnet des règles : le glossaire n'est plus une copie des fiches

@@ -178,7 +178,7 @@
     <string name="game2_league_name_saphir">Safira</string>
     <string name="game2_league_pseudonym_current">Você joga com o nome %1$s.</string>
     <string name="game2_league_pseudonym_drawn">Seu nome de torneio é sorteado: nem o seu nome, nem o seu usuário. Ele muda a cada viagem.</string>
-    <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres.</string>
+    <string name="game2_league_pseudonym_hint_change">De 3 a 20 caracteres. Nem seu nome, nem seu usuário.</string>
     <string name="game2_league_pseudonym_invalid">Nome inválido: letras, números, ponto, hífen, sublinhado.</string>
     <string name="game2_league_pseudonym_new">Novo nome de torneio</string>
     <string name="game2_league_pseudonym_save">Mudar de nome de torneio</string>

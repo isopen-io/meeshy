@@ -172,6 +172,6 @@ extension GameText {
 
     static var leaguePseudonymNew: String { String(localized: "game2.league.pseudonym.new", defaultValue: "Nouveau nom de joute", bundle: .main) }
 
-    static var leaguePseudonymHintChange: String { String(localized: "game2.league.pseudonym.hint_change", defaultValue: "3 à 20 caractères.", bundle: .main) }
+    static var leaguePseudonymHintChange: String { String(localized: "game2.league.pseudonym.hint_change", defaultValue: "3 à 20 caractères. Ni ton nom, ni ton identifiant.", bundle: .main) }
 
 }
