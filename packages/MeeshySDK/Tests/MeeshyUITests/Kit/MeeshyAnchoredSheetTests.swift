@@ -180,7 +180,7 @@ struct MeeshyAnchoredSheetTests {
     func chrome_followsTheVectors() throws {
         for row in try Self.rows("law13") {
             let expect = try #require(row["expect"] as? [String: Any])
-            let outside = try #require(MeeshyAnchoredSheetOutside(rawValue: try #require(row["outside"] as? String)))
+            let outside = try #require(MeeshyAnchoredSheetOutside(rawValue: try kitRequired(row["outside"] as? String)))
             let chrome = MeeshyAnchoredSheetChrome.resolve(
                 hasTitle: try #require(row["title"] as? Bool),
                 hasTrailing: try #require(row["trailing"] as? Bool),
