@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 
+import { InfoHintScope } from '@/components/info-hint';
 import { apiDeps } from '@/lib/api/deps';
 import { performCreateTrackingLink, type CreateFamilyLinkOutcome } from '@/lib/api/link-family-actions';
 import { emptyTrackingLinkDraft, normalizedUrl, TRACKING_NAME_MAX, TRACKING_UTM_MAX, trackingLinkUrl, type MyTrackingLink, type TrackingLinkDraft, type TrackingLinkDraftField } from '@/lib/api/my-tracking-links';
@@ -9,7 +10,7 @@ import { translateLinkFamilies, type PlainLinkFamiliesKey } from '@/lib/i18n-lin
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { Field, FormError, SubmitButton } from '@/routes/link-family-form';
-import { LinksGlyph, LinksHeader, LinksOfflineNotice } from '@/routes/links-parts';
+import { LinksGlyph, LinksHeader, LinksOfflineNotice, linksHint } from '@/routes/links-parts';
 import { href, navigate } from '@/routes/route-table';
 import { FormSection } from '@/routes/share-link-form';
 
@@ -82,60 +83,65 @@ export default function MyTrackingLinkNewScreen() {
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <LinksHeader language={language} back="myTrackingLinks" backLabel={translateLinkFamilies(language, 'linkFamilies.tracking.back')} title={translateLinkFamilies(language, 'linkFamilies.tracking.create.title')} />
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
-        <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
-          {online ? null : <LinksOfflineNotice language={language} />}
-          <FormSection id="tracking-section-destination" title={translateLinkFamilies(language, 'linkFamilies.tracking.create.section.destination')} subtitle={null} icon={<LinksGlyph name="arrowSquareOut" size={12} />}>
-            <Field
-              id="tracking-url"
-              type="url"
-              inputMode="url"
-              dir="ltr"
-              required
-              label={translateLinkFamilies(language, 'linkFamilies.tracking.create.url')}
-              placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.url.placeholder')}
-              value={draft.originalUrl}
-              error={errorOf('originalUrl')}
-              onChange={(value) => edit('originalUrl', value)}
+        <InfoHintScope>
+          <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
+            {online ? null : <LinksOfflineNotice language={language} />}
+            <FormSection id="tracking-section-destination" title={translateLinkFamilies(language, 'linkFamilies.tracking.create.section.destination')} subtitle={null} icon={<LinksGlyph name="arrowSquareOut" size={12} />}>
+              <Field
+                id="tracking-url"
+                type="url"
+                inputMode="url"
+                dir="ltr"
+                required
+                label={translateLinkFamilies(language, 'linkFamilies.tracking.create.url')}
+                placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.url.placeholder')}
+                value={draft.originalUrl}
+                error={errorOf('originalUrl')}
+                onChange={(value) => edit('originalUrl', value)}
+              />
+              <Field
+                id="tracking-name"
+                maxLength={TRACKING_NAME_MAX}
+                label={translateLinkFamilies(language, 'linkFamilies.tracking.create.name')}
+                note={linksHint(translateLinkFamilies(language, 'linkFamilies.tracking.create.name.question'), translateLinkFamilies(language, 'linkFamilies.tracking.create.name.note'))}
+                placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.name.placeholder')}
+                value={draft.name}
+                error={errorOf('name')}
+                onChange={(value) => edit('name', value)}
+              />
+            </FormSection>
+            <FormSection
+              id="tracking-section-utm"
+              title={translateLinkFamilies(language, 'linkFamilies.tracking.create.section.utm')}
+              subtitle={null}
+              note={linksHint(translateLinkFamilies(language, 'linkFamilies.tracking.create.section.utm.question'), translateLinkFamilies(language, 'linkFamilies.tracking.create.section.utm.subtitle'))}
+              icon={<LinksGlyph name="tag" size={12} />}
+            >
+              <Field id="tracking-campaign" maxLength={TRACKING_UTM_MAX} label={translateLinkFamilies(language, 'linkFamilies.tracking.campaign')} placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.campaign.placeholder')} value={draft.campaign} onChange={(value) => edit('campaign', value)} />
+              <Field id="tracking-source" maxLength={TRACKING_UTM_MAX} label={translateLinkFamilies(language, 'linkFamilies.tracking.source')} placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.source.placeholder')} value={draft.source} onChange={(value) => edit('source', value)} />
+              <Field id="tracking-medium" maxLength={TRACKING_UTM_MAX} label={translateLinkFamilies(language, 'linkFamilies.tracking.medium')} placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.medium.placeholder')} value={draft.medium} onChange={(value) => edit('medium', value)} />
+            </FormSection>
+            <FormSection id="tracking-section-token" title={null} subtitle={null} icon={<LinksGlyph name="link" size={12} />}>
+              <Field
+                id="tracking-token"
+                dir="ltr"
+                maxLength={50}
+                label={translateLinkFamilies(language, 'linkFamilies.tracking.create.token')}
+                placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.token.placeholder')}
+                value={draft.customToken}
+                {...(preview === null ? {} : { help: preview })}
+                note={linksHint(translateLinkFamilies(language, 'linkFamilies.tracking.create.token.question'), translateLinkFamilies(language, 'linkFamilies.tracking.create.token.help'))}
+                error={errorOf('customToken')}
+                onChange={(value) => edit('customToken', value)}
+              />
+            </FormSection>
+            <FormError text={feedback === null ? null : translateLinkFamilies(language, feedback)} />
+            <SubmitButton
+              label={translateLinkFamilies(language, submitting ? 'linkFamilies.create.inprogress' : 'linkFamilies.tracking.create.button')}
+              disabled={submitting || !online || !ready}
             />
-            <Field
-              id="tracking-name"
-              maxLength={TRACKING_NAME_MAX}
-              label={translateLinkFamilies(language, 'linkFamilies.tracking.create.name')}
-              placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.name.placeholder')}
-              value={draft.name}
-              error={errorOf('name')}
-              onChange={(value) => edit('name', value)}
-            />
-          </FormSection>
-          <FormSection
-            id="tracking-section-utm"
-            title={translateLinkFamilies(language, 'linkFamilies.tracking.create.section.utm')}
-            subtitle={translateLinkFamilies(language, 'linkFamilies.tracking.create.section.utm.subtitle')}
-            icon={<LinksGlyph name="tag" size={12} />}
-          >
-            <Field id="tracking-campaign" maxLength={TRACKING_UTM_MAX} label={translateLinkFamilies(language, 'linkFamilies.tracking.campaign')} placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.campaign.placeholder')} value={draft.campaign} onChange={(value) => edit('campaign', value)} />
-            <Field id="tracking-source" maxLength={TRACKING_UTM_MAX} label={translateLinkFamilies(language, 'linkFamilies.tracking.source')} placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.source.placeholder')} value={draft.source} onChange={(value) => edit('source', value)} />
-            <Field id="tracking-medium" maxLength={TRACKING_UTM_MAX} label={translateLinkFamilies(language, 'linkFamilies.tracking.medium')} placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.medium.placeholder')} value={draft.medium} onChange={(value) => edit('medium', value)} />
-          </FormSection>
-          <FormSection id="tracking-section-token" title={translateLinkFamilies(language, 'linkFamilies.tracking.create.section.token')} subtitle={null} icon={<LinksGlyph name="link" size={12} />}>
-            <Field
-              id="tracking-token"
-              dir="ltr"
-              maxLength={50}
-              label={translateLinkFamilies(language, 'linkFamilies.tracking.create.token')}
-              placeholder={translateLinkFamilies(language, 'linkFamilies.tracking.create.token.placeholder')}
-              value={draft.customToken}
-              help={preview ?? translateLinkFamilies(language, 'linkFamilies.tracking.create.token.help')}
-              error={errorOf('customToken')}
-              onChange={(value) => edit('customToken', value)}
-            />
-          </FormSection>
-          <FormError text={feedback === null ? null : translateLinkFamilies(language, feedback)} />
-          <SubmitButton
-            label={translateLinkFamilies(language, submitting ? 'linkFamilies.create.inprogress' : 'linkFamilies.tracking.create.button')}
-            disabled={submitting || !online || !ready}
-          />
-        </form>
+          </form>
+        </InfoHintScope>
       </main>
     </div>
   );
