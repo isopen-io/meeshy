@@ -17,7 +17,7 @@ import { useOnline } from '@/lib/net/online';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
-import { CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySection, FamilySkeleton, FamilyStats, TRACKING_TINT, SEPARATOR } from '@/routes/link-families-parts';
+import { CopyRowAction, FAMILY_ROW_HEIGHT, FamilyDisc, FamilyEmpty, FamilyRow, FamilySkeleton, FamilyStats, TRACKING_TINT, SEPARATOR } from '@/routes/link-families-parts';
 import { LinksAnnouncement, LinksGlyph, LinksHeader, LinksLoadError, LinksOfflineNotice, statusLabel } from '@/routes/links-parts';
 
 /**
@@ -109,7 +109,6 @@ export default function MyTrackingLinksScreen() {
           family="tracking"
           glyph={<LinksGlyph name="chartLine" size={48} />}
           title={translateLinkFamilies(language, 'linkFamilies.tracking.empty.title')}
-          subtitle={translateLinkFamilies(language, 'linkFamilies.tracking.empty.subtitle')}
           cta={{
             to: 'myTrackingLinkNew',
             label: translateLinkFamilies(language, 'links.hub.tracking.create'),
@@ -184,11 +183,9 @@ export default function MyTrackingLinksScreen() {
               ]}
             />
           )}
-          <FamilySection id="tracking-links-title" title={translate(language, 'root.menu.links')}>
-            <ul data-tracking-links className="grid gap-2">
-              {body}
-            </ul>
-          </FamilySection>
+          <ul data-tracking-links aria-label={translate(language, 'root.menu.links')} className="grid gap-2">
+            {body}
+          </ul>
         </div>
       </div>
       <LinksAnnouncement text={sharing.announcer.text} />
