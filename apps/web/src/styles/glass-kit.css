@@ -173,13 +173,13 @@
 }
 
 .glass-touch:active,
-:active:not(.glass-touch) > .glass-touch,
+:where(button,[role='button'],a[href],label,summary):active:not(.glass-touch) > .glass-touch,
 .glass-touch[data-pressed] {
   transform: scale(var(--glass-press-scale));
 }
 
 .glass-touch:active::after,
-:active:not(.glass-touch) > .glass-touch::after,
+:where(button,[role='button'],a[href],label,summary):active:not(.glass-touch) > .glass-touch::after,
 .glass-touch[data-pressed]::after {
   opacity: var(--glass-glow-press);
 }
@@ -209,7 +209,7 @@
 
   .glass-touch,
   .glass-touch:active,
-  :active:not(.glass-touch) > .glass-touch,
+  :where(button,[role='button'],a[href],label,summary):active:not(.glass-touch) > .glass-touch,
   .glass-touch[data-pressed] {
     transform: none;
     transition: none;

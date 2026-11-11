@@ -308,6 +308,12 @@ describe('la matière de glass.css porte les valeurs de la recette', () => {
     expect(glassCss.match(/:active:not\(\.glass-touch\) > \.glass-touch/g)).toHaveLength(3);
   });
 
+  test('l’appui d’une surface ne presse pas ses voisines : seul un contrôle qui la porte dans son libellé lui transmet son appui', () => {
+    const hosts = [...glassCss.matchAll(/(\S*):active:not\(\.glass-touch\) > \.glass-touch/g)].map((match) => match[1]);
+    expect(hosts).toHaveLength(3);
+    for (const host of hosts) expect(host).toBe(":where(button,[role='button'],a[href],label,summary)");
+  });
+
   test('un contrôle désactivé ne répond pas : ni échelle, ni reflet, ni main', () => {
     const [disabled] = bodiesOf(glassCss, /\.glass-touch:disabled,\s*\.glass-touch\[aria-disabled='true'\] \{/);
     expect(disabled).toContain('cursor: default');
