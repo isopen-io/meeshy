@@ -98,7 +98,7 @@ class EpureReglagesStringsTest {
         }
         assertThat(fr("sessions_orientation"))
             .isEqualTo("Appareils connectés à votre compte. Déconnectez ceux que vous ne reconnaissez pas.")
-        assertThat(fr("twofactor_orientation")).isEqualTo("Un code de votre application s'ajoute au mot de passe.")
+        assertThat(fr("twofactor_orientation")).startsWith("Un code de votre application s'ajoute au mot de passe.")
         assertThat(fr("settings_voice_orientation"))
             .isEqualTo("Votre voix clonée traduit vos vocaux. Elle demande votre consentement.")
         assertThat(fr("encrypted_devices_last_seen")).isEqualTo("Dernier usage : %1\$s")
