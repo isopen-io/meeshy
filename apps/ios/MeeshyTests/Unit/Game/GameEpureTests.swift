@@ -189,9 +189,10 @@ final class GameEpureTests: XCTestCase {
 
     func test_glossary_theFiveEntriesWithoutASheet_keepTheirWholeBody() throws {
         let catalog = try Self.catalog()
+        let minimum = ["chest": 60, "treasury": 100, "steps": 100, "tailwind": 100, "duo": 100]
         for concept in Self.conceptsWithoutASheet {
             let french = try XCTUnwrap(catalog["game.rules.concept.\(concept).body"]?["fr"])
-            XCTAssertGreaterThan(french.count, 100, "\(concept) n'a pas de fiche : le carnet est son seul endroit — « \(french) »")
+            XCTAssertGreaterThan(french.count, minimum[concept] ?? 100, "\(concept) n'a pas de fiche : le carnet est son seul endroit — « \(french) »")
         }
     }
 
@@ -282,5 +283,102 @@ final class GameEpureTests: XCTestCase {
         let flame = try code("Meeshy/Features/Game/GameFlamePanelView.swift")
         XCTAssertTrue(flame.contains("game.flame_panel.freeze_full"))
         XCTAssertFalse(flame.contains("MeeshyInfoNote"))
+    }
+
+    // MARK: - Épure 2/3 : le glossaire ne redit plus l'atlas, la confirmation ni la règle voisine (#17687)
+
+    private static let frenchSecondPass: [String: String] = [
+        "game.rules.2.body": "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : un million d’étincelles pour le niveau 100. Une frappe en fige une part, donc le fait baisser.",
+        "game.rules.concept.steps.body": "Tous les dix niveaux, de 10 à 100 : frapper une Meesh, réaliser des rêves, tenir une Flamme ou atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend.",
+        "game.rules.concept.chest.body": "Elle apparaît quand les trois actes du rêve sont réalisés : un présent voilé.",
+        "game.rules.concept.treasury.body": "Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil.",
+        "game.rules.badges.intro": "Chaque médaille suit UN geste précis : un message vocal, une story, une amitié nouée…",
+        "game.rules.badges.imprint": "Une médaille éteinte reste une empreinte : elle dit ce qu’il manque pour la rallumer.",
+        "game2.prestige.meo": "Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %@ de gloire. Ton rang ne recule jamais.",
+        "game.concept.prestige.use": "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro ; le reste est gardé.",
+        "game2.settings.celebrations.body": "Cartes de Mee et Meo sur Progression. Cet appareil seulement.",
+        "game.concept.meesh.use": "Garde tes Meeshes pour ton héritage, ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage.",
+    ]
+
+    func test_secondPass_shortenedTexts_sayTheirNewFrench() throws {
+        let catalog = try Self.catalog()
+        for (key, expected) in Self.frenchSecondPass {
+            XCTAssertEqual(catalog[key]?["fr"], expected, key)
+        }
+    }
+
+    func test_secondPass_shortenedTexts_areTranslatedInTheSixOtherLanguages_withTheSameMarkers() throws {
+        let catalog = try Self.catalog()
+        for key in Self.frenchSecondPass.keys {
+            let french = try XCTUnwrap(catalog[key]?["fr"], key)
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
+                XCTAssertFalse(value.isEmpty, "\(key) [\(language)]")
+                XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français")
+                XCTAssertEqual(specifiers(in: value), specifiers(in: french), "\(key) [\(language)] : mêmes marqueurs que le français")
+            }
+        }
+    }
+
+    func test_secondPass_whatAnotherBlockAlreadySays_isNotRepeated() throws {
+        let catalog = try Self.catalog()
+        let rule2 = try XCTUnwrap(catalog["game.rules.2.body"]?["fr"])
+        for repeated in ["Vingt états", "jusqu’à 499", "Ambassadeur", "Oracle", "Chaque niveau demande", "une épreuve tous les dix niveaux"] {
+            XCTAssertFalse(rule2.contains(repeated), "la règle 2 redit « \(repeated) » : l'atlas et le glossaire le disent")
+        }
+        XCTAssertTrue(rule2.contains("un million d’étincelles pour le niveau 100"))
+        XCTAssertFalse(try XCTUnwrap(catalog["game.rules.concept.treasury.body"]?["fr"]).contains("L’héritage grandit"), "la règle 6 le dit")
+        XCTAssertFalse(try XCTUnwrap(catalog["game.rules.badges.intro"]?["fr"]).contains("vingt"), "le titre « Les vingt médailles » le dit")
+        XCTAssertFalse(try XCTUnwrap(catalog["game.rules.badges.imprint"]?["fr"]).contains("Frapper une Meesh"), "la règle 4 le dit")
+        XCTAssertFalse(try XCTUnwrap(catalog["game.concept.meesh.use"]?["fr"]).contains("Bourse"), "l'entrée Héritage le dit")
+        XCTAssertFalse(try XCTUnwrap(catalog["game.concept.prestige.use"]?["fr"]).contains("ta joute"), "la confirmation de la Renaissance le dit")
+        XCTAssertFalse(try XCTUnwrap(catalog["game2.settings.celebrations.body"]?["fr"]).contains("aïeux"), "le commutateur « Signes des aïeux » le nomme")
+    }
+
+    func test_secondPass_theTrialAndTheRebirth_keepTheirOneEntry_andTheIrreversibleConfirmationStaysWhole() throws {
+        let catalog = try Self.catalog()
+        XCTAssertTrue(try XCTUnwrap(catalog["game.rules.concept.steps.body"]?["fr"]).contains("Tous les dix niveaux, de 10 à 100"), "l'épreuve n'est dite qu'ici")
+        XCTAssertTrue(try XCTUnwrap(catalog["game.rules.concept.prestige.body"]?["fr"]).contains("facultative, offerte au niveau 100"))
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.prestige.meo"]?["fr"]).contains("%@"), "la gloire offerte garde son nombre")
+        for key in ["game2.prestige.confirm.resets", "game2.prestige.confirm.keeps", "game2.prestige.confirm.access"] {
+            for language in ["fr"] + Self.otherLanguages {
+                XCTAssertFalse((catalog[key]?[language] ?? "").isEmpty, "\(key) [\(language)] : la conséquence irréversible ne se retire pas")
+            }
+        }
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.prestige.confirm.keeps"]?["fr"]).contains("ta Flamme"))
+    }
+
+    func test_secondPass_shortenedTexts_holdTheirBudget() throws {
+        let catalog = try Self.catalog()
+        let limit: [String: Int] = [
+            "game.rules.2.body": 180, "game.rules.concept.steps.body": 170, "game.rules.concept.chest.body": 80,
+            "game.rules.concept.treasury.body": 115, "game.rules.badges.intro": 90, "game.rules.badges.imprint": 90,
+            "game2.prestige.meo": 110, "game.concept.prestige.use": 140, "game2.settings.celebrations.body": 70,
+            "game.concept.meesh.use": 130,
+        ]
+        for (key, maximum) in limit {
+            let value = try XCTUnwrap(catalog[key]?["fr"], key)
+            XCTAssertLessThanOrEqual(value.count, maximum, "\(key) : \(value)")
+        }
+    }
+
+    func test_atlas_noLongerReadsTheSentencesTheScreenSaysElsewhere() throws {
+        let atlas = try code("Meeshy/Features/Game/GameRulesAtlas.swift")
+        XCTAssertFalse(atlas.contains("game.atlas.tiers.prestige"), "la Renaissance est dite par le glossaire et l'écran Renaissance")
+        XCTAssertFalse(atlas.contains("game.atlas.medals.line"), "la section « Les médailles » dit déjà matières et paliers")
+        let detail = try code("Meeshy/Features/Game/GameDetailCopy.swift")
+        XCTAssertFalse(detail.contains("game.rules.badges.sheet"), "la rangée montre seule ce que fait un toucher")
+        let rules = try code("Meeshy/Features/Game/GameRulesView.swift")
+        XCTAssertFalse(rules.contains("rulesSheet"))
+    }
+
+    func test_atlas_medalsFamily_hasNoSubtitle_butKeepsItsTitle_andTheOtherEightKeepTheirLine() {
+        XCTAssertNil(GameAtlasCopy.line(.medals))
+        XCTAssertFalse(GameAtlasCopy.title(.medals).isEmpty)
+        for family in GameRulesAtlas.Family.allCases where family != .medals {
+            let line = GameAtlasCopy.line(family)
+            XCTAssertNotNil(line, "\(family)")
+            XCTAssertFalse(line?.hasPrefix("game.") ?? true, "clé brute : \(family)")
+        }
     }
 }

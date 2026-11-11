@@ -41,14 +41,13 @@ final class GameRulesAtlasTests: XCTestCase {
         XCTAssertEqual(GameRulesAtlas.levelCapBands[2].ranks.first, .oracle)
     }
 
-    func test_theLevelRules_sayEachCap_theOptionalPrestige_andTheFirstPassGlory() {
+    func test_theLevelRules_sayEachCap_andTheFirstPassGlory_thePrestigeIsTheGlossarysToSay() {
         let rules = GameAtlasCopy.levelRules
-        XCTAssertEqual(rules.count, 5)
+        XCTAssertEqual(rules.count, 4)
         XCTAssertTrue(rules[0].contains(GameCopy.formatCount(499)) && rules[0].contains(GameCopy.rankName(.ambassadeur)), rules[0])
         XCTAssertTrue(rules[1].contains(GameCopy.formatCount(1000)) && rules[1].contains(GameCopy.rankName(.orateur)), rules[1])
         XCTAssertTrue(rules[2].contains(GameCopy.rankName(.oracle)), rules[2])
-        XCTAssertTrue(rules[3].contains(GameCopy.formatCount(GameLevels.prestigeLevel)), rules[3])
-        XCTAssertTrue(rules[4].contains(GameCopy.formatCount(GameGlory.points.levelDecade)), rules[4])
+        XCTAssertTrue(rules[3].contains(GameCopy.formatCount(GameGlory.points.levelDecade)), rules[3])
         for rule in rules { XCTAssertFalse(rule.hasPrefix("game."), "clé brute : \(rule)") }
     }
 
