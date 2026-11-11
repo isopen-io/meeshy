@@ -33,6 +33,7 @@ const enStickerPacks = {
   'stickerPacks.submit.instant': 'Instant',
   'stickerPacks.submit.removeItem': 'Remove this sticker',
   'stickerPacks.submit.zoneHint': 'Draw on the image the area where the text will be written. The preview shows the longest text allowed.',
+  'stickerPacks.submit.zoneHint.question': 'How do I place the text?',
   'stickerPacks.submit.zoneDefault': 'Default text',
   'stickerPacks.submit.zoneLength': 'Maximum length',
   'stickerPacks.submit.send': 'Send for review',

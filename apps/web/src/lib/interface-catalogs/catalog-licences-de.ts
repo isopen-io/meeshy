@@ -10,11 +10,12 @@ const de = {
   'licences.source.title': 'Quellcode',
   'licences.source.body': 'Der Quellcode dieser Version, einschließlich der Build-Skripte, ist kostenlos verfügbar.',
   'licences.source.commit': 'Revision {commit}',
-  'licences.source.open': 'Quellcode öffnen',
+  'licences.source.open': 'Öffnen',
   'licences.agpl.title': 'Lizenztext der AGPL-3.0',
   'licences.libsignal.title': 'Hinweise zu libsignal',
   'licences.libsignal.body': 'libsignal und die enthaltenen Bibliotheken, mit dem Text ihrer Lizenzen.',
-  'licences.libsignal.open': 'Von Signal veröffentlichte Hinweise ansehen',
+  'licences.libsignal.question': 'Was deckt dieser Hinweis ab?',
+  'licences.libsignal.open': 'Öffnen',
   'licences.legal_review': 'Diese Angaben werden derzeit rechtlich geprüft.',
 } as const satisfies LicencesCatalog;
 
