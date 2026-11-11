@@ -6,7 +6,7 @@ import type { Attachment } from '@/lib/api/types';
 import { callNoticeTarget } from './call-notice';
 import { formatCallClock, meshPhase, type CallMember } from './call-store';
 import { bindCallTransport, listenCallEvents, resetCallTransportForTests, setCallEngineWake } from './call-transport';
-import { callLayout, callStatusKey, canRetry, gridColumns, orderedMembers, statusPills, visibleStatusPills } from './call-view';
+import { callLayout, callStatusKey, canRetry, gridColumns, membersInArrival, orderedMembers, statusPills, visibleStatusPills } from './call-view';
 
 /**
  * LES RÈGLES DE L'APPEL SANS ÉCRAN (#6382, #8044) — ce que la passerelle
@@ -90,7 +90,8 @@ describe('ce que l’écran dit', () => {
     expect(callLayout({ members: { a: member() }, cameraOn: false, remoteStreams: {}, isGroup: false })).toBe('portrait');
     expect(callLayout({ members: { a: member() }, cameraOn: true, remoteStreams: {}, isGroup: false })).toBe('video-duo');
     expect(callLayout({ members: { a: member(), b: member({ userId: 'b' }) }, cameraOn: false, remoteStreams: {}, isGroup: true })).toBe('grid');
-    expect([1, 2, 4, 5, 9].map(gridColumns)).toEqual([1, 2, 2, 3, 3]);
+    expect([1, 2, 3, 4, 5, 6].map((count) => gridColumns(count, false))).toEqual([1, 1, 2, 2, 2, 2]);
+    expect([1, 2, 3, 4, 5, 6].map((count) => gridColumns(count, true))).toEqual([1, 2, 2, 2, 3, 3]);
   });
 
   test('pastilles : micro coupé, pair muet (en direct seulement), réseau faible', () => {
@@ -111,7 +112,13 @@ describe('ce que l’écran dit', () => {
     expect(statusPills({ micMuted: false, screenSharing: false, members: {}, quality: quality('good', 'suspended'), isGroup: false })).toEqual(['video-suspended']);
   });
 
-  test('la grille range les connectés d’abord, puis par nom', () => {
+  test('la grille suit l’ORDRE D’ARRIVÉE : un pair qui se reconnecte garde sa case, ma vignette reste en dernier (P11.3)', () => {
+    const arrived = { z: member({ userId: 'z', name: 'Zoé' }), b: member({ userId: 'b', name: 'Bob', link: 'reconnecting' }), a: member({ userId: 'a', name: 'Ana' }) };
+    expect(membersInArrival(arrived).map((m) => m.name)).toEqual(['Zoé', 'Bob', 'Ana']);
+    expect(membersInArrival({ ...arrived, b: { ...arrived.b, link: 'connected' } }).map((m) => m.name)).toEqual(['Zoé', 'Bob', 'Ana']);
+  });
+
+  test('la feuille des personnes, l’enregistrement et le duo gardent « les connectés d’abord, par nom »', () => {
     const ordered = orderedMembers({ z: member({ userId: 'z', name: 'Zoé' }), b: member({ userId: 'b', name: 'Bob', link: 'connecting' }), a: member({ userId: 'a', name: 'Ana' }) });
     expect(ordered.map((m) => m.name)).toEqual(['Ana', 'Zoé', 'Bob']);
   });
