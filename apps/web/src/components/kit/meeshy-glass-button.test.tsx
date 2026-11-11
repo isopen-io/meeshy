@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { act, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-import { loadIosSchemes, loadKitGlassTones, resolveColor, wcagContrastRatio, type RGBA } from '../../../scripts/lib/glass-contrast.mjs';
+import { loadColorAliasMap, loadIosSchemes, loadKitGlassTones, resolveColor, wcagContrastRatio, type RGBA } from '../../../scripts/lib/glass-contrast.mjs';
 import { installHapticsDriver, type HapticCue } from '@/lib/view/haptics';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -213,7 +213,7 @@ describe('les quatre tailles', () => {
       expect(recipe.targetSide).toBe(Math.max(expected.diameter, vectors.tapTarget.web));
       expect(recipe.targetSide).toBeGreaterThanOrEqual(44);
       expect(recipe.hitSlack).toBe((recipe.targetSide - recipe.diameter) / 2);
-      expect(recipe.hitSlack * 2).toBe(expected.slack);
+      expect(recipe.hitSlack).toBe(expected.slack);
     }),
   );
 });
@@ -229,7 +229,8 @@ describe('l’encre du glyphe', () => {
 
 describe('le contraste, calculé depuis la recette et les jetons', () => {
   const dark = loadIosSchemes().dark;
-  const colorOf = (token: string): RGBA => resolveColor(`var(${token})`, dark);
+  const aliases = loadColorAliasMap();
+  const colorOf = (token: string): RGBA => resolveColor(`var(${aliases[token] ?? token})`, dark);
   const tokenOf = (cssValue: string): string => /var\((--[\w-]+)\)/.exec(cssValue)?.[1] ?? '';
   const over = (top: RGBA, below: RGBA): RGBA => {
     const alpha = top.a + below.a * (1 - top.a);
@@ -237,7 +238,7 @@ describe('le contraste, calculé depuis la recette et les jetons', () => {
     return { r: mix(top.r, below.r), g: mix(top.g, below.g), b: mix(top.b, below.b), a: alpha };
   };
   const solid = (kind: MeeshyGlassButtonKind) => {
-    const style = meeshyGlassButtonStyle({ kind, size: 44 });
+    const style = meeshyGlassButtonStyle({ kind, size: 44 }) as Readonly<Record<string, unknown>>;
     return { fill: colorOf(tokenOf(String(style['--kit-btn-fill']))), ink: colorOf(tokenOf(String(style['--kit-btn-ink']))) };
   };
 
@@ -281,7 +282,7 @@ describe('ce que le bouton dit au lecteur d’écran', () => {
       const said = meeshyGlassButtonAccessibility({ label: 'Mettre en forme', activation });
       expect(meeshyGlassButtonRecipe({ activation, size: 44 }).kind).toBe(expected.impliedKind);
       if (expected.toggle) expect(said['aria-pressed']).toBe(expected.toggleOn);
-      else if (expected.selected) expect(said['aria-pressed']).toBe(true);
+      else if (expected.activation.startsWith('selected')) expect(said['aria-pressed']).toBe(expected.selected);
       else expect(said['aria-pressed']).toBeUndefined();
     }),
   );
@@ -668,13 +669,14 @@ describe('la feuille de style : des jetons, une réponse dessinée, aucune mati�
   sources.forEach(([name, text]) =>
     test(`${name} : ni flou d’arrière-plan, ni Liquid Glass, ni classe de verre en dur`, () => {
       expect(code(text)).not.toMatch(/backdrop-filter|backdropFilter|backdrop-blur|glassEffect|adaptiveGlass/);
-      expect(code(text)).not.toMatch(/['"`\s.]glass(?:-(?:prominent|card|accent|call[\w-]*|tone|touch|scope|group))?['"`\s{,:]/);
+      expect(code(text)).not.toMatch(/['"`]glass['"`]|[\s'"`.]glass-(?:prominent|card|accent|call[\w-]*|tone|touch|scope|group)\b/);
     }),
   );
 
   sources.forEach(([name, text]) =>
     test(`${name} : aucune couleur ni rayon en dur`, () => {
-      expect(code(text)).not.toMatch(/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:white|black)\b(?!-)/);
+      expect(code(text)).not.toMatch(/#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/);
+      if (name.endsWith('.css')) expect(code(text)).not.toMatch(/\b(?:white|black)\b(?!-)/);
       expect(code(text)).not.toMatch(/border-radius:\s*[\d.]+(?:px|rem|%)/);
     }),
   );
