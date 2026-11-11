@@ -183,7 +183,7 @@ describe('la configuration, en lecture', () => {
     expect(text).toContain('En même temps 50 max');
     expect(text).toMatch(/Expire le 1 oct\. 2026/u);
     expect(text).toContain('Toutes les langues');
-    expect(text).toContain('Envoyer des fichiers non autorisé');
+    expect(text).toContain('Fichiers non autorisé');
     expect(html).toContain('href="#link-edit"');
   });
 

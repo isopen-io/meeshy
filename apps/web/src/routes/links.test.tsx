@@ -161,8 +161,8 @@ describe('la création', () => {
     });
   });
 
-  test('sans conversation choisie, le choix se nomme par sa promesse', () => {
-    expect(renderToStaticMarkup(<ConversationChoice language="fr" conversation={null} invalid={false} onOpen={noop} />)).toContain('Choisir un groupe ou une communauté');
+  test('sans conversation choisie, le choix se nomme d’un verbe', () => {
+    expect(renderToStaticMarkup(<ConversationChoice language="fr" conversation={null} invalid={false} onOpen={noop} />)).toContain('Choisir');
   });
 
   test('le nombre d’utilisations n’apparaît qu’avec la limite, et un refus nomme la borne', () => {

@@ -237,21 +237,16 @@ export function LinkStatTiles({ language, stats }: { readonly language: Interfac
   );
 }
 
-/** Langues des arrivants — la même barre que la page d'accueil (`LanguageShareBar`). */
+/** Langues des arrivants — la même barre que la page d'accueil (`LanguageShareBar`). Absente tant qu'il n'y a aucune arrivée : la rubrique « Arrivés récemment » dit le vide, une seule fois. */
 export function ArrivalLanguages({ language, stats }: { readonly language: InterfaceLanguage; readonly stats: ShareLinkStats }) {
   const shares = languageSharesOf(stats.arrivalsByLanguage);
+  if (shares.length === 0) return null;
   return (
     <section aria-labelledby="link-arrival-languages" data-share-link-languages className={CARD_CLASS} style={SECTION_CARD_STYLE}>
       <h2 id="link-arrival-languages" className={`${TITLE_CLASS} ${SECTION_BRAND_INK}`}>
         {translateInvite(language, 'linkDetail.languages.title')}
       </h2>
-      {shares.length === 0 ? (
-        <p className="text-caption" style={{ color: INK_2 }}>
-          {translateInvite(language, 'linkDetail.languages.empty')}
-        </p>
-      ) : (
-        <LanguageShareBar language={language} shares={shares} compose={(name, percent) => translateInvite(language, 'invite.stats.share', { language: name, percent })} />
-      )}
+      <LanguageShareBar language={language} shares={shares} compose={(name, percent) => translateInvite(language, 'invite.stats.share', { language: name, percent })} />
     </section>
   );
 }

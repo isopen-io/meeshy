@@ -148,7 +148,7 @@ export default function ShareLinkScreen() {
         <div className="mx-auto grid max-w-xl gap-5 pb-24 pt-2 md:max-w-[1200px] md:gap-4 md:pt-7">
           <LinkBreadcrumb language={language} name={title} />
           <h1 className="hidden text-screen font-extrabold tracking-tight md:block" style={{ color: 'var(--color-ios-ink)' }}>
-            {translateInvite(language, 'linkDetail.title')}
+            {title}
           </h1>
           {online ? null : <LinksOfflineNotice language={language} />}
           {link !== undefined ? (

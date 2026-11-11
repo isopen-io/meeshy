@@ -128,6 +128,7 @@ const token = (overrides: Partial<AffiliateToken> = {}): AffiliateToken => ({
   currentUses: 50,
   maxUses: 50,
   referrals: 50,
+  expiresAt: null,
   createdAt: '2026-09-10T09:00:00.000Z',
   ...overrides,
 });

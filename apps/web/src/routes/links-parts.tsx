@@ -3,6 +3,7 @@ import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-a
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { LINKS_GLYPHS, type LinksGlyphName } from '@/components/glyphs-links';
 import { SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import type { InfoHint } from '@/components/info-hint';
 import type { MyShareLink, ShareLinksSummary } from '@/lib/api/links';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -12,7 +13,7 @@ import { Link } from '@/routes/route-table';
 
 /**
  * **LES PIÈCES DE « MES LIENS »** (#6361) — miroir de `LinksHubView.swift`
- * (bannière, cartes de famille), `ShareLinksView.swift` (statistiques, lignes,
+ * (cartes de famille), `ShareLinksView.swift` (statistiques, lignes,
  * état vide) et `ShareLinkDetailView.swift` (carte d'en-tête, barre d'actions,
  * statistiques, informations).
  *
@@ -30,7 +31,7 @@ import { Link } from '@/routes/route-table';
  */
 
 export const LINKS_HEADER_HEIGHT = 64;
-/** Au repos, la bannière du hub commence sous les disques flottants (`floating-corridor.ts`). */
+/** Au repos, la première carte du hub commence sous les disques flottants (`floating-corridor.ts`). */
 export const LINKS_HUB_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - LINKS_HEADER_HEIGHT;
 export const SHARE_LINK_ROW_HEIGHT = 72;
 
@@ -40,7 +41,6 @@ const CARD_STYLE = SECTION_CARD_STYLE;
 const BRAND = 'var(--color-ios-brand)';
 export const SHARE_TINT = 'var(--ios-indigo-500)';
 const NEUTRAL_TINT = 'var(--color-ios-ink-3)';
-const HUB_TINT = 'var(--color-warning)';
 export const SKELETON_TINT = 'color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)';
 export const STRETCHED = "before:absolute before:inset-0 before:rounded-card before:content-['']";
 export const SECTION_TITLE_CLASS = 'ps-1 text-check font-bold uppercase tracking-wide';
@@ -50,6 +50,9 @@ export const BRAND_BUTTON_STYLE = {
   color: 'var(--color-ios-on-brand)',
   outlineColor: BRAND,
 } as const;
+
+/** Le (i) d'un écran de liens : la QUESTION nomme le bouton, la note reste lue repliée. */
+export const linksHint = (question: string, text: string): InfoHint => ({ label: question, text, glyph: LINKS_GLYPHS.info });
 
 export function LinksGlyph({ name, size }: { readonly name: LinksGlyphName; readonly size: number }) {
   return <GlyphSvg glyph={LINKS_GLYPHS[name]} size={size} {...(name === 'caretRight' ? { className: 'rtl:-scale-x-100' } : {})} />;
@@ -133,25 +136,6 @@ export function LinksHeader({
         </Link>
       )}
     </header>
-  );
-}
-
-/** Miroir `LinksHubView.headerBanner`. */
-export function LinksBanner({ language }: { readonly language: InterfaceLanguage }) {
-  return (
-    <div data-links-banner className="flex items-center gap-3 rounded-card p-4" style={{ ...CARD_STYLE, backgroundImage: `linear-gradient(135deg, ${tinted(HUB_TINT, 14)}, transparent 70%)` }}>
-      <span aria-hidden="true" className="shrink-0" style={{ color: HUB_TINT }}>
-        <LinksGlyph name="link" size={30} />
-      </span>
-      <span className="grid min-w-0 gap-0.5">
-        <span className="text-body font-bold" style={{ color: INK }}>
-          {translate(language, 'links.hub.banner.title')}
-        </span>
-        <span className="text-caption" style={{ color: INK_2 }}>
-          {translate(language, 'links.hub.banner.subtitle')}
-        </span>
-      </span>
-    </div>
   );
 }
 
@@ -281,7 +265,7 @@ export function ShareLinksSkeleton({ language, rows = 3 }: { readonly language: 
   );
 }
 
-/** Miroir `ShareLinksView.emptyState` — nommer, promettre, offrir le geste. */
+/** Miroir `ShareLinksView.emptyState` — nommer, offrir le geste : une ligne et une action (épure, règle 4). */
 export function ShareLinksEmpty({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <div data-share-links-empty className="grid justify-items-center gap-4 px-6 py-10 text-center">
@@ -290,9 +274,6 @@ export function ShareLinksEmpty({ language }: { readonly language: InterfaceLang
       </span>
       <p className="text-thread font-bold" style={{ color: INK }}>
         {translate(language, 'links.share.empty.title')}
-      </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
-        {translate(language, 'links.share.empty.subtitle')}
       </p>
       <Link
         to="shareLinkNew"

@@ -6,13 +6,14 @@ import type { GlyphName } from '@/components/glyphs';
 import type { LinksGlyphName } from '@/components/glyphs-links';
 import { RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import { IosSwitch } from '@/components/ios-switch';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { Sheet, SheetEmpty } from '@/components/sheet';
 import { MAX_USES_CEILING, SHARE_LINK_EXPIRATIONS, type ShareLinkDraft, type ShareLinkExpiration } from '@/lib/api/links';
 import { translate } from '@/lib/i18n-catalog';
 import { translateLinkFamilies, type LinkFamiliesCatalogKey } from '@/lib/i18n-link-families-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
-import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT } from '@/routes/links-parts';
+import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT, linksHint } from '@/routes/links-parts';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 /**
@@ -47,20 +48,22 @@ export type RuleKey = Extract<
 >;
 type RuleTextKey = Extract<LinkFamiliesCatalogKey, `links.create.access.${string}` | `links.create.permission.${string}`>;
 type RuleGlyph = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'links'; readonly name: LinksGlyphName };
-type RuleSpec = { readonly key: RuleKey; readonly label: RuleTextKey; readonly caption: RuleTextKey; readonly glyph: RuleGlyph; readonly tint: string };
+/** `note` : le (i) d'une rangée dont le nom ne dit pas tout — sa QUESTION nomme le bouton, son texte reste lu replié. */
+type RuleNote = { readonly question: RuleTextKey; readonly text: RuleTextKey };
+type RuleSpec = { readonly key: RuleKey; readonly label: RuleTextKey; readonly note: RuleNote | null; readonly glyph: RuleGlyph; readonly tint: string };
 
 export const ACCESS_RULES: readonly RuleSpec[] = [
-  { key: 'requireAccount', label: 'links.create.access.account', caption: 'links.create.access.account.caption', glyph: { set: 'links', name: 'userCheck' }, tint: SHARE_TINT },
-  { key: 'requireNickname', label: 'links.create.access.nickname', caption: 'links.create.access.nickname.caption', glyph: { set: 'socle', name: 'user' }, tint: 'var(--ios-indigo-600)' },
-  { key: 'requireEmail', label: 'links.create.access.email', caption: 'links.create.access.email.caption', glyph: { set: 'links', name: 'envelopeSimple' }, tint: 'var(--color-warning)' },
-  { key: 'requireBirthday', label: 'links.create.access.birthday', caption: 'links.create.access.birthday.caption', glyph: { set: 'links', name: 'calendarBlank' }, tint: 'var(--color-warning)' },
+  { key: 'requireAccount', label: 'links.create.access.account', note: null, glyph: { set: 'links', name: 'userCheck' }, tint: SHARE_TINT },
+  { key: 'requireNickname', label: 'links.create.access.nickname', note: null, glyph: { set: 'socle', name: 'user' }, tint: 'var(--ios-indigo-600)' },
+  { key: 'requireEmail', label: 'links.create.access.email', note: null, glyph: { set: 'links', name: 'envelopeSimple' }, tint: 'var(--color-warning)' },
+  { key: 'requireBirthday', label: 'links.create.access.birthday', note: { question: 'links.create.access.birthday.question', text: 'links.create.access.birthday.caption' }, glyph: { set: 'links', name: 'calendarBlank' }, tint: 'var(--color-warning)' },
 ];
 
 export const PERMISSION_RULES: readonly RuleSpec[] = [
-  { key: 'allowAnonymousMessages', label: 'links.create.permission.messages', caption: 'links.create.permission.messages.caption', glyph: { set: 'links', name: 'chatCircle' }, tint: SHARE_TINT },
-  { key: 'allowAnonymousImages', label: 'links.create.permission.images', caption: 'links.create.permission.images.caption', glyph: { set: 'socle', name: 'image' }, tint: 'var(--ios-indigo-400)' },
-  { key: 'allowAnonymousFiles', label: 'links.create.permission.files', caption: 'links.create.permission.files.caption', glyph: { set: 'links', name: 'paperclip' }, tint: 'var(--ios-indigo-600)' },
-  { key: 'allowViewHistory', label: 'links.create.permission.history', caption: 'links.create.permission.history.caption', glyph: { set: 'links', name: 'clockCounterClockwise' }, tint: 'var(--color-warning)' },
+  { key: 'allowAnonymousMessages', label: 'links.create.permission.messages', note: null, glyph: { set: 'links', name: 'chatCircle' }, tint: SHARE_TINT },
+  { key: 'allowAnonymousImages', label: 'links.create.permission.images', note: null, glyph: { set: 'socle', name: 'image' }, tint: 'var(--ios-indigo-400)' },
+  { key: 'allowAnonymousFiles', label: 'links.create.permission.files', note: null, glyph: { set: 'links', name: 'paperclip' }, tint: 'var(--ios-indigo-600)' },
+  { key: 'allowViewHistory', label: 'links.create.permission.history', note: null, glyph: { set: 'links', name: 'clockCounterClockwise' }, tint: 'var(--color-warning)' },
 ];
 
 const EXPIRATION_KEY: Readonly<Record<ShareLinkExpiration, Extract<LinkFamiliesCatalogKey, `links.create.expiration.${string}`>>> = {
@@ -77,32 +80,46 @@ function RuleIcon({ glyph }: { readonly glyph: RuleGlyph }) {
   return glyph.set === 'socle' ? <Glyph name={glyph.name} size={15} /> : <LinksGlyph name={glyph.name} size={15} />;
 }
 
+/**
+ * Une section de formulaire. Sans `title`, la section est une carte sans titre : ses rangées se
+ * nomment seules (épure, règle 2 — un titre qui répète sa rangée est retiré). Avec `note`, le (i)
+ * se pose à côté du titre et sa note reste lue repliée.
+ */
 export function FormSection({
   id,
   title,
   subtitle,
   icon,
+  note,
   children,
 }: {
   readonly id: string;
-  readonly title: string;
+  readonly title: string | null;
   readonly subtitle: string | null;
   readonly icon: ReactNode;
+  readonly note?: InfoHint;
   readonly children: ReactNode;
 }) {
+  const info = useInfoHint();
   return (
-    <section aria-labelledby={id} className="grid gap-2">
-      <div className="grid gap-0.5 ps-1">
-        <h2 id={id} className={`flex items-center gap-1.5 text-check font-bold uppercase tracking-wide ${SECTION_BRAND_INK}`}>
-          <span aria-hidden="true">{icon}</span>
-          {title}
-        </h2>
-        {subtitle === null ? null : (
-          <p className="text-caption" style={{ color: INK_2 }}>
-            {subtitle}
-          </p>
-        )}
-      </div>
+    <section {...(title === null ? {} : { 'aria-labelledby': id })} className="grid gap-2">
+      {title === null ? null : (
+        <div className="grid gap-0.5 ps-1">
+          <div className="flex items-center gap-1">
+            <h2 id={id} className={`flex items-center gap-1.5 text-check font-bold uppercase tracking-wide ${SECTION_BRAND_INK}`}>
+              <span aria-hidden="true">{icon}</span>
+              {title}
+            </h2>
+            {note === undefined ? null : <InfoHintButton hint={note} state={info} />}
+          </div>
+          {note === undefined ? null : <InfoHintText hint={note} state={info} />}
+          {subtitle === null ? null : (
+            <p className="text-caption" style={{ color: INK_2 }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+      )}
       <div className={`grid overflow-hidden rounded-card ${ROW_DIVIDER}`} style={SECTION_CARD_STYLE}>
         {children}
       </div>
@@ -110,11 +127,11 @@ export function FormSection({
   );
 }
 
-
 export function RuleToggle({
   id,
   label,
   caption,
+  note,
   icon,
   tint,
   checked,
@@ -123,31 +140,39 @@ export function RuleToggle({
 }: {
   readonly id: string;
   readonly label: string;
-  readonly caption: string;
+  /** Une valeur qui change avec l'état (« Illimité », « 5 utilisations au maximum ») — jamais une légende fixe : celle-là passe par `note`. */
+  readonly caption?: string | null;
+  readonly note?: InfoHint;
   readonly icon: ReactNode;
   readonly tint: string;
   readonly checked: boolean;
   readonly disabled: boolean;
   readonly onToggle: (next: boolean) => void;
 }) {
+  const info = useInfoHint();
   const captionId = `link-rule-${id}-caption`;
+  const described = caption ? captionId : note === undefined ? undefined : info.id;
   return (
-    <div data-link-rule-row={id} className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 60, opacity: disabled ? 0.45 : 1 }}>
+    <div data-link-rule-row={id} className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: caption || note !== undefined ? 60 : 52, opacity: disabled ? 0.45 : 1 }}>
       <RowIcon tint={tint}>{icon}</RowIcon>
       <span className="grid min-w-0 flex-1 gap-0.5">
         <span className="text-body font-medium" style={{ color: INK }}>
           {label}
         </span>
-        <span id={captionId} className="text-caption" style={{ color: INK_2 }}>
-          {caption}
-        </span>
+        {caption ? (
+          <span id={captionId} className="text-caption" style={{ color: INK_2 }}>
+            {caption}
+          </span>
+        ) : null}
+        {note === undefined ? null : <InfoHintText hint={note} state={info} inline />}
       </span>
+      {note === undefined ? null : <InfoHintButton hint={note} state={info} />}
       <button
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
-        aria-describedby={captionId}
+        {...(described === undefined ? {} : { 'aria-describedby': described })}
         data-link-rule={id}
         disabled={disabled}
         onClick={() => onToggle(!checked)}
@@ -174,7 +199,7 @@ export function RulesSection({
   readonly language: InterfaceLanguage;
   readonly id: string;
   readonly title: string;
-  readonly subtitle: string;
+  readonly subtitle: string | null;
   readonly icon: ReactNode;
   readonly rules: readonly RuleSpec[];
   /** Les huit bascules seulement : la création (`ShareLinkDraft`) et l'édition
@@ -191,7 +216,7 @@ export function RulesSection({
             key={rule.key}
             id={rule.key}
             label={translateLinkFamilies(language, rule.label)}
-            caption={translateLinkFamilies(language, rule.caption)}
+            {...(rule.note === null ? {} : { note: linksHint(translateLinkFamilies(language, rule.note.question), translateLinkFamilies(language, rule.note.text)) })}
             icon={<RuleIcon glyph={rule.glyph} />}
             tint={rule.tint}
             checked={draft[rule.key] && !overridden}

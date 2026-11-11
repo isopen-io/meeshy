@@ -331,7 +331,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           language={language}
           id="link-edit-entry"
           title={translateInvite(language, 'linkDetail.edit.entry')}
-          subtitle={translateLinkFamilies(language, 'links.create.section.access.subtitle')}
+          subtitle={null}
           icon={<LinksGlyph name="userCheck" size={13} />}
           rules={ACCESS_RULES}
           draft={draft}
@@ -352,7 +352,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           language={language}
           id="link-edit-rights"
           title={translateInvite(language, 'linkDetail.edit.rights')}
-          subtitle={translateLinkFamilies(language, 'links.create.section.permissions.subtitle')}
+          subtitle={null}
           icon={<LinksGlyph name="chatCircle" size={13} />}
           rules={PERMISSION_RULES}
           draft={draft}

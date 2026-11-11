@@ -193,16 +193,13 @@ try {
       check((await page.$$('[data-links-family]')).length === 4, `${label} : le hub montre les quatre familles d'iOS`);
       check((await page.getAttribute('[data-links-family-create]', 'href')) === '/links/share/new', `${label} : « + » mène à la création`);
       await capture(page, `hub-${slug}`);
-      assertReach(label, 'le hub', await reachAtRest(page, { controls: 'header a, [data-links-family] a', texts: 'header h1, [data-links-banner] .text-body, [data-links-banner] .text-caption, [data-links-family-title]' }), {
+      assertReach(label, 'le hub', await reachAtRest(page, { controls: 'header a, [data-links-family] a', texts: 'header h1, [data-links-family-title]' }), {
         controls: 3,
-        texts: 4,
+        texts: 2,
       });
       await assertInks(label, 'le hub', page, {
         titre: 'header h1',
-        banniere: '[data-links-banner] .text-body',
-        'banniere, sous-titre': '[data-links-banner] .text-caption',
         famille: '[data-links-family-title]',
-        'famille, description': '[data-links-family] .text-caption',
       });
 
       // ------------------------------------------------ 2. la liste
@@ -384,7 +381,7 @@ try {
         section: 'main h2',
         choix: '[data-link-conversation] .text-body',
         bascule: '[data-link-rule-row="requireAccount"] .text-body',
-        legende: '[data-link-rule-row="requireAccount"] .text-caption',
+        legende: '[data-link-rule-row="limitUses"] .text-caption',
       });
 
       await page.click('[data-link-conversation]');

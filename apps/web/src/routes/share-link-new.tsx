@@ -3,6 +3,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { Glyph } from '@/components/glyph';
+import { InfoHintScope } from '@/components/info-hint';
 import { conversationsQuery } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { performCreateShareLink, type CreateShareLinkOutcome } from '@/lib/api/link-actions';
@@ -114,69 +115,71 @@ export default function ShareLinkNewScreen() {
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <LinksHeader language={language} back="shareLinks" backLabel={translate(language, 'links.detail.back')} title={translateLinkFamilies(language, 'links.create.title')} />
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
-        <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
-          {online ? null : <LinksOfflineNotice language={language} />}
-          <FormSection id="link-section-conversation" title={translateLinkFamilies(language, 'links.create.section.conversation')} subtitle={null} icon={<LinksGlyph name="chatsCircle" size={12} />}>
-            <ConversationChoice language={language} conversation={chosen} invalid={feedback === 'links.create.error.conversation'} onOpen={() => setPicking(true)} />
-          </FormSection>
-          <FormSection id="link-section-identity" title={translateLinkFamilies(language, 'links.create.section.identity')} subtitle={null} icon={<LinksGlyph name="tag" size={12} />}>
-            <TextRow
-              id="link-name"
-              label={translateLinkFamilies(language, 'links.create.name')}
-              placeholder={translateLinkFamilies(language, 'links.create.name.placeholder')}
-              value={draft.name}
-              onChange={(value) => edit('name', value)}
-            />
-            <TextRow
-              id="link-description"
-              label={translateLinkFamilies(language, 'links.create.description')}
-              placeholder={translateLinkFamilies(language, 'links.create.description.placeholder')}
-              value={draft.description}
-              onChange={(value) => edit('description', value)}
-            />
-          </FormSection>
-          <RulesSection
-            language={language}
-            id="link-section-access"
-            title={translateLinkFamilies(language, 'links.create.section.access')}
-            subtitle={translateLinkFamilies(language, 'links.create.section.access.subtitle')}
-            icon={<Glyph name="key" size={12} />}
-            rules={ACCESS_RULES}
-            draft={draft}
-            onToggle={(key, next) => edit(key, next)}
-          />
-          <RulesSection
-            language={language}
-            id="link-section-permissions"
-            title={translateLinkFamilies(language, 'links.create.section.permissions')}
-            subtitle={translateLinkFamilies(language, 'links.create.section.permissions.subtitle')}
-            icon={<LinksGlyph name="slidersHorizontal" size={12} />}
-            rules={PERMISSION_RULES}
-            draft={draft}
-            onToggle={(key, next) => edit(key, next)}
-          />
-          <FormSection
-            id="link-section-limits"
-            title={translateLinkFamilies(language, 'links.create.section.limits')}
-            subtitle={translateLinkFamilies(language, 'links.create.section.limits.subtitle')}
-            icon={<LinksGlyph name="gauge" size={12} />}
-          >
-            <LimitsFields
+        <InfoHintScope>
+          <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
+            {online ? null : <LinksOfflineNotice language={language} />}
+            <FormSection id="link-section-conversation" title={translateLinkFamilies(language, 'links.create.section.conversation')} subtitle={null} icon={<LinksGlyph name="chatsCircle" size={12} />}>
+              <ConversationChoice language={language} conversation={chosen} invalid={feedback === 'links.create.error.conversation'} onOpen={() => setPicking(true)} />
+            </FormSection>
+            <FormSection id="link-section-identity" title={null} subtitle={null} icon={<LinksGlyph name="tag" size={12} />}>
+              <TextRow
+                id="link-name"
+                label={translateLinkFamilies(language, 'links.create.name')}
+                placeholder={translateLinkFamilies(language, 'links.create.name.placeholder')}
+                value={draft.name}
+                onChange={(value) => edit('name', value)}
+              />
+              <TextRow
+                id="link-description"
+                label={translateLinkFamilies(language, 'links.create.description')}
+                placeholder={translateLinkFamilies(language, 'links.create.description.placeholder')}
+                value={draft.description}
+                onChange={(value) => edit('description', value)}
+              />
+            </FormSection>
+            <RulesSection
               language={language}
+              id="link-section-access"
+              title={translateLinkFamilies(language, 'links.create.section.access')}
+              subtitle={null}
+              icon={<Glyph name="key" size={12} />}
+              rules={ACCESS_RULES}
               draft={draft}
-              maxUsesInvalid={maxUsesInvalid}
-              onLimitUses={(next) => edit('limitUses', next)}
-              onMaxUses={(value) => edit('maxUses', value)}
-              onExpiration={(value) => edit('expiration', value)}
+              onToggle={(key, next) => edit(key, next)}
             />
-          </FormSection>
-          {feedback === null ? null : (
-            <p role="alert" data-link-create-error className="text-center text-caption font-medium" style={{ color: 'var(--color-error)' }}>
-              {translateLinkFamilies(language, feedback)}
-            </p>
-          )}
-          <CreateLinkButton language={language} submitting={submitting} disabled={submitting || !online || chosen === null} />
-        </form>
+            <RulesSection
+              language={language}
+              id="link-section-permissions"
+              title={translateLinkFamilies(language, 'links.create.section.permissions')}
+              subtitle={null}
+              icon={<LinksGlyph name="slidersHorizontal" size={12} />}
+              rules={PERMISSION_RULES}
+              draft={draft}
+              onToggle={(key, next) => edit(key, next)}
+            />
+            <FormSection
+              id="link-section-limits"
+              title={translateLinkFamilies(language, 'links.create.section.limits')}
+              subtitle={null}
+              icon={<LinksGlyph name="gauge" size={12} />}
+            >
+              <LimitsFields
+                language={language}
+                draft={draft}
+                maxUsesInvalid={maxUsesInvalid}
+                onLimitUses={(next) => edit('limitUses', next)}
+                onMaxUses={(value) => edit('maxUses', value)}
+                onExpiration={(value) => edit('expiration', value)}
+              />
+            </FormSection>
+            {feedback === null ? null : (
+              <p role="alert" data-link-create-error className="text-center text-caption font-medium" style={{ color: 'var(--color-error)' }}>
+                {translateLinkFamilies(language, feedback)}
+              </p>
+            )}
+            <CreateLinkButton language={language} submitting={submitting} disabled={submitting || !online || chosen === null} />
+          </form>
+        </InfoHintScope>
       </main>
       {picking ? (
         <ConversationPicker
