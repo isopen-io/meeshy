@@ -221,6 +221,7 @@
     <string name="call_recording_cancel">Cancel</string>
     <string name="call_recording_caption">Record</string>
     <string name="call_recording_close">Close</string>
+    <string name="call_recording_consent">Everyone must accept. Recording stops if someone joins.</string>
     <string name="call_recording_hint">Asks every participant for consent before recording</string>
     <string name="call_recording_kind_audio">Audio</string>
     <string name="call_recording_kind_hint">Choose what will be recorded; each participant must then agree</string>

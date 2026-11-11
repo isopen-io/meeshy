@@ -221,6 +221,7 @@
     <string name="call_recording_cancel">Cancelar</string>
     <string name="call_recording_caption">Grabar</string>
     <string name="call_recording_close">Cerrar</string>
+    <string name="call_recording_consent">Todos deben aceptar. La grabación se detiene si alguien se une.</string>
     <string name="call_recording_hint">Pide el consentimiento de cada participante antes de grabar</string>
     <string name="call_recording_kind_audio">Audio</string>
     <string name="call_recording_kind_hint">Elige qué se grabará; después, cada participante debe aceptar</string>
