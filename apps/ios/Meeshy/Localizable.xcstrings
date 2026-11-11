@@ -31744,43 +31744,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بلغ حسابك الحد الأقصى من الأجهزة المشفّرة. أزل جهازًا للكتابة من هذا الجهاز: لن يقرأ بعد ذلك الرسائل المشفّرة الجديدة."
+            "value": "بلغ حسابك الحد الأقصى من الأجهزة المشفّرة. أزل جهازًا للكتابة من هذا الجهاز. لن يقرأ الجهاز المُزال بعد ذلك الرسائل المشفّرة الجديدة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Konto hat die maximale Anzahl verschlüsselter Geräte erreicht. Entferne eines, um von diesem zu schreiben: Es liest keine neuen verschlüsselten Nachrichten mehr."
+            "value": "Dein Konto hat die maximale Anzahl verschlüsselter Geräte erreicht. Entferne eines, um von diesem zu schreiben. Das entfernte Gerät liest keine neuen verschlüsselten Nachrichten mehr."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your account has reached the maximum number of encrypted devices. Remove one to write from this one: it will no longer read new encrypted messages."
+            "value": "Your account has reached the maximum number of encrypted devices. Remove one to write from this one. The removed device will no longer read new encrypted messages."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu cuenta alcanzó el número máximo de dispositivos cifrados. Elimina uno para escribir desde este: dejará de leer los nuevos mensajes cifrados."
+            "value": "Tu cuenta alcanzó el número máximo de dispositivos cifrados. Elimina uno para escribir desde este. El dispositivo eliminado dejará de leer los nuevos mensajes cifrados."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre compte a atteint le nombre maximal d’appareils chiffrés. Retirez-en un pour écrire depuis celui-ci : il ne lira plus les nouveaux messages chiffrés."
+            "value": "Votre compte a atteint le nombre maximal d’appareils chiffrés. Retirez-en un pour écrire depuis celui-ci. L’appareil retiré ne lira plus les nouveaux messages chiffrés."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo account ha raggiunto il numero massimo di dispositivi crittografati. Rimuovine uno per scrivere da questo: non leggerà più i nuovi messaggi crittografati."
+            "value": "Il tuo account ha raggiunto il numero massimo di dispositivi crittografati. Rimuovine uno per scrivere da questo. Il dispositivo rimosso non leggerà più i nuovi messaggi crittografati."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua conta atingiu o número máximo de dispositivos criptografados. Remova um para escrever deste: ele deixará de ler as novas mensagens criptografadas."
+            "value": "Sua conta atingiu o número máximo de dispositivos criptografados. Remova um para escrever deste. O dispositivo removido deixará de ler as novas mensagens criptografadas."
           }
         }
       }

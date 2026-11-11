@@ -85,7 +85,7 @@ struct EndToEndDeviceLimitSheet: View {
             List {
                 Section {
                     Text(String(localized: "e2ee.deviceLimit.explanation",
-                                defaultValue: "Votre compte a atteint le nombre maximal d’appareils chiffrés. Retirez-en un pour écrire depuis celui-ci : il ne lira plus les nouveaux messages chiffrés.",
+                                defaultValue: "Votre compte a atteint le nombre maximal d’appareils chiffrés. Retirez-en un pour écrire depuis celui-ci. L’appareil retiré ne lira plus les nouveaux messages chiffrés.",
                                 bundle: .main))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
