@@ -109,6 +109,9 @@ const peerReceives = async (page) => {
   return false;
 };
 
+/** Les rails glissent (300 ms) : on mesure et on touche posés, jamais en route (#17327). */
+const railsSettled = (page) => page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => !(animation instanceof CSSTransition) || animation.playState !== 'running') ?? true, undefined, { timeout: 3000 }).then(() => true, () => false);
+
 /**
  * Les actions vivent derrière le (…) de la pilule (#8391), qui les déplie
  * s'il ne l'a pas déjà fait. En vidéo, aucune attente n'efface les commandes
@@ -118,7 +121,8 @@ const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  await appears(page, '[data-call-actions]');
+  await appears(page, '[data-call-rails="shown"], [data-call-actions]');
+  await railsSettled(page);
 };
 
 const startConnectedAudioCall = async (page) => {
@@ -225,7 +229,7 @@ try {
         await appears(page, '[data-call-pill="screen-sharing"]');
         await openActions(page);
         check(await page.locator('button[aria-label="Couper la caméra"], button[aria-label="Activer la caméra"]').first().isDisabled(), `${label} : la caméra ne se rallume pas par-dessus un partage`);
-        await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+        await page.click('[data-call-screen] button[aria-label="Réduire"]');
         await page.click('[data-call-pill-stop-share]');
         await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
         await openActions(page);
@@ -243,7 +247,7 @@ try {
         const banner = await page.$eval('[data-call-screen-banner]', (el) => el.textContent ?? '').catch(() => '');
         check(banner === `${PEER_NAME} partage son écran`, `${label} : la bannière nomme celui qui partage (« ${banner} »)`);
         await capture(page, `partage-recu-${slug}`);
-        await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+        await page.click('[data-call-screen] button[aria-label="Réduire"]');
         await page.click('[data-call-pill-collapse]');
         const bubbleFit = await page.waitForSelector('[data-call-bubble] video', { timeout: 5000 }).then((video) => video.evaluate((el) => getComputedStyle(el).objectFit), () => null);
         check(bubbleFit === 'contain', `${label} : réduit en bulle, l'écran partagé reste ENTIER (object-fit ${bubbleFit})`);

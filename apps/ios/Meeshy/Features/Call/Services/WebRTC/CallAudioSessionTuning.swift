@@ -5,7 +5,7 @@ import Foundation
 /// and CallKit's `provider(_:didActivate:)` (#11522). Every preference is a
 /// best-effort hint (`applyBestEffortAudioSetting`): the OS may ignore it, and
 /// some throw on iOS-app-on-Mac.
-enum CallAudioSessionTuning {
+nonisolated enum CallAudioSessionTuning {
 
     /// PERF-010: HFP only (not A2DP) — A2DP is output-only and conflicts with
     /// the bidirectional voice path (forces the OS to flap between Bluetooth

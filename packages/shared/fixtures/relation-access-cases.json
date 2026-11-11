@@ -2680,7 +2680,7 @@
       }
     },
     {
-      "id": "team-audit-is-not-the-team",
+      "id": "team-audit-is-the-team",
       "matrix": "Équipe (#16623)",
       "input": {
         "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2697,14 +2697,14 @@
         "consent": "granted"
       },
       "expected": {
-        "allowed": false,
-        "effectiveLevel": "PUBLIC",
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
         "reason": "level",
-        "requiresConsent": false
+        "requiresConsent": true
       }
     },
     {
-      "id": "team-analyst-is-not-the-team",
+      "id": "team-analyst-is-the-team",
       "matrix": "Équipe (#16623)",
       "input": {
         "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2718,6 +2718,30 @@
         "viewerRole": "MODERATOR",
         "targetRole": "ANALYST",
         "feature": "bring",
+        "consent": "granted"
+      },
+      "expected": {
+        "allowed": true,
+        "effectiveLevel": "BLOOD",
+        "reason": "level",
+        "requiresConsent": true
+      }
+    },
+    {
+      "id": "team-analyst-faces-an-ordinary-user",
+      "matrix": "Équipe (#16623)",
+      "input": {
+        "viewerId": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "targetId": "bbbbbbbbbbbbbbbbbbbbbbbb",
+        "grantedByViewer": "PUBLIC",
+        "grantedByTarget": "PUBLIC",
+        "sharesCommunity": false,
+        "blockedEitherWay": false,
+        "viewerMinor": "adult",
+        "targetMinor": "adult",
+        "viewerRole": "ANALYST",
+        "targetRole": "USER",
+        "feature": "talkie",
         "consent": "granted"
       },
       "expected": {

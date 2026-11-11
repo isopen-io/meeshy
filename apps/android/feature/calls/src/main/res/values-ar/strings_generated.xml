@@ -5,7 +5,7 @@
     <string name="call_action_close">إغلاق</string>
     <string name="call_action_decline">رفض</string>
     <string name="call_action_hang_up">إنهاء المكالمة</string>
-    <string name="call_action_minimize">تصغير المكالمة</string>
+    <string name="call_action_minimize">تصغير</string>
     <string name="call_action_mute">كتم</string>
     <string name="call_action_retry">إعادة المحاولة</string>
     <string name="call_action_speaker">مكبر الصوت</string>
@@ -40,6 +40,8 @@
     <string name="call_control_add_people">إضافة أشخاص إلى المكالمة</string>
     <string name="call_control_add_people_caption">إضافة</string>
     <string name="call_control_camera">اختيار الكاميرا</string>
+    <string name="call_control_camera_off">إيقاف الكاميرا</string>
+    <string name="call_control_camera_on">تشغيل الكاميرا</string>
     <string name="call_control_camera_rail">خيارات الكاميرا الخاصة بي</string>
     <string name="call_control_capture">التقاط المكالمة</string>
     <string name="call_control_capture_caption">التقاط</string>
@@ -49,10 +51,16 @@
     <string name="call_control_flip_camera_caption">قلب</string>
     <string name="call_control_flip_camera_hint">يبدّل بين الكاميرا الأمامية والخلفية</string>
     <string name="call_control_more">مزيد من الإجراءات</string>
+    <string name="call_control_more_hide">إخفاء الإجراءات</string>
     <string name="call_control_more_hint">يعرض إجراءات المكالمة أو يخفيها</string>
+    <string name="call_control_more_show">عرض الإجراءات</string>
+    <string name="call_control_mute_caption">الميكروفون</string>
     <string name="call_control_mute_hint">يكتم صوت الميكروفون بالنسبة للطرف الآخر</string>
+    <string name="call_control_mute_label">كتم الميكروفون</string>
+    <string name="call_control_output_a11y">إخراج الصوت</string>
     <string name="call_control_pip">التصغير إلى صورة داخل صورة</string>
     <string name="call_control_react">إرسال تفاعل</string>
+    <string name="call_control_unmute_label">إعادة تشغيل الميكروفون</string>
     <string name="call_decline_cancel">إلغاء</string>
     <string name="call_decline_custom_label">رسالتك</string>
     <string name="call_decline_custom_placeholder">اكتب رسالة…</string>

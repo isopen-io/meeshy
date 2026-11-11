@@ -193,10 +193,9 @@ fun CallScreen(
                 }
             }
             val selfCamera = remember(viewModel) {
-                CallSelfCameraActions(viewModel.cameraZoom, onFlip = viewModel::flipCamera, onToggleCamera = viewModel::toggleCamera)
+                CallSelfCameraActions(viewModel.cameraZoom)
             }
             val pill = rememberCallPillActions(state, viewModel, chrome)
-            val selfEffects = remember(pill) { CallSelfEffects(CallPillModel.selfEffects(pill.available, pill.items), pill.onAction) }
             if (duo.shown) {
                 CallDuoVideoStage(
                     state = state,
@@ -211,7 +210,6 @@ fun CallScreen(
                     onSwap = duo.onSwap,
                     onSceneTap = sceneTap,
                     selfCamera = selfCamera,
-                    selfEffects = selfEffects,
                     controlsVisible = chromeVisibility.isVisible(CallChromeElement.Controls) && !inPip,
                     framed = duo.framed,
                     selfUserId = viewModel.selfUserId,
@@ -239,7 +237,6 @@ fun CallScreen(
                     videoStage = duo.videoStage,
                     peer = peer,
                     pill = pill,
-                    cameraPlacement = duo.layout.controlsPlacement,
                     modifier = content,
                     inPip = inPip,
                     groupStage = if (groupShown) {

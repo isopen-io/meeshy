@@ -181,6 +181,10 @@ public struct EmbeddedSceneCanvas: View {
     /// Le menu d'appui long peint par l'hôte (#8717).
     public var onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)?
     public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind>
+    /// `false` : la scène se peint sans son fond — posée sur l'aperçu de l'objectif (#17432).
+    public var paintsSceneBackground: Bool
+    /// Seuls les touchers qui tombent sur un objet restent au canvas (#17432).
+    public var passesThroughEmptyTouches: Bool
 
     public init(
         slide: Binding<StorySlide>,
@@ -211,9 +215,13 @@ public struct EmbeddedSceneCanvas: View {
         onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil,
         localMediaAliases: [String: URL] = [:],
         inlineEditYieldsToManipulation: Bool = false,
-        inlineEditInputLink: StoryInlineEditInputLink? = nil
+        inlineEditInputLink: StoryInlineEditInputLink? = nil,
+        paintsSceneBackground: Bool = true,
+        passesThroughEmptyTouches: Bool = false
     ) {
         self.inlineEditInputLink = inlineEditInputLink
+        self.paintsSceneBackground = paintsSceneBackground
+        self.passesThroughEmptyTouches = passesThroughEmptyTouches
         self.localMediaAliases = localMediaAliases
         self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         self.timelineBridge = timelineBridge
@@ -295,12 +303,12 @@ public struct EmbeddedSceneCanvas: View {
                 loadedImages: loadedImages,
                 loadedStickerAnimations: loadedStickerAnimations,
                 loadedImagesVersion: loadedImagesVersion,
-                // Rayon compensé : la carte est rendue à sa taille de référence PUIS
-                // réduite (même compensation que `canvasComposerLayer`).
+                // Rayon compensé : rendue à sa taille de référence PUIS réduite (comme `canvasComposerLayer`).
                 canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0,
                 timelineBridge: timelineBridge,
                 localMediaAliases: localMediaAliases,
                 inlineEditYieldsToManipulation: inlineEditYieldsToManipulation,
+                paintsSceneBackground: paintsSceneBackground, passesThroughEmptyTouches: passesThroughEmptyTouches,
                 inlineEditInputLink: inlineEditInputLink
             )
             // **Le canvas cesse de recevoir les touches pendant qu'un calque

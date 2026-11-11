@@ -72856,43 +72856,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تصغير المكالمة"
+            "value": "تصغير"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anruf minimieren"
+            "value": "Verkleinern"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Minimize call"
+            "value": "Minimize"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Minimizar llamada"
+            "value": "Minimizar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réduire l'appel"
+            "value": "Réduire"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Riduci la chiamata"
+            "value": "Riduci"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Minimizar chamada"
+            "value": "Minimizar"
           }
         }
       }
@@ -99821,6 +99821,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enviar em um quadro"
+          }
+        }
+      }
+    },
+    "composer.viewfinder.gallery": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المعرض"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Galerie"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gallery"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Galería"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Galerie"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Galleria"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Galeria"
           }
         }
       }
@@ -239888,53 +239935,6 @@
         }
       }
     },
-    "call.control.more": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مزيد من الإجراءات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Weitere Aktionen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "More actions"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Más acciones"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus d'actions"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Altre azioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais ações"
-          }
-        }
-      }
-    },
     "call.control.more.caption": {
       "extractionState": "manual",
       "localizations": {
@@ -333508,43 +333508,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لحالة طارئة قصوى: يرنّ هاتفه حتى في الوضع الصامت."
+            "value": "لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل. قد يعرض آيفون في الوضع الصامت تنبيهًا ذا أولوية فقط."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Für einen extremen Notfall: Das Telefon klingelt, auch im Lautlos-Modus."
+            "value": "Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt. Ein iPhone im Lautlos-Modus zeigt je nach Einstellung nur einen dringenden Hinweis."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "For an extreme emergency: their phone rings, even on silent."
+            "value": "For an extreme emergency: their phone rings, even when locked. Depending on settings, an iPhone on silent may only show a priority alert."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para una urgencia extrema: su teléfono suena, incluso en silencio."
+            "value": "Para una urgencia extrema: su teléfono suena, incluso bloqueado. Según sus ajustes, un iPhone en silencio puede mostrar solo una alerta prioritaria."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pour une urgence extrême : son téléphone sonne, même en silencieux."
+            "value": "Pour une urgence extrême : son téléphone sonne, même verrouillé. Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Per un’emergenza estrema: il suo telefono squilla, anche in silenzioso."
+            "value": "Per un’emergenza estrema: il suo telefono squilla, anche bloccato. In base alle impostazioni, un iPhone in silenzioso può mostrare solo un avviso prioritario."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Para uma emergência extrema: o telefone dela toca, mesmo no silencioso."
+            "value": "Para uma emergência extrema: o telefone dela toca, mesmo bloqueado. Conforme os ajustes, um iPhone no silencioso pode mostrar só um alerta prioritário."
           }
         }
       }
@@ -335472,6 +335472,476 @@
           "stringUnit": {
             "state": "translated",
             "value": "Trinta segundos no máximo: a fala parou."
+          }
+        }
+      }
+    },
+    "call.control.more.show": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض الإجراءات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktionen anzeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show actions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar acciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher les actions"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostra le azioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar ações"
+          }
+        }
+      }
+    },
+    "call.control.more.hide": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إخفاء الإجراءات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktionen ausblenden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide actions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar acciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer les actions"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nascondi le azioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar ações"
+          }
+        }
+      }
+    },
+    "call.control.camera.on": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشغيل الكاميرا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kamera einschalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on camera"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar cámara"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activer la caméra"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attiva la fotocamera"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ligar câmera"
+          }
+        }
+      }
+    },
+    "call.control.camera.off": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف الكاميرا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kamera ausschalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off camera"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivar cámara"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couper la caméra"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disattiva la fotocamera"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desligar câmera"
+          }
+        }
+      }
+    },
+    "call.control.output.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إخراج الصوت"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audioausgabe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio output"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salida de audio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sortie audio"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uscita audio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saída de áudio"
+          }
+        }
+      }
+    },
+    "call.control.more": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مزيد من الإجراءات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weitere Aktionen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More actions"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más acciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus d'actions"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altre azioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais ações"
+          }
+        }
+      }
+    },
+    "bring.alarm.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ يطلب منك الردّ الآن"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ lässt es bei dir klingeln"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is ringing you"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ te hace sonar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ te fait sonner"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ti fa squillare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ está tocando você"
+          }
+        }
+      }
+    },
+    "bring.alarm.titleHidden": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شخص ما يطلب منك الردّ الآن"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jemand lässt es bei dir klingeln"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Someone is ringing you"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alguien te hace sonar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelqu’un te fait sonner"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qualcuno ti fa squillare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alguém está tocando você"
+          }
+        }
+      }
+    },
+    "bring.alarm.stop": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopp"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêter"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrompi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parar"
+          }
+        }
+      }
+    },
+    "notifications.action.stopBring": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إيقاف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopp"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detener"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrêter"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrompi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parar"
           }
         }
       }

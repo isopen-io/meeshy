@@ -65,7 +65,7 @@ struct SupportView: View {
                     requestReview()
                 }
             }
-            .background(sectionBackground(tint: accentColor))
+            .background(SettingsSectionBackground(tint: accentColor))
         }
     }
 
@@ -79,7 +79,7 @@ struct SupportView: View {
                 supportLink(icon: "envelope.fill", title: String(localized: "support.contact.email", defaultValue: "Email du support", bundle: .main), url: "mailto:support@meeshy.me", color: MeeshyColors.infoHex)
                 supportLink(icon: "at", title: String(localized: "support.contact.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.infoHex)
             }
-            .background(sectionBackground(tint: MeeshyColors.infoHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.infoHex))
         }
     }
 
@@ -93,7 +93,7 @@ struct SupportView: View {
                 supportLink(icon: "ladybug.fill", title: String(localized: "support.report.bug", defaultValue: "Signaler un bug", bundle: .main), url: "mailto:bugs@meeshy.me?subject=Bug%20Report%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
                 supportLink(icon: "lightbulb.fill", title: String(localized: "support.report.feature", defaultValue: "Suggérer une fonctionnalité", bundle: .main), url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
             }
-            .background(sectionBackground(tint: MeeshyColors.warningHex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.warningHex))
         }
     }
 
@@ -108,7 +108,7 @@ struct SupportView: View {
                 infoRow(icon: "hammer.fill", title: String(localized: "support.info.build", defaultValue: "Build", bundle: .main), value: buildNumber, color: MeeshyColors.neutral500Hex)
                 infoRow(icon: "apple.logo", title: String(localized: "support.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: MeeshyColors.neutral500Hex)
             }
-            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.neutral500Hex))
         }
     }
 
@@ -127,15 +127,6 @@ struct SupportView: View {
         .padding(.leading, MeeshySpacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {

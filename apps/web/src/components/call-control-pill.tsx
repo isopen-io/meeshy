@@ -7,19 +7,26 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { CallRowsKit } from '@/components/call-control-actions';
-import type { CallControlSet } from '@/lib/calls/call-controls';
+import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
- * **LA PILULE DE VERRE** (#8391, #8550) — la même en audio, en vidéo et en
- * groupe : `(…)` · Micro · Sortie · Fin. `(…)` est devant le micro : il
- * bascule l'affichage des actions (`aria-expanded`). Déployée, la pilule
- * GRANDIT vers le haut : sa ligne de commandes reste en bas, et au-dessus
+ * **LA PILULE DE VERRE** (#8391, #8550, #17327) — la même en audio, en vidéo et
+ * en groupe : `(…)` · Micro · Sortie · Fin. `(…)` est devant le micro : il
+ * bascule l'affichage des actions (`aria-expanded`). Ce qu'il sort dépend du
+ * nombre de participants (`call-controls-disposition.ts`) : à deux, deux rails
+ * sur les bords (`call-screen.tsx`) et la pilule NE GRANDIT PAS ; à plusieurs,
+ * elle GRANDIT vers le haut — sa ligne de commandes reste en bas, et au-dessus
  * d'elle, dans le MÊME cadre de verre, le bandeau des sous-titres puis UNE
  * chose : les rangées des familles (`call-control-actions.tsx`) OU le panneau
- * ouvert, qui les REMPLACE (#8578) — jamais les deux empilés.
+ * ouvert, qui les REMPLACE (#8578) — jamais les deux empilés. Un panneau la
+ * fait grandir à deux comme à plusieurs.
+ *
+ * Chaque bouton de la pilule porte son DISQUE de verre dessiné (#17345 —
+ * `CallButton`, ton `disc`, `.glass-call-disc`) : un voile et un liseré, sans
+ * flou à eux. Le seul `backdrop-filter` du groupe est celui de la pilule.
  *
  * « Sortie » ouvre la feuille des appareils (caméra, micro, sortie audio —
  * `call-devices-sheet.tsx`, chunk à part chargé au premier geste).
@@ -35,8 +42,12 @@ const CallDevicesSheet = lazy(() => import('./call-devices-sheet').then((module)
 type PillProps = {
   readonly call: ActiveCall;
   readonly language: InterfaceLanguage;
-  readonly set: CallControlSet;
+  /** Les rangées légendées que la pilule déplie : vide à deux, où les actions sont sur les rails. */
+  readonly rows: readonly CallFamilyRow[];
+  /** `(…)` est ouvert : un menu, un panneau. */
   readonly expanded: boolean;
+  /** La pilule a grandi : un panneau, ou — à plusieurs — les rangées (`unfoldsPill`). */
+  readonly grown: boolean;
   readonly onToggle: () => void;
   readonly prominent: boolean;
   /** Le bandeau des sous-titres, posé en haut du cadre quand la pilule a grandi. */
@@ -48,22 +59,22 @@ type PillProps = {
   readonly panel: ReactNode;
 };
 
-export function CallControlPill({ call, language, set, expanded, onToggle, prominent, framedCaptions, panels, kit, panel }: PillProps) {
+export function CallControlPill({ call, language, rows, expanded, grown, onToggle, prominent, framedCaptions, panels, kit, panel }: PillProps) {
   const [devicesOpen, setDevicesOpen] = useState(false);
   return (
     <>
       <div
-        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
-        data-call-control-pill={expanded ? 'grown' : 'pill'}
+        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${grown ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        data-call-control-pill={grown ? 'grown' : 'pill'}
         data-call-chrome-keep=""
       >
-        {expanded ? (
+        {grown ? (
           <>
             <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="">
               {framedCaptions}
               {panel ?? (
                 <Suspense fallback={null}>
-                  <CallActionRows call={call} set={set} language={language} panels={panels} kit={kit} />
+                  <CallActionRows call={call} rows={rows} language={language} panels={panels} kit={kit} />
                 </Suspense>
               )}
             </div>
@@ -72,10 +83,10 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
         ) : null}
         <div className="flex items-center justify-center gap-2">
           <CallButton
-            label={translate(language, 'call.more')}
+            label={translate(language, expanded ? 'call.more.hide' : 'call.more.show')}
             glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.dotsThree} size={24} />}
             onPress={onToggle}
-            tone={expanded ? 'active' : 'bare'}
+            tone={expanded ? 'active' : 'disc'}
             expanded={expanded}
             controls={kit.actionsId}
             data={{ 'data-call-more': '' }}
@@ -84,7 +95,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
             label={translate(language, call.micMuted ? 'call.mic.unmute' : 'call.mic.mute')}
             glyph={call.micMuted ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={22} /> : <Glyph name="microphone" size={22} />}
             onPress={callActions.toggleMic}
-            tone={call.micMuted ? 'active' : 'bare'}
+            tone={call.micMuted ? 'active' : 'disc'}
             pressed={call.micMuted}
           />
           <CallButton

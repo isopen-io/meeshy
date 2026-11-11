@@ -16,7 +16,7 @@
  *  2. l'en-tête porte Réduire puis « Conversation » (verre isolé, 44 px), et
  *     « Messages » a quitté les actions (#8436) ;
  *  3. les commandes de ma caméra, dans ma vignette : Caméra, (Retourner),
- *     Effets, Écran — chaque bouton fait 44, sans verre à lui, et le (…) ne
+ *     Effets, Écran — chaque bouton fait 44, porte son disque de verre sans flou à lui, et le (…) ne
  *     les double pas (#8432, #8550, #8626) ;
  *  4. « Effets » entre dans le MODE Effets (#8578) : l'en-tête, la pilule et
  *     ses rangées partent, ma vidéo prend tout l'écran ; « Visage · Couleur »
@@ -138,11 +138,15 @@ const peerReceives = async (page) => {
   return false;
 };
 
+/** Les rails glissent (300 ms) : on mesure et on touche posés, jamais en route (#17327). */
+const railsSettled = (page) => page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => !(animation instanceof CSSTransition) || animation.playState !== 'running') ?? true, undefined, { timeout: 3000 }).then(() => true, () => false);
+
 const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  await appears(page, '[data-call-actions]');
+  await appears(page, '[data-call-rails="shown"], [data-call-actions]');
+  await railsSettled(page);
 };
 
 /**
@@ -261,21 +265,23 @@ try {
 
       // ------------------------------------------------ 2. l'en-tête
       const header = await page.$$eval('[data-call-header] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
-      check(header[0]?.label === 'Réduire l’appel' && header[1]?.label === 'Ouvrir la conversation', `${label} : l'en-tête porte Réduire puis « Conversation » (${header.map((b) => b.label).join(' · ')})`);
+      check(header[0]?.label === 'Réduire' && header[1]?.label === 'Conversation', `${label} : l'en-tête porte Réduire puis « Conversation » (${header.map((b) => b.label).join(' · ')})`);
       check(header[1] !== undefined && header[1].glass && header[1].w >= TAP_FLOOR && header[1].h >= TAP_FLOOR, `${label} : « Conversation » est un verre isolé de ${TAP_FLOOR} au moins`);
       await openActions(page);
       check((await page.$('[data-call-control="messages"]')) === null, `${label} : « Messages » a quitté les actions`);
 
-      // ------------------------------------------------ 3. la rangée de mon image
-      check((await page.$('[data-call-row="mine"]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra`);
-      const mine = await page.$$eval('[data-call-corner-frame] [data-call-self-row] [data-call-self-controls="tile"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
+      // ------------------------------------------------ 3. le rail de mon image
+      check((await page.$('[data-call-row="mine"]')) === null && (await page.$('[data-call-self-controls], [data-call-self-row]')) === null, `${label} : le (…) ne double pas les commandes de ma caméra, et rien ne les pose autour de ma vignette`);
+      const mine = await page.$$eval('[data-call-rail="mine"] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), blur: ['glass-call', 'glass-call-prominent'].some((token) => button.classList.contains(token)), disc: button.classList.contains('glass-call-disc') || button.querySelector('.glass-call-disc') !== null, solid: (button.getAttribute('style') ?? '').includes('background'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
       const labels = mine.map((button) => button.label).filter((name) => name !== 'Retourner la caméra');
-      check(JSON.stringify(labels) === JSON.stringify(['Effets de ma vidéo', 'Partager l’écran', 'Couper la caméra', 'Zoom de ma caméra, 1×']), `${label} : mon image, et le cran du zoom (#8441) — ${mine.map((b) => b.label).join(' · ')}`);
-      check(mine.every((button) => !button.glass && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons de la rangée de ma vignette font ${TAP_FLOOR} et n'ont pas de verre à eux`);
+      check(JSON.stringify(labels) === JSON.stringify(['Couper la caméra', 'Effets de ma vidéo', 'Partager l’écran']), `${label} : le rail de mon image : Caméra · Effets · Écran — ${mine.map((b) => b.label).join(' · ')}`);
+      check(mine.every((button) => (button.disc || button.solid) && !button.blur && button.w >= TAP_FLOOR && button.h >= TAP_FLOOR), `${label} : les boutons du rail font ${TAP_FLOOR}, portent leur disque de verre (ou leur plein, enclenchés) et n'ont pas de flou à eux (#17345)`);
+      const zoomStep = await page.$$eval('[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
+      check(zoomStep.length === 1 && zoomStep[0].label === 'Zoom de ma caméra, 1×' && zoomStep[0].w >= TAP_FLOOR && zoomStep[0].h >= TAP_FLOOR, `${label} : le cran du zoom (#8441) reste dans le coin de ma vignette, ${TAP_FLOOR} px (${JSON.stringify(zoomStep)})`);
 
       // ------------------------------------------------ 5 (avant le mode). le micro coupé
       await page.click('[data-call-screen] button[aria-label="Couper le micro"]');
-      await appears(page, '[data-call-screen] button[aria-label="Activer le micro"]');
+      await appears(page, '[data-call-screen] button[aria-label="Réactiver le micro"]');
 
       // ------------------------------------------------ 4. le mode Effets
       const before = await sentVideo(page);
@@ -284,8 +290,8 @@ try {
       await openActions(page);
       await page.click('[data-call-control="effects"]');
       check(await appears(page, '[data-call-mode="effects"]'), `${label} : « Effets » entre dans le mode Effets`);
-      const left = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-row]'].filter((selector) => document.querySelector(selector) !== null));
-      check(left.length === 0, `${label} : l'en-tête, la pilule et les rangées partent (${JSON.stringify(left)})`);
+      const left = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-rails]'].filter((selector) => document.querySelector(selector) !== null));
+      check(left.length === 0, `${label} : l'en-tête, la pilule et les rails partent (${JSON.stringify(left)})`);
       check(await appears(page, '[data-call-mode-preview="effects"] video'), `${label} : ma vidéo prend tout l'écran`);
       check((await page.$('[data-call-capture-shoot], [data-call-mode-bar] .size-\\[72px\\]')) === null, `${label} : plus de déclencheur dans la barre`);
       check(await appears(page, '[data-call-capture-hint]', 2000) && (await page.textContent('[data-call-capture-hint]')) === 'Deux tapes : photo · Appui long : vidéo', `${label} : l'indice du geste se montre`);
@@ -397,7 +403,7 @@ try {
 
       // ------------------------------------------------ 7. pas de zoom de caméra : le zoom numérique recadre l'image ENVOYÉE
       check((await page.$('[data-call-zoom]')) === null, `${label} : une caméra sans zoom n'affiche pas de capsule sur ma vignette`);
-      const step = '[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]';
+      const step = '[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]';
       check((await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local', `${label} : le cran de ma vignette règle le zoom numérique (#8441)`);
       await page.$eval(step, (button) => button.click());
       check(await until(page, () => document.querySelector('[data-call-self-control="zoom"]')?.getAttribute('aria-label')?.endsWith('2×') === true), `${label} : un cran passe à 2×`);
@@ -409,7 +415,7 @@ try {
 
       // ------------------------------------------------ 8. le mode Montage
       await openActions(page);
-      await page.click('[data-call-screen] button[aria-label="Activer le micro"]').catch(() => undefined);
+      await page.click('[data-call-screen] button[aria-label="Réactiver le micro"]').catch(() => undefined);
       await page.click('[data-call-control="capture"]');
       check(await appears(page, '[data-call-mode="montage"]'), `${label} : « Capturer » entre dans le mode Montage`);
       check((await page.$('[data-call-control-pill]')) === null, `${label} : la pilule part`);
@@ -519,7 +525,7 @@ try {
       await page.keyboard.press('Escape');
       check(await vanishes(page, '[data-call-mode]'), `${label} : Échap quitte le mode Montage`);
 
-      await page.click('[data-call-screen] button[aria-label="Activer le micro"]').catch(() => undefined);
+      await page.click('[data-call-screen] button[aria-label="Réactiver le micro"]').catch(() => undefined);
       await openActions(page);
       await page.click('[data-call-screen] button[aria-label="Raccrocher"]');
     } catch (error) {

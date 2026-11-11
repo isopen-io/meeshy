@@ -176,17 +176,17 @@ describe('un appel vocal propose d’ajouter la vidéo (#9095, `video.badge.plus
   });
 });
 
-describe('l’image dans l’image vit dans la rangée « l’appel » (#9095, `CallView+Pill.swift`)', () => {
-  test('offerte, elle ferme la rangée « l’appel » et quitte l’en-tête', async () => {
+describe('l’image dans l’image vit dans la liste « l’appel » (#9095, `CallView+Pill.swift`)', () => {
+  test('offerte, elle ferme le rail « l’appel » et quitte l’en-tête', async () => {
     const pipWindow = window as unknown as { documentPictureInPicture?: unknown };
     withDevices([]);
     pipWindow.documentPictureInPicture = {};
     try {
       const view = await mount({ media: 'video', members: { 'u-peer': member({ cameraOn: true }) }, remoteStreams: { 'u-peer': videoOf('remote') } });
       expect(view.find('[data-call-header] [data-call-pip]')).toBeNull();
-      const row = [...document.querySelectorAll('[data-call-row="call"] [data-call-row-scroll] button')].map((button) => button.getAttribute('data-call-control'));
+      const row = [...document.querySelectorAll('[data-call-rail="call"] button')].map((button) => button.getAttribute('data-call-control'));
       expect(row.at(-1)).toBe('pip');
-      expect(view.find('[data-call-row="call"] [data-call-control="pip"]')?.getAttribute('aria-label')).toBe('Image dans l’image');
+      expect(view.find('[data-call-rail="call"] [data-call-control="pip"]')?.getAttribute('aria-label')).toBe('Image dans l’image');
       view.done();
     } finally {
       delete pipWindow.documentPictureInPicture;

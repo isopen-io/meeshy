@@ -40,6 +40,36 @@ final class QuotedReferenceFactoryTests: XCTestCase {
         XCTAssertEqual(reference.authorName, "Bob")
     }
 
+    func test_quotedMissedCall_saysTheOutcomeFromTheReadersSide_neverTheFrenchFallback() {
+        let call = CallSummaryMetadata(
+            callId: "c-1", initiatorId: "u-ama", callType: .audio, outcome: .missed,
+            durationSeconds: 0, bytesTotal: nil, bytesEstimated: false, networkQuality: nil
+        )
+        let quoted = Message(
+            id: "q-call", conversationId: "000000000000000000000091", senderId: "000000000000000000000002",
+            content: "Appel manqué (repli)", messageSource: .system, senderName: "Ama", callSummary: call
+        )
+        let strings = ConversationPreviewCatalog.strings()
+
+        let received = QuotedReferenceFactory.reference(quoting: quoted, citing: nil, viewerId: "u-kofi", servedText: { nil })
+        let placed = QuotedReferenceFactory.reference(quoting: quoted, citing: nil, viewerId: "u-ama", servedText: { nil })
+
+        XCTAssertEqual(received.previewText, strings(.callMissed))
+        XCTAssertEqual(placed.previewText, strings(.callUnanswered))
+    }
+
+    func test_quotedArrival_saysTheArrivalInTheAppLanguage() {
+        let join = JoinNoticeMetadata(participantId: "p-1", displayName: "Bruno", isAnonymous: false, viaShareLink: false)
+        let quoted = Message(
+            id: "q-join", conversationId: "000000000000000000000091", senderId: "000000000000000000000002",
+            content: "Bruno a rejoint (repli)", messageSource: .system, joinNotice: join
+        )
+
+        let reference = QuotedReferenceFactory.reference(quoting: quoted, citing: nil, viewerId: "u-kofi", servedText: { nil })
+
+        XCTAssertEqual(reference.previewText, ConversationPreviewCatalog.strings()(.systemMemberJoined, ["actor": "Bruno"]))
+    }
+
     func test_noServedTranslation_fallsBackOnTheOriginal() {
         let reference = QuotedReferenceFactory.reference(quoting: makeQuoted(), citing: nil, servedText: { nil })
 

@@ -16,14 +16,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import dagger.Binds
 import dagger.Module
@@ -113,16 +111,9 @@ interface CallCameraPickerCapabilityModule {
     fun bindActionHandler(impl: CallCameraPickerActionHandler): CallActionHandler
 }
 
-/** Le pont de l'écran vers le contrôleur (singleton) : la feuille l'observe, la rangée de ma caméra l'ouvre. */
+/** Le pont de l'écran vers le contrôleur (singleton) : la feuille l'observe, l'action « Choisir la caméra » l'ouvre. */
 @HiltViewModel
 class CallCameraPickerViewModel @Inject constructor(val controller: CallCameraPickerController) : ViewModel()
-
-/** Ouvre « Choisir la caméra » depuis la rangée de ma caméra : à n'appeler que si une caméra est branchée. */
-@Composable
-internal fun rememberCameraPickerOpener(): () -> Unit {
-    val bridge: CallCameraPickerViewModel = hiltViewModel()
-    return remember(bridge) { bridge.controller::open }
-}
 
 @Composable
 internal fun CameraDeviceOption.displayName(): String = when (facing) {

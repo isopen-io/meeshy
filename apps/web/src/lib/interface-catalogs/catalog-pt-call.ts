@@ -30,7 +30,7 @@ const ptCall = {
   'call.camera.peerOff': 'Câmara desativada',
   'call.video.connecting': 'A ligar o vídeo…',
   'call.hangup': 'Desligar',
-  'call.minimize': 'Minimizar chamada',
+  'call.minimize': 'Minimizar',
   'call.expand': 'Voltar à chamada',
   'call.captions.on': 'Mostrar legendas traduzidas',
   'call.captions.off': 'Ocultar legendas',

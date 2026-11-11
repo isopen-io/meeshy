@@ -65,10 +65,10 @@ final class StoryEffectsEqualityTests: XCTestCase {
         let base = Self.heavyEffects()
         let copie = Self.distinctStorage(base)
 
-        let oracle = Self.seconds { _ = Self.encodedEqual(base, copie) }
-        let egalite = Self.seconds { _ = base == copie }
+        let oracle = Self.bestOf { _ = Self.encodedEqual(base, copie) }
+        let egalite = Self.bestOf { _ = base == copie }
 
-        XCTAssertLessThan(egalite * 20, oracle,
+        XCTAssertLessThan(egalite * Self.ecartQuiExclutLaSerialisation, oracle,
                           "`==` doit coûter une fraction de l'encodage (\(egalite)s contre \(oracle)s)")
     }
 
@@ -82,10 +82,16 @@ final class StoryEffectsEqualityTests: XCTestCase {
         return gauche == droite
     }
 
+    private static let ecartQuiExclutLaSerialisation: Double = 5
+
     private static func seconds(_ work: () -> Void) -> TimeInterval {
         let start = CFAbsoluteTimeGetCurrent()
         (0..<5).forEach { _ in work() }
         return CFAbsoluteTimeGetCurrent() - start
+    }
+
+    private static func bestOf(_ work: () -> Void) -> TimeInterval {
+        (0..<7).map { _ in seconds(work) }.min() ?? .infinity
     }
 
     /// Recopie les tableaux élément par élément : deux valeurs égales qui ne

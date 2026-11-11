@@ -53,6 +53,7 @@ object SocketAckParsing {
             limit = response.number("limit")?.toInt(),
             errorCode = errorCode,
             endReason = errorObject?.string("endReason"),
+            conversationId = response.string("conversationId"),
         )
     }
 

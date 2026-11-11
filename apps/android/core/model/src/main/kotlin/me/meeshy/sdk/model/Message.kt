@@ -52,6 +52,13 @@ data class ApiMessageReplyPreview(
     val attachmentReplyTo: ApiQuotedAttachmentReference? = null,
     /** Nombre TOTAL de photos et vidéos du message cité (la passerelle n'en sert que quatre). */
     val visualAttachmentCount: Int? = null,
+    /**
+     * #17441 — la métadonnée de l'avis cité (appel, arrivée, arrivées regroupées, départ annoncé), servie par
+     * `servedQuotedMessage` : la citation s'en dit dans la langue du lecteur ([QuotedNoticeText]). Absente (ancienne
+     * passerelle) ou illisible ⇒ `null`, la citation garde `content`.
+     */
+    @Serializable(with = TolerantQuotedNoticeSerializer::class)
+    val notice: JsonObject? = null,
 ) {
     /** L'utilisateur cité : la personne avant l'identifiant de participant. */
     val authorUserId: String? get() = sender?.resolvedUserId ?: senderId
@@ -76,6 +83,8 @@ data class ApiQuotedAttachmentReference(
     val attachmentId: String,
     val kind: String? = null,
 )
+
+internal object TolerantQuotedNoticeSerializer : KSerializer<JsonObject?> by TolerantSerializer(JsonObject.serializer())
 
 internal object TolerantQuotedAttachmentReferenceSerializer :
     KSerializer<ApiQuotedAttachmentReference?> by TolerantSerializer(ApiQuotedAttachmentReference.serializer())

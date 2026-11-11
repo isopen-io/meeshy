@@ -267,8 +267,9 @@ public enum MessageActionPolicy {
         let kind = context.content.kind
         let flags = context.content.flags
         let deletion = deleteVerdict(context)
-        let reacts = context.live && !context.notice && context.viewer.isActiveMember
+        let writes = context.live && context.viewer.isActiveMember
             && context.viewer.canSendMessages && !context.conversation.isClosed
+        let reacts = writes && !context.notice
         let serverFeature: (Bool) -> Bool? = { applies in
             context.e2ee ? nil : applies && context.live && context.readable
         }
@@ -282,7 +283,8 @@ public enum MessageActionPolicy {
             report: context.live && context.registered && context.viewer.isActiveMember
                 && !context.notice && !context.isMine,
             canReact: reacts,
-            canReply: reacts && !flags.viewOnce && viewerCanWrite(in: context.conversation, viewer: context.viewer),
+            canReply: writes && (!context.notice || context.quotableNotice) && !flags.viewOnce
+                && viewerCanWrite(in: context.conversation, viewer: context.viewer),
             translate: translatable ? (context.e2ee ? TranslateVerdict.device : TranslateVerdict.servedSwitch) : nil,
             transcribe: serverFeature(kind == .audio),
             sentiment: serverFeature(context.hasText),
@@ -356,6 +358,8 @@ private struct MessageActionContext {
     let content: MessageContentKind.Shape
     let registered: Bool
     let notice: Bool
+    /// Un avis AFFICHÉ qu'on cite (#17441, `quotableNoticeKind`) : appel, arrivée (seule ou regroupée), départ annoncé.
+    let quotableNotice: Bool
     let forwardable: Bool
     let exportable: Bool
     let e2ee: Bool
@@ -369,6 +373,10 @@ private struct MessageActionContext {
     let piecesNotServerCopyable: Bool
 
     private static let noticeKinds: Set<MessageContentKind> = [.system, .call]
+
+    /// `QUOTABLE_NOTICE_KINDS` (`packages/shared/utils/quotable-notice.ts`) — l'avis de capture reste hors : la
+    /// passerelle refuse de le citer (#9629).
+    static let quotableNoticeKinds: Set<String> = ["call", "call-live", "member-joined", "members-arrived", "member-left"]
 
     init(_ input: MessageActionPolicy.Input) {
         let subject = input.message.subject
@@ -389,6 +397,8 @@ private struct MessageActionContext {
         self.content = content
         self.registered = registered
         self.notice = notice
+        self.quotableNotice = subject.messageType == "system"
+            && subject.metadata.kind.map { MessageActionContext.quotableNoticeKinds.contains($0) } == true
         self.forwardable = exit.forward.isAllowed
         self.exportable = exportable
         self.e2ee = flags.encrypted || input.conversation.isEndToEnd

@@ -29,6 +29,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byIdCard(id: String)
     case byIdDeleteForMe(id: String)
     case byIdEngagement(id: String)
+    case byIdExternalReport(id: String)
     case byIdInvite(id: String)
     case byIdLeave(id: String)
     case byIdMarkRead(id: String)
@@ -58,6 +59,8 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byIdStatus(id: String)
     case byIdThreadsByMessageId(id: String, messageId: String)
     case checkIdentifierByIdentifier(identifier: String)
+    case external
+    case externalConsent
     case joinByLinkId(linkId: String)
     case root
     case search
@@ -81,6 +84,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byIdCard(let id): return "/api/v1/conversations/\(id)/card"
         case .byIdDeleteForMe(let id): return "/api/v1/conversations/\(id)/delete-for-me"
         case .byIdEngagement(let id): return "/api/v1/conversations/\(id)/engagement"
+        case .byIdExternalReport(let id): return "/api/v1/conversations/\(id)/external/report"
         case .byIdInvite(let id): return "/api/v1/conversations/\(id)/invite"
         case .byIdLeave(let id): return "/api/v1/conversations/\(id)/leave"
         case .byIdMarkRead(let id): return "/api/v1/conversations/\(id)/mark-read"
@@ -110,6 +114,8 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byIdStatus(let id): return "/api/v1/conversations/\(id)/status"
         case .byIdThreadsByMessageId(let id, let messageId): return "/api/v1/conversations/\(id)/threads/\(messageId)"
         case .checkIdentifierByIdentifier(let identifier): return "/api/v1/conversations/check-identifier/\(identifier)"
+        case .external: return "/api/v1/conversations/external"
+        case .externalConsent: return "/api/v1/conversations/external/consent"
         case .joinByLinkId(let linkId): return "/api/v1/conversations/join/\(linkId)"
         case .root: return "/api/v1/conversations"
         case .search: return "/api/v1/conversations/search"

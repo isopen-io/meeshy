@@ -457,6 +457,11 @@ services:
       # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
       # Sans BREVO_API_KEY sur l'hôte, rien ne part (la passerelle le journalise).
       - MEESHY_ENV=staging
+      # #17117 — les conversations externes (écrire à un ami WhatsApp, chantier #17007) :
+      # armées par la seule valeur exacte on posée dans le .env de l'hôte, éteintes sinon.
+      - EXTERNAL_CONVERSATIONS=${EXTERNAL_CONVERSATIONS:-off}
+      # #17120 — durée de conservation du numéro de l'ami (jours entiers, provisoire, borne dure 365).
+      - EXTERNAL_PEER_HANDLE_RETENTION_DAYS=${EXTERNAL_PEER_HANDLE_RETENTION_DAYS:-90}
       # #9614, #9642 — la purge de conservation (sessions closes 90 j, journaux
       # 12 mois, adresses d'inscription et de connexion 12 mois). ARMÉE par la
       # seule valeur exacte true ; sinon elle compte et journalise sans écrire.

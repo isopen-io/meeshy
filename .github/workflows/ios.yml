@@ -87,7 +87,8 @@ name: iOS
 # Trois portées, dans cet ordre de priorité :
 #   1. `workflow_dispatch`        → suite complète (un lancement manuel est déjà explicite)
 #   2. poussée sur `main`         → suite complète, SANS opt-in
-#   3. tout le reste (PR, `dev`)  → compilation, sauf mot-clé au sujet du commit
+#   3. poussée sur `dev`          → suite complète, SANS opt-in (2026-11-10)
+#   4. tout le reste (PR)         → compilation, sauf mot-clé au sujet du commit
 #
 # La règle 2 tient à ce que `main` n'est pas une branche de travail : c'est ce
 # qui part en production, et rien n'y est jamais « sur demande ». Le reste du
@@ -265,6 +266,14 @@ jobs:
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "run_tests=true" >> "$GITHUB_OUTPUT"
             echo "::notice title=Portée::Suite complète — poussée sur main, aucun opt-in requis."
+            exit 0
+          fi
+
+          # `dev` est le staging, et ce qui y entre part vers main : la suite
+          # complète y tourne à chaque poussée (directive porteur 2026-11-10).
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/dev" ]; then
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Portée::Suite complète — poussée sur dev, aucun opt-in requis."
             exit 0
           fi
 

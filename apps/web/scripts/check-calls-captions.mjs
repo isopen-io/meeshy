@@ -144,6 +144,9 @@ const tapSize = async (locator) => {
   return { ok: box !== null && box.width >= TAP_FLOOR && box.height >= TAP_FLOOR, size: box && [Math.round(box.width), Math.round(box.height)] };
 };
 
+/** Les rails glissent (300 ms) : on mesure et on touche posés, jamais en route (#17327). */
+const railsSettled = (page) => page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => !(animation instanceof CSSTransition) || animation.playState !== 'running') ?? true, undefined, { timeout: 3000 }).then(() => true, () => false);
+
 /**
  * Les actions vivent derrière le (…) de la pilule (#8391), qui les déplie.
  * En vidéo, aucune attente n'efface les commandes (#8988) : seul un toucher
@@ -153,7 +156,8 @@ const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  await appears(page, '[data-call-actions]');
+  await appears(page, '[data-call-rails="shown"], [data-call-actions]');
+  await railsSettled(page);
 };
 
 const startConnectedCall = async (page) => {
@@ -268,14 +272,14 @@ try {
         return appears(page, '[data-call-journal-panel]');
       };
       await openActions(page);
-      const journalButton = page.locator('[data-call-row="call"] [data-call-control="journal"]');
+      const journalButton = page.locator('[data-call-rail="call"] [data-call-control="journal"]');
       const journalSize = await tapSize(journalButton);
-      check(journalSize.ok, `${label} : « Journal » est dans la rangée « L'appel » et fait au moins ${TAP_FLOOR} (${JSON.stringify(journalSize.size)})`);
-      const callRow = await page.$$eval('[data-call-row="call"] button', (buttons) => buttons.map((button) => button.getAttribute('data-call-control') ?? (button.hasAttribute('data-call-captions') ? 'captions' : '')));
-      check(callRow.indexOf('journal') === callRow.indexOf('captions') + 1 && callRow.includes('captions'), `${label} : « Journal » suit les sous-titres (${callRow.join(' · ')})`);
+      check(journalSize.ok, `${label} : « Journal » est dans le rail « L'appel » et fait au moins ${TAP_FLOOR} (${JSON.stringify(journalSize.size)})`);
+      const callRow = await page.$$eval('[data-call-rail="call"] button', (buttons) => buttons.map((button) => button.getAttribute('data-call-control') ?? (button.hasAttribute('data-call-captions') ? 'captions' : button.hasAttribute('data-call-record') ? 'record' : '')));
+      check(JSON.stringify(callRow.filter((key) => key !== 'pip').slice(0, 5)) === JSON.stringify(['captions', 'record', 'invite', 'journal', 'react']), `${label} : « Journal » suit « Ajouter » dans « L'appel » (${callRow.join(' · ')})`);
       await journalButton.click();
       check(await appears(page, '[data-call-journal-panel]'), `${label} : « Journal » ouvre le journal`);
-      check((await page.$('[data-call-row]')) === null, `${label} : le journal REMPLACE les rangées`);
+      check(await page.waitForFunction(() => document.querySelector('[data-call-row], [data-call-rail]') === null, undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : le journal REMPLACE les rails`);
       check((await page.$('[data-call-captions-panel]')) === null, `${label} : le bandeau des sous-titres se retire le temps de lire le journal`);
       check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : le journal porte les voix dans l'ordre (${JSON.stringify(await journalEntries())})`);
       const peerLine = await page.$eval('[data-call-journal-entry="peer"]', (entry) => ({
@@ -286,7 +290,7 @@ try {
       check((await page.$eval('[data-call-journal]', (list) => getComputedStyle(list).overflowY)) === 'auto', `${label} : le journal défile librement`);
       await capture(page, `journal-${width}x${height}`);
       await page.click('[data-panel-back]');
-      check(await appears(page, '[data-call-row="call"]'), `${label} : ‹ revient aux rangées`);
+      check(await appears(page, '[data-call-rails="shown"] [data-call-rail="call"]'), `${label} : ‹ revient aux rails`);
       check(await page.evaluate(() => document.activeElement?.getAttribute('data-call-control') === 'journal'), `${label} : le focus revient à « Journal »`);
 
       await openActions(page);
@@ -300,7 +304,7 @@ try {
       check(await vanishes(page, '[data-call-journal-panel]'), `${label} : Échap ferme le journal`);
       check((await page.$('[data-call-screen="connected"]')) !== null, `${label} : sans réduire l'appel`);
 
-      await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+      await page.click('[data-call-screen] button[aria-label="Réduire"]');
       check(await appears(page, '[data-call-pill-bar]'), `${label} : l'appel se réduit`);
       await page.click('[data-call-pill-bar] button >> nth=0');
       check(await appears(page, '[data-call-screen="connected"]'), `${label} : l'appel revient`);

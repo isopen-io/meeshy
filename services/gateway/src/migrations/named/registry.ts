@@ -4,6 +4,7 @@ import { socialEventsV2Retention } from './social-events-v2-retention';
 import { serverAtRestAttachmentFiles } from './server-at-rest-attachment-files';
 import { serverAtRestAttachmentFilesUnseal } from './server-at-rest-attachment-files-unseal';
 import { attachmentFileAtRestIndexes } from './attachment-file-at-rest-indexes';
+import { externalConversationPeerIndexes } from './external-conversation-peer-indexes';
 import type { NamedMigration } from './types';
 
 export type { NamedMigration, NamedMigrationContext } from './types';
@@ -20,4 +21,5 @@ export const NAMED_MIGRATIONS: readonly NamedMigration[] = [
   attachmentFileAtRestIndexes,
   serverAtRestAttachmentFiles,
   serverAtRestAttachmentFilesUnseal,
+  externalConversationPeerIndexes,
 ];

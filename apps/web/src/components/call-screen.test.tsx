@@ -12,13 +12,17 @@ import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import { CallModePending, CallScreen } from './call-screen';
 import { ThreadCallButton } from './thread-call-button';
 
-/* Les rangées d'actions vivent dans leur chunk (`call-control-actions.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
+/* Les rangées d'actions et les rails du duo vivent dans leurs chunks (`call-control-actions.tsx`, `call-rails.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming', preview: { getVideoTracks: () => [], getTracks: () => [] } as unknown as MediaStream })} />);
   await import('./call-control-actions');
+  await import('./call-rails');
   await import('./call-preview');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  /* Le cadre des rails arrivé, un second rendu amorce le contenu d'un rail, qu'il charge à son tour. */
+  renderToStaticMarkup(<CallScreen call={call({ members: { 'u-peer': member() } })} canShare initiallyExpanded />);
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
@@ -134,11 +138,19 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
     const shapes = [screen({ members: { 'u-peer': member() } }), screen({ cameraOn: true, members: { 'u-peer': member() } }), screen({ isGroup: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } })];
     for (const html of shapes) {
       const pill = html.slice(html.indexOf('data-call-control-pill'));
-      const order = ['Plus d’actions', 'Couper le micro', 'Choisir les périphériques', 'Raccrocher'].map((label) => pill.indexOf(`aria-label="${label}"`));
+      const order = ['Afficher les actions', 'Couper le micro', 'Sortie audio', 'Raccrocher'].map((label) => pill.indexOf(`aria-label="${label}"`));
       expect(order.every((index) => index >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
       expect(html).toMatch(/class="glass-call[^"]*"[^>]*data-call-control-pill/);
     }
+  });
+
+  test('le bouton (…) annonce l’action : « Masquer les actions » une fois ouvert', () => {
+    expect(expandedScreen({ members: { 'u-peer': member() } })).toMatch(/aria-label="Masquer les actions"[^>]*data-call-more/);
+  });
+
+  test('micro coupé, le bouton annonce « Réactiver le micro »', () => {
+    expect(screen({ micMuted: true, members: { 'u-peer': member() } })).toContain('aria-label="Réactiver le micro"');
   });
 
   test('(…) dit son état : actions rangées à l’ouverture de l’appel', () => {
@@ -154,16 +166,16 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
   });
 
   test('Réduire est un bouton de verre isolé', () => {
-    expect(screen({ members: { 'u-peer': member() } })).toMatch(/aria-label="Réduire l’appel"[^>]*class="glass-call/);
+    expect(screen({ members: { 'u-peer': member() } })).toMatch(/aria-label="Réduire"[^>]*class="glass-call/);
   });
 
   test('UN seul chemin vers la conversation : « Conversation » dans l’en-tête, juste à droite de Réduire (#8436)', () => {
     const html = screen({ members: { 'u-peer': member() } });
     const header = html.slice(html.indexOf('data-call-header'));
-    const order = ['aria-label="Réduire l’appel"', 'data-call-conversation'].map((marker) => header.indexOf(marker));
+    const order = ['aria-label="Réduire"', 'data-call-conversation'].map((marker) => header.indexOf(marker));
     expect(order.every((at) => at >= 0)).toBe(true);
     expect(order[0]).toBeLessThan(order[1] as number);
-    expect(header).toMatch(/aria-label="Ouvrir la conversation"[^>]*class="glass-call/);
+    expect(header).toMatch(/aria-label="Conversation"[^>]*class="glass-call/);
     expect(html).not.toContain('data-call-control="messages"');
   });
 
@@ -223,81 +235,159 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={effectsSupport} />));
     const find = (selector: string) => host.querySelector(selector);
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
+    const rerender = (next: Partial<ActiveCall>) => root.render(<CallScreen call={call(next)} canShare effectsSupport={effectsSupport} />);
     const done = () => {
       act(() => root.unmount());
       host.remove();
     };
-    return { host, find, press, done };
+    return { host, find, press, rerender, done };
   };
 
   const peers = { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) };
 
   const rowLabels = (host: HTMLElement, family: string) => [...host.querySelectorAll(`[data-call-row="${family}"] [data-call-row-scroll] button`)].map((button) => button.getAttribute('aria-label'));
 
-  for (const [shape, overrides] of [
-    ['en duo', { members: { 'u-peer': member() } }],
-    ['en groupe', { isGroup: true, members: peers }],
-  ] as const) {
-    test(`${shape}, (…) fait grandir la pilule : une rangée par famille, légendée, qui défile à l’horizontale (#8550)`, () => {
-      const view = mount(overrides);
-      view.press('[data-call-more]');
-      expect(view.find('[data-call-more]')?.getAttribute('aria-expanded')).toBe('true');
-      expect(view.find('[data-call-control-pill]')?.getAttribute('data-call-control-pill')).toBe('grown');
-      const rows = [...view.host.querySelectorAll('[data-call-control-pill] [data-call-row]')].map((row) => [row.getAttribute('data-call-row'), row.querySelector('[data-call-row-title]')?.textContent]);
-      expect(rows).toEqual([
-        ['mine', 'Mon image'],
-        ['call', 'L’appel'],
-      ]);
-      const scroller = view.find('[data-call-row="call"] [data-call-row-scroll]');
-      expect(scroller?.getAttribute('role')).toBe('toolbar');
-      expect(scroller?.getAttribute('aria-orientation')).toBe('horizontal');
-      expect(scroller?.className).toContain('overflow-x-auto');
-      expect(scroller?.className).not.toContain('snap-');
-      expect(scroller?.className).not.toContain('flex-wrap');
-      expect(rowLabels(view.host, 'mine')).toEqual(['Activer la caméra', 'Partager l’écran']);
-      expect(view.find('[data-call-row="call"] [data-call-captions]')).not.toBeNull();
-      expect(view.find('[data-call-row="call"] [data-call-record]')).not.toBeNull();
-      expect(view.find('[data-call-self-controls]')).toBeNull();
-      expect(view.find('[data-call-row] button')?.className).not.toContain('glass-call');
-      view.press('[data-call-more]');
-      expect(view.find('[data-call-row]')).toBeNull();
-      view.done();
-    });
-  }
+  const railLabels = (host: HTMLElement, family: string) => [...host.querySelectorAll(`[data-call-rail="${family}"] button`)].map((button) => button.getAttribute('aria-label'));
 
-  test('les flèches passent d’une action à sa voisine dans la rangée', () => {
+  /* Un rail entre une image après sa demande (il se monte hors de l'écran, puis glisse) et sort en 300 ms : les témoins attendent ces deux moments. */
+  const frame = () => act(async () => void (await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))));
+
+  const leaving = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 350))));
+
+  const railsState = (host: HTMLElement) => host.querySelector('[data-call-rails]')?.getAttribute('data-call-rails') ?? null;
+
+  test('en duo, (…) fait sortir DEUX RAILS sur les bords — « Mon image » à gauche, « L’appel » à droite — et la pilule NE grandit PAS (#17327)', async () => {
+    const view = mount({ members: { 'u-peer': member() } });
+    expect(railsState(view.host)).toBeNull();
+    view.press('[data-call-more]');
+    await frame();
+    expect(view.find('[data-call-more]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(view.find('[data-call-control-pill]')?.getAttribute('data-call-control-pill')).toBe('pill');
+    expect(view.find('[data-call-control-pill]')?.className).toContain('w-fit');
+    expect(view.find('[data-call-control-pill] [data-call-row]')).toBeNull();
+    expect(railsState(view.host)).toBe('shown');
+    expect([...view.host.querySelectorAll('[data-call-rail]')].map((rail) => rail.getAttribute('data-call-rail'))).toEqual(['mine', 'call']);
+    expect(view.find('[data-call-rail-side="leading"] [data-call-rail="mine"]')).not.toBeNull();
+    expect(view.find('[data-call-rail-side="trailing"] [data-call-rail="call"]')).not.toBeNull();
+    expect(railLabels(view.host, 'mine')).toEqual(['Activer la caméra', 'Partager l’écran']);
+    expect(railLabels(view.host, 'call')).toEqual(['Afficher les sous-titres traduits', 'Enregistrer l’appel', 'Ajouter des personnes à l’appel', 'Ouvrir le journal de l’appel', 'Envoyer une réaction']);
+    const rail = view.find('[data-call-rail="call"]');
+    expect(rail?.getAttribute('role')).toBe('toolbar');
+    expect(rail?.getAttribute('aria-orientation')).toBe('vertical');
+    expect(rail?.getAttribute('aria-label')).toBe('L’appel');
+    expect(rail?.className).toContain('glass-call');
+    expect(rail?.querySelector('[data-call-rail-scroll]')?.className).toContain('overflow-y-auto');
+    expect(view.find('[data-call-rail] [data-call-captions]')).not.toBeNull();
+    expect(view.find('[data-call-rail] [data-call-record]')).not.toBeNull();
+    expect(view.find('[data-call-rail] button')?.className).not.toContain('glass-call ');
+    view.done();
+  });
+
+  test('en duo, ranger (…) renvoie chaque rail vers SON bord, puis le démonte : rien ne disparaît d’un coup (#17327)', async () => {
     const view = mount({ members: { 'u-peer': member() } });
     view.press('[data-call-more]');
-    const first = view.find('[data-call-row="mine"] [data-call-row-scroll] button') as HTMLElement;
-    act(() => first.focus());
-    act(() => view.find('[data-call-row="mine"] [data-call-row-scroll]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Partager l’écran');
+    await frame();
+    view.press('[data-call-more]');
+    expect(railsState(view.host)).toBe('away');
+    expect(view.find('[data-call-rail-side="leading"]')?.className).toContain('-translate-x-[calc(100%+1.5rem)]');
+    expect(view.find('[data-call-rail-side="trailing"]')?.className).toContain('translate-x-[calc(100%+1.5rem)]');
+    expect(view.find('[data-call-rail-side="leading"]')?.className).toContain('opacity-0');
+    expect(view.find('[data-call-rail-side="leading"]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(view.find('[data-call-rail-side="leading"]')?.hasAttribute('inert')).toBe(true);
+    await leaving();
+    expect(railsState(view.host)).toBeNull();
+    expect(view.find('[data-call-rail]')).toBeNull();
     view.done();
   });
 
-  test('caméra allumée en duo, les commandes de MA caméra vivent AUTOUR de ma vignette — Effets · Écran au-dessus, Retourner · Couper en dessous — et le (…) ne les double pas (#8626, #8747)', () => {
-    const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
-    for (const group of ['effects', 'camera']) {
-      const row = view.find(`[data-call-corner-frame] [data-call-self-row="${group}"] [data-call-self-controls="tile"]`);
-      expect(row?.getAttribute('role')).toBe('toolbar');
-      expect(row?.getAttribute('aria-orientation')).toBe('horizontal');
-      expect(row?.getAttribute('aria-label')).toBe('Options de ma caméra');
-      expect(row?.getAttribute('data-call-self-group')).toBe(group);
-    }
-    const labels = (group: string) => [...view.host.querySelectorAll(`[data-call-self-row="${group}"] [data-call-self-control]`)].map((button) => button.getAttribute('aria-label'));
-    expect(labels('effects')).toEqual(['Effets de ma vidéo', 'Partager l’écran']);
-    expect(labels('camera')).toEqual(['Retourner la caméra', 'Couper la caméra']);
-    expect(view.find('[data-call-self-row="effects"]')?.getAttribute('data-call-self-row-side')).toBe('above');
-    expect(view.find('[data-call-self-row="camera"]')?.getAttribute('data-call-self-row-side')).toBe('below');
-    expect(view.find('[data-call-corner] [data-call-self-controls]')).toBeNull();
+  test('les rails ne font bouger que la transformation et l’opacité ; « Réduire les animations » remplace la translation par un fondu', async () => {
+    const view = mount({ members: { 'u-peer': member() } });
     view.press('[data-call-more]');
-    expect(view.find('[data-call-row="mine"]')).toBeNull();
+    await frame();
+    const classes = view.find('[data-call-rail-side="leading"]')?.className ?? '';
+    expect(classes).toContain('transition-[translate,opacity]');
+    expect(classes).toContain('motion-reduce:translate-x-0');
+    expect(classes).toContain('motion-reduce:duration-150');
+    expect(classes).not.toContain('transition-all');
+    view.done();
+  });
+
+  test('en groupe, (…) fait grandir la pilule : une rangée par famille, légendée, qui défile à l’horizontale — jamais de rail sur la grille (#8550, #17327)', async () => {
+    const view = mount({ isGroup: true, members: peers });
+    view.press('[data-call-more]');
+    await act(async () => {});
+    expect(view.find('[data-call-more]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(view.find('[data-call-control-pill]')?.getAttribute('data-call-control-pill')).toBe('grown');
+    const rows = [...view.host.querySelectorAll('[data-call-control-pill] [data-call-row]')].map((row) => [row.getAttribute('data-call-row'), row.querySelector('[data-call-row-title]')?.textContent]);
+    expect(rows).toEqual([
+      ['mine', 'Mon image'],
+      ['call', 'L’appel'],
+    ]);
+    const scroller = view.find('[data-call-row="call"] [data-call-row-scroll]');
+    expect(scroller?.getAttribute('role')).toBe('toolbar');
+    expect(scroller?.getAttribute('aria-orientation')).toBe('horizontal');
+    expect(scroller?.className).toContain('overflow-x-auto');
+    expect(scroller?.className).not.toContain('snap-');
+    expect(scroller?.className).not.toContain('flex-wrap');
+    expect(rowLabels(view.host, 'mine')).toEqual(['Activer la caméra', 'Partager l’écran']);
+    expect(view.find('[data-call-row="call"] [data-call-captions]')).not.toBeNull();
+    expect(view.find('[data-call-row="call"] [data-call-record]')).not.toBeNull();
+    expect(view.find('[data-call-self-controls]')).toBeNull();
+    expect(view.find('[data-call-rail]')).toBeNull();
+    expect(view.find('[data-call-rails]')).toBeNull();
+    expect(view.find('[data-call-row] button')?.className).not.toContain('glass-call');
+    view.press('[data-call-more]');
+    expect(view.find('[data-call-row]')).toBeNull();
+    view.done();
+  });
+
+  test('de deux à trois, le (…) reste ouvert et change de forme : les rails repartent, les rangées se déplient (#17327)', async () => {
+    const duo = mount({ members: { 'u-peer': member() } });
+    duo.press('[data-call-more]');
+    await frame();
+    expect(duo.find('[data-call-rail]')).not.toBeNull();
+    act(() => duo.rerender({ isGroup: true, members: peers }));
+    expect(duo.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('menu');
+    expect(duo.find('[data-call-control-pill]')?.getAttribute('data-call-control-pill')).toBe('grown');
+    expect(duo.find('[data-call-control-pill] [data-call-row="call"]')).not.toBeNull();
+    expect(railsState(duo.host)).toBe('away');
+    duo.done();
+  });
+
+  test('les flèches passent d’une action à sa voisine : ← et → dans une rangée du groupe, ↑ et ↓ dans un rail du duo', async () => {
+    const group = mount({ isGroup: true, members: peers });
+    group.press('[data-call-more]');
+    await act(async () => {});
+    const first = group.find('[data-call-row="mine"] [data-call-row-scroll] button') as HTMLElement;
+    act(() => first.focus());
+    act(() => group.find('[data-call-row="mine"] [data-call-row-scroll]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })));
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Partager l’écran');
+    group.done();
+    const duo = mount({ members: { 'u-peer': member() } });
+    duo.press('[data-call-more]');
+    await frame();
+    act(() => (duo.find('[data-call-rail="mine"] button') as HTMLElement).focus());
+    act(() => duo.find('[data-call-rail="mine"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Partager l’écran');
+    duo.done();
+  });
+
+  test('caméra allumée en duo, ma vignette ne porte AUCUNE commande : Caméra · Retourner · Effets · Écran sont le rail gauche, dans cet ordre (#17327)', async () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
+    expect(view.find('[data-call-self-controls]')).toBeNull();
+    expect(view.find('[data-call-self-row]')).toBeNull();
+    expect(view.find('[data-call-corner-frame] [role="toolbar"]')).toBeNull();
+    expect(view.find('[data-call-corner-frame] [data-call-control]')).toBeNull();
+    view.press('[data-call-more]');
+    await frame();
+    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
     expect(view.host.querySelectorAll('[data-call-control="camera"]')).toHaveLength(1);
     expect(view.host.querySelectorAll('[data-call-screen-share]')).toHaveLength(1);
+    expect(view.find('[data-call-rail="mine"] [data-call-control="camera"]')?.getAttribute('aria-pressed')).toBe('true');
     view.done();
   });
 
-  test('ma vignette porte le cran du zoom de ma caméra, dans la rangée du dessous (#8441, #8747)', async () => {
+  test('ma vignette porte le cran du zoom de ma caméra, et lui seul, dans son coin haut (#8441, #17327)', async () => {
     const camera = { kind: 'video', readyState: 'live', getCapabilities: () => ({ zoom: { min: 1, max: 10, step: 0.1 } }), getSettings: () => ({ zoom: 1 }), applyConstraints: async () => undefined };
     const stream = Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getVideoTracks: () => [camera], getAudioTracks: () => [], getTracks: () => [camera] });
     const view = mount({ cameraOn: true, localStream: stream, members: { 'u-peer': member() } });
@@ -305,40 +395,54 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       await import('./call-self-camera');
     });
     await act(async () => {});
-    expect(view.find('[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]')?.textContent).toBe('1×');
-    expect(view.find('[data-call-self-row="effects"] [data-call-self-control="zoom"]')).toBeNull();
+    expect(view.find('[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]')?.textContent).toBe('1×');
+    expect(view.host.querySelectorAll('[data-call-corner-frame] [data-call-self-control]')).toHaveLength(1);
     view.done();
   });
 
-  test('caméra coupée, les commandes de ma caméra restent dans le (…) pour la rallumer (#8626)', () => {
+  test('caméra coupée, Caméra et Écran restent dans le rail gauche pour la rallumer (#8626, #17327)', async () => {
     const view = mount({ media: 'video', members: { 'u-peer': member({ cameraOn: true }) } });
     expect(view.find('[data-call-self-controls]')).toBeNull();
     view.press('[data-call-more]');
-    expect(rowLabels(view.host, 'mine')).toContain('Activer la caméra');
+    await frame();
+    expect(railLabels(view.host, 'mine')).toEqual(['Activer la caméra', 'Partager l’écran']);
     view.done();
   });
 
-  test('toucher la scène efface les deux rangées autour de ma vignette avec le reste (#8626, #8747)', () => {
+  test('toucher la scène range les deux rails vers leurs bords, avec le reste ; un second toucher les rend (#17327)', async () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-    const holders = () => [...view.host.querySelectorAll('[data-call-self-controls-holder]')];
-    expect(holders()).toHaveLength(2);
-    expect(holders().every((holder) => holder.className.includes('opacity-100'))).toBe(true);
-    act(() => (view.find('[data-call-screen]') as HTMLElement).click());
-    expect(holders().every((holder) => holder.className.includes('opacity-0'))).toBe(true);
-    expect(holders().every((holder) => holder.getAttribute('aria-hidden') === 'true')).toBe(true);
+    view.press('[data-call-more]');
+    await frame();
+    expect(railsState(view.host)).toBe('shown');
+    tapStage(view);
+    expect(railsState(view.host)).toBe('away');
+    expect(view.find('[data-call-rail-side="leading"]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(view.find('[data-call-rail-side="trailing"]')?.hasAttribute('inert')).toBe(true);
+    tapStage(view);
+    await frame();
+    expect(railsState(view.host)).toBe('shown');
+    expect(view.find('[data-call-rail-side="leading"]')?.hasAttribute('inert')).toBe(false);
     view.done();
   });
 
-  test('en vidéo connectée, « Capturer » rejoint la rangée de l’appel, après Enregistrer ; jamais en audio (#8552)', () => {
+  test('toucher un rail n’efface rien : le toucher appartient à ce qu’il touche (#8735)', async () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    view.press('[data-call-more]');
+    await frame();
+    act(() => (view.find('[data-call-rail="call"]') as HTMLElement).click());
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    view.done();
+  });
+
+  test('en vidéo connectée, « Capturer » ferme la liste de l’appel, après Réagir ; jamais en audio (#8552, #17327)', async () => {
     const video = mount({ cameraOn: true, members: { 'u-peer': member() } });
     video.press('[data-call-more]');
-    const labels = rowLabels(video.host, 'call');
-    const record = labels.findIndex((label) => label === 'Enregistrer l’appel');
-    expect(record).toBeGreaterThanOrEqual(0);
-    expect(labels[record + 1]).toBe('Capturer l’appel');
+    await frame();
+    expect(railLabels(video.host, 'call')).toEqual(['Afficher les sous-titres traduits', 'Enregistrer l’appel', 'Ajouter des personnes à l’appel', 'Ouvrir le journal de l’appel', 'Envoyer une réaction', 'Capturer l’appel']);
     video.done();
     const audio = mount({ members: { 'u-peer': member() } });
     audio.press('[data-call-more]');
+    await frame();
     expect(audio.find('[data-call-control="capture"]')).toBeNull();
     audio.done();
   });
@@ -363,15 +467,19 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     await act(async () => {});
   };
 
-  test('« Effets » entre en MODE : en-tête, pilule et rangées s’effacent ; seul reste le carrousel, et ✕ rend l’appel (#8578)', async () => {
+  test('« Effets » entre en MODE : en-tête, pilule et rails s’effacent ; seul reste le carrousel, et ✕ rend l’appel (#8578)', async () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
-    view.press('[data-call-self-controls] [data-call-control="effects"]');
+    view.press('[data-call-more]');
+    await frame();
+    view.press('[data-call-rail="mine"] [data-call-control="effects"]');
     await settle(() => import('./call-effects-mode'));
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
     expect(view.find('[data-call-header]')).toBeNull();
     expect(view.find('[data-call-control-pill]')).toBeNull();
     expect(view.find('[data-call-row]')).toBeNull();
+    expect(view.find('[data-call-rail]')).toBeNull();
+    expect(view.find('[data-call-rails]')).toBeNull();
     expect(view.host.querySelectorAll('[data-call-mode-carousel]')).toHaveLength(1);
     view.press('[data-call-mode-quit]');
     expect(view.find('[data-call-mode="effects"]')).toBeNull();
@@ -390,7 +498,9 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     const mine = videoStream('mine');
     const theirs = videoStream('theirs');
     const view = mount({ media: 'video', cameraOn: true, localStream: mine, members: { 'u-peer': member({ cameraOn: true }) }, remoteStreams: { 'u-peer': theirs } }, { color: true, blur: false });
-    view.press('[data-call-self-controls] [data-call-control="effects"]');
+    view.press('[data-call-more]');
+    await frame();
+    view.press('[data-call-control="effects"]');
     await settle(() => import('./call-effects-mode'));
     const block = view.find('[data-call-effects-companions]');
     expect(block?.getAttribute('aria-label')).toBe('Participants à l’appel');
@@ -448,36 +558,38 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('mon image en plein écran : la rangée de ma caméra monte en haut au centre ; « Effets » y entre dans le mode, qui la retire (#8576, #8626)', async () => {
+  test('mon image en plein écran : plus aucune rangée de commandes en haut — le rail « mon image » reste le seul endroit ; « Effets » y entre dans le mode (#8576, #17327)', async () => {
     const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } }, { color: true, blur: false });
-    expect(view.find('[data-call-self-controls="top"]')).toBeNull();
     view.press('[data-call-corner]');
     await settle(() => import('./call-self-camera'));
-    const top = view.find('[data-call-self-controls="top"]');
-    expect(top?.getAttribute('aria-orientation')).toBe('horizontal');
-    expect(top?.closest('[data-call-self-controls-holder]')?.getAttribute('data-call-self-controls-holder')).toBe('top');
-    expect(view.find('[data-call-self-controls="tile"]')).toBeNull();
-    expect(view.find('[data-call-corner-frame] [data-call-self-controls]')).toBeNull();
-    expect([...view.host.querySelectorAll('[data-call-self-control]')].map((button) => button.getAttribute('data-call-self-control'))).toEqual(['flip', 'camera', 'effects', 'screen']);
-    view.press('[data-call-self-control="effects"]');
+    expect(view.find('[data-call-self-controls]')).toBeNull();
+    expect(view.find('[data-call-self-controls-holder]')).toBeNull();
+    expect(view.find('[data-call-corner-frame] [data-call-control]')).toBeNull();
+    view.press('[data-call-more]');
+    await frame();
+    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    view.press('[data-call-rail="mine"] [data-call-control="effects"]');
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     await settle(() => import('./call-effects-mode'));
     expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
-    expect(view.find('[data-call-self-controls]')).toBeNull();
+    expect(view.find('[data-call-rail]')).toBeNull();
     view.done();
   });
 
-  test('« Journal », juste après les sous-titres, ouvre TOUT l’appel à la place des rangées — et le bandeau se tait (#8579)', async () => {
+  test('« Journal », entre Ajouter et Réagir, ouvre TOUT l’appel à la place des rails — et le bandeau se tait (#8579, #17327)', async () => {
     const said = (n: number) => ({ id: `w-${n}`, speakerId: 'u-peer', speakerName: 'Amina', original: `Line ${n}`, translated: `Ligne ${n}`, pair: { from: 'en', to: 'fr' }, isFinal: true, at: n, mine: false });
     const view = mount({ members: { 'u-peer': member() }, captionsMode: 'translated', captions: Array.from({ length: 250 }, (_, n) => said(n)) });
     view.press('[data-call-more]');
-    const row = [...view.host.querySelectorAll('[data-call-row="call"] [data-call-row-scroll] button')];
+    await frame();
+    const row = [...view.host.querySelectorAll('[data-call-rail="call"] button')];
     const at = (selector: string) => row.findIndex((button) => button.matches(selector));
-    expect(at('[data-call-control="journal"]')).toBe(at('[data-call-captions]') + 1);
+    expect(at('[data-call-control="journal"]')).toBe(at('[data-call-control="invite"]') + 1);
+    expect(at('[data-call-control="react"]')).toBe(at('[data-call-control="journal"]') + 1);
     expect(view.find('[data-call-control="journal"]')?.getAttribute('aria-label')).toBe('Ouvrir le journal de l’appel');
     view.press('[data-call-control="journal"]');
     await settle(() => import('./call-journal-panel'));
     expect(view.find('[data-call-row]')).toBeNull();
+    expect(railsState(view.host)).not.toBe('shown');
     expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(250);
     expect(view.find('[data-call-captions-panel]')).toBeNull();
     view.press('[data-panel-back]');
@@ -532,12 +644,16 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     spy.restore();
   });
 
-  test('en groupe, MA tuile passe à la une : les commandes de ma caméra quittent le menu pour le haut de la scène (#9098)', () => {
+  test('en groupe, MA tuile passe à la une : la grille ne porte aucune commande de ma caméra, la rangée « Mon image » de la pilule les garde toutes (#9098, #17327)', async () => {
     const view = mount({ isGroup: true, members: peers, cameraOn: true });
     view.press('[data-call-tile-self]');
     expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('self');
-    expect(view.find('[data-call-self-featured-controls] [data-call-self-controls-holder="top"]')).not.toBeNull();
+    expect(view.find('[data-call-self-featured-controls]')).toBeNull();
+    expect(view.find('[data-call-self-controls-holder]')).toBeNull();
     expect(view.find('[data-call-fullscreen]')).not.toBeNull();
+    view.press('[data-call-more]');
+    await act(async () => {});
+    expect(rowLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Partager l’écran']);
     view.done();
   });
 
@@ -576,15 +692,20 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
   test('un panneau REMPLACE les rangées : ‹ revient au menu, ✕ ferme tout (#8578)', async () => {
     const view = mount({ members: { 'u-peer': member() } });
     view.press('[data-call-more]');
+    await frame();
     view.press('[data-call-control="react"]');
     await settle(() => import('./call-control-panels'));
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('panel');
     expect(view.find('[data-call-react-panel]')).not.toBeNull();
     expect(view.find('[data-call-row]')).toBeNull();
+    expect(railsState(view.host)).not.toBe('shown');
+    expect(view.find('[data-call-control-pill]')?.getAttribute('data-call-control-pill')).toBe('grown');
     expect(view.find('[data-panel-back]')?.getAttribute('aria-label')).toBe('Retour');
     view.press('[data-panel-back]');
+    await frame();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('menu');
-    expect(view.find('[data-call-row="call"]')).not.toBeNull();
+    expect(railsState(view.host)).toBe('shown');
+    expect(view.find('[data-call-control-pill]')?.getAttribute('data-call-control-pill')).toBe('pill');
     expect(document.activeElement?.getAttribute('data-call-control')).toBe('react');
     view.press('[data-call-control="react"]');
     view.press('[data-panel-close]');
@@ -601,7 +722,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
     view.press('[data-call-more]');
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('menu');
-    expect(view.find('[data-call-row="call"]')).not.toBeNull();
+    expect(view.find('[data-call-rail="call"]')).not.toBeNull();
     view.done();
   });
 
@@ -715,8 +836,9 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
      l'élasticité locale d'une piste, dont la fin d'animation termine le
      défilement suivant (#8619, 10 glissés perdus sur 10). */
   test('chaque rangée et chaque panneau défile sans élasticité : overscroll-x-none (#8736)', async () => {
-    const view = mount({ members: { 'u-peer': member() } });
+    const view = mount({ isGroup: true, members: peers });
     view.press('[data-call-more]');
+    await act(async () => {});
     const rows = [...view.host.querySelectorAll<HTMLElement>('[data-call-row] [data-call-row-scroll]')];
     expect(rows.length).toBeGreaterThan(0);
     rows.forEach((row) => {
@@ -788,7 +910,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
   });
 });
 
-describe('CallScreen — le verre, sans verre sur verre (#8432)', () => {
+describe('CallScreen — le verre : un seul flou par pilule, un disque de verre par bouton (#8432, #17345)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
   beforeAll(() => {
@@ -822,16 +944,103 @@ describe('CallScreen — le verre, sans verre sur verre (#8432)', () => {
     return { nested, glasses: glasses.length, panel };
   };
 
-  test('en duo, actions sorties et panneau « Réagir » ouvert : chaque groupe a UN verre', async () => {
+  test('en duo, actions sorties et panneau « Réagir » ouvert : chaque groupe a UN flou', async () => {
     const view = await nestedGlass({ cameraOn: true, members: { 'u-peer': member() } }, true);
     expect(view.panel).not.toBeNull();
     expect(view.glasses).toBeGreaterThan(3);
     expect(view.nested).toEqual([]);
   });
 
-  test('en groupe, la pilule qui a grandi porte ses rangées sans verre à elles', async () => {
+  test('en groupe, la pilule qui a grandi porte ses rangées sans second flou', async () => {
     const view = await nestedGlass({ isGroup: true, cameraOn: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }, true);
     expect(view.nested).toEqual([]);
+  });
+
+  const BLUR = '.glass-call, .glass-call-prominent';
+  const DISC = 'glass-call-disc';
+
+  const mountPill = async (overrides: Partial<ActiveCall>, expand: boolean) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={{ color: true, blur: true }} />));
+    if (expand) {
+      act(() => (host.querySelector('[data-call-more]') as HTMLElement | null)?.click());
+      await act(async () => {});
+    }
+    const pill = host.querySelector('[data-call-control-pill]') as HTMLElement;
+    const buttons = [...pill.querySelectorAll('button')] as HTMLElement[];
+    const done = () => {
+      act(() => root.unmount());
+      host.remove();
+    };
+    return { pill, buttons, done };
+  };
+
+  const discOf = (button: HTMLElement) => (button.classList.contains(DISC) ? button : button.querySelector(`.${DISC}`));
+
+  test('(#17345) chaque bouton au repos de la pilule porte son disque de verre dessiné : (…), Micro, Sortie', async () => {
+    const view = await mountPill({ cameraOn: true, members: { 'u-peer': member() } }, false);
+    const resting = ['[data-call-more]', '[aria-label="Couper le micro"]', '[data-call-devices-open]'].map((selector) => view.pill.querySelector(selector) as HTMLElement);
+    expect(resting.every((button) => button != null)).toBe(true);
+    for (const button of resting) expect(discOf(button)).not.toBeNull();
+    view.done();
+  });
+
+  test('(#17345) aucun bouton de la pilule n’est transparent', async () => {
+    const view = await mountPill({ isGroup: true, cameraOn: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }, true);
+    expect(view.buttons.length).toBeGreaterThan(4);
+    for (const button of view.buttons) {
+      const round = (button.querySelector('span[class*="rounded-full"]') ?? button) as HTMLElement;
+      const filled = discOf(button) != null || round.style.background !== '' || round.style.backgroundColor !== '';
+      expect([button.getAttribute('aria-label'), filled]).toEqual([button.getAttribute('aria-label'), true]);
+      expect(round.style.background).not.toBe('transparent');
+    }
+    view.done();
+  });
+
+  test('(#17345) les rangées sorties par (…) en groupe portent aussi leurs disques, sous le même flou', async () => {
+    const view = await mountPill({ isGroup: true, cameraOn: true, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }, true);
+    const rows = [...view.pill.querySelectorAll('[data-call-row] button')] as HTMLElement[];
+    expect(rows.length).toBeGreaterThan(2);
+    expect(rows.filter((button) => discOf(button) != null).length).toBeGreaterThan(0);
+    view.done();
+  });
+
+  test('(#17345, #17327) les rails du duo : chaque bouton porte son disque de verre dessiné, sous le seul flou de la capsule', async () => {
+    const view = await mountPill({ cameraOn: true, members: { 'u-peer': member() } }, true);
+    await act(async () => void (await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))));
+    const rails = [...document.querySelectorAll('[data-call-rail]')] as HTMLElement[];
+    expect(rails).toHaveLength(2);
+    for (const rail of rails) {
+      expect(rail.matches(BLUR)).toBe(true);
+      expect(rail.querySelectorAll(BLUR)).toHaveLength(0);
+      const buttons = [...rail.querySelectorAll('button')] as HTMLElement[];
+      expect(buttons.length).toBeGreaterThan(1);
+      for (const button of buttons) expect([button.getAttribute('aria-label'), discOf(button) != null || button.style.background !== '' || (button.querySelector('span[class*="rounded-full"]') as HTMLElement | null)?.style.background !== '']).toEqual([button.getAttribute('aria-label'), true]);
+    }
+    view.done();
+  });
+
+  test('(#17345) un seul flou : la pilule, repliée comme déployée, et aucun de ses disques', async () => {
+    for (const expand of [false, true]) {
+      const view = await mountPill({ cameraOn: true, members: { 'u-peer': member() } }, expand);
+      expect(view.pill.matches(BLUR)).toBe(true);
+      expect(view.pill.querySelectorAll(BLUR)).toHaveLength(0);
+      for (const disc of view.pill.querySelectorAll(`.${DISC}`)) expect(disc.matches(BLUR)).toBe(false);
+      view.done();
+    }
+  });
+
+  test('(#17345) enclenché reste un plein blanc, Fin reste rouge : ni l’un ni l’autre ne devient un disque de verre', async () => {
+    const view = await mountPill({ micMuted: true, members: { 'u-peer': member() } }, false);
+    const mic = view.pill.querySelector('[aria-pressed="true"]') as HTMLElement;
+    expect(mic.classList.contains(DISC)).toBe(false);
+    expect(mic.style.background).toContain('--color-on-media');
+    const hangup = view.pill.querySelector('[aria-label="Raccrocher"]') as HTMLElement | null;
+    expect(hangup?.classList.contains(DISC)).toBe(false);
+    expect(hangup?.style.background).toContain('--ios-error-strong');
+    view.done();
   });
 
   test('la sonnerie et l’écran de fin : les boutons neutres sont de verre, Refuser et Fin rouges, Accepter vert', () => {

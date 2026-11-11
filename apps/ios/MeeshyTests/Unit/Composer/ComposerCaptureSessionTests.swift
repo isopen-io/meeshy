@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import Combine
 @testable import Meeshy
 
 /// **Une seule machine d'état de capture, servie aux deux montages du viseur**
@@ -191,5 +192,56 @@ final class ComposerCaptureSessionTests: XCTestCase {
         let regle = try XCTUnwrap(camera.range(of: "private func microphoneArmsAtSetup("))
         XCTAssertTrue(camera[regle.upperBound...].prefix(400).contains("CameraAudioArming.armsAtSetup("),
                       "seul un micro déjà autorisé entre à l'armement (#9328)")
+    }
+
+    // MARK: - La tenue ne recompose pas le viseur à chaque mouvement du doigt (#17433)
+
+    /// Une tenue qui attend l'objectif : la session reste armée, rien d'autre ne publie.
+    private static func heldSession() -> (ComposerCaptureSession, MockComposerCaptureCamera) {
+        let objectif = MockComposerCaptureCamera()
+        objectif.isSwitchingCamera = true
+        let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
+        session.beginHold()
+        return (session, objectif)
+    }
+
+    private static func emissions(of session: ComposerCaptureSession, during gestes: () -> Void) -> Int {
+        var compte = 0
+        let abonnement = session.objectWillChange.sink { _ in compte += 1 }
+        gestes()
+        abonnement.cancel()
+        return compte
+    }
+
+    func test_holdChanged_jitterThatLeavesTheLockUntouched_publishesNothing() {
+        let (session, _) = Self.heldSession()
+        let compte = Self.emissions(of: session) {
+            (0..<120).forEach { i in session.holdChanged(CGPoint(x: -CGFloat(i % 3), y: CGFloat(i % 7))) }
+        }
+        XCTAssertEqual(compte, 0, "un doigt qui tremble sans approcher du cadenas ne recompose pas tout le viseur")
+        session.disarm()
+    }
+
+    func test_holdChanged_slowSlideTowardTheLock_publishesOnlyVisibleSteps() {
+        let (session, _) = Self.heldSession()
+        let course = ComposerShutterGesture.slideToLock * 0.9
+        let compte = Self.emissions(of: session) {
+            (0..<120).forEach { i in session.holdChanged(CGPoint(x: course * CGFloat(i) / 119, y: 0)) }
+        }
+        XCTAssertLessThanOrEqual(compte, ComposerShutterGesture.lockProgressSteps,
+                                 "120 mouvements ne publient que les crans visibles de la piste du cadenas")
+        XCTAssertGreaterThan(session.lockProgress, 0.8, "la piste suit toujours le doigt")
+        session.disarm()
+    }
+
+    func test_dismissDrag_spoiledDragRepeatingZero_publishesNothing() {
+        let session = ComposerCaptureSession(stage: .armed, controls: MockComposerCaptureCamera(),
+                                             gallery: MockComposerGallery())
+        session.pinchZoom(scale: 1.2)
+        let compte = Self.emissions(of: session) {
+            (0..<60).forEach { session.followDismissDrag(translationY: CGFloat($0)) }
+        }
+        XCTAssertEqual(compte, 0, "un rangement gâché par le pincement reste à zéro sans republier")
+        session.disarm()
     }
 }

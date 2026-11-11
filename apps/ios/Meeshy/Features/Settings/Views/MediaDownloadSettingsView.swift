@@ -104,7 +104,7 @@ struct MediaDownloadSettingsView: View {
                 .padding(.vertical, MeeshySpacing.smPlus)
                 .accessibilityElement(children: .combine)
             }
-            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.neutral500Hex))
         }
     }
 
@@ -135,7 +135,7 @@ struct MediaDownloadSettingsView: View {
             .tint(Color(hex: accentColor))
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.smPlus)
-            .background(sectionBackground(tint: accentColor))
+            .background(SettingsSectionBackground(tint: accentColor))
         }
     }
 
@@ -162,7 +162,7 @@ struct MediaDownloadSettingsView: View {
                                                defaultValue: "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande.",
                                                bundle: .main))
             }
-            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.indigo600Hex))
         }
     }
 
@@ -188,7 +188,7 @@ struct MediaDownloadSettingsView: View {
                                                defaultValue: "Vos photos s'ouvrent à mi-hauteur, la caméra visible derrière.",
                                                bundle: .main))
             }
-            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.indigo600Hex))
         }
     }
 
@@ -215,7 +215,7 @@ struct MediaDownloadSettingsView: View {
                                                defaultValue: "Par défaut, la position GPS est retirée de chaque photo avant l'envoi.",
                                                bundle: .main))
             }
-            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
+            .background(SettingsSectionBackground(tint: MeeshyColors.indigo600Hex))
         }
     }
 
@@ -282,7 +282,7 @@ struct MediaDownloadSettingsView: View {
                     }
                 }
             }
-            .background(sectionBackground(tint: color))
+            .background(SettingsSectionBackground(tint: color))
         }
     }
 
@@ -312,15 +312,6 @@ struct MediaDownloadSettingsView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isHeader)
-    }
-
-    private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-            .fill(theme.surfaceGradient(tint: tint))
-            .overlay(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .stroke(theme.border(tint: tint), lineWidth: 1)
-            )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {

@@ -212,3 +212,69 @@ nonisolated enum ComposerSceneCameraSize: String, Equatable, CaseIterable, Senda
             : "arrow.down.right.and.arrow.up.left"
     }
 }
+
+/// **Une entrée de scène de la colonne du viseur** (#17432, directive porteur) :
+/// ce qu'on compose sans quitter la caméra.
+nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Sendable {
+    case text
+    case background
+    case gallery
+    case sticker
+
+    /// Ce que l'entrée fait de la caméra.
+    enum Camera: Equatable, Sendable {
+        /// La caméra reste armée : ce qu'on pose attend la prise, qui passera dessous.
+        case kept
+        /// La caméra se coupe : l'entrée remplace ce qu'elle aurait pris.
+        case cut
+    }
+
+    var camera: Camera {
+        switch self {
+        case .text, .sticker: return .kept
+        case .background, .gallery: return .cut
+        }
+    }
+
+    /// La porte de la scène que l'entrée ouvre ; la galerie n'en a pas, elle ouvre la photothèque.
+    var door: ComposerRailDoor? {
+        switch self {
+        case .text: return .text
+        case .background: return .background
+        case .sticker: return .sticker
+        case .gallery: return nil
+        }
+    }
+
+    var symbol: String {
+        door?.symbolName ?? "photo.on.rectangle"
+    }
+
+    var accessibilityIdentifier: String { "composer.viewfinder.\(rawValue)" }
+}
+
+/// **La colonne du viseur du composer : Texte · Fond · Galerie · Sticker, puis
+/// les familles de look** (#17432). Elle retourne « pas de rail au viseur »
+/// (A8, #17109) : les rails de la SCÈNE cèdent toujours, mais le viseur armé
+/// porte ses entrées de scène. La caméra de conversation n'en a aucune ; une
+/// prise en cours, une tenue ou une retouche les retirent ; des segments en
+/// attente ne laissent que ce qui garde la caméra.
+nonisolated enum ComposerViewfinderColumn {
+    static func entries(composesScene: Bool, context: ComposerCaptureGestureContext) -> [ComposerViewfinderEntry] {
+        guard composesScene, context.stage == .armed, !context.editing, !context.holding else { return [] }
+        guard context.pendingSegments > 0 else { return ComposerViewfinderEntry.allCases }
+        return ComposerViewfinderEntry.allCases.filter { $0.camera == .kept }
+    }
+
+    /// Un trait sépare ce qu'on pose de ce qui teinte la prise, quand le rail porte les deux.
+    static func separatesLooks(sceneEntries: [ComposerViewfinderEntry], offersLooks: Bool) -> Bool {
+        !sceneEntries.isEmpty && offersLooks
+    }
+
+    static func label(_ entry: ComposerViewfinderEntry) -> String {
+        guard let door = entry.door else {
+            return String(localized: "composer.viewfinder.gallery", defaultValue: "Galerie", bundle: .main)
+        }
+        return ComposerRailCopy.label(door)
+    }
+}

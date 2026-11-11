@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { CallCameraPicker } from '@/components/call-camera-picker';
@@ -7,49 +7,52 @@ import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import type { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import type { CallAction, CallControlSet, MineAction } from '@/lib/calls/call-controls';
+import type { CallAction, MineAction } from '@/lib/calls/call-controls';
+import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
 import type { CallPanelKind, CallPanels } from '@/lib/calls/call-screen-layer';
-import type { SelfControlGroup } from '@/lib/calls/call-self-controls';
 import { callRecording } from '@/lib/calls/call-recording-live';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import type { RowKeyHandler, RowWheelHandler } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
-import type { LocalZoom } from '@/lib/calls/self-zoom';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
- * **CE QUE LE `(…)` SORT** (#8391, #8550) — les actions de la vue « C
- * adapté », en deux familles, la même chose en duo et en groupe : la pilule
- * GRANDIT vers le haut et monte, au-dessus de sa ligne de commandes, une
- * RANGÉE par famille — « Mon image », puis « L'appel ». Chaque rangée est
- * légendée en petites capitales et DÉFILE À L'HORIZONTALE (accrochage aux
- * boutons, jamais de retour à la ligne) ; chaque bouton garde sa légende et
- * ses 44 de cible. Au clavier, une rangée est une barre d'outils : ← et →
- * vont au voisin (`call-row-keys.ts`).
+ * **CE QUE LE `(…)` SORT** (#8391, #8550, #17327) — les actions de la vue « C
+ * adapté », en deux familles, dans le même ordre et avec les mêmes boutons où
+ * qu'elles se posent (`call-controls-disposition.ts`) :
  *
- * Un seul verre, celui de la pilule : ses rangées et leurs boutons n'en
- * portent pas. Les règles (qui est offert, dans quel ordre) sont dans
- * `lib/calls/call-controls.ts`.
+ * - À DEUX, un RAIL vertical par famille sur les bords de l'écran (`CallActionRail`) :
+ *   « Mon image » au début, « L'appel » à la fin, des boutons de 44 sans
+ *   légende dans une capsule de verre, que le doigt fait défiler quand l'écran
+ *   est court. ↑ et ↓ vont au voisin ;
+ * - À PLUSIEURS, la pilule GRANDIT vers le haut et monte une RANGÉE par famille
+ *   (`CallActionRows`) — « Mon image », puis « L'appel » —, légendée en petites
+ *   capitales, qui DÉFILE À L'HORIZONTALE (accrochage aux boutons, jamais de
+ *   retour à la ligne) ; chaque bouton garde sa légende et ses 44 de cible.
+ *   ← et → vont au voisin (`call-row-keys.ts`).
+ *
+ * Un seul verre : celui de la pilule pour ses rangées, celui de la capsule pour
+ * un rail ; leurs boutons n'en portent pas. Les règles (qui est offert, dans
+ * quel ordre) sont dans `lib/calls/call-controls.ts`.
  *
  * Comme iOS (#9094, #9095) : sur un ordinateur à plusieurs webcams, le choix
  * de la caméra (`call-camera-picker.tsx`) remplace Retourner ; Effets se
  * montre actif quand un effet est posé ; un appel vocal propose d'ajouter la
- * vidéo (la caméra et son « + ») ; l'image dans l'image ferme la rangée
+ * vidéo (la caméra et son « + ») ; l'image dans l'image ferme la famille
  * « l'appel ».
  *
  * Une chose à la fois (#8578, `call-screen-layer.ts`) : Enregistrer au repos
  * (#8437), Ajouter (#8433) et Réagir (#8439) ouvrent un PANNEAU qui REMPLACE
- * les rangées dans le cadre ; Effets (#8442, #8551) et Capturer (#8552)
+ * les rails ou les rangées ; Effets (#8442, #8551) et Capturer (#8552)
  * entrent dans un MODE qui libère tout l'écran.
  *
- * Chunk à part (`budgets.json` › `call_action_rows`) : les rangées ne se
- * montrent qu'au `(…)`, et les commandes de ma caméra qu'avec ma vignette ; l'écran
- * d'appel le précharge dès que l'appel vit. Il n'importe RIEN de l'écran
- * d'appel (`call_overlay`, `dynamic_only`) : le bouton de verre, les glyphes,
- * les flèches et la molette d'une rangée, les identifiants lui sont remis
- * (`CallRowsKit`).
+ * Chunk à part (`budgets.json` › `call_action_rows`) : les actions ne se
+ * montrent qu'au `(…)` ; l'écran d'appel le précharge dès que l'appel vit. Il
+ * n'importe RIEN de l'écran d'appel (`call_overlay`, `dynamic_only`) : le
+ * bouton de verre, les glyphes, les flèches et la molette d'une rangée, les
+ * identifiants lui sont remis (`CallRowsKit`).
  */
 
 /** Ce que l'écran d'appel remet aux rangées et aux commandes de ma caméra. */
@@ -118,7 +121,7 @@ type ActionView = {
 
 const panelView = (panels: CallPanels, panel: CallPanelKind) => ({
   onPress: () => panels.toggle(panel),
-  tone: panels.open === panel ? ('active' as const) : ('bare' as const),
+  tone: panels.open === panel ? ('active' as const) : ('disc' as const),
   expanded: panels.open === panel,
   panel,
 });
@@ -132,7 +135,7 @@ function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, langua
         caption: translate(language, 'call.devices.camera'),
         glyph: cameraGlyph(call, kit),
         onPress: callActions.toggleCamera,
-        tone: call.cameraOn ? 'active' : 'bare',
+        tone: call.cameraOn ? 'active' : 'disc',
         pressed: call.cameraOn,
         disabled: call.screenSharing,
         data: { 'data-call-control': 'camera' },
@@ -144,7 +147,7 @@ function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, langua
         caption: translate(language, 'call.flip'),
         glyph: screenGlyph('cameraRotate'),
         onPress: callActions.switchCamera,
-        tone: 'bare',
+        tone: 'disc',
         data: { 'data-call-control': 'flip' },
       };
     case 'effects':
@@ -154,7 +157,7 @@ function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, langua
         caption: translate(language, 'call.effects'),
         glyph: <GlyphSvg glyph={kit.glyphs.magicWand} size={22} />,
         onPress: () => panels.enter('effects'),
-        tone: effectsActive ? 'active' : 'bare',
+        tone: effectsActive ? 'active' : 'disc',
         pressed: effectsActive,
         data: { 'data-call-control': 'effects' },
       };
@@ -165,7 +168,7 @@ function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, langua
         caption: translate(language, 'call.screen.short'),
         glyph: screenGlyph('monitorArrowUp'),
         onPress: callActions.toggleScreen,
-        tone: call.screenSharing ? 'active' : 'bare',
+        tone: call.screenSharing ? 'active' : 'disc',
         pressed: call.screenSharing,
         data: { 'data-call-screen-share': '' },
       };
@@ -216,7 +219,7 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       caption: translateCallControls(language, 'callControls.pip'),
       glyph: kit.pipGlyph,
       onPress: kit.requestPip,
-      tone: 'bare',
+      tone: 'disc',
       data: { 'data-call-control': 'pip', 'data-call-pip': '' },
     };
   if (action === 'capture')
@@ -226,7 +229,7 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       caption: translateCallControls(language, 'callControls.capture'),
       glyph: <GlyphSvg glyph={kit.glyphs.aperture} size={22} />,
       onPress: () => panels.enter('montage'),
-      tone: 'bare',
+      tone: 'disc',
       data: { 'data-call-control': 'capture' },
     };
   return captionsAction(context);
@@ -245,13 +248,18 @@ function captionsAction({ call, language }: ActionContext): ActionView {
       </span>
     ),
     onPress: callActions.toggleCaptions,
-    tone: call.captionsMode === 'off' ? 'bare' : 'active',
+    tone: call.captionsMode === 'off' ? 'disc' : 'active',
     pressed: call.captionsMode !== 'off',
     data: { 'data-call-captions': '' },
   };
 }
 
-function ActionButton({ view, kit }: { readonly view: ActionView; readonly kit: CallRowsKit }) {
+/** Une rangée de la pilule légende ses boutons ; un rail n'en porte pas et tient des cibles de 44. */
+type Variant = 'row' | 'rail';
+
+const RAIL_BUTTON = 44;
+
+function ActionButton({ view, kit, variant }: { readonly view: ActionView; readonly kit: CallRowsKit; readonly variant: Variant }) {
   return (
     <kit.Button
       label={view.label}
@@ -261,7 +269,7 @@ function ActionButton({ view, kit }: { readonly view: ActionView; readonly kit: 
       {...(view.pressed === undefined ? {} : { pressed: view.pressed })}
       {...(view.expanded === undefined || view.panel === undefined ? {} : { expanded: view.expanded, controls: kit.panelIds[view.panel], popup: true })}
       {...(view.disabled === undefined ? {} : { disabled: view.disabled })}
-      caption={view.caption}
+      {...(variant === 'rail' ? { size: RAIL_BUTTON } : { caption: view.caption })}
       data={{ ...view.data, [kit.rowItem]: '' }}
     />
   );
@@ -273,7 +281,7 @@ function ActionButton({ view, kit }: { readonly view: ActionView; readonly kit: 
  * passerelle, qui recueille l'accord de tous — rien ne s'enregistre avant. Le
  * même bouton renonce à une demande ou arrête l'enregistrement en cours.
  */
-function RecordButton({ language, panels, kit }: { readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit }) {
+function RecordButton({ language, panels, kit, variant }: { readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit; readonly variant: Variant }) {
   const kind = useStore(callRecordingStore, (state) => state.view.kind);
   const idle = kind === 'idle';
   const choosing = idle && panels.open === 'record';
@@ -282,10 +290,10 @@ function RecordButton({ language, panels, kit }: { readonly language: InterfaceL
       label={translate(language, idle ? 'callRecording.start' : 'callRecording.stop')}
       glyph={<span aria-hidden className={idle ? 'size-4 rounded-full border-2 border-current' : 'size-3.5 rounded-[3px]'} style={idle ? undefined : { background: 'var(--ios-error-strong)' }} />}
       onPress={() => (idle ? panels.toggle('record') : void callRecording.stop())}
-      tone={kind === 'recording' || choosing ? 'active' : 'bare'}
+      tone={kind === 'recording' || choosing ? 'active' : 'disc'}
       {...(idle ? { expanded: choosing, controls: kit.panelIds.record, popup: true } : { pressed: kind === 'recording' })}
       disabled={kind === 'asking'}
-      caption={translate(language, 'call.record.short')}
+      {...(variant === 'rail' ? { size: RAIL_BUTTON } : { caption: translate(language, 'call.record.short') })}
       data={{ 'data-call-record': kind, [kit.rowItem]: '' }}
     />
   );
@@ -293,19 +301,19 @@ function RecordButton({ language, panels, kit }: { readonly language: InterfaceL
 
 const pickerGlyph = (kit: CallRowsKit) => badged(screenGlyph('videoCamera'), <GlyphSvg glyph={kit.glyphs.dotsThree} size={10} />);
 
-function Family({ actions, context }: { readonly actions: readonly (MineAction | CallAction)[]; readonly context: ActionContext }) {
+function Family({ actions, context, variant }: { readonly actions: readonly (MineAction | CallAction)[]; readonly context: ActionContext; readonly variant: Variant }) {
   return (
     <>
       {actions.map((action) => (
         <Fragment key={action}>
           {action === 'record' ? (
-            <RecordButton language={context.language} panels={context.panels} kit={context.kit} />
+            <RecordButton language={context.language} panels={context.panels} kit={context.kit} variant={variant} />
           ) : action === 'camera-picker' ? (
-            <CallCameraPicker call={context.call} language={context.language} kit={context.kit} glyph={pickerGlyph(context.kit)} captioned data={{ 'data-call-control': 'camera-picker', [context.kit.rowItem]: '' }} />
+            <CallCameraPicker call={context.call} language={context.language} kit={context.kit} glyph={pickerGlyph(context.kit)} captioned={variant === 'row'} data={{ 'data-call-control': 'camera-picker', [context.kit.rowItem]: '' }} />
           ) : action === 'camera' || action === 'flip' || action === 'effects' || action === 'screen' ? (
-            <ActionButton view={mineAction(action, context)} kit={context.kit} />
+            <ActionButton view={mineAction(action, context)} kit={context.kit} variant={variant} />
           ) : (
-            <ActionButton view={callAction(action, context)} kit={context.kit} />
+            <ActionButton view={callAction(action, context)} kit={context.kit} variant={variant} />
           )}
         </Fragment>
       ))}
@@ -326,75 +334,53 @@ export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-none px-1 pb-
 /** La légende d'une rangée, en petites capitales. */
 export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-on-media-3 [font-variant-caps:all-small-caps]';
 
-type RowsProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit };
+const FAMILY_LEGEND = { mine: 'call.section.mine', call: 'call.section.call' } as const;
 
-const CallZoomStep = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallZoomStep })));
-
-const CAMERA_ORDER = ['flip', 'camera-picker', 'camera', 'effects', 'screen'] as const;
+/** Ce qui défile dans un rail s'efface en fondu à ses deux bords, sur les 8 px de son bord : au repos, aucun bouton n'est estompé. */
+const RAIL_FADE = { maskImage: 'linear-gradient(to bottom, transparent, #000 8px, #000 calc(100% - 8px), transparent)' } as const;
 
 /**
- * LES COMMANDES DE MA CAMÉRA (#8576, #8626) — Retourner, Couper la caméra,
- * Effets (qui entre dans le mode), Partager l'écran, et dans ma vignette le
- * cran du zoom (#8441 : `local`, que l'écran d'appel ne remet qu'à ma
- * vignette, `zoomControlIn`), en une rangée compacte :
- * autour de ma vignette (`tile`, #8747 : `group` en pose une moitié —
- * Effets · Écran au-dessus, Retourner · Couper et le cran en dessous), ou en
- * haut au centre quand mon image remplit l'écran (`top`). ← et → y passent
- * d'un bouton à l'autre.
+ * UN RAIL (#17327) — une famille en colonne de verre sur le bord de l'écran :
+ * des boutons de 44 sans légende, qui défilent DANS la capsule quand l'écran
+ * est court (paysage), en s'effaçant en fondu en haut comme en bas (facture
+ * #17406) — le verre, lui, reste entier : le fondu est posé sur ce qui défile,
+ * jamais sur la capsule, et les disques des boutons n'ont pas de flou qu'il
+ * couperait. Le nom de la famille est celui de la rangée du groupe : « Mon
+ * image », « L'appel ».
  */
-export function CallCameraControls({ call, set, language, panels, kit, place, local, group, only }: RowsProps & { readonly place: 'tile' | 'top'; readonly local: LocalZoom | null; readonly group?: SelfControlGroup | undefined; readonly only?: readonly MineAction[] | undefined }) {
+export function CallActionRail({ call, row, language, panels, kit }: { readonly call: ActiveCall; readonly row: CallFamilyRow; readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit }) {
   const context = { call, language, panels, kit, effectsActive: kit.useEffectsActive() };
-  const label = translateCallControls(language, 'callControls.camera.options');
   return (
-    <div role="toolbar" aria-label={label} aria-orientation="horizontal" onKeyDown={kit.onRowKeyDown} className="glass-call flex w-max items-center gap-0.5 rounded-full p-0.5" data-call-self-controls={place} data-call-self-group={group}>
-      {CAMERA_ORDER.filter((action) => set.mine.includes(action) && (only === undefined || only.includes(action))).map((action) => {
-        if (action === 'camera-picker')
-          return <CallCameraPicker key={action} call={call} language={language} kit={kit} glyph={pickerGlyph(kit)} captioned={false} data={{ 'data-call-control': action, 'data-call-self-control': action, [kit.rowItem]: '' }} />;
-        const view = mineAction(action, context);
-        return (
-          <kit.Button
-            key={action}
-            label={view.label}
-            glyph={view.glyph}
-            onPress={view.onPress}
-            tone={view.tone}
-            {...(view.pressed === undefined ? {} : { pressed: view.pressed })}
-            {...(view.disabled === undefined ? {} : { disabled: view.disabled })}
-            size={44}
-            data={{ ...view.data, 'data-call-self-control': action, [kit.rowItem]: '' }}
-          />
-        );
-      })}
-      {local !== null ? (
-        <Suspense fallback={null}>
-          <CallZoomStep stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} Button={kit.Button} rowItem={kit.rowItem} />
-        </Suspense>
-      ) : null}
+    <div
+      role="toolbar"
+      aria-label={translate(language, FAMILY_LEGEND[row.family])}
+      aria-orientation="vertical"
+      onKeyDown={kit.onRowKeyDown}
+      className="glass-call pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-full"
+      data-call-rail={row.family}
+    >
+      <div className="flex min-h-0 flex-col items-center gap-2 overflow-y-auto overscroll-contain p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0" style={RAIL_FADE} data-call-rail-scroll="">
+        <Family actions={row.actions} context={context} variant="rail" />
+      </div>
     </div>
   );
 }
 
-/** Les deux familles, une rangée chacune, dans la pilule qui a grandi. */
-export function CallActionRows({ call, set, language, panels, kit }: RowsProps) {
+/** Les familles qu'on lui remet, une rangée chacune, dans la pilule qui a grandi. */
+export function CallActionRows({ call, rows, language, panels, kit }: { readonly call: ActiveCall; readonly rows: readonly CallFamilyRow[]; readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit }) {
   const context = { call, language, panels, kit, effectsActive: kit.useEffectsActive() };
-  const families = [
-    ['mine', set.mine, 'call.section.mine'],
-    ['call', set.call, 'call.section.call'],
-  ] as const;
   return (
     <div id={kit.actionsId} className="flex flex-col gap-2" data-call-actions="rows">
-      {families.map(([side, actions, legend]) =>
-        actions.length === 0 ? null : (
-          <div key={side} role="group" aria-labelledby={`call-row-${side}`} className="flex min-w-0 flex-col gap-1" data-call-row={side}>
-            <span id={`call-row-${side}`} className={ROW_TITLE} data-call-row-title="">
-              {translate(language, legend)}
-            </span>
-            <div role="toolbar" aria-labelledby={`call-row-${side}`} aria-orientation="horizontal" onKeyDown={kit.onRowKeyDown} onWheel={kit.onRowWheel} className={ROW_SCROLL} data-call-row-scroll="">
-              <Family actions={actions} context={context} />
-            </div>
+      {rows.map(({ family, actions }) => (
+        <div key={family} role="group" aria-labelledby={`call-row-${family}`} className="flex min-w-0 flex-col gap-1" data-call-row={family}>
+          <span id={`call-row-${family}`} className={ROW_TITLE} data-call-row-title="">
+            {translate(language, FAMILY_LEGEND[family])}
+          </span>
+          <div role="toolbar" aria-labelledby={`call-row-${family}`} aria-orientation="horizontal" onKeyDown={kit.onRowKeyDown} onWheel={kit.onRowWheel} className={ROW_SCROLL} data-call-row-scroll="">
+            <Family actions={actions} context={context} variant="row" />
           </div>
-        ),
-      )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -2,19 +2,16 @@ package me.meeshy.sdk.model.call
 
 import me.meeshy.sdk.model.call.camera.CameraZoomProfile
 
-/** Where the controls of MY camera live: around my tile, top-center when my image is full screen, else in the menu. */
+/**
+ * Where the ZOOM of MY camera lives: in my tile, top-center when my image is full screen, nowhere when no tile carries it.
+ * The commands of my camera (Camera, Flip, Effects, Screen) no longer have a place of their own : they are the « My image »
+ * rail of the (…) on a duo, its row in the pill on a group ([CallControlsDisposition], #17327).
+ */
 enum class CallCameraControlsPlacement { SelfTile, TopCenter, Menu }
 
-/** The two rows outside my tile: what travels with my image above, what acts on the camera below. */
-data class CallSelfTileControlRows(val effects: List<CallAction>, val camera: List<CallAction>) {
-    val isEmpty: Boolean get() = effects.isEmpty() && camera.isEmpty()
-}
-
-enum class CallCameraFoldedTap { Button, Action, Elsewhere }
-
 /**
- * The zoom among the controls of MY camera (iOS `CallZoomControl`): one chip per step when my image is full
- * screen, a single button that moves to the next step inside my tile.
+ * The zoom of MY camera (iOS `CallZoomControl`): one chip per step when my image is full screen, a single button that
+ * moves to the next step inside my tile.
  */
 sealed interface CallZoomControl {
     data class LensChips(val stops: List<Float>) : CallZoomControl
@@ -26,13 +23,6 @@ sealed interface CallZoomControl {
 object CallCameraRail {
     const val TARGET_SIDE_DP: Float = 44f
     const val TILE_INSET_DP: Float = 4f
-    val order: List<CallAction> = listOf(
-        CallAction.FlipCamera, CallAction.CameraPicker, CallAction.Camera, CallAction.Effects, CallAction.ScreenShare,
-    )
-    val effectsRow: List<CallAction> = listOf(CallAction.Effects, CallAction.ScreenShare)
-    val cameraRow: List<CallAction> = listOf(CallAction.FlipCamera, CallAction.CameraPicker, CallAction.Camera)
-
-    fun actions(set: CallActionSet): List<CallAction> = order.filter { it in set.myImage }
 
     fun isMyImageFullScreen(isGroupStage: Boolean, isSelfFeatured: Boolean, isLocalPrimary: Boolean): Boolean =
         if (isGroupStage) isSelfFeatured else isLocalPrimary
@@ -43,21 +33,13 @@ object CallCameraRail {
         else -> CallCameraControlsPlacement.Menu
     }
 
-    fun foldedMenu(isOpen: Boolean, after: CallCameraFoldedTap): Boolean =
-        if (after == CallCameraFoldedTap.Button) !isOpen else false
-
-    /** Une vignette plus étroite que la moyenne ne porte pas deux rangées : elles se replient en un bouton. */
-    fun foldsRows(tileWidthDp: Float): Boolean = tileWidthDp < CallSelfTileScale.X2.widthDp
-
-    fun consumesTapElsewhere(isFoldedMenuOpen: Boolean): Boolean = isFoldedMenuOpen
-
     fun isShown(
         placement: CallCameraControlsPlacement,
         at: CallCameraControlsPlacement,
         chrome: CallChromeVisibility,
     ): Boolean = placement == at && chrome.isVisible(CallChromeElement.Controls)
 
-    /** The rows live outside my tile: its top-end corner is free for the zoom button as soon as a 44 dp target fits. */
+    /** My tile carries no command (#17327): its top-end corner is free for the zoom button as soon as a 44 dp target fits. */
     fun zoomControl(
         profile: CameraZoomProfile?,
         placement: CallCameraControlsPlacement,
@@ -74,13 +56,4 @@ object CallCameraRail {
             CallCameraControlsPlacement.Menu -> null
         }
     }
-
-    fun selfTileRows(actions: List<CallAction>): CallSelfTileControlRows = CallSelfTileControlRows(
-        effects = effectsRow.filter { it in actions },
-        camera = cameraRow.filter { it in actions },
-    )
-
-    fun menuRows(set: CallActionSet, placement: CallCameraControlsPlacement): List<CallActionFamilyRow> =
-        if (placement == CallCameraControlsPlacement.Menu) set.familyRows
-        else set.familyRows.filter { it.family != CallActionFamily.MyImage }
 }

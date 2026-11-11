@@ -77,6 +77,8 @@ enum PlayerBannerCopy {
             return String(localized: "game2.banner.mission.a11y",
                           defaultValue: "Rêve : \(GameCopy.formatCount(mission.done)) sur \(GameCopy.formatCount(mission.total))",
                           bundle: .main)
+        case .treasury:
+            return banner.treasury.map { GameText.visitorTreasury(tier: GameCopy.treasuryName($0)) } ?? ""
         case .season:
             return String(localized: "game2.banner.season.a11y",
                           defaultValue: "Voyage \(GameCopy.formatCount(banner.season?.number ?? 0))", bundle: .main)
@@ -100,6 +102,7 @@ enum PlayerBannerCopy {
                 GameText.bannerLeague(league: GameText.leagueName($0.league), place: GameText.bannerPlace(count: $0.place))
             },
             banner.flame.map { GameText.bannerFlame(days: GameCopy.days($0.days)) },
+            banner.treasury.map { GameText.visitorTreasury(tier: GameCopy.treasuryName($0)) },
         ]
         return parts.compactMap { $0 }.joined(separator: GameText.bannerSeparator)
     }

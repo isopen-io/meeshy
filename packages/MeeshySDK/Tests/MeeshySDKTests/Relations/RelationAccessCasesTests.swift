@@ -171,8 +171,8 @@ struct RelationAccessCasesTests {
         #expect(Set(RelationFeature.allCases.filter(\.isMinorApartForTeam).map(\.rawValue)) == apart)
     }
 
-    @Test func theTeamIsModeratorAdminAndBigboss_neverAuditNorAnalyst() {
-        #expect(Set(PlatformRole.allCases.filter(\.isTeam)) == [.moderator, .admin, .bigboss])
+    @Test func theTeamIsAnalystAndAbove_neverUserNorAgent() {
+        #expect(Set(PlatformRole.allCases.filter(\.isTeam)) == [.analyst, .audit, .moderator, .admin, .bigboss])
     }
 
     @Test func theLevelsAreOrderedAsInTheTypeScriptScale() throws {

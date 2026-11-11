@@ -30,6 +30,10 @@ beforeAll(async () => {
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await import('./call-control-actions');
+  await import('./call-rails');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  /* Les rails du duo sont un chunk à part (`call-rails.tsx`) : le cadre arrivé, un second rendu amorce le contenu d'un rail. */
+  renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await new Promise((resolve) => setTimeout(resolve, 0));
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
@@ -113,12 +117,13 @@ const settle = async (chunk: () => Promise<unknown>) => {
 };
 
 describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
-  test('en duo comme en groupe, la rangée de l’appel les porte', () => {
+  test('en duo le rail de l’appel les porte, en groupe la rangée de l’appel (#17327)', async () => {
     const duo = mount(<CallScreen call={call()} canShare initiallyExpanded />);
-    expect(duo.find('[data-call-row="call"] [data-call-control="invite"]')?.getAttribute('aria-label')).toBe('Ajouter des personnes à l’appel');
-    expect(duo.find('[data-call-row="call"] [data-call-control="react"]')?.getAttribute('aria-label')).toBe('Envoyer une réaction');
+    expect(duo.find('[data-call-rail="call"] [data-call-control="invite"]')?.getAttribute('aria-label')).toBe('Ajouter des personnes à l’appel');
+    expect(duo.find('[data-call-rail="call"] [data-call-control="react"]')?.getAttribute('aria-label')).toBe('Envoyer une réaction');
     duo.done();
     const group = mount(<CallScreen call={call({ isGroup: true, members: { 'u-nadia': member('u-nadia', 'Nadia'), 'u-bruno': member('u-bruno', 'Bruno') } })} canShare initiallyExpanded />);
+    await act(async () => {});
     expect(group.find('[data-call-row="call"] [data-call-control="invite"]')).not.toBeNull();
     expect(group.find('[data-call-row="call"] [data-call-control="react"]')).not.toBeNull();
     group.done();
@@ -145,6 +150,7 @@ describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
 
   test('« Ajouter » ouvre la liste : moi, chaque participant, et une invitée qui sonne', async () => {
     const view = mount(<CallScreen call={call({ isGroup: true, members: { 'u-nadia': member('u-nadia', 'Nadia'), 'u-bruno': member('u-bruno', 'Bruno', { link: 'ringing' }) } })} canShare initiallyExpanded />);
+    await act(async () => {});
     view.press('[data-call-control="invite"]');
     await settle(() => import('./call-people-sheet'));
     const sheet = view.find('[data-call-people-sheet]');

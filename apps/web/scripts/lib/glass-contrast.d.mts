@@ -14,6 +14,8 @@ export type GlassContrastEntry = {
   readonly density: GlassDensityKey;
   /** Le fond du pire cas quand la surface a le sien (le verre d'appel, #8391 : le blanc) — sinon l'extrême du schéma. */
   readonly canvas?: string;
+  /** Le disque de verre posé SUR ce verre (#17345) : son voile blanc éclaircit le fond sous l'encre. */
+  readonly veil?: 'glass-call-disc';
   readonly kind: GlassContrastKind;
 };
 
@@ -44,6 +46,7 @@ export declare const MIN_RATIO: Readonly<Record<GlassContrastKind, number>>;
 export declare function resolveColor(rawValue: string, vars: Readonly<Record<string, string>>, seen?: ReadonlySet<string>): RGBA;
 export declare function loadIosSchemes(): { readonly dark: Record<string, string>; readonly light: Record<string, string> };
 export declare function loadGlassDensities(): Readonly<Record<GlassDensityKey, number>>;
+export declare function loadGlassDiscVeil(): number;
 export declare function loadColorAliasMap(): Readonly<Record<string, string>>;
 export declare function wcagContrastRatio(a: RGBA, b: RGBA): number;
 export declare function glassWorstCaseBackground(args: { readonly tone: RGBA; readonly densityPercent: number; readonly scheme: Scheme; readonly canvas?: RGBA }): RGBA;
@@ -53,6 +56,7 @@ export declare function glassWorstCaseContrast(args: {
   readonly densityPercent: number;
   readonly scheme: Scheme;
   readonly canvas?: RGBA;
+  readonly veilPercent?: number;
 }): number;
 export declare function glassContrastAudit(inventory?: readonly GlassContrastEntry[]): readonly GlassContrastResult[];
 export declare function glassInkUsages(text: string): readonly GlassInkUsage[];

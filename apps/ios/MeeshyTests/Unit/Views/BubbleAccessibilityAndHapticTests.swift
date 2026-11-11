@@ -141,6 +141,51 @@ final class MessageRowOfferLawTests: XCTestCase {
         XCTAssertEqual(offer.accessibilityActions, [])
     }
 
+    // MARK: - #17441 : un avis AFFICHÉ se cite
+
+    private func notice(call: CallSummaryMetadata? = nil, join: JoinNoticeMetadata? = nil, arrivals: ArrivalsNoticeMetadata? = nil) -> Message {
+        Message(
+            id: "6a0ad86a6e21a483b4443d21",
+            conversationId: "6a0ad86a6e21a483b4443d99",
+            senderId: "6a0ad86a6e21a483b4443da2",
+            content: "Appel manqué",
+            messageSource: .system,
+            createdAt: now.addingTimeInterval(-3600),
+            updatedAt: now.addingTimeInterval(-3600),
+            senderUserId: otherId,
+            callSummary: call,
+            joinNotice: join,
+            arrivalsNotice: arrivals
+        )
+    }
+
+    func test_offer_aMissedCallAnArrivalAndGroupedArrivals_offerReplyOnly() {
+        let call = CallSummaryMetadata(
+            callId: "c-1", initiatorId: otherId, callType: .audio, outcome: .missed,
+            durationSeconds: 0, bytesTotal: nil, bytesEstimated: false, networkQuality: nil
+        )
+        let join = JoinNoticeMetadata(participantId: "p-1", displayName: "Bruno", isAnonymous: false, viaShareLink: false)
+        let arrivals = ArrivalsNoticeMetadata(
+            arrivals: [ArrivalsNoticeMetadata.Arrival(participantId: "p-1", displayName: "Aïcha")],
+            count: 1, windowStartedAt: "2026-11-10T08:00:00.000Z"
+        )
+        for subject in [notice(call: call), notice(join: join), notice(arrivals: arrivals)] {
+            let offer = lawOffer(subject, authority())
+            XCTAssertTrue(offer.canReply, "un avis affiché se cite")
+            XCTAssertFalse(offer.canForward, "un avis ne se transfère pas")
+            XCTAssertFalse(offer.canEdit)
+            XCTAssertEqual(offer.accessibilityActions, [.reply])
+        }
+    }
+
+    func test_offer_aNoticeInAnAnnouncementChannelWithoutTheWritingRank_offersNoReply() {
+        let call = CallSummaryMetadata(
+            callId: "c-1", initiatorId: otherId, callType: .audio, outcome: .missed,
+            durationSeconds: 0, bytesTotal: nil, bytesEstimated: false, networkQuality: nil
+        )
+        XCTAssertFalse(lawOffer(notice(call: call), authority(isAnnouncementChannel: true)).canReply)
+    }
+
     func test_offer_anAnnouncementChannelWithoutTheWritingRank_offersNoReply() {
         let offer = lawOffer(message(), authority(isAnnouncementChannel: true))
         XCTAssertFalse(offer.canReply, "un membre sans rang d'écriture ne répond pas dans un canal d'annonce")

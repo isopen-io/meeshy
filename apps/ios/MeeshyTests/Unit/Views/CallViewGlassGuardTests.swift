@@ -1,8 +1,11 @@
 import XCTest
 @testable import Meeshy
 
-/// #8459 — la pilule est UN bloc de verre réel (iOS 26), et les actions du
-/// `(…)` s'y déploient au-dessus de la rangée de base, en duo comme en groupe.
+/// #8459 — la pilule est UN bloc de verre réel (iOS 26). #17327 — les actions du
+/// `(…)` s'y déploient au-dessus de la rangée de base EN GROUPE ; à deux, elles
+/// sortent en deux rails sur les bords et la pilule ne grandit pas.
+/// #17323 — chaque bouton y est lui-même un Liquid Glass interactif (iOS 26) ou
+/// le verre dessiné de `adaptiveLiquidGlass` (iOS 16 à 25) ; Fin reste rouge.
 /// #8435 — le bouton PiP quitte le plein écran par le même chemin que le glissé.
 @MainActor
 final class CallViewGlassGuardTests: XCTestCase {
@@ -17,57 +20,148 @@ final class CallViewGlassGuardTests: XCTestCase {
         return String(code[from.upperBound ..< to.lowerBound])
     }
 
-    /// #8459 — un bouton de la pilule est un disque PLAT dans le bloc de
-    /// verre : pas de verre sur verre, ni d'identité de morphing.
-    func test_pillGlyph_isAFlatDiscInsideTheGlassBlock() throws {
+    /// #17323 — un bouton de la pilule est un verre à lui : le traitement vient
+    /// de la loi pure `CallButtonGlassRule`, jamais d'un disque dessiné.
+    func test_pillGlyph_isAnInteractiveGlassDisc_chosenByThePureRule() throws {
         let glyph = try block("struct CallPillGlyph: View {", until: "struct CallPillButtonLabel", in: try callViewCode())
-        XCTAssertTrue(glyph.contains(".background(Circle().fill(CallButtonFill.color(for: kind)))"))
-        XCTAssertFalse(glyph.contains("CallButtonGlass"), "Un bouton de verre dans un bloc de verre, c'est du verre sur verre")
-        XCTAssertFalse(glyph.contains("adaptiveGlass"))
+        XCTAssertTrue(glyph.contains(".modifier(CallButtonGlassModifier(kind: kind, diameter: diameter))"))
+        XCTAssertFalse(glyph.contains("CallButtonFill.color"), "Plus de disque dessiné sous le glyphe")
+        XCTAssertFalse(glyph.contains("Color.white.opacity(0.16)"))
+        XCTAssertTrue(glyph.contains("CallButtonGlassRule.treatment("), "Le toucher dessiné ne reste que là où le verre ne réagit pas seul")
     }
 
-    func test_buttonFill_activeIsWhite_endIsRed_restIsTranslucent() throws {
+    func test_buttonGlass_noFlatTranslucentDiscRemains_andEndStaysRed() throws {
         let glass = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift")
         )
-        let fill = try block("enum CallButtonFill {", until: "\n}\n", in: glass)
-        XCTAssertTrue(fill.contains("case .active: return .white"))
-        XCTAssertTrue(fill.contains("case .destructive: return MeeshyColors.error"))
-        XCTAssertTrue(fill.contains("Color.white.opacity("))
-        XCTAssertFalse(glass.contains("struct CallButtonGlass"), "Le verre par bouton a quitté l'écran d'appel")
+        XCTAssertFalse(glass.contains("Color.white.opacity(0.16)"))
+        XCTAssertFalse(glass.contains("static func color(for kind: CallPillButtonKind)"), "Le disque plat par état a quitté l'écran d'appel")
+        let modifier = try block("struct CallButtonGlassModifier: ViewModifier {", until: "\n}\n", in: glass)
+        XCTAssertTrue(modifier.contains(".callControlGlass(diameter: diameter"), "Le verre neutre est celui de l'en-tête : adaptiveLiquidGlass interactif")
+        XCTAssertTrue(modifier.contains(".endCallGlass(diameter: diameter)"), "Fin reste rouge")
+        let endGlass = try block("func endCallGlass(diameter: CGFloat) -> some View {", until: "\n    }\n", in: glass)
+        XCTAssertTrue(endGlass.contains(".adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)"))
+        let anchor = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Call/Views/CallModeCarousel.swift").first)
+        let directory = anchor.deletingLastPathComponent()
+        for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        where url.pathExtension == "swift" {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            XCTAssertFalse(code.contains("CallButtonFill.color("), "\(url.lastPathComponent) : un disque plat par état")
+            XCTAssertFalse(code.contains("Color.white.opacity(0.16)"), "\(url.lastPathComponent) : plus aucun disque translucide dessiné dans la vue d'appel (#17323)")
+        }
     }
 
-    /// #8459 · #8550 — UN seul bloc de verre réel : la pilule ; les familles
-    /// OU le panneau ouvert s'y déploient, au-dessus de la rangée de base,
-    /// sans second bloc — en duo comme en groupe, par le MÊME chemin. #8578 —
-    /// le panneau REMPLACE les rangées : jamais les deux à la fois.
-    func test_actions_unfoldInsideTheSingleGlassBlock_aboveTheBaseRow() throws {
+    /// #8459 · #8550 — UN seul bloc de verre réel : la pilule ; en groupe, les
+    /// familles OU le panneau ouvert s'y déploient, au-dessus de la rangée de
+    /// base, sans second bloc. #8578 — le panneau REMPLACE les rangées : jamais
+    /// les deux à la fois. #17327 — c'est la loi pure `CallControlsDisposition` qui
+    /// dit si la pilule se déplie (groupe, ou option dessinée dedans), jamais une
+    /// bascule locale.
+    func test_groupActions_unfoldInsideTheSingleGlassBlock_aboveTheBaseRow() throws {
         let code = try callViewCode()
         let pill = try block("var callControlsPill: some View {", until: "var pillHairline: some View", in: code)
         XCTAssertEqual(pill.components(separatedBy: ".callControlsGlass(in:").count - 1, 1, "Un seul verre pour tout le bloc")
         let panel = try XCTUnwrap(pill.range(of: "panelRows(panel)"))
-        let families = try XCTUnwrap(pill.range(of: "familyRows(CallCameraRail.menuRows(actions, placement: cameraControlsPlacement))"))
+        let families = try XCTUnwrap(pill.range(of: "familyRows(disposition.pillRows(actions, layer: layer))"))
         let base = try XCTUnwrap(pill.range(of: "baseRow"))
         let glass = try XCTUnwrap(pill.range(of: ".callControlsGlass(in:"))
+        XCTAssertTrue(pill.contains("if disposition.unfoldsPill(for: layer) {"), "La pilule se déplie par la loi, pas par l'état seul du (…)")
+        XCTAssertTrue(pill.contains("let disposition = controlsDisposition"))
         XCTAssertTrue(pill.contains("if let panel = layer.pillPanel {"), "Le panneau se lit dans CallScreenLayer")
         let alternative = String(pill[panel.upperBound ..< families.lowerBound])
         XCTAssertTrue(alternative.contains("} else {"), "Le panneau REMPLACE les familles, il ne s'empile pas (#8578)")
         XCTAssertLessThan(families.lowerBound, base.lowerBound)
         XCTAssertLessThan(base.lowerBound, glass.lowerBound, "Le verre enveloppe les rangées ET la rangée de base")
-        XCTAssertFalse(pill.contains("isGroupStage ?"), "Duo et groupe partagent la même disposition")
+        XCTAssertFalse(pill.contains("isGroupStage ?"), "La disposition vient de la loi pure, jamais d'une bascule locale")
+        XCTAssertFalse(pill.contains("railActionButton"), "Les boutons des rails sont ceux des rails, pas ceux de la pilule")
         XCTAssertFalse(code.contains("callLegibilityVeil"), "Plus de voile non vitré : le bloc est du verre")
-        XCTAssertFalse(code.contains("actionRails"), "Les rails latéraux ont quitté l'écran d'appel")
         XCTAssertFalse(code.contains("CallReactionPalette"), "La palette flottante a rejoint la pilule")
     }
 
+    /// #17327 — À DEUX, deux rails verticaux sur les bords : « mon image » à
+    /// gauche, « l'appel » à droite, centrés verticalement, chacun UNE capsule de
+    /// verre qui porte les mêmes boutons que les rangées. La garde d'avant
+    /// interdisait tout rail (#8459) ; la directive porteur du 2026-11-09 a retiré
+    /// cet interdit : à deux, les rails sont IMPOSÉS, à plusieurs ils sont bannis.
+    func test_duoActions_comeOutAsTwoEdgeRails_chosenByThePureLaw() throws {
+        let code = try callViewCode()
+        let rails = try block("var callActionRails: some View {", until: "private func actionRail(", in: code)
+        XCTAssertTrue(rails.contains("controlsDisposition.railRows(currentActionSet, layer: layer)"), "Les rails se lisent dans la loi : rien en groupe")
+        XCTAssertTrue(rails.contains("CallRailsLayout.bottomClearance("), "Centrés sur toute la hauteur en paysage, au-dessus de la pilule en portrait")
+        XCTAssertTrue(rails.contains("alignment: side == .leading ? .leading : .trailing"), "Mon image ouvre la marche, l'appel la ferme, retournés en droite à gauche")
+        XCTAssertTrue(rails.contains("AsyncRenderRow(id: row.family"), "Construits sur le fil principal (#9456)")
+        XCTAssertTrue(rails.contains(".callChromeVisibility(isChromeVisible)"), "Les rails se rangent avec l'en-tête et la pilule")
+        XCTAssertTrue(rails.contains(".animation(disclosureAnimation, value: rows)"), "Un rail apparu ou parti suit le (…), jamais d'un coup")
+        let rail = try block("private func actionRail(", until: "private struct CallRailSlide", in: code)
+        XCTAssertEqual(rail.components(separatedBy: ".callControlsGlass(in: Capsule())").count - 1, 1, "UNE capsule de verre par rail, l'atome adaptatif")
+        XCTAssertTrue(rail.contains("railActionButton(action)"), "Les boutons sont ceux des rangées : même verre, mêmes libellés VoiceOver")
+        XCTAssertTrue(rail.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"), "Les disques voisins se composent ensemble")
+        XCTAssertTrue(rail.contains("ViewThatFits(in: .vertical)"), "Trop haut, un rail défile au lieu de déborder")
+        XCTAssertTrue(rail.contains("CallControlsCopy.familyTitle(row.family)"), "VoiceOver nomme le rail")
+        XCTAssertFalse(rail.contains(".adaptiveGlass("), "Aucun verre dessiné à la main dans la vue")
+        let slideStart = try XCTUnwrap(code.range(of: "private struct CallRailSlide: ViewModifier {"))
+        let slide = String(code[slideStart.upperBound...])
+        XCTAssertTrue(slide.contains("CallRailsLayout.slideOffset("), "Le rail entre et sort par SON bord de l'écran")
+        XCTAssertTrue(slide.contains("layoutDirection == .rightToLeft"), "Retourné en écriture de droite à gauche")
+        XCTAssertTrue(code.contains("guard !reduceMotion else { return .opacity }"), "Réduire les animations : un fondu")
+        XCTAssertTrue(code.contains("callEdgeControls\n"), "Les rails sont montés dans l'appel établi")
+    }
+
+    /// #17327 — « Une seule forme par disposition » : plus aucune commande de ma
+    /// caméra autour de ma vignette ni en haut au centre, ni aucune rangée du
+    /// (…) qui doublerait le rail gauche.
+    func test_noSecondFormOfMyImageControls_remains() throws {
+        let code = try callViewCode()
+        for removed in ["selfTileControlRows", "selfTileControlRow(", "CallSelfTileControlsPlacement", "CallSelfTileControlButton", "CallSelfTileControlGlyph", "menuRows(", "selfTileRows(", "selfTileControlsBounds"] {
+            XCTAssertFalse(code.contains(removed), "\(removed) : une seconde forme des commandes de ma caméra")
+        }
+        let handler = try block(".adaptiveOnChange(of: isGroupStage) { _, isGroup in", until: ".adaptiveOnChange(of: isVideoStage)", in: code)
+        XCTAssertFalse(handler.contains("layer"), "De deux à trois, l'état du (…) ne bouge pas : seule la forme change")
+    }
+
+    /// #17327 — les boutons de ma vignette retirés vibraient au toucher pour
+    /// allumer ou couper la caméra et pour arrêter le partage d'écran : le rail
+    /// gauche et la rangée « Mon image », qui les remplacent, gardent ce retour.
+    func test_myImageButtons_keepTheTouchFeedbackOfTheRemovedTileButtons() throws {
+        let code = try callViewCode()
+        let camera = try block("private func cameraActionButton(captioned: Bool, diameter: CGFloat) -> some View {", until: "private func cameraPickerActionButton", in: code)
+        XCTAssertTrue(camera.contains("HapticFeedback.light()\n            callManager.cameraActuator.toggleVideo()"), "Caméra : retour au toucher avant la bascule")
+        let screenShare = try block("case .screenShare:", until: "case .captions:", in: code)
+        XCTAssertTrue(screenShare.contains("if callManager.screenShare.isSharing { HapticFeedback.light() }"), "Écran : retour au toucher à l'arrêt du partage")
+    }
+
     /// Le bloc de verre est un verre RÉEL sous iOS 26 (`adaptiveGlass`, qui
-    /// porte le `glassEffect` et le repli matériau).
-    func test_controlsGlass_isRealAdaptiveGlass() throws {
+    /// porte le `glassEffect` et le repli matériau) ; les disques de verre
+    /// voisins qu'il porte se composent dans un `AdaptiveGlassContainer`.
+    func test_controlsGlass_isRealAdaptiveGlass_andItsButtonsShareAContainer() throws {
         let glass = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift")
         )
         let modifier = try block("func callControlsGlass<S: Shape>(in shape: S) -> some View {", until: "\n    }\n", in: glass)
         XCTAssertTrue(modifier.contains(".adaptiveGlass(in: shape)"))
+        let controlCircle = try block("func callControlGlass(diameter: CGFloat, isActive: Bool, tint: Color) -> some View {", until: "\n    }\n", in: glass)
+        XCTAssertTrue(controlCircle.contains(".adaptiveLiquidGlass(in: Circle()"), "Le disque de l'en-tête est un verre dessiné avant iOS 26")
+        XCTAssertTrue(controlCircle.contains("interactive: true"))
+        let chip = try block("func callChipGlass(isActive: Bool, tint: Color) -> some View {", until: "\n    }\n", in: glass)
+        XCTAssertTrue(chip.contains("adaptiveLiquidGlass(in: Capsule()"))
+        let code = try callViewCode()
+        let base = try block("private var baseRow: some View {", until: "private func moreButton(", in: code)
+        XCTAssertTrue(base.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"))
+    }
+
+    /// #17323 — l'en-tête : Réduire et Conversation sont des verres voisins,
+    /// composés ensemble ; la capsule de droite est un verre interactif quand
+    /// elle s'ouvre au toucher.
+    func test_header_buttonsShareAGlassContainer_andTheChipIsInteractive() throws {
+        let header = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Header.swift")
+        )
+        let chrome = try block("var topChrome: some View {", until: "private var showsDurationChip", in: header)
+        XCTAssertTrue(chrome.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"))
+        XCTAssertEqual(chrome.components(separatedBy: ".callControlGlass(diameter: 40").count - 1, 2)
+        XCTAssertFalse(chrome.contains(".adaptiveGlass("))
+        let chip = try block("private var durationChip: some View {", until: "func collapseIntoPip()", in: header)
+        XCTAssertTrue(chip.contains(".modifier(CallInteractiveChromeCapsule())"))
     }
 
     /// Les rangées d'actions ne portent plus aucun fond propre : elles sont
@@ -83,8 +177,12 @@ final class CallViewGlassGuardTests: XCTestCase {
         )
         XCTAssertTrue(row.contains("ScrollView(.horizontal, showsIndicators: false)"))
         XCTAssertTrue(row.contains("scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Un lancer va aussi loin qu'il porte (#8736)")
-        XCTAssertFalse(row.contains("adaptiveGlass"), "Une rangée dans le bloc de verre n'a pas de verre à elle")
+        XCTAssertFalse(row.contains(".adaptiveGlass("), "Une rangée n'a pas de plaque de verre à elle : seuls ses boutons sont du verre")
         XCTAssertFalse(row.contains("callChromeGlass"))
+        XCTAssertTrue(row.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"), "Les disques voisins d'une rangée se composent ensemble")
+        XCTAssertFalse(row.contains("CallButtonFill.color"))
+        let chip = try block("struct CallPillChip: View {", until: "private var artwork: some View {", in: row)
+        XCTAssertTrue(chip.contains(".buttonStyle(CallPressButtonStyle(glassPressesItself: art.carriesGlass))"), "Une puce de verre ne rétrécit pas par-dessus son verre interactif")
     }
 
     /// Les fichiers de l'écran d'appel qui portent un défilement horizontal
@@ -125,7 +223,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(code.contains("DragGesture(minimumDistance: 0)"))
         XCTAssertTrue(code.contains("struct CallPressButtonStyle: ButtonStyle"))
         for file in ["CallPillRow.swift", "CallModeCarousel.swift"] {
-            XCTAssertTrue(scrollers[file]?.contains(".buttonStyle(CallPressButtonStyle())") == true, file)
+            XCTAssertTrue(scrollers[file]?.contains(".buttonStyle(CallPressButtonStyle(") == true, file)
         }
     }
 
@@ -215,31 +313,21 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(service.contains("@Published private(set) var preview"), "L'aperçu se publie sur son flux, pas sur le contrôleur")
     }
 
-    /// #8747 — les commandes de ma caméra quittent la vignette : Effets ·
-    /// Écran au-dessus, Retourner · Caméra en dessous, posés par la règle pure,
-    /// chacun un disque de verre interactif, chaque rangée un conteneur de
-    /// verre. La vignette ne porte plus que le zoom ; la toucher permute.
-    func test_selfTileControls_liveAroundTheTile_inInteractiveGlass() throws {
+    /// #17327 — ma vignette ne porte plus aucune commande autour d'elle (#8747
+    /// retiré) : elle garde son glissé, son pincement, son zoom, et la toucher
+    /// permute les flux.
+    func test_selfTile_carriesNoControlAroundIt_onlyTheZoom() throws {
         let code = try callViewCode()
         let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
-        XCTAssertTrue(pip.contains("selfTileControlRows("), "Les rangées sont posées autour de la vignette")
-        XCTAssertTrue(pip.contains("dragOffset: pipDragOffset"), "Elles suivent le glissé")
+        XCTAssertFalse(pip.contains("selfTileControlRows("), "Plus de rangées autour de la vignette")
         XCTAssertTrue(pip.contains("selfTileZoomSlot(tileSize: size)"), "Le zoom reste dans la vignette")
         XCTAssertFalse(pip.contains("tapCameraMenu"), "Plus de grille repliée dans la vignette")
         XCTAssertFalse(code.contains("foldedCameraButton"))
         XCTAssertFalse(code.contains("cameraControlsGrid"))
-        XCTAssertTrue(code.contains("CallSelfTileControlsPlacement.layout("))
-        XCTAssertTrue(code.contains("CallSelfTileControlsPlacement.following("))
-        XCTAssertTrue(code.contains("CallSelfTileControlsPlacement.restingCenter("), "Au repos, la vignette laisse la place des rangées")
-        let rows = try block("func selfTileControlRows(", until: "func selfTileZoomSlot(", in: code)
-        XCTAssertTrue(rows.contains("CallCameraRail.isShown(.selfTile"), "Elles se masquent avec le chrome")
-        XCTAssertTrue(code.contains("AdaptiveGlassContainer(spacing: CallSelfTileControlsPlacement.buttonSpacing)"))
-        let glyph = try block("struct CallSelfTileControlGlyph: View {", until: "enum CallMyImageCopy", in: code)
-        XCTAssertTrue(glyph.contains(".callControlGlass(diameter: CallSelfTileControlsPlacement.buttonSide"), "Un disque de verre interactif, comme la flèche de l'en-tête")
-        let button = try block("struct CallSelfTileControlButton: View {", until: "struct CallSelfTileControlGlyph: View {", in: code)
-        XCTAssertTrue(button.contains(".buttonStyle(CallPressButtonStyle())"), "L'enfoncement se voit au premier toucher")
-        XCTAssertTrue(button.contains(".toggleStateAccessibility("))
-        XCTAssertTrue(code.contains("screenSharePicker.toggle(controller: callManager.screenShare)"))
+        XCTAssertTrue(pip.contains(".onTapGesture { swapPictureInPicture() }"), "Toucher la vignette permute")
+        XCTAssertTrue(pip.contains("selfTilePinchGesture"))
+        let center = try block("func pipCenter(", until: "func pipTileSize(", in: code)
+        XCTAssertFalse(center.contains("restingCenter"), "La vignette ne réserve plus la place de rangées")
     }
 
     /// Loi 4 — la vignette du duo établi porte la couleur de qui elle montre,
@@ -257,15 +345,15 @@ final class CallViewGlassGuardTests: XCTestCase {
         let code = try callViewCode()
         let pip = try block("var pipView: some View {", until: "var videoAutoPaused: Bool {", in: code)
         XCTAssertFalse(pip.contains("callCameraZoom"), "Pincer la vignette la redimensionne, il ne zoome pas")
-        XCTAssertTrue(pip.contains("selfTileControlRows("), "Les commandes de ma caméra vivent autour de ma vignette")
+        XCTAssertTrue(pip.contains("selfTileZoomSlot(tileSize: size)"), "Le zoom de la vignette est un bouton dans la vignette")
         XCTAssertTrue(code.contains(".callCameraZoom(isEnabled: effectiveSwapStreams)"))
-        let rail = try block("var cameraRail: some View {", until: "\n    }\n}", in: code)
-        XCTAssertTrue(rail.contains("CallCameraRail.actions(from: currentActionSet)"))
-        XCTAssertTrue(rail.contains("CallCameraRail.isShown("))
-        XCTAssertTrue(rail.contains("CallCameraZoomAccessibilityElement()"))
-        XCTAssertTrue(rail.contains("alignment: .top"), "Mon image en plein écran : les commandes en haut au centre")
-        XCTAssertFalse(rail.contains("alignment: .trailing"), "Le rail vertical de droite a laissé place à la rangée du haut")
-        XCTAssertTrue(code.contains("cameraRail\n"), "Le rail est monté dans l'appel établi")
+        let lens = try block("var zoomLensRail: some View {", until: "\n    }\n", in: code)
+        XCTAssertTrue(lens.contains("CallCameraRail.isShown("))
+        XCTAssertTrue(lens.contains("CallZoomLensCapsule()"), "Mon image en plein écran : les pastilles de zoom, et rien d'autre")
+        XCTAssertTrue(lens.contains("alignment: .top"), "Mon image en plein écran : le zoom en haut au centre")
+        XCTAssertFalse(lens.contains("railActionButton"), "Les commandes de ma caméra sont dans leur rail (#17327)")
+        let capsule = try block("struct CallZoomLensCapsule: View {", until: "\n}\n", in: code)
+        XCTAssertTrue(capsule.contains("CallCameraZoomAccessibilityElement()"))
         let stage = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift")
         )

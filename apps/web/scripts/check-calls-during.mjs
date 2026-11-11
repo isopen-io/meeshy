@@ -27,7 +27,7 @@
  *     Ctrl + molette, au pincement de deux doigts — retenues avec sa place ;
  *     à chaque taille, en haut comme en bas de sa course, elle reste
  *     entière à l'écran et ne recouvre ni l'en-tête ni le champ d'écriture ;
- *  4 ter. « Choisir les périphériques » est dans la bulle là où la sortie se
+ *  4 ter. « Sortie audio » est dans la bulle là où la sortie se
  *     choisit (`setSinkId`, #9097) : la feuille s'ouvre, Échap la ferme et
  *     l'appel reste en bulle ;
  *  5. la bulle se déplace au doigt (clipsée à gauche) et au clavier
@@ -147,7 +147,7 @@ try {
       check(closed && (await page.$('[data-call-screen]')) !== null, `${label} : Échap ferme la feuille sans réduire l'appel`);
 
       // ------------------------------------------------ 3. pastille puis bulle
-      await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+      await page.click('[data-call-screen] button[aria-label="Réduire"]');
       check(await appears(page, '[data-call-pill-bar]'), `${label} : réduire l'appel rend la pastille`);
       const pillH = await heights(page, '[data-call-pill-bar] button');
       check(pillH.every((h) => h >= TAP_FLOOR), `${label} : les commandes de la pastille font au moins ${TAP_FLOOR} (${JSON.stringify(pillH)})`);
@@ -264,7 +264,7 @@ try {
       // ------------------------------------------------ 4 ter. la sortie audio depuis la bulle (#9097)
       const sinks = await page.evaluate(() => 'setSinkId' in HTMLMediaElement.prototype);
       const output = await page.$('[data-call-bubble-control="output"]');
-      check(sinks === (output !== null), `${label} : « Choisir les périphériques » est dans la bulle là où la sortie se choisit (setSinkId : ${sinks})`);
+      check(sinks === (output !== null), `${label} : « Sortie audio » est dans la bulle là où la sortie se choisit (setSinkId : ${sinks})`);
       if (output !== null) {
         await output.click();
         const outputSheet = await appears(page, '[data-call-devices] [role="dialog"]');
@@ -295,9 +295,9 @@ try {
       await page.click('[data-call-bubble-body]');
       check(await appears(page, '[data-call-screen]'), `${label} : toucher la bulle rend l'écran d'appel`);
 
-      // ------------------------------------------------ 7. l'image dans l'image (rangée « l'appel » du (…), #9095)
-      if ((await page.$('[data-call-actions="rows"]')) === null) await page.click('[data-call-more]').catch(() => undefined);
-      await page.waitForSelector('[data-call-actions="rows"]', { timeout: 3000 }).catch(() => null);
+      // ------------------------------------------------ 7. l'image dans l'image (rail « l'appel » du (…), #9095)
+      if ((await page.$('[data-call-rails="shown"], [data-call-actions="rows"]')) === null) await page.click('[data-call-more]').catch(() => undefined);
+      await page.waitForSelector('[data-call-rails="shown"], [data-call-actions="rows"]', { timeout: 3000 }).catch(() => null);
       const pipButton = await page.$('[data-call-pip]');
       const support = await page.evaluate(() => ('documentPictureInPicture' in window ? 'document' : document.pictureInPictureEnabled ? 'video' : 'none'));
       if (support === 'none') {

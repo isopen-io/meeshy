@@ -20,6 +20,7 @@ import { isPrivilegedPlatformRole } from './platform-privilege.js';
 import { GLOBAL_CONVERSATION_TYPE } from './global-minor-restriction.js';
 import { messageContentKind, type MessageContentKind, type MessageContentShape, type MessageContentSubject } from './message-content-kind.js';
 import { sharedTranslationServerReadsMessage } from './shared-translation-eligibility.js';
+import { quotableNoticeKind } from './quotable-notice.js';
 
 /** 24 heures, bornes incluses — la fenêtre d'édition de l'AUTEUR (`messageEditAdmission.ts`). */
 export const MESSAGE_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -100,7 +101,7 @@ export type MessageActionVerdicts = {
   readonly report: boolean;
   /** Un message vivant, non système, un membre actif d'une conversation ouverte — sans le droit d'écrire. */
   readonly canReact: boolean;
-  /** Le droit d'écrire en plus (`admitConversationWriteFor`). */
+  /** Le droit d'écrire en plus (`admitConversationWriteFor`) ; un avis AFFICHÉ se cite sans se réagir (#17441). */
   readonly canReply: boolean;
   readonly translate: TranslateVerdict;
   /** `null` : le service n'existe pas dans ce mode (voir `serverFeatureAbsence`). */
@@ -167,6 +168,8 @@ type Context = MessageActionInput & {
   readonly content: MessageContentShape;
   readonly registered: boolean;
   readonly notice: boolean;
+  /** Un avis AFFICHÉ qu'on cite (`quotableNoticeKind`, #17441) : appel, arrivée, départ annoncé. */
+  readonly quotableNotice: boolean;
   readonly exit: ContentExitLaw;
   readonly e2ee: boolean;
   readonly gone: boolean;
@@ -200,6 +203,7 @@ function contextOf(input: MessageActionInput): Context {
     content,
     registered,
     notice: NOTICE_KINDS.has(kind),
+    quotableNotice: quotableNoticeKind(message) !== null,
     exit: contentExitLaw(message),
     e2ee: flags.encrypted || conversationIsEndToEnd(input.conversation),
     gone,
@@ -273,7 +277,8 @@ function verdictsOf(ctx: Context): MessageActionVerdicts {
   const { kind, flags } = ctx.content;
   const { exit, notice } = ctx;
   const deletion = deleteVerdict(ctx);
-  const reacts = ctx.live && !notice && ctx.viewer.isActiveMember && ctx.viewer.canSendMessages && !conversationIsClosed(ctx.conversation);
+  const writes = ctx.live && ctx.viewer.isActiveMember && ctx.viewer.canSendMessages && !conversationIsClosed(ctx.conversation);
+  const reacts = writes && !notice;
   const serverFeature = (applies: boolean): boolean | null => (ctx.e2ee ? null : applies && ctx.live && ctx.readable);
   return {
     edit: editVerdict(ctx),
@@ -283,7 +288,7 @@ function verdictsOf(ctx: Context): MessageActionVerdicts {
     pin: pinVerdict(ctx),
     report: ctx.live && ctx.registered && ctx.viewer.isActiveMember && !notice && !ctx.isMine,
     canReact: reacts,
-    canReply: reacts && !flags.viewOnce && viewerCanWrite(ctx.conversation, ctx.viewer),
+    canReply: writes && (!notice || ctx.quotableNotice) && !flags.viewOnce && viewerCanWrite(ctx.conversation, ctx.viewer),
     translate: ctx.hasText && ctx.readable && ctx.live ? (ctx.e2ee ? 'device' : 'served-switch') : null,
     transcribe: serverFeature(kind === 'audio'),
     sentiment: serverFeature(ctx.hasText),

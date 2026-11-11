@@ -77,10 +77,10 @@ public enum PlatformRole: String, CaseIterable, Sendable, Comparable {
         isPrivileged
     }
 
-    /// L'ÉQUIPE de la plateforme (`isPlatformTeam`, #16623) : MODERATOR, ADMIN, BIGBOSS testent les features de cercle
-    /// entre eux, sans lien. AUDIT et ANALYST n'en sont pas.
+    /// L'ÉQUIPE de la plateforme (`isPlatformTeam`, #16623) : ANALYST et au-dessus ont entre eux toutes les features
+    /// de cercle, sans lien. USER et AGENT n'en sont pas.
     public var isTeam: Bool {
-        level >= PlatformRole.moderator.level
+        level >= PlatformRole.analyst.level
     }
 
     /// Administre la plateforme : ouvre la console (`isGlobalAdmin`).

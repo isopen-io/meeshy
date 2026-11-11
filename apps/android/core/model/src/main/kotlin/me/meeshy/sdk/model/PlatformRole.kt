@@ -29,8 +29,8 @@ enum class PlatformRole(val wireValue: String, val level: Int) {
     /** Modère le contenu : modifier le message d'autrui, retirer, écrire là où le rang manque. */
     val moderatesContent: Boolean get() = this == MODERATOR || administers
 
-    /** L'ÉQUIPE de la plateforme (`isPlatformTeam`, #16623) : MODERATOR, ADMIN, BIGBOSS testent les cercles entre eux. */
-    val isTeam: Boolean get() = level >= MODERATOR.level
+    /** L'ÉQUIPE de la plateforme (`isPlatformTeam`, #16623) : ANALYST et au-dessus ont entre eux toutes les features de cercle. */
+    val isTeam: Boolean get() = level >= ANALYST.level
 
     /** Administre la plateforme : vaut le créateur dans une conversation dont il est membre (`isGlobalAdmin`). */
     val administers: Boolean get() = this == ADMIN || this == BIGBOSS

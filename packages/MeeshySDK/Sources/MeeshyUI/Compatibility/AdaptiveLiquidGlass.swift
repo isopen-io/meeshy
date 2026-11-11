@@ -16,18 +16,22 @@ import SwiftUI
 /// below iOS 26 too.
 ///
 /// Opaque atom, per SDK purity: the caller passes a `Shape` and a `Color`.
+///
+/// Un renvoi : la matière, la recette et la réponse au toucher vivent dans
+/// `.meeshyGlass` (`Kit/MeeshyGlassSurface.swift`), au ton `theme` — la recette
+/// d'ici, inchangée au repos.
 public extension View {
     func adaptiveLiquidGlass<S: Shape>(
         in shape: S,
         tint: Color? = nil,
         interactive: Bool = false
     ) -> some View {
-        modifier(AdaptiveLiquidGlassModifier(shape: shape, tint: tint, interactive: interactive))
+        meeshyGlass(in: shape, tone: .theme, tint: tint, isInteractive: interactive)
     }
 }
 
 /// The hand-made glass recipe, as plain values — a `ViewModifier` cannot be
-/// inspected, its recipe can.
+/// inspected, its recipe can. It is the `theme` tone of `MeeshyGlassRecipe`.
 public nonisolated struct LiquidGlassFallbackRecipe: Equatable, Sendable {
     public let tintWash: Double
     public let sheen: Double
@@ -45,53 +49,5 @@ public nonisolated struct LiquidGlassFallbackRecipe: Equatable, Sendable {
             shadowOpacity: isDark ? 0.35 : 0.12,
             shadowRadius: 14
         )
-    }
-}
-
-private struct AdaptiveLiquidGlassModifier<S: Shape>: ViewModifier {
-    let shape: S
-    let tint: Color?
-    let interactive: Bool
-
-    @Environment(\.colorScheme) private var colorScheme
-
-    func body(content: Content) -> some View {
-        if #available(iOS 26.0, *) {
-            content.glassEffect(makeMeeshyGlass(tint: tint, interactive: interactive), in: shape)
-        } else {
-            content.background(fallback)
-        }
-    }
-
-    private var fallback: some View {
-        let recipe = LiquidGlassFallbackRecipe.resolve(isDark: colorScheme == .dark, isTinted: tint != nil)
-        return shape
-            .fill(.ultraThinMaterial)
-            .overlay(shape.fill((tint ?? .clear).opacity(recipe.tintWash)))
-            .overlay(
-                shape.fill(
-                    LinearGradient(
-                        colors: [Color.white.opacity(recipe.sheen), Color.white.opacity(0)],
-                        startPoint: .top,
-                        endPoint: .center
-                    )
-                )
-            )
-            .overlay(
-                shape.stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(recipe.rimLit),
-                            Color.white.opacity(recipe.rimShade),
-                            Color.white.opacity(recipe.rimLit * 0.5)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-            )
-            .compositingGroup()
-            .shadow(color: Color.black.opacity(recipe.shadowOpacity), radius: recipe.shadowRadius, y: 6)
     }
 }

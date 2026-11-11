@@ -63,6 +63,9 @@ export const byIdDeleteForMe = (id: string): string => `/api/v1/conversations/${
 /** GET /api/v1/conversations/:id/engagement */
 export const byIdEngagement = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/engagement`;
 
+/** POST /api/v1/conversations/:id/external/report */
+export const byIdExternalReport = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/external/report`;
+
 /** POST /api/v1/conversations/:id/invite */
 export const byIdInvite = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/invite`;
 
@@ -149,6 +152,12 @@ export const byIdThreadsByMessageId = (id: string, messageId: string): string =>
 
 /** GET /api/v1/conversations/check-identifier/:identifier */
 export const checkIdentifierByIdentifier = (identifier: string): string => `/api/v1/conversations/check-identifier/${encodeURIComponent(identifier)}`;
+
+/** POST /api/v1/conversations/external */
+export const external = '/api/v1/conversations/external';
+
+/** GET · PUT /api/v1/conversations/external/consent */
+export const externalConsent = '/api/v1/conversations/external/consent';
 
 /** POST /api/v1/conversations/join/:linkId */
 export const joinByLinkId = (linkId: string): string => `/api/v1/conversations/join/${encodeURIComponent(linkId)}`;

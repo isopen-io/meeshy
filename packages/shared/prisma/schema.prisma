@@ -404,6 +404,16 @@ model User {
   /// La version de la notice sous laquelle il a été donné (`CONSENT_POLICY_VERSION`).
   publicLeagueConsentVersion String?
 
+  /// Le consentement à l'interopérabilité WhatsApp (#17120, chantier #17007) —
+  /// daté par le SERVEUR (`PUT /conversations/external/consent`), donné sous la
+  /// version de l'information sur ce qui part chez Meta
+  /// (`EXTERNAL_INTEROP_NOTICE_VERSION`). Sans lui, ou sous une autre version,
+  /// aucune conversation externe ne s'ouvre. Le retirer efface les adresses
+  /// d'amis que le compte gardait. `null`/absent = pas de consentement.
+  whatsappInteropConsentAt     DateTime?
+  /// La version de l'information sous laquelle il a été donné.
+  whatsappInteropNoticeVersion String?
+
   // ============================================
   // E2EE / SIGNAL PROTOCOL ENCRYPTION FIELDS
   // ============================================
@@ -663,12 +673,15 @@ model ContactJoinNotice {
   @@index([joinerId])
 }
 
-/// Conversation entre utilisateurs (direct, group, public, global)
+/// Conversation entre utilisateurs (direct, group, public, global, external)
 model Conversation {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   /// Identifiant lisible par l'homme (ex: "mee_meeshy", "general", "mee_support")
   identifier    String   @unique
-  /// direct, group, public, global
+  /// direct, group, public, global — et `external` (#17117) : un tête-à-tête
+  /// avec un ami d'un réseau tiers, toujours `encryptionMode = e2ee`, dont
+  /// l'adresse vit dans `ExternalConversationPeer`. Un ancien client ne la
+  /// reçoit pas (jeton `external-conversations`).
   type          String
   title         String?
   description   String?
@@ -809,6 +822,9 @@ model Conversation {
   // Unified participant model (replaces members + anonymousParticipants)
   participants Participant[]
 
+  /// #17117 — l'adresse du pair d'une conversation `external`, absente partout ailleurs.
+  externalPeer ExternalConversationPeer?
+
   @@index([type]) // Optimisation: filtrer conversations par type (direct, group, global, etc.)
   @@index([isActive]) // Optimisation: filtrer conversations actives
   @@index([lastMessageAt]) // Optimisation: trier par activité récente
@@ -833,6 +849,47 @@ model Conversation {
   @@index([isActive, lastActivityAt])
   // #14643 — le balayage de purge des conversations obsolètes
   // (`purgeAfter <= now`). EXPLOITATION : créer cet index à la main sur la prod.
+  @@index([purgeAfter])
+}
+
+/// L'ADRESSE de l'ami d'une conversation `external` (#17117, chantier #17007).
+///
+/// Le numéro E.164 de l'ami est gardé EN CLAIR — exception BORNÉE à #9225
+/// (décision porteur du 2026-11-08) : seulement pour une conversation que
+/// l'utilisateur a ouverte LUI-MÊME (`openedByUserId`), jamais tiré d'un carnet,
+/// jamais accompagné d'un nom. Il vit dans sa propre collection pour qu'aucune
+/// lecture de `Conversation` (liste, détail, admin, export) ne l'emporte par un
+/// `include` : seul `services/external-conversation/` y touche (garde de source).
+///
+/// `purgeAfter` est l'échéance de conservation, repoussée à chaque ouverture
+/// (durée provisoire `EXTERNAL_PEER_HANDLE_RETENTION_DAYS`, fixée par le lot
+/// conformité avec #16999). Un index TTL l'efface à l'échéance.
+/// EXPLOITATION : les index se posent par la migration nommée
+/// `2026-11-10-external-conversation-peer-indexes`, jamais par `prisma db push`.
+model ExternalConversationPeer {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String       @unique @db.ObjectId
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// Le réseau tiers : `whatsapp` (Messenger plus tard).
+  network        String
+  /// Le numéro E.164 de l'ami — en clair, borné par `purgeAfter`, jamais journalisé.
+  handle         String
+  /// L'utilisateur Meeshy qui a ouvert la conversation, seul à pouvoir y écrire.
+  openedByUserId String       @db.ObjectId
+  createdAt      DateTime     @default(now())
+  /// L'échéance de conservation du numéro : l'index TTL efface la ligne à cet instant,
+  /// et la tâche `external-peer-retention-sweep` en est le filet (#17120).
+  purgeAfter     DateTime
+  /// #17120 — le pair BLOQUÉ par l'ouvreur (signalement d'un contenu reçu) : le relais
+  /// ne lui remet plus rien de ce pair. `null`/absent = non bloqué.
+  blockedAt      DateTime?
+
+  /// Une conversation par (utilisateur, réseau, numéro) : rouvrir rend la même.
+  @@unique([openedByUserId, network, handle])
+  /// Rendu TTL (`expireAfterSeconds: 0`) par la migration nommée, sous CE nom
+  /// (`ExternalConversationPeer_purgeAfter_idx`) : le moteur Prisma MongoDB
+  /// compare un index par nom et par clés, jamais par ses options. Ne jamais le
+  /// renommer ni le retirer d'ici (un `db push` le supprimerait avec son TTL).
   @@index([purgeAfter])
 }
 

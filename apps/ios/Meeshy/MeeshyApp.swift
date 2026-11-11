@@ -49,6 +49,9 @@ struct MeeshyApp: App {
         // Le SDK ne lit pas le catalogue de l'app ; il reçoit ce mot une fois,
         // et ses chemins (pont socket, moteur de synchro) le relaient.
         ConversationListAuthor.configureReaderLabel(ConversationListViewModel.youAuthorLabel)
+        // La citation d'un avis (appel, arrivée, départ — #17441) se dit dans la
+        // langue de l'app : le SDK reçoit nos libellés, il n'en porte aucun.
+        QuotedNotice.lend(strings: { ConversationPreviewCatalog.strings() })
 
         // Sortie de bêta : la clé de la préférence « Activer les bêta » est effacée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()
@@ -84,16 +87,25 @@ struct MeeshyApp: App {
         MessageSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
         SocialSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
 
-        // Surface a one-shot toast when the offline outbox reaches 80% of its
-        // 500-item capacity. removeDuplicates() in nearCapacityPublisher ensures
-        // the toast fires exactly once per true→false→true crossing, not on
-        // every new enqueue while near capacity.
-        //
-        // Le saut sur le main PRÉCÈDE le filter : `OfflineQueue` est un actor
-        // et émet depuis son exécuteur. Une fermeture écrite ici est isolée au
-        // MainActor ; reçue hors du main, elle trappe
-        // (`_dispatch_assert_queue_fail`) — même forme que le plantage
-        // TestFlight 1915/1916. Garde : OffMainCombineHopSourceGuardTests.
+        Self.installOfflineQueueNearCapacityToast()
+
+        // Arrière-plan, retour et ouverture/fermeture de session : une fois par
+        // transition de l'APPLICATION, même quand l'iPad a fermé la fenêtre
+        // principale (`AppLifecycleHooks`).
+        Self.installApplicationLifecycleHooks()
+    }
+
+    // Surface a one-shot toast when the offline outbox reaches 80% of its
+    // 500-item capacity. removeDuplicates() in nearCapacityPublisher ensures
+    // the toast fires exactly once per true→false→true crossing, not on
+    // every new enqueue while near capacity.
+    //
+    // Le saut sur le main PRÉCÈDE le filter : `OfflineQueue` est un actor
+    // et émet depuis son exécuteur. Une fermeture écrite ici est isolée au
+    // MainActor ; reçue hors du main, elle trappe
+    // (`_dispatch_assert_queue_fail`) — même forme que le plantage
+    // TestFlight 1915/1916. Garde : OffMainCombineHopSourceGuardTests.
+    private static func installOfflineQueueNearCapacityToast() {
         Self.nearCapacityCancellable = OfflineQueue.shared.nearCapacityPublisher
             .receive(on: DispatchQueue.main)
             .filter { $0 }
@@ -106,20 +118,18 @@ struct MeeshyApp: App {
                     )
                 }
             }
-
-        // Arrière-plan, retour et ouverture/fermeture de session : une fois par
-        // transition de l'APPLICATION, même quand l'iPad a fermé la fenêtre
-        // principale (`AppLifecycleHooks`).
-        Self.installApplicationLifecycleHooks()
     }
 
     /// L'aperçu DEBUG de l'onboarding REMPLACE l'écran de connexion au lieu de
     /// s'y superposer : un frère de `ZStack` est proposé la taille du plus
     /// grand, et `LoginView` en arabe sur iPhone SE en annonce 666 pour 647 —
     /// le calque débordait alors de 19 pt, coupant son bouton au bord.
-    private static var onboardingPreviewReplacesLogin: Bool {
+    /// Le catalogue du kit le remplace aussi, et aucun des deux n'est recouvert
+    /// par l'accueil plein écran : sans compte, il recouvrait le catalogue une
+    /// demi-seconde après son apparition (#17397).
+    private static var debugPreviewReplacesLogin: Bool {
         #if DEBUG
-        OnboardingPreviewLaunch.isActive
+        OnboardingPreviewLaunch.isActive || KitCatalogLaunch.isActive
         #else
         false
         #endif
@@ -172,7 +182,8 @@ struct MeeshyApp: App {
                             isAuthenticated: session.isAuthenticated,
                             splashPhase: inputs.splashPhase,
                             hasGuestSession: inputs.activeGuestSession != nil,
-                            hasVisitorRequest: inputs.hasVisitorRequest
+                            hasVisitorRequest: inputs.hasVisitorRequest,
+                            previewReplacesLogin: Self.debugPreviewReplacesLogin
                         )
                     },
                     set: { _ in }
@@ -233,7 +244,7 @@ struct MeeshyApp: App {
             hasCompletedOnboarding: hasCompletedOnboarding,
             hasVisitorRequest: visitorPresenter.request != nil,
             crashReports: crashReportsToShow,
-            previewReplacesLogin: Self.onboardingPreviewReplacesLogin
+            previewReplacesLogin: Self.debugPreviewReplacesLogin
         )
     }
 

@@ -221,7 +221,7 @@ class CallScreenShareController internal constructor(
 /**
  * « Partager l'écran » (iOS `CallScreenShareCopy`) : offert sur un appel établi, en audio comme en vidéo ;
  * allumé et « Arrêter le partage d'écran » pendant une demande ou un partage. Il prend place dans la
- * pilule et dans la rangée « Effets · Écran » de ma vignette (`CallCameraRail.effectsRow`).
+ * famille « Mon image » du (…) : le rail du début à deux, la rangée de la pilule à plusieurs (#17327).
  */
 @Singleton
 class CallScreenShareActionHandler @Inject constructor(
