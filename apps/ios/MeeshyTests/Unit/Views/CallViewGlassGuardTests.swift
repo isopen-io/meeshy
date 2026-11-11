@@ -303,8 +303,10 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// d'elle, à la place de la bande de looks, qui monte depuis la barre en fondu et y
     /// redescend. « Réduire les animations » en fait un fondu court, jamais un retrait net.
     func test_effectsBar_isOneGlassPiece_andSettingsRiseInTheirOwnGlassAboveIt() throws {
-        let bar = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift")
+        let bar = try block(
+            "struct CallEffectsBar<Looks: View>: View {",
+            until: "private struct CallModeShotActions",
+            in: AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeCarousel.swift"))
         )
         XCTAssertTrue(bar.contains(".callControlsGlass(in:"), "Le verre est l'atome partagé, d'une pièce")
         XCTAssertTrue(bar.contains("AdaptiveGlassContainer("))
