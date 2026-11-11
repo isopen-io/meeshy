@@ -39,6 +39,7 @@ struct CallView: View {
     /// et aucun masquage ne tombe sous un doigt posé.
     @State var showTranscript = false
     @State var showOriginalText = false
+    @State var journalShowsOriginal = false
     /// Progression du morph PiP (0 = plein écran, 1 = contracté vers la
     /// bannière). Piloté par `collapseIntoPip()` (réduction) et par
     /// `onAppear` (expansion depuis la bannière) — voir le trio
@@ -95,8 +96,9 @@ struct CallView: View {
     @State var isCameraMenuUnfolded = false
     let selfTileMemory: any CallSelfTileRemembering
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
-    /// sous une traduction, traduction sous un original dans le journal).
-    @State var revealedCaptionIds: Set<UUID> = []
+    /// sous une traduction, traduction sous un original dans le journal), une
+    /// surface à la fois (#17678, loi 7).
+    @State var revealedCaptions = CallCaptionsReveals()
     /// #8625 — l'écran d'appel TIENT la capture sans l'observer : ses états
     /// (aperçu, chrono, résultat) se lisent dans des vues feuilles, sinon un
     /// film redessinerait tout l'écran d'appel à chaque trame.

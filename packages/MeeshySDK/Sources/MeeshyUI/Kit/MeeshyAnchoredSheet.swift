@@ -92,7 +92,7 @@ nonisolated struct MeeshyAnchoredSheetLayout: Equatable {
 // MARK: - Les mots
 
 /// Les mots du kit : le nom du ✕ et celui de la poignée à crans, dans les sept langues.
-public nonisolated enum MeeshyAnchoredSheetCopy {
+public enum MeeshyAnchoredSheetCopy {
     public static var close: String {
         String(localized: "kit.anchored_sheet.close", defaultValue: "Fermer", bundle: .module)
     }
