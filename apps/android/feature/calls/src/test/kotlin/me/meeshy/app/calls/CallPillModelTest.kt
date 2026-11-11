@@ -27,7 +27,7 @@ class CallPillModelTest {
 
     @Test
     fun `an audio call offers the camera, which turns it into a video call`() {
-        val item = CallPillModel.cameraItem(state(isVideo = false, camera = false))!!
+        val item = CallPillModel.cameraItem(state(isVideo = false, camera = false))
         assertThat(item.action).isEqualTo(CallAction.Camera)
         assertThat(item.labelRes).isEqualTo(R.string.call_control_camera_on)
         assertThat(item.kind).isEqualTo(CallPillKind.Normal)
@@ -51,13 +51,13 @@ class CallPillModelTest {
 
     @Test
     fun `the camera toggle is active while the camera is on`() {
-        assertThat(CallPillModel.cameraItem(state())!!.kind).isEqualTo(CallPillKind.Active)
-        assertThat(CallPillModel.cameraItem(state(camera = false))!!.kind).isEqualTo(CallPillKind.Normal)
+        assertThat(CallPillModel.cameraItem(state()).kind).isEqualTo(CallPillKind.Active)
+        assertThat(CallPillModel.cameraItem(state(camera = false)).kind).isEqualTo(CallPillKind.Normal)
     }
 
     @Test
     fun `the automatic pause turns the camera toggle amber and says so`() {
-        val item = CallPillModel.cameraItem(state(paused = true))!!
+        val item = CallPillModel.cameraItem(state(paused = true))
         assertThat(item.kind).isEqualTo(CallPillKind.Warning)
         assertThat(item.labelRes).isEqualTo(R.string.call_control_video_paused)
         assertThat(item.captionRes).isEqualTo(R.string.call_control_video_paused_caption)

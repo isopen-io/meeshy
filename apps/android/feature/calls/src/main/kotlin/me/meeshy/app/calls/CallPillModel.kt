@@ -44,9 +44,8 @@ internal object CallPillModel {
             showsVideo = state.isVideoCall && state.showsConnectedLayout,
         )
 
-    /** The camera toggle: always there on a video call, amber while the app froze the video. */
-    fun cameraItem(state: CallUiState): CallPillItem? {
-        if (!state.isVideoCall) return null
+    /** The camera toggle: always there (on an audio call it upgrades to video, iOS `.camera`), amber while the app froze the video. */
+    fun cameraItem(state: CallUiState): CallPillItem {
         val paused = state.isVideoAutoPaused
         return CallPillItem(
             action = CallAction.Camera,
@@ -93,7 +92,7 @@ internal object CallPillModel {
                 isToggle = entry.presentation.isActive,
             )
         }
-        val camera = cameraItem(state)?.let { mapOf(CallAction.Camera to it) }.orEmpty()
+        val camera = mapOf(CallAction.Camera to cameraItem(state))
         val flip = flipItem(state)?.let { mapOf(CallAction.FlipCamera to it) }.orEmpty()
         return fromHandlers + camera + flip
     }
