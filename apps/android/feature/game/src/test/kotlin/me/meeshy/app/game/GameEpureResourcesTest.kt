@@ -274,7 +274,12 @@ class GameEpureResourcesTest {
     }
 
     @Test
-    fun `la tete de la fiche niveau garde les deux valeurs sans legende qui tronque`() {
-        assertThat(text(R.string.game_sparks_cumul_record)).isEqualTo("%1\$s · %2\$s en tout")
+    fun `apres une renaissance chacune des deux valeurs de la tete dit ce qu elle compte`() {
+        retiredLanguages.forEach { folder ->
+            val pieces = valueIn(folder, "game_sparks_cumul_record").split(" · ")
+            assertThat(pieces).hasSize(2)
+            pieces.forEach { piece -> assertThat(piece.replace(Regex("""[⁦⁩]|%\d\$s"""), "").trim()).isNotEmpty() }
+        }
+        assertThat(text(R.string.game_sparks_cumul_record)).isEqualTo("%1\$s cet Âge · %2\$s en tout")
     }
 }

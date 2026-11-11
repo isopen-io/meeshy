@@ -42,5 +42,5 @@
     <string name="game_photo_camera_unsupported">This device does not allow the camera here.</string>
     <string name="game_photo_camera_unavailable">The camera is not available.</string>
     <string name="game_mint_blocked_debt_plain">A shadow veils your light: your next sparks will clear it, then you can mint.</string>
-    <string name="game_sparks_cumul_record">%1$s · %2$s in all</string>
+    <string name="game_sparks_cumul_record">%1$s this Age · %2$s in all</string>
 </resources>

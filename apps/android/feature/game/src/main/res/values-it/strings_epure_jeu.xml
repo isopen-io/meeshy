@@ -42,5 +42,5 @@
     <string name="game_photo_camera_unsupported">Questo dispositivo non consente la fotocamera qui.</string>
     <string name="game_photo_camera_unavailable">La fotocamera non è disponibile.</string>
     <string name="game_mint_blocked_debt_plain">Un’ombra vela la tua luce: le tue prossime scintille la dissiperanno, poi potrai coniare.</string>
-    <string name="game_sparks_cumul_record">%1$s · %2$s in tutto</string>
+    <string name="game_sparks_cumul_record">%1$s in quest’Era · %2$s in tutto</string>
 </resources>

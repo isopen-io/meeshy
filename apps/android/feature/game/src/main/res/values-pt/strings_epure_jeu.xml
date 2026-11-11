@@ -42,5 +42,5 @@
     <string name="game_photo_camera_unsupported">Este aparelho não permite a câmera aqui.</string>
     <string name="game_photo_camera_unavailable">A câmera não está disponível.</string>
     <string name="game_mint_blocked_debt_plain">Uma sombra cobre sua luz: suas próximas faíscas vão dissipá-la, e então você poderá cunhar.</string>
-    <string name="game_sparks_cumul_record">%1$s · %2$s ao todo</string>
+    <string name="game_sparks_cumul_record">%1$s nesta Era · %2$s ao todo</string>
 </resources>

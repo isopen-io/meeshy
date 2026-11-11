@@ -42,5 +42,5 @@
     <string name="game_photo_camera_unsupported">Este dispositivo no permite la cámara aquí.</string>
     <string name="game_photo_camera_unavailable">La cámara no está disponible.</string>
     <string name="game_mint_blocked_debt_plain">Una sombra cubre tu luz: tus próximas chispas la disiparán, y luego podrás acuñar.</string>
-    <string name="game_sparks_cumul_record">%1$s · %2$s en total</string>
+    <string name="game_sparks_cumul_record">%1$s en esta Edad · %2$s en total</string>
 </resources>

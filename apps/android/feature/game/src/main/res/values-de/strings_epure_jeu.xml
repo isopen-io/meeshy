@@ -42,5 +42,5 @@
     <string name="game_photo_camera_unsupported">Dieses Gerät erlaubt hier keine Kamera.</string>
     <string name="game_photo_camera_unavailable">Die Kamera ist nicht verfügbar.</string>
     <string name="game_mint_blocked_debt_plain">Ein Schatten verhüllt dein Licht: Deine nächsten Funken werden ihn vertreiben, dann kannst du prägen.</string>
-    <string name="game_sparks_cumul_record">%1$s · %2$s insgesamt</string>
+    <string name="game_sparks_cumul_record">%1$s in diesem Zeitalter · %2$s insgesamt</string>
 </resources>

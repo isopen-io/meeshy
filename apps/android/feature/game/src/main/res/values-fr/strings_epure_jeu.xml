@@ -42,5 +42,5 @@
     <string name="game_photo_camera_unsupported">Cet appareil ne permet pas la caméra ici.</string>
     <string name="game_photo_camera_unavailable">La caméra n’est pas disponible.</string>
     <string name="game_mint_blocked_debt_plain">Une ombre voile ta lumière : tes prochaines étincelles la dissiperont, puis tu pourras frapper.</string>
-    <string name="game_sparks_cumul_record">%1$s · %2$s en tout</string>
+    <string name="game_sparks_cumul_record">%1$s cet Âge · %2$s en tout</string>
 </resources>
