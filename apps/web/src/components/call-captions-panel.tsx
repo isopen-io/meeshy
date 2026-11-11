@@ -1,8 +1,8 @@
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
-import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
-import { callCaptionsFooter } from '@/lib/calls/call-captions-footer';
+import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { callCaptionsFooter, captionFooterLine, EVENT_FOOTER_LINE, type CaptionsFooter } from '@/lib/calls/call-captions-footer';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
@@ -31,9 +31,14 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * d'appel ne fait que les garder montés : la sortie vit ici, hors de son chunk.
  *
  * Le nom de chaque personne porte SA couleur (`call-speaker-color.ts`), la
- * même que le liseré de sa vignette dans la grille. Une ligne traduite porte
- * une petite étiquette « EN → FR » — le Prisme dit discrètement qu'il a agi —
- * et un toucher sur la phrase déplie son original sous elle. Tout l'appel se
+ * même que le liseré de sa vignette dans la grille ; ma ligne se dit « Moi ».
+ * L'original part tout de suite, étiqueté de sa langue (« EN ») quand elle est
+ * hors du Prisme du lecteur, avec trois points tant qu'une traduction est
+ * attendue (`TRANSLATION_WAIT_MS`) ; la traduction le remplace sur place, et
+ * l'étiquette devient « EN → FR » — le Prisme dit discrètement qu'il a agi. Un
+ * toucher sur la phrase déplie « Original · … » sous elle. TOUTE la bande
+ * retient son toucher (`data-call-chrome-keep`) : sur une scène vidéo, toucher
+ * une phrase, une capture ou sa marge ne range plus les commandes (planche P5). Tout l'appel se
  * relit dans le Journal (#8579, `call-journal-panel.tsx`), ouvert depuis la
  * rangée « L'appel » : le bandeau ne montre que le direct.
  *
@@ -47,6 +52,33 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * secondaire, l'heure de l'appel au bout ; de même le début et la fin de
  * l'enregistrement consenti, sans pseudo.
  */
+
+/** Les trois points d'attente : un battement d'opacité décalé (`glass.css`), fixes sous « Réduire les animations ». */
+function WaitingDots({ label }: { readonly label: string }) {
+  return (
+    <>
+      <span aria-hidden="true" className="ms-1.5 inline-flex gap-0.5 align-middle" data-call-caption-waiting="">
+        {[0, 1, 2].map((dot) => (
+          <i key={dot} className="inline-block h-1 w-1 rounded-full bg-current" style={{ animationDelay: `${dot * 150}ms` }} />
+        ))}
+      </span>
+      <span className="sr-only">{`, ${label}`}</span>
+    </>
+  );
+}
+
+/** Rend le composant à l'échéance de la prochaine attente : l'attente retombe, l'étiquette de la langue reste. */
+function useWaitingClock(deadlines: readonly (number | null)[]): number {
+  const [, wake] = useState(0);
+  const now = Date.now();
+  const next = Math.min(...deadlines.map((until) => (until !== null && until > now ? until : Number.POSITIVE_INFINITY)));
+  useEffect(() => {
+    if (!Number.isFinite(next)) return undefined;
+    const handle = setTimeout(() => wake((tick) => tick + 1), Math.max(0, next - Date.now()));
+    return () => clearTimeout(handle);
+  }, [next]);
+  return now;
+}
 
 /** L'encre d'une phrase ORIGINALE : seule une traduction prend la couleur de son auteur (`docs/product/appels-vue-finale.md` loi 4). */
 const INK = 'var(--color-on-media)';
@@ -84,6 +116,8 @@ const CaptionLine = memo(function CaptionLine({
   speaker,
   color,
   open,
+  waiting,
+  language,
   onToggle,
 }: {
   readonly caption: CallCaption;
@@ -91,6 +125,8 @@ const CaptionLine = memo(function CaptionLine({
   readonly speaker: string;
   readonly color: string;
   readonly open: boolean;
+  readonly waiting: boolean;
+  readonly language: InterfaceLanguage;
   readonly onToggle: (id: string) => void;
 }) {
   const shown = captionText(caption, mode);
@@ -107,6 +143,7 @@ const CaptionLine = memo(function CaptionLine({
           {languages}
         </span>
       )}
+      {waiting ? <WaitingDots label={translate(language, 'callCaptions.translating')} /> : null}
     </>
   );
   return (
@@ -121,8 +158,11 @@ const CaptionLine = memo(function CaptionLine({
         </p>
       )}
       {unfoldable && open ? (
-        <span className="block ps-3 text-mini" style={{ color: INK_2 }} dir="auto" lang={caption.pair?.from} data-call-caption-original="">
-          {caption.original}
+        <span className="block ps-3 text-mini" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-caption-original="">
+          {`${translateCallControls(language, 'callControls.journal.original')} · `}
+          <span dir="auto" lang={caption.pair?.from} data-call-caption-original-text="">
+            {caption.original}
+          </span>
         </span>
       ) : null}
     </div>
@@ -162,22 +202,37 @@ export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'su
   );
 }
 
+/** Ce que dit le pied : la paire et le geste, les langues comptées, ou la traduction attendue. */
+function footerLabel(language: InterfaceLanguage, footer: CaptionsFooter): string {
+  switch (footer.kind) {
+    case 'translating':
+      return translate(language, 'callCaptions.footer.translating', { language: footer.language });
+    case 'touchForOriginal':
+      return translate(language, 'callCaptions.footer.touchForOriginal', { pair: footer.pair });
+    case 'translatedLanguages':
+      return translate(language, 'callCaptions.footer.translatedLanguages', { count: String(footer.count) });
+  }
+}
+
 export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal }: PanelProps) {
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
   const mode = call.captionsMode;
   const lines = overlayEntries(call.captions, call.journalNotes ?? [], CAPTIONS_OVERLAY_LINES);
   const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
-  const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'message.author.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
+  const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
   const toggle = useCallback((id: string) => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id]))), []);
-  const pair = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? { languages: null, event: true } : { languages: captionLanguageLabel(entry.caption, mode), event: false })));
+  const now = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))));
+  const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, mode, now))));
+  const footerText = footer === null ? null : footerLabel(language, footer);
 
   return (
     <section
-      aria-label={translate(language, 'callCaptions.region')}
+      aria-label={translate(language, 'callCaptions.regionLabel')}
       className={`${surface === 'glass' ? 'glass-call-prominent rounded-card ' : ''}flex flex-col gap-1.5 px-3 py-2`}
       data-call-captions-panel={mode}
       data-call-captions-surface={surface}
+      data-call-chrome-keep=""
     >
       <div aria-live="polite" className="flex flex-col text-body" data-call-caption-lines="">
         {lines.length === 0 ? (
@@ -187,17 +242,17 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
             entry.type === 'note' ? (
               <NoteLine key={entry.note.id} note={entry.note} language={language} color={colorOf({ speakerId: entry.note.userId ?? '', speakerName: entry.note.name ?? '' })} clock={clockOf(entry.at)} />
             ) : (
-              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={unfolded.has(entry.caption.id)} onToggle={toggle} />
+              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={unfolded.has(entry.caption.id)} waiting={isAwaitingTranslation(entry.caption, now)} language={language} onToggle={toggle} />
             ),
           )
         )}
       </div>
-      {pair === null && note === null && onOpenJournal === undefined ? null : (
+      {footerText === null && note === null && onOpenJournal === undefined ? null : (
         <div className="flex items-center justify-between gap-x-3 text-mini" style={{ color: INK_2 }} data-call-captions-footer="">
           <div className="flex min-w-0 flex-col">
-            {pair === null ? null : (
-              <span className="truncate" data-call-captions-pair={pair}>
-                {translate(language, 'callCaptions.footer.touchForOriginal', { pair })}
+            {footerText === null || footer === null ? null : (
+              <span className="truncate" data-call-captions-footer-state={footer.kind} {...(footer.kind === 'touchForOriginal' ? { 'data-call-captions-pair': footer.pair } : {})}>
+                {footerText}
               </span>
             )}
             {note === null ? null : <span data-call-captions-note={call.transcription}>{translate(language, note)}</span>}

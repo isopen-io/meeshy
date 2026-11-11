@@ -247,3 +247,24 @@
     transition: none;
   }
 }
+
+/* LES TROIS POINTS D'UNE TRADUCTION ATTENDUE (planche P3-P5) — un battement d'opacité
+   décalé d'un point à l'autre ; seule l'opacité bouge. Sous « Réduire les animations »,
+   ils restent fixes, à mi-teinte. */
+[data-call-caption-waiting] > i {
+  animation: call-caption-dot 900ms ease-in-out infinite alternate;
+  opacity: 0.35;
+}
+
+@keyframes call-caption-dot {
+  to {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-call-caption-waiting] > i {
+    animation: none;
+    opacity: 0.6;
+  }
+}
