@@ -173,10 +173,9 @@ final class EntryScreensEpureTests: XCTestCase {
         XCTAssertNil(app["auth.login.create_account.hint"], "répétait « Créer un compte »")
 
         let unread = [
-            "onboarding.friends.body", "onboarding.friends.badge", "onboarding.global.hint",
+            "onboarding.friends.body", "onboarding.global.hint",
             "onboarding.story.sending.detail", "onboarding.email.waiting",
             "auth.magiclink.email.hintLabel", "auth.magiclink.email.title", "auth.magiclink.sent.codeAndLink",
-            "auth.password.change.current.section", "auth.password.change.new.section",
             "auth.signup.subtitle", "emailVerification.nav.title", "emailVerification.noCode",
             "sessionClosed.signedOut.message", "sessionClosed.expired.message",
         ]
@@ -186,6 +185,17 @@ final class EntryScreensEpureTests: XCTestCase {
         let sdk = try Self.catalog(Self.sdkCatalogPath)
         let orphans = sdk.keys.filter { $0.hasPrefix("auth.registration.") }.sorted()
         XCTAssertTrue(orphans.isEmpty, "24 clés sans aucun lecteur : \(orphans.joined(separator: ", "))")
+    }
+
+    /// Android lit le même catalogue (apps/android/i18n/manifest) : une clé
+    /// qu'iOS n'affiche plus mais qu'Android affiche encore garde ses sept
+    /// langues, sinon la génération des chaînes Android échoue.
+    func test_catalog_keysAndroidStillReads_keepTheirSevenLanguages() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        for key in ["onboarding.friends.badge", "auth.password.change.current.section", "auth.password.change.new.section"] {
+            let values = try XCTUnwrap(app[key], key)
+            XCTAssertEqual(Set(values.keys), Set(["fr"] + Self.otherLanguages), key)
+        }
     }
 
     // MARK: - Connexion

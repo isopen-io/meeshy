@@ -290,7 +290,7 @@
     <string name="share_link_resume_anonymously">Reprendre en anonyme</string>
     <string name="signup_card_code_lead">Entrez le code à 6 chiffres envoyé à %1$s, ou ouvrez le lien reçu.</string>
     <string name="signup_card_verified">Compte validé !</string>
-    <string name="signup_card_verified_lead">Tout est prêt : vos proches vous lisent dans votre langue.</string>
+    <string name="signup_card_verified_lead">Vos proches vous lisent dans votre langue.</string>
     <string name="signup_close">Fermer</string>
     <string name="signup_country_search_hint">Rechercher un pays</string>
     <string name="signup_email_forgot_password">Mot de passe oublié ?</string>
