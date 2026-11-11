@@ -23,7 +23,7 @@ import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySid
 import { JOURNAL_COLUMN_GUTTER, JOURNAL_COLUMN_WIDTH, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { callPillText, PILL_TEXT_WIDTH_CLASS, pillStaysWhenChromeStowed, type CallPillText } from '@/lib/calls/call-pill-text';
-import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
+import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, panelInThePill, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
@@ -387,6 +387,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const nameOf = (userId: string): string | null => call.members[userId]?.name ?? null;
   const closeGlyph = <GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />;
   const expanded = shown.kind === 'menu' || shown.kind === 'panel';
+  const pillPanel = chrome.panel !== null && panelInThePill(chrome.panel) ? chrome.panel : null;
   const grown = unfoldsPill(disposition, shown);
 
   useEffect(() => {
@@ -562,7 +563,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       case 'journal':
         return <CallJournalPanel {...base} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} windowHeight={viewport.height} />;
       case 'people':
-        return <CallPeopleSheet {...base} members={orderedMembers(call.members)} renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />} />;
+        /* Une feuille se referme sur le menu qu'elle recouvrait (G3.5, `backToMenu` d'iOS), pas sur la pilule de base. */
+        return <CallPeopleSheet {...base} onClose={base.back.onPress} members={orderedMembers(call.members)} renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />} />;
     }
   };
   const exitMode = () => send({ type: 'exit-mode' });
@@ -680,7 +682,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                   captions={captionsOf('captions', text === 'captions' || stowedWithCaptions)}
                   panels={panels}
                   kit={ROWS_KIT}
-                  panel={chrome.panel === null ? null : <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense>}
+                  panel={pillPanel === null ? null : <Suspense fallback={null}>{panelOf(pillPanel)}</Suspense>}
                   stowed={stowedWithCaptions}
                 />
               </div>
@@ -712,6 +714,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
             <CallJournalInColumn width={JOURNAL_COLUMN_WIDTH} gutter={JOURNAL_COLUMN_GUTTER} id={CALL_PANEL_ID.journal} closeGlyph={closeGlyph} language={language} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />
           </Suspense>
         ) : null}
+        {chrome.panel !== null && !panelInThePill(chrome.panel) ? <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense> : null}
         {declineOpen && phase === 'incoming' ? (
           <Suspense fallback={null}>
             <CallDeclineSheet call={call} language={language} onClose={() => setDeclineOpen(false)} />

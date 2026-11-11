@@ -5,8 +5,12 @@ import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type Wheel
  * forme commune des panneaux que le `(…)` ouvre : Réagir, Enregistrer,
  * Ajouter, Journal. Chacun s'ouvre DANS le cadre de la pilule et REMPLACE les
  * rangées d'actions (une chose à la fois), sous un petit en-tête (‹ Retour ·
- * titre · Fermer) : ‹ revient aux rangées, ✕ referme tout. Un fond à peine
- * plus clair le distingue ; jamais de verre dans le verre.
+ * titre centré · Fermer) : ‹ revient aux rangées, ✕ referme tout. Un fond à peine
+ * plus clair le distingue ; ‹ et ✕ sont des disques de verre de 44, comme chaque
+ * bouton de la pilule (`CallButton` ton `disc`, #17345, G3.6) : un voile et un liseré
+ * (`.glass-call-disc`), sans flou à eux, donc sans verre dans le verre. Le disque est
+ * redessiné ici, avec la MÊME classe, parce que `CallButton` vit dans `call_overlay`
+ * (`dynamic_only`) et que ce module, chargé à part, n'en importe rien.
  *
  * Échap le ferme sans réduire l'appel ; à l'ouverture, le focus va au choix
  * coché ou au premier bouton ; en fermant, l'écran le rend au bouton qui l'a
@@ -51,6 +55,15 @@ type FrameProps = {
 
 export type PanelBack = { readonly label: string; readonly onPress: () => void };
 
+/** Un bouton rond de l'en-tête : le disque de verre de l'appel (`CallButton`, ton `disc`), 44 de côté. */
+function Disc({ label, glyph, onPress, data }: { readonly label: string; readonly glyph: ReactNode; readonly onPress: () => void; readonly data: Readonly<Record<`data-${string}`, string>> }) {
+  return (
+    <button type="button" aria-label={label} title={label} onClick={onPress} className="glass-call-disc grid shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none" style={{ width: 44, height: 44, color: 'var(--color-on-media)' }} {...data}>
+      {glyph}
+    </button>
+  );
+}
+
 const chevron = (
   <svg aria-hidden viewBox="0 0 24 24" className="size-5 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="m15 5-7 7 7 7" />
@@ -81,27 +94,17 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, chi
       style={fill ? undefined : { background: 'var(--color-media-fill)' }}
       {...data}
     >
-      <div className={`flex items-center gap-1 ${back === undefined ? 'ps-3' : ''}`}>
-        {back === undefined ? null : (
-          <button type="button" aria-label={back.label} title={back.label} onClick={back.onPress} className="grid size-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none" data-panel-back="">
-            {chevron}
-          </button>
+      <div className="flex items-center gap-1">
+        {back === undefined ? (
+          <span aria-hidden className="size-11 shrink-0" />
+        ) : (
+          <Disc label={back.label} glyph={chevron} onPress={back.onPress} data={{ 'data-panel-back': '' }} />
         )}
-        <h2 id={titleId} className="min-w-0 flex-1 truncate text-body font-semibold">
+        <h2 id={titleId} className="min-w-0 flex-1 truncate text-center text-body font-semibold">
           {title}
         </h2>
         {trailing}
-        <button
-          type="button"
-          aria-label={closeLabel}
-          title={closeLabel}
-          onClick={onClose}
-          className="grid size-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none"
-          data-panel-close=""
-          {...closeData}
-        >
-          {closeGlyph}
-        </button>
+        <Disc label={closeLabel} glyph={closeGlyph} onPress={onClose} data={{ 'data-panel-close': '', ...closeData }} />
       </div>
       {children}
     </div>

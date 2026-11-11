@@ -1,5 +1,5 @@
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
@@ -22,8 +22,11 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **LES PARTICIPANTS D'UN APPEL, ET QUI Y AJOUTER** (#8433, #8438, #8550) —
- * ouvert par « Ajouter » de la rangée de l'appel, DANS le cadre de la pilule
- * (`call-panel-frame.tsx`) ; sa liste défile à la verticale, bornée. En haut, « Dans l'appel » : moi, puis chaque
+ * ouvert par « Ajouter » de la rangée de l'appel, en FEUILLE qui monte du bas
+ * de l'écran, par-dessus les rangées qui restent sous elle (G3.5, loi 14 : seules
+ * les options Réagir, Enregistrer et Journal vivent dans la pilule) ; elle repart
+ * par où elle est venue, et « Réduire les animations » la remplace par un fondu.
+ * Sa liste défile à la verticale, bornée. En haut, « Dans l'appel » : moi, puis chaque
  * participant — une personne invitée y apparaît AUSSITÔT, « Sonne… » —, et,
  * pour qui modère, le menu de chacun (remis par l'écran : `renderModeration`).
  * En dessous, « Ajouter des personnes » : mes contacts acceptés qui ne sont pas
@@ -79,7 +82,7 @@ function useInvitable(query: string, members: readonly CallMember[]) {
   return { loading: accepted.data === undefined && accepted.isPending, all: friends.filter((f) => !inCall.includes(f.id)), shown: invitableFriends({ friends, inCall, query }) };
 }
 
-export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, renderModeration, invite = callActions.invite, back }: SheetProps) {
+function PeopleList({ id, closeGlyph, language, members, onClose, renderModeration, invite = callActions.invite, back }: SheetProps) {
   const [query, setQuery] = useState('');
   const panel = useRef<HTMLDivElement>(null);
   const { loading, all, shown } = useInvitable(query, members);
@@ -162,5 +165,32 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
         </section>
       </div>
     </CallPanelFrame>
+  );
+}
+
+/** La durée de la sortie de la feuille (`call-motion.css`, `[data-call-sheet][data-leaving]`). */
+const SHEET_EXIT_MS = 180;
+
+/**
+ * **LA FEUILLE DES PERSONNES** (G3.5) — l'hôte de la liste : un voile qui ferme au
+ * toucher, et la feuille qui monte du bas. Échap, ✕ et le voile passent par le
+ * MÊME chemin : la feuille repart, puis `onClose` rend le menu.
+ */
+export function CallPeopleSheet(props: SheetProps) {
+  const [leaving, setLeaving] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => void (timer.current !== null && clearTimeout(timer.current)), []);
+  const close = () => {
+    if (timer.current !== null) return;
+    setLeaving(true);
+    timer.current = setTimeout(props.onClose, SHEET_EXIT_MS);
+  };
+  return (
+    <div className="fixed inset-0 z-[220] flex items-end justify-center sm:items-center" data-call-sheet="" {...(leaving ? { 'data-leaving': '' } : {})}>
+      <button type="button" aria-label={t(props.language, 'callControls.close')} tabIndex={-1} onClick={close} className="absolute inset-0" style={{ background: 'var(--color-scrim)' }} data-call-sheet-scrim="" />
+      <div role="dialog" aria-modal="true" aria-label={t(props.language, 'callControls.people.title')} className="relative flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-t-card p-1.5 pb-safe sm:rounded-card" style={{ background: 'var(--ios-indigo-950)', color: 'var(--color-on-media)' }} data-call-sheet-panel="" data-call-people-host="">
+        <PeopleList {...props} back={undefined} onClose={close} />
+      </div>
+    </div>
   );
 }

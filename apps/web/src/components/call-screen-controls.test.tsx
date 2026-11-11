@@ -204,7 +204,7 @@ describe('les panneaux « Réagir » et « Enregistrer »', () => {
     for (const selector of ['[data-panel-back]', '[data-panel-close]']) {
       const button = view.find(selector);
       expect(button?.className).toContain('glass-call-disc');
-      expect(button?.className).toContain('size-11');
+      expect((button as HTMLElement | null)?.style.width).toBe('44px');
     }
     view.done();
   });
