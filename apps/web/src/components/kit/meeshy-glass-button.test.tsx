@@ -526,6 +526,19 @@ describe('le disque seul', () => {
     expect(face?.getAttribute('data-kit-btn-kind')).toBe('active');
   });
 
+  test('libellé d’un hôte désactivé : le disque s’éteint à l’opacité de la recette et ne répond plus au toucher', () => {
+    const face = mount(<MeeshyGlassButtonFace disabled pressed glyph={<Glyph />} />).querySelector<HTMLElement>('.kit-btn');
+    expect(face?.style.opacity).toBe(String(vectors.disabledOpacity));
+    expect(face?.className.split(' ')).not.toContain('glass-touch');
+    expect(face?.hasAttribute('data-pressed')).toBe(false);
+  });
+
+  test('un bouton désactivé ne porte pas la réponse au toucher du verre', () => {
+    const node = button(mount(<MeeshyGlassButton label="Marqueur" glyph={<Glyph />} disabled onPress={() => {}} />));
+    expect(node.className.split(' ')).not.toContain('glass-touch');
+    expect(node.className.split(' ')).toContain('glass-tone');
+  });
+
   test('libellé d’un bouton hôte : la réponse de l’hôte pressé passe par le CSS, sans état', () => {
     expect(css).toContain(":where(button,[role='button'],a[href],label,summary):active:not(.kit-btn) > .kit-btn");
   });
@@ -649,6 +662,33 @@ describe('l’appui long', () => {
     expect(node.getAttribute('aria-keyshortcuts')).toBe('ContextMenu Shift+F10');
   });
 
+  test('doigt posé, le menu contextuel du système fait l’appui long : le relâcher n’active pas l’action, le minuteur ne la rejoue pas', async () => {
+    const played = recordHaptics();
+    const calls: string[] = [];
+    const node = button(mount(<MeeshyGlassButton label="Micro" glyph={<Glyph />} onPress={() => calls.push('action')} onLongPress={() => calls.push('long')} />));
+    act(() => {
+      node.dispatchEvent(pointer('pointerdown', { clientX: 20, clientY: 20 }));
+      node.dispatchEvent(new Event('contextmenu', { bubbles: true, cancelable: true }));
+      node.dispatchEvent(pointer('pointerup', { clientX: 20, clientY: 20 }));
+      node.click();
+    });
+    await act(async () => wait(holdMs));
+    expect(calls).toEqual(['long']);
+    expect(played).toEqual(['light']);
+    tap(node);
+    expect(calls).toEqual(['long', 'action']);
+  });
+
+  test('après le menu contextuel au clavier, une activation sans doigt posé (lecteur d’écran) part', () => {
+    const calls: string[] = [];
+    const node = button(mount(<MeeshyGlassButton label="Micro" glyph={<Glyph />} onPress={() => calls.push('action')} onLongPress={() => calls.push('long')} />));
+    act(() => {
+      node.dispatchEvent(new Event('contextmenu', { bubbles: true, cancelable: true }));
+      node.click();
+    });
+    expect(calls).toEqual(['long', 'action']);
+  });
+
   test('sans appui long, le menu contextuel du navigateur reste', () => {
     const node = button(mount(<MeeshyGlassButton label="Micro" glyph={<Glyph />} onPress={() => {}} />));
     const event = new Event('contextmenu', { bubbles: true, cancelable: true });
@@ -705,6 +745,21 @@ describe('la feuille de style : des jetons, une réponse dessinée, aucune mati�
   test('la cible déborde le disque sans changer l’encombrement', () => {
     expect(code(css)).toMatch(/\.kit-btn::before\s*\{[^}]*inset:\s*calc\(-1 \* var\(--kit-btn-slack\)\)/);
     expect(code(css)).toMatch(/inline-size:\s*var\(--kit-btn-d\)/);
+  });
+
+  test('le style d’un état ne dépend pas de ce qui l’a déduit : une bascule active et un actif forcé partagent le même objet', () => {
+    const base = { size: 44, tone: 'deep', material: 'drawn', isNested: false, isEnabled: true, glyphTint: null } as const;
+    const forced = meeshyGlassButtonStyle({ ...base, kind: 'active' });
+    expect(meeshyGlassButtonStyle({ ...base, activation: { toggle: true } })).toBe(forced);
+    expect(meeshyGlassButtonStyle({ ...base, activation: { expanded: true, controls: 'feuille-1' } })).toBe(forced);
+  });
+
+  test('la mémoire des styles est bornée : un hôte qui fait varier l’encre ne la fait pas grandir', () => {
+    const input = { kind: 'normal', size: 44, tone: 'deep', material: 'drawn', isNested: false, isEnabled: true } as const;
+    const first = meeshyGlassButtonStyle({ ...input, glyphTint: 'var(--k02-probe-first)' });
+    Array.from({ length: 512 }, (_, index) => meeshyGlassButtonStyle({ ...input, glyphTint: `var(--k02-probe-${index})` }));
+    expect(meeshyGlassButtonStyle({ ...input, glyphTint: 'var(--k02-probe-first)' })).not.toBe(first);
+    expect(meeshyGlassButtonStyle({ ...input, glyphTint: 'var(--k02-probe-first)' })).toEqual(first);
   });
 
   test('le style d’un même état est le même objet : aucun rendu inutile', () => {

@@ -172,9 +172,27 @@ const FILL_TOKEN: Readonly<Record<Exclude<MeeshyGlassButtonFill, 'clear'>, strin
 export type MeeshyGlassButtonStyleInput = Omit<MeeshyGlassButtonRecipeInput, 'isPressed' | 'isHovered'>;
 
 const STYLES = new Map<string, CSSProperties>();
+const STYLE_MEMORY = 64;
 
 const keyOf = (input: MeeshyGlassButtonStyleInput): string =>
-  [input.kind ?? '', JSON.stringify(input.activation ?? null), input.size, input.tone ?? '', input.material ?? '', input.isNested ?? '', input.isEnabled ?? '', input.glyphTint ?? ''].join('|');
+  [
+    input.kind ?? impliedMeeshyGlassButtonKind(input.activation),
+    input.size,
+    input.tone ?? '',
+    input.material ?? '',
+    input.isNested ?? '',
+    input.isEnabled ?? '',
+    input.glyphTint ?? '',
+  ].join('|');
+
+const remember = (key: string, style: CSSProperties): CSSProperties => {
+  if (STYLES.size >= STYLE_MEMORY) {
+    const oldest = STYLES.keys().next();
+    if (oldest.done !== true) STYLES.delete(oldest.value);
+  }
+  STYLES.set(key, style);
+  return style;
+};
 
 const shadowLayer = (shadow: MeeshyGlassButtonShadow | null): string =>
   shadow === null
@@ -206,10 +224,7 @@ const styleOf = (input: MeeshyGlassButtonStyleInput): CSSProperties => {
 export const meeshyGlassButtonStyle = (input: MeeshyGlassButtonStyleInput): CSSProperties => {
   const key = keyOf(input);
   const known = STYLES.get(key);
-  if (known !== undefined) return known;
-  const made = styleOf(input);
-  STYLES.set(key, made);
-  return made;
+  return known ?? remember(key, styleOf(input));
 };
 
 export const meeshyGlassPressReport = (wasPressed: boolean, isPressed: boolean | null): boolean | null => {

@@ -65,13 +65,14 @@ function Disc({ as: Tag, kind, size, tone, tint, glyphTint, enabled, pressed, gl
   const material = host.opaque ? 'opaque' : 'drawn';
   const input = { kind, size, tone: resolvedTone, material, isNested: host.nested, isEnabled: enabled, glyphTint: glyphTint ?? null } as const;
   const recipe = meeshyGlassButtonRecipe(input);
+  const isHeld = pressed && enabled;
   const glass =
     recipe.glass === 'neutral'
-      ? meeshyGlassRecipe({ tone: resolvedTone, tint: tint ?? null, isInteractive: true, isPressed: pressed, isNested: host.nested, material })
+      ? meeshyGlassRecipe({ tone: resolvedTone, tint: tint ?? null, isInteractive: enabled, isPressed: isHeld, isNested: host.nested, material })
       : null;
   const classes = [recipe.className, ...(glass === null ? [] : [glass.className]), ...(className === undefined ? [] : [className])].join(' ');
   return (
-    <Tag {...attributes} {...recipe.attributes} {...(glass === null ? (pressed ? { 'data-pressed': '' } : {}) : glass.attributes)} className={classes} style={meeshyGlassButtonStyle(input)}>
+    <Tag {...attributes} {...recipe.attributes} {...(glass === null ? (isHeld ? { 'data-pressed': '' } : {}) : glass.attributes)} className={classes} style={meeshyGlassButtonStyle(input)}>
       <span className="kit-btn__fill" aria-hidden="true" />
       <span className="kit-btn__veil" aria-hidden="true" />
       <span className="kit-btn__glyph" aria-hidden="true">
@@ -94,13 +95,14 @@ export type MeeshyGlassButtonFaceProps = {
   readonly tint?: MeeshyGlassTint | undefined;
   readonly glyphTint?: string | undefined;
   readonly pressed?: boolean | undefined;
+  readonly disabled?: boolean | undefined;
   readonly badge?: ReactNode;
   readonly className?: string | undefined;
 };
 
-export function MeeshyGlassButtonFace({ glyph, kind = 'normal', size = 44, tone, tint, glyphTint, pressed = false, badge, className }: MeeshyGlassButtonFaceProps) {
+export function MeeshyGlassButtonFace({ glyph, kind = 'normal', size = 44, tone, tint, glyphTint, pressed = false, disabled = false, badge, className }: MeeshyGlassButtonFaceProps) {
   return (
-    <Disc as="span" kind={kind} size={size} tone={tone} tint={tint} glyphTint={glyphTint} enabled pressed={pressed} glyph={glyph} badge={badge} className={className} attributes={{}} />
+    <Disc as="span" kind={kind} size={size} tone={tone} tint={tint} glyphTint={glyphTint} enabled={!disabled} pressed={pressed} glyph={glyph} badge={badge} className={className} attributes={{}} />
   );
 }
 
@@ -244,8 +246,11 @@ export function MeeshyGlassButton({
             ? {
                 onContextMenu: (event: SyntheticEvent) => {
                   event.preventDefault();
+                  const isHolding = origin.current !== null;
                   stopTimer();
-                  if (!longFired.current) performLong();
+                  if (longFired.current) return;
+                  longFired.current = isHolding;
+                  performLong();
                 },
               }
             : {}),
