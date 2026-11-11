@@ -3,68 +3,41 @@ import UIKit
 import MeeshySDK
 import MeeshyUI
 
-// Le chrome du haut de l'écran d'appel : Réduire, Conversation, et le
-// passage vers la conversation pendant l'appel. Sorti de `CallView.swift`
-// (hors budget de taille, #8276). #17323 — ses boutons sont des verres
-// interactifs voisins, composés dans un `AdaptiveGlassContainer`.
+// Le chrome du haut de l'écran d'appel : Réduire · Image dans l'image ·
+// Conversation (#17329, `CallHeaderRule`), la capsule de droite (#17341,
+// `CallHeaderCapsuleRule`) et le passage vers la conversation pendant l'appel.
+// Sorti de `CallView.swift` (hors budget de taille, #8276). #17323 — ses
+// boutons sont des verres interactifs voisins, composés dans un
+// `AdaptiveGlassContainer`.
 
 extension CallView {
     // MARK: - Top Chrome
 
-    /// Minimize-to-PiP affordance + ouverture de la conversation.
+    var headerActions: [CallHeaderAction] {
+        CallHeaderRule.actions(CallHeaderContext(
+            canActivateSystemPiP: callManager.canActivateSystemPiP,
+            isSystemPiPActive: callManager.isSystemPiPActive,
+            hasConversation: callManager.conversationId != nil
+        ))
+    }
+
+    /// Minimize-to-PiP affordance + image dans l'image + ouverture de la conversation.
     var topChrome: some View {
         VStack {
             AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
-                HStack {
-                    Button {
-                        collapseIntoPip()
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            // Doctrine 82i : glyphe de chrome dans un cadre glass fixe
-                            // (diameter 40) → taille figée (ne doit pas déborder du cercle).
-                            .font(MeeshyFont.fixedGlyph(16, weight: .semibold))
-                            .foregroundStyle(Color.white)
-                            .callControlGlass(diameter: 40, isActive: false, tint: .white)
-                            // Visual glass circle stays 40pt (doctrine 82i), but the
-                            // tappable area must meet the HIG 44×44 minimum.
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                    }
-                    .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Réduire", bundle: .main))
-                    .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une bannière flottante", bundle: .main))
-
-                    // #8436 — la SEULE porte vers la conversation pendant l'appel,
-                    // juste à droite de la flèche (plus d'action « Messages »).
-                    // Ouvrir la conversation (DM) de l'interlocuteur tout en
-                    // gardant l'appel actif (minimisé en pilule). Masqué quand
-                    // la conversationId est inconnue (ex: appel entrant réveillé
-                    // par un push VoIP sans conversationId dans le payload).
-                    if callManager.conversationId != nil {
-                        Button {
-                            openConversationDuringCall()
-                        } label: {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                                // Doctrine 82i : glyphe de chrome dans un cadre
-                                // glass fixe (diameter 40) → taille figée.
-                                .font(MeeshyFont.fixedGlyph(15, weight: .semibold))
-                                .foregroundStyle(Color.white)
-                                .callControlGlass(diameter: 40, isActive: false, tint: .white)
-                                // Cercle glass 40pt (doctrine 82i) mais cible
-                                // tactile HIG 44×44.
-                                .frame(width: 44, height: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .padding(.leading, MeeshySpacing.sm)
-                        .accessibilityLabel(String(localized: "call.openConversation", defaultValue: "Conversation", bundle: .main))
-                        .accessibilityHint(String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main))
+                HStack(spacing: MeeshySpacing.sm) {
+                    ForEach(headerActions, id: \.self) { action in
+                        headerButton(action)
+                            .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.8)))
                     }
                     Spacer()
-                    // #8394 — la puce durée/qualité, à DROITE de la rangée
-                    // d'en-tête, en duo vidéo comme en groupe.
-                    if showsDurationChip {
+                    // #8394 — la capsule, à DROITE de la rangée d'en-tête, en duo
+                    // vidéo comme en groupe ; en audio, pour le seul réseau dégradé.
+                    if headerCapsule != nil {
                         durationChip
                     }
                 }
+                .animation(disclosureAnimation, value: headerActions)
             }
             Spacer()
         }
@@ -72,65 +45,208 @@ extension CallView {
         .padding(.top, Self.chromeTopInset)
         // §7.3 — l'en-tête se masque avec la pilule et les rails.
         .callChromeVisibility(isChromeVisible)
+        .task(id: callManager.conversationId) { await refreshHeaderNames() }
     }
 
-    /// La puce n'a de sens que sur un appel établi dont le layout n'a pas
-    /// déjà sa propre ligne de statut (l'audio l'a sous l'avatar).
-    private var showsDurationChip: Bool {
-        let showsConnectedLayout: Bool
-        switch callManager.callState {
-        case .connected: showsConnectedLayout = true
-        case .reconnecting: showsConnectedLayout = callManager.hasEstablishedMedia
-        default: showsConnectedLayout = false
+    @ViewBuilder
+    private func headerButton(_ action: CallHeaderAction) -> some View {
+        switch action {
+        case .minimize:
+            headerGlassButton(
+                symbol: "chevron.down",
+                glyphSize: 16,
+                label: String(localized: "call.minimize", defaultValue: "Réduire", bundle: .main),
+                hint: String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une bannière flottante", bundle: .main),
+                action: collapseIntoPip
+            )
+        case .pictureInPicture:
+            pictureInPictureHeaderButton()
+        case .conversation:
+            // #8436 — la SEULE porte vers la conversation pendant l'appel (plus
+            // d'action « Messages ») : ouvrir la conversation (DM) de
+            // l'interlocuteur tout en gardant l'appel actif, minimisé en pilule.
+            headerGlassButton(
+                symbol: "bubble.left.and.bubble.right.fill",
+                glyphSize: 15,
+                label: String(localized: "call.openConversation", defaultValue: "Conversation", bundle: .main),
+                hint: String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main),
+                action: openConversationDuringCall
+            )
         }
-        return showsConnectedLayout && (callManager.isVideoUIActive || isGroupStage)
     }
 
+    /// PiP système : visible seulement si l'appel y est éligible (vidéo, piste
+    /// distante, caméra distante allumée, appareil compatible) — ou déjà actif,
+    /// pour pouvoir en sortir (`CallHeaderRule`).
+    func pictureInPictureHeaderButton() -> some View {
+        let isActive = callManager.isSystemPiPActive
+        return headerGlassButton(
+            symbol: isActive ? "pip.exit" : "pip.enter",
+            glyphSize: 16,
+            isActive: isActive,
+            label: isActive
+                ? String(localized: "call.control.pip.exit", defaultValue: "Quitter le mode Picture-in-Picture", bundle: .main)
+                : String(localized: "call.control.pip", defaultValue: "Réduire en Picture-in-Picture", bundle: .main),
+            hint: isActive ? nil : String(localized: "call.control.pip.hint", defaultValue: "Ferme l'écran d'appel et garde la vidéo dans une fenêtre flottante", bundle: .main)
+        ) {
+            if isActive {
+                callManager.stopSystemPiP()
+            } else {
+                enterSystemPiP()
+            }
+        }
+    }
+
+    /// Doctrine 82i : glyphe de chrome dans un cadre glass fixe (diameter 40) →
+    /// taille figée, sans déborder du cercle ; la cible tactile reste HIG 44×44.
+    private func headerGlassButton(
+        symbol: String,
+        glyphSize: CGFloat,
+        isActive: Bool = false,
+        label: String,
+        hint: String?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(MeeshyFont.fixedGlyph(glyphSize, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .callControlGlass(diameter: 40, isActive: isActive, tint: .white)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(label)
+        .optionalAccessibilityHint(hint)
+    }
+
+    // MARK: - La capsule de droite (#17341)
+
+    /// Les noms que la conversation en cache donne à la capsule — cache-first,
+    /// aucune requête ne part d'ici.
+    @MainActor
+    func refreshHeaderNames() async {
+        let conversationId = callManager.conversationId
+        let conversation: MeeshyConversation?
+        if let conversationId, !conversationId.isEmpty {
+            conversation = await CallConversationCache.shared.cachedConversation(id: conversationId)
+        } else {
+            conversation = nil
+        }
+        headerNames = CallHeaderNames.resolve(conversation: conversation, knownGroupTitle: mesh.groupTitle(for: conversationId))
+    }
+
+    /// La capsule n'a de sens que sur un appel établi dont le layout n'a pas
+    /// déjà sa propre ligne de statut : l'audio a le nom et la durée sous
+    /// l'avatar, la capsule n'y porte que le réseau dégradé.
+    var headerCapsule: CallHeaderCapsule? {
+        let isEstablished: Bool
+        switch callManager.callState {
+        case .connected: isEstablished = true
+        case .reconnecting: isEstablished = callManager.hasEstablishedMedia
+        default: isEstablished = false
+        }
+        return CallHeaderCapsuleRule.resolve(CallHeaderCapsuleInput(
+            layout: isGroupStage ? .group : (callManager.isVideoUIActive ? .video : .audio),
+            isEstablished: isEstablished,
+            isNetworkDegraded: signalStrength.isDegraded || callManager.isRemoteQualityDegraded || isConnectionDegraded,
+            givenName: headerNames.givenName,
+            displayName: callManager.remoteUsername,
+            groupName: headerNames.groupName ?? mesh.groupTitle(for: callManager.conversationId),
+            participantCount: callParticipantCount
+        ))
+    }
+
+    @ViewBuilder
     private var durationChip: some View {
-        CallDurationClock {
-            HStack(spacing: MeeshySpacing.xsPlus) {
+        if let capsule = headerCapsule {
+            chip(capsule)
+        }
+    }
+
+    private func chip(_ capsule: CallHeaderCapsule) -> some View {
+        Group {
+            if capsule.showsDuration {
+                CallDurationClock { chipContent(capsule) }
+            } else {
+                chipContent(capsule)
+            }
+        }
+        .callQualityDetailTrigger(isPresented: $showQualityDetail)
+    }
+
+    private func chipContent(_ capsule: CallHeaderCapsule) -> some View {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            if capsule.showsDuration {
                 TransientCallSignalGlyph(strength: signalStrength)
+            } else {
+                CallSignalGlyph(strength: signalStrength)
+            }
+            if let title = capsule.title {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                chipSeparator
+            }
+            if let count = capsule.participantCount {
+                Image(systemName: "person.2.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.white)
+                Text("\(count)")
+                    .font(.caption2.weight(.medium).monospacedDigit())
+                    .foregroundStyle(Color.white)
+                    .fixedSize()
+                chipSeparator
+            }
+            if capsule.showsDuration {
                 Text(callManager.formattedDuration)
                     .font(.caption2.weight(.medium).monospacedDigit())
                     .foregroundStyle(Color.white)
-                if callManager.isRemoteQualityDegraded {
-                    Image(systemName: "wifi.exclamationmark")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(MeeshyColors.warning)
-                }
-                // §4.3 — même remplacement pill-compacte qu'en audio
-                // (voir audioCallLayout) : pas de bandeau plein-écran.
-                // No per-icon .accessibilityLabel — the badge is one
-                // opaque element (children: .ignore below); this
-                // state is folded into videoDurationBadgeAccessibilityLabel.
-                if case .reconnecting = callManager.callState {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(MeeshyColors.warning)
-                        .accessibilityHidden(true)
-                }
+                    .fixedSize()
             }
-            // The parent's own .accessibilityLabel below already makes this
-            // whole badge one opaque VoiceOver element (children: .ignore) —
-            // every child label is discarded regardless, so hiding them here
-            // is a no-op today. Kept explicit so a future removal of the
-            // parent label doesn't silently re-expose fragmented per-child
-            // announcements (glyph, then digits, then icon) instead of the
-            // single composed sentence `videoDurationBadgeAccessibilityLabel`.
-            .accessibilityElement(children: .ignore)
-            .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, MeeshySpacing.xs)
-            // Verre adaptatif à fond sombre (#8394) : lisible sur un flux clair.
-            // #17323 — la capsule s'ouvre au toucher (détail de la qualité) :
-            // un verre interactif, comme les boutons voisins.
-            .modifier(CallInteractiveChromeCapsule())
-            .clipShape(Capsule())
-            .frame(height: 44)
-            .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
-            .accessibilityValue(callManager.spokenDuration)
-            .accessibilityAddTraits(.updatesFrequently)
+            if capsule.showsNetwork && callManager.isRemoteQualityDegraded {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(MeeshyColors.warning)
+            }
+            // §4.3 — même remplacement pill-compacte qu'en audio
+            // (voir audioCallLayout) : pas de bandeau plein-écran.
+            // No per-icon .accessibilityLabel — the badge is one
+            // opaque element (children: .ignore below); this
+            // state is folded into videoDurationBadgeAccessibilityLabel.
+            if case .reconnecting = callManager.callState {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(MeeshyColors.warning)
+                    .accessibilityHidden(true)
+            }
         }
-        .callQualityDetailTrigger(isPresented: $showQualityDetail)
+        // The parent's own .accessibilityLabel below already makes this
+        // whole badge one opaque VoiceOver element (children: .ignore) —
+        // every child label is discarded regardless, so hiding them here
+        // is a no-op today. Kept explicit so a future removal of the
+        // parent label doesn't silently re-expose fragmented per-child
+        // announcements (glyph, then digits, then icon) instead of the
+        // single composed sentence `videoDurationBadgeAccessibilityLabel`.
+        .accessibilityElement(children: .ignore)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xs)
+        // Verre adaptatif à fond sombre (#8394) : lisible sur un flux clair.
+        // #17323 — la capsule s'ouvre au toucher (détail de la qualité) :
+        // un verre interactif, comme les boutons voisins.
+        .modifier(CallInteractiveChromeCapsule())
+        .clipShape(Capsule())
+        .frame(height: 44)
+        .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
+        .accessibilityValue(capsule.showsDuration ? callManager.spokenDuration : "")
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+
+    private var chipSeparator: some View {
+        Text("·")
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(Color.white.opacity(MeeshyOpacity.heavy))
     }
 
     // MARK: - Open Conversation During Call

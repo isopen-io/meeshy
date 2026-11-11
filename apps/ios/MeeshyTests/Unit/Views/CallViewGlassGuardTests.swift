@@ -149,19 +149,37 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(base.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"))
     }
 
-    /// #17323 — l'en-tête : Réduire et Conversation sont des verres voisins,
-    /// composés ensemble ; la capsule de droite est un verre interactif quand
-    /// elle s'ouvre au toucher.
+    /// #17323 — l'en-tête : Réduire, Image dans l'image et Conversation sont des
+    /// verres voisins, composés ensemble, qui naissent tous du MÊME bouton de verre ;
+    /// la capsule de droite est un verre interactif quand elle s'ouvre au toucher.
     func test_header_buttonsShareAGlassContainer_andTheChipIsInteractive() throws {
         let header = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Header.swift")
         )
-        let chrome = try block("var topChrome: some View {", until: "private var showsDurationChip", in: header)
+        let chrome = try block("var topChrome: some View {", until: "private func headerButton(", in: header)
         XCTAssertTrue(chrome.contains("AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing)"))
-        XCTAssertEqual(chrome.components(separatedBy: ".callControlGlass(diameter: 40").count - 1, 2)
+        XCTAssertTrue(chrome.contains("ForEach(headerActions, id: \\.self)"), "Les boutons viennent de la loi CallHeaderRule")
+        XCTAssertEqual(header.components(separatedBy: ".callControlGlass(diameter: 40").count - 1, 1, "Un seul bouton de verre, trois usages")
         XCTAssertFalse(chrome.contains(".adaptiveGlass("))
-        let chip = try block("private var durationChip: some View {", until: "func collapseIntoPip()", in: header)
+        let glassButton = try block("private func headerGlassButton(", until: "// MARK: - La capsule de droite", in: header)
+        XCTAssertTrue(glassButton.contains(".frame(width: 44, height: 44)"), "Cible tactile HIG 44 pt")
+        let chip = try block("private func chipContent(", until: "private var chipSeparator", in: header)
         XCTAssertTrue(chip.contains(".modifier(CallInteractiveChromeCapsule())"))
+    }
+
+    /// #17329 — Image dans l'image quitte la liste « l'appel » pour l'en-tête, entre
+    /// Réduire et Conversation ; son bouton garde le repli sur la pastille.
+    func test_header_pictureInPictureButton_isBetweenMinimizeAndConversation_andLeavesThroughEnterSystemPiP() throws {
+        let header = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Header.swift")
+        )
+        let button = try block("func pictureInPictureHeaderButton(", until: "private func headerGlassButton(", in: header)
+        XCTAssertTrue(button.contains("enterSystemPiP()"))
+        XCTAssertFalse(button.contains("callManager.startSystemPiP()"), "Le bouton passe par enterSystemPiP et son repli")
+        let pill = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift")
+        )
+        XCTAssertFalse(pill.contains("pictureInPicture"), "La liste « l'appel » ne porte plus l'image dans l'image")
     }
 
     /// Les rangées d'actions ne portent plus aucun fond propre : elles sont
@@ -361,13 +379,9 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(stage.contains("GroupCallSpotlight.featuresLocal(focus)"))
     }
 
-    /// Le bouton PiP quitte le plein écran (et retombe sur la pastille si
-    /// AVKit refuse), exactement comme le glissé.
-    func test_pipButton_andSwipe_leaveFullScreenThroughTheSameEntry() throws {
+    /// Le bouton PiP et le glissé quittent le plein écran par la même entrée.
+    func test_pipSwipe_leavesFullScreenThroughTheSameEntry() throws {
         let code = try callViewCode()
-        let button = try block("func pictureInPictureActionButton(", until: "}\n}", in: code)
-        XCTAssertTrue(button.contains("enterSystemPiP()"))
-        XCTAssertFalse(button.contains("callManager.startSystemPiP()"), "Le bouton passe par enterSystemPiP et son repli")
         XCTAssertTrue(code.contains("case .systemPiP: enterSystemPiP()"))
         XCTAssertTrue(code.contains("CallPiPPolicy.shouldFallBackToPill("))
         XCTAssertTrue(code.contains("CallPiPPolicy.swipeDownOutcome("))
