@@ -144,6 +144,7 @@ class EpureEntreeStringsTest {
         }
         assertThat(all("values")["onboarding_story_title"]).isEqualTo("Your story")
         assertThat(all("values-fr")["onboarding_story_title"]).isEqualTo("Ta story")
+        assertThat(all("values-pt")["onboarding_story_title"]).isEqualTo("Seu story")
         val english = all("values").getValue("onboarding_story_title")
         folders.drop(1).filterNot { it == "values-fr" }.forEach { folder ->
             assertWithMessage(folder).that(all(folder).getValue("onboarding_story_title")).isNotEqualTo(english)

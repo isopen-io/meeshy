@@ -38,7 +38,7 @@
     <string name="onboarding_story_audience_friends">Visível para seus amigos</string>
     <string name="onboarding_story_audience_public">Visível para todos</string>
     <string name="onboarding_story_body">Uma foto, uma frase: um story.</string>
-    <string name="onboarding_story_title">A tua story</string>
+    <string name="onboarding_story_title">Seu story</string>
     <string name="onboarding_story_verify">Confirme seu e-mail para publicar seu story</string>
     <string name="session_closed_activation_message">Entre novamente e digite o código recebido por e-mail.</string>
     <string name="session_closed_admin_message">Para proteger sua conta.</string>
