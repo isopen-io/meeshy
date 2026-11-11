@@ -116,6 +116,12 @@ export function playSwap(element: HTMLElement, entering: boolean, previous: Anim
 
 const FADE_IN: readonly Keyframe[] = [{ opacity: 0 }, { opacity: 1 }];
 
+/** Où se voit l'avatar de la scène audio, à cet instant (un passage en cours compris). */
+export function stagePortraitRect(stage: HTMLElement | null): MorphRect | null {
+  const rect = stage?.querySelector(STAGE_PORTRAIT)?.getBoundingClientRect();
+  return rect === undefined ? null : { x: rect.left, y: rect.top, width: rect.width };
+}
+
 /** Un passage annulé en route rejette son `finished` : ce rejet attendu ne remonte pas. */
 const quiet = (animation: Animation): Animation => {
   animation.finished?.catch(() => undefined);
@@ -136,8 +142,8 @@ export function playStageMorph(stage: HTMLElement, first: MorphRect | null, prev
   const duration = portraitMorphMs(reduced);
   if (reduced) return [quiet(stage.animate([...FADE_IN], { duration, easing: 'linear' }))];
   const portrait = stage.querySelector<HTMLElement>(STAGE_PORTRAIT);
-  const rect = portrait?.getBoundingClientRect();
-  const frames = first === null || rect === undefined ? null : portraitMorphKeyframes(first, { x: rect.left, y: rect.top, width: rect.width }, false);
+  const last = stagePortraitRect(stage);
+  const frames = first === null || last === null ? null : portraitMorphKeyframes(first, last, false);
   const moved = frames === null || portrait === null ? [] : [quiet(portrait.animate([...frames], { duration, easing: EASING }))];
   const labels = [...stage.querySelectorAll<HTMLElement>(STAGE_LABEL)].map((label) => quiet(label.animate([...FADE_IN], { duration, easing: 'ease-out' })));
   return [...moved, ...labels];
