@@ -178360,7 +178360,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lesen Sie eine Unterhaltung als Blasen, Skript, Zusammenfassung, Focal oder Fluss."
+            "value": "Lies eine Unterhaltung als Blasen, Skript, Zusammenfassung, Focal oder Fluss."
           }
         },
         "en": {
@@ -337312,7 +337312,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Behalten Sie Ihre Stimme in Ihren übersetzten Nachrichten."
+            "value": "Behalte deine Stimme in deinen übersetzten Nachrichten."
           }
         },
         "en": {
@@ -337359,7 +337359,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Transkription einer Sprachnachricht erscheint in Ihrer Sprache."
+            "value": "Die Transkription einer Sprachnachricht erscheint in deiner Sprache."
           }
         },
         "en": {
@@ -337500,7 +337500,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ende-zu-Ende-Verschlüsselung wählen Sie pro Unterhaltung, unwiderruflich."
+            "value": "Die Ende-zu-Ende-Verschlüsselung wählst du pro Unterhaltung, unwiderruflich."
           }
         },
         "en": {
@@ -337594,7 +337594,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Server sieht den Klartext nie: Die Übersetzung erfolgt auf Ihrem Gerät, und Funktionen, die die Nachricht lesen müssten, fehlen. Eine Nachricht im Klartext wird abgelehnt."
+            "value": "Der Server sieht den Klartext nie: Die Übersetzung erfolgt auf deinem Gerät, und Funktionen, die die Nachricht lesen müssten, fehlen. Eine Nachricht im Klartext wird abgelehnt."
           }
         },
         "en": {
