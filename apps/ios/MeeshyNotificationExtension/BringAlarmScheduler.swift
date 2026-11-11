@@ -1,4 +1,5 @@
 import Foundation
+import MeeshyCore
 import os
 #if canImport(AlarmKit)
 import ActivityKit
@@ -79,7 +80,7 @@ nonisolated struct BringAlarmCoordinator: Sendable {
 
 /// Le journal de l'essai AlarmKit (#17475) : sans lui, un refus du système était avalé et l'alarme manquait en silence.
 nonisolated enum BringAlarmLog {
-    static let logger = Logger(subsystem: "me.meeshy.app", category: "bring-alarm")
+    static let logger = MeeshyLog.logger(.bringAlarm)
     private static let journalLimit = 200
 
     /// Le journal, et en Debug sa copie dans le groupe d'apps (`Library/Caches/bring-alarm.log`, 200 lignes) : l'app et
