@@ -179,6 +179,18 @@ class CallLiveCaptionLineTest {
     }
 
     @Test
+    fun `the screen redraws only at the next deadline still to come`() {
+        val first = lineForFrench(seg(key = "a", translatedText = null, translatedLanguage = null))
+        val second = lineForFrench(seg(key = "b", translatedText = null, translatedLanguage = null).copy(capturedAtMs = 4_000))
+        val done = line()
+
+        assertThat(CallLiveCaptionLines.nextDeadline(listOf(first, second, done), nowMs = 0)).isEqualTo(8_001)
+        assertThat(CallLiveCaptionLines.nextDeadline(listOf(first, second, done), nowMs = 8_001)).isEqualTo(12_000)
+        assertThat(CallLiveCaptionLines.nextDeadline(listOf(first, second, done), nowMs = 12_000)).isNull()
+        assertThat(CallLiveCaptionLines.nextDeadline(emptyList(), nowMs = 0)).isNull()
+    }
+
+    @Test
     fun `an empty translation is treated as absent`() {
         val line = lineForFrench(seg(translatedText = "  "))
 

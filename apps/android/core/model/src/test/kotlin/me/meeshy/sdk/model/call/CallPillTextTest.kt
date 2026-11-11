@@ -127,8 +127,8 @@ class CallCaptionsFooterTest {
     }
 
     @Test
-    fun `the newest translated line decides the pair`() {
-        val lines = listOf(line("ES", "FR"), line("EN", "FR"), line())
+    fun `one pair of languages is named once, whatever the originals around it say`() {
+        val lines = listOf(line("EN", "FR"), line("EN", "FR"), line())
         assertThat(CallCaptionsFooter.resolve(lines)).isEqualTo(CallCaptionsFooter.TouchForOriginal("EN → FR"))
     }
 

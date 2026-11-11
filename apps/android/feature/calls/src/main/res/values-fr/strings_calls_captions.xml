@@ -17,4 +17,14 @@
     <string name="call_captions_unavailable">Les sous-titres ne sont pas encore disponibles pour cet appel.</string>
     <string name="call_captions_local_unsupported">Votre parole n’est pas sous-titrée sur cet appareil : il faut Android 13 et la reconnaissance vocale sur l’appareil. Vous lisez toujours les sous-titres de votre interlocuteur.</string>
     <string name="call_captions_local_language_missing">Votre parole n’est pas sous-titrée : cet appareil n’a pas le modèle vocal de votre langue. Vous lisez toujours les sous-titres de votre interlocuteur.</string>
+    <string name="call_captions_region">Sous-titres de l\'appel</string>
+    <string name="call_captions_translating">Traduction en cours</string>
+    <string name="call_captions_hide_original_hint">Masquer le texte original</string>
+    <string name="call_captions_me">Moi</string>
+    <string name="call_captions_footer_translating">%1$s · traduction en cours</string>
+    <plurals name="call_captions_footer_translated_languages">
+        <item quantity="one">Traduit · %1$d langue</item>
+        <item quantity="many">Traduit · %1$d de langues</item>
+        <item quantity="other">Traduit · %1$d langues</item>
+    </plurals>
 </resources>

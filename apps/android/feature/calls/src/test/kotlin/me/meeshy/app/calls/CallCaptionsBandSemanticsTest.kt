@@ -2,7 +2,14 @@ package me.meeshy.app.calls
 
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
@@ -27,22 +34,107 @@ import org.robolectric.annotation.Config
 class CallCaptionsBandSemanticsTest {
     @get:Rule val rule = createComposeRule()
 
-    private fun line(key: String, text: String, isFinal: Boolean = true, tag: String? = "EN → FR") = CallLiveCaptionLine(
-        key = key, speakerId = "peer", speakerName = "Ada", isLocal = false, text = text, languageTag = tag,
-        isFinal = isFinal, capturedAtMs = 0, isShowingOriginal = tag == null, canRevealOriginal = tag != null,
+    private fun line(
+        key: String,
+        text: String,
+        isFinal: Boolean = true,
+        tag: String? = "EN → FR",
+        originalBelow: String? = null,
+        awaitingUntilMs: Long? = null,
+        speakerName: String = "Ada",
+    ) = CallLiveCaptionLine(
+        key = key, speakerId = "peer", speakerName = speakerName, isLocal = false, text = text, languageTag = tag,
+        isFinal = isFinal, capturedAtMs = 0, isShowingOriginal = tag == null || !tag.contains("→"), canRevealOriginal = tag != null && tag.contains("→"),
+        originalBelow = originalBelow, awaitingUntilMs = awaitingUntilMs,
+        originLanguage = tag?.substringBefore(" →"), servedLanguage = tag?.substringAfter("→ ", "")?.takeIf { it.isNotEmpty() },
     )
 
     @Test
-    fun `the band shows the translated tag and a touch asks to flip the sentence`() {
+    fun `the sentence is one piece, name then text then the label, and a touch asks to flip it`() {
         val flipped = mutableListOf<String>()
         rule.setContent {
             MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour")), onToggleOriginal = { flipped += it }, onOpenJournal = {}) }
         }
 
-        rule.onNodeWithText("EN → FR").assertIsDisplayed()
-        rule.onNodeWithText("Bonjour").performClick()
+        rule.onNodeWithText("Ada · Bonjour", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Ada · Bonjour", substring = true).performClick()
 
         assertThat(flipped).containsExactly("a")
+    }
+
+    @Test
+    fun `the touched translation unfolds its original below in one more line`() {
+        rule.setContent {
+            MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour", originalBelow = "Hello")), onToggleOriginal = {}, onOpenJournal = {}) }
+        }
+
+        rule.onNodeWithText("Original · Hello", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Ada · Bonjour", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `an original awaiting its translation is labelled and says so in the foot`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallCaptionsBand(
+                    lines = listOf(line("a", "Hello", tag = "EN", awaitingUntilMs = System.currentTimeMillis() + 60_000)),
+                    onToggleOriginal = {},
+                    onOpenJournal = {},
+                )
+            }
+        }
+
+        rule.onNodeWithText("Ada · Hello", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("EN · translating").assertIsDisplayed()
+    }
+
+    @Test
+    fun `an awaited translation that is given up falls out of the foot`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallCaptionsBand(
+                    lines = listOf(line("a", "Hello", tag = "EN", awaitingUntilMs = 1)),
+                    onToggleOriginal = {},
+                    onOpenJournal = {},
+                )
+            }
+        }
+
+        rule.onNodeWithText("EN · translating").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the band is the live region « Call captions »`() {
+        rule.setContent {
+            MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour")), onToggleOriginal = {}, onOpenJournal = {}, modifier = Modifier.testTag("band")) }
+        }
+
+        val node = rule.onNodeWithTag("band").fetchSemanticsNode()
+        assertThat(node.config.getOrNull(SemanticsProperties.ContentDescription)).containsExactly("Call captions")
+    }
+
+    @Test
+    fun `a touch on the band, even on its margin, never reaches the scene beneath it (#17495)`() {
+        var sceneTaps = 0
+        rule.setContent {
+            MeeshyTheme {
+                Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize().testTag("scene").clickable { sceneTaps++ })
+                    CallCaptionsBand(
+                        lines = listOf(line("a", "Hello", tag = null)),
+                        onToggleOriginal = {},
+                        onOpenJournal = {},
+                        modifier = Modifier.testTag("band").align(Alignment.BottomCenter),
+                    )
+                }
+            }
+        }
+
+        rule.onNodeWithTag("band").performTouchInput { click(Offset(2f, 2f)) }
+        assertThat(sceneTaps).isEqualTo(0)
+
+        rule.onNodeWithTag("scene").performTouchInput { click(Offset(2f, 2f)) }
+        assertThat(sceneTaps).isEqualTo(1)
     }
 
     @Test
@@ -80,9 +172,9 @@ class CallCaptionsBandSemanticsTest {
     }
 
     @Test
-    fun `an original line says nothing in the foot`() {
+    fun `an original line outside the prism says nothing of touching in the foot`() {
         rule.setContent {
-            MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Hello", tag = null)), onToggleOriginal = {}, onOpenJournal = {}) }
+            MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Hello", tag = "EN")), onToggleOriginal = {}, onOpenJournal = {}) }
         }
 
         rule.onNodeWithText("tap = original", substring = true).assertDoesNotExist()
@@ -116,7 +208,7 @@ class CallCaptionsBandSemanticsTest {
         }
 
         rule.onNodeWithTag("stowed").assertWidthIsEqualTo(560.dp)
-        rule.onNodeWithText("Bonjour").assertIsDisplayed()
+        rule.onNodeWithText("Ada · Bonjour", substring = true).assertIsDisplayed()
     }
 
     private fun collectLabels(node: androidx.compose.ui.semantics.SemanticsNode): List<String> =
