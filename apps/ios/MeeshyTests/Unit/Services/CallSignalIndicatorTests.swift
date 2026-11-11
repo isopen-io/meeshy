@@ -501,38 +501,34 @@ final class CallHangupFastPathTests: XCTestCase {
 
     /// Chaque ligne porte un horodatage, et il vient de `segment.capturedAt`
     /// — JAMAIS de `startTime`/`endTime`, qui sont relatifs au buffer ASR
-    /// (voir le doc comment de `CallTranscriptionSegment.capturedAt`). C'est la
-    /// moitié portante de la demande utilisateur 2026-07-11 et elle est
-    /// intacte.
+    /// (voir le doc comment de `CallTranscriptionSegment.capturedAt`).
     ///
-    /// Ce qui a changé : l'heure affichée n'est plus l'ÉCOULÉ depuis le début
-    /// de l'appel (`capturedAt.timeIntervalSince(callManager.callStartDate)`
-    /// mis en forme par `CallManager.formatDuration`) mais l'HORLOGE MURALE de
-    /// capture — spec 2026-08-13, tableau « Composants modifiés » : « ligne
-    /// `displayName (heure)` (horloge murale, plus l'écoulé) », objectif §1
-    /// « ordonnées par l'horloge murale de CAPTURE », décision §3
-    /// « `capturedAtMs` est la clé d'ordre du journal ». Un écoulé n'a plus de
-    /// sens dans un journal fusionné entre appareils : `callStartDate` est
-    /// local à CE device (il est même nil avant l'établissement média), alors
-    /// que `capturedAt` est estampillé par le device du LOCUTEUR et transporté
-    /// par le wire — c'est la seule référence commune aux deux côtés de
-    /// l'appel.
-    func test_captionLine_showsCaptureWallClockTime_neverASRRelativeOffsets() throws {
+    /// L'heure AFFICHÉE est celle de l'APPEL (mm:ss depuis son début), alignée à
+    /// droite de la ligne méta, la même que celle des lignes de capture et du
+    /// journal d'après l'appel (planche P6, #17510) : l'horloge murale entre
+    /// parenthèses collée au pseudo, qu'avait posée le spec 2026-08-13, est
+    /// supplantée. La date reste celle de l'appareil du LOCUTEUR (`capturedAt`),
+    /// seule référence commune aux deux côtés ; seule sa MISE EN FORME change.
+    func test_captionLine_isDatedByCaptureTime_shownAsTheTimeInTheCall() throws {
         let view = try AppSourceGuard.callViewSource()
         let line = try source("Meeshy/Features/Call/Models/CallCaptionLine.swift")
         XCTAssertTrue(
             line.contains("capturedAt: segment.capturedAt"),
-            "Une ligne est datée par `segment.capturedAt` — l'horloge murale estampillée par " +
+            "Une ligne est datée par `segment.capturedAt` — l'horloge estampillée par " +
             "l'appareil du LOCUTEUR, la seule référence commune aux deux côtés de l'appel."
-        )
-        XCTAssertTrue(
-            view.contains("line.capturedAt.formatted(date: .omitted, time: .shortened)"),
-            "…et l'heure résolue atteint la ligne du journal."
         )
         XCTAssertFalse(
             line.contains("segment.startTime") || line.contains("segment.endTime"),
             "Jamais startTime/endTime : relatifs au buffer ASR, ils dérivent à chaque " +
             "redémarrage du moteur et ne veulent rien dire pour le pair."
+        )
+        XCTAssertTrue(
+            view.contains("line.timeLabel"),
+            "L'heure de la ligne du journal est l'heure DANS l'appel, résolue une fois par la loi (`CallJournalClock`)."
+        )
+        XCTAssertFalse(
+            view.contains("line.capturedAt.formatted(date: .omitted, time: .shortened)"),
+            "Plus d'heure murale entre parenthèses collée au pseudo : l'heure dans l'appel va à droite (P6.4)."
         )
     }
 
@@ -551,53 +547,32 @@ final class CallHangupFastPathTests: XCTestCase {
         XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
     }
 
-    /// Transparence du consentement : un appareil ne doit JAMAIS accumuler en
-    /// silence les paroles de l'autre participant sans rien afficher.
+    /// #17342 — le journal garde TOUT l'appel, sous-titres allumés ou non : les
+    /// phrases des autres arrivent par le relais serveur ET par le canal de
+    /// données, et se rangent au journal quel que soit l'état du panneau. La porte
+    /// de confidentialité (#13720) reste du côté de la CAPTURE : c'est elle qui
+    /// décide si une phrase est dite à voix haute dans le micro, pas la lecture.
     ///
-    /// Cette garantie était d'abord tenue par une AUTO-RÉVÉLATION du panneau
-    /// au premier segment reçu (spec 2026-07-11 §4). Le spec 2026-08-13
-    /// (« Cycle de vie du panneau », itération 2 §1) l'a RETIRÉE au profit
-    /// d'un mécanisme plus fort, à la source : la réception elle-même est liée
-    /// au panneau — « Panneau caché ⇒ désabonnement des canaux de réception ET
-    /// d'émission […] L'auto-révélation du panneau au premier segment reçu
-    /// (spec 2026-07-11 §4) est RETIRÉE — panneau caché ⇒ plus aucun segment
-    /// ne peut arriver, la règle n'a plus d'objet. »
-    ///
-    /// Le garde suit la garantie, pas sa vieille forme : il vérifie désormais
-    /// que les DEUX points d'entrée de réception de `CallManager` (le sink
-    /// socket `callTranslatedSegmentReceived` et le routage data channel
-    /// `.transcriptEntry`) refusent tout segment panneau fermé. Un seul des
-    /// deux gardé laisserait le trou ouvert sur l'autre transport.
-    func test_passiveSegments_neverAccumulateWhileTranscriptPanelHidden() throws {
-        // L'ancienne forme ne doit pas revenir sans que ce garde soit revu :
-        // ré-ouvrir le panneau tout seul, alors que rien ne peut plus arriver
-        // panneau fermé, ne ferait qu'afficher un panneau vide.
-        let view = try AppSourceGuard.callViewSource()
-        XCTAssertFalse(
-            view.contains("adaptiveOnChange(of: transcriptionService.segments.isEmpty)"),
-            "The 2026-07-11 auto-reveal observer was retired by spec 2026-08-13 — reception is " +
-            "now gated on the panel being visible, so nothing can arrive while it is hidden."
-        )
-
-        let manager = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
-        let gate = "guard call.transcriptionService.isShowingOverlay else { return }"
-        let channelGate = "guard self.transcriptionService.isShowingOverlay else { return }"
-
-        guard let socketRange = manager.range(of: "socket.callTranslatedSegmentReceived") else {
-            XCTFail("CallManager must subscribe to socket.callTranslatedSegmentReceived")
+    /// Le garde vérifie que les DEUX points d'entrée (le sink du relais, dans
+    /// `CallSignalingRouter`, et le routage `.transcriptEntry` du canal de
+    /// données) ne reposent plus sur le panneau : un seul des deux laissé
+    /// gardé creuserait un trou dans le journal, et celui d'après l'appel en
+    /// hériterait.
+    func test_remoteSegments_joinTheJournal_whateverTheCaptionsState() throws {
+        let router = try source("Meeshy/Features/Call/Services/CallCollaborators/CallSignalingRouter.swift")
+        guard let socketRange = router.range(of: "socket.callTranslatedSegmentReceived") else {
+            XCTFail("CallSignalingRouter must subscribe to socket.callTranslatedSegmentReceived")
             return
         }
-        let socketEnd = manager.range(of: ".store(in: &cancellables)", range: socketRange.upperBound ..< manager.endIndex)?
-            .upperBound ?? manager.endIndex
-        let socketSink = String(manager[socketRange.lowerBound ..< socketEnd])
-        XCTAssertTrue(
-            socketSink.contains(gate),
-            "The relayed (server) reception path must drop segments while the transcript panel " +
-            "is hidden — otherwise the device silently accumulates the other participant's " +
-            "words with nothing shown, the exact consent-transparency gap this guard exists for."
+        let socketEnd = router.range(of: ".store(in: &cancellables)", range: socketRange.upperBound ..< router.endIndex)?
+            .upperBound ?? router.endIndex
+        let socketSink = String(router[socketRange.lowerBound ..< socketEnd])
+        XCTAssertFalse(
+            socketSink.contains("isShowingOverlay"),
+            "Le relais serveur remet chaque phrase au journal, panneau fermé comme ouvert (#17342)."
         )
+        XCTAssertTrue(socketSink.contains("receiveTranslatedSegment"))
 
-        // #9085 — le canal de données vit dans `CallManager+DataChannel.swift`.
         let dataChannel = try source("Meeshy/Features/Call/Services/CallManager+DataChannel.swift")
         guard let channelRange = dataChannel.range(of: "case .transcriptEntry(let entry):") else {
             XCTFail("CallManager must route the data channel's .transcriptEntry case")
@@ -606,11 +581,11 @@ final class CallHangupFastPathTests: XCTestCase {
         let channelEnd = dataChannel.range(of: "case .ignored:", range: channelRange.upperBound ..< dataChannel.endIndex)?
             .lowerBound ?? dataChannel.endIndex
         let channelRoute = String(dataChannel[channelRange.lowerBound ..< channelEnd])
-        XCTAssertTrue(
-            channelRoute.contains(channelGate),
-            "The P2P (data channel) reception path must carry the SAME panel gate as the socket " +
-            "sink — gating only one transport leaves the peer's words flowing in over the other."
+        XCTAssertFalse(
+            channelRoute.contains("isShowingOverlay"),
+            "Le canal de données remet chaque entrée au journal, comme le relais : un seul transport gardé laisse un trou (#17342)."
         )
+        XCTAssertTrue(channelRoute.contains("receivePeerEntry"))
     }
 }
 

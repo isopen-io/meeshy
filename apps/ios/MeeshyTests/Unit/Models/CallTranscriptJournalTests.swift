@@ -44,13 +44,53 @@ final class CallTranscriptJournalTests: XCTestCase {
         XCTAssertEqual(CallTranscriptJournal.inserting(segment("a", at: 1), into: []).map(\.text), ["a"])
     }
 
-    func test_bounded_underTheCeiling_keepsEverything() {
-        let journal = (0 ..< 500).map { segment("\($0)", at: TimeInterval($0)) }
-        XCTAssertEqual(CallTranscriptJournal.bounded(journal).count, 500)
+    /// #17342, P6.8 — le journal garde TOUT l'appel : aucune phrase ne tombe, si
+    /// longue que soit la conversation (plus de plafond de 10 000 phrases).
+    func test_inserting_beyondTenThousandSentences_dropsNone() {
+        let journal = (0 ..< 10_000).map { segment("\($0)", at: TimeInterval($0)) }
+        let grown = CallTranscriptJournal.inserting(segment("dernière", at: 10_000), into: journal)
+        XCTAssertEqual(grown.count, 10_001)
+        XCTAssertEqual(grown.first?.text, "0", "la plus ancienne phrase reste")
+        XCTAssertEqual(grown.last?.text, "dernière")
     }
 
-    func test_ceiling_holdsHoursOfConversation() {
-        XCTAssertGreaterThanOrEqual(CallTranscriptJournal.ceiling, 10_000)
+    func test_journal_hasNoCeiling() throws {
+        let law = try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTranscriptJournal.swift")
+        XCTAssertFalse(law.contains("ceiling"), "Aucun plafond ne fait tomber les plus anciennes phrases (#17342)")
+        XCTAssertFalse(law.contains("bounded"))
+        let service = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
+        XCTAssertFalse(service.contains("CallTranscriptJournal.bounded"))
+        XCTAssertFalse(service.contains("persistedSegmentCeiling"), "Le journal d'après l'appel n'hérite d'aucun trou")
+    }
+
+    // MARK: - L'heure dans l'appel (P6.4)
+
+    private let english = Locale(identifier: "en_US")
+
+    func test_clock_isTheTimeSinceTheCallStarted() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(CallJournalClock.label(at: start.addingTimeInterval(75), since: start, locale: english), "01:15")
+        XCTAssertEqual(CallJournalClock.label(at: start, since: start, locale: english), "00:00")
+    }
+
+    func test_clock_aSentenceStampedBeforeTheCallStart_readsZero() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(CallJournalClock.label(at: start.addingTimeInterval(-3), since: start, locale: english), "00:00")
+    }
+
+    func test_clock_withoutACallStart_saysNothingRatherThanTheWallClock() {
+        XCTAssertNil(CallJournalClock.label(at: Date(timeIntervalSince1970: 1_000), since: nil, locale: english))
+    }
+
+    func test_composer_datesEverySpokenLineByItsTimeInTheCall() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let said = segment("Salut", at: 1_075)
+        let composer = CallJournalComposer(
+            segments: [said], captures: [], callStartedAt: start,
+            speechLine: { [self] in captionLine($0.text) }
+        )
+        XCTAssertEqual(composer.line(for: .speech(said)).timeLabel, CallJournalClock.label(at: said.capturedAt, since: start))
+        XCTAssertEqual(composer.line(for: .speech(said)).timeLabel, "01:15")
     }
 
     // MARK: - Relire sans être ramené en bas
