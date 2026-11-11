@@ -1,5 +1,163 @@
 # @meeshy/web-v2
 
+## 2.32.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - les animations de la pilule et de l'en-tête suivent l'écran d'appel, le premier rendu repasse sous 97 Ko
+  - K02 — le paramètre play du déclencheur est isolé au main actor
+  - K02 — le déclencheur du bouton de verre vit sur le main actor
+  - le journal de l'alarme date ses lignes par WireDate
+  - l'écran d'appel repasse sous son plafond de 22 Ko, le nombre et « Micro coupé » suivent iOS
+  - K02 iOS — le glyphe fige sa taille par la recette, le cliquet fixed-font ne régresse plus
+  - le viseur du composer ne re-rend plus le meuble à chaque trame, rend sa caméra au départ et n'orpheline plus de prise
+  - ma ligne du journal se dit « Moi », « Traduit · N langues » s'accorde au nombre, et l'attente comme l'original déplié arrivent et repartent en fondu
+  - l'éclair frappe l'icône du flash, la jauge se pose sous lui et ne sert que la caméra avant
+  - K00 relu — l'état vide porte son fond comme sur iOS, et l'ancre d'un état a son témoin
+  - l'en-tête porte Réduire · Image dans l'image · Conversation, la capsule dit nom donné · durée
+  - l'original se déplie sous la traduction par fondu et translation, sans animer sa hauteur
+  - une phrase dite dans une variante régionale d'une langue du Prisme n'est ni étiquetée ni mise en attente
+  - Réduire rend l'écran d'avant par une loi testée, la capsule ne laisse aucun séparateur orphelin, CallPeerBlock mort retiré
+  - chaque phrase des sous-titres dit sa langue, son attente de traduction et « Moi », l'original déplié se lit « Original · … », et toucher la bande ne range plus les commandes
+  - le journal se pose hors du ViewThatFits de la pilule, l'en-tête compact audio relit sa durée
+  - l'en-tête dit Réduire · Image dans l'image · Conversation, sa capsule nom donné · durée (réseau dégradé seul en audio)
+  - « toucher = original » du pied des sous-titres est inscrit au manifeste des chaînes
+  - chaque phrase dit sa langue, son attente et « Moi », déplie son original dessous et la bande porte son pied
+  - une phrase d'un autre garde sa langue d'origine dès l'original et attend sa traduction huit secondes au plus
+  - K02 iOS — relecture : fondu de tenue joué, appui long toujours nommé, onPressChange en loi, aucun verre sur verre au catalogue
+  - la colonne du journal du grand écran vit dans le chunk du journal, et l'écran d'appel retrouve de la marge sous son plafond
+  - les sous-titres repartent en fondu de la pilule, et leur pied dit la paire et « toucher = original » comme iOS
+  - K02 iOS — le bouton rond suit la fiche du 2026-11-11 (états dits, quatre matières, voile d'appui, ton du thème, Face) [xcodegen]
+  - le montage du viseur a son type, l'unité de l'hôte redescend à 7303
+  - les libellés du micro traduits en arabe, allemand et italien quittent known-gaps
+  - ComposerSceneCameraMountingTests relit l'hôte du viseur là où il vit sur dev
+  - la pilule colore ses sous-titres par foregroundStyle, et le tour de fusion verrouille ses références
+  - trois témoins rouges de dev — talkie de l'équipe, date du Bring, gate du viseur
+  - le bouton Bring de l'en-tête nomme son modèle « bring », la garde d'état d'envoi ne le prend plus pour la conversation
+  - K00 relu — le catalogue suit iOS (légende isPressed, cases du système, réglages remis à neuf), aucun réglage ne re-rend un composant, et le second cliquet du verre compte ce qui ne répond pas au toucher
+  - la pilule qui se replie garde ce qu'elle montrait pendant son fondu, « Revenir au direct » porte le verre des boutons
+  - le texte de la pilule tient dans le budget d'appel et ses témoins navigateur suivent (…)
+  - le journal de l'alarme passe par MeeshyLog, l'extension n'importe que MeeshyCore
+  - fermer la bande du Cadre rend le viseur, segments intacts
+  - K00 — le catalogue du kit se voit (/kit) et se prouve (garde du registre, cliquet du verre, captures)
+  - la loi de la pilule porte les sous-titres et le journal, (…) range le journal, le journal garde tout l'appel
+  - les sous-titres et le journal vivent dans la pilule au-dessus de sa rangée, (…) les range et les rend
+  - le journal de la NSE ne nomme plus l'expéditeur d'un Bring
+  - l'extension attend l'alarme du Bring avant de livrer la bannière, et l'essai AlarmKit se journalise
+  - MeeshyApp.init repasse sous 80 lignes, le toast de file presque pleine a sa fonction
+  - une phrase qui arrive ne redessine que sa ligne, et le journal ouvert dans la pilule reçoit VoiceOver
+  - les trois disques de verre de l'en-tête partagent une recette, et le cliquet du verre redescend
+  - la capture attend une session qui arrive, et le viseur range Galerie, Texte, Fond, Stickers
+  - le reflet du bord haut trace le contour de la forme
+  - l'action, le talkie et le Bring de l'en-tête partagent un seul disque de verre, et le cliquet du verre redescend à 68 appels / 22 ronds
+  - la cloche de l'en-tête ne lit plus le catalogue « Mes cercles » avant qu'il soit chargé
+  - K02 iOS — la méthode d'opacité pressée ne porte plus le nom de la propriété [xcodegen]
+  - le reflet du bord haut passe par drawPath
+  - les chaînes générées suivent le texte honnête du Bring
+  - K02 iOS — MeeshyGlassButton, le bouton rond de verre (recette, disque, bouton, catalogue, témoins) [xcodegen]
+  - la sortie audio s'annonce « Sortie audio » comme la planche, et les gardes suivent les nouveaux libellés
+  - allumer le flash du viseur fait frapper un éclair
+  - le verre du kit — loi du ton, matière, recette en valeurs et réponse au toucher (K01)
+  - les libellés des commandes de l'appel suivent la planche
+  - le schéma des décisions se déclare avant la fiche qui l'emploie, et un tour en échec arrête le chantier avant le rapprochement
+  - les sous-titres et le journal vivent dans la pilule, (…) les range et les rend
+  - les boutons de la pilule se nomment comme la planche (Afficher/Masquer les actions, Sortie audio, Activer/Couper la caméra) et le micro parle les sept langues
+  - l'emblème du contenant se dimensionne par son cadre, sans police fixe
+  - le Bring se lance depuis l'en-tête d'un direct, avec la confirmation de la fiche
+  - la catégorie et l'arrêt du Bring ne gonflent plus les fonctions du budget de cohésion
+  - la citation d'un avis d'appel, d'arrivée ou de départ se dit dans la langue du lecteur
+  - le chantier se déroule de bout en bout sans intervention, et chaque décision prise se consigne et se change
+  - bannière avec « Arrêter », texte honnête, essai AlarmKit derrière un drapeau
+  - le Bring se lance depuis l'en-tête d'une conversation directe
+  - un lot déjà tenu compte comme livré, et une cible en dossier se constate
+  - un trait sépare, sur le rail bas gauche du viseur, ce qu'on pose des looks
+  - le Bring se lance depuis l'en-tête d'une conversation directe, en deux gestes
+  - la partie « banner » du catalogue repasse sous ses 7 Ko
+  - la présence part chez les collègues ANALYST et AUDIT, et le Bring sonne dès ANALYST
+  - la scène se pose sur le viseur et la prise en devient le fond
+  - un avis d'appel, d'arrivée ou de départ se cite, et sa citation suit la langue du lecteur
+  - on répond à un avis d'appel, d'arrivée ou de départ, et sa citation suit la langue du lecteur
+  - le bandeau montre le contenant de l'Héritage sous la Flamme, à droite du Rêve du jour
+  - à deux, le rail « l'appel » ne recouvre plus ma vignette — il se pose sous elle, ou à côté en paysage
+  - le viseur porte Texte, Fond, Galerie et Sticker avant les filtres et les effets
+  - coller une image pose le fond de la scène et coller un texte remplit le contenu de la publication
+  - la capture ne republie plus le viseur à chaque mouvement du doigt et sa barre reste une ligne jusqu'à la deuxième prise
+  - cinq avertissements d'isolation et de capture disparaissent de la compilation
+  - à deux, (…) fait sortir le rail « mon image » à gauche et le rail « l'appel » à droite, sans faire grandir la pilule ni laisser de commandes autour de ma vignette
+  - à deux, le (…) fait sortir le rail « Mon image » au début et le rail « L'appel » à la fin
+  - la transition des rails vit avec leur glissement, l'écran d'appel rend dix lignes à son budget
+  - Caméra et l'arrêt du partage d'écran vibrent au toucher dans le rail et la rangée « Mon image », comme les boutons de ma vignette qu'ils remplacent
+  - le retrait du consentement externe n'est jamais bloqué par la version citée
+  - à deux, (…) fait sortir deux rails sur les bords ; à plusieurs, les rangées restent dans la pilule
+  - le bouton Caméra autour de ma vignette dit « Activer la caméra » / « Couper la caméra », comme la pilule
+  - plus aucun disque translucide à plat dans l'écran d'appel, et la capsule de durée est une cible de 48 dp
+  - chaque bouton de la pilule porte son disque de verre dessiné, sous le seul flou de la pilule
+  - chaque bouton de l'appel porte son propre verre, et Fin reste rouge
+  - les boutons de l'appel se nomment comme la planche (Afficher/Masquer les actions, Sortie audio, Réduire, Activer/Couper la caméra)
+  - le verre sur média se rend en sombre, quelle que soit l'apparence
+  - le verre sur fond clair et la fiche du catalogue se lisent
+  - l'accueil plein écran ne recouvre plus le catalogue du kit
+  - K00 Android — les instantanés suivent les thèmes et la planche d'iOS
+  - K00 Android — relecture : le cliquet du verre voit chrome et la recette du composeur, les réglages du détail sont prouvés
+  - la barre d'en-tête dit avant la fin si la voix passe en direct ou part hors ligne
+  - les icônes du talkie passent par MeeshyIcons, le cliquet des imports directs repasse au vert
+  - le talkie a son bouton dans l'en-tête d'un direct et prend toute la barre quand une voix passe
+  - on parle au talkie depuis la fiche d'un Proche, avec le (i) qui dit à quoi il sert
+  - K00 Android — l'audit pur ne charge plus les options Roborazzi
+  - l'en-tête d'un direct porte le talkie, s'élargit sur toute la barre et dit avant la fin si la voix passe
+  - plus aucun disque translucide dans la vue d'appel, et une puce de verre ne rétrécit plus par-dessus son verre
+  - la loi de l'en-tête talkie — voix, direct ou hors ligne, onde miroir et traîne
+  - K00 Android — import de assert dans le témoin de l'écran
+  - K01 iOS — jamais de verre sur du verre, Liquid Glass gardé sous « réduire la transparence », survol et fondu du ton
+  - rend endCallGlass, supprimé par erreur, et remet les plafonds à leur mesure
+  - K01 iOS — le verre du kit : ton, recette en valeurs, surface .meeshyGlass, groupe et appui dessiné [xcodegen]
+  - K00 Android — le manifeste du catalogue n'avait pas de « -- » dans un commentaire XML
+  - K00 Android — le catalogue du kit, son modèle, sa garde et ses instantanés
+  - le catalogue du kit remplace l'écran de connexion
+  - le témoin de coupure du micro compare le journal à celui d'avant la coupure
+  - le verre des boutons réutilise les deux sites de verre existants, les cliquets baissent
+  - chaque bouton de l'appel est un Liquid Glass interactif (iOS 26) ou un verre dessiné, Fin reste rouge
+  - couper le micro arrête aussitôt la capture de ma parole, sans fenêtre de 250 ms
+  - l'aperçu de liste chiffre LE SPECTRE DE LA MAISON pour le fini rainbow (iter-83w) (#17359)
+  - l'accusé serveur tient en une ligne — la cohésion de ConversationViewModel ne régresse plus
+  - l'accusé serveur d'un message renvoyé journalise son échec
+  - SecurityView passe de 983 à 221 lignes, et les sept copies du fond de section deviennent une seule vue
+  - LocationPickerView passe de 957 à 502 lignes, découpé par responsabilité
+  - K00 iOS — le témoin d'image de l'état vide attend ses références
+  - K00 iOS — relecture : l'état vide du catalogue est son premier instantané
+  - le temps écoulé de l'en-tête passe par MediaFormat.duration
+  - K00 iOS — le réglage du détail passe par la place sémantique .primaryAction
+  - huit rouges de la suite complète repassent au vert — trois défauts du code, cinq témoins périmés
+  - les sept témoins rouges de la suite complète repassent au vert, du côté fautif
+  - les cinq gardes de source du workflow iOS SDK repassent au vert
+  - K00 iOS — relecture : l'argument ouvre l'entrée, la garde lit la cible du registre [xcodegen]
+  - l'en-tête montre en direct ce qu'on dit quand l'autre écoute, et une bande d'enregistrement quand il est hors ligne
+  - K00 iOS — écran du catalogue DEBUG et argument de lancement [xcodegen]
+  - K00 iOS — modèle du catalogue, entrées K01 à K25 vides, garde du registre, cliquets du verre
+  - l'aperçu d'appui long se pose sur un voile léger, et l'appui qui l'a montré n'ouvre plus la conversation
+  - talkie actif, le bouton prend toute la barre d'en-tête et son onde suit la voix en direct
+  - l'assistant vocal n'envoie aucune date de naissance que l'utilisateur n'a pas choisie
+  - l'assistant vocal ne propose aucune date après celle des 18 ans
+  - le sélecteur de l'assistant vocal s'arrête à la date limite des 18 ans
+  - la copie vocale part sous le nom talkie_AAAA-MM-JJ_HHmm.m4a
+  - le menu d'appui long d'un message prend la largeur de l'aperçu de conversation
+  - l'aperçu d'appui long rétrécit de 20 % et se ferme par le voile, un glissé vers le bas ou « Fermer »
+  - l'aperçu d'appui long et son menu tiennent sur 80 % de l'écran
+  - la citation d'un appel, d'une arrivée ou d'un départ porte sa métadonnée
+  - aucun chemin du serveur ne clone une voix sans 18 ans révolus
+  - le clonage vocal n'est ouvert qu'à 18 ans révolus, date limite calculée au jour près
+  - le second chemin multi-locuteur ne clone plus aucune voix sans l'accord de la passerelle
+  - un audio à plusieurs voix n'est cloné que si la passerelle l'autorise
+  - la citation d'un avis se dit dans la langue du lecteur
+  - un appel, une arrivée et un départ annoncé se citent dans la loi des actions
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.49.0
+
 ## 2.31.0
 
 ### Minor Changes
