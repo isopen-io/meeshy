@@ -3,15 +3,16 @@ import SwiftUI
 // MARK: - Les valeurs
 
 /// Le remplissage d'une pastille : uni, dégradé, ou disque creux (« Aucun »).
-public enum MeeshyColorDotFill: Sendable, Equatable {
+/// Le sens d'un dégradé ne se reflète pas en RTL.
+public nonisolated enum MeeshyColorDotFill: Sendable, Equatable {
     case solid(Color)
     case gradient([Color])
     case hollow
 }
 
-/// Une pastille. `id` est l'identifiant stable, choisi par l'hôte ; `name` le
-/// nom déjà traduit, optionnel ; `systemImage` un glyphe au centre du disque.
-public struct MeeshyColorDot: Identifiable, Sendable, Equatable {
+/// Une pastille. `id` est l'identifiant stable et unique, choisi par l'hôte ;
+/// `name` le nom déjà traduit, optionnel ; `systemImage` un glyphe au centre.
+public nonisolated struct MeeshyColorDot: Identifiable, Sendable, Equatable {
     public let id: String
     public let fill: MeeshyColorDotFill
     public let name: String?
@@ -40,54 +41,27 @@ public nonisolated enum MeeshyColorDotSize: String, Sendable, Equatable, CaseIte
     public var cell: Double { Double(MeeshyControlSize.tapTarget) }
 }
 
-/// `wrap` passe à la ligne ; `row` tient sur une ligne et défile.
+/// `wrap` passe à la ligne ; `row` tient sur une ligne, défile et s'estompe s'il déborde.
 public nonisolated enum MeeshyColorDotsLayout: String, Sendable, Equatable, CaseIterable {
     case wrap
     case row
 }
 
-/// Le retour haptique du choix : un `light` au site unique, ou aucun.
-public nonisolated enum MeeshyColorDotHaptic: String, Sendable, Equatable, CaseIterable {
-    case light
-    case none
-}
-
-/// La géométrie d'un groupe, calculée une fois par largeur, sans mesure par pastille.
-public nonisolated struct MeeshyColorDotsRecipe: Sendable, Equatable {
-    /// Le contenu désactivé, à 40 % (fiche K07 § 6).
-    public static let disabledOpacity: Double = 0.4
-    /// Le filet intérieur et le pré-cercle à 25 % et 50 % (fiche K07 § 6).
-    public static let hairlineOpacity: Double = 0.25
-
-    /// Le nombre de pastilles par ligne.
-    public let rows: [Int]
-    /// Vrai quand une ligne `row` déborde et défile.
-    public let scrolls: Bool
-
-    public static func resolve(count: Int,
-                               available: Double,
-                               size: MeeshyColorDotSize,
-                               layout: MeeshyColorDotsLayout) -> MeeshyColorDotsRecipe {
-        guard count > 0 else { return MeeshyColorDotsRecipe(rows: [], scrolls: false) }
-        switch layout {
-        case .row:
-            return MeeshyColorDotsRecipe(rows: [count], scrolls: Double(count) * size.cell > available)
-        case .wrap:
-            let perRow = max(1, Int(((available + size.cell - size.diameter) / size.cell).rounded(.down)))
-            let full = Array(repeating: perRow, count: count / perRow)
-            let rest = count % perRow
-            return MeeshyColorDotsRecipe(rows: rest > 0 ? full + [rest] : full, scrolls: false)
-        }
-    }
-}
+/// Le retour du choix : un `light` par le site unique de K02, ou aucun quand
+/// l'hôte joue le sien. Une seule loi pour les deux composants.
+public typealias MeeshyColorDotHaptic = MeeshyGlassButtonHaptic
 
 // MARK: - Le groupe
 
-/// **Un groupe de choix unique : des disques dont un seul est courant, cerclé.**
+/// **Un groupe de choix unique : des disques dont un seul est courant, cerclé** (K07).
 ///
-/// Ni palette, ni libellé visible, ni verre : l'hôte passe les pastilles, leur
-/// nom et la courante. Toucher une pastille rappelle `onSelect(id)` une fois ;
-/// retoucher la courante le rappelle aussi, l'hôte décide.
+/// Ni palette, ni titre visible, ni verre : l'hôte passe les pastilles, leur nom
+/// et la courante. Toucher une pastille rappelle `onSelect(id)` une fois, au
+/// relâcher ; retoucher la courante le rappelle aussi, l'hôte décide.
+/// `trailing` porte une action qui n'est pas un choix (« Aléatoire ») : elle se
+/// pose dans le flux, après la dernière pastille, dans une cellule de 44 pt.
+/// Une liste vide ne rend rien. `.disabled(_:)` : contenu à 40 %, ni action ni
+/// haptique.
 public struct MeeshyColorDots<Trailing: View>: View {
     private let dots: [MeeshyColorDot]
     private let selection: String?
@@ -98,11 +72,11 @@ public struct MeeshyColorDots<Trailing: View>: View {
     private let haptic: MeeshyColorDotHaptic
     private let onSelect: (String) -> Void
     private let trailing: Trailing
+    private var pressedPreview: String?
 
-    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.meeshyGlassTone) private var hostTone
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var width: Double = 0
 
     public init(_ dots: [MeeshyColorDot],
                 selection: String? = nil,
@@ -124,75 +98,54 @@ public struct MeeshyColorDots<Trailing: View>: View {
         self.trailing = trailing()
     }
 
+    @ViewBuilder
     public var body: some View {
-        let recipe = MeeshyColorDotsRecipe.resolve(count: dots.count, available: width, size: size, layout: layout)
-        let ink = Self.inkColor(tone: tone, colorScheme: colorScheme)
-        VStack(alignment: .leading, spacing: 0) {
-            switch layout {
-            case .wrap: wrapped(recipe: recipe, ink: ink)
-            case .row: scrolled(ink: ink)
-            }
-            trailing
+        if !dots.isEmpty {
+            arranged
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(label)
         }
-        .background(GeometryReader { proxy in
-            Color.clear.preference(key: MeeshyColorDotsWidthKey.self, value: Double(proxy.size.width))
-        })
-        .onPreferenceChange(MeeshyColorDotsWidthKey.self) { width = $0 }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(label)
     }
 
     @ViewBuilder
-    private func wrapped(recipe: MeeshyColorDotsRecipe, ink: Color) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(Self.chunks(of: dots, sizes: recipe.rows).enumerated()), id: \.offset) { _, row in
-                HStack(spacing: 0) { cells(row, ink: ink) }
-            }
+    private var arranged: some View {
+        switch layout {
+        case .wrap:
+            MeeshyColorDotsFlow(size: size, layout: .wrap) { content }
+        case .row:
+            MeeshyColorDotsRow(size: size, selection: selection, reduceMotion: reduceMotion) { content }
         }
     }
 
-    private func scrolled(ink: Color) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) { cells(dots, ink: ink) }
-        }
-    }
-
-    private func cells(_ items: [MeeshyColorDot], ink: Color) -> some View {
-        ForEach(items) { dot in
+    @ViewBuilder
+    private var content: some View {
+        let recipe = MeeshyColorDotsRecipe.resolve(count: 1, available: .infinity, size: size, layout: .row,
+                                                   tone: tone ?? hostTone)
+        let ink = recipe.inkColor(isDark: colorScheme == .dark)
+        ForEach(Array(dots.enumerated()), id: \.element.id) { index, dot in
             MeeshyColorDotCell(
                 dot: dot,
-                position: Self.positionLabel(of: dot, in: dots),
-                isSelected: dot.id == selection,
+                name: MeeshyColorDotsWords.spokenName(of: dot, index: index, total: dots.count),
+                isSelected: MeeshyColorDotsRecipe.isCurrent(dot.id, selection: selection),
+                isPressedPreview: dot.id == pressedPreview,
                 size: size,
                 ink: ink,
                 reduceMotion: reduceMotion,
-                onTap: {
-                    if haptic == .light { HapticFeedback.light() }
-                    onSelect(dot.id)
-                }
+                haptic: haptic,
+                onSelect: onSelect
             )
             .equatable()
-            .disabled(!isEnabled)
+            .id(dot.id)
         }
+        trailing
     }
 
-    static func chunks(of items: [MeeshyColorDot], sizes: [Int]) -> [[MeeshyColorDot]] {
-        let starts = sizes.reduce(into: [0]) { $0.append($0.last! + $1) }
-        return zip(starts, sizes).map { start, length in Array(items[start..<start + length]) }
-    }
-
-    static func positionLabel(of dot: MeeshyColorDot, in dots: [MeeshyColorDot]) -> String {
-        if let name = dot.name { return name }
-        let index = (dots.firstIndex(where: { $0.id == dot.id }) ?? 0) + 1
-        return "Couleur \(index) sur \(dots.count)"
-    }
-
-    static func inkColor(tone: MeeshyGlassTone?, colorScheme: ColorScheme) -> Color {
-        switch tone {
-        case .onLight: return MeeshyColors.indigo950
-        case .theme where colorScheme != .dark: return MeeshyColors.indigo950
-        default: return MeeshyColors.onMedia
-        }
+    /// Le catalogue fige une pastille sous le doigt : un bouton ne se tient pas
+    /// pressé hors écran.
+    func previewPressed(_ id: String?) -> Self {
+        var copy = self
+        copy.pressedPreview = id
+        return copy
     }
 }
 
@@ -210,81 +163,180 @@ extension MeeshyColorDots where Trailing == EmptyView {
     }
 }
 
-private struct MeeshyColorDotsWidthKey: PreferenceKey {
-    static let defaultValue: Double = 0
-    static func reduce(value: inout Double, nextValue: () -> Double) { value = nextValue() }
+// MARK: - La disposition
+
+/// Pose des cellules jointives de 44 pt depuis la recette, sans mesurer aucune
+/// pastille : l'encombrement est celui des disques, la cible déborde de `inset`.
+struct MeeshyColorDotsFlow: Layout {
+    let size: MeeshyColorDotSize
+    let layout: MeeshyColorDotsLayout
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrangement(count: subviews.count, width: proposal.width).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let recipe = arrangement(count: subviews.count, width: proposal.width ?? bounds.width)
+        let side = ProposedViewSize(width: CGFloat(recipe.cell), height: CGFloat(recipe.cell))
+        for (index, subview) in subviews.enumerated() {
+            let origin = recipe.cellOrigin(index: index)
+            subview.place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
+                          anchor: .topLeading, proposal: side)
+        }
+    }
+
+    private func arrangement(count: Int, width: CGFloat?) -> MeeshyColorDotsRecipe {
+        MeeshyColorDotsRecipe.resolve(count: count, available: width.map { Double($0) } ?? .infinity,
+                                      size: size, layout: layout)
+    }
+}
+
+/// La ligne `row` : posée telle quelle si elle tient ; sinon elle défile,
+/// s'estompe au bord de fin et se cale sur la courante — sans animation à
+/// l'apparition, au ressort ensuite, immédiatement sous « réduire les animations ».
+struct MeeshyColorDotsRow<Content: View>: View {
+    let size: MeeshyColorDotSize
+    let selection: String?
+    let reduceMotion: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            MeeshyColorDotsFlow(size: size, layout: .row) { content }
+            scrolling
+        }
+    }
+
+    private var scrolling: some View {
+        let inset = (size.cell - size.diameter) / 2
+        return ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                MeeshyColorDotsFlow(size: size, layout: .row) { content }
+                    .padding(inset)
+            }
+            .mask { fade }
+            .padding(-inset)
+            .onAppear { scroll(proxy, animated: false) }
+            .adaptiveOnChange(of: selection) { _, _ in scroll(proxy, animated: true) }
+        }
+    }
+
+    private var fade: some View {
+        LinearGradient(
+            stops: [
+                .init(color: MeeshyColors.onMedia, location: 0),
+                .init(color: MeeshyColors.onMedia, location: MeeshyColorDotsRecipe.fadeStart),
+                .init(color: .clear, location: 1),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        )
+        .flipsForRightToLeftLayoutDirection(true)
+    }
+
+    private func scroll(_ proxy: ScrollViewProxy, animated: Bool) {
+        guard let selection else { return }
+        let animation = animated ? MeeshyColorDotsRecipe.ringAnimation(reduceMotion: reduceMotion) : nil
+        withAnimation(animation) { proxy.scrollTo(selection, anchor: .center) }
+    }
 }
 
 // MARK: - La pastille
 
-/// Une cellule de 44 pt. Équatable : elle ne se re-rend que si son état change.
+/// Une cellule de 44 pt. `Equatable` sur ses valeurs (la fermeture hors
+/// comparaison, l'hôte la garde stable) : à un choix, seules l'ancienne et la
+/// nouvelle courante se re-rendent.
 struct MeeshyColorDotCell: View, Equatable {
     let dot: MeeshyColorDot
-    let position: String
+    let name: String
     let isSelected: Bool
+    let isPressedPreview: Bool
     let size: MeeshyColorDotSize
     let ink: Color
     let reduceMotion: Bool
-    let onTap: () -> Void
+    let haptic: MeeshyColorDotHaptic
+    let onSelect: (String) -> Void
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.dot == rhs.dot && lhs.position == rhs.position && lhs.isSelected == rhs.isSelected
-            && lhs.size == rhs.size && lhs.reduceMotion == rhs.reduceMotion
+        lhs.dot == rhs.dot && lhs.name == rhs.name && lhs.isSelected == rhs.isSelected
+            && lhs.isPressedPreview == rhs.isPressedPreview && lhs.size == rhs.size && lhs.ink == rhs.ink
+            && lhs.reduceMotion == rhs.reduceMotion && lhs.haptic == rhs.haptic
     }
 
     var body: some View {
-        Button(action: onTap) {
-            EmptyView()
-        }
-        .buttonStyle(MeeshyColorDotButtonStyle(dot: dot, size: size, isSelected: isSelected, ink: ink, reduceMotion: reduceMotion))
-        .accessibilityLabel(dot.name ?? position)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        Button(action: select) { EmptyView() }
+            .buttonStyle(MeeshyColorDotStyle(
+                dot: dot, size: size, isSelected: isSelected, isPressedPreview: isPressedPreview,
+                isHovered: isHovered, ink: ink, reduceMotion: reduceMotion
+            ))
+            .onHover { isHovered = $0 }
+            .accessibilityLabel(name)
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+            .accessibilityShowsLargeContentViewer {
+                Label {
+                    Text(name)
+                } icon: {
+                    MeeshyColorDotDisc(dot: dot, size: size, isSelected: false, isPressed: false,
+                                       isHovered: false, ink: ink, reduceMotion: true)
+                }
+            }
+    }
+
+    private func select() {
+        MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled, haptic: haptic) { onSelect(dot.id) }
     }
 }
 
-struct MeeshyColorDotButtonStyle: ButtonStyle {
+struct MeeshyColorDotStyle: ButtonStyle {
     let dot: MeeshyColorDot
     let size: MeeshyColorDotSize
     let isSelected: Bool
+    let isPressedPreview: Bool
+    let isHovered: Bool
     let ink: Color
     let reduceMotion: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        MeeshyColorDotDisc(dot: dot, size: size, isSelected: isSelected, isPressed: configuration.isPressed,
-                           ink: ink, reduceMotion: reduceMotion)
+        MeeshyColorDotDisc(dot: dot, size: size, isSelected: isSelected,
+                           isPressed: configuration.isPressed || isPressedPreview,
+                           isHovered: isHovered, ink: ink, reduceMotion: reduceMotion)
     }
 }
 
-/// Le disque seul : fond, filet intérieur, glyphe et cercle de courante.
+/// Le disque dans sa cellule : fond, glyphe, filet intérieur, cercle de la
+/// courante. Seuls l'opacité et l'échelle du cercle s'animent ; le pré-cercle
+/// paraît sous le doigt sans attendre.
 struct MeeshyColorDotDisc: View {
     let dot: MeeshyColorDot
     let size: MeeshyColorDotSize
     let isSelected: Bool
     let isPressed: Bool
+    let isHovered: Bool
     let ink: Color
     let reduceMotion: Bool
+
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        let diameter = size.diameter
+        let recipe = MeeshyColorDotsRecipe.resolve(count: 1, available: .infinity, size: size, layout: .row)
+        let hairline = MeeshyColorDotsRecipe.hairline(isHovered: isHovered, increasedContrast: contrast == .increased)
         ZStack {
-            fill(diameter: diameter)
-            if let image = dot.systemImage {
-                Image(systemName: image)
-                    .font(.system(size: diameter * 0.45, weight: .semibold))
-                    .foregroundStyle(ink)
-            }
+            fill(diameter: recipe.diameter)
+            glyph(diameter: recipe.diameter)
             Circle()
-                .strokeBorder(MeeshyColors.onMedia.opacity(MeeshyColorDotsRecipe.hairlineOpacity), lineWidth: MeeshyBorder.regular)
-                .frame(width: diameter, height: diameter)
+                .strokeBorder(ink.opacity(hairline), lineWidth: MeeshyBorder.regular)
+                .frame(width: recipe.diameter, height: recipe.diameter)
             Circle()
-                .strokeBorder(ink, lineWidth: MeeshyBorder.strong)
-                .frame(width: diameter + 8, height: diameter + 8)
-                .scaleEffect(isSelected ? 1 : 0.8)
-                .opacity(isSelected ? 1 : (isPressed ? MeeshyOpacity.strong : 0))
-                .animation(reduceMotion ? nil : MeeshyAnimation.springFast, value: isSelected)
+                .strokeBorder(ink, lineWidth: recipe.ringWidth)
+                .frame(width: recipe.ringDiameter, height: recipe.ringDiameter)
+                .scaleEffect(MeeshyColorDotsRecipe.ringScale(isSelected: isSelected, isPressed: isPressed))
+                .opacity(MeeshyColorDotsRecipe.ringOpacity(isSelected: isSelected, isPressed: isPressed))
+                .animation(MeeshyColorDotsRecipe.ringAnimation(reduceMotion: reduceMotion), value: isSelected)
         }
-        .frame(width: size.cell, height: size.cell)
+        .frame(width: recipe.cell, height: recipe.cell)
         .contentShape(Rectangle())
         .opacity(isEnabled ? 1 : MeeshyColorDotsRecipe.disabledOpacity)
     }
@@ -300,8 +352,18 @@ struct MeeshyColorDotDisc: View {
                 .frame(width: diameter, height: diameter)
         case .hollow:
             Circle()
-                .strokeBorder(MeeshyColors.onMedia.opacity(MeeshyColorDotsRecipe.hairlineOpacity), lineWidth: MeeshyBorder.strong)
+                .strokeBorder(ink.opacity(MeeshyColorDotsRecipe.hairlineEmphasisOpacity), lineWidth: MeeshyBorder.regular)
                 .frame(width: diameter, height: diameter)
+        }
+    }
+
+    @ViewBuilder
+    private func glyph(diameter: Double) -> some View {
+        if let systemImage = dot.systemImage {
+            Image(systemName: systemImage)
+                .font(.system(size: diameter * MeeshyColorDotsRecipe.glyphScale, weight: .semibold))
+                .foregroundStyle(MeeshyColorDotsRecipe.glyphInk(on: dot.fill, groupInk: ink))
+                .accessibilityHidden(true)
         }
     }
 }
