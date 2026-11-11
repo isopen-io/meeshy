@@ -58,7 +58,12 @@ export function talkieAnnouncement(language: InterfaceLanguage, live: ThreadTalk
   return live.voice === 'outgoing' ? translateCircles(language, TALKIE_ANNOUNCE_KEY[live.delivery]) : '';
 }
 
-const RECORDING_RED = 'var(--color-error)';
+// Rouge d'enregistrement : APLAT (dot, tête de lecture) posé sur une surface
+// TOUJOURS sombre (le dégradé de la conversation, assombri d'un voile hors ligne).
+// La charte veut alors `ios-error-strong` (miroir iOS `MeeshyColors.errorStrong`,
+// #ef4444) — le jeton `error` schématisé tombe à un rouge foncé illisible sur du
+// verre sombre en thème clair.
+const RECORDING_RED = 'var(--ios-error-strong)';
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const REDUCED_MOTION_PERIOD_MS = 100;
 
@@ -80,6 +85,7 @@ function drawBars(context: CanvasRenderingContext2D, { heights, barWidth, gap, o
   heights.forEach((barHeight, index) => {
     const x = originX + index * (barWidth + gap);
     const fill = strength && height > barWidth ? (barHeight - barWidth) / (height - barWidth) : 1;
+    // harmony-exempt: encre blanche « on-media » peinte en CANVAS (hors du DOM, même raison que lib/canvas/) — l'alpha suit l'amplitude de la voix
     context.fillStyle = `rgba(255, 255, 255, ${strength ? 0.6 + 0.4 * fill : 1})`;
     const y = (height - barHeight) / 2;
     if (typeof context.roundRect !== 'function') return context.fillRect(x, y, barWidth, barHeight);
@@ -149,7 +155,7 @@ function TalkieChrono() {
     return () => clearInterval(timer);
   }, []);
   return (
-    <span data-talkie-chrono="" className="shrink-0 text-caption font-semibold tabular-nums" style={{ color: 'rgba(255, 255, 255, 0.92)' }}>
+    <span data-talkie-chrono="" className="shrink-0 text-caption font-semibold tabular-nums" style={{ color: 'var(--color-on-media-2)' }}>
       {talkieElapsed(now - startedAt)}
     </span>
   );
@@ -166,16 +172,16 @@ function TalkieDeliveryBadge({ language, live }: { readonly language: InterfaceL
   return (
     <span
       className="flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-mini font-extrabold uppercase"
-      style={{ color: '#fff', letterSpacing: '0.04em', backgroundColor: `rgba(255, 255, 255, ${realtime ? 0.22 : 0.14})` }}
+      style={{ color: 'var(--color-on-media)', letterSpacing: '0.04em', backgroundColor: realtime ? 'var(--color-media-hairline)' : 'var(--color-media-fill)' }}
     >
       <span aria-hidden="true" className="relative grid size-3.5 place-items-center">
         {realtime ? (
           <>
-            <span className="absolute inset-0 rounded-full motion-safe:animate-ping" style={{ backgroundColor: 'rgba(255, 255, 255, 0.35)' }} />
-            <span className="relative rounded-full" style={{ width: 7, height: 7, backgroundColor: '#fff' }} />
+            <span className="absolute inset-0 rounded-full motion-safe:animate-ping" style={{ backgroundColor: 'color-mix(in srgb, var(--color-on-media) 35%, transparent)' }} />
+            <span className="relative rounded-full" style={{ width: 7, height: 7, backgroundColor: 'var(--color-on-media)' }} />
           </>
         ) : (
-          <span className="rounded-full motion-safe:animate-pulse" style={{ width: 8, height: 8, backgroundColor: RECORDING_RED, boxShadow: '0 0 0 1px rgba(255, 255, 255, 0.8)' }} />
+          <span className="rounded-full motion-safe:animate-pulse" style={{ width: 8, height: 8, backgroundColor: RECORDING_RED, boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-on-media) 80%, transparent)' }} />
         )}
       </span>
       <GlyphSvg glyph={badgeGlyph(live)} size={11} />
@@ -207,11 +213,11 @@ export function TalkieHeaderBand({
           boxShadow: `0 0 ${realtime ? 10 : 4}px color-mix(in srgb, ${accent} ${realtime ? 55 : 20}%, transparent)`,
         }}
       >
-        {realtime ? null : <span className="absolute inset-0" style={{ backgroundColor: 'rgba(0, 0, 0, 0.38)' }} />}
-        <span className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0.28), transparent 50%)' }} />
+        {realtime ? null : <span className="absolute inset-0" style={{ backgroundColor: 'var(--color-scrim-soft)' }} />}
+        <span className="absolute inset-0" style={{ background: 'linear-gradient(to bottom, color-mix(in srgb, var(--color-on-media) 28%, transparent), transparent 50%)' }} />
         <span
           className="absolute inset-0 rounded-full"
-          style={{ border: realtime ? '1px solid rgba(255, 255, 255, 0.4)' : '1px dashed rgba(255, 255, 255, 0.45)' }}
+          style={{ border: realtime ? '1px solid color-mix(in srgb, var(--color-on-media) 40%, transparent)' : '1px dashed color-mix(in srgb, var(--color-on-media) 45%, transparent)' }}
         />
         <span className="relative flex size-full items-center gap-2">
           <TalkieDeliveryBadge language={language} live={live} />
@@ -220,6 +226,7 @@ export function TalkieHeaderBand({
               <TalkieWaveCanvas key="mirror" mode="mirror" meter={meter} />
             ) : (
               <>
+                {/* harmony-exempt: masque de luminance (fondu d'entrée de la bande défilante) — #000 = opaque, pas une couleur */}
                 <span className="block size-full pe-1" style={{ maskImage: 'linear-gradient(to right, transparent, #000 40%, #000)', WebkitMaskImage: 'linear-gradient(to right, transparent, #000 40%, #000)' }}>
                   <TalkieWaveCanvas key="tape" mode="tape" meter={meter} />
                 </span>
