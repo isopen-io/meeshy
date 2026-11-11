@@ -89,9 +89,10 @@ describe('la liste', () => {
     expect(html).not.toContain('data-share-link-status');
   });
 
-  test('un lien inactif se dit « Inactif » EN TOUTES LETTRES, pas par la seule couleur', () => {
+  test('un lien inactif se dit par son disque tireté ; « Inactif » reste lu par le lecteur d’écran, plus écrit', () => {
     const html = renderToStaticMarkup(<ShareLinkRow language="fr" link={link({ isActive: false, inactiveReason: 'REVOKED' })} copied={false} onCopy={noop} />);
-    expect(html).toMatch(/data-share-link-status[^>]*>· Inactif</);
+    expect(html).not.toContain('data-share-link-status');
+    expect(html).toContain('aria-label="Invitation, Inactif, 3 rejoints et Équipe déploiement"');
   });
 
   test('#10381 — l’expiration choisie à la création se lit sur la ligne et s’annonce au lecteur d’écran', () => {
@@ -101,9 +102,9 @@ describe('la liste', () => {
     expect(html).toContain(`aria-label="Invitation, Actif, 3 rejoints, Équipe déploiement et Expire le ${date.replace(/\s/gu, ' ')}"`);
   });
 
-  test('#10381 — une échéance passée se dit « Lien expiré », un lien sans échéance n’ajoute rien', () => {
+  test('#10381 — une échéance passée se dit « Expiré », un lien sans échéance n’ajoute rien', () => {
     const past = renderToStaticMarkup(<ShareLinkRow language="fr" link={link({ expiresAt: '2000-01-01T00:00:00.000Z' })} copied={false} onCopy={noop} />);
-    expect(past).toMatch(/data-share-link-expiry[^>]*>Lien expiré</);
+    expect(past).toMatch(/data-share-link-expiry[^>]*>Expiré</);
     expect(renderToStaticMarkup(<ShareLinkRow language="fr" link={link()} copied={false} onCopy={noop} />)).not.toContain('data-share-link-expiry');
   });
 
@@ -161,8 +162,8 @@ describe('la création', () => {
     });
   });
 
-  test('sans conversation choisie, le choix se nomme par sa promesse', () => {
-    expect(renderToStaticMarkup(<ConversationChoice language="fr" conversation={null} invalid={false} onOpen={noop} />)).toContain('Choisir un groupe ou une communauté');
+  test('sans conversation choisie, le choix se nomme d’un verbe', () => {
+    expect(renderToStaticMarkup(<ConversationChoice language="fr" conversation={null} invalid={false} onOpen={noop} />)).toContain('Choisir');
   });
 
   test('le nombre d’utilisations n’apparaît qu’avec la limite, et un refus nomme la borne', () => {

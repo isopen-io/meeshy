@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 
 import { AFFILIATE_NAME_MAX, emptyAffiliateTokenDraft, type AffiliateDraftField, type AffiliateTokenDraft } from '@/lib/api/affiliate-tokens';
+import { InfoHintScope } from '@/components/info-hint';
 import { apiDeps } from '@/lib/api/deps';
 import { performCreateAffiliateToken } from '@/lib/api/link-family-actions';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -9,7 +10,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { AFFILIATE_TINT } from '@/routes/link-families-parts';
 import { Field, FormError, SubmitButton } from '@/routes/link-family-form';
-import { LinksGlyph, LinksHeader, LinksOfflineNotice } from '@/routes/links-parts';
+import { LinksGlyph, LinksHeader, LinksOfflineNotice, linksHint } from '@/routes/links-parts';
 import { href, navigate } from '@/routes/route-table';
 import { FormSection, RuleToggle } from '@/routes/share-link-form';
 
@@ -58,50 +59,52 @@ export default function AffiliateLinkNewScreen() {
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <LinksHeader language={language} back="affiliateLinks" backLabel={translateLinkFamilies(language, 'linkFamilies.affiliate.title')} title={translateLinkFamilies(language, 'linkFamilies.affiliate.create.title')} />
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
-        <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
-          {online ? null : <LinksOfflineNotice language={language} />}
-          <FormSection id="affiliate-section-identity" title={translateLinkFamilies(language, 'linkFamilies.affiliate.create.name')} subtitle={null} icon={<LinksGlyph name="tag" size={12} />}>
-            <Field
-              id="affiliate-name"
-              required
-              maxLength={AFFILIATE_NAME_MAX}
-              label={translateLinkFamilies(language, 'linkFamilies.affiliate.create.name')}
-              placeholder={translateLinkFamilies(language, 'linkFamilies.affiliate.create.name.placeholder')}
-              value={draft.name}
-              error={invalid === 'name' ? translateLinkFamilies(language, 'linkFamilies.affiliate.create.name.invalid') : null}
-              onChange={(value) => edit('name', value)}
-            />
-          </FormSection>
-          <FormSection id="affiliate-section-limit" title={translateLinkFamilies(language, 'linkFamilies.affiliate.create.limit')} subtitle={null} icon={<LinksGlyph name="gauge" size={12} />}>
-            <RuleToggle
-              id="affiliate-limit"
-              label={translateLinkFamilies(language, 'linkFamilies.affiliate.create.limit')}
-              caption={translateLinkFamilies(language, 'linkFamilies.affiliate.create.limit.caption')}
-              icon={<LinksGlyph name="userPlus" size={15} />}
-              tint={AFFILIATE_TINT}
-              checked={draft.limitUses}
-              disabled={false}
-              onToggle={(next) => edit('limitUses', next)}
-            />
-            {draft.limitUses ? (
+        <InfoHintScope>
+          <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
+            {online ? null : <LinksOfflineNotice language={language} />}
+            <FormSection id="affiliate-section-identity" title={null} subtitle={null} icon={null}>
               <Field
-                id="affiliate-max-uses"
-                inputMode="numeric"
-                maxLength={6}
-                label={translateLinkFamilies(language, 'linkFamilies.affiliate.create.maxUses')}
-                placeholder="100"
-                value={draft.maxUses}
-                error={invalid === 'maxUses' ? translateLinkFamilies(language, 'linkFamilies.affiliate.create.maxUses.invalid') : null}
-                onChange={(value) => edit('maxUses', value)}
+                id="affiliate-name"
+                required
+                maxLength={AFFILIATE_NAME_MAX}
+                label={translateLinkFamilies(language, 'linkFamilies.affiliate.create.name')}
+                placeholder={translateLinkFamilies(language, 'linkFamilies.affiliate.create.name.placeholder')}
+                value={draft.name}
+                error={invalid === 'name' ? translateLinkFamilies(language, 'linkFamilies.affiliate.create.name.invalid') : null}
+                onChange={(value) => edit('name', value)}
               />
-            ) : null}
-          </FormSection>
-          <FormError text={feedback === null ? null : translateLinkFamilies(language, feedback)} />
-          <SubmitButton
-            label={translateLinkFamilies(language, submitting ? 'linkFamilies.create.inprogress' : 'linkFamilies.affiliate.create.button')}
-            disabled={submitting || !online || draft.name.trim() === ''}
-          />
-        </form>
+            </FormSection>
+            <FormSection id="affiliate-section-limit" title={null} subtitle={null} icon={null}>
+              <RuleToggle
+                id="affiliate-limit"
+                label={translateLinkFamilies(language, 'linkFamilies.affiliate.create.limit')}
+                note={linksHint(translateLinkFamilies(language, 'linkFamilies.affiliate.create.limit.question'), translateLinkFamilies(language, 'linkFamilies.affiliate.create.limit.caption'))}
+                icon={<LinksGlyph name="userPlus" size={15} />}
+                tint={AFFILIATE_TINT}
+                checked={draft.limitUses}
+                disabled={false}
+                onToggle={(next) => edit('limitUses', next)}
+              />
+              {draft.limitUses ? (
+                <Field
+                  id="affiliate-max-uses"
+                  inputMode="numeric"
+                  maxLength={6}
+                  label={translateLinkFamilies(language, 'linkFamilies.affiliate.create.maxUses')}
+                  placeholder="100"
+                  value={draft.maxUses}
+                  error={invalid === 'maxUses' ? translateLinkFamilies(language, 'linkFamilies.affiliate.create.maxUses.invalid') : null}
+                  onChange={(value) => edit('maxUses', value)}
+                />
+              ) : null}
+            </FormSection>
+            <FormError text={feedback === null ? null : translateLinkFamilies(language, feedback)} />
+            <SubmitButton
+              label={translateLinkFamilies(language, submitting ? 'linkFamilies.create.inprogress' : 'linkFamilies.affiliate.create.button')}
+              disabled={submitting || !online || draft.name.trim() === ''}
+            />
+          </form>
+        </InfoHintScope>
       </main>
     </div>
   );
