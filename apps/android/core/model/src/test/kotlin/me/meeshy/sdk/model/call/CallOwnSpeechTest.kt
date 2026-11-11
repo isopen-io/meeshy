@@ -149,14 +149,15 @@ class CallOwnSpeechTest {
     }
 
     @Test
-    fun `my finals enter my journal even while my panel is closed, my partials only while I read, nothing behind a closed gate`() {
+    fun `my words enter my journal even while my captions are off, partials included, nothing behind a closed gate (#17342)`() {
         val partial = CallJournalSegment(wireId = "u1", speakerId = "me", speakerDisplayName = null, text = "Bon", language = "fr", isFinal = false, capturedAtMs = 1)
         val final = partial.copy(text = "Bonjour", isFinal = true)
         val closedPanel = CallCaptionsState(gate = CallCaptionsGate.Open)
 
-        assertThat(closedPanel.receivingOwn(partial).journal.isEmpty).isTrue()
+        assertThat(closedPanel.receivingOwn(partial).journal.segments.single().text).isEqualTo("Bon")
         assertThat(closedPanel.receivingOwn(final).journal.segments.single().text).isEqualTo("Bonjour")
         assertThat(closedPanel.copy(isPanelOpen = true).receivingOwn(partial).journal.segments.single().text).isEqualTo("Bon")
+        assertThat(CallCaptionsState(gate = CallCaptionsGate.EndToEnd).receivingOwn(partial).journal.isEmpty).isTrue()
         assertThat(CallCaptionsState(gate = CallCaptionsGate.EndToEnd).receivingOwn(final).journal.isEmpty).isTrue()
     }
 

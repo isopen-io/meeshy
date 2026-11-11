@@ -54,7 +54,7 @@ public object ComposerPhotoLookRule {
     public const val CATALOG_PEOPLE: Int = 2
 
     /** Les filtres de l'appel, dans son ordre ; [VideoFilterPreset.Natural] en tête rend l'original. */
-    public val filters: List<VideoFilterPreset> = VideoFilterPreset.entries
+    public val filters: List<VideoFilterPreset> = VideoFilterPreset.fiveTints
 
     public fun chips(among: List<CallFrameDesign> = CallFrameCatalogue.all): List<CallMontageMoodChip> =
         CallMontageFrameRule.chips(CATALOG_PEOPLE, among)

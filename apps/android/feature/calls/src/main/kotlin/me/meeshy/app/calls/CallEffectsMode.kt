@@ -2,17 +2,26 @@ package me.meeshy.app.calls
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -21,8 +30,11 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -30,9 +42,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.selected
@@ -47,14 +61,15 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.BRIGHTNESS_LIMIT
 import me.meeshy.sdk.model.call.CallEffectsCompanionRule
-import me.meeshy.sdk.model.call.CallEffectsDuoPeer
 import me.meeshy.sdk.model.call.CallFaceEffect
+import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.sdk.model.call.SMOOTHING_INTENSITY_MAX
 import me.meeshy.sdk.model.call.SMOOTHING_INTENSITY_MIN
 import me.meeshy.sdk.model.call.VideoFilterPreset
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
 import me.meeshy.sdk.model.call.effects.CallEffectsModeRule
 import me.meeshy.sdk.model.call.effects.CallEffectsModeState
+import me.meeshy.sdk.model.call.effects.CallEffectsSettingsMotion
 import me.meeshy.sdk.model.call.montage.CallCaptureLook
 import me.meeshy.sdk.model.call.montage.CallCaptureScene
 import me.meeshy.sdk.model.call.montage.CallCaptureSceneRule
@@ -78,8 +93,9 @@ class CallEffectsViewModel @Inject constructor(val effects: CallVideoEffectsCont
 /**
  * Le mode « Effets de ma caméra » (iOS `CallScreenMode.effects`, `CallEffectsModeControls`) : MON image en
  * plein écran — telle qu'elle part, effet compris —, l'autre en vignette pour rester avec lui, et en bas
- * le choix d'UN effet à la fois : « Visage · Couleur », le carrousel, puis Quitter (rend l'image d'avant),
- * Réglages (luminosité, flou du fond, force du lissage) et Valider. Chaque essai part aussitôt à l'autre.
+ * le choix d'UN effet à la fois : le carrousel, puis la barre de verre ‹ (revient à l'appel avec le look) · Réglages
+ * (le panneau Luminosité · Flou du fond, force du lissage, prend la place du carrousel) · (+) (le look de l'autre genre).
+ * Aucun Quitter ni Valider : chaque essai part aussitôt à l'autre et se garde.
  * Comme le Montage, la prise se déclenche sur l'effet CENTRÉ du carrousel (#13737) : deux tapes photographient
  * mon image, un appui long la filme ; la scène ne porte aucun geste.
  */
@@ -91,26 +107,31 @@ internal fun CallEffectsMode(
     eglContext: EglBase.Context,
     reduceMotion: Boolean,
     onClose: () -> Unit,
+    peerUserId: String? = null,
+    peerAvatarUrl: String? = null,
 ) {
     val effects = hiltViewModel<CallEffectsViewModel>().effects
     val captureViewModel: CallCaptureViewModel = hiltViewModel()
     val frameViewModel: CallLiveFrameViewModel = hiltViewModel()
-    val haptics = LocalHapticFeedback.current
-    val session = remember(effects) { CallEffectsController(effects) { haptics.performHapticFeedback(HapticFeedbackType.LongPress) } }
+    val session = remember(effects) { CallEffectsController(effects) }
     val mode by session.state.collectAsStateWithLifecycle()
     val setMode: (CallEffectsModeState) -> Unit = { next -> session.change { next } }
-    val finish: (Boolean) -> Unit = { validated -> if (session.finish(validated)) onClose() }
-    val companions = remember(state.peerName, state.isCameraOn, state.isPeerCameraOff, state.isPeerMuted, state.isMuted) {
-        CallEffectsCompanionRule.layout(
-            CallEffectsCompanionRule.duoTiles(
-                CallEffectsDuoPeer(null, "", null, isVideoOn = state.isCameraOn, isMicMuted = state.isMuted),
-                CallEffectsDuoPeer(null, state.peerName, null, isVideoOn = !state.isPeerCameraOff, isMicMuted = state.isPeerMuted),
-            ),
-            featuredId = null,
-            capacity = CallEffectsCompanionRule.MAX_COMPANIONS,
-        ).companions
+    val finish: () -> Unit = { if (session.finish()) onClose() }
+    val companions = remember(peerUserId, peerAvatarUrl, state.peerName, state.isCameraOn, state.isPeerCameraOff, state.isPeerMuted, state.isMuted) {
+        CallEffectsCompanionRule.duoCompanions(
+            peerUserId = peerUserId,
+            peerName = state.peerName,
+            peerAvatarUrl = peerAvatarUrl,
+            isCameraOn = state.isCameraOn,
+            isMuted = state.isMuted,
+            isPeerCameraOff = state.isPeerCameraOff,
+            isPeerMuted = state.isPeerMuted,
+        )
     }
-    BackHandler { finish(false) }
+    BackHandler { finish() }
+    // Le mode peut disparaître autrement que par ‹ (l'appel se termine, la couche change) : le look se garde, la
+    // session ne se termine qu'une fois.
+    DisposableEffect(session) { onDispose { session.finish() } }
 
     val self = remember(state.isCameraOn, state.isFrontCamera) {
         val me = frameViewModel.controller.people(state.peerName, null).filter { it.isSelf }
@@ -141,37 +162,129 @@ internal fun CallEffectsMode(
             reduceMotion = reduceMotion,
             modifier = Modifier.systemBarsPadding().padding(bottom = BAR_RESERVE),
         )
-        Column(
-            Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
-                .systemBarsPadding()
-                .padding(bottom = MeeshySpacing.lg),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-        ) {
-            AnimatedContent(
-                targetState = mode.showsSettings,
-                transitionSpec = { fadeIn(tween(if (reduceMotion) 0 else 200)) togetherWith fadeOut(tween(if (reduceMotion) 0 else 200)) },
-                label = "effects-settings",
-            ) { settings ->
-                if (settings) {
-                    EffectsSettings(mode, onChange = setMode)
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-                        CategoryPicker(mode.category) { setMode(mode.showing(it)) }
-                        EffectsCarousel(mode, reduceMotion, shots, hint, onChange = setMode)
-                    }
-                }
-            }
-            EffectsActionBar(
-                showsSettings = mode.showsSettings,
-                onQuit = { finish(false) },
-                onSettings = { setMode(mode.togglingSettings()) },
-                onValidate = { finish(true) },
-            )
+        EffectsControls(
+            state = state,
+            mode = mode,
+            reduceMotion = reduceMotion,
+            shots = shots,
+            hint = hint,
+            onChange = setMode,
+            onFinish = finish,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+/**
+ * Le bas du mode, de haut en bas : les sous-titres (ils restent, dans leur verre sans rangée, sans bouton Journal — iOS
+ * `captionsBand(opensJournal: false)`), le carrousel OU le panneau Luminosité · Flou du fond (un verre séparé), puis
+ * la barre ‹ · Réglages · (+).
+ */
+@Composable
+private fun EffectsControls(
+    state: CallUiState,
+    mode: CallEffectsModeState,
+    reduceMotion: Boolean,
+    shots: CallModeShots,
+    hint: String?,
+    onChange: (CallEffectsModeState) -> Unit,
+    onFinish: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val haptics = LocalHapticFeedback.current
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
+            .systemBarsPadding()
+            .padding(bottom = MeeshySpacing.lg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        if (state.captions.mode != CaptionsMode.Off) {
+            CallCaptionsBandHost(state = state, hasOwnGlass = true, opensJournal = false, modifier = Modifier.padding(horizontal = MeeshySpacing.lg))
         }
+        EffectsLooksOrPanel(mode, reduceMotion, shots, hint, onChange)
+        EffectsBar(
+            mode = mode,
+            reduceMotion = reduceMotion,
+            onBack = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onFinish()
+            },
+            onSettings = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onChange(mode.togglingSettings())
+            },
+            onAddLook = {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onChange(mode.addingLook())
+            },
+            onCategory = { onChange(mode.showing(it)) },
+        )
+    }
+}
+
+/**
+ * P8b.6 — le panneau remplace la bande de looks : elle part en fondu, il monte depuis la barre en fondu (≈ 200 ms,
+ * transformation + opacité) et y redescend au retour. « Réduire les animations » : fondu court seul, sans montée.
+ */
+@Composable
+private fun EffectsLooksOrPanel(
+    mode: CallEffectsModeState,
+    reduceMotion: Boolean,
+    shots: CallModeShots,
+    hint: String?,
+    onChange: (CallEffectsModeState) -> Unit,
+) {
+    val millis = CallEffectsSettingsMotion.durationMillis(reduceMotion)
+    val rise = with(LocalDensity.current) { CallEffectsSettingsMotion.riseDp(reduceMotion).dp.roundToPx() }
+    AnimatedContent(
+        targetState = mode.showsSettings,
+        transitionSpec = {
+            val enter = fadeIn(tween(millis)) + slideInVertically(tween(millis)) { if (targetState) rise else 0 }
+            val exit = fadeOut(tween(millis)) + slideOutVertically(tween(millis)) { if (targetState) 0 else rise }
+            (enter togetherWith exit).using(SizeTransform(clip = false) { _, _ -> tween(millis) })
+        },
+        contentAlignment = Alignment.BottomCenter,
+        label = "effects-settings",
+    ) { settings ->
+        if (settings) {
+            EffectsSettingsPanel(mode, onChange = onChange)
+        } else {
+            EffectsCarousel(mode, reduceMotion, shots, hint, onChange = onChange)
+        }
+    }
+}
+
+/**
+ * La barre de verre d'UNE pièce (`CallControlsGlass`, l'atome du bloc de la pilule) : les puces Visage · Couleur et leur
+ * filet au-dessus, puis ‹ · Réglages · (+). Réglages ouvert, les puces partent en fondu et la barre se resserre sur sa
+ * rangée de base (iOS `CallEffectsBar`) ; sous « Réduire les animations », le cadre se redimensionne en fondu court.
+ */
+@Composable
+internal fun EffectsBar(
+    mode: CallEffectsModeState,
+    reduceMotion: Boolean,
+    onBack: () -> Unit,
+    onSettings: () -> Unit,
+    onAddLook: () -> Unit,
+    onCategory: (CallEffectsCategory) -> Unit,
+) {
+    val millis = CallEffectsSettingsMotion.durationMillis(reduceMotion)
+    val resize = if (reduceMotion) Modifier.animateContentSize(tween(millis)) else Modifier
+    CallControlsGlass(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg).then(resize)) {
+        AnimatedVisibility(
+            visible = !mode.showsSettings,
+            enter = fadeIn(tween(millis)) + if (reduceMotion) EnterTransition.None else expandVertically(tween(millis)),
+            exit = fadeOut(tween(millis)) + if (reduceMotion) ExitTransition.None else shrinkVertically(tween(millis)),
+        ) {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                CategoryPicker(mode.category, onCategory)
+                CallPillHairline()
+            }
+        }
+        EffectsBaseRow(mode.showsSettings, onBack, onSettings, onAddLook)
     }
 }
 
@@ -235,26 +348,27 @@ internal fun EffectsCarousel(
     }
 }
 
-/** Réglages (iOS `settingsRow`) : la force du lissage quand il est choisi, puis la luminosité et le flou du fond. */
+/**
+ * Le panneau Réglages (iOS `settingsPanel`) : un verre SÉPARÉ posé au-dessus de la barre — la force du lissage quand il
+ * est choisi, Luminosité (un titre et son curseur), puis Flou du fond (une ligne titrée à interrupteur).
+ */
 @Composable
-private fun EffectsSettings(mode: CallEffectsModeState, onChange: (CallEffectsModeState) -> Unit) {
-    val haptics = LocalHapticFeedback.current
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.xl),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-    ) {
-        if (mode.showsSmoothingStrength) {
-            val strength = mode.current.skinSmoothingIntensity
-            EffectsSlider(
-                value = strength,
-                range = SMOOTHING_INTENSITY_MIN..SMOOTHING_INTENSITY_MAX,
-                label = stringResource(R.string.call_effects_smoothing_strength),
-                percent = (strength * 100).roundToInt(),
-                onChange = { onChange(mode.withSmoothing(it)) },
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+internal fun EffectsSettingsPanel(mode: CallEffectsModeState, onChange: (CallEffectsModeState) -> Unit) {
+    CallControlsGlass(Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg)) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.mdPlus),
+        ) {
+            if (mode.showsSmoothingStrength) {
+                val strength = mode.current.skinSmoothingIntensity
+                EffectsSlider(
+                    value = strength,
+                    range = SMOOTHING_INTENSITY_MIN..SMOOTHING_INTENSITY_MAX,
+                    label = stringResource(R.string.call_effects_smoothing_strength),
+                    percent = (strength * 100).roundToInt(),
+                    onChange = { onChange(mode.withSmoothing(it)) },
+                )
+            }
             val brightness = mode.current.brightness
             EffectsSlider(
                 value = brightness,
@@ -262,24 +376,13 @@ private fun EffectsSettings(mode: CallEffectsModeState, onChange: (CallEffectsMo
                 label = stringResource(R.string.call_effects_brightness),
                 percent = (brightness / BRIGHTNESS_LIMIT * 100).roundToInt(),
                 onChange = { onChange(mode.withBrightness(it)) },
-                modifier = Modifier.weight(1f),
             )
-            CallPillButton(
-                icon = MeeshyIcons.PersonBackgroundDotted,
-                kind = if (mode.current.backgroundBlurEnabled) CallPillKind.Active else CallPillKind.Normal,
-                label = stringResource(R.string.call_effects_blur),
-                caption = stringResource(R.string.call_effects_blur),
-                toggleState = mode.current.backgroundBlurEnabled,
-                diameter = SIDE_DIAMETER,
-                onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onChange(mode.togglingBlur())
-                },
-            )
+            EffectsBlurRow(mode.current.backgroundBlurEnabled) { onChange(mode.togglingBlur()) }
         }
     }
 }
 
+/** Un titre visible au-dessus de son curseur ; le lecteur d'écran lit le curseur seul, avec son nom et sa valeur. */
 @Composable
 private fun EffectsSlider(
     value: Float,
@@ -287,63 +390,94 @@ private fun EffectsSlider(
     label: String,
     percent: Int,
     onChange: (Float) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val valueText = stringResource(R.string.call_effects_percent, percent)
-    Slider(
-        value = value,
-        onValueChange = onChange,
-        valueRange = range,
-        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f)),
-        modifier = modifier
-            .heightIn(min = 48.dp)
-            .semantics {
-                contentDescription = label
-                stateDescription = valueText
-            },
-    )
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = CallPalette.Ink,
+            modifier = Modifier.clearAndSetSemantics { },
+        )
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            valueRange = range,
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.3f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .semantics {
+                    contentDescription = label
+                    stateDescription = valueText
+                },
+        )
+    }
 }
 
-/** Quitter à gauche, puis Réglages et Valider (iOS `CallModeActionBar`). */
+/** « Flou du fond » : une ligne titrée à interrupteur, toute la ligne se touche (48 dp). */
 @Composable
-private fun EffectsActionBar(showsSettings: Boolean, onQuit: () -> Unit, onSettings: () -> Unit, onValidate: () -> Unit) {
+private fun EffectsBlurRow(isOn: Boolean, onToggle: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.xl),
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(value = isOn, role = Role.Switch) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onToggle()
+            },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        Text(
+            text = stringResource(R.string.call_effects_blur),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = CallPalette.Ink,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = isOn,
+            onCheckedChange = null,
+            colors = SwitchDefaults.colors(checkedTrackColor = CallPalette.Accept, checkedThumbColor = Color.White),
+        )
+    }
+}
+
+/** ‹ Retour à l'appel · Réglages (disque blanc quand il est ouvert) · (+) Ajouter un autre look (iOS `CallEffectsBar.baseRow`). */
+@Composable
+private fun EffectsBaseRow(showsSettings: Boolean, onBack: () -> Unit, onSettings: () -> Unit, onAddLook: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         CallPillButton(
-            icon = MeeshyIcons.Close,
+            icon = MeeshyIcons.Back,
             kind = CallPillKind.Normal,
-            label = stringResource(R.string.call_effects_quit),
-            caption = stringResource(R.string.call_effects_quit),
-            hint = stringResource(R.string.call_effects_quit_hint),
+            label = stringResource(R.string.call_effects_back),
+            hint = stringResource(R.string.call_effects_back_hint),
             diameter = SIDE_DIAMETER,
-            onClick = onQuit,
+            onClick = onBack,
         )
-        Spacer(Modifier.weight(1f))
         CallPillButton(
-            icon = MeeshyIcons.Tune,
+            icon = MeeshyIcons.SettingsFilled,
             kind = if (showsSettings) CallPillKind.Active else CallPillKind.Normal,
             label = stringResource(R.string.call_effects_settings),
             caption = stringResource(R.string.call_effects_settings),
             hint = stringResource(R.string.call_effects_settings_hint),
             toggleState = showsSettings,
             diameter = SIDE_DIAMETER,
-            onClick = {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onSettings()
-            },
+            onClick = onSettings,
         )
         CallPillButton(
-            icon = MeeshyIcons.Check,
+            icon = MeeshyIcons.Add,
             kind = CallPillKind.Normal,
-            label = stringResource(R.string.call_effects_validate),
-            caption = stringResource(R.string.call_effects_validate),
-            hint = stringResource(R.string.call_effects_validate_hint),
+            label = stringResource(R.string.call_effects_add_look),
+            hint = stringResource(R.string.call_effects_add_look_hint),
             diameter = SIDE_DIAMETER,
-            onClick = onValidate,
+            onClick = onAddLook,
         )
     }
 }
@@ -372,19 +506,34 @@ private fun faceGlyph(effect: CallFaceEffect): String = when (effect) {
     CallFaceEffect.Volcano -> "🌋"
 }
 
+/** Les noms des ambiances viennent du catalogue d'iOS (`video.filter.preset.*`), les mêmes qu'ailleurs dans l'appel. */
 private fun presetLabel(preset: VideoFilterPreset): Int = when (preset) {
-    VideoFilterPreset.Natural -> R.string.call_effects_preset_natural
-    VideoFilterPreset.Warm -> R.string.call_effects_preset_warm
-    VideoFilterPreset.Cool -> R.string.call_effects_preset_cool
-    VideoFilterPreset.Vivid -> R.string.call_effects_preset_vivid
-    VideoFilterPreset.Muted -> R.string.call_effects_preset_muted
+    VideoFilterPreset.Natural -> R.string.video_filter_preset_natural
+    VideoFilterPreset.Warm -> R.string.video_filter_preset_warm
+    VideoFilterPreset.Cool -> R.string.video_filter_preset_cool
+    VideoFilterPreset.Vivid -> R.string.video_filter_preset_vivid
+    VideoFilterPreset.Muted -> R.string.video_filter_preset_muted
+    VideoFilterPreset.Golden -> R.string.video_filter_preset_golden
+    VideoFilterPreset.Film -> R.string.video_filter_preset_film
+    VideoFilterPreset.SoftNight -> R.string.video_filter_preset_softNight
+    VideoFilterPreset.Bright -> R.string.video_filter_preset_bright
+    VideoFilterPreset.Velvet -> R.string.video_filter_preset_velvet
+    VideoFilterPreset.Sky -> R.string.video_filter_preset_sky
+    VideoFilterPreset.Monochrome -> R.string.video_filter_preset_monochrome
 }
 
-/** iOS `presetSymbol` (feuille, soleil, flocon, étincelles, nuage), rendu en glyphes. */
+/** iOS `presetSymbol` (feuille, horizon, pellicule, lune, soleil bas, étincelle, nuage-soleil, demi-disque), rendu en glyphes. */
 private fun presetGlyph(preset: VideoFilterPreset): String = when (preset) {
     VideoFilterPreset.Natural -> "🍃"
     VideoFilterPreset.Warm -> "☀️"
     VideoFilterPreset.Cool -> "❄️"
     VideoFilterPreset.Vivid -> "✨"
     VideoFilterPreset.Muted -> "☁️"
+    VideoFilterPreset.Golden -> "🌅"
+    VideoFilterPreset.Film -> "🎞️"
+    VideoFilterPreset.SoftNight -> "🌙"
+    VideoFilterPreset.Bright -> "🔅"
+    VideoFilterPreset.Velvet -> "✦"
+    VideoFilterPreset.Sky -> "⛅"
+    VideoFilterPreset.Monochrome -> "◐"
 }

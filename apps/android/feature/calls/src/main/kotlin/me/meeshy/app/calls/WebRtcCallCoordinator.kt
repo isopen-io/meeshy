@@ -73,7 +73,7 @@ class WebRtcCallCoordinator @Inject constructor(
     private val mesh = GroupCallMesh(
         factory = EngineGroupMeshPeerFactory(engine),
         names = names,
-        primaryAudioLevel = { engine.peerHandle?.inboundAudioLevel() },
+        primaryAudioLevel = { peerAudioLevel() },
         isPrimaryReconnecting = { iceMonitor.stalled },
         primaryVideoCeiling = { engine.setGroupVideoCeiling(it) },
         sender = { callId, to, from, signal ->
@@ -342,6 +342,9 @@ class WebRtcCallCoordinator @Inject constructor(
 
     /** Speaker/earpiece toggle — local audio routing only, never signalled to the peer. */
     fun setSpeakerEnabled(enabled: Boolean) = audio.setSpeaker(enabled)
+
+    /** Le niveau sonore reçu du pair de l'appel (0…1) : le maillage et l'avatar caméra coupée du duo le relèvent (G4.2). */
+    suspend fun peerAudioLevel(): Double? = engine.peerHandle?.inboundAudioLevel()
 
     /**
      * L'aperçu avant décroché devient audible (ou se tait) : la route s'ouvre sur le haut-parleur,

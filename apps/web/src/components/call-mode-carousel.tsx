@@ -32,6 +32,10 @@ import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
  * donc dans la FACE d'un élément (la zone d'accroche garde sa boîte), et le
  * nom sous la piste est une boîte fixe, contenue.
  *
+ * Une piste qui a quitté la page ne choisit rien : le démontage remet son
+ * `scrollLeft` à zéro et émet un dernier `scroll`, qui rendait « Naturel » sous
+ * l'Échap qui venait de rendre les effets d'avant.
+ *
  * Seul un défilement TENU choisit (#8969) : un doigt (jusqu'au `scrollend`),
  * une molette ou une touche. Le réaccrochage de Chromium quand la mise en
  * page change (chunk chargé, piste remplacée) ne choisit rien — l'élément
@@ -67,6 +71,11 @@ type CarouselProps = {
 };
 
 const ITEM = 64;
+
+/** La piste s'efface à ses deux bords (#17409) : la même largeur des deux côtés, rien à inverser en arabe. */
+const EDGE_FADE_PX = 34;
+// harmony-exempt: masque alpha du fondu de bord, seule l'opacité compte, aucune couleur n'est peinte
+const EDGE_FADE = `linear-gradient(90deg, transparent 0, #000 ${EDGE_FADE_PX}px, #000 calc(100% - ${EDGE_FADE_PX}px), transparent 100%)`;
 
 type Press = { readonly id: string; readonly x: number; readonly y: number; readonly timer: ReturnType<typeof setTimeout> };
 
@@ -139,6 +148,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
     };
     const settle = (): void => {
       clearTimeout(quiet);
+      if (!row.isConnected) return;
       const moved = travelled.current;
       const gripped = held();
       finger = false;
@@ -158,6 +168,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       } else center(announced.current, false);
     };
     const onScroll = (): void => {
+      if (!row.isConnected) return;
       travelled.current = true;
       if (settling.current === null && press.current !== null) {
         clearTimeout(press.current.timer);
@@ -171,7 +182,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       if (until > 0) until = performance.now() + GRIP_MS;
       cancelAnimationFrame(frame.current);
       frame.current = requestAnimationFrame(() => {
-        const nearest = centered();
+        const nearest = row.isConnected ? centered() : null;
         if (nearest === null || settling.current !== null || nearest === announced.current) return;
         announced.current = nearest;
         choose.current(nearest);
@@ -304,7 +315,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
         onKeyDown={onKeyDown}
         {...(onWheel === undefined ? {} : { onWheel })}
         className="flex w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto overscroll-x-none py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        style={{ paddingInline: `calc(50% - ${ITEM / 2}px)` }}
+        style={{ paddingInline: `calc(50% - ${ITEM / 2}px)`, maskImage: EDGE_FADE, WebkitMaskImage: EDGE_FADE }}
         data-call-row-scroll=""
       >
         {items.map((item, index) => {

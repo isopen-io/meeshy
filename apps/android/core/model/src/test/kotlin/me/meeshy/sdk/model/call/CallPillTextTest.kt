@@ -87,6 +87,19 @@ class CallPillTextTest {
     }
 
     @Test
+    fun `the captions are in the glass at rest and alone when the pill is stowed, never with the journal (G1_3, law 17)`() {
+        assertThat(CallPillText.Captions.showsCaptionsBand).isTrue()
+        assertThat(CallPillText.CaptionsAlone.showsCaptionsBand).isTrue()
+        assertThat(listOf(CallPillText.None, CallPillText.Journal).none { it.showsCaptionsBand }).isTrue()
+    }
+
+    @Test
+    fun `only the captions alone keep the glass on screen when the chrome is stowed, one glass that tightens`() {
+        assertThat(CallPillText.CaptionsAlone.staysWhenChromeStowed).isTrue()
+        assertThat(listOf(CallPillText.None, CallPillText.Captions, CallPillText.Journal).none { it.staysWhenChromeStowed }).isTrue()
+    }
+
+    @Test
     fun `a pill that carries text and the stowed glass share one cap, the resting pill keeps its own`() {
         assertThat(CallPillWidth.maxWidthDp(CallPillText.Captions)).isEqualTo(560f)
         assertThat(CallPillWidth.maxWidthDp(CallPillText.Journal)).isEqualTo(560f)

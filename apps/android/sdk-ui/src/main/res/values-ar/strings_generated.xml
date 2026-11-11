@@ -446,9 +446,16 @@
     <string name="retouch_family_effects">تأثيرات</string>
     <string name="retouch_family_filters">المرشّحات</string>
     <string name="retouch_family_frames">الإطارات</string>
+    <string name="retouch_filter_bright">ساطع</string>
     <string name="retouch_filter_cool">بارد</string>
+    <string name="retouch_filter_film">فيلم</string>
+    <string name="retouch_filter_golden">ذهبي</string>
+    <string name="retouch_filter_monochrome">أبيض وأسود</string>
     <string name="retouch_filter_muted">ناعم</string>
     <string name="retouch_filter_natural">طبيعي</string>
+    <string name="retouch_filter_sky">سماء</string>
+    <string name="retouch_filter_softNight">ليل هادئ</string>
+    <string name="retouch_filter_velvet">مخملي</string>
     <string name="retouch_filter_vivid">زاهٍ</string>
     <string name="retouch_filter_warm">دافئ</string>
     <string name="retouch_no_filter">بلا مرشّح</string>

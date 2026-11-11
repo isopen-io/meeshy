@@ -20,8 +20,25 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `the colours are the five looks in iOS order`() {
-        assertThat(CallEffectsModeRule.colors.map { it.id }).containsExactly("natural", "warm", "cool", "vivid", "muted").inOrder()
+    fun `the colours are the eight moods of iOS, in iOS order, the four older tints no longer offered`() {
+        assertThat(CallEffectsModeRule.colors.map { it.id })
+            .containsExactly("natural", "golden", "film", "softNight", "bright", "velvet", "sky", "monochrome").inOrder()
+    }
+
+    @Test
+    fun `an older tint stays readable and selectable by a call that carries it`() {
+        val warm = CallEffectsModeRule.applying(VideoFilterPreset.Warm, VideoFilterConfig())
+        assertThat(CallEffectsModeRule.colorSelection(warm)).isEqualTo(VideoFilterPreset.Warm)
+        assertThat(VideoFilterPreset.fromId("muted")).isEqualTo(VideoFilterPreset.Muted)
+    }
+
+    @Test
+    fun `every mood of the catalogue applies and is read back as itself`() {
+        CallEffectsModeRule.colors.forEach { mood ->
+            val applied = CallEffectsModeRule.applying(mood, VideoFilterConfig())
+            assertThat(CallEffectsModeRule.colorSelection(applied)).isEqualTo(mood)
+            assertThat(applied.isEnabled).isEqualTo(mood != VideoFilterPreset.Natural)
+        }
     }
 
     @Test
@@ -53,12 +70,29 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `quitting restores the image as it was, validating keeps the trial`() {
-        val original = VideoFilterConfig(backgroundBlurEnabled = true)
-        val tried = CallEffectsModeState.opening(original).selecting(VideoFilterPreset.Vivid).togglingBlur()
-        assertThat(tried.exiting(validated = false)).isEqualTo(original)
-        assertThat(tried.exiting(validated = true)).isEqualTo(tried.current)
+    fun `every try is kept as it is, nothing is restored on leaving (P8b, no Quit, no Validate)`() {
+        val tried = CallEffectsModeState.opening(VideoFilterConfig(backgroundBlurEnabled = true)).selecting(VideoFilterPreset.Vivid).togglingBlur()
         assertThat(tried.current.backgroundBlurEnabled).isFalse()
+        assertThat(tried.color).isEqualTo(VideoFilterPreset.Vivid)
+    }
+
+    @Test
+    fun `(+) opens the looks of the other kind to stack on the one in hand, and closes the settings`() {
+        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Face)).isEqualTo(CallEffectsCategory.Color)
+        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Color)).isEqualTo(CallEffectsCategory.Face)
+        val open = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Angel).togglingSettings()
+        val added = open.addingLook()
+        assertThat(added.showsSettings).isFalse()
+        assertThat(added.category).isEqualTo(CallEffectsCategory.Color)
+        assertThat(added.face).isEqualTo(CallFaceEffect.Angel)
+    }
+
+    @Test
+    fun `the settings panel rises from the bar in 200 ms and only fades, shorter, under Reduce Motion (P8b.6)`() {
+        assertThat(CallEffectsSettingsMotion.durationMillis(reduceMotion = false)).isEqualTo(200)
+        assertThat(CallEffectsSettingsMotion.riseDp(reduceMotion = false)).isEqualTo(20)
+        assertThat(CallEffectsSettingsMotion.durationMillis(reduceMotion = true)).isEqualTo(150)
+        assertThat(CallEffectsSettingsMotion.riseDp(reduceMotion = true)).isEqualTo(0)
     }
 
     @Test

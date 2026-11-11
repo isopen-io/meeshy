@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { HttpRequest } from '@/lib/api/http';
 
-import { decodeCallTranscript, loadCallTranscript, transcriptLines, transcriptNotes, type CallTranscript } from './call-transcript';
+import { decodeCallTranscript, loadCallTranscript, transcriptEntries, transcriptLines, transcriptNotes, type CallTranscript } from './call-transcript';
 
 /**
  * LA TRANSCRIPTION D'APRÈS L'APPEL (#8048, G6) — la forme servie par
@@ -35,10 +35,10 @@ const reader = { viewerId: 'u-me', languages: ['fr', 'en'] } as const;
 describe('la transcription d’après l’appel (#8048)', () => {
   test('les lignes suivent l’heure de capture, datées depuis le début de l’appel', () => {
     const transcript = decodeCallTranscript(wire) as CallTranscript;
-    expect(transcriptLines(transcript, reader).map((line) => [line.id, line.offsetSec])).toEqual([
-      ['t-1', 4],
-      ['t-2', 9],
-      ['t-3', 75],
+    expect(transcriptLines(transcript, reader).map((line) => [line.id, line.offsetMs])).toEqual([
+      ['t-1', 4_000],
+      ['t-2', 9_000],
+      ['t-3', 75_000],
     ]);
   });
 
@@ -57,9 +57,15 @@ describe('la transcription d’après l’appel (#8048)', () => {
 
   test('#16665 — les captures se rangent à leur heure dans l’appel ; une sorte inconnue s’ignore', () => {
     expect(transcriptNotes(decodeCallTranscript(wire) as CallTranscript)).toEqual([
-      { id: 'cap-1', kind: 'screenshot', userId: 'u-peer', name: 'Kwame', offsetSec: 10 },
-      { id: 'cap-2', kind: 'call-recording-stopped', userId: null, name: null, offsetSec: 80 },
+      { id: 'cap-1', kind: 'screenshot', userId: 'u-peer', name: 'Kwame', offsetMs: 10_000 },
+      { id: 'cap-2', kind: 'call-recording-stopped', userId: null, name: null, offsetMs: 80_000 },
     ]);
+  });
+
+  test('P6.13 — phrases et captures se rangent à la MILLISECONDE ; à heure égale, la phrase d’abord, comme le journal vivant', () => {
+    const transcript = decodeCallTranscript({ ...wire, segments: [{ id: 'a', speakerId: 'u-peer', text: 'A', language: 'en', capturedAtMs: Date.parse('2026-09-26T09:00:10.500Z') }, { id: 'b', speakerId: 'u-peer', text: 'B', language: 'en', capturedAtMs: Date.parse('2026-09-26T09:00:10.100Z') }], captures: [{ id: 'same', kind: 'screenshot', offsetMs: 10_500 }, { id: 'early', kind: 'screenshot', offsetMs: 10_900 }, { id: 'first', kind: 'screenshot', offsetMs: 10_050 }] }) as CallTranscript;
+    const entries = transcriptEntries(transcriptLines(transcript, reader), transcriptNotes(transcript));
+    expect(entries.map((entry) => (entry.type === 'line' ? entry.line.id : entry.note.id))).toEqual(['first', 'b', 'a', 'same', 'early']);
   });
 
   test('un corps illisible n’est pas une transcription', () => {

@@ -38,6 +38,13 @@ internal object ComposerRetouchCopy {
         VideoFilterPreset.Cool -> R.string.retouch_filter_cool
         VideoFilterPreset.Vivid -> R.string.retouch_filter_vivid
         VideoFilterPreset.Muted -> R.string.retouch_filter_muted
+        VideoFilterPreset.Golden -> R.string.retouch_filter_golden
+        VideoFilterPreset.Film -> R.string.retouch_filter_film
+        VideoFilterPreset.SoftNight -> R.string.retouch_filter_softNight
+        VideoFilterPreset.Bright -> R.string.retouch_filter_bright
+        VideoFilterPreset.Velvet -> R.string.retouch_filter_velvet
+        VideoFilterPreset.Sky -> R.string.retouch_filter_sky
+        VideoFilterPreset.Monochrome -> R.string.retouch_filter_monochrome
     }
 
     @StringRes

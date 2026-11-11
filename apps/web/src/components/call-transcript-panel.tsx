@@ -9,7 +9,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { formatCallClock } from '@/lib/calls/call-store';
-import { callTranscriptQueryKey, loadCallTranscript, transcriptLines, transcriptNotes, type TranscriptLine, type TranscriptNote } from '@/lib/calls/call-transcript';
+import { callTranscriptQueryKey, loadCallTranscript, transcriptEntries, transcriptLines, transcriptNotes, type TranscriptLine, type TranscriptNote } from '@/lib/calls/call-transcript';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { authorInkStyle } from '@/lib/view/author-ink';
@@ -88,10 +88,6 @@ type LinesProps = {
   readonly onToggleOriginal?: () => void;
 };
 
-type Entry = { readonly type: 'line'; readonly line: TranscriptLine } | { readonly type: 'note'; readonly note: TranscriptNote };
-
-const offsetOf = (entry: Entry): number => (entry.type === 'line' ? entry.line.offsetSec : entry.note.offsetSec);
-
 function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly language: InterfaceLanguage }) {
   return (
     <li data-call-transcript-note={note.kind}>
@@ -99,7 +95,7 @@ function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly 
         <span>
           <JournalNoteSentence note={note} language={language} ink={{ className: 'author-ink', style: authorInkStyle({ authorId: note.userId ?? '', name: note.name ?? '' }) }} />
         </span>
-        <span className="text-mini font-semibold tabular-nums">{formatCallClock(note.offsetSec)}</span>
+        <span className="text-mini font-semibold tabular-nums">{formatCallClock(note.offsetMs / 1000)}</span>
       </span>
     </li>
   );
@@ -107,7 +103,7 @@ function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly 
 
 export function CallTranscriptLines({ lines, notes = [], language, original, onToggleOriginal }: LinesProps) {
   const translatedSome = lines.some((line) => line.translated);
-  const entries: readonly Entry[] = [...notes.map((note): Entry => ({ type: 'note', note })), ...lines.map((line): Entry => ({ type: 'line', line }))].sort((left, right) => offsetOf(left) - offsetOf(right));
+  const entries = transcriptEntries(lines, notes);
   return (
     <section aria-label={translate(language, 'callTranscript.title')} className="flex w-full max-w-[560px] flex-col gap-2 rounded-card px-3 py-2 text-start" style={{ background: 'color-mix(in srgb, var(--color-ios-ink-2) 8%, transparent)' }} data-call-transcript="lines">
       <ol className="flex flex-col gap-2">
@@ -120,7 +116,7 @@ export function CallTranscriptLines({ lines, notes = [], language, original, onT
             <li key={line.id} data-call-transcript-line={line.mine ? 'mine' : 'peer'}>
               <span className="flex justify-between gap-3 text-mini font-semibold" style={muted}>
                 <span className="author-ink" style={ink}>{name}</span>
-                <span className="tabular-nums">{formatCallClock(line.offsetSec)}</span>
+                <span className="tabular-nums">{formatCallClock(line.offsetMs / 1000)}</span>
               </span>
               {!original && line.translated ? (
                 <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={line.language || undefined} data-call-transcript-text="translated">

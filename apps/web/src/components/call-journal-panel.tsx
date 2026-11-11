@@ -1,11 +1,13 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { memo, useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { CallJournalColumn, type JournalColumnGeometry } from '@/components/call-journal-column';
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { CallJournalViewSwitch, type JournalView } from '@/components/call-journal-view-switch';
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
+import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { captionLanguageLabel, captionText, type CallCaption } from '@/lib/calls/call-captions';
 import { journalEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
+import { journalClock } from '@/lib/calls/call-journal-clock';
 import { callJournalHeight } from '@/lib/calls/call-journal-height';
 import { translateCallControls as t } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -51,6 +53,8 @@ type JournalProps = {
   readonly captions: readonly CallCaption[];
   readonly notes: readonly CallJournalNote[];
   readonly colorOf: (who: Pick<CallCaption, 'speakerId' | 'speakerName'>) => string;
+  /** Le début de l'appel (`ActiveCall.connectedAt`) : chaque ligne se date DANS l'appel (`m:ss`), jamais à l'heure murale ; sans lui, aucune heure. */
+  readonly startedAt: number | null;
   /** Les sous-titres sont coupés : rien ne s'inscrit, et l'état vide propose de les activer. */
   readonly listening: boolean;
   readonly onListen: () => void;
@@ -60,44 +64,67 @@ type JournalProps = {
   readonly windowHeight?: number;
 };
 
-type Clock = Intl.DateTimeFormat;
+/** L'heure dans l'appel, au bout (à droite) de la ligne méta ; absente quand le début de l'appel est inconnu. */
+function CallClock({ at, startedAt }: { readonly at: number; readonly startedAt: number | null }) {
+  const label = journalClock(at, startedAt);
+  return label === null ? null : (
+    <time className="shrink-0 tabular-nums" dateTime={new Date(at).toISOString()} data-call-journal-clock="">
+      {label}
+    </time>
+  );
+}
 
-/* Une ligne qui arrive ne redessine que la sienne : chaque ligne se compare par ce qu'elle MONTRE (sa phrase, son nom, sa couleur, la vue, l'horloge mémoïsée). */
-const JournalNoteLine = memo(function JournalNoteLine({ note, language, clock, colorOf }: { readonly note: CallJournalNote; readonly language: InterfaceLanguage; readonly clock: Clock; readonly colorOf: JournalProps['colorOf'] }) {
+/* Une ligne qui arrive ne redessine que la sienne : chaque ligne se compare par ce qu'elle MONTRE (sa phrase, son nom, sa couleur, la vue, l'heure dans l'appel). */
+const JournalNoteLine = memo(function JournalNoteLine({ note, language, startedAt, colorOf }: { readonly note: CallJournalNote; readonly language: InterfaceLanguage; readonly startedAt: number | null; readonly colorOf: JournalProps['colorOf'] }) {
   return (
-    <li className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 48px' }} data-call-journal-note={note.kind}>
-      <time className="text-mini" style={{ color: INK_2 }} dateTime={new Date(note.at).toISOString()}>
-        {clock.format(note.at)}
-      </time>
+    <li className="flex items-baseline justify-between gap-3 text-mini" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }} data-call-journal-note={note.kind}>
       <span className="text-body" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-journal-note-text="">
         <JournalNoteSentence note={note} language={language} ink={{ style: { color: colorOf({ speakerId: note.userId ?? '', speakerName: note.name ?? '' }) } }} />
       </span>
+      <CallClock at={note.at} startedAt={startedAt} />
     </li>
   );
 });
 
-type CaptionLineProps = { readonly caption: CallCaption; readonly view: JournalView; readonly language: InterfaceLanguage; readonly clock: Clock; readonly speaker: string; readonly color: string };
+type CaptionLineProps = {
+  readonly caption: CallCaption;
+  readonly view: JournalView;
+  readonly language: InterfaceLanguage;
+  readonly startedAt: number | null;
+  readonly speaker: string;
+  readonly color: string;
+  readonly open: boolean;
+  readonly onToggle: (id: string) => void;
+};
 
-const JournalCaptionLine = memo(function JournalCaptionLine({ caption, view, language, clock, speaker, color }: CaptionLineProps) {
+const JournalCaptionLine = memo(function JournalCaptionLine({ caption, view, language, startedAt, speaker, color, open, onToggle }: CaptionLineProps) {
   const served = captionText(caption, view);
   const languages = captionLanguageLabel(caption, view);
-  return (
-    <li className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px', opacity: caption.isFinal ? 1 : 0.7 }} data-call-journal-entry={caption.mine ? 'mine' : 'peer'}>
-      <span className="text-mini" style={{ color: INK_2 }}>
-        <strong style={{ color }}>{speaker}</strong> · <time dateTime={new Date(caption.at).toISOString()}>{clock.format(caption.at)}</time>
-        {languages === null ? null : <span className="ms-1.5 text-check font-semibold tracking-wide">{languages}</span>}
+  const unfoldable = served !== caption.original;
+  const content = (
+    <>
+      <span className="flex items-baseline justify-between gap-3 text-mini" style={{ color: INK_2 }}>
+        <span data-call-journal-who="">
+          <strong style={{ color }}>{speaker}</strong>
+          {languages === null ? null : <span className="ms-1.5 text-check font-semibold tracking-wide">{languages}</span>}
+        </span>
+        <CallClock at={caption.at} startedAt={startedAt} />
       </span>
-      <span className="text-body" style={{ color: served === caption.original ? INK : color }} dir="auto" data-call-journal-text="">
+      <span className="text-body" style={{ color: unfoldable ? color : INK }} dir="auto" data-call-journal-text="">
         {served}
       </span>
-      {served === caption.original ? null : (
-        <span className="text-mini" style={{ color: INK_2 }} data-call-journal-original="">
-          <span className="font-semibold">{t(language, 'callControls.journal.original')} · </span>
-          <span dir="auto" lang={caption.pair?.from}>
-            {caption.original}
-          </span>
-        </span>
+    </>
+  );
+  return (
+    <li className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px', opacity: caption.isFinal ? 1 : 0.7 }} data-call-journal-entry={caption.mine ? 'mine' : 'peer'}>
+      {unfoldable ? (
+        <button type="button" aria-expanded={open} onClick={() => onToggle(caption.id)} className="flex min-h-11 w-full flex-col gap-0.5 text-start" data-call-journal-line={caption.id}>
+          {content}
+        </button>
+      ) : (
+        content
       )}
+      <UnfoldedOriginal open={unfoldable && open} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-journal-original" />
     </li>
   );
 });
@@ -107,12 +134,13 @@ const listSize = (windowHeight: number | undefined): CSSProperties => (windowHei
 
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
-export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, notes, colorOf, listening, onListen, fill = false, windowHeight }: JournalProps) {
+export function CallJournalPanel({ id, closeGlyph, language, onClose, back, captions, notes, colorOf, listening, onListen, startedAt, fill = false, windowHeight }: JournalProps) {
   const list = useRef<HTMLOListElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
   const [view, setView] = useState<JournalView>('translated');
-  const clock = useMemo(() => new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' }), [language]);
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = useCallback((id: string) => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id]))), []);
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
   const last = captions.at(-1);
   const entries = journalEntries(captions, notes);
@@ -120,7 +148,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
   useLayoutEffect(() => {
     const element = list.current;
     if (element !== null && stuck.current) element.scrollTop = element.scrollHeight;
-  }, [entries.length, last?.original, last?.translated]);
+  }, [entries.length, last?.original, last?.translated, unfolded]);
 
   const onScroll = (): void => {
     const element = list.current;
@@ -175,9 +203,9 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
           >
             {entries.map((entry) =>
               entry.type === 'note' ? (
-                <JournalNoteLine key={entry.note.id} note={entry.note} language={language} clock={clock} colorOf={colorOf} />
+                <JournalNoteLine key={entry.note.id} note={entry.note} language={language} startedAt={startedAt} colorOf={colorOf} />
               ) : (
-                <JournalCaptionLine key={entry.caption.id} caption={entry.caption} view={view} language={language} clock={clock} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} />
+                <JournalCaptionLine key={entry.caption.id} caption={entry.caption} view={view} language={language} startedAt={startedAt} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={unfolded.has(entry.caption.id)} onToggle={toggle} />
               ),
             )}
           </ol>

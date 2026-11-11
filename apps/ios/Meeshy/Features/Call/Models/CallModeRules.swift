@@ -142,8 +142,28 @@ enum CallEffectsModeRule {
         config.applyingPreset(preset == .natural ? nil : preset)
     }
 
-    static func exiting(validated: Bool, current: VideoFilterConfig, original: VideoFilterConfig) -> VideoFilterConfig {
-        validated ? current : original
+    /// P8b · loi 14 — « (+) Ajouter un autre look » : le look d'un AUTRE genre se pose par-dessus
+    /// celui qu'on a (Visage et Couleur se cumulent dans la même configuration).
+    static func addingLook(from category: CallEffectsCategory) -> CallEffectsCategory {
+        switch category {
+        case .face: return .color
+        case .color: return .face
+        }
+    }
+}
+
+/// P8b.6 — Réglages ouvert, la bande de looks et les puces partent en fondu pendant que le
+/// panneau monte depuis la barre resserrée, ≈ 200 ms ; il y redescend au retour.
+/// « Réduire les animations » garde un fondu court, sans montée : l'écran ne change jamais d'un coup.
+nonisolated enum CallEffectsSettingsMotion {
+    static let rise: CGFloat = 20
+
+    static func duration(reduceMotion: Bool) -> Double {
+        reduceMotion ? 0.15 : 0.2
+    }
+
+    static func panelRise(reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : rise
     }
 }
 

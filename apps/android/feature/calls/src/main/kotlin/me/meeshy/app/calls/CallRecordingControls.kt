@@ -2,6 +2,10 @@ package me.meeshy.app.calls
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,6 +18,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallRecordingKind
 import me.meeshy.sdk.model.call.CallRecordingNotice
 import me.meeshy.sdk.model.call.CallRecordingPhase
@@ -159,31 +166,54 @@ internal fun CallRecordingNoticePill(
     }
 }
 
-/** Les deux choix du panneau « Enregistrer » dans la pilule : Audio seulement, Audio et vidéo. */
+/**
+ * G3.2 — le panneau « Enregistrer » dans la pilule : la phrase d'accord, puis deux puces larges Audio | Vidéo qui
+ * LANCENT aussitôt la demande (pas de bouton de lancement). Le titre et les deux disques d'en-tête sont ceux de
+ * [CallPillPanel]. Miroir de iOS `CallRecordingPanel`.
+ */
 @Composable
 internal fun CallRecordingKindPanel(
     onPick: (CallRecordingKind) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.sm),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
-    ) {
-        listOf(
-            CallRecordingKind.AUDIO to MeeshyIcons.Waveform,
-            CallRecordingKind.VIDEO to MeeshyIcons.Video,
-        ).forEach { (kind, icon) ->
-            val label = stringResource(if (kind == CallRecordingKind.VIDEO) R.string.call_recording_kind_video else R.string.call_recording_kind_audio)
-            CallPillButton(
-                icon = icon,
-                kind = CallPillKind.Normal,
-                label = label,
-                caption = label,
-                hint = stringResource(R.string.call_recording_kind_hint),
-                diameter = CALL_ROW_GLYPH_DIAMETER,
-                onClick = { onPick(kind) },
-                modifier = Modifier.heightIn(min = PILL_TARGET),
-            )
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+        Text(
+            text = stringResource(R.string.call_recording_consent),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyMediaChromeColors.OnMediaSecondary,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg).padding(bottom = MeeshySpacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        ) {
+            listOf(CallRecordingKind.AUDIO, CallRecordingKind.VIDEO).forEach { kind ->
+                CallRecordingChoiceChip(
+                    label = stringResource(if (kind == CallRecordingKind.VIDEO) R.string.call_recording_kind_video else R.string.call_recording_kind_audio),
+                    hint = stringResource(R.string.call_recording_kind_hint),
+                    onClick = { onPick(kind) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
+    }
+}
+
+/** G3.2 — un choix de l'option : une puce large de verre (cible de 48 dp) qui lance aussitôt la demande. */
+@Composable
+private fun CallRecordingChoiceChip(label: String, hint: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    CallGlassButtonSurface(
+        role = CallButtonRole.Neutral,
+        shape = CircleShape,
+        isPressed = pressed,
+        modifier = modifier
+            .heightIn(min = PILL_TARGET)
+            .clip(CircleShape)
+            .clickable(interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = label },
+    ) {
+        Text(text = label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
     }
 }

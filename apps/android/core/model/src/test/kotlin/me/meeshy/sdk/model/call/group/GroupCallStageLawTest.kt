@@ -66,4 +66,12 @@ class GroupCallStageLawTest {
         assertThat(tiles.map { it.id to it.isSpeaking })
             .containsExactly(GroupCallStageLaw.LOCAL_TILE_ID to false, "alice" to false, "bob" to true).inOrder()
     }
+
+    @Test
+    fun `remote cameras on count the primary by its video and the members by their camera or their screen (G1_13)`() {
+        assertThat(GroupCallStageLaw.remoteCamerasOn(trio, isPrimaryVideoActive = false)).isEqualTo(1)
+        assertThat(GroupCallStageLaw.remoteCamerasOn(trio, isPrimaryVideoActive = true)).isEqualTo(2)
+        val audioOnly = primaryOnly.admitting(GroupCallArrival("bob", isVideoEnabled = false))
+        assertThat(GroupCallStageLaw.remoteCamerasOn(audioOnly, isPrimaryVideoActive = false)).isEqualTo(0)
+    }
 }

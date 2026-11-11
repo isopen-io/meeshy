@@ -2,7 +2,8 @@ import { lookFilter } from '@/lib/media/photo-develop';
 import type { LensStage } from '@/lib/meeshy-lens/lens-stage';
 
 import { faceGrade } from './face-effects';
-import { effectsFilter, type FrameSettings, type VideoEffects } from './video-effects';
+import type { FrameSettings, VideoEffects } from './video-effects';
+import { effectsFilter } from './video-effects-look';
 
 /**
  * **LE TRAITEMENT D'UNE IMAGE** (#8442, #8551, #9099, #8471, #8441) — le MÊME

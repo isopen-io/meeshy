@@ -28,13 +28,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallDuoStageLayout
+import me.meeshy.sdk.model.call.CallSelfTileCorner
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.ScreenShareCapturePolicy
 import me.meeshy.ui.theme.MeeshySpacing
@@ -71,6 +74,8 @@ internal fun CallDuoVideoStage(
     layout: CallDuoStageLayout,
     modifier: Modifier = Modifier,
     onSwap: () -> Unit = {},
+    /** Ma vignette touchée, contrôles rangés : ils reviennent d'abord (G1.9). */
+    onRevive: () -> Unit = {},
     selfTileMemory: CallSelfTileMemory = CallSelfTileMemories.shared,
     onSceneTap: (() -> Unit)? = null,
     selfCamera: CallSelfCameraActions? = null,
@@ -78,6 +83,7 @@ internal fun CallDuoVideoStage(
     framed: Boolean = false,
     selfUserId: String = "",
     peerUserId: String = "",
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     Box(modifier.fillMaxSize()) {
         if (!connected) {
@@ -102,6 +108,7 @@ internal fun CallDuoVideoStage(
                         avatarUrl = peerAvatarUrl,
                         modifier = Modifier.fillMaxSize(),
                         fit = fit,
+                        peerSpeech = peerSpeech,
                     )
                 }
             }
@@ -154,15 +161,18 @@ internal fun CallDuoVideoStage(
                     paused = state.isVideoAutoPaused && state.isCameraOn,
                     reduceMotion = reduceMotion,
                     onSwap = onSwap,
+                    onReveal = onRevive,
                     controlsVisible = controlsVisible,
                     rimHex = CallTileRim.duoSelfTile(selfUserId, peerUserId, showsPeer = featuresLocal),
                     modifier = Modifier.fillMaxSize(),
-                    overlay = {
+                    overlay = { stowFactor ->
                         if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)
                         if (state.isPeerMuted && featuresLocal) {
+                            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
                             CallPeerMutedBadge(
                                 compact = true,
-                                modifier = Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.xs),
+                                modifier = Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.xs)
+                                    .callKeepsSmallTileSize(stowFactor, CallSelfTileCorner.BottomStart, rtl),
                             )
                         }
                     },
@@ -182,6 +192,7 @@ internal fun CallDuoVideoStage(
                             modifier = Modifier.fillMaxSize(),
                             compact = true,
                             overlay = true,
+                            peerSpeech = peerSpeech,
                         )
                         localTrack != null -> VideoRenderer(
                             track = localTrack,
