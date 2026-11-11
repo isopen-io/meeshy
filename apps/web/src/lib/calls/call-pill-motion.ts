@@ -33,6 +33,16 @@ export function morphKeyframes(from: GlassSize, to: GlassSize, reducedMotion: bo
   return [{ transform: `scale(${from.width / to.width}, ${from.height / to.height})` }];
 }
 
+/**
+ * Ce qui est POSÉ sur un verre qui se déforme depuis son bord du bas (le panneau et la bande de
+ * looks au-dessus de la barre d'un mode) suit son bord du haut : la mise en page l'a déjà posé à
+ * sa place finale, il en repart de l'écart de hauteur (FLIP) et la rejoint avec le verre.
+ */
+export function followKeyframes(from: GlassSize, to: GlassSize, reducedMotion: boolean): readonly Keyframe[] | null {
+  if (reducedMotion || from.height <= 0 || to.height <= 0 || Math.abs(from.height - to.height) < EPSILON_PX) return null;
+  return [{ transform: `translateY(${to.height - from.height}px)` }];
+}
+
 type StowInput = {
   /** La hauteur du verre, déployé. */
   readonly height: number;
@@ -57,3 +67,22 @@ export const stowFadeKeyframes = (stowing: boolean): readonly Keyframe[] =>
         { opacity: 0, visibility: 'hidden' },
       ]
     : [{ opacity: 0 }, { opacity: 1 }];
+
+/**
+ * RÉGLAGES DU MODE EFFETS (P8b.6, `CallEffectsSettingsMotion` d'iOS) — le panneau Luminosité ·
+ * Flou du fond remplace la bande de looks : elle et ses puces repartent en fondu pendant que le
+ * panneau monte depuis la barre, ≈ 200 ms, et il y redescend au retour. Sous « Réduire les
+ * animations », un fondu court sans montée : l'écran ne change jamais d'un coup.
+ */
+export const SWAP_MS = 200;
+
+/** De combien le panneau monte depuis la barre. */
+const SWAP_RISE_PX = 20;
+
+export const swapMs = (reducedMotion: boolean): number => (reducedMotion ? STOW_REDUCED_MS : SWAP_MS);
+
+export function swapKeyframes(entering: boolean, reducedMotion: boolean): readonly Keyframe[] {
+  const shown: Keyframe = reducedMotion ? { opacity: 1 } : { opacity: 1, transform: 'translateY(0)' };
+  const hidden: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: `translateY(${SWAP_RISE_PX}px)` };
+  return entering ? [hidden, shown] : [shown, hidden];
+}

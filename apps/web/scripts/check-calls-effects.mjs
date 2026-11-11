@@ -383,13 +383,28 @@ try {
       check(toggles.filter((t) => t.event === 'call:toggle-audio').at(-1)?.enabled === false, `${label} : le pair sait le micro coupé`);
       await page.click('[data-call-effects-settings-toggle]');
       check(await appears(page, '[data-call-effects-settings] input[type="range"]'), `${label} : « Réglages » ouvre la luminosité`);
-      check((await page.$('[data-call-mode="effects"] [data-carousel-item]')) === null, `${label} : à la place du carrousel`);
+      await until(page, () => document.querySelector('[data-call-effects-categories]') === null);
+      const settingsLayout = await page.evaluate(() => {
+        const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect() ?? null;
+        const panel = rect('[data-call-effects-settings]');
+        const bar = rect('[data-call-mode-bar]');
+        const titles = [...document.querySelectorAll('[data-call-effects-settings] label span, [data-call-effects-blur] > span:first-child')].map((node) => node.textContent);
+        const titleAbove = (rect('[data-call-effects-settings] label span')?.bottom ?? 1e9) <= (rect('[data-call-effects-settings] input[type="range"]')?.top ?? 0) + 1;
+        return { panel, bar, titles, titleAbove, glass: document.querySelector('[data-call-effects-settings]')?.className.includes('glass-call') === true, white: document.querySelector('[data-call-effects-settings-toggle] > span')?.className.includes('bg-on-media') === true };
+      });
+      check(settingsLayout.panel !== null && settingsLayout.bar !== null && settingsLayout.panel.bottom <= settingsLayout.bar.top + 1, `${label} : le panneau est un verre SÉPARÉ, posé au-dessus de la barre (P8b.2)`);
+      check(settingsLayout.glass && settingsLayout.white, `${label} : le panneau est de verre, et Réglages passe en disque blanc (P8b.4)`);
+      check((await page.$('[data-call-mode-bar] [data-call-effects-categories]')) === null, `${label} : la barre a perdu ses puces et se resserre sur ‹ · Réglages · (+)`);
+      check(settingsLayout.titles[0] === 'Luminosité' && settingsLayout.titleAbove, `${label} : « Luminosité » au-dessus de son curseur (P8b.3)`);
+      await capture(page, `effets-reglages-${slug}`);
+      check(await vanishes(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : à la place du carrousel, qui repart en fondu`);
       await page.click('[data-call-effects-settings-toggle]');
       check(await appears(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : un second appui rend le carrousel`);
 
-      // ------------------------------------------------ 6. valider, puis quitter sans garder
-      await page.click('[data-call-effects-validate]');
-      check(await vanishes(page, '[data-call-mode]'), `${label} : Valider quitte le mode`);
+      // ------------------------------------------------ 6. ‹ garde le look et rend l'appel ; Échap aussi
+      check((await page.$('[data-call-effects-validate]')) === null, `${label} : ni Valider ni ✕ (P8b.5)`);
+      await page.click('[data-call-mode-quit]');
+      check(await vanishes(page, '[data-call-mode]'), `${label} : ‹ quitte le mode`);
       check(await appears(page, '[data-call-control-pill]'), `${label} : la pilule revient`);
       check(await until(page, () => document.activeElement?.hasAttribute('data-call-more') === true), `${label} : le focus revient au (…)`);
       await openActions(page);
@@ -406,7 +421,7 @@ try {
       await appears(page, '[data-call-mode="effects"]');
       await page.click('[data-call-effects-category="color"]');
       const restored = await page.getAttribute('[data-call-mode="effects"] [data-carousel-item][aria-checked="true"]', 'data-carousel-item');
-      check(restored === 'golden', `${label} : quitter rend les effets d'avant (« Doré », pas « Ciel » : ${restored})`);
+      check(restored === 'sky', `${label} : Échap garde le look posé (« Ciel » : ${restored}), rien n'est restauré (P8b.5)`);
       await page.click('[data-call-mode-quit]');
       await vanishes(page, '[data-call-mode]');
 
