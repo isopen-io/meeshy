@@ -28,7 +28,8 @@
  *     le canal de données `transcription` (`transcript-entry`) ;
  *  4. « Journal » (#8579), dans la rangée « L'appel » (44 × 44), ouvre À LA
  *     PLACE des rangées tout ce qui a été dit, dans l'ordre : la phrase
- *     servie et son original dessous ; le bandeau se retire le temps de le
+ *     servie, son original SEULEMENT sous la phrase touchée (#17340) et l'heure
+ *     dans l'appel à droite de sa ligne (#17517) ; le bandeau se retire le temps de le
  *     lire. Le journal SURVIT aux sous-titres coupés et à l'appel réduit ;
  *  5. au raccroché, `bye` part sur le canal et `call:analytics` dit
  *     `transcriptionUsed: true` ;
@@ -298,11 +299,20 @@ try {
       check(await page.waitForFunction(() => document.querySelector('[data-call-row], [data-call-rail]') === null, undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : le journal REMPLACE les rails`);
       check((await page.$('[data-call-captions-panel]')) === null, `${label} : le bandeau des sous-titres se retire le temps de lire le journal`);
       check(JSON.stringify(await journalEntries()) === JSON.stringify(expected), `${label} : le journal porte les voix dans l'ordre (${JSON.stringify(await journalEntries())})`);
-      const peerLine = await page.$eval('[data-call-journal-entry="peer"]', (entry) => ({
-        text: entry.querySelector('[data-call-journal-text]')?.textContent ?? '',
-        original: entry.querySelector('[data-call-journal-original]')?.textContent ?? '',
-      }));
-      check(peerLine.text === PEER_TRANSLATED && peerLine.original === `Original · ${PEER_SAID}`, `${label} : la phrase servie, et son original dessous (${JSON.stringify(peerLine)})`);
+      const peerOf = () =>
+        page.$eval('[data-call-journal-entry="peer"]', (entry) => ({
+          text: entry.querySelector('[data-call-journal-text]')?.textContent ?? '',
+          original: entry.querySelector('[data-call-journal-original]')?.textContent ?? '',
+          clock: entry.querySelector('time')?.textContent ?? '',
+          clockAfterWho: entry.querySelector('[data-call-journal-who]')?.nextElementSibling === entry.querySelector('time'),
+        }));
+      const folded = await peerOf();
+      check(folded.text === PEER_TRANSLATED && folded.original === '', `${label} : la phrase servie seule, l'original replié (${JSON.stringify(folded)})`);
+      check(/^\d+:\d{2}$/.test(folded.clock) && folded.clockAfterWho, `${label} : l'heure dans l'appel, à droite de la ligne méta (${JSON.stringify(folded)})`);
+      await page.click('[data-call-journal-entry="peer"] [data-call-journal-line]');
+      await page.waitForSelector('[data-call-journal-original]', { timeout: 3000 });
+      const peerLine = await peerOf();
+      check(peerLine.original === `Original · ${PEER_SAID}`, `${label} : toucher la phrase déplie son original dessous (${JSON.stringify(peerLine)})`);
       check((await page.$eval('[data-call-journal]', (list) => getComputedStyle(list).overflowY)) === 'auto', `${label} : le journal défile librement`);
       await capture(page, `journal-${width}x${height}`);
       await page.click('[data-panel-back]');
