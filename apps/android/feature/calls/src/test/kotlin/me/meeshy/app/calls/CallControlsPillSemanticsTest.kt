@@ -255,7 +255,7 @@ class CallControlsPillSemanticsTest {
     }
 
     @Test
-    fun `a stowed pill keeps ONE glass: the captions stay and the base row folds out (G1_3)`() {
+    fun `a stowed pill keeps ONE glass, the captions stay and the base row folds out (G1_3)`() {
         var text by mutableStateOf(CallPillText.Captions)
         val state = ui()
         rule.setContent {
