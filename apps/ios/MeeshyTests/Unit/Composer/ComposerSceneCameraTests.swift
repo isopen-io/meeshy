@@ -327,6 +327,31 @@ final class ComposerViewfinderColumnTests: XCTestCase {
         XCTAssertTrue(ComposerViewfinderColumn.yieldsToScene(toolPresentsSheet: false))
     }
 
+    /// Recette iPhone du 2026-11-11 : Fond, avec un média de fond, déplie la bande du CADRE ;
+    /// le viseur lui cédait la scène, mais la bande ne comptait pas comme outil ouvert, donc
+    /// sa fermeture ne rendait jamais le viseur — caméra armée derrière une scène figée.
+    func test_entryToolIsOpen_frameBandCountsAsAnOpenTool() {
+        XCTAssertTrue(ComposerViewfinderColumn.entryToolIsOpen(
+            yieldsToScene: true, sceneToolOwnsScreen: false, sheetIsPresented: false, bandIsOpen: true))
+        XCTAssertFalse(ComposerViewfinderColumn.entryToolIsOpen(
+            yieldsToScene: true, sceneToolOwnsScreen: false, sheetIsPresented: false, bandIsOpen: false),
+                       "plus rien d'ouvert : le viseur revient")
+        XCTAssertFalse(ComposerViewfinderColumn.entryToolIsOpen(
+            yieldsToScene: false, sceneToolOwnsScreen: true, sheetIsPresented: true, bandIsOpen: true),
+                       "un viseur qui n'a rien cédé n'attend le retour d'aucun outil")
+        XCTAssertTrue(ComposerViewfinderColumn.entryToolIsOpen(
+            yieldsToScene: true, sceneToolOwnsScreen: true, sheetIsPresented: false, bandIsOpen: false))
+    }
+
+    func test_armSceneCamera_takesTheSceneBackFromAnyTool() throws {
+        let code = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift")
+        let debut = try XCTUnwrap(code.range(of: "func armSceneCamera()"))
+        let fin = try XCTUnwrap(code.range(of: "sceneCapture.arm(mode: mode)", range: debut.upperBound..<code.endIndex))
+        XCTAssertTrue(code[debut.upperBound..<fin.lowerBound].contains("viewfinderYieldsToScene = false"),
+                      "armer la caméra la remontre, même si un outil l'avait cédée")
+        XCTAssertTrue(code.contains("ComposerViewfinderColumn.entryToolIsOpen("), "l'hôte lit la loi")
+    }
+
     func test_handleViewfinderEntry_neverDisarmsAtOpening() throws {
         let code = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift")
         let debut = try XCTUnwrap(code.range(of: "func handleViewfinderEntry("))
