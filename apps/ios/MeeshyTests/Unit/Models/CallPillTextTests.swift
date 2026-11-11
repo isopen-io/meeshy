@@ -129,25 +129,49 @@ final class CallPillTextTests: XCTestCase {
 @MainActor
 final class CallCaptionsFooterTests: XCTestCase {
 
-    private func line(tag: String? = nil, isEvent: Bool = false) -> CallCaptionLine {
-        CallCaptionLine(
+    private func line(
+        origin: String? = nil,
+        served: String? = nil,
+        awaiting: Bool = false,
+        isEvent: Bool = false
+    ) -> CallCaptionLine {
+        var sut = CallCaptionLine(
             id: UUID(), speakerId: "u", speakerName: "Awa", text: "Salut",
-            languageTag: tag, isFinal: true, capturedAt: Date(timeIntervalSince1970: 0),
-            isShowingOriginal: tag == nil, canRevealOriginal: tag != nil, isEvent: isEvent
+            languageTag: origin.map { o in served.map { "\(o) → \($0)" } ?? o },
+            isFinal: true, capturedAt: Date(timeIntervalSince1970: 0),
+            isShowingOriginal: served == nil, canRevealOriginal: served != nil, isEvent: isEvent
         )
+        sut.originLanguage = origin
+        sut.servedLanguage = served
+        sut.awaitingUntil = awaiting ? Date(timeIntervalSince1970: 8) : nil
+        return sut
     }
 
     func test_aTranslatedLine_tellsHowToSeeTheOriginal() {
-        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(tag: "EN → FR")]), .touchForOriginal(pair: "EN → FR"))
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", served: "FR")]), .touchForOriginal(pair: "EN → FR"))
     }
 
-    func test_theNewestTranslatedLine_decidesThePair() {
-        let lines = [line(tag: "ES → FR"), line(tag: "EN → FR"), line()]
+    func test_aLineAwaitingItsTranslation_saysSo() {
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", awaiting: true)]), .translating(language: "EN"))
+    }
+
+    func test_waitingComesBeforeThePair_theNewestWaitingLineNamesItsLanguage() {
+        let lines = [line(origin: "ES", served: "FR"), line(origin: "EN", awaiting: true), line(origin: "EN")]
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: lines), .translating(language: "EN"))
+    }
+
+    func test_severalPairs_sayHowManyLanguagesAreTranslated() {
+        let lines = [line(origin: "EN", served: "FR"), line(origin: "ES", served: "FR"), line()]
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: lines), .translatedLanguages(count: 3))
+    }
+
+    func test_theSamePairTwice_isStillOnePair() {
+        let lines = [line(origin: "EN", served: "FR"), line(origin: "EN", served: "FR")]
         XCTAssertEqual(CallCaptionsFooter.resolve(lines: lines), .touchForOriginal(pair: "EN → FR"))
     }
 
     func test_originalsOnly_sayNothing() {
-        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(), line()]), .none)
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(), line(origin: "EN")]), .none)
     }
 
     func test_noLine_saysNothing() {
@@ -155,6 +179,6 @@ final class CallCaptionsFooterTests: XCTestCase {
     }
 
     func test_aCaptureEvent_isNotASpeech_itNeverSpeaksForTheFooter() {
-        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(tag: "EN → FR", isEvent: true)]), .none)
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", served: "FR", isEvent: true)]), .none)
     }
 }

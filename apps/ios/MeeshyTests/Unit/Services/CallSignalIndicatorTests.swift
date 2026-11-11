@@ -375,22 +375,95 @@ final class CallHangupFastPathTests: XCTestCase {
             row.contains("private var speakerColor: Color { Color(hex: line.speakerColorHex) }"),
             "La couleur de la ligne est celle de son AUTEUR, dérivée de son identifiant (#16614)."
         )
-        XCTAssertEqual(
-            row.components(separatedBy: ".foregroundStyle(speakerColor)").count - 1, 1,
-            "Le NOM porte toujours la couleur de son auteur (#16662)."
+        XCTAssertTrue(
+            row.contains("nameColor: speakerColor") && row.contains(".foregroundStyle(speakerColor)"),
+            "Le NOM porte toujours la couleur de son auteur, dans la phrase comme dans le journal (#16662)."
         )
         XCTAssertTrue(
-            row.contains(".foregroundColor(line.textColorHex.map { Color(hex: $0) } ?? .white)"),
+            row.contains("private var ink: Color { line.textColorHex.map { Color(hex: $0) } ?? .white }") && row.contains("textColor: ink"),
             "La phrase ne prend la couleur que traduite ; l'original reste à l'encre de l'appel (#16662)."
         )
         XCTAssertTrue(
-            row.contains("Text(line.speakerName)"),
-            "Le nom du locuteur est du texte VISIBLE, pas seulement une pastille."
+            row.contains("CallCaptionSentence.text("),
+            "Le nom du locuteur est du texte VISIBLE, en tête de la phrase : « Moi · texte » (loi 4)."
         )
         XCTAssertTrue(
-            row.contains(".accessibilityLabel(\"\\(line.speakerName) : \\(line.text)\")"),
+            row.contains(".accessibilityLabel(spokenLabel)") && row.contains("\\(line.speakerName) : \\(line.text)"),
             "…et VoiceOver l'annonce aussi : deux exigences distinctes."
         )
+    }
+
+    /// Loi 4 — l'original déplié sous la phrase traduite est en encre secondaire, jamais
+    /// à la couleur de l'auteur ni en blanc plein ; et ma ligne est signée « Moi ».
+    func test_captionRow_unfoldsTheOriginalBelow_inSecondaryInk() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "struct CallCaptionRow: View {"),
+              let end = view.range(of: "struct CallCaptionsBand: View {", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionRow must exist")
+            return
+        }
+        let row = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(row.contains("if let original = line.originalBelow"))
+        XCTAssertTrue(
+            row.contains("\\(CallCaptionsCopy.original) · \\(original)") && row.contains(".foregroundStyle(MeeshyColors.mediaChromeSecondary)"),
+            "« Original · … » en encre secondaire, sous la traduction (#17340)."
+        )
+    }
+
+    func test_localSpeaker_isSignedMoi_notWithTheNameNorVous() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "func speakerName(for segment"),
+              let end = view.range(of: "if isGroupStage,", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("speakerName(for:localUserId:) must exist")
+            return
+        }
+        let local = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(local.contains("\"common.me\""), "Ma ligne est signée « Moi » (loi 4).")
+        XCTAssertFalse(local.contains("call.transcript.you") || local.contains("displayName"), "Ni « Vous », ni mon pseudo.")
+    }
+
+    func test_captionsBand_isALabelledLiveRegion_andAnnouncesInQueue() throws {
+        let view = try AppSourceGuard.callViewSource()
+        XCTAssertTrue(view.contains("String(localized: \"call.captions.region\""), "La zone s'appelle « Sous-titres de l'appel ».")
+        XCTAssertTrue(view.contains(".accessibilityAddTraits(.updatesFrequently)"), "La zone est une région vive.")
+        XCTAssertTrue(view.contains("queuedAnnouncement"), "Une phrase annoncée attend la fin de la précédente.")
+        XCTAssertFalse(view.contains("UIAccessibility.post(notification: .announcement, argument: announcement)"))
+    }
+
+    /// L'arrivée de la traduction ne change pas l'IDENTITÉ de la phrase : un seul
+    /// `TimelineView`, en pause hors attente, jamais deux branches qui se relaient
+    /// (elles occuperaient la place ensemble le temps du fondu, et la bande sauterait).
+    func test_captionRow_keepsOneIdentity_whenTheTranslationReplacesTheWait() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "struct CallCaptionRow: View {"),
+              let end = view.range(of: "struct CallCaptionsBand: View {", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionRow must exist")
+            return
+        }
+        let row = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(row.contains("TimelineView(.animation(minimumInterval:"), "Les trois points se mettent en pause, ils ne changent pas de vue.")
+        XCTAssertFalse(row.contains("TimelineView(.periodic"))
+        XCTAssertFalse(row.contains("if isWaiting && !reduceMotion"))
+    }
+
+    /// Le pied change d'état (attente, paire, N langues) en fondu, jamais d'un coup.
+    func test_captionsFooter_changesInAFade() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "private var footer: some View {"),
+              let end = view.range(of: "private func journalButton(", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionsBand.footer must exist")
+            return
+        }
+        let footer = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(footer.contains(".contentTransition(.opacity)") && footer.contains(".transition(.opacity)"))
+        XCTAssertTrue(footer.contains(".animation(fade, value: note)"))
+    }
+
+    /// L'écran verrouillé étiquette la langue comme l'écran d'appel : par le Prisme du
+    /// lecteur, sans quoi une phrase déjà dans ma langue y porterait « FR ».
+    func test_liveActivityCaption_descendsTheReaderPrism() throws {
+        let coordinator = try AppSourceGuard.unit("Meeshy/Features/LiveActivity/CallLiveActivityCoordinator.swift")
+        XCTAssertTrue(coordinator.contains("readerPrism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)"))
     }
 
     func test_advanceCaptionsMode_off_startsTranscriptionAndLandsOnTranslated() throws {

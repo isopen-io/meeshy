@@ -334,10 +334,9 @@ extension CallView {
             // (cycle de vie dans TransientCallSignalGlyph).
             CallDurationClock {
                 HStack(spacing: MeeshySpacing.xsPlus) {
-                    TransientCallSignalGlyph(strength: signalStrength)
                     Text(callManager.formattedDuration)
                         .font(.body.weight(.medium).monospacedDigit())
-                        .foregroundColor(durationColor)
+                        .foregroundColor(MeeshyColors.indigo400)
                         // Without an explicit label the combined capsule announces a
                         // context-free "1:23" (the signal glyph is invisible on a
                         // healthy link) — VoiceOver users can't tell it is the call
@@ -351,7 +350,7 @@ extension CallView {
                 .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
                     Capsule()
-                        .fill(durationColor.opacity(MeeshyOpacity.light))
+                        .fill(MeeshyColors.indigo400.opacity(MeeshyOpacity.light))
                 )
                 // Naked-readout fix (doctrine 206i/210i/211i): the combined element
                 // previously announced a bare "0:34" with no context. Signal state is
@@ -380,15 +379,6 @@ extension CallView {
                 }
                 if callManager.isSpeaker {
                     statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
-                }
-                if isConnectionDegraded {
-                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.unstable", defaultValue: "Connexion instable", bundle: .main), color: MeeshyColors.warning)
-                }
-                // État persistant des alertes ponctuelles : tant que le lien du
-                // contact / le signaling restent dégradés, une status pill
-                // discrète le rappelle (la bannière, elle, s'est retirée).
-                if callManager.isRemoteQualityDegraded {
-                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main), color: MeeshyColors.warning)
                 }
                 if callManager.isSignalingDegraded {
                     statusPill(icon: "antenna.radiowaves.left.and.right.slash", text: String(localized: "call.status.signaling", defaultValue: "Serveur déconnecté", bundle: .main), color: MeeshyColors.warning)
@@ -421,15 +411,19 @@ extension CallView {
     var videoDurationBadgeAccessibilityLabel: String {
         let reconnecting: Bool
         if case .reconnecting = callManager.callState { reconnecting = true } else { reconnecting = false }
+        let capsule = headerCapsule
         return CallVideoBadgeAccessibility.label(
+            title: capsule?.title,
+            participants: capsule?.participantCount,
+            includesDuration: capsule?.showsDuration ?? true,
             signalDegraded: signalStrength.isDegraded ? signalStrength.accessibilityLabel : nil,
-            peerMuted: !callManager.isRemoteAudioEnabled,
+            peerMuted: capsule?.showsDuration != false && !callManager.isRemoteAudioEnabled,
             peerNetworkWeak: callManager.isRemoteQualityDegraded,
             reconnecting: reconnecting
         )
     }
 
-    private var isConnectionDegraded: Bool {
+    var isConnectionDegraded: Bool {
         // Sustained flag only (2 consecutive degraded stats ticks) — a single
         // 5 s sample must never flash the "Connexion instable" pill.
         if callManager.liveVideoQualityLevel != nil {
@@ -439,10 +433,6 @@ extension CallView {
         case .disconnected, .failed: return true
         default: return false
         }
-    }
-
-    private var durationColor: Color {
-        isConnectionDegraded ? MeeshyColors.warning : MeeshyColors.indigo400
     }
 
     var videoCallLayout: some View {

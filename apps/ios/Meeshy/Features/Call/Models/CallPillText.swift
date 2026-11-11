@@ -62,14 +62,28 @@ enum CallJournalSizing {
     }
 }
 
-/// #17343 — le pied des sous-titres : ce que la ligne dit de sa traduction, à côté du
-/// bouton Journal (« EN → FR · toucher = original »).
+/// #17343 — le pied des sous-titres : ce que les lignes disent de leur traduction, à
+/// côté du bouton Journal. Un seul composant pour le duo et le groupe : une paire de
+/// langues dit « EN → FR · toucher = original », plusieurs paires « Traduit · N langues »,
+/// et une traduction attendue « EN · traduction en cours » (planche, vues P3 et P13).
 enum CallCaptionsFooter: Equatable, Sendable {
     case none
+    case translating(language: String)
     case touchForOriginal(pair: String)
+    case translatedLanguages(count: Int)
 
+    /// `lines` : les lignes déjà `settled(at:)`, pour qu'une attente échue ne parle plus.
     static func resolve(lines: [CallCaptionLine]) -> CallCaptionsFooter {
-        guard let pair = lines.last(where: { !$0.isEvent && $0.languageTag != nil })?.languageTag else { return .none }
-        return .touchForOriginal(pair: pair)
+        let speech = lines.filter { !$0.isEvent }
+        if let waiting = speech.last(where: \.isAwaitingTranslation)?.originLanguage {
+            return .translating(language: waiting)
+        }
+        let pairs = speech.compactMap { line in
+            line.originLanguage.flatMap { origin in line.servedLanguage.map { (origin, $0) } }
+        }
+        guard let newest = pairs.last else { return .none }
+        let distinct = Set(pairs.map { "\($0.0)>\($0.1)" })
+        guard distinct.count > 1 else { return .touchForOriginal(pair: "\(newest.0) → \(newest.1)") }
+        return .translatedLanguages(count: Set(pairs.flatMap { [$0.0, $0.1] }).count)
     }
 }

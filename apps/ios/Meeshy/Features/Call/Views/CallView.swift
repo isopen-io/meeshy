@@ -82,6 +82,7 @@ struct CallView: View {
     // l'avatar des cercles d'appel et le fond pleine page.
     @State var remoteProfile: MeeshyUser?
     @State var showQualityDetail = false
+    @State var headerNames = CallHeaderNames(givenName: nil, groupName: nil)
     /// #8276 — le maillage d'un appel de groupe, injecté comme `callManager`
     /// (jamais un `= .shared` par défaut, même hazard P1-16) : sa grille vit
     /// DANS l'écran d'appel, entre l'en-tête et la pilule.

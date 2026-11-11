@@ -68,26 +68,22 @@ final class CallQualityIndicatorsUITests: XCTestCase {
 
     // MARK: - Persistent, discreet state indicators
 
-    func test_persistentDegradedState_isCarriedByStatusPills() throws {
+    /// #17341 — le réseau dégradé d'un appel AUDIO n'est plus sous l'avatar : il vit
+    /// dans la capsule de droite de l'en-tête. Seul le serveur de signalisation garde
+    /// sa status pill.
+    func test_persistentDegradedState_audioNetworkLivesInTheHeaderCapsule() throws {
         let view = try callViewSource()
-        XCTAssertTrue(
-            view.contains("call.status.peer.network"),
-            "While the peer's network stays degraded (after the transient banner left), " +
-            "a discreet status pill must carry the state in the audio layout."
-        )
-        XCTAssertTrue(
-            view.contains("call.status.signaling"),
-            "Same for the signaling-degraded state."
-        )
+        XCTAssertFalse(view.contains("call.status.peer.network\", defaultValue"), "plus de pastille « Réseau faible (contact) » sous l'avatar")
+        XCTAssertFalse(view.contains("call.status.unstable"), "plus de pastille « Connexion instable » sous l'avatar")
+        XCTAssertTrue(view.contains("call.status.signaling"), "Le serveur déconnecté garde sa status pill.")
     }
 
-    func test_signalGlyph_isMountedInDurationBadges() throws {
+    func test_signalGlyph_isMountedInTheHeaderCapsuleOnly() throws {
         let view = try callViewSource()
         let glyphCount = view.components(separatedBy: "TransientCallSignalGlyph(strength: signalStrength)").count - 1
-        XCTAssertGreaterThanOrEqual(
-            glyphCount, 2,
-            "The color-coded signal glyph must live in BOTH duration badges " +
-            "(audio capsule + video overlay badge)."
+        XCTAssertEqual(
+            glyphCount, 1,
+            "Le glyphe de signal vit dans la capsule de l'en-tête (#17341) : plus sous l'avatar."
         )
     }
 }
