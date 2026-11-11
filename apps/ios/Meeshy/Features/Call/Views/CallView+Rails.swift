@@ -13,7 +13,7 @@ import MeeshyUI
 
 extension CallView {
     /// Les participants de l'appel, moi compris : deux hors grille, sinon moi et le maillage.
-    private var callParticipantCount: Int {
+    var callParticipantCount: Int {
         isGroupStage ? mesh.roster.members.count + 1 : 2
     }
 

@@ -119,8 +119,8 @@ extension CallView {
                     // aucun panneau ne remplace l'avatar ; le journal le resserre.
                     VStack(spacing: MeeshySpacing.md) {
                         if pillText.compactsAudioLayout {
-                            CallCompactAudioHeader(avatar: callAvatarPair(size: 56), name: peerDisplayName, signalStrength: signalStrength,
-                                                   durationColor: durationColor, duration: { callManager.formattedDuration },
+                            CallCompactAudioHeader(avatar: callAvatarPair(size: 56), name: peerDisplayName,
+                                                   duration: { callManager.formattedDuration },
                                                    spokenDuration: { callManager.spokenDuration }, showsQualityDetail: $showQualityDetail)
                                 .padding(.top, CallTopBannerStack.topInset(chromeTopInset: Self.chromeTopInset))
                             Spacer()
@@ -328,16 +328,12 @@ extension CallView {
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundStyle(Color.white)
 
-            // Duration + glyphe signal code couleur :
-            // invisible sur lien sain, apparaît à la dégradation, persiste en
-            // vert `recoveryLingerSeconds` après récupération puis se retire
-            // (cycle de vie dans TransientCallSignalGlyph).
+            // La durée, sous le nom ; le réseau dégradé vit dans la capsule de l'en-tête (#17341).
             CallDurationClock {
                 HStack(spacing: MeeshySpacing.xsPlus) {
-                    TransientCallSignalGlyph(strength: signalStrength)
                     Text(callManager.formattedDuration)
                         .font(.body.weight(.medium).monospacedDigit())
-                        .foregroundColor(durationColor)
+                        .foregroundColor(MeeshyColors.indigo400)
                         // Without an explicit label the combined capsule announces a
                         // context-free "1:23" (the signal glyph is invisible on a
                         // healthy link) — VoiceOver users can't tell it is the call
@@ -351,7 +347,7 @@ extension CallView {
                 .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
                     Capsule()
-                        .fill(durationColor.opacity(MeeshyOpacity.light))
+                        .fill(MeeshyColors.indigo400.opacity(MeeshyOpacity.light))
                 )
                 // Naked-readout fix (doctrine 206i/210i/211i): the combined element
                 // previously announced a bare "0:34" with no context. Signal state is
@@ -380,15 +376,6 @@ extension CallView {
                 }
                 if callManager.isSpeaker {
                     statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
-                }
-                if isConnectionDegraded {
-                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.unstable", defaultValue: "Connexion instable", bundle: .main), color: MeeshyColors.warning)
-                }
-                // État persistant des alertes ponctuelles : tant que le lien du
-                // contact / le signaling restent dégradés, une status pill
-                // discrète le rappelle (la bannière, elle, s'est retirée).
-                if callManager.isRemoteQualityDegraded {
-                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main), color: MeeshyColors.warning)
                 }
                 if callManager.isSignalingDegraded {
                     statusPill(icon: "antenna.radiowaves.left.and.right.slash", text: String(localized: "call.status.signaling", defaultValue: "Serveur déconnecté", bundle: .main), color: MeeshyColors.warning)
@@ -421,15 +408,19 @@ extension CallView {
     var videoDurationBadgeAccessibilityLabel: String {
         let reconnecting: Bool
         if case .reconnecting = callManager.callState { reconnecting = true } else { reconnecting = false }
+        let capsule = headerCapsule
         return CallVideoBadgeAccessibility.label(
+            title: capsule?.title,
+            participants: capsule?.participantCount,
+            includesDuration: capsule?.showsDuration ?? true,
             signalDegraded: signalStrength.isDegraded ? signalStrength.accessibilityLabel : nil,
-            peerMuted: !callManager.isRemoteAudioEnabled,
+            peerMuted: !callManager.isRemoteAudioEnabled && capsule?.showsDuration != false,
             peerNetworkWeak: callManager.isRemoteQualityDegraded,
-            reconnecting: reconnecting
+            reconnecting: reconnecting && capsule?.showsDuration != false
         )
     }
 
-    private var isConnectionDegraded: Bool {
+    var isConnectionDegraded: Bool {
         // Sustained flag only (2 consecutive degraded stats ticks) — a single
         // 5 s sample must never flash the "Connexion instable" pill.
         if callManager.liveVideoQualityLevel != nil {
@@ -439,10 +430,6 @@ extension CallView {
         case .disconnected, .failed: return true
         default: return false
         }
-    }
-
-    private var durationColor: Color {
-        isConnectionDegraded ? MeeshyColors.warning : MeeshyColors.indigo400
     }
 
     var videoCallLayout: some View {
@@ -604,8 +591,6 @@ private nonisolated struct CallGroupStageHeightKey: PreferenceKey {
 struct CallCompactAudioHeader<Avatar: View>: View {
     let avatar: Avatar
     let name: String
-    let signalStrength: CallSignalStrength
-    let durationColor: Color
     let duration: () -> String
     let spokenDuration: () -> String
     @Binding var showsQualityDetail: Bool
@@ -622,18 +607,15 @@ struct CallCompactAudioHeader<Avatar: View>: View {
                     .lineLimit(1)
 
                 CallDurationClock {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        TransientCallSignalGlyph(strength: signalStrength)
-                        Text(duration())
-                            .font(.caption.weight(.medium).monospacedDigit())
-                            .foregroundStyle(durationColor)
-                    }
-                    // Aucune rangée d'états ici : la durée s'annonce nommée,
-                    // « Durée de l'appel, 0:34 », jamais un « 0:34 » nu.
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                    .accessibilityValue(spokenDuration())
-                    .accessibilityAddTraits(.updatesFrequently)
+                    Text(duration())
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundStyle(MeeshyColors.indigo400)
+                        // Aucune rangée d'états ici : la durée s'annonce nommée,
+                        // « Durée de l'appel, 0:34 », jamais un « 0:34 » nu.
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(spokenDuration())
+                        .accessibilityAddTraits(.updatesFrequently)
                 }
                 .callQualityDetailTrigger(isPresented: $showsQualityDetail)
             }

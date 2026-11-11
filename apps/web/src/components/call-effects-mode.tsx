@@ -6,7 +6,7 @@ import type { CallCaption } from '@/lib/calls/call-captions';
 import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
-import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
+import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESET_CATALOG, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
 import { loadCallStudioCatalog, translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -176,6 +176,20 @@ const SWATCH: Readonly<Record<VideoPreset, string>> = {
   vivid: 'linear-gradient(135deg, #ff5fa2, #ffd23f 55%, #36d1a6)',
   // harmony-exempt: pastille de preset video, teintes propres a chaque preset
   muted: 'linear-gradient(135deg, #d7d2cc, #8a8580)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  golden: 'linear-gradient(135deg, #ffe0a3, #e8962e)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  film: 'linear-gradient(135deg, #cdb79a, #4f6f7a)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  softNight: 'linear-gradient(135deg, #9fb0d8, #2b3a67)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  bright: 'linear-gradient(135deg, #ffffff, #cfe4ee)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  velvet: 'linear-gradient(135deg, #c98aa6, #5a2a4a)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  sky: 'linear-gradient(135deg, #bfe3ff, #4a90d9)',
+  // harmony-exempt: pastille de preset video, teintes propres a chaque preset
+  monochrome: 'linear-gradient(135deg, #f2f2f2, #1a1a1a)',
 };
 
 const faceVisual = (effect: FaceEffect): ReactNode => (
@@ -245,12 +259,12 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const items: readonly CarouselItem[] =
     category === 'face'
       ? FACE_EFFECTS.map((effect) => ({ id: effect, label: t(`callStudio.face.${effect}`), visual: faceVisual(effect) }))
-      : VIDEO_PRESETS.map((preset) => ({ id: preset, label: translate(language, `call.effects.preset.${preset}`), visual: swatch(preset) }));
+      : VIDEO_PRESET_CATALOG.map((preset) => ({ id: preset, label: t(`callStudio.preset.${preset}`), visual: swatch(preset) }));
   const selected = category === 'face' ? effects.faceEffect : effects.preset;
   style.current = selected;
   const select = (id: string): void => {
     const face = FACE_EFFECTS.find((effect) => effect === id);
-    const preset = VIDEO_PRESETS.find((entry) => entry === id);
+    const preset = VIDEO_PRESET_CATALOG.find((entry) => entry === id);
     if (category === 'face' && face !== undefined && face !== effects.faceEffect) apply({ faceEffect: face });
     if (category === 'color' && preset !== undefined && preset !== effects.preset) apply({ preset });
   };
