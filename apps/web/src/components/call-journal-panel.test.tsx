@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
@@ -139,6 +141,26 @@ describe('CallJournalPanel', () => {
     act(() => taps[1]?.click());
     expect((view.all('[data-call-journal-entry] button')[1] as HTMLElement).getAttribute('aria-expanded')).toBe('false');
     view.done();
+  });
+
+  test('#17406 — l’original du journal DESCEND de sa phrase et y REMONTE en fondu, comme dans la bande : même repère, même feuille', () => {
+    const view = mount([caption({ id: 'a' })]);
+    act(() => (view.find('[data-call-journal-line]') as HTMLElement).click());
+    const open = view.find('[data-call-journal-original]') as HTMLElement;
+    expect(open.hasAttribute('data-call-unfolded-original')).toBe(true);
+    act(() => (view.find('[data-call-journal-line]') as HTMLElement).click());
+    const leaving = view.find('[data-call-journal-original]') as HTMLElement;
+    expect(leaving.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving.getAttribute('aria-hidden')).toBe('true');
+    view.done();
+
+    const css = readFileSync(new URL('../styles/call-unfolded-original.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\[data-call-unfolded-original\]\s*\{\s*animation:\s*call-unfold-in\s/);
+    expect(css).toMatch(/\[data-call-unfolded-original\]\[data-leaving\]\s*\{\s*animation:\s*call-unfold-out\s/);
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*)\}\s*$/.exec(css)?.[1] ?? '';
+    expect(reduced).toMatch(/@keyframes call-unfold-in\s*\{\s*from\s*\{\s*opacity:\s*0;\s*\}/);
+    expect(reduced).not.toContain('transform');
+    expect(readFileSync(new URL('./call-unfolded-original.tsx', import.meta.url), 'utf8')).toContain("import '@/styles/call-unfolded-original.css';");
   });
 
   test('#17340 — une phrase sans traduction (la mienne comprise) n’a rien à déplier : pas de bouton', () => {

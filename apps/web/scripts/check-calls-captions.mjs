@@ -313,8 +313,14 @@ try {
       await page.waitForSelector('[data-call-journal-original]', { timeout: 3000 });
       const peerLine = await peerOf();
       check(peerLine.original === `Original · ${PEER_SAID}`, `${label} : toucher la phrase déplie son original dessous (${JSON.stringify(peerLine)})`);
+      const unfoldIn = await page.$eval('[data-call-journal-original]', (element) => getComputedStyle(element).animationName);
+      check(unfoldIn === 'call-unfold-in', `${label} : l'original du journal DESCEND de sa phrase, il n'apparaît pas d'un coup (${unfoldIn})`);
       check((await page.$eval('[data-call-journal]', (list) => getComputedStyle(list).overflowY)) === 'auto', `${label} : le journal défile librement`);
       await capture(page, `journal-${width}x${height}`);
+      await page.click('[data-call-journal-entry="peer"] [data-call-journal-line]');
+      const unfoldOut = await page.$eval('[data-call-journal-original]', (element) => getComputedStyle(element).animationName).catch(() => 'parti sans fondu');
+      check(unfoldOut === 'call-unfold-out', `${label} : le second toucher le fait REMONTER en fondu (${unfoldOut})`);
+      check(await page.waitForFunction(() => document.querySelector('[data-call-journal-original]') === null, undefined, { timeout: 3000 }).then(() => true, () => false), `${label} : replié, l'original ne laisse rien`);
       await page.click('[data-panel-back]');
       check(await appears(page, '[data-call-rails="shown"] [data-call-rail="call"]'), `${label} : ‹ revient aux rails`);
       check(await page.evaluate(() => document.activeElement?.getAttribute('data-call-control') === 'journal'), `${label} : le focus revient à « Journal »`);
