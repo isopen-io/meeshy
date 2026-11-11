@@ -268,6 +268,20 @@ describe('le formulaire « Modifier le lien »', () => {
     expect(text.join(' | ')).not.toContain('Limiter les utilisations');
   });
 
+  test('les deux « Maximum » se distinguent à l’oreille : chacun dit la rangée qu’il borne', async () => {
+    const host = await mountForm();
+    for (const rule of ['limitUses', 'limitConcurrent']) {
+      const toggle = host.querySelector(`[data-link-rule="${rule}"]`);
+      if (toggle?.getAttribute('aria-checked') === 'false') await click(toggle);
+    }
+    const nameOf = (input: Element): string =>
+      (input.getAttribute('aria-labelledby') ?? '')
+        .split(' ')
+        .map((id) => host.querySelector(`[id="${id}"]`)?.textContent?.trim() ?? '?')
+        .join(' ');
+    expect([...host.querySelectorAll('input[type="number"]')].map(nameOf)).toEqual(['Utilisations Maximum', 'En même temps Maximum']);
+  });
+
   test('« Autoriser » garde, derrière un (i), qu’il ne gouverne que les invités sans compte', async () => {
     const host = await mountForm();
     expect(controlledBy(infoButton(host, 'À qui s’appliquent ces autorisations ?'))?.textContent).toBe('Aux invités qui rejoignent sans compte Meeshy.');

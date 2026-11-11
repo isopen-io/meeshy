@@ -127,6 +127,9 @@ export function FormSection({
   );
 }
 
+/** L'identifiant du NOM d'une bascule — un champ qui la précise s'en sert pour se nommer par elle. */
+export const ruleLabelId = (id: string): string => `link-rule-${id}-label`;
+
 export function RuleToggle({
   id,
   label,
@@ -156,7 +159,7 @@ export function RuleToggle({
     <div data-link-rule-row={id} className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: caption || note !== undefined ? 60 : 52, opacity: disabled ? 0.45 : 1 }}>
       <RowIcon tint={tint}>{icon}</RowIcon>
       <span className="grid min-w-0 flex-1 gap-0.5">
-        <span className="text-body font-medium" style={{ color: INK }}>
+        <span id={ruleLabelId(id)} className="text-body font-medium" style={{ color: INK }}>
           {label}
         </span>
         {caption ? (

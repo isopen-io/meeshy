@@ -13,7 +13,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { editDraftOf, validateEditDraft, type EditDraftField, type ShareLinkEditDraft, type ShareLinkExpirationChoice } from '@/lib/links/edit-draft';
 import { canReactivate } from '@/lib/links/view';
 import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT, linksHint } from '@/routes/links-parts';
-import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, permissionsScopeHint, type RuleKey } from '@/routes/share-link-form';
+import { ACCESS_RULES, FormSection, PERMISSION_RULES, RuleToggle, RulesSection, permissionsScopeHint, ruleLabelId, type RuleKey } from '@/routes/share-link-form';
 
 /**
  * **L'ÉDITION D'UN LIEN D'INVITATION** (#7797) — la colonne de droite de la
@@ -57,6 +57,7 @@ const TEXT_INPUT_STYLE = {
 function NumberRow({
   id,
   label,
+  scopeId,
   value,
   invalid,
   errorText,
@@ -64,6 +65,8 @@ function NumberRow({
 }: {
   readonly id: string;
   readonly label: string;
+  /** « Maximum » se lit DEUX fois dans « Limiter » : le nom lu porte d'abord la rangée qu'il borne (`RuleToggle` de cet id). */
+  readonly scopeId: string;
   readonly value: number;
   readonly invalid: boolean;
   readonly errorText: string;
@@ -72,7 +75,7 @@ function NumberRow({
   return (
     <div className="grid">
       <label htmlFor={id} className="flex items-center gap-3 px-3.5 py-1.5 focus-within:outline-2 focus-within:-outline-offset-2" style={{ outlineColor: BRAND }}>
-        <span className="min-w-0 flex-1 text-body" style={{ color: INK }}>
+        <span id={`${id}-label`} className="min-w-0 flex-1 text-body" style={{ color: INK }}>
           {label}
         </span>
         <input
@@ -83,6 +86,7 @@ function NumberRow({
           max={MAX_USES_CEILING}
           step={1}
           value={Number.isFinite(value) ? String(value) : ''}
+          aria-labelledby={`${ruleLabelId(scopeId)} ${id}-label`}
           aria-invalid={invalid}
           {...(invalid ? { 'aria-describedby': `${id}-error` } : {})}
           onInput={(event) => onChange(event.currentTarget.valueAsNumber)}
@@ -322,6 +326,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             <NumberRow
               id="link-edit-max-uses"
               label={translateInvite(language, 'linkDetail.edit.maxUses.count')}
+              scopeId="limitUses"
               value={draft.maxUses}
               invalid={invalid === 'maxUses'}
               errorText={numberError}
@@ -346,6 +351,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             <NumberRow
               id="link-edit-max-concurrent"
               label={translateInvite(language, 'linkDetail.edit.maxConcurrent.count')}
+              scopeId="limitConcurrent"
               value={draft.maxConcurrent}
               invalid={invalid === 'maxConcurrent'}
               errorText={numberError}
