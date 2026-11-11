@@ -67,7 +67,7 @@ extension GameText {
         String(localized: "game2.league.pseudonym.current", defaultValue: "Tu joues sous le nom \(name).", bundle: .main)
     }
 
-    static var leaguePseudonymInvalid: String { String(localized: "game2.league.pseudonym.invalid", defaultValue: "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas.", bundle: .main) }
+    static var leaguePseudonymInvalid: String { String(localized: "game2.league.pseudonym.invalid", defaultValue: "Nom non valable : lettres, chiffres, point, tiret, tiret bas.", bundle: .main) }
 
     static var leagueWaiting: String { String(localized: "game2.league.waiting", defaultValue: "C’est noté. Un groupe t’est attribué au début de la semaine prochaine.", bundle: .main) }
 
@@ -103,7 +103,7 @@ extension GameText {
 
     static var leagueFriendsTitle: String { String(localized: "game2.league.friends.title", defaultValue: "Joute des amis", bundle: .main) }
 
-    static var leagueFriendsBody: String { String(localized: "game2.league.friends.body", defaultValue: "Les étincelles de la semaine, entre amis acceptés. Toujours ouverte, sans consentement à donner.", bundle: .main) }
+    static var leagueFriendsBody: String { String(localized: "game2.league.friends.body", defaultValue: "Étincelles de la semaine entre amis acceptés. Ouverte à tous, sans consentement.", bundle: .main) }
 
     static var leagueFriendsEmpty: String { String(localized: "game2.league.friends.empty", defaultValue: "Ajoute des amis pour te comparer à eux chaque semaine.", bundle: .main) }
 
@@ -173,6 +173,6 @@ extension GameText {
 
     static var leaguePseudonymNew: String { String(localized: "game2.league.pseudonym.new", defaultValue: "Nouveau nom de joute", bundle: .main) }
 
-    static var leaguePseudonymHintChange: String { String(localized: "game2.league.pseudonym.hint_change", defaultValue: "3 à 20 caractères. Ni ton nom, ni ton identifiant.", bundle: .main) }
+    static var leaguePseudonymHintChange: String { String(localized: "game2.league.pseudonym.hint_change", defaultValue: "3 à 20 caractères.", bundle: .main) }
 
 }

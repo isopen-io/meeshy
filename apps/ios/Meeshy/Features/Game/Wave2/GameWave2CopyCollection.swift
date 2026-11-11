@@ -22,7 +22,7 @@ extension GameText {
     }
 
     static func seasonHow(per: String) -> String {
-        String(localized: "game2.season.how", defaultValue: "Chaque acte réalisé et chaque alliance te font avancer de quelques pas : \(per) pas mènent à la halte suivante. Tout le voyage est gratuit.", bundle: .main)
+        String(localized: "game2.season.how", defaultValue: "Actes et alliance font avancer le voyage : \(per) pas par halte. Tout est gratuit.", bundle: .main)
     }
 
     static func seasonToNext(stars: String) -> String {
@@ -71,7 +71,7 @@ extension GameText {
     static var seasonSealTitle: String { String(localized: "game2.season.seal.title", defaultValue: "Le Sceau du voyage", bundle: .main) }
 
     static func seasonSealBody(every: String) -> String {
-        String(localized: "game2.season.seal.body", defaultValue: "Le Sceau est purement décoratif : un objet à collectionner toutes les \(every) haltes, qui ne change rien au jeu.", bundle: .main)
+        String(localized: "game2.season.seal.body", defaultValue: "Objet décoratif, une fois toutes les \(every) haltes. Sans effet sur le jeu.", bundle: .main)
     }
 
     static func seasonSealBuy(price: String) -> String {
@@ -124,7 +124,7 @@ extension GameText {
 
     static var showcaseTitle: String { String(localized: "game2.showcase.title", defaultValue: "Tes trophées", bundle: .main) }
 
-    static var showcaseEmpty: String { String(localized: "game2.showcase.empty", defaultValue: "Tes trophées t’attendent. Les coupes de joute et de voyage, les trophées de Renaissance et de Flamme s’y rangent à mesure que tu les gagnes.", bundle: .main) }
+    static var showcaseEmpty: String { String(localized: "game2.showcase.empty", defaultValue: "Tes trophées t’attendent : coupes de joute et de voyage, Renaissance, Flamme.", bundle: .main) }
 
     static var showcaseOrderHint: String { String(localized: "game2.showcase.order_hint", defaultValue: "Range tes trophées : monte ou descends chacun d’un cran.", bundle: .main) }
 
@@ -142,11 +142,11 @@ extension GameText {
 
     static var showcaseVisibility: String { String(localized: "game2.showcase.visibility", defaultValue: "Qui voit tes trophées", bundle: .main) }
 
-    static var showcaseVisibilityHint: String { String(localized: "game2.showcase.visibility_hint", defaultValue: "Un visiteur ne voit que le mois d’obtention, jamais la date exacte. « Moi seul » cache tes trophées à tous les autres.", bundle: .main) }
+    static var showcaseVisibilityHint: String { String(localized: "game2.showcase.visibility_hint", defaultValue: "Un visiteur ne voit que le mois d’obtention, jamais la date exacte.", bundle: .main) }
 
     static var atlasTitle: String { String(localized: "game2.atlas.title", defaultValue: "Atlas des langues", bundle: .main) }
 
-    static var atlasIntro: String { String(localized: "game2.atlas.intro", defaultValue: "Chaque langue avec laquelle tu as vraiment échangé — un message envoyé et un reçu avec quelqu’un qui l’écrit — pose un tampon dans ton passeport.", bundle: .main) }
+    static var atlasIntro: String { String(localized: "game2.atlas.intro", defaultValue: "Un tampon par langue vraiment échangée : un message envoyé, un reçu.", bundle: .main) }
 
     static func atlasCount(stamped: String, total: String) -> String {
         String(localized: "game2.atlas.count", defaultValue: "\(stamped) langues sur \(total)", bundle: .main)
@@ -168,9 +168,9 @@ extension GameText {
 
     static var atlasPendingReceived: String { String(localized: "game2.atlas.pending.received", defaultValue: "reçu — il manque un message envoyé", bundle: .main) }
 
-    static var atlasEmpty: String { String(localized: "game2.atlas.empty", defaultValue: "Pas encore de tampon. Écris dans une autre langue : dès qu’on te répond, le premier arrive.", bundle: .main) }
+    static var atlasEmpty: String { String(localized: "game2.atlas.empty", defaultValue: "Pas encore de tampon : écris dans une autre langue.", bundle: .main) }
 
-    static var atlasPrivacy: String { String(localized: "game2.atlas.privacy", defaultValue: "Ton Atlas est privé par défaut : une langue peut en dire long sur toi. Tu choisis qui le voit. Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation.", bundle: .main) }
+    static var atlasPrivacy: String { String(localized: "game2.atlas.privacy", defaultValue: "Ton Atlas est privé par défaut : une langue peut en dire long sur toi. Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation.", bundle: .main) }
 
     static var atlasVisibility: String { String(localized: "game2.atlas.visibility", defaultValue: "Qui voit ton Atlas", bundle: .main) }
 

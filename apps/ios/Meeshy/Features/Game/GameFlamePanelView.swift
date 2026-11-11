@@ -67,7 +67,7 @@ struct GameFlamePanelView: View {
         if flame.freezes >= flame.maxFreezes {
             GameNote(text: String(
                 localized: "game.flame_panel.freeze_full",
-                defaultValue: "Tes Veilleuses sont au complet : une Veilleuse garde ta Flamme allumée un jour d’absence, tu n’en as pas besoin d’une de plus.",
+                defaultValue: "Tes Veilleuses sont au complet.",
                 bundle: .main
             ))
         } else {

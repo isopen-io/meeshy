@@ -263496,43 +263496,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "قناديلك مكتملة: القنديل يُبقي لهبك مشتعلًا يوم غيابك، ولا تحتاج إلى قنديل آخر."
+            "value": "قناديلك مكتملة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Hüterinnen sind vollzählig: Eine Hüterin hält deine Flamme einen Tag deiner Abwesenheit am Brennen, eine weitere brauchst du nicht."
+            "value": "Deine Hüterinnen sind vollzählig."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your Vigils are all here: a Vigil keeps your Flame lit for one day away, and you don’t need another."
+            "value": "Your Vigils are all here."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus Velas están completas: una Vela mantiene tu Llama encendida un día de ausencia, no necesitas otra."
+            "value": "Tus Velas están completas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes Veilleuses sont au complet : une Veilleuse garde ta Flamme allumée un jour d’absence, tu n’en as pas besoin d’une de plus."
+            "value": "Tes Veilleuses sont au complet."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le tue Lucerne sono al completo: una Lucerna tiene accesa la tua Fiamma per un giorno di assenza, non te ne serve un’altra."
+            "value": "Le tue Lucerne sono al completo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suas Lamparinas estão completas: uma Lamparina mantém sua Chama acesa num dia de ausência, você não precisa de mais uma."
+            "value": "Suas Lamparinas estão completas."
           }
         }
       }
@@ -271674,43 +271674,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سيرتك تنتظر صفحتها الأولى. مع كل علامة من أجدادك (رتبة، أو أول Meesh، أو لهب لسبعة أيام)، يدعوك مي وميو إلى تخليد اللحظة، وتبقى الصورة على جهازك."
+            "value": "سيرتك تنتظر صفحتها الأولى. مع كل علامة من أجدادك، صورة مع مي وميو، تبقى على جهازك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Chronik wartet auf ihre erste Seite. Bei jedem Zeichen deiner Ahnen (ein Rang, eine erste Meesh, eine Flamme von 7 Tagen) laden dich Mee und Meo ein, den Moment zu verewigen, und das Foto bleibt auf deinem Gerät."
+            "value": "Deine Chronik wartet auf ihre erste Seite. Bei jedem Zeichen deiner Ahnen ein Foto mit Mee und Meo, gespeichert auf diesem Gerät."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your Chronicle is waiting for its first page. At each sign from your ancestors (a rank, a first Meesh, a 7-day Flame), Mee and Meo invite you to immortalize the moment, and the photo stays on your device."
+            "value": "Your Chronicle is waiting for its first page. At each sign from your ancestors, a photo with Mee and Meo, kept on this device."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu Crónica espera su primera página. Con cada señal de tus ancestros (un rango, una primera Meesh, una Llama de 7 días), Mee y Meo te invitan a inmortalizar el momento, y la foto se queda en tu dispositivo."
+            "value": "Tu Crónica espera su primera página. En cada señal de tus ancestros, una foto con Mee y Meo, guardada en este dispositivo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta Chronique attend sa première page. À chaque signe de tes aïeux (un rang, une première Meesh, une Flamme de 7 jours), Mee et Meo t’invitent à immortaliser le moment, et la photo reste sur ton appareil."
+            "value": "Ta Chronique attend sa première page. À chaque signe de tes aïeux, une photo avec Mee et Meo, gardée sur cet appareil."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua Cronaca aspetta la sua prima pagina. A ogni segno dei tuoi antenati (un rango, una prima Meesh, una Fiamma di 7 giorni), Mee e Meo ti invitano a immortalare il momento, e la foto resta sul tuo dispositivo."
+            "value": "La tua Cronaca aspetta la sua prima pagina. A ogni segno dei tuoi antenati, una foto con Mee e Meo, conservata su questo dispositivo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua Crônica espera a primeira página. A cada sinal dos seus ancestrais (um título, uma primeira Meesh, uma Chama de 7 dias), Mee e Meo convidam você a eternizar o momento, e a foto fica no seu aparelho."
+            "value": "Sua Crônica espera a primeira página. A cada sinal dos seus ancestrais, uma foto com Mee e Meo, guardada neste aparelho."
+          }
+        }
+      }
+    },
+    "game.notebook.when": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متى تُقترح صورة؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wann wird ein Foto vorgeschlagen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When is a photo offered?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuándo se propone una foto?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand une photo est-elle proposée ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando viene proposta una foto?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando uma foto é sugerida?"
+          }
+        }
+      }
+    },
+    "game.notebook.when.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مع كل علامة من أجدادك: رتبة، أو أول Meesh، أو لهب لسبعة أيام."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bei jedem Zeichen deiner Ahnen: ein Rang, eine erste Meesh, eine Flamme von 7 Tagen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At each sign from your ancestors: a rank, a first Meesh, a 7-day Flame."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En cada señal de tus ancestros: un rango, una primera Meesh, una Llama de 7 días."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À chaque signe de tes aïeux : un rang, une première Meesh, une Flamme de 7 jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A ogni segno dei tuoi antenati: un rango, una prima Meesh, una Fiamma di 7 giorni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A cada sinal dos seus ancestrais: um título, uma primeira Meesh, uma Chama de 7 dias."
           }
         }
       }
@@ -272514,6 +272608,53 @@
         }
       }
     },
+    "game.door.notebook.line": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صورك مع مي وميو"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Fotos mit Mee und Meo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your photos with Mee and Meo"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus fotos con Mee y Meo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes photos avec Mee et Meo"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le tue foto con Mee e Meo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suas fotos com Mee e Meo"
+          }
+        }
+      }
+    },
     "game.photo.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -272990,43 +273131,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الكاميرا غير متاحة (هل يستخدمها تطبيق آخر؟). اختر صورة من المعرض، أو احتفظ بالبطاقة فقط."
+            "value": "الكاميرا غير متاحة. اختر صورة من المعرض، أو احتفظ بالبطاقة فقط."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Kamera ist nicht verfügbar (nutzt sie eine andere App?). Wähle ein Foto aus deiner Galerie oder behalte nur die Karte."
+            "value": "Kamera nicht verfügbar. Wähle ein Foto aus deiner Galerie oder behalte nur die Karte."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The camera is not available (is another app using it?). Pick a photo from your gallery, or keep the card only."
+            "value": "Camera unavailable. Pick a photo from your gallery, or keep the card only."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La cámara no está disponible (¿la usa otra aplicación?). Elige una foto de tu galería, o quédate solo con la tarjeta."
+            "value": "Cámara no disponible. Elige una foto de tu galería, o quédate solo con la tarjeta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La caméra n’est pas disponible (une autre application l’utilise ?). Choisis une photo dans ta galerie, ou garde la carte seule."
+            "value": "Caméra indisponible. Choisis une photo dans ta galerie, ou garde la carte seule."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La fotocamera non è disponibile (la sta usando un’altra app?). Scegli una foto dalla galleria, oppure tieni solo la carta."
+            "value": "Fotocamera non disponibile. Scegli una foto dalla galleria, oppure tieni solo la carta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A câmera não está disponível (outro app a está usando?). Escolha uma foto da galeria, ou fique só com o cartão."
+            "value": "Câmera indisponível. Escolha uma foto da galeria, ou fique só com o cartão."
           }
         }
       }
@@ -279759,43 +279900,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسم المبارزة هذا غير صالح: من 3 إلى 20 حرفًا، حروف وأرقام ونقطة وشرطة وشرطة سفلية."
+            "value": "اسم غير صالح: حروف وأرقام ونقطة وشرطة وشرطة سفلية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Turniername ist ungültig: 3 bis 20 Zeichen, Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich."
+            "value": "Ungültiger Name: Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This joust name isn’t valid: 3 to 20 characters, letters, digits, dot, dash, underscore."
+            "value": "Invalid name: letters, digits, dot, dash, underscore."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nombre de justa no es válido: de 3 a 20 caracteres, letras, números, punto, guion, guion bajo."
+            "value": "Nombre no válido: letras, números, punto, guion, guion bajo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas."
+            "value": "Nom non valable : lettres, chiffres, point, tiret, tiret bas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo nome di torneo non è valido: da 3 a 20 caratteri, lettere, cifre, punto, trattino, trattino basso."
+            "value": "Nome non valido: lettere, cifre, punto, trattino, trattino basso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nome de torneio não é válido: de 3 a 20 caracteres, letras, números, ponto, hífen, sublinhado."
+            "value": "Nome inválido: letras, números, ponto, hífen, sublinhado."
           }
         }
       }
@@ -280511,43 +280652,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التوقف عن المشاركة في مبارزة الأصدقاء"
+            "value": "الانسحاب"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nicht mehr am Turnier der Freunde teilnehmen"
+            "value": "Mich zurückziehen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stop taking part in the Friends’ Joust"
+            "value": "Opt me out"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dejar de participar en la Justa de los amigos"
+            "value": "Retirarme"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ne plus participer à la joute des amis"
+            "value": "Me retirer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non partecipare più al Torneo degli amici"
+            "value": "Ritirami"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deixar de participar do Torneio dos amigos"
+            "value": "Me retirar"
           }
         }
       }
@@ -280558,43 +280699,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يراك أصدقاؤك المقبولون في ترتيبهم الأسبوعي وتراهم في ترتيبك. يمكنك الانسحاب بلمسة واحدة: لن تظهر في ترتيبهم ولن ترى ترتيبهم."
+            "value": "ترتيب أسبوعي بين الأصدقاء المقبولين. انسحابك يُخفي كلًّا منكم عن الآخر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine bestätigten Freunde sehen dich in ihrer Wochenwertung, und du siehst sie in deiner. Du kannst mit einem Tipp aussteigen: Du erscheinst nicht mehr in ihrer und siehst ihre nicht mehr."
+            "value": "Wochenwertung unter bestätigten Freunden. Wer sich zurückzieht, ist füreinander unsichtbar."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your accepted friends see you in their weekly ranking, and you see them in yours. You can opt out in one tap: you no longer appear in theirs, and you no longer see theirs."
+            "value": "Weekly ranking among accepted friends. Opting out hides you from each other."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus amigos aceptados te ven en su clasificación semanal, y tú los ves en la tuya. Puedes salir con un toque: ya no apareces en la suya y dejas de ver la suya."
+            "value": "Clasificación semanal entre amigos aceptados. Si te retiras, os ocultáis mutuamente."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes amis acceptés te voient dans leur classement de la semaine, et toi dans le tien. Tu peux t’en retirer d’un geste : tu n’apparais plus dans le leur, et tu ne vois plus le leur."
+            "value": "Classement de la semaine entre amis acceptés. T’en retirer vous masque les uns aux autres."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi amici accettati ti vedono nella loro classifica settimanale, e tu loro nella tua. Puoi uscirne con un tocco: non compari più nella loro e non vedi più la loro."
+            "value": "Classifica settimanale tra amici accettati. Se ti ritiri, non vi vedete più a vicenda."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus amigos aceitos veem você na classificação semanal deles, e você os vê na sua. Você pode sair com um toque: deixa de aparecer na deles e deixa de ver a deles."
+            "value": "Classificação semanal entre amigos aceitos. Se você sair, vocês deixam de se ver."
           }
         }
       }
@@ -281969,43 +282110,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "خارج الأصدقاء المقبولين لا أحد يرى إن كنت متصلًا ولا متى تلعب. تحدد هذه الإعدادات ما يراه أصدقاؤك، أو الجميع، من لعبتك."
+            "value": "خارج الأصدقاء المقبولين لا أحد يرى إن كنت متصلًا ولا متى تلعب."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Außerhalb bestätigter Freunde sieht niemand, ob du online bist oder wann du spielst. Diese Einstellungen legen fest, was deine Freunde oder alle von deinem Spiel sehen."
+            "value": "Außerhalb bestätigter Freunde sieht niemand, ob du online bist oder wann du spielst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Outside accepted friends, nobody sees whether you are online or when you play. These settings say what your friends, or everyone, can see of your game."
+            "value": "Outside accepted friends, nobody sees whether you are online or when you play."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fuera de los amigos aceptados, nadie ve si estás en línea ni cuándo juegas. Estos ajustes dicen qué ven tus amigos, o todo el mundo, de tu juego."
+            "value": "Fuera de los amigos aceptados, nadie ve si estás en línea ni cuándo juegas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues. Ces réglages disent ce que tes amis, ou tout le monde, voient de ton jeu."
+            "value": "Hors amis acceptés, personne ne voit si tu es en ligne ni quand tu joues."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fuori dagli amici accettati nessuno vede se sei online né quando giochi. Queste impostazioni dicono cosa vedono i tuoi amici, o tutti, del tuo gioco."
+            "value": "Fuori dagli amici accettati nessuno vede se sei online né quando giochi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fora dos amigos aceitos, ninguém vê se você está online nem quando joga. Estas configurações dizem o que seus amigos, ou todos, veem do seu jogo."
+            "value": "Fora dos amigos aceitos, ninguém vê se você está online nem quando joga."
           }
         }
       }
@@ -282251,43 +282392,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يخفي اللعبة في كل مكان على هذا الجهاز، ويغلق كؤوسك ورتبتك وإرثك وأطلسك أمام الجميع، ويخرجك من المبارزة العامة. تبقى شراراتك وكؤوسك محفوظة."
+            "value": "يخفي اللعبة على هذا الجهاز، ويغلق كؤوسك ورتبتك وإرثك وأطلسك أمام الآخرين، ويخرجك من المبارزة العامة. تبقى الشرارات والكؤوس محفوظة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Blendet das Spiel überall auf diesem Gerät aus, verbirgt deine Trophäen, deinen Rang, dein Erbe und deinen Atlas vor allen anderen und nimmt dich aus dem öffentlichen Turnier. Deine Funken und Trophäen bleiben erhalten."
+            "value": "Blendet das Spiel auf diesem Gerät aus, verbirgt Trophäen, Rang, Erbe und Atlas vor anderen, nimmt dich aus dem öffentlichen Turnier. Funken und Trophäen bleiben erhalten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hides the game everywhere on this device, closes your trophies, your rank, your Legacy and your Atlas to everyone else, and takes you out of the public joust. Your sparks and your trophies are kept."
+            "value": "Hides the game on this device, closes your trophies, rank, Legacy and Atlas to others, takes you out of the public joust. Sparks and trophies are kept."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Oculta el juego en todas partes de este dispositivo, cierra tus trofeos, tu rango, tu Legado y tu Atlas a todos los demás, y te saca de la justa pública. Tus chispas y tus trofeos se conservan."
+            "value": "Oculta el juego en este dispositivo, cierra tus trofeos, tu rango, tu Legado y tu Atlas a los demás, te saca de la justa pública. Chispas y trofeos se conservan."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Masque le jeu partout sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas à tous les autres, et te retire de la joute publique. Tes étincelles et tes trophées sont gardés."
+            "value": "Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nasconde il gioco ovunque su questo dispositivo, chiude i tuoi trofei, il tuo rango, la tua Eredità e il tuo Atlante a tutti gli altri, e ti toglie dal torneo pubblico. Le tue scintille e i tuoi trofei restano custoditi."
+            "value": "Nasconde il gioco su questo dispositivo, chiude trofei, rango, Eredità e Atlante agli altri, ti toglie dal torneo pubblico. Scintille e trofei restano custoditi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esconde o jogo em todo este aparelho, fecha seus troféus, seu título, sua Herança e seu Atlas para todos os outros, e tira você do torneio público. Suas faíscas e seus troféus são guardados."
+            "value": "Esconde o jogo neste aparelho, fecha seus troféus, seu título, sua Herança e seu Atlas para os outros, tira você do torneio público. Faíscas e troféus são guardados."
           }
         }
       }
@@ -282345,43 +282486,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عرض علامات الأجداد"
+            "value": "علامات الأسلاف"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zeichen der Ahnen anzeigen"
+            "value": "Zeichen der Ahnen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Show the signs from your ancestors"
+            "value": "Ancestors’ signs"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostrar las señales de los ancestros"
+            "value": "Signos de los ancestros"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Afficher les signes des aïeux"
+            "value": "Signes des aïeux"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostra i segni degli antenati"
+            "value": "Segni degli antenati"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostrar os sinais dos ancestrais"
+            "value": "Sinais dos ancestrais"
           }
         }
       }
@@ -285823,43 +285964,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أطلسك خاص افتراضيًا: قد تكشف اللغة الكثير عنك. أنت تختار من يراه. تحتفظ اللعبة باللغة والاتجاهين والتاريخ فقط — لا بالطرف الآخر ولا بالمحادثة."
+            "value": "أطلسك خاص افتراضيًا: قد تكشف اللغة الكثير عنك. تحتفظ اللعبة باللغة والاتجاهين والتاريخ فقط — لا بالطرف الآخر ولا بالمحادثة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Atlas ist standardmäßig privat: Eine Sprache kann viel über dich verraten. Du entscheidest, wer ihn sieht. Das Spiel speichert die Sprache, beide Richtungen und das Datum — nie das Gegenüber oder die Unterhaltung."
+            "value": "Dein Atlas ist standardmäßig privat: Eine Sprache kann viel über dich verraten. Das Spiel speichert die Sprache, beide Richtungen und das Datum — nie das Gegenüber oder die Unterhaltung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your Atlas is private by default: a language can say a lot about you. You choose who sees it. The game keeps the language, both directions and the date — never the other person or the conversation."
+            "value": "Your Atlas is private by default: a language can say a lot about you. The game keeps the language, both directions and the date — never the other person or the conversation."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu Atlas es privado por defecto: un idioma puede decir mucho de ti. Tú eliges quién lo ve. El juego guarda el idioma, los dos sentidos y la fecha, nunca al interlocutor ni la conversación."
+            "value": "Tu Atlas es privado por defecto: un idioma puede decir mucho de ti. El juego guarda el idioma, los dos sentidos y la fecha, nunca al interlocutor ni la conversación."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton Atlas est privé par défaut : une langue peut en dire long sur toi. Tu choisis qui le voit. Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation."
+            "value": "Ton Atlas est privé par défaut : une langue peut en dire long sur toi. Le jeu garde la langue, les deux sens et la date — jamais l’interlocuteur ni la conversation."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo Atlante è privato per impostazione predefinita: una lingua può dire molto di te. Scegli tu chi lo vede. Il gioco conserva la lingua, i due sensi e la data — mai l’interlocutore né la conversazione."
+            "value": "Il tuo Atlante è privato per impostazione predefinita: una lingua può dire molto di te. Il gioco conserva la lingua, i due sensi e la data — mai l’interlocutore né la conversazione."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu Atlas é privado por padrão: um idioma pode dizer muito sobre você. Você escolhe quem o vê. O jogo guarda o idioma, os dois sentidos e a data — nunca o interlocutor nem a conversa."
+            "value": "Seu Atlas é privado por padrão: um idioma pode dizer muito sobre você. O jogo guarda o idioma, os dois sentidos e a data — nunca o interlocutor nem a conversa."
           }
         }
       }
@@ -285870,43 +286011,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا أختام بعد. اكتب بلغة أخرى: بمجرد أن يردّ أحدهم يصلك الأول."
+            "value": "لا أختام بعد: اكتب بلغة أخرى."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Noch kein Stempel. Schreibe in einer anderen Sprache: Sobald jemand antwortet, kommt der erste."
+            "value": "Noch kein Stempel: schreibe in einer anderen Sprache."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No stamp yet. Write in another language: as soon as someone replies, the first one arrives."
+            "value": "No stamp yet: write in another language."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aún no hay sellos. Escribe en otro idioma: en cuanto te respondan, llega el primero."
+            "value": "Aún no hay sellos: escribe en otro idioma."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pas encore de tampon. Écris dans une autre langue : dès qu’on te répond, le premier arrive."
+            "value": "Pas encore de tampon : écris dans une autre langue."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ancora nessun timbro. Scrivi in un’altra lingua: appena qualcuno risponde, arriva il primo."
+            "value": "Ancora nessun timbro: scrivi in un’altra lingua."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ainda sem carimbos. Escreva em outro idioma: assim que alguém responder, o primeiro chega."
+            "value": "Ainda sem carimbos: escreva em outro idioma."
           }
         }
       }
@@ -286246,43 +286387,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل لغة تبادلت بها الرسائل فعلًا — رسالة مرسلة وأخرى مستلمة مع من يكتبها — تضع ختمًا في جواز سفرك."
+            "value": "ختم لكل لغة تبادلت بها الرسائل فعلًا: رسالة مرسلة ورسالة مستلمة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jede Sprache, in der du wirklich geschrieben hast — eine gesendete und eine empfangene Nachricht mit jemandem, der sie schreibt — setzt einen Stempel in deinen Pass."
+            "value": "Ein Stempel pro wirklich gesprochener Sprache: eine gesendete, eine empfangene Nachricht."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Every language you have really exchanged in — one message sent and one received with someone who writes it — adds a stamp to your passport."
+            "value": "One stamp per language really exchanged: one message sent, one received."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada idioma con el que has intercambiado de verdad —un mensaje enviado y uno recibido con alguien que lo escribe— pone un sello en tu pasaporte."
+            "value": "Un sello por idioma realmente intercambiado: un mensaje enviado, uno recibido."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque langue avec laquelle tu as vraiment échangé — un message envoyé et un reçu avec quelqu’un qui l’écrit — pose un tampon dans ton passeport."
+            "value": "Un tampon par langue vraiment échangée : un message envoyé, un reçu."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni lingua con cui hai davvero scambiato messaggi — uno inviato e uno ricevuto con qualcuno che la scrive — mette un timbro nel tuo passaporto."
+            "value": "Un timbro per ogni lingua davvero scambiata: un messaggio inviato, uno ricevuto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada idioma com o qual você realmente trocou mensagens — uma enviada e uma recebida com alguém que o escreve — coloca um carimbo no seu passaporte."
+            "value": "Um carimbo por idioma realmente trocado: uma mensagem enviada, uma recebida."
           }
         }
       }
@@ -286575,43 +286716,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يرى الزائر شهر الحصول فقط، لا التاريخ الدقيق أبدًا. «أنا فقط» يخفي كؤوسك عن الجميع."
+            "value": "يرى الزائر شهر الحصول فقط، لا التاريخ الدقيق أبدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Besucher sehen nur den Monat, nie das genaue Datum. „Nur ich“ verbirgt deine Trophäen vor allen anderen."
+            "value": "Besucher sehen nur den Monat, nie das genaue Datum."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A visitor only sees the month you won a trophy, never the exact date. “Only me” hides your trophies from everyone else."
+            "value": "A visitor only sees the month you won a trophy, never the exact date."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un visitante solo ve el mes de obtención, nunca la fecha exacta. «Solo yo» oculta tus trofeos a todos los demás."
+            "value": "Un visitante solo ve el mes de obtención, nunca la fecha exacta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un visiteur ne voit que le mois d’obtention, jamais la date exacte. « Moi seul » cache tes trophées à tous les autres."
+            "value": "Un visiteur ne voit que le mois d’obtention, jamais la date exacte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un visitatore vede solo il mese in cui l’hai ottenuto, mai la data esatta. «Solo io» nasconde i tuoi trofei a tutti gli altri."
+            "value": "Un visitatore vede solo il mese in cui l’hai ottenuto, mai la data esatta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um visitante só vê o mês de obtenção, nunca a data exata. “Só eu” esconde seus troféus de todos os outros."
+            "value": "Um visitante só vê o mês de obtenção, nunca a data exata."
           }
         }
       }
@@ -286857,43 +286998,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كؤوسك في انتظارك. كؤوس المبارزة والرحلة والانبعاث واللهب تُصفّ هنا كلما ربحتها."
+            "value": "كؤوسك في انتظارك: كؤوس المبارزة والرحلة والانبعاث واللهب."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Trophäen warten auf dich. Die Pokale aus Turnier und Reise, die Trophäen der Wiedergeburt und der Flamme kommen hierher, sobald du sie gewinnst."
+            "value": "Deine Trophäen warten: Pokale aus Turnier und Reise, Wiedergeburt, Flamme."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your trophies are waiting for you. Joust and journey cups, Rebirth and Flame trophies take their place here as you win them."
+            "value": "Your trophies are waiting: joust and journey cups, Rebirth, Flame."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus trofeos te esperan. Las copas de justa y de viaje, los trofeos de Renacimiento y de Llama se colocan aquí a medida que los ganas."
+            "value": "Tus trofeos te esperan: copas de justa y de viaje, Renacimiento, Llama."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes trophées t’attendent. Les coupes de joute et de voyage, les trophées de Renaissance et de Flamme s’y rangent à mesure que tu les gagnes."
+            "value": "Tes trophées t’attendent : coupes de joute et de voyage, Renaissance, Flamme."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi trofei ti aspettano. Le coppe del torneo e del viaggio, i trofei di Rinascita e della Fiamma si sistemano qui man mano che li vinci."
+            "value": "I tuoi trofei ti aspettano: coppe del torneo e del viaggio, Rinascita, Fiamma."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seus troféus esperam por você. As taças de torneio e de viagem, os troféus de Renascimento e de Chama se guardam aqui à medida que você os ganha."
+            "value": "Seus troféus esperam por você: taças de torneio e de viagem, Renascimento, Chama."
           }
         }
       }
@@ -287468,43 +287609,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "من 3 إلى 20 حرفًا. لا اسمك ولا معرّفك."
+            "value": "من 3 إلى 20 حرفًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "3 bis 20 Zeichen. Weder dein Name noch dein Benutzername."
+            "value": "3 bis 20 Zeichen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "3 to 20 characters. Not your name or your username."
+            "value": "3 to 20 characters."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "De 3 a 20 caracteres. Ni tu nombre ni tu usuario."
+            "value": "De 3 a 20 caracteres."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "3 à 20 caractères. Ni ton nom, ni ton identifiant."
+            "value": "3 à 20 caractères."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Da 3 a 20 caratteri. Né il tuo nome né il tuo nome utente."
+            "value": "Da 3 a 20 caratteri."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "De 3 a 20 caracteres. Nem seu nome, nem seu usuário."
+            "value": "De 3 a 20 caracteres."
           }
         }
       }
@@ -287750,43 +287891,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الخاتم للزينة فقط: قطعة للجمع كل ⁦%@⁩ محطات، لا تغيّر شيئًا في اللعبة."
+            "value": "قطعة للزينة، مرة كل ⁦%@⁩ محطات. دون أثر على اللعبة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Siegel ist rein dekorativ: alle %@ Rasten ein Sammelobjekt, ohne Einfluss auf das Spiel."
+            "value": "Dekoratives Sammelobjekt, alle %@ Rasten. Ohne Wirkung auf das Spiel."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The Seal is purely decorative: a collectible every %@ stops, which changes nothing in the game."
+            "value": "Decorative collectible, once every %@ stops. No effect on the game."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El Sello es puramente decorativo: un objeto de colección cada %@ paradas, que no cambia nada del juego."
+            "value": "Objeto decorativo, una vez cada %@ paradas. Sin efecto en el juego."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Sceau est purement décoratif : un objet à collectionner toutes les %@ haltes, qui ne change rien au jeu."
+            "value": "Objet décoratif, une fois toutes les %@ haltes. Sans effet sur le jeu."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il Sigillo è puramente decorativo: un oggetto da collezione ogni %@ soste, che non cambia nulla nel gioco."
+            "value": "Oggetto decorativo, una volta ogni %@ soste. Nessun effetto sul gioco."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Selo é puramente decorativo: um objeto de coleção a cada %@ paradas, que não muda nada no jogo."
+            "value": "Objeto decorativo, uma vez a cada %@ paradas. Sem efeito no jogo."
           }
         }
       }
@@ -288502,43 +288643,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل فصل محقّق وكل تحالف يُقدّمانك بضع خطوات: ⁦%@⁩ خطوات تقودك إلى المحطة التالية. الرحلة كلها مجانية."
+            "value": "الفصول والتحالف يُقدّمان الرحلة: ⁦%@⁩ خطوات لكل محطة. كل شيء مجاني."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeder erfüllte Akt und jedes Bündnis bringen dich ein paar Schritte voran: %@ Schritte führen zur nächsten Rast. Die ganze Reise ist kostenlos."
+            "value": "Akte und Bündnis bringen die Reise voran: %@ Schritte pro Rast. Alles ist kostenlos."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Each act you complete and each alliance carry you a few strides: %@ strides lead to the next stop. The whole journey is free."
+            "value": "Acts and alliance move the journey forward: %@ strides per stop. Everything is free."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada acto hecho realidad y cada alianza te hacen avanzar unos pasos: %@ pasos llevan a la parada siguiente. Todo el viaje es gratis."
+            "value": "Los actos y la alianza hacen avanzar el viaje: %@ pasos por parada. Todo es gratis."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque acte réalisé et chaque alliance te font avancer de quelques pas : %@ pas mènent à la halte suivante. Tout le voyage est gratuit."
+            "value": "Actes et alliance font avancer le voyage : %@ pas par halte. Tout est gratuit."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni atto compiuto e ogni alleanza ti fanno avanzare di qualche passo: %@ passi portano alla sosta successiva. Tutto il viaggio è gratuito."
+            "value": "Atti e alleanza fanno avanzare il viaggio: %@ passi per sosta. Tutto è gratuito."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada ato realizado e cada aliança fazem você avançar alguns passos: %@ passos levam à parada seguinte. A viagem inteira é gratuita."
+            "value": "Atos e aliança fazem a viagem avançar: %@ passos por parada. Tudo é gratuito."
           }
         }
       }
@@ -290006,43 +290147,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "شرارات الأسبوع بين الأصدقاء المقبولين. مفتوح دائمًا، دون موافقة مطلوبة."
+            "value": "شرارات الأسبوع بين الأصدقاء المقبولين. مفتوحة للجميع، دون موافقة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Funken der Woche unter bestätigten Freunden. Immer offen, ohne Einwilligung."
+            "value": "Funken der Woche unter bestätigten Freunden. Für alle offen, ohne Einwilligung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This week’s sparks, among accepted friends. Always open, no consent to give."
+            "value": "This week’s sparks among accepted friends. Open to all, no consent needed."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Las chispas de la semana, entre amigos aceptados. Siempre abierta, sin consentimiento que dar."
+            "value": "Chispas de la semana entre amigos aceptados. Abierta a todos, sin consentimiento."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les étincelles de la semaine, entre amis acceptés. Toujours ouverte, sans consentement à donner."
+            "value": "Étincelles de la semaine entre amis acceptés. Ouverte à tous, sans consentement."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le scintille della settimana, tra amici accettati. Sempre aperta, nessun consenso da dare."
+            "value": "Scintille della settimana tra amici accettati. Aperta a tutti, senza consenso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As faíscas da semana, entre amigos aceitos. Sempre aberta, sem consentimento a dar."
+            "value": "Faíscas da semana entre amigos aceitos. Aberta a todos, sem consentimento."
           }
         }
       }
@@ -290758,43 +290899,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسم المبارزة هذا غير صالح: من 3 إلى 20 حرفًا، حروف وأرقام ونقطة وشرطة وشرطة سفلية."
+            "value": "اسم غير صالح: حروف وأرقام ونقطة وشرطة وشرطة سفلية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Turniername ist ungültig: 3 bis 20 Zeichen, Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich."
+            "value": "Ungültiger Name: Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This joust name isn’t valid: 3 to 20 characters, letters, digits, dot, dash, underscore."
+            "value": "Invalid name: letters, digits, dot, dash, underscore."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nombre de justa no es válido: de 3 a 20 caracteres, letras, números, punto, guion, guion bajo."
+            "value": "Nombre no válido: letras, números, punto, guion, guion bajo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas."
+            "value": "Nom non valable : lettres, chiffres, point, tiret, tiret bas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo nome di torneo non è valido: da 3 a 20 caratteri, lettere, cifre, punto, trattino, trattino basso."
+            "value": "Nome non valido: lettere, cifre, punto, trattino, trattino basso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nome de torneio não é válido: de 3 a 20 caracteres, letras, números, ponto, hífen, sublinhado."
+            "value": "Nome inválido: letras, números, ponto, hífen, sublinhado."
           }
         }
       }
@@ -293813,43 +293954,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une proposition d’alliance, un résultat de joute, une halte de voyage : au plus une notification du jeu par jour. Ce réglage vaut pour ton compte, sur tous tes appareils."
+            "value": "Alliance, joute, voyage : au plus une par jour, sur tous tes appareils."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "An alliance offer, a joust result, a journey stop: at most one game notification a day. This setting applies to your account, on all your devices."
+            "value": "Alliance, joust, journey: at most one a day, on all your devices."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una propuesta de alianza, un resultado de justa, una parada del viaje: como máximo una notificación del juego al día. Este ajuste vale para tu cuenta, en todos tus dispositivos."
+            "value": "Alianza, justa, viaje: como máximo una al día, en todos tus dispositivos."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Bündnis-Angebot, ein Turnierergebnis, eine Rast auf der Reise: höchstens eine Spielbenachrichtigung pro Tag. Diese Einstellung gilt für dein Konto, auf allen deinen Geräten."
+            "value": "Bündnis, Turnier, Reise: höchstens eine pro Tag, auf allen deinen Geräten."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una proposta di alleanza, un risultato del torneo, una sosta del viaggio: al massimo una notifica del gioco al giorno. Questa impostazione vale per il tuo account, su tutti i tuoi dispositivi."
+            "value": "Alleanza, torneo, viaggio: al massimo una al giorno, su tutti i tuoi dispositivi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma proposta de aliança, um resultado de torneio, uma parada de viagem: no máximo uma notificação do jogo por dia. Este ajuste vale para a sua conta, em todos os seus aparelhos."
+            "value": "Aliança, torneio, viagem: no máximo uma por dia, em todos os seus aparelhos."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عرض تحالف، نتيجة مبارزة، محطة رحلة: إشعار واحد للعبة في اليوم على الأكثر. يسري هذا الإعداد على حسابك في جميع أجهزتك."
+            "value": "تحالف، مبارزة، رحلة: إشعار واحد على الأكثر في اليوم، على جميع أجهزتك."
           }
         }
       }
@@ -293860,43 +294001,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recevoir les notifications du jeu"
+            "value": "Notifications"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Receive game notifications"
+            "value": "Notifications"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recibir las notificaciones del juego"
+            "value": "Notificaciones"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Spielbenachrichtigungen erhalten"
+            "value": "Mitteilungen"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ricevi le notifiche del gioco"
+            "value": "Notifiche"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Receber as notificações do jogo"
+            "value": "Notificações"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تلقي إشعارات اللعبة"
+            "value": "الإشعارات"
           }
         }
       }
@@ -301464,6 +301605,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "O que é?"
+          }
+        }
+      }
+    },
+    "game.fiche.what.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا تعني هذه الكلمة بالتفصيل؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was bedeutet dieses Wort genau?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does this word mean, in detail?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué significa esta palabra, en detalle?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que veut dire ce mot, en détail ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Che cosa significa questa parola, nel dettaglio?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que esta palavra significa, em detalhe?"
           }
         }
       }
@@ -314975,43 +315163,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل ما تعرضه اللعبة، واحدًا واحدًا: ما هو، وما فائدته، وكيف يُكسب، وكيف تستعمله."
+            "value": "كل عنصر في اللعبة، بوضوح."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alles, was das Spiel zeigt, eins nach dem anderen: was es ist, wozu es dient, wie du es bekommst und wie du es nutzt."
+            "value": "Jedes Element des Spiels, verständlich erklärt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Everything the game shows, one by one: what it is, what it’s for, how you earn it and how to use it."
+            "value": "Every element of the game, in plain words."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Todo lo que muestra el juego, uno por uno: qué es, para qué sirve, cómo se gana y cómo usarlo."
+            "value": "Cada elemento del juego, en claro."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tout ce que le jeu affiche, un par un : ce que c’est, à quoi ça sert, comment ça se gagne et comment t’en servir."
+            "value": "Chaque élément du jeu, en clair."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tutto ciò che il gioco mostra, uno per uno: che cos’è, a cosa serve, come si guadagna e come usarlo."
+            "value": "Ogni elemento del gioco, in chiaro."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tudo o que o jogo mostra, um por um: o que é, para que serve, como se ganha e como usar."
+            "value": "Cada elemento do jogo, em palavras simples."
+          }
+        }
+      }
+    },
+    "game.rules.step.why": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لماذا الخطوة ⁦%@⁩؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum Schritt %@?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why step %@?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Por qué el paso %@?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pourquoi l’étape %@ ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perché il passo %@?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por que a etapa %@?"
           }
         }
       }
@@ -315069,43 +315304,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نورك يفتح الحلم عند المستوى 5، والمبارزة عند 10، والتحالف عند 20، والانبعاث عند 100. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا. سكّ Meesh يصوغ جزءًا من نورك ويُخفض مستواك، لكن المبارزة والتحالف يبقيان مفتوحين متى فُتحا."
+            "value": "نورك يفتح الحلم عند المستوى 5، والمبارزة عند 10، والتحالف عند 20، والانبعاث عند 100. وكل عشرة مستويات، من 10 إلى 100، يطلب أجدادك اختبارًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung. Eine Meesh zu prägen bannt einen Teil deines Lichts und senkt dein Level, aber Turnier und Bündnis bleiben offen, wenn sie einmal offen sind."
+            "value": "Dein Licht öffnet den Traum ab Level 5, das Turnier ab 10, das Bündnis ab 20 und die Wiedergeburt ab 100. Von 10 bis 100 verlangen deine Ahnen alle zehn Level eine Prüfung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial. Minting a Meesh binds part of your light and lowers your level, but the joust and the alliance, once open, stay open."
+            "value": "Your light opens the dream at level 5, the joust at 10, the alliance at 20 and rebirth at 100. Every ten levels, from 10 to 100, your ancestors ask for a trial."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba. Acuñar una Meesh fija una parte de tu luz y baja tu nivel, pero la justa y la alianza, una vez abiertas, siguen abiertas."
+            "value": "Tu luz abre el sueño en el nivel 5, la justa en el 10, la alianza en el 20 y el renacimiento en el 100. Cada diez niveles, de 10 a 100, tus ancestros piden una prueba."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve. Frapper une Meesh fige une part de ta lumière et fait baisser ton niveau, mais la joute et l’alliance, une fois ouvertes, le restent."
+            "value": "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova. Coniare una Meesh fissa una parte della tua luce e abbassa il tuo livello, ma il torneo e l’alleanza, una volta aperti, restano aperti."
+            "value": "La tua luce apre il sogno al livello 5, il torneo al 10, l’alleanza al 20 e la rinascita al 100. Ogni dieci livelli, da 10 a 100, i tuoi antenati chiedono una prova."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova. Cunhar uma Meesh cristaliza uma parte da sua luz e baixa o seu nível, mas o torneio e a aliança, uma vez abertos, continuam abertos."
+            "value": "Sua luz abre o sonho no nível 5, o torneio no 10, a aliança no 20 e o renascimento no 100. A cada dez níveis, de 10 a 100, seus ancestrais pedem uma prova."
           }
         }
       }
@@ -315163,43 +315398,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نورك يسكّ عملات Meesh لإرثك. وسكّ Meesh يصوغ جزءًا منه في القطعة: فينخفض نورك، ومعه مستواك، بقدره. وما تلقّيته يبقى لك."
+            "value": "نورك يسكّ عملات Meesh لإرثك. وسكّ Meesh يصوغ جزءًا منه في القطعة: فينخفض نورك، ومعه مستواك، بقدره."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Licht prägt die Meeshes deines Erbes. Eine Meesh zu prägen bannt einen Teil davon in die Münze: Dein Licht, und damit dein Level, sinkt um ebenso viel. Was du empfangen hast, bleibt empfangen."
+            "value": "Dein Licht prägt die Meeshes deines Erbes. Eine Meesh zu prägen bannt einen Teil davon in die Münze: Dein Licht, und damit dein Level, sinkt um ebenso viel."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your light mints the Meeshes of your legacy. Minting a Meesh binds part of it into the coin: your light, and so your level, drops by as much. What you received stays received."
+            "value": "Your light mints the Meeshes of your legacy. Minting a Meesh binds part of it into the coin: your light, and so your level, drops by as much."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu luz acuña las Meeshes de tu legado. Acuñar una Meesh fija una parte en la moneda: tu luz, y con ella tu nivel, baja otro tanto. Lo recibido sigue recibido."
+            "value": "Tu luz acuña las Meeshes de tu legado. Acuñar una Meesh fija una parte en la moneda: tu luz, y con ella tu nivel, baja otro tanto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant. Ce que tu as reçu reste reçu."
+            "value": "Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua luce conia le Meesh della tua eredità. Coniare una Meesh ne fissa una parte nella moneta: la tua luce, e quindi il tuo livello, scende di altrettanto. Ciò che hai ricevuto resta ricevuto."
+            "value": "La tua luce conia le Meesh della tua eredità. Coniare una Meesh ne fissa una parte nella moneta: la tua luce, e quindi il tuo livello, scende di altrettanto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua luz cunha as Meeshes da sua herança. Cunhar uma Meesh cristaliza uma parte dela na moeda: sua luz, e portanto seu nível, baixa na mesma medida. O que você recebeu continua recebido."
+            "value": "Sua luz cunha as Meeshes da sua herança. Cunhar uma Meesh cristaliza uma parte dela na moeda: sua luz, e portanto seu nível, baixa na mesma medida."
           }
         }
       }
@@ -316432,43 +316667,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الرقم على حلقتك، ويُقرأ من نورك. يفتح الحلم (المستوى 5) والمبارزة (10) والتحالف (20) والانبعاث (100). يرتفع حين يبلغ نورك العتبة التالية، وينخفض حين يصوغ السكّ جزءًا منه. والانبعاث يعيده إلى 1."
+            "value": "الرقم على حلقتك، ويُقرأ من نورك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Zahl auf deinem Ring, abgelesen an deinem Licht. Es öffnet den Traum (Level 5), das Turnier (10), das Bündnis (20) und die Wiedergeburt (100). Es steigt, wenn dein Licht die nächste Schwelle erreicht, und sinkt, wenn eine Prägung einen Teil davon bannt. Die Wiedergeburt setzt es auf 1 zurück."
+            "value": "Die Zahl auf deinem Ring, abgelesen an deinem Licht."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The number on your ring, read from your light. It opens the dream (level 5), the joust (10), the alliance (20) and rebirth (100). It rises when your light reaches the next threshold, and drops when a mint binds part of it. Rebirth sets it back to 1."
+            "value": "The number on your ring, read from your light."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La cifra de tu anillo, leída en tu luz. Abre el sueño (nivel 5), la justa (10), la alianza (20) y el renacimiento (100). Sube cuando tu luz alcanza el umbral siguiente, y baja cuando acuñar fija una parte de ella. El renacimiento lo devuelve a 1."
+            "value": "La cifra de tu anillo, leída en tu luz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffre de ton anneau, lu sur ta lumière. Il ouvre le rêve (niveau 5), la joute (10), l’alliance (20) et la renaissance (100). Il monte quand ta lumière atteint le seuil suivant, et baisse quand une frappe en fige une part. La renaissance le remet à 1."
+            "value": "Le chiffre de ton anneau, lu sur ta lumière."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il numero del tuo anello, letto sulla tua luce. Apre il sogno (livello 5), il torneo (10), l’alleanza (20) e la rinascita (100). Sale quando la tua luce raggiunge la soglia successiva, e scende quando un conio ne fissa una parte. La rinascita lo riporta a 1."
+            "value": "Il numero del tuo anello, letto sulla tua luce."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O número do seu anel, lido na sua luz. Ele abre o sonho (nível 5), o torneio (10), a aliança (20) e o renascimento (100). Ele sobe quando a sua luz alcança o limiar seguinte, e baixa quando uma cunhagem cristaliza uma parte dela. O renascimento o leva de volta a 1."
+            "value": "O número do seu anel, lido na sua luz."
           }
         }
       }
@@ -316479,43 +316714,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل تبادل حقيقي يُطلق شرارات؛ ومعًا تصنع نورك. نورك يصنع مستواك ويسكّ عملات Meesh. والشرارات التي تلقّيتها منذ البداية تبقى لك."
+            "value": "كل تبادل حقيقي يُطلق شرارات؛ ومعًا تصنع نورك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jeder echte Austausch lässt Funken sprühen; zusammen bilden sie dein Licht. Dein Licht macht dein Level und prägt die Meeshes. Die seit jeher empfangenen Funken bleiben empfangen."
+            "value": "Jeder echte Austausch lässt Funken sprühen; zusammen bilden sie dein Licht."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Every real exchange makes sparks fly; together, they form your light. Your light makes your level and mints the Meeshes. The sparks received since the beginning stay received."
+            "value": "Every real exchange makes sparks fly; together, they form your light."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada intercambio de verdad hace brotar chispas; juntas forman tu luz. Tu luz hace tu nivel y acuña las Meeshes. Las chispas recibidas desde siempre siguen recibidas."
+            "value": "Cada intercambio de verdad hace brotar chispas; juntas forman tu luz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque vrai échange fait jaillir des étincelles ; ensemble, elles forment ta lumière. Ta lumière fait ton niveau et frappe les Meeshes. Les étincelles reçues depuis toujours restent reçues."
+            "value": "Chaque vrai échange fait jaillir des étincelles ; ensemble, elles forment ta lumière."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni vero scambio fa scaturire scintille; insieme, formano la tua luce. La tua luce fa il tuo livello e conia le Meesh. Le scintille ricevute da sempre restano ricevute."
+            "value": "Ogni vero scambio fa scaturire scintille; insieme, formano la tua luce."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada troca de verdade faz saltar faíscas; juntas, elas formam a sua luz. Sua luz faz o seu nível e cunha as Meeshes. As faíscas recebidas desde sempre continuam recebidas."
+            "value": "Cada troca de verdade faz saltar faíscas; juntas, elas formam a sua luz."
           }
         }
       }
@@ -316526,43 +316761,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عملة Meeshy النادرة المرقّمة: يُصاغ فيها جزء من نورك حين تسكّها. احتفظ بها لإرثك، أو أنفقها: قنديل للهبك، أو فصل تبدّله، أو خاتم الرحلة. ويكبر الجزء المصوغ بمقدار ⁦30%⁩ كل عشر مرات سكّ."
+            "value": "عملة Meeshy النادرة المرقّمة: يُصاغ فيها جزء من نورك حين تسكّها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die seltene, nummerierte Münze von Meeshy: Ein Teil deines Lichts wird darin gebannt, wenn du sie prägst. Behalte sie für dein Erbe, oder gib sie aus: eine Hüterin für deine Flamme, einen Akt zum Tauschen, das Siegel der Reise. Alle zehn Prägungen wächst der gebannte Teil um 30 %."
+            "value": "Die seltene, nummerierte Münze von Meeshy: Ein Teil deines Lichts wird darin gebannt, wenn du sie prägst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy’s rare, numbered coin: part of your light is bound into it when you mint it. Keep it for your legacy, or spend it: a Vigil for your Flame, an act to change, the Journey Seal. The bound part grows by 30 % every ten mints."
+            "value": "Meeshy’s rare, numbered coin: part of your light is bound into it when you mint it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La moneda rara de Meeshy, numerada: una parte de tu luz se fija en ella cuando la acuñas. Guárdala para tu legado, o gástala: una Vela para tu Llama, un acto que cambiar, el Sello del viaje. La parte fijada crece un 30 % cada diez acuñaciones."
+            "value": "La moneda rara de Meeshy, numerada: una parte de tu luz se fija en ella cuando la acuñas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La pièce rare de Meeshy, numérotée : une part de ta lumière s’y fige quand tu la frappes. Garde-la pour ton héritage, ou dépense-la : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage. La part figée grandit de 30 % toutes les dix frappes."
+            "value": "La pièce rare de Meeshy, numérotée : une part de ta lumière s’y fige quand tu la frappes."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La moneta rara di Meeshy, numerata: una parte della tua luce vi si fissa quando la conii. Custodiscila per la tua eredità, oppure spendila: una Lucerna per la tua Fiamma, un atto da cambiare, il Sigillo del viaggio. La parte fissata cresce del 30 % ogni dieci coni."
+            "value": "La moneta rara di Meeshy, numerata: una parte della tua luce vi si fissa quando la conii."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A moeda rara do Meeshy, numerada: uma parte da sua luz se cristaliza nela quando você a cunha. Guarde-a para a sua herança, ou gaste-a: uma Lamparina para a sua Chama, um ato para trocar, o Selo da viagem. A parte cristalizada cresce 30% a cada dez cunhagens."
+            "value": "A moeda rara do Meeshy, numerada: uma parte da sua luz se cristaliza nela quando você a cunha."
           }
         }
       }
@@ -316573,43 +316808,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مجدك ينمو ولا يتراجع أبدًا: وهو يمنحك رتبتك. ينمو حين تسكّ، وحين يبلغ نورك مستوى لأول مرة، وحين تحقّق مأثرة، وحين ترتقي إلى حلقة مبارزة أعلى، وحين تُتمّ رحلة. ورتبتك تفتح نورك فوق المستوى 499."
+            "value": "مجدك ينمو ولا يتراجع أبدًا: وهو يمنحك رتبتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Ruhm wächst und weicht nie zurück: Er gibt dir deinen Rang. Er wächst, wenn du prägst, wenn dein Licht ein Level zum ersten Mal erreicht, wenn du eine Heldentat vollbringst, wenn du einen Kreis des Turniers erklimmst, wenn du eine Reise vollendest. Dein Rang öffnet dein Licht über Level 499 hinaus."
+            "value": "Dein Ruhm wächst und weicht nie zurück: Er gibt dir deinen Rang."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your glory grows and never goes back: it gives you your rank. It grows when you mint, when your light reaches a level for the first time, when you do a great deed, when you climb a joust circle, when you complete a journey. Your rank opens your light beyond level 499."
+            "value": "Your glory grows and never goes back: it gives you your rank."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu gloria crece y nunca retrocede: te da tu rango. Crece cuando acuñas, cuando tu luz alcanza un nivel por primera vez, cuando logras una hazaña, cuando subes un círculo de justa, cuando terminas un viaje. Tu rango abre tu luz más allá del nivel 499."
+            "value": "Tu gloria crece y nunca retrocede: te da tu rango."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta gloire grandit et ne recule jamais : elle te donne ton rang. Elle grandit quand tu frappes, quand ta lumière atteint un niveau pour la première fois, quand tu accomplis un haut fait, quand tu gravis un cercle de joute, quand tu achèves un voyage. Ton rang ouvre ta lumière au-delà du niveau 499."
+            "value": "Ta gloire grandit et ne recule jamais : elle te donne ton rang."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua gloria cresce e non arretra mai: ti dà il tuo rango. Cresce quando conii, quando la tua luce raggiunge un livello per la prima volta, quando compi un’impresa, quando sali un cerchio del torneo, quando porti a termine un viaggio. Il tuo rango apre la tua luce oltre il livello 499."
+            "value": "La tua gloria cresce e non arretra mai: ti dà il tuo rango."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua glória cresce e nunca recua: ela dá o seu título. Ela cresce quando você cunha, quando a sua luz alcança um nível pela primeira vez, quando você cumpre uma façanha, quando você sobe um círculo de torneio, quando você completa uma viagem. Seu título abre a sua luz além do nível 499."
+            "value": "Sua glória cresce e nunca recua: ela dá o seu título."
           }
         }
       }
@@ -316620,43 +316855,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النار التي يأتمنك عليها أجدادك، تتّقد كل يوم بإجراء واحد على الأقل. كل يوم من اللهب يضيف ⁦2%⁩ إلى شرارات أحلامك، حتى ⁦50%⁩. القنديل يحرسه يوم غيابك؛ وإن انطفأ، يُعاد إشعاله بعملات Meesh خلال 48 ساعة."
+            "value": "النار التي يأتمنك عليها أجدادك، تتّقد كل يوم بإجراء واحد على الأقل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Feuer, das dir deine Ahnen anvertrauen, jeden Tag mit mindestens einer Aktion genährt. Jeder Tag deiner Flamme schenkt den Funken deiner Träume 2 % mehr, bis zu 50 %. Eine Hüterin hält sie einen Tag deiner Abwesenheit am Brennen; ist sie erloschen, entzündest du sie 48 Stunden lang mit Meeshes neu."
+            "value": "Das Feuer, das dir deine Ahnen anvertrauen, jeden Tag mit mindestens einer Aktion genährt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The fire your ancestors entrust to you, tended each day by at least one move. Each day of Flame adds 2 % to the sparks of your dreams, up to 50 %. A Vigil guards it for one day away; once out, it can be relit with Meeshes for 48 hours."
+            "value": "The fire your ancestors entrust to you, tended each day by at least one move."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El fuego que tus ancestros te confían, mantenido cada día con al menos un gesto. Cada día de Llama añade un 2 % a las chispas de tus sueños, hasta un 50 %. Una Vela la guarda un día de ausencia; apagada, se vuelve a encender con Meeshes durante 48 h."
+            "value": "El fuego que tus ancestros te confían, mantenido cada día con al menos un gesto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le feu que tes aïeux te confient, entretenu chaque jour par au moins un geste. Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Une Veilleuse la garde un jour d’absence ; éteinte, elle se rallume avec des Meeshes pendant 48 h."
+            "value": "Le feu que tes aïeux te confient, entretenu chaque jour par au moins un geste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il fuoco che i tuoi antenati ti affidano, alimentato ogni giorno da almeno un gesto. Ogni giorno di Fiamma aggiunge il 2 % alle scintille dei tuoi sogni, fino al 50 %. Una Lucerna la custodisce per un giorno di assenza; spenta, si riaccende con le Meesh entro 48 ore."
+            "value": "Il fuoco che i tuoi antenati ti affidano, alimentato ogni giorno da almeno un gesto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O fogo que seus ancestrais confiam a você, mantido todo dia por pelo menos um gesto. Cada dia de Chama soma 2% às faíscas dos seus sonhos, até 50%. Uma Lamparina cuida dela num dia de ausência; apagada, ela se reacende com Meeshes durante 48 h."
+            "value": "O fogo que seus ancestrais confiam a você, mantido todo dia por pelo menos um gesto."
           }
         }
       }
@@ -316667,43 +316902,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل ليلة، يرسل إليك أجدادك حلمًا من ثلاثة فصول، يُفتح عند المستوى 5. كل فصل محقّق يُطلق شرارات؛ وتحقيق الثلاثة يُظهر العطيّة. يمكنك تبديل فصل واحد في اليوم بعملة Meesh."
+            "value": "كل ليلة، يرسل إليك أجدادك حلمًا من ثلاثة فصول، يُفتح عند المستوى 5."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jede Nacht schicken dir deine Ahnen einen Traum in drei Akten, offen ab Level 5. Jeder erfüllte Akt lässt Funken sprühen; sind alle drei erfüllt, erscheint die Gabe. Einen Akt pro Tag kannst du mit einer Meesh tauschen."
+            "value": "Jede Nacht schicken dir deine Ahnen einen Traum in drei Akten, offen ab Level 5."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Each night, your ancestors send you a dream in three acts, open from level 5. Each act you complete makes sparks fly; all three complete make the Offering appear. You can change one act a day with a Meesh."
+            "value": "Each night, your ancestors send you a dream in three acts, open from level 5."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada noche, tus ancestros te envían un sueño en tres actos, abierto desde el nivel 5. Cada acto hecho realidad hace brotar chispas; los tres hechos realidad hacen aparecer la Ofrenda. Puedes cambiar un acto al día con una Meesh."
+            "value": "Cada noche, tus ancestros te envían un sueño en tres actos, abierto desde el nivel 5."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, ouvert au niveau 5. Chaque acte réalisé fait jaillir des étincelles ; les trois réalisés font apparaître l’Offrande. Tu peux changer un acte par jour avec une Meesh."
+            "value": "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, ouvert au niveau 5."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ogni notte, i tuoi antenati ti mandano un sogno in tre atti, aperto dal livello 5. Ogni atto compiuto fa scaturire scintille; tutti e tre compiuti fanno apparire l’Offerta. Puoi cambiare un atto al giorno con una Meesh."
+            "value": "Ogni notte, i tuoi antenati ti mandano un sogno in tre atti, aperto dal livello 5."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toda noite, seus ancestrais enviam um sonho em três atos, aberto a partir do nível 5. Cada ato realizado faz saltar faíscas; os três realizados fazem aparecer a Oferenda. Você pode trocar um ato por dia com uma Meesh."
+            "value": "Toda noite, seus ancestrais enviam um sonho em três atos, aberto a partir do nível 5."
           }
         }
       }
@@ -316714,43 +316949,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ترتيب الأسبوع، يُفتح عند المستوى 10: ثلاثون بطلًا يتبارزون فيه بأسماء المبارزة. شرارات أسبوعك تحدّد مركزك: الأوائل السبعة يرتقون إلى الحلقة التالية، والخمسة الأخيرون يهبطون، وكل شيء يبدأ من الصفر يوم الاثنين. مبارزة الأصدقاء تبقى مفتوحة دائمًا."
+            "value": "ترتيب الأسبوع، يُفتح عند المستوى 10: ثلاثون بطلًا يتبارزون فيه بأسماء المبارزة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Wertung der Woche, offen ab Level 10: Dreißig Helden messen sich dort unter ihrem Turniernamen. Deine Funken der Woche bestimmen deinen Platz: Die ersten 7 steigen in den nächsten Kreis auf, die letzten 5 steigen ab, und am Montag beginnt alles bei null. Das Turnier der Freunde ist immer offen."
+            "value": "Die Wertung der Woche, offen ab Level 10: Dreißig Helden messen sich dort unter ihrem Turniernamen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The week’s contest, open from level 10: thirty heroes measure themselves there under their joust names. Your sparks of the week set your place: the top 7 climb to the next circle, the bottom 5 go back down, and everything starts again from zero on Monday. The Friends’ Joust is always open."
+            "value": "The week’s contest, open from level 10: thirty heroes measure themselves there under their joust names."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La clasificación de la semana, abierta desde el nivel 10: treinta héroes se miden en ella con su nombre de justa. Tus chispas de la semana marcan tu puesto: los 7 primeros suben al círculo siguiente, los 5 últimos bajan, y todo vuelve a cero el lunes. La Justa de los amigos siempre está abierta."
+            "value": "La clasificación de la semana, abierta desde el nivel 10: treinta héroes se miden en ella con su nombre de justa."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le classement de la semaine, ouvert au niveau 10 : trente héros s’y mesurent sous leur nom de joute. Tes étincelles de la semaine font ta place : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent, et tout repart de zéro le lundi. La Joute des amis reste toujours ouverte."
+            "value": "Le classement de la semaine, ouvert au niveau 10 : trente héros s’y mesurent sous leur nom de joute."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La sfida della settimana, aperta dal livello 10: trenta eroi vi si misurano con il loro nome di torneo. Le tue scintille della settimana fanno il tuo posto: i primi 7 salgono al cerchio successivo, gli ultimi 5 riscendono, e tutto riparte da zero il lunedì. Il Torneo degli amici resta sempre aperto."
+            "value": "La sfida della settimana, aperta dal livello 10: trenta eroi vi si misurano con il loro nome di torneo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A classificação da semana, aberta a partir do nível 10: trinta heróis se medem nela sob o seu nome de torneio. Suas faíscas da semana fazem o seu lugar: os 7 primeiros sobem para o círculo seguinte, os 5 últimos voltam a descer, e tudo recomeça do zero na segunda-feira. O Torneio dos amigos continua sempre aberto."
+            "value": "A classificação da semana, aberta a partir do nível 10: trinta heróis se medem nela sob o seu nome de torneio."
           }
         }
       }
@@ -316761,43 +316996,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "رحلة من ثمانية أسابيع إلى أرض لغة، فيها 40 محطة مجانية. فصول حلمك والتحالف تُقدّمك بضع خطوات؛ وأربع خطوات تقودك إلى المحطة التالية، التي تستلمها واحدة واحدة. والرحلة المكتملة تمنح كأس الرحلة."
+            "value": "رحلة من ثمانية أسابيع إلى أرض لغة، فيها 40 محطة مجانية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Reise über acht Wochen in einem Sprachland, mit 40 kostenlosen Rasten. Die Akte deines Traums und das Bündnis bringen dich ein paar Schritte voran; vier Schritte führen zur nächsten Rast, die du dir einzeln holst. Die vollendete Reise bringt den Reisepokal."
+            "value": "Eine Reise über acht Wochen in einem Sprachland, mit 40 kostenlosen Rasten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "An eight-week journey in the land of a language, with 40 free stops. The acts of your dream and the alliance carry you a few strides; four strides lead to the next stop, which you claim one by one. The finished journey gives the journey cup."
+            "value": "An eight-week journey in the land of a language, with 40 free stops."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un viaje de ocho semanas en tierra de idioma, con 40 paradas gratuitas. Los actos de tu sueño y la alianza te hacen avanzar unos pasos; cuatro pasos llevan a la parada siguiente, que reclamas una a una. El viaje terminado da la copa del viaje."
+            "value": "Un viaje de ocho semanas en tierra de idioma, con 40 paradas gratuitas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un voyage de huit semaines en terre de langue, avec 40 haltes gratuites. Les actes de ton rêve et l’alliance te font avancer de quelques pas ; quatre pas mènent à la halte suivante, que tu réclames une à une. Le voyage fini donne la coupe du voyage."
+            "value": "Un voyage de huit semaines en terre de langue, avec 40 haltes gratuites."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un viaggio di otto settimane in terra di lingua, con 40 soste gratuite. Gli atti del tuo sogno e l’alleanza ti fanno avanzare di qualche passo; quattro passi portano alla sosta successiva, che riscatti una a una. Il viaggio compiuto dà la coppa del viaggio."
+            "value": "Un viaggio di otto settimane in terra di lingua, con 40 soste gratuite."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma viagem de oito semanas em terra de idioma, com 40 paradas gratuitas. Os atos do seu sonho e a aliança fazem você avançar alguns passos; quatro passos levam à parada seguinte, que você resgata uma a uma. A viagem concluída dá a taça da viagem."
+            "value": "Uma viagem de oito semanas em terra de idioma, com 40 paradas gratuitas."
           }
         }
       }
@@ -316808,43 +317043,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انبعاث اختياري يُعرض عند المستوى 100، خمس مرات على الأكثر. يعود مستواك إلى 1 ونورك إلى الصفر: يعود شرارةً من جديد، وتدخل أسطورتك عصرًا جديدًا. وتبقى الشرارات التي تلقّيتها منذ البداية وذروة نورك، وتظل المبارزة والتحالف مفتوحين. ويهديك أجدادك كأسًا مرقّمة ومجدًا. وتبقى رتبتك وعملات Meesh ولهبك."
+            "value": "انبعاث اختياري يُعرض عند المستوى 100، خمس مرات على الأكثر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine freiwillige Wiedergeburt, ab Level 100, höchstens fünfmal. Dein Level beginnt wieder bei 1 und dein Licht bei null: Es wird wieder zum Funken, und deine Legende tritt in ein neues Zeitalter. Deine seit jeher empfangenen Funken und dein hellstes Licht bleiben, und Turnier wie Bündnis bleiben offen. Deine Ahnen schenken dir eine nummerierte Trophäe und Ruhm. Dein Rang, deine Meeshes und deine Flamme bleiben."
+            "value": "Eine freiwillige Wiedergeburt, ab Level 100, höchstens fünfmal."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "An optional rebirth, offered at level 100, five times at most. Your level starts over at 1 and your light at zero: it becomes a Spark again, and your legend enters a new Age. The sparks you received since the beginning and your highest light stay, and the joust and the alliance stay open. Your ancestors offer you a numbered trophy and glory. Your rank, your Meeshes and your Flame stay."
+            "value": "An optional rebirth, offered at level 100, five times at most."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un renacimiento opcional, que se ofrece en el nivel 100, cinco veces como máximo. Tu nivel vuelve a 1 y tu luz a cero: vuelve a ser Chispa, y tu leyenda entra en una nueva Edad. Tus chispas recibidas desde siempre y tu luz más alta se quedan, y la justa y la alianza siguen abiertas. Tus ancestros te ofrecen un trofeo numerado y gloria. Tu rango, tus Meeshes y tu Llama se quedan."
+            "value": "Un renacimiento opcional, que se ofrece en el nivel 100, cinco veces como máximo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une renaissance facultative, offerte au niveau 100, cinq fois au plus. Ton niveau repart à 1 et ta lumière à zéro : elle redevient Étincelle, et ta légende entre dans un nouvel Âge. Tes étincelles reçues depuis toujours et ta plus haute lumière restent, et la joute comme l’alliance restent ouvertes. Tes aïeux t’offrent un trophée numéroté et de la gloire. Ton rang, tes Meeshes et ta Flamme restent."
+            "value": "Une renaissance facultative, offerte au niveau 100, cinq fois au plus."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una rinascita facoltativa, offerta al livello 100, cinque volte al massimo. Il tuo livello riparte da 1 e la tua luce da zero: torna Scintilla, e la tua leggenda entra in una nuova Era. Le tue scintille ricevute da sempre e la tua luce più alta restano, e il torneo come l’alleanza restano aperti. I tuoi antenati ti offrono un trofeo numerato e gloria. Il tuo rango, le tue Meesh e la tua Fiamma restano."
+            "value": "Una rinascita facoltativa, offerta al livello 100, cinque volte al massimo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um renascimento opcional, oferecido no nível 100, no máximo cinco vezes. Seu nível recomeça em 1 e a sua luz em zero: ela volta a ser Faísca, e a sua lenda entra numa nova Era. Suas faíscas recebidas desde sempre e o auge da sua luz ficam, e o torneio como a aliança continuam abertos. Seus ancestrais oferecem a você um troféu numerado e glória. Seu título, suas Meeshes e sua Chama ficam."
+            "value": "Um renascimento opcional, oferecido no nível 100, no máximo cinco vezes."
           }
         }
       }
@@ -316855,43 +317090,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مضاعِف للشرارات. يشتعل حين تكون نشطًا في عدة فئات من الإجراءات هذه الأيام: المحتوى، والتعليقات، والمحادثات، والأدوات، والروابط الاجتماعية. وما دام قائمًا، يُطلق كل إجراء شرارات أكثر."
+            "value": "مضاعِف للشرارات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Funken-Multiplikator. Er springt an, wenn du in diesen Tagen in mehreren Aktionsfamilien aktiv bist: Inhalte, Kommentare, Unterhaltungen, Werkzeuge, soziale Bindung. Solange er hält, lässt jede Aktion mehr Funken sprühen."
+            "value": "Ein Funken-Multiplikator."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A spark multiplier. It lights up when you’re active in several families of moves these days: content, comments, conversations, tools, social ties. While it holds, every move makes more sparks fly."
+            "value": "A spark multiplier."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un multiplicador de chispas. Se enciende cuando estás activo en varias familias de gestos estos días: contenido, comentarios, conversaciones, herramientas, vínculo social. Mientras dure, cada gesto hace brotar más chispas."
+            "value": "Un multiplicador de chispas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci : contenu, commentaires, conversations, outils, lien social. Tant qu’il tient, chaque geste fait jaillir plus d’étincelles."
+            "value": "Un multiplicateur d’étincelles."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un moltiplicatore di scintille. Si accende quando sei attivo in più famiglie di gesti in questi giorni: contenuti, commenti, conversazioni, strumenti, legame sociale. Finché regge, ogni gesto fa scaturire più scintille."
+            "value": "Un moltiplicatore di scintille."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um multiplicador de faíscas. Ele se acende quando você está ativo em várias famílias de gestos nestes dias: conteúdo, comentários, conversas, ferramentas, laço social. Enquanto ele durar, cada gesto faz saltar mais faíscas."
+            "value": "Um multiplicador de faíscas."
           }
         }
       }
@@ -316902,43 +317137,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عشرون وسامًا، واحد لكل إجراء محدّد. كلٌّ منها يرتقي سبع درجات، من النحاس إلى المنشور، بتكرار إجرائه. لا يطفئ السكّ أيًّا منها ولا يُنزله."
+            "value": "عشرون وسامًا، واحد لكل إجراء محدّد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zwanzig Medaillen, eine pro bestimmter Aktion. Jede erklimmt sieben Stufen, von Kupfer bis Prisma, wenn du ihre Aktion wiederholst. Eine Prägung lässt keine erlöschen und keine absteigen."
+            "value": "Zwanzig Medaillen, eine pro bestimmter Aktion."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Twenty medals, one per precise move. Each one climbs seven marks, from copper to prism, as you make its move again. A mint never puts one out or brings one down."
+            "value": "Twenty medals, one per precise move."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Veinte medallas, una por gesto preciso. Cada una sube siete escalones, del cobre al prisma, a fuerza de repetir su gesto. Una acuñación no apaga ni baja ninguna."
+            "value": "Veinte medallas, una por gesto preciso."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vingt médailles, une par geste précis. Chacune gravit sept paliers, du cuivre au prisme, à force de refaire son geste. Une frappe n’en éteint aucune et n’en fait redescendre aucune."
+            "value": "Vingt médailles, une par geste précis."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Venti medaglie, una per gesto preciso. Ognuna sale sette gradini, dal rame al prisma, a forza di rifare il suo gesto. Un conio non ne spegne né ne abbassa nessuna."
+            "value": "Venti medaglie, una per gesto preciso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vinte medalhas, uma por gesto preciso. Cada uma sobe sete degraus, do cobre ao prisma, à força de refazer o seu gesto. Uma cunhagem não apaga nem rebaixa nenhuma."
+            "value": "Vinte medalhas, uma por gesto preciso."
           }
         }
       }
@@ -316949,43 +317184,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "درجات بأرقام في كل فئة من الإجراءات. ابلغ العدد المطلوب: فتُتجاوز الدرجة وتُفتح التالية."
+            "value": "درجات بأرقام في كل فئة من الإجراءات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stufen mit einer Zahl in jeder Aktionsfamilie. Erreiche die verlangte Zahl: Die Stufe ist geschafft und die nächste öffnet sich."
+            "value": "Stufen mit einer Zahl in jeder Aktionsfamilie."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Numbered tiers in every family of actions. Reach the number asked: the tier is cleared and the next one opens."
+            "value": "Numbered tiers in every family of actions."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escalones con cifra en cada familia de gestos. Alcanza el número pedido: el escalón queda superado y se abre el siguiente."
+            "value": "Escalones con cifra en cada familia de gestos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Des paliers chiffrés dans chaque famille de gestes. Atteins le nombre demandé : le palier est franchi et le suivant s’ouvre."
+            "value": "Des paliers chiffrés dans chaque famille de gestes."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gradini numerati in ogni famiglia di gesti. Raggiungi il numero richiesto: il gradino è superato e si apre il successivo."
+            "value": "Gradini numerati in ogni famiglia di gesti."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Patamares com número em cada família de gestos. Alcance o número pedido: o patamar é vencido e o seguinte se abre."
+            "value": "Patamares com número em cada família de gestos."
           }
         }
       }
@@ -316996,43 +317231,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تقديرات نادرة، تتحقّق دفعة واحدة حين تجمع ما تطلبه. كل مأثرة تُنمّي مجدك: كلما كانت أندر، نما أكثر."
+            "value": "تقديرات نادرة، تتحقّق دفعة واحدة حين تجمع ما تطلبه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seltene Auszeichnungen, die auf einmal gelingen, wenn du erfüllst, was sie verlangen. Jede Heldentat lässt deinen Ruhm wachsen: Je seltener sie ist, desto mehr wächst er."
+            "value": "Seltene Auszeichnungen, die auf einmal gelingen, wenn du erfüllst, was sie verlangen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rare distinctions, done in one go when you gather what they ask for. Each great deed makes your glory grow: the rarer it is, the more it grows."
+            "value": "Rare distinctions, done in one go when you gather what they ask for."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Distinciones raras, que se logran de una vez cuando reúnes lo que piden. Cada hazaña hace crecer tu gloria: cuanto más rara, más crece."
+            "value": "Distinciones raras, que se logran de una vez cuando reúnes lo que piden."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Des distinctions rares, accomplies d’un coup quand tu réunis ce qu’elles demandent. Chaque haut fait fait grandir ta gloire : plus il est rare, plus elle grandit."
+            "value": "Des distinctions rares, accomplies d’un coup quand tu réunis ce qu’elles demandent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Riconoscimenti rari, compiuti in un colpo solo quando riunisci ciò che chiedono. Ogni impresa fa crescere la tua gloria: più è rara, più cresce."
+            "value": "Riconoscimenti rari, compiuti in un colpo solo quando riunisci ciò che chiedono."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Distinções raras, cumpridas de uma vez quando você reúne o que elas pedem. Cada façanha faz a sua glória crescer: quanto mais rara, mais ela cresce."
+            "value": "Distinções raras, cumpridas de uma vez quando você reúne o que elas pedem."
           }
         }
       }
@@ -317043,43 +317278,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "رفّ كؤوسك: كؤوس المبارزة والرحلة والانبعاث واللهب. الكأس لا تكسبك شيئًا: تُحفظ وتُعرض. أنت تختار الترتيب ومن يراها."
+            "value": "رفّ كؤوسك: كؤوس المبارزة والرحلة والانبعاث واللهب."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Regal deiner Trophäen: Pokale aus Turnier und Reise, Trophäen der Wiedergeburt und der Flamme. Eine Trophäe bringt nichts ein: Du bewahrst und zeigst sie. Du bestimmst die Reihenfolge und wer sie sieht."
+            "value": "Das Regal deiner Trophäen: Pokale aus Turnier und Reise, Trophäen der Wiedergeburt und der Flamme."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The shelf of your trophies: joust and journey cups, rebirth and Flame trophies. A trophy brings nothing: it is kept and shown. You choose the order and who sees them."
+            "value": "The shelf of your trophies: joust and journey cups, rebirth and Flame trophies."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El estante de tus trofeos: copas de justa y de viaje, trofeos de renacimiento y de Llama. Un trofeo no da nada: se guarda y se muestra. Tú eliges el orden y quién los ve."
+            "value": "El estante de tus trofeos: copas de justa y de viaje, trofeos de renacimiento y de Llama."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme. Un trophée ne rapporte rien : il se garde et se montre. Tu choisis l’ordre et qui les voit."
+            "value": "L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lo scaffale dei tuoi trofei: coppe del torneo e del viaggio, trofei di rinascita e della Fiamma. Un trofeo non porta nulla: si custodisce e si mostra. Scegli tu l’ordine e chi li vede."
+            "value": "Lo scaffale dei tuoi trofei: coppe del torneo e del viaggio, trofei di rinascita e della Fiamma."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A prateleira dos seus troféus: taças de torneio e de viagem, troféus de renascimento e de Chama. Um troféu não rende nada: ele se guarda e se mostra. Você escolhe a ordem e quem os vê."
+            "value": "A prateleira dos seus troféus: taças de torneio e de viagem, troféus de renascimento e de Chama."
           }
         }
       }
@@ -317090,43 +317325,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جواز لغاتك. يوضع الختم حين ترسل رسالة وتستقبل أخرى بلغة ما. وهو خاص افتراضيًا: أنت تختار من يراه."
+            "value": "جواز لغاتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Sprachenpass. Ein Stempel sitzt, wenn du in einer Sprache eine Nachricht gesendet und eine erhalten hast. Er ist standardmäßig privat: Du bestimmst, wer ihn sieht."
+            "value": "Dein Sprachenpass."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your language passport. A stamp lands when you have sent a message and received one in a language. It is private by default: you choose who sees it."
+            "value": "Your language passport."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu pasaporte de idiomas. Un sello se estampa cuando has enviado un mensaje y recibido otro en un idioma. Es privado por defecto: tú eliges quién lo ve."
+            "value": "Tu pasaporte de idiomas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton passeport des langues. Un tampon se pose quand tu as envoyé un message et reçu un message dans une langue. Il est privé par défaut : tu choisis qui le voit."
+            "value": "Ton passeport des langues."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo passaporto delle lingue. Un timbro si posa quando hai inviato un messaggio e ne hai ricevuto uno in una lingua. È privato per impostazione predefinita: scegli tu chi lo vede."
+            "value": "Il tuo passaporto delle lingue."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu passaporte de idiomas. Um carimbo aparece quando você enviou uma mensagem e recebeu outra em um idioma. Ele é privado por padrão: você escolhe quem o vê."
+            "value": "Seu passaporte de idiomas."
           }
         }
       }
