@@ -8,6 +8,8 @@ struct DataStorageView: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     @State private var cacheSize: Int = 0
+    /// Le (i) ouvert : un seul à la fois sur l'écran.
+    @State private var openNoteID: String?
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -54,34 +56,20 @@ struct DataStorageView: View {
                 HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("folder.fill", color: accentColor)
 
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        HStack(spacing: MeeshySpacing.sm) {
-                            Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache média", bundle: .main))
-                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                                .foregroundStyle(theme.textPrimary)
-
-                            Spacer()
-
-                            Text(MediaFormat.bytes(Int64(cacheSize)))
-                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                                .foregroundStyle(Color(hex: accentColor))
-                        }
-
-                        Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et vidéos mis en cache", bundle: .main))
+                    MeeshyInfoNoted(note: SettingsInfoNotes.cacheUse, openNoteID: $openNoteID, tint: theme.textMuted) {
+                        Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Chargé plus vite, vidé après 7 jours.", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                             .foregroundStyle(theme.textMuted)
                     }
+
+                    Spacer()
+
+                    Text(MediaFormat.bytes(Int64(cacheSize)))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                        .foregroundStyle(Color(hex: accentColor))
                 }
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.smPlus)
-                .accessibilityElement(children: .combine)
-
-                Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours.", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                    .foregroundStyle(theme.textMuted)
-                    .lineSpacing(3)
-                    .padding(.horizontal, MeeshySpacing.mdPlus)
-                    .padding(.bottom, MeeshySpacing.smPlus)
             }
             .background(SettingsSectionBackground(tint: accentColor))
         }

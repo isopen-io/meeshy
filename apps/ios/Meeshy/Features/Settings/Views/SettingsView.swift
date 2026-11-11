@@ -551,15 +551,15 @@ struct SettingsView: View {
     }
 
     private var lentilleListTitle: String {
-        String(localized: "settings.interface.lentille_list", defaultValue: "Activer la liste Lentille", bundle: .main)
+        String(localized: "settings.interface.lentille_list", defaultValue: "Liste Lentille", bundle: .main)
     }
 
     private var readingModesTitle: String {
-        String(localized: "settings.interface.reading_modes", defaultValue: "Activer le mode de lecture", bundle: .main)
+        String(localized: "settings.interface.reading_modes", defaultValue: "Mode de lecture", bundle: .main)
     }
 
     private var riviereModeTitle: String {
-        String(localized: "settings.interface.riviere_mode", defaultValue: "Activer le mode Rivière", bundle: .main)
+        String(localized: "settings.interface.riviere_mode", defaultValue: "Mode Rivière", bundle: .main)
     }
 
     // MARK: - Notifications Section
@@ -729,14 +729,14 @@ struct SettingsView: View {
 
     private var transcriptionSection: some View {
         settingsSection(title: String(localized: "settings.section.transcription", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo300Hex) {
-            settingsRow(icon: "mic.fill", title: String(localized: "settings.transcription.mine", defaultValue: "Transcrire mes messages vocaux", bundle: .main), color: MeeshyColors.indigo300Hex) {
+            settingsRow(icon: "mic.fill", title: String(localized: "settings.transcription.mine", defaultValue: "Mes messages vocaux", bundle: .main), color: MeeshyColors.indigo300Hex) {
                 Toggle("", isOn: Binding(
                     get: { prefs.audio.transcriptionEnabled },
                     set: { val in prefs.updateAudio { $0.transcriptionEnabled = val } }
                 ))
                     .labelsHidden()
                     .tint(Color(hex: accentColor))
-                    .accessibilityLabel(String(localized: "settings.transcription.mine", defaultValue: "Transcrire mes messages vocaux", bundle: .main))
+                    .accessibilityLabel(String(localized: "settings.transcription.mine", defaultValue: "Mes messages vocaux", bundle: .main))
                     .accessibilityValue(prefs.audio.transcriptionEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
             }
 

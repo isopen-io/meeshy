@@ -23,6 +23,8 @@ struct MediaDownloadSettingsView: View {
     /// #9885 — à l'envoi : le lieu des photos (retiré par défaut, #11247) et la compression.
     @AppStorage(OutgoingImageLocationSetting.key) private var keepsPhotoLocation = OutgoingImageLocationSetting.standard
     @ObservedObject private var preferences: UserPreferencesManager
+    /// Le (i) ouvert : un seul à la fois sur l'écran.
+    @State private var openNoteID: String?
     init(store: MediaDownloadPreferencesStore = .shared, preferences: UserPreferencesManager = .shared) {
         self.store = store
         self.preferences = preferences
@@ -52,7 +54,6 @@ struct MediaDownloadSettingsView: View {
 
     private var pageContent: some View {
         VStack(spacing: MeeshySpacing.xl) {
-            infoSection
             autoSaveSection
             captureSaveSection
             composerOpeningSection
@@ -79,35 +80,6 @@ struct MediaDownloadSettingsView: View {
         .padding(.top, MeeshySpacing.lg)
     }
 
-    // MARK: - Info Section
-
-    private var infoSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            sectionHeader(title: String(localized: "settings.media.download.info_header", defaultValue: "Information", bundle: .main), icon: "info.circle.fill", color: MeeshyColors.neutral500Hex)
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-                HStack(spacing: MeeshySpacing.md) {
-                    fieldIcon("arrow.down.circle.fill", color: accentColor)
-
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        Text(String(localized: "settings.media.download.auto_title", defaultValue: "Téléchargement automatique", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
-
-                        Text(String(localized: "settings.media.download.auto_subtitle", defaultValue: "Choisissez quand télécharger automatiquement chaque type de média selon votre connexion.", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-                            .foregroundColor(theme.textMuted)
-                            .lineSpacing(2)
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.mdPlus)
-                .padding(.vertical, MeeshySpacing.smPlus)
-                .accessibilityElement(children: .combine)
-            }
-            .background(SettingsSectionBackground(tint: MeeshyColors.neutral500Hex))
-        }
-    }
-
     // MARK: - Enregistrement automatique (#8307)
 
     private var autoSaveSection: some View {
@@ -115,26 +87,14 @@ struct MediaDownloadSettingsView: View {
             sectionHeader(title: String(localized: "settings.media.autosave.header", defaultValue: "Galerie", bundle: .main),
                           icon: "photo.on.rectangle", color: accentColor)
             // #14640 — la préférence SERVEUR, la même que Réglages › Confidentialité. Coupée par défaut.
-            Toggle(isOn: Binding(get: { preferences.privacy.saveMediaToGallery },
-                                 set: { enregistre in preferences.updatePrivacy { $0.saveMediaToGallery = enregistre } })) {
-                HStack(spacing: MeeshySpacing.md) {
-                    fieldIcon("square.and.arrow.down.on.square.fill", color: accentColor)
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        Text(String(localized: "settings.media.autosave.title", defaultValue: "Enregistrer dans Photos", bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
-                        Text(String(localized: "settings.media.autosave.subtitle",
-                                    defaultValue: "Les images et vidéos reçues rejoignent l'album Meeshy, une seule fois. Jamais un média éphémère, flouté ou à vue unique.",
-                                    bundle: .main))
-                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-                            .foregroundColor(theme.textMuted)
-                            .lineSpacing(2)
-                    }
-                }
-            }
-            .tint(Color(hex: accentColor))
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.smPlus)
+            captureToggle(isOn: Binding(get: { preferences.privacy.saveMediaToGallery },
+                                        set: { enregistre in preferences.updatePrivacy { $0.saveMediaToGallery = enregistre } }),
+                          icon: "square.and.arrow.down.on.square.fill", iconColor: accentColor,
+                          title: String(localized: "settings.media.autosave.title", defaultValue: "Enregistrer dans Photos", bundle: .main),
+                          subtitle: String(localized: "settings.media.autosave.subtitle",
+                                           defaultValue: "Les médias reçus rejoignent l'album Meeshy.",
+                                           bundle: .main),
+                          note: SettingsInfoNotes.galleryAutosave)
             .background(SettingsSectionBackground(tint: accentColor))
         }
     }
@@ -157,10 +117,8 @@ struct MediaDownloadSettingsView: View {
                                             set: { captureRenderedMode = $0 ? .automatic : .manual }),
                               icon: "camera.filters",
                               title: String(localized: "settings.media.capture.rendered.title",
-                                            defaultValue: "Enregistrer la version avec effets et cadre", bundle: .main),
-                              subtitle: String(localized: "settings.media.capture.rendered.subtitle",
-                                               defaultValue: "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande.",
-                                               bundle: .main))
+                                            defaultValue: "Version avec effets", bundle: .main),
+                              note: SettingsInfoNotes.renderedCapture)
             }
             .background(SettingsSectionBackground(tint: MeeshyColors.indigo600Hex))
         }
@@ -177,9 +135,7 @@ struct MediaDownloadSettingsView: View {
                 captureToggle(isOn: $openingArmsCamera, icon: "camera.viewfinder",
                               title: String(localized: "settings.media.opening.camera.title",
                                             defaultValue: "Armer la caméra", bundle: .main),
-                              subtitle: String(localized: "settings.media.opening.camera.subtitle",
-                                               defaultValue: "La caméra s'ouvre derrière la scène dès l'ouverture du composer. Maintenez la scène pour filmer.",
-                                               bundle: .main))
+                              note: SettingsInfoNotes.cameraArming)
                 Divider().padding(.leading, Self.separatorInset)
                 captureToggle(isOn: $openingOpensLibrary, icon: "photo.on.rectangle",
                               title: String(localized: "settings.media.opening.library.title",
@@ -203,10 +159,11 @@ struct MediaDownloadSettingsView: View {
                                             set: { compresse in preferences.updateDocument { $0.compressImagesOnUpload = compresse } }),
                               icon: "arrow.down.right.and.arrow.up.left",
                               title: String(localized: "settings.media.outgoing.compress.title",
-                                            defaultValue: "Compression forte des photos et vidéos", bundle: .main),
+                                            defaultValue: "Compression forte", bundle: .main),
                               subtitle: String(localized: "settings.media.outgoing.compress.subtitle",
-                                               defaultValue: "Économise des données en réduisant chaque photo et chaque vidéo (720p). Sinon, elles partent en haute définition (vidéos en 1080p), compressées sans perte visible.",
-                                               bundle: .main))
+                                               defaultValue: "Économise des données.",
+                                               bundle: .main),
+                              note: SettingsInfoNotes.compression)
                 Divider().padding(.leading, Self.separatorInset)
                 captureToggle(isOn: $keepsPhotoLocation, icon: "location",
                               title: String(localized: "settings.media.outgoing.location.title",
@@ -219,22 +176,35 @@ struct MediaDownloadSettingsView: View {
         }
     }
 
-    private func captureToggle(isOn: Binding<Bool>, icon: String, title: String, subtitle: String) -> some View {
-        Toggle(isOn: isOn) {
-            HStack(spacing: MeeshySpacing.md) {
-                fieldIcon(icon, color: MeeshyColors.indigo600Hex)
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+    private func captureToggle(
+        isOn: Binding<Bool>,
+        icon: String,
+        iconColor: String = MeeshyColors.indigo600Hex,
+        title: String,
+        subtitle: String? = nil,
+        note: MeeshyInfoNote? = nil
+    ) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            fieldIcon(icon, color: iconColor)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textMuted) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
+                }
+                if let subtitle {
                     Text(subtitle)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                         .foregroundColor(theme.textMuted)
                         .lineSpacing(2)
                 }
             }
+            Spacer(minLength: MeeshySpacing.sm)
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .tint(Color(hex: accentColor))
+                .accessibilityLabel(title)
         }
-        .tint(Color(hex: accentColor))
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
     }

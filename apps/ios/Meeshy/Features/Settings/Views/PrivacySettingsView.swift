@@ -10,8 +10,8 @@ struct PrivacySettingsView: View {
     init(prefs: UserPreferencesManager = .shared) {
         self.prefs = prefs
     }
-    /// Fiche « (i) » affichée en surimpression. Une seule à la fois.
-    @State private var presentedInfo: SettingsInfo?
+    /// Le (i) ouvert : sa note se déplie sous la rangée, une seule à la fois.
+    @State private var openNoteID: String?
     /// Réglage de l'APPAREIL (#11296) : l'adresse IP à masquer est la sienne.
     @AppStorage(CallAddressPrivacySetting.key) private var hidesCallAddress = false
 
@@ -30,7 +30,6 @@ struct PrivacySettingsView: View {
                 content: { pageContent }
             )
         }
-        .settingsInfoOverlay($presentedInfo)
         .adaptiveOnChange(of: prefs.privacy.allowAnalytics) { _, _ in
             AnalyticsManager.shared.syncCollectionState()
         }
@@ -67,7 +66,8 @@ struct PrivacySettingsView: View {
         let title: String
         let color: String
         let keyPath: WritableKeyPath<PrivacyPreferences, Bool>
-        var info: SettingsInfo?
+        var summary: String?
+        var note: MeeshyInfoNote?
     }
 
     private var visibilitySection: some View {
@@ -80,29 +80,15 @@ struct PrivacySettingsView: View {
                     id: "online", icon: "circle.fill",
                     title: String(localized: "settings.privacy.online_status", defaultValue: "Statut en ligne", bundle: .main),
                     color: "4ADE80", keyPath: \.showOnlineStatus,
-                    info: SettingsInfo(
-                        id: "privacy.online_status",
-                        title: String(localized: "settings.privacy.online_status", defaultValue: "Statut en ligne", bundle: .main),
-                        message: String(
-                            localized: "settings.privacy.online_status.info",
-                            defaultValue: "La pastille verte sur votre avatar indique que vous êtes actif. Désactivée, personne ne voit ce point — mais écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs.",
-                            bundle: .main
-                        )
-                    )
+                    summary: String(localized: "settings.privacy.online_status.summary", defaultValue: "La pastille verte dit que vous êtes actif.", bundle: .main),
+                    note: SettingsInfoNotes.onlineStatus
                 ),
                 ToggleSpec(
                     id: "notifyOnReturn", icon: "person.crop.circle.badge.clock",
-                    title: String(localized: "settings.privacy.notify_contacts_on_return", defaultValue: "Prévenir mes contacts quand je reviens sur Meeshy", bundle: .main),
+                    title: String(localized: "settings.privacy.notify_contacts_on_return", defaultValue: "Annoncer mon retour", bundle: .main),
                     color: MeeshyColors.tileTealHex, keyPath: \.notifyContactsOnReturn,
-                    info: SettingsInfo(
-                        id: "privacy.notify_contacts_on_return",
-                        title: String(localized: "settings.privacy.notify_contacts_on_return", defaultValue: "Prévenir mes contacts quand je reviens sur Meeshy", bundle: .main),
-                        message: String(
-                            localized: "settings.privacy.notify_contacts_on_return.info",
-                            defaultValue: "Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué.",
-                            bundle: .main
-                        )
-                    )
+                    summary: String(localized: "settings.privacy.notify_contacts_on_return.summary", defaultValue: "Vos contacts voient « était sur Meeshy récemment », au plus toutes les 3 heures.", bundle: .main),
+                    note: SettingsInfoNotes.returnAnnouncement
                 ),
                 ToggleSpec(
                     id: "lastSeen", icon: "clock.fill",
@@ -113,15 +99,7 @@ struct PrivacySettingsView: View {
                     id: "readReceipts", icon: "checkmark.message.fill",
                     title: String(localized: "settings.privacy.read_receipts", defaultValue: "Accusés de lecture", bundle: .main),
                     color: MeeshyColors.tileBlueHex, keyPath: \.showReadReceipts,
-                    info: SettingsInfo(
-                        id: "privacy.read_receipts",
-                        title: String(localized: "settings.privacy.read_receipts", defaultValue: "Accusés de lecture", bundle: .main),
-                        message: String(
-                            localized: "settings.privacy.read_receipts.info",
-                            defaultValue: "Réciproque : si vous ne renvoyez pas d'accusé de lecture, vous ne verrez pas non plus si vos messages ont été lus.",
-                            bundle: .main
-                        )
-                    )
+                    note: SettingsInfoNotes.readReceipts
                 ),
                 ToggleSpec(
                     id: "typing", icon: "ellipsis.bubble.fill",
@@ -130,17 +108,9 @@ struct PrivacySettingsView: View {
                 ),
                 ToggleSpec(
                     id: "hideSearch", icon: "magnifyingglass",
-                    title: String(localized: "settings.privacy.hide_from_contact_search", defaultValue: "Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail", bundle: .main),
+                    title: String(localized: "settings.privacy.hide_from_contact_search", defaultValue: "Masquer mon numéro et mon e-mail", bundle: .main),
                     color: MeeshyColors.tileCoralHex, keyPath: \.hideProfileFromSearch,
-                    info: SettingsInfo(
-                        id: "privacy.hide_from_contact_search",
-                        title: String(localized: "settings.privacy.hide_from_contact_search", defaultValue: "Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail", bundle: .main),
-                        message: String(
-                            localized: "settings.privacy.hide_from_contact_search.info",
-                            defaultValue: "Activé, votre profil ne ressort plus d'une recherche par numéro ou par e-mail, et vos contacts ne sont pas prévenus de votre arrivée sur Meeshy.",
-                            bundle: .main
-                        )
-                    )
+                    note: SettingsInfoNotes.contactSearch
                 ),
             ]
         )
@@ -166,15 +136,7 @@ struct PrivacySettingsView: View {
                     id: "callsNonContacts", icon: "phone.arrow.down.left",
                     title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
                     color: MeeshyColors.tileCoralHex, keyPath: \.acceptCallsFromNonContacts,
-                    info: SettingsInfo(
-                        id: "privacy.calls_non_contacts",
-                        title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
-                        message: String(
-                            localized: "settings.privacy.calls_non_contacts.info",
-                            defaultValue: "Désactivé, seuls vos amis peuvent vous faire sonner. Les autres voient que vous n'acceptez que les appels de vos contacts.",
-                            bundle: .main
-                        )
-                    )
+                    note: SettingsInfoNotes.callsFromNonContacts
                 ),
             ]
         )
@@ -205,15 +167,7 @@ struct PrivacySettingsView: View {
                     id: "analytics", icon: "chart.bar.fill",
                     title: String(localized: "settings.privacy.analytics", defaultValue: "Analytique", bundle: .main),
                     color: MeeshyColors.infoHex, keyPath: \.allowAnalytics,
-                    info: SettingsInfo(
-                        id: "privacy.analytics",
-                        title: String(localized: "settings.privacy.analytics", defaultValue: "Analytique", bundle: .main),
-                        message: String(
-                            localized: "settings.privacy.analytics.info",
-                            defaultValue: "Mesure d'usage anonyme : écrans ouverts, fonctionnalités utilisées, plantages. Jamais le contenu de vos messages, ni vos contacts. Le réglage prend effet immédiatement.",
-                            bundle: .main
-                        )
-                    )
+                    note: SettingsInfoNotes.analytics
                 ),
                 ToggleSpec(
                     id: "shareData", icon: "arrow.triangle.branch",
@@ -241,13 +195,8 @@ struct PrivacySettingsView: View {
             SettingsCard(tint: MeeshyColors.tileBlueHex) {
                 SettingsRow(
                     icon: "eye.slash.fill", title: titre, color: MeeshyColors.tileBlueHex,
-                    info: SettingsInfo(
-                        id: "privacy.calls.hide_ip", title: titre,
-                        message: String(localized: "settings.privacy.calls.hide_ip.info",
-                                        defaultValue: "Vos appels passent par un relais Meeshy : votre correspondant ne voit pas votre adresse IP. La connexion peut être un peu plus lente. Ce réglage vaut pour cet appareil.",
-                                        bundle: .main)
-                    ),
-                    onInfo: { presentedInfo = $0 }
+                    note: SettingsInfoNotes.hiddenCallAddress,
+                    openNoteID: $openNoteID
                 ) {
                     Toggle("", isOn: $hidesCallAddress)
                         .labelsHidden()
@@ -320,9 +269,10 @@ struct PrivacySettingsView: View {
             SettingsRow(
                 icon: spec.icon,
                 title: spec.title,
+                subtitle: spec.summary,
                 color: spec.color,
-                info: spec.info,
-                onInfo: { presentedInfo = $0 }
+                note: spec.note,
+                openNoteID: $openNoteID
             ) {
                 Toggle("", isOn: Binding(
                     get: { prefs.privacy[keyPath: spec.keyPath] },

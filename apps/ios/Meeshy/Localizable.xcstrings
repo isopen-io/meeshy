@@ -2775,53 +2775,6 @@
         }
       }
     },
-    "2fa_badge_active": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نشط"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aktiv"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Active"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Activo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Actif"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Attivo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ativo"
-          }
-        }
-      }
-    },
     "2fa_cancel": {
       "extractionState": "manual",
       "localizations": {
@@ -3805,6 +3758,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Autenticação de dois fatores"
+          }
+        }
+      }
+    },
+    "2fa_section_summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز إضافي مع كلمة المرور عند كل تسجيل دخول."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bei jeder Anmeldung ein Code zusätzlich zum Passwort."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A code on top of your password at every sign-in."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un código además de la contraseña en cada inicio de sesión."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un code en plus du mot de passe à chaque connexion."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un codice in più della password a ogni accesso."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um código além da senha a cada login."
           }
         }
       }
@@ -21263,43 +21263,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل روابطك، من الدم إلى المعارف، وأعضاء المجتمعات التي تشاركها."
+            "value": "روابطك، من الدم إلى المعارف، والمجتمعات التي تشاركها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alle deine Verbindungen, von Blut bis Bekannter, und die Mitglieder deiner gemeinsamen Communities."
+            "value": "Deine Verbindungen, von Blut bis Bekannter, und die gemeinsamen Communities."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "All your connections, from Blood to Acquaintance, and members of the communities you share."
+            "value": "Your connections, from Blood to Acquaintance, and the communities you share."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Todos tus vínculos, de Sangre a Conocido, y los miembros de las comunidades que compartes."
+            "value": "Tus vínculos, de Sangre a Conocido, y las comunidades que compartes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tous vos liens, de Sang à Connaissance, et les membres des communautés que vous partagez."
+            "value": "Vos liens, de Sang à Connaissance, et les communautés que vous partagez."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tutti i tuoi legami, da Sangue a Conoscente, e i membri delle community che condividi."
+            "value": "I tuoi legami, da Sangue a Conoscente, e le community che condividi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Todos os seus vínculos, de Sangue a Conhecido, e os membros das comunidades que você compartilha."
+            "value": "Seus vínculos, de Sangue a Conhecido, e as comunidades que você compartilha."
           }
         }
       }
@@ -21357,43 +21357,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الأشخاص أنفسهم كما في المجتمع: لا يوجد متابعون في Meeshy، ولا يتلقى أي غريب إشعارًا."
+            "value": "مثل المجتمع: بلا متابعين، لا يتلقى أي غريب إشعارًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieselben Personen wie bei Community: Meeshy hat keine Follower, kein Fremder wird benachrichtigt."
+            "value": "Wie Community: ohne Follower wird kein Fremder benachrichtigt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The same people as Community: Meeshy has no followers, so no stranger is notified."
+            "value": "Same as Community: no followers, so no stranger is notified."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Las mismas personas que Comunidad: Meeshy no tiene seguidores, ningún desconocido recibe el aviso."
+            "value": "Como Comunidad: sin seguidores, ningún desconocido recibe el aviso."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les mêmes personnes que Communauté : Meeshy n’a pas d’abonnés, aucun inconnu n’est prévenu."
+            "value": "Comme Communauté : sans abonnés, aucun inconnu n’est prévenu."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le stesse persone di Comunità: Meeshy non ha follower, nessuno sconosciuto viene avvisato."
+            "value": "Come Comunità: senza follower, nessuno sconosciuto viene avvisato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "As mesmas pessoas que Comunidade: o Meeshy não tem seguidores, nenhum desconhecido é avisado."
+            "value": "Como Comunidade: sem seguidores, nenhum desconhecido é avisado."
           }
         }
       }
@@ -21545,43 +21545,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اختر، لكل إجراء، أي دائرة من محيطك تتلقى إشعارًا."
+            "value": "لكل إجراء، اختر دائرة محيطك التي يتم إخطارها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wähle für jede Aktion, welcher Kreis deiner Leute eine Benachrichtigung erhält."
+            "value": "Wähle für jede Aktion den Kreis deiner Leute, der benachrichtigt wird."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose, action by action, which circle of your people receives a notification."
+            "value": "For each action, choose which circle of your people is notified."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Elige, acción por acción, qué círculo de tu entorno recibe una notificación."
+            "value": "Para cada acción, elige el círculo de tu entorno al que se avisa."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisissez, action par action, le cercle de votre entourage qui reçoit une notification."
+            "value": "Pour chaque action, choisissez le cercle de votre entourage prévenu."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scegli, azione per azione, quale cerchia delle tue persone riceve una notifica."
+            "value": "Per ogni azione, scegli la cerchia delle tue persone che viene avvisata."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escolha, ação por ação, qual círculo das suas pessoas recebe uma notificação."
+            "value": "Para cada ação, escolha o círculo das suas pessoas que é avisado."
           }
         }
       }
@@ -31744,43 +31744,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يستخدم حسابك بالفعل الحد الأقصى من الأجهزة للتشفير التام بين الطرفين. أزل جهازًا للكتابة من هذا الجهاز. الجهاز المُزال لن يقرأ الرسائل المشفّرة الجديدة."
+            "value": "بلغ حسابك الحد الأقصى من الأجهزة المشفّرة. أزل جهازًا للكتابة من هذا الجهاز: لن يقرأ بعد ذلك الرسائل المشفّرة الجديدة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Konto nutzt bereits die maximale Anzahl an Geräten für die Ende-zu-Ende-Verschlüsselung. Entferne eines, um von diesem Gerät zu schreiben. Ein entferntes Gerät liest keine neuen verschlüsselten Nachrichten mehr."
+            "value": "Dein Konto hat die maximale Anzahl verschlüsselter Geräte erreicht. Entferne eines, um von diesem zu schreiben: Es liest keine neuen verschlüsselten Nachrichten mehr."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your account already uses the maximum number of devices for end-to-end encryption. Remove one to write from this device. A removed device no longer reads new encrypted messages."
+            "value": "Your account has reached the maximum number of encrypted devices. Remove one to write from this one: it will no longer read new encrypted messages."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu cuenta ya usa el número máximo de dispositivos para el cifrado de extremo a extremo. Elimina uno para escribir desde este. Un dispositivo eliminado ya no lee los nuevos mensajes cifrados."
+            "value": "Tu cuenta alcanzó el número máximo de dispositivos cifrados. Elimina uno para escribir desde este: dejará de leer los nuevos mensajes cifrados."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre compte utilise déjà le nombre maximal d’appareils pour le chiffrement de bout en bout. Retirez-en un pour écrire depuis celui-ci. Un appareil retiré ne lit plus les nouveaux messages chiffrés."
+            "value": "Votre compte a atteint le nombre maximal d’appareils chiffrés. Retirez-en un pour écrire depuis celui-ci : il ne lira plus les nouveaux messages chiffrés."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo account usa già il numero massimo di dispositivi per la crittografia end-to-end. Rimuovine uno per scrivere da questo. Un dispositivo rimosso non legge più i nuovi messaggi crittografati."
+            "value": "Il tuo account ha raggiunto il numero massimo di dispositivi crittografati. Rimuovine uno per scrivere da questo: non leggerà più i nuovi messaggi crittografati."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua conta já usa o número máximo de dispositivos para a criptografia de ponta a ponta. Remova um para escrever deste. Um dispositivo removido não lê mais as novas mensagens criptografadas."
+            "value": "Sua conta atingiu o número máximo de dispositivos criptografados. Remova um para escrever deste: ele deixará de ler as novas mensagens criptografadas."
           }
         }
       }
@@ -50712,43 +50712,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy منصة مراسلة فورية عالية الأداء مع ترجمة متعددة اللغات واستنساخ صوتي وتشفير من طرف إلى طرف."
+            "value": "مراسلة فورية، مترجمة إلى لغتك، ومشفّرة من طرف إلى طرف."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy ist eine leistungsstarke Echtzeit-Messaging-Plattform mit mehrsprachiger Übersetzung, Voice-Cloning und Ende-zu-Ende-Verschlüsselung."
+            "value": "Echtzeit-Messaging, in deine Sprache übersetzt, Ende-zu-Ende-verschlüsselt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy is a high-performance real-time messaging platform with multilingual translation, voice cloning and end-to-end encryption."
+            "value": "Real-time messaging, translated into your language, end-to-end encrypted."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy es una plataforma de mensajería en tiempo real de alto rendimiento con traducción multilingüe, clonación de voz y cifrado de extremo a extremo."
+            "value": "Mensajería en tiempo real, traducida a tu idioma, cifrada de extremo a extremo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy est une plateforme de messagerie en temps réel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout."
+            "value": "Messagerie en temps réel, traduite dans votre langue, chiffrée de bout en bout."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy è una piattaforma di messaggistica in tempo reale ad alte prestazioni con traduzione multilingue, clonazione vocale e crittografia end-to-end."
+            "value": "Messaggistica in tempo reale, tradotta nella tua lingua, crittografata end-to-end."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O Meeshy é uma plataforma de mensagens em tempo real de alto desempenho com tradução multilíngue, clonagem de voz e criptografia de ponta a ponta."
+            "value": "Mensagens em tempo real, traduzidas no seu idioma, criptografadas de ponta a ponta."
           }
         }
       }
@@ -51605,43 +51605,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الكود المصدري المقابل لهذا الإصدار، بما في ذلك سكربتات البناء، متاح مجانًا."
+            "value": "الكود المصدري لهذا الإصدار، مجاني."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Quellcode dieser Version, einschließlich der Build-Skripte, ist kostenlos verfügbar."
+            "value": "Quellcode dieser Version, kostenlos."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The source code for this version, build scripts included, is available free of charge."
+            "value": "Source code for this version, free."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El código fuente de esta versión, scripts de compilación incluidos, está disponible de forma gratuita."
+            "value": "Código fuente de esta versión, gratis."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le code source correspondant à cette version, scripts de construction compris, est disponible gratuitement."
+            "value": "Code source de cette version, gratuit."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il codice sorgente di questa versione, script di compilazione inclusi, è disponibile gratuitamente."
+            "value": "Codice sorgente di questa versione, gratuito."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O código-fonte desta versão, scripts de compilação incluídos, está disponível gratuitamente."
+            "value": "Código-fonte desta versão, gratuito."
           }
         }
       }
@@ -63573,53 +63573,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bloquear este usuário?"
-          }
-        }
-      }
-    },
-    "blocked.users.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سيظهر هنا المستخدمون الذين تحظرهم"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Von dir blockierte Nutzer erscheinen hier"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Users you block will appear here"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los usuarios que bloquees aparecerán aquí"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les utilisateurs que vous bloquez apparaîtront ici"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gli utenti che blocchi appariranno qui"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os usuários que você bloquear aparecerão aqui"
           }
         }
       }
@@ -144061,43 +144014,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "في مستويي الحي والمدينة، تتم مشاركة المنطقة فقط — وليس العنوان الدقيق."
+            "value": "الحي والمدينة: تتم مشاركة المنطقة فقط، لا العنوان الدقيق."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf den Stufen Viertel und Stadt wird nur das Gebiet geteilt – nicht die genaue Adresse."
+            "value": "Viertel und Stadt: nur das Gebiet wird geteilt, nicht die genaue Adresse."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "At Neighborhood and City levels, only the area is shared — not the exact address."
+            "value": "Neighborhood and City: only the area is shared, not the exact address."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En los niveles Barrio y Ciudad, solo se comparte la zona, no la dirección exacta."
+            "value": "Barrio y Ciudad: solo se comparte la zona, no la dirección exacta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aux niveaux Quartier et Ville, seule la zone est transmise — pas l'adresse exacte."
+            "value": "Quartier et Ville : seule la zone est transmise, pas l'adresse exacte."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ai livelli Quartiere e Città viene condivisa solo la zona, non l'indirizzo esatto."
+            "value": "Quartiere e Città: viene condivisa solo la zona, non l'indirizzo esatto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nos níveis Bairro e Cidade, apenas a área é compartilhada — não o endereço exato."
+            "value": "Bairro e Cidade: só a área é compartilhada, não o endereço exato."
           }
         }
       }
@@ -160796,43 +160749,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نسخ رسائلي الصوتية نصًّا"
+            "value": "رسائلي الصوتية"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meine Sprachnachrichten transkribieren"
+            "value": "Meine Sprachnachrichten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcribe my voice messages"
+            "value": "My voice messages"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcribir mis mensajes de voz"
+            "value": "Mis mensajes de voz"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcrire mes messages vocaux"
+            "value": "Mes messages vocaux"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trascrivi i miei messaggi vocali"
+            "value": "I miei messaggi vocali"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcrever minhas mensagens de voz"
+            "value": "Minhas mensagens de voz"
           }
         }
       }
@@ -160843,43 +160796,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُنسَخ رسائلك الصوتية نصًّا لتُترجَم إلى لغة كل مستلم."
+            "value": "تُنسَخ نصًّا لتُترجَم إلى لغة كل مستلم."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Sprachnachrichten werden transkribiert, um sie in die Sprache jedes Empfängers zu übersetzen."
+            "value": "Transkribiert, um in die Sprache jedes Empfängers übersetzt zu werden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your voice messages are transcribed so they can be translated into each recipient's language."
+            "value": "Transcribed so they can be translated into each recipient's language."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus mensajes de voz se transcriben para traducirlos al idioma de cada destinatario."
+            "value": "Se transcriben para traducirse al idioma de cada destinatario."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos messages vocaux sont transcrits pour être traduits dans la langue de chaque destinataire."
+            "value": "Transcrits pour être traduits dans la langue de chaque destinataire."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi messaggi vocali vengono trascritti per essere tradotti nella lingua di ogni destinatario."
+            "value": "Trascritti per essere tradotti nella lingua di ogni destinatario."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suas mensagens de voz são transcritas para serem traduzidas no idioma de cada destinatário."
+            "value": "Transcritas para serem traduzidas no idioma de cada destinatário."
           }
         }
       }
@@ -174071,49 +174024,96 @@
         }
       }
     },
+    "security_sessions_summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الأجهزة المتصلة بحسابك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die mit deinem Konto verbundenen Geräte."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The devices signed in to your account."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los dispositivos conectados a tu cuenta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les appareils connectés à votre compte."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I dispositivi connessi al tuo account."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os aparelhos conectados à sua conta."
+          }
+        }
+      }
+    },
     "security_sessions_manage": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إدارة الجلسات النشطة"
+            "value": "عرض الجلسات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aktive Sitzungen verwalten"
+            "value": "Sitzungen ansehen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Manage active sessions"
+            "value": "View sessions"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gestionar las sesiones activas"
+            "value": "Ver las sesiones"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gérer les sessions actives"
+            "value": "Voir les sessions"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gestisci le sessioni attive"
+            "value": "Vedi le sessioni"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gerenciar as sessões ativas"
+            "value": "Ver as sessões"
           }
         }
       }
@@ -174218,43 +174218,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الحالية"
+            "value": "هذا الجهاز"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aktuell"
+            "value": "Dieses Gerät"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Current"
+            "value": "This device"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Actual"
+            "value": "Este dispositivo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Actuelle"
+            "value": "Cet appareil"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Attuale"
+            "value": "Questo dispositivo"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Atual"
+            "value": "Este aparelho"
           }
         }
       }
@@ -174678,6 +174678,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sessões ativas"
+          }
+        }
+      }
+    },
+    "sessions.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أجهزتك المتصلة: سجّل خروج الأجهزة التي لا تعرفها."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine angemeldeten Geräte: melde die ab, die du nicht kennst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your signed-in devices: sign out the ones you don't recognize."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus dispositivos conectados: cierra los que no reconozcas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos appareils connectés : déconnectez ceux que vous ne reconnaissez pas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi dispositivi connessi: disconnetti quelli che non riconosci."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus aparelhos conectados: desconecte os que você não reconhece."
           }
         }
       }
@@ -177085,43 +177132,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حول Meeshy"
+            "value": "Meeshy"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Über Meeshy"
+            "value": "Meeshy"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "About Meeshy"
+            "value": "Meeshy"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acerca de Meeshy"
+            "value": "Meeshy"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "À propos de Meeshy"
+            "value": "Meeshy"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Informazioni su Meeshy"
+            "value": "Meeshy"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sobre o Meeshy"
+            "value": "Meeshy"
           }
         }
       }
@@ -177508,43 +177555,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "وفقًا للائحة GDPR، يمكنك تصدير كل بياناتك الشخصية."
+            "value": "صدّر بياناتك الشخصية (GDPR)."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gemäß DSGVO kannst du all deine personenbezogenen Daten exportieren."
+            "value": "Exportiere deine personenbezogenen Daten (DSGVO)."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Under the GDPR, you can export all of your personal data."
+            "value": "Export your personal data (GDPR)."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conforme al RGPD, puedes exportar todos tus datos personales."
+            "value": "Exporta tus datos personales (RGPD)."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conformément au RGPD, vous pouvez exporter toutes vos données personnelles."
+            "value": "Exportez vos données personnelles (RGPD)."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "In conformità al GDPR, puoi esportare tutti i tuoi dati personali."
+            "value": "Esporta i tuoi dati personali (GDPR)."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conforme o RGPD, você pode exportar todos os seus dados pessoais."
+            "value": "Exporte seus dados pessoais (RGPD)."
           }
         }
       }
@@ -177743,6 +177790,53 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
+            "value": "تحميل أسرع، وتُفرَّغ بعد 7 أيام."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lädt schneller, nach 7 Tagen geleert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loads faster, cleared after 7 days."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carga más rápido, se vacía a los 7 días."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chargé plus vite, vidé après 7 jours."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si carica più in fretta, svuotata dopo 7 giorni."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carrega mais rápido, limpo após 7 dias."
+          }
+        }
+      }
+    },
+    "settings.data.storage.cache.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
             "value": "تسرّع الذاكرة المؤقتة تحميل الوسائط وتقلّل استهلاك البيانات. تُحذف الملفات المخزّنة تلقائيًا بعد 7 أيام."
           }
         },
@@ -177780,6 +177874,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "O cache carrega as mídias mais rápido e reduz o consumo de dados. Os arquivos em cache são apagados automaticamente após 7 dias."
+          }
+        }
+      }
+    },
+    "settings.data.storage.cache.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما فائدة الذاكرة المؤقتة؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wofür ist der Cache?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What is the cache for?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Para qué sirve la caché?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quoi sert le cache ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A cosa serve la cache?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para que serve o cache?"
           }
         }
       }
@@ -178260,43 +178401,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تفعيل قائمة لينتيّ"
+            "value": "قائمة لينتيّ"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lentille-Liste aktivieren"
+            "value": "Lentille-Liste"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enable the Lentille list"
+            "value": "Lentille list"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activar la lista Lentille"
+            "value": "Lista Lentille"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activer la liste Lentille"
+            "value": "Liste Lentille"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Attiva l'elenco Lentille"
+            "value": "Elenco Lentille"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ativar a lista Lentille"
+            "value": "Lista Lentille"
           }
         }
       }
@@ -178307,43 +178448,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تفعيل وضع القراءة"
+            "value": "وضع القراءة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lesemodus aktivieren"
+            "value": "Lesemodus"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enable reading mode"
+            "value": "Reading mode"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activar el modo de lectura"
+            "value": "Modo de lectura"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activer le mode de lecture"
+            "value": "Mode de lecture"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Attiva la modalità di lettura"
+            "value": "Modalità di lettura"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ativar o modo de leitura"
+            "value": "Modo de leitura"
           }
         }
       }
@@ -178401,43 +178542,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تفعيل وضع ريفيير"
+            "value": "وضع ريفيير"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rivière-Modus aktivieren"
+            "value": "Rivière-Modus"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enable Rivière mode"
+            "value": "Rivière mode"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activar el modo Rivière"
+            "value": "Modo Rivière"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activer le mode Rivière"
+            "value": "Mode Rivière"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Attiva la modalità Rivière"
+            "value": "Modalità Rivière"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ativar o modo Rivière"
+            "value": "Modo Rivière"
           }
         }
       }
@@ -179194,6 +179335,100 @@
         }
       }
     },
+    "settings.media.capture.rendered.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تلقائيًا عند تأكيد التعديل. وإلا فإن سهم التعديل يحفظها عند الطلب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisch beim Bestätigen der Bearbeitung. Sonst sichert sie der Pfeil der Bearbeitung auf Wunsch."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatically when you confirm the edit. Otherwise, the arrow in the edit view saves it on demand."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automáticamente al validar la edición. Si no, la flecha de la edición la guarda cuando quieras."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automaticamente quando confermi la modifica. Altrimenti, la freccia della modifica la salva su richiesta."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automaticamente ao confirmar a edição. Caso contrário, a seta da edição a salva quando você quiser."
+          }
+        }
+      }
+    },
+    "settings.media.capture.rendered.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متى تُحفظ؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wann wird sie gesichert?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When is it saved?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuándo se guarda?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand est-elle enregistrée ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando viene salvata?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quando ela é salva?"
+          }
+        }
+      }
+    },
     "settings.media.outgoing.header": {
       "extractionState": "manual",
       "localizations": {
@@ -179247,48 +179482,48 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ضغط قوي للصور والفيديو"
+            "value": "ضغط قوي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Starke Komprimierung von Fotos und Videos"
+            "value": "Starke Komprimierung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Strong photo and video compression"
+            "value": "Strong compression"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compresión fuerte de fotos y vídeos"
+            "value": "Compresión fuerte"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compression forte des photos et vidéos"
+            "value": "Compression forte"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compressione forte di foto e video"
+            "value": "Compressione forte"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compressão forte de fotos e vídeos"
+            "value": "Compressão forte"
           }
         }
       }
     },
-    "settings.media.opening.camera.subtitle": {
+    "settings.media.opening.camera.note": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -179331,6 +179566,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "A câmera abre atrás da cena assim que o editor abre. Toque e segure a cena para gravar."
+          }
+        }
+      }
+    },
+    "settings.media.opening.camera.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يفعل «تجهيز الكاميرا»؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was bewirkt „Kamera bereitstellen“?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does “Get the camera ready” do?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué hace «Preparar la cámara»?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que fait « Armer la caméra » ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa fa «Preparare la fotocamera»?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que faz “Preparar a câmera”?"
           }
         }
       }
@@ -179529,6 +179811,53 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
+            "value": "يوفّر البيانات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spart Daten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saves data."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahorra datos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Économise des données."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risparmia dati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Economiza dados."
+          }
+        }
+      }
+    },
+    "settings.media.outgoing.compress.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
             "value": "يوفّر البيانات بتصغير كل صورة وكل فيديو (720p). وإلا تُرسل بدقة عالية (فيديو 1080p) مضغوطة دون فقدان ملحوظ."
           }
         },
@@ -179566,6 +179895,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Economiza dados reduzindo cada foto e cada vídeo (720p). Caso contrário, são enviados em alta definição (vídeos em 1080p), comprimidos sem perda visível."
+          }
+        }
+      }
+    },
+    "settings.media.outgoing.compress.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يغيّر الضغط؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ändert die Komprimierung?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does compression change?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué cambia la compresión?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que change la compression ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa cambia la compressione?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que a compressão muda?"
           }
         }
       }
@@ -179670,43 +180046,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حفظ النسخة مع التأثيرات والإطار"
+            "value": "النسخة مع التأثيرات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Version mit Effekten und Rahmen sichern"
+            "value": "Version mit Effekten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save the version with effects and frame"
+            "value": "Version with effects"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guardar la versión con efectos y marco"
+            "value": "Versión con efectos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enregistrer la version avec effets et cadre"
+            "value": "Version avec effets"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Salva la versione con effetti e cornice"
+            "value": "Versione con effetti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Salvar a versão com efeitos e moldura"
+            "value": "Versão com efeitos"
           }
         }
       }
@@ -179899,53 +180275,6 @@
         }
       }
     },
-    "settings.media.download.auto_title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التنزيل التلقائي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatischer Download"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatic download"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Descarga automática"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Téléchargement automatique"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Download automatico"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Download automático"
-          }
-        }
-      }
-    },
     "settings.media.download.hint": {
       "extractionState": "manual",
       "localizations": {
@@ -180036,53 +180365,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Imagens"
-          }
-        }
-      }
-    },
-    "settings.media.download.info_header": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "معلومات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Information"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Information"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Información"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Information"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Informazioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Informação"
           }
         }
       }
@@ -180751,43 +181033,90 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quand un contact revient sur Meeshy"
+            "value": "Retour d’un contact"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "When a contact is back on Meeshy"
+            "value": "Contact is back"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cuando un contacto vuelve a Meeshy"
+            "value": "Regreso de un contacto"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wenn ein Kontakt zurück auf Meeshy ist"
+            "value": "Rückkehr eines Kontakts"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quando un contatto torna su Meeshy"
+            "value": "Ritorno di un contatto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quando um contato volta ao Meeshy"
+            "value": "Retorno de um contato"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عندما يعود أحد جهات الاتصال إلى Meeshy"
+            "value": "عودة جهة اتصال"
+          }
+        }
+      }
+    },
+    "settings.notifications.contact_activity.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«كان X على Meeshy مؤخرًا»، كل 3 ساعات على الأكثر."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„X war vor Kurzem auf Meeshy“, höchstens alle 3 Stunden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“X was on Meeshy recently”, at most every 3 hours."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«X estuvo en Meeshy hace poco», como máximo cada 3 horas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« X était sur Meeshy récemment », au plus toutes les 3 heures."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«X è stato su Meeshy di recente», al massimo ogni 3 ore."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“X esteve no Meeshy recentemente”, no máximo a cada 3 horas."
           }
         }
       }
@@ -181033,43 +181362,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تفعيل عدم الإزعاج"
+            "value": "تفعيل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nicht stören aktivieren"
+            "value": "Aktivieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enable Do Not Disturb"
+            "value": "Enable"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activar No molestar"
+            "value": "Activar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activer Ne pas déranger"
+            "value": "Activer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Attiva Non disturbare"
+            "value": "Attiva"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ativar Não perturbe"
+            "value": "Ativar"
           }
         }
       }
@@ -181080,43 +181409,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "وقت الانتهاء"
+            "value": "الانتهاء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Endzeit"
+            "value": "Ende"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End time"
+            "value": "End"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hora de fin"
+            "value": "Fin"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Heure de fin"
+            "value": "Fin"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ora di fine"
+            "value": "Fine"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hora de término"
+            "value": "Fim"
           }
         }
       }
@@ -181127,43 +181456,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "وقت البدء"
+            "value": "البدء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Startzeit"
+            "value": "Beginn"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Start time"
+            "value": "Start"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hora de inicio"
+            "value": "Inicio"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Heure début"
+            "value": "Début"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ora di inizio"
+            "value": "Inizio"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hora de início"
+            "value": "Início"
           }
         }
       }
@@ -181926,7 +182255,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الإشعارات الفورية"
+            "value": "فوري"
           }
         },
         "de": {
@@ -181950,7 +182279,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Notifications push"
+            "value": "Push"
           }
         },
         "it": {
@@ -182719,6 +183048,53 @@
         }
       }
     },
+    "settings.privacy.analytics.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا تقيس التحليلات؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was misst die Analytik?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does analytics measure?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué mide la analítica?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que mesure l'analytique ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa misura l'analisi?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que a análise mede?"
+          }
+        }
+      }
+    },
     "settings.privacy.block_screenshots": {
       "extractionState": "manual",
       "localizations": {
@@ -182907,6 +183283,53 @@
         }
       }
     },
+    "settings.privacy.calls.hide_ip.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يفعل «إخفاء عنوان IP الخاص بي»؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was bewirkt „Meine IP-Adresse verbergen“?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does “Hide my IP address” do?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué hace «Ocultar mi dirección IP»?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que fait « Masquer mon adresse IP » ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa fa «Nascondi il mio indirizzo IP»?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que faz “Ocultar meu endereço IP”?"
+          }
+        }
+      }
+    },
     "settings.privacy.calls_non_contacts": {
       "extractionState": "manual",
       "localizations": {
@@ -182997,6 +183420,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Desativado, só seus amigos podem fazer seu telefone tocar. Os outros veem que você só aceita chamadas dos seus contatos."
+          }
+        }
+      }
+    },
+    "settings.privacy.calls_non_contacts.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يستطيع الاتصال بي؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer kann mich anrufen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who can call me?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Quién puede llamarme?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui peut m'appeler ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi può chiamarmi?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem pode me ligar?"
           }
         }
       }
@@ -183618,43 +184088,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النقطة الخضراء على صورتك تعني أنك نشط. عند إيقافها لا يراها أحد، لكن الكتابة في محادثة تظل دليلاً على نشاطك."
+            "value": "عند إيقافها لا يراها أحد، لكن الكتابة في محادثة تظل دليلاً على نشاطك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der grüne Punkt auf deinem Avatar zeigt, dass du aktiv bist. Deaktiviert sieht ihn niemand — wer aber in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem."
+            "value": "Deaktiviert sieht niemand den Punkt – wer in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The green dot on your avatar means you're active. Turned off, nobody sees it — but typing in a conversation still proves you're around."
+            "value": "Turned off, nobody sees the dot. Typing in a conversation still shows you're around."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El punto verde en tu avatar indica que estás activo. Desactivado, nadie lo ve, pero escribir en una conversación sigue delatando tu actividad."
+            "value": "Desactivado, nadie ve el punto, pero escribir en una conversación sigue delatando tu actividad."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La pastille verte sur votre avatar indique que vous êtes actif. Désactivée, personne ne voit ce point — mais écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs."
+            "value": "Désactivée, personne ne voit ce point. Écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il punto verde sul tuo avatar indica che sei attivo. Disattivato, nessuno lo vede, ma scrivere in una conversazione rivela comunque la tua presenza."
+            "value": "Disattivato, nessuno vede il punto, ma scrivere in una conversazione rivela comunque la tua presenza."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O ponto verde no seu avatar indica que você está ativo. Desativado, ninguém o vê — mas escrever em uma conversa continua revelando sua atividade."
+            "value": "Desativado, ninguém vê o ponto, mas escrever em uma conversa continua revelando sua atividade."
+          }
+        }
+      }
+    },
+    "settings.privacy.online_status.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النقطة الخضراء تعني أنك نشط."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der grüne Punkt zeigt, dass du aktiv bist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The green dot says you're active."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El punto verde indica que estás activo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La pastille verte dit que vous êtes actif."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il punto verde indica che sei attivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O ponto verde indica que você está ativo."
+          }
+        }
+      }
+    },
+    "settings.privacy.online_status.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يرى أنني متصل؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer sieht, dass ich online bin?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who can see that I'm online?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Quién ve que estoy en línea?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui voit que je suis en ligne ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi vede che sono online?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem vê que estou online?"
           }
         }
       }
@@ -183749,6 +184313,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "É recíproco: se você não enviar confirmações de leitura, também não verá se suas mensagens foram lidas."
+          }
+        }
+      }
+    },
+    "settings.privacy.read_receipts.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لماذا الأمر متبادل؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum gilt das in beide Richtungen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why does this work both ways?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Por qué es recíproco?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pourquoi est-ce réciproque ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perché è reciproco?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por que é recíproco?"
           }
         }
       }
@@ -184605,43 +185216,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تغيير كلمة المرور"
+            "value": "تغيير"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passwort ändern"
+            "value": "Ändern"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Change password"
+            "value": "Change"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambiar la contraseña"
+            "value": "Cambiar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changer le mot de passe"
+            "value": "Changer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambia password"
+            "value": "Cambia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Alterar a senha"
+            "value": "Alterar"
           }
         }
       }
@@ -185159,6 +185770,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conversas bloqueadas"
+          }
+        }
+      }
+    },
+    "settings.security.locked_conversations.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اقفل المحادثات برمز PIN رئيسي."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sperre Unterhaltungen mit einer Haupt-PIN."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lock conversations behind a master PIN."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloquea conversaciones con un PIN principal."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verrouillez des conversations derrière un code PIN principal."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocca le conversazioni con un PIN principale."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloqueie conversas com um PIN principal."
           }
         }
       }
@@ -186861,43 +187519,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النسخ النصي التلقائي"
+            "value": "تلقائي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Automatische Transkription"
+            "value": "Automatisch"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Automatic transcription"
+            "value": "Automatic"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcripción automática"
+            "value": "Automática"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcription automatique"
+            "value": "Automatique"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trascrizione automatica"
+            "value": "Automatica"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcrição automática"
+            "value": "Automática"
           }
         }
       }
@@ -186908,43 +187566,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محرك النسخ النصي"
+            "value": "المحرك"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transkriptions-Engine"
+            "value": "Engine"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcription engine"
+            "value": "Engine"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Motor de transcripción"
+            "value": "Motor"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Moteur de transcription"
+            "value": "Moteur"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Motore di trascrizione"
+            "value": "Motore"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Motor de transcrição"
+            "value": "Motor"
           }
         }
       }
@@ -187143,43 +187801,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنشاء ملف صوتي"
+            "value": "إنشاء"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sprachprofil erstellen"
+            "value": "Erstellen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Create a voice profile"
+            "value": "Create"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crear un perfil de voz"
+            "value": "Crear"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Créer un profil vocal"
+            "value": "Créer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crea un profilo vocale"
+            "value": "Crea"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criar um perfil de voz"
+            "value": "Criar"
           }
         }
       }
@@ -187237,43 +187895,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إدارة الملف الصوتي"
+            "value": "إدارة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sprachprofil verwalten"
+            "value": "Verwalten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Manage voice profile"
+            "value": "Manage"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gestionar perfil de voz"
+            "value": "Gestionar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gérer le profil vocal"
+            "value": "Gérer"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gestisci il profilo vocale"
+            "value": "Gestisci"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gerenciar perfil de voz"
+            "value": "Gerenciar"
           }
         }
       }
@@ -216918,43 +217576,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يجري إنشاء بصمتك الصوتية. قد يستغرق ذلك بعض الوقت."
+            "value": "جارٍ إنشاء بصمتك الصوتية…"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Sprachprofil wird erstellt. Das kann einen Moment dauern."
+            "value": "Dein Sprachprofil wird erstellt …"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your voice profile is being created. This may take a moment."
+            "value": "Creating your voice profile…"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Se está creando tu perfil de voz. Puede tardar unos instantes."
+            "value": "Creando tu perfil de voz…"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre profil vocal est en cours de création. Cela peut prendre quelques instants."
+            "value": "Création de votre profil vocal…"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo profilo vocale è in creazione. Potrebbe richiedere qualche istante."
+            "value": "Creazione del profilo vocale…"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu perfil de voz está sendo criado. Isso pode levar alguns instantes."
+            "value": "Criando seu perfil de voz…"
           }
         }
       }
@@ -217153,43 +217811,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اقرأ بصوت عالٍ الجملتين أو الثلاث المعروضة، دون تكلّف. 3 عيّنات على الأقل مدة كل منها 10 ثوانٍ."
+            "value": "اقرأ بصوت عالٍ الجمل المعروضة، دون تكلّف."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lies die zwei oder drei angezeigten Sätze laut vor, ganz natürlich. Mindestens 3 Proben à 10 Sekunden."
+            "value": "Lies die angezeigten Sätze laut vor, ganz natürlich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Read the two or three sentences shown aloud, in your natural tone. At least 3 samples of 10 seconds."
+            "value": "Read the sentences shown aloud, in your natural tone."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lee en voz alta las dos o tres frases mostradas, con tono natural. Mínimo 3 muestras de 10 segundos."
+            "value": "Lee en voz alta las frases mostradas, con tono natural."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lisez à voix haute les deux ou trois phrases affichées, sans forcer le ton. Minimum 3 échantillons de 10 secondes."
+            "value": "Lisez à voix haute les phrases affichées, sans forcer le ton."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Leggi ad alta voce le due o tre frasi mostrate, con tono naturale. Minimo 3 campioni da 10 secondi."
+            "value": "Leggi ad alta voce le frasi mostrate, con tono naturale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Leia em voz alta as duas ou três frases exibidas, em tom natural. Mínimo de 3 amostras de 10 segundos."
+            "value": "Leia em voz alta as frases exibidas, em tom natural."
           }
         }
       }
@@ -236322,43 +236980,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail"
+            "value": "Masquer mon numéro et mon e-mail"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Don't suggest me to people who have my number or email"
+            "value": "Hide my number and email"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No sugerirme a quienes tienen mi número o mi correo"
+            "value": "Ocultar mi número y mi correo"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mich nicht Personen vorschlagen, die meine Nummer oder E-Mail haben"
+            "value": "Meine Nummer und E-Mail verbergen"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non propormi a chi ha il mio numero o la mia e-mail"
+            "value": "Nascondi il mio numero e la mia e-mail"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não me sugerir a quem tem meu número ou e-mail"
+            "value": "Ocultar meu número e meu e-mail"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا تقترحني على من لديهم رقمي أو بريدي الإلكتروني"
+            "value": "إخفاء رقمي وبريدي الإلكتروني"
           }
         }
       }
@@ -236369,43 +237027,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prévenir mes contacts quand je reviens sur Meeshy"
+            "value": "Annoncer mon retour"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Let my contacts know when I'm back on Meeshy"
+            "value": "Announce my return"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avisar a mis contactos cuando vuelvo a Meeshy"
+            "value": "Anunciar mi regreso"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meine Kontakte benachrichtigen, wenn ich zurück auf Meeshy bin"
+            "value": "Meine Rückkehr ankündigen"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avvisa i miei contatti quando torno su Meeshy"
+            "value": "Annuncia il mio ritorno"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Avisar meus contatos quando eu voltar ao Meeshy"
+            "value": "Anunciar meu retorno"
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إعلام جهات اتصالي عند عودتي إلى Meeshy"
+            "value": "الإعلان عن عودتي"
           }
         }
       }
@@ -236457,6 +237115,100 @@
         }
       }
     },
+    "settings.privacy.notify_contacts_on_return.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ترى جهات اتصالك «كان على Meeshy مؤخرًا»، كل 3 ساعات على الأكثر."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Kontakte sehen „war vor Kurzem auf Meeshy“, höchstens alle 3 Stunden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your contacts see “was on Meeshy recently”, at most every 3 hours."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus contactos ven «estuvo en Meeshy hace poco», como máximo cada 3 horas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos contacts voient « était sur Meeshy récemment », au plus toutes les 3 heures."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I tuoi contatti vedono «è stato su Meeshy di recente», al massimo ogni 3 ore."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seus contatos veem “esteve no Meeshy recentemente”, no máximo a cada 3 horas."
+          }
+        }
+      }
+    },
+    "settings.privacy.notify_contacts_on_return.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يُبلَّغ بعودتي؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer erfährt von meiner Rückkehr?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who is told when I'm back?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿A quién se avisa de mi regreso?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui est prévenu de mon retour ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi viene avvisato del mio ritorno?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem é avisado do meu retorno?"
+          }
+        }
+      }
+    },
     "settings.privacy.hide_from_contact_search.info": {
       "extractionState": "manual",
       "localizations": {
@@ -236500,6 +237252,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "عند التفعيل، لن يظهر ملفك الشخصي في البحث برقم الهاتف أو البريد الإلكتروني، ولن يتم إخطار جهات اتصالك بانضمامك إلى Meeshy."
+          }
+        }
+      }
+    },
+    "settings.privacy.hide_from_contact_search.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يستطيع العثور عليّ برقمي؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer kann mich über meine Nummer finden?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who can find me by my number?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Quién puede encontrarme por mi número?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui peut me trouver par mon numéro ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi può trovarmi con il mio numero?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem pode me encontrar pelo meu número?"
           }
         }
       }
@@ -239894,6 +240693,53 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
+            "value": "تنضم الوسائط المستلمة إلى ألبوم Meeshy."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empfangene Medien landen im Meeshy-Album."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Received media join the Meeshy album."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los archivos recibidos se guardan en el álbum Meeshy."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les médias reçus rejoignent l'album Meeshy."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I contenuti ricevuti finiscono nell'album Meeshy."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As mídias recebidas vão para o álbum Meeshy."
+          }
+        }
+      }
+    },
+    "settings.media.autosave.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
             "value": "تنضم الصور ومقاطع الفيديو المستلمة إلى ألبوم Meeshy مرة واحدة. لا تُحفظ أبدًا الوسائط المؤقتة أو الضبابية أو ذات العرض الواحد."
           }
         },
@@ -239931,6 +240777,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "As imagens e vídeos recebidos vão para o álbum Meeshy, uma única vez. Nunca uma mídia efêmera, desfocada ou de visualização única."
+          }
+        }
+      }
+    },
+    "settings.media.autosave.note.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ما الوسائط التي تُحفظ؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welche Medien werden gesichert?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Which media are saved?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué archivos se guardan?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quels médias sont enregistrés ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quali contenuti vengono salvati?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quais mídias são salvas?"
           }
         }
       }
@@ -326834,43 +327727,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذه الأرقام للاطلاع فقط: لا يُعتمد جهاز إلا بقراءة الرمز."
+            "value": "للعلم فقط: مسح الرمز وحده يعتمد الجهاز."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Ziffern dienen nur zur Information: Nur das Scannen des Codes genehmigt ein Gerät."
+            "value": "Zur Info: Nur das Lesen des Codes genehmigt ein Gerät."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "These digits are for information only: only scanning the code approves a device."
+            "value": "For information: only scanning the code approves a device."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estos dígitos son solo informativos: solo leer el código aprueba un dispositivo."
+            "value": "A título informativo: solo leer el código aprueba un dispositivo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ces chiffres sont donnés pour information : seule la lecture du code approuve un appareil."
+            "value": "Pour information : seule la lecture du code approuve un appareil."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Queste cifre sono solo informative: solo la lettura del codice approva un dispositivo."
+            "value": "Per informazione: solo la lettura del codice approva un dispositivo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estes dígitos são apenas informativos: só a leitura do código aprova um dispositivo."
+            "value": "Para informação: só a leitura do código aprova um dispositivo."
           }
         }
       }
@@ -326965,6 +327858,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Registrado em %@"
+          }
+        }
+      }
+    },
+    "e2ee.devices.lastUsed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "آخر استخدام %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuletzt genutzt %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last used %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Último uso %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dernier usage %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ultimo utilizzo %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Último uso %@"
           }
         }
       }
@@ -327445,43 +328385,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "على «%@»، افتح الإعدادات › الأمان › أجهزتي المشفّرة، واختر هذا الجهاز ثم المس «إظهار رمزي». اقرأ ذلك الرمز هنا."
+            "value": "على «%@»، افتح أجهزتي المشفّرة › إظهار رمزي، ثم امسحه هنا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffne auf „%@“ Einstellungen › Sicherheit › Meine verschlüsselten Geräte, wähle dieses Gerät und tippe auf „Meinen Code zeigen“. Scanne diesen Code hier."
+            "value": "Öffne auf „%@“ Meine verschlüsselten Geräte › Meinen Code zeigen und lies ihn hier."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On “%@”, open Settings › Security › My encrypted devices, choose this device and tap “Show my code”. Scan that code here."
+            "value": "On “%@”, open My encrypted devices › Show my code, then scan it here."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En «%@», abre Ajustes › Seguridad › Mis dispositivos cifrados, elige este dispositivo y toca «Mostrar mi código». Lee ese código aquí."
+            "value": "En «%@», abre Mis dispositivos cifrados › Mostrar mi código y léelo aquí."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sur « %@ », ouvrez Réglages › Sécurité › Mes appareils chiffrés, choisissez cet appareil et touchez « Montrer mon code ». Lisez ce code ici."
+            "value": "Sur « %@ », ouvrez Mes appareils chiffrés › Montrer mon code, puis lisez-le ici."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Su «%@», apri Impostazioni › Sicurezza › I miei dispositivi crittografati, scegli questo dispositivo e tocca «Mostra il mio codice». Leggi quel codice qui."
+            "value": "Su «%@», apri I miei dispositivi crittografati › Mostra il mio codice, poi leggilo qui."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Em “%@”, abra Ajustes › Segurança › Meus dispositivos criptografados, escolha este dispositivo e toque em “Mostrar meu código”. Leia esse código aqui."
+            "value": "Em “%@”, abra Meus dispositivos criptografados › Mostrar meu código e leia-o aqui."
           }
         }
       }
@@ -328009,43 +328949,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "وجّه الكاميرا إلى الرمز الذي يعرضه جهازك الآخر في «أجهزتي المشفّرة» › «إظهار رمزي»."
+            "value": "وجّه الكاميرا إلى الرمز الذي يعرضه جهازك الآخر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Richte die Kamera auf den Code deines anderen Geräts unter „Meine verschlüsselten Geräte“ › „Meinen Code zeigen“."
+            "value": "Richte die Kamera auf den Code deines anderen Geräts."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Point at the code shown by your other device, in “My encrypted devices” › “Show my code”."
+            "value": "Point at the code shown by your other device."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apunta al código que muestra tu otro dispositivo, en «Mis dispositivos cifrados» › «Mostrar mi código»."
+            "value": "Apunta al código que muestra tu otro dispositivo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Visez le code affiché par votre autre appareil, dans « Mes appareils chiffrés » › « Montrer mon code »."
+            "value": "Visez le code montré par votre autre appareil."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inquadra il codice mostrato dall’altro dispositivo, in «I miei dispositivi crittografati» › «Mostra il mio codice»."
+            "value": "Inquadra il codice mostrato dall’altro dispositivo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aponte para o código exibido pelo seu outro dispositivo, em “Meus dispositivos criptografados” › “Mostrar meu código”."
+            "value": "Aponte para o código exibido pelo seu outro dispositivo."
           }
         }
       }
@@ -328338,43 +329278,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يحتوي هذا الجهاز على كاميرا. اقرأ رمز هذا الجهاز من الجهاز الآخر بدلًا من ذلك."
+            "value": "لا توجد كاميرا: امسح رمز هذا الجهاز من الجهاز الآخر."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieses Gerät hat keine Kamera. Scanne stattdessen den Code dieses Geräts mit dem anderen."
+            "value": "Keine Kamera: Lies den Code dieses Geräts vom anderen aus."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This device has no camera. Scan this device’s code from the other one instead."
+            "value": "No camera: scan this device’s code from the other one."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este dispositivo no tiene cámara. Lee mejor el código de este dispositivo desde el otro."
+            "value": "Sin cámara: lee el código de este dispositivo desde el otro."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cet appareil n’a pas de caméra. Lisez plutôt le code de cet appareil depuis l’autre."
+            "value": "Pas de caméra : lisez le code de cet appareil depuis l’autre."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo dispositivo non ha fotocamera. Leggi invece il codice di questo dispositivo dall’altro."
+            "value": "Nessuna fotocamera: leggi il codice di questo dispositivo dall’altro."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este dispositivo não tem câmera. Leia o código deste dispositivo a partir do outro."
+            "value": "Sem câmera: leia o código deste dispositivo a partir do outro."
           }
         }
       }
@@ -328667,43 +329607,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يطابق هذا الرمز أيًّا من أجهزتك. لم يُعتمد أي شيء. اقرأ الرمز المعروض في «أجهزتي المشفّرة» على جهازك الآخر."
+            "value": "هذا الرمز ليس لأي من أجهزتك. لم تتم الموافقة على شيء."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Code passt zu keinem deiner Geräte. Nichts wurde genehmigt. Scanne den Code unter „Meine verschlüsselten Geräte“ auf deinem anderen Gerät."
+            "value": "Dieser Code gehört keinem deiner Geräte. Es wurde nichts genehmigt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This code matches none of your devices. Nothing was approved. Scan the code shown in “My encrypted devices” on your other device."
+            "value": "This code belongs to none of your devices. Nothing was approved."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este código no corresponde a ninguno de tus dispositivos. No se ha aprobado nada. Lee el código que aparece en «Mis dispositivos cifrados» en tu otro dispositivo."
+            "value": "Este código no es de ninguno de tus dispositivos. No se aprobó nada."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce code ne correspond à aucun de vos appareils. Rien n’a été approuvé. Lisez le code affiché dans « Mes appareils chiffrés » sur votre autre appareil."
+            "value": "Ce code n’est celui d’aucun de vos appareils. Rien n’a été approuvé."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo codice non corrisponde a nessuno dei tuoi dispositivi. Non è stato approvato nulla. Leggi il codice mostrato in «I miei dispositivi crittografati» sull’altro dispositivo."
+            "value": "Questo codice non è di nessuno dei tuoi dispositivi. Nulla è stato approvato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este código não corresponde a nenhum dos seus dispositivos. Nada foi aprovado. Leia o código exibido em “Meus dispositivos criptografados” no seu outro dispositivo."
+            "value": "Este código não é de nenhum dos seus dispositivos. Nada foi aprovado."
           }
         }
       }
@@ -328761,43 +329701,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أخذ جهاز آخر هذا المكان منذ عرض القائمة. لم تتم إزالة أي شيء. تحقق من القائمة المحدّثة قبل إزالة أي جهاز."
+            "value": "تغيّرت القائمة. لم تتم إزالة شيء: تحقّق منها أولًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seit dem Anzeigen der Liste hat ein anderes Gerät diesen Platz eingenommen. Es wurde nichts entfernt. Prüfe die aktualisierte Liste, bevor du ein Gerät entfernst."
+            "value": "Die Liste hat sich geändert. Es wurde nichts entfernt – prüfe sie zuerst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Another device took this place since the list was shown. Nothing was removed. Check the updated list before removing a device."
+            "value": "The list has changed. Nothing was removed: check it first."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Otro dispositivo ocupó este lugar desde que se mostró la lista. No se eliminó nada. Revisa la lista actualizada antes de eliminar un dispositivo."
+            "value": "La lista ha cambiado. No se eliminó nada: revísala primero."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un autre appareil a pris cette place depuis l’affichage de la liste. Rien n’a été retiré. Vérifiez la liste à jour avant de retirer un appareil."
+            "value": "La liste a changé. Rien n’a été retiré : vérifiez-la d’abord."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un altro dispositivo ha preso questo posto da quando è stato mostrato l’elenco. Non è stato rimosso nulla. Controlla l’elenco aggiornato prima di rimuovere un dispositivo."
+            "value": "L’elenco è cambiato. Non è stato rimosso nulla: controllalo prima."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Outro dispositivo ocupou este lugar desde que a lista foi exibida. Nada foi removido. Verifique a lista atualizada antes de remover um dispositivo."
+            "value": "A lista mudou. Nada foi removido: verifique-a antes."
           }
         }
       }
@@ -329037,49 +329977,96 @@
         }
       }
     },
+    "e2ee.devices.entry.summary": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الأجهزة التي تقرأ رسائلك المشفّرة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Geräte, die deine verschlüsselten Nachrichten lesen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The devices that read your encrypted messages."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los dispositivos que leen tus mensajes cifrados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les appareils qui lisent vos messages chiffrés."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I dispositivi che leggono i tuoi messaggi crittografati."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os dispositivos que leem suas mensagens criptografadas."
+          }
+        }
+      }
+    },
     "e2ee.devices.explanation": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا تصل رسائلك المشفّرة تمامًا بين الطرفين إلا إلى الأجهزة التي اعتمدتها. لاعتماد جهاز، اقرأ رمزه من هذا الجهاز ثم افعل العكس."
+            "value": "لا تصل رسائلك المشفّرة إلا إلى الأجهزة المعتمدة. لاعتماد جهاز، امسح رمزه هنا ثم افعل العكس."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Ende-zu-Ende-verschlüsselten Nachrichten erreichen nur die Geräte, die du genehmigt hast. Um ein Gerät zu genehmigen, scanne seinen Code mit diesem Gerät und dann umgekehrt."
+            "value": "Deine verschlüsselten Nachrichten erreichen nur genehmigte Geräte. Um eines zu genehmigen, lies seinen Code hier und tu dann dasselbe umgekehrt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your end-to-end encrypted messages only reach the devices you have approved. To approve a device, scan its code from this one, then do the reverse."
+            "value": "Your encrypted messages only reach approved devices. To approve one, scan its code here, then do the reverse."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus mensajes cifrados de extremo a extremo solo llegan a los dispositivos que has aprobado. Para aprobar un dispositivo, lee su código desde este y luego haz lo contrario."
+            "value": "Tus mensajes cifrados solo llegan a los dispositivos aprobados. Para aprobar uno, lee su código aquí y luego haz lo inverso."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos messages chiffrés de bout en bout ne parviennent qu’aux appareils que vous avez approuvés. Pour approuver un appareil, lisez son code depuis celui-ci, puis faites l’inverse."
+            "value": "Vos messages chiffrés n’arrivent qu’aux appareils approuvés. Pour en approuver un, lisez son code ici, puis faites l’inverse."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi messaggi crittografati end-to-end raggiungono solo i dispositivi che hai approvato. Per approvare un dispositivo, leggi il suo codice da questo, poi fai il contrario."
+            "value": "I tuoi messaggi crittografati arrivano solo ai dispositivi approvati. Per approvarne uno, leggi qui il suo codice, poi fai il contrario."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suas mensagens criptografadas de ponta a ponta só chegam aos dispositivos que você aprovou. Para aprovar um dispositivo, leia o código dele a partir deste e depois faça o inverso."
+            "value": "Suas mensagens criptografadas só chegam aos dispositivos aprovados. Para aprovar um, leia o código dele aqui e depois faça o inverso."
           }
         }
       }
@@ -329513,43 +330500,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يوجد جهاز مشفّر آخر. افتح Meeshy على جهازك الآخر وسيظهر هنا."
+            "value": "لا جهاز آخر. افتح Meeshy على الجهاز الآخر لإضافته."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kein anderes verschlüsseltes Gerät. Öffne Meeshy auf deinem anderen Gerät: Es erscheint dann hier."
+            "value": "Kein weiteres Gerät. Öffne Meeshy auf dem anderen, um es hinzuzufügen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No other encrypted device. Open Meeshy on your other device: it will appear here."
+            "value": "No other device. Open Meeshy on the other one to add it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ningún otro dispositivo cifrado. Abre Meeshy en tu otro dispositivo: aparecerá aquí."
+            "value": "Ningún otro dispositivo. Abre Meeshy en el otro para añadirlo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun autre appareil chiffré. Ouvrez Meeshy sur votre autre appareil : il apparaîtra ici."
+            "value": "Aucun autre appareil. Ouvrez Meeshy sur l’autre pour l’ajouter."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessun altro dispositivo crittografato. Apri Meeshy sull’altro dispositivo: apparirà qui."
+            "value": "Nessun altro dispositivo. Apri Meeshy sull’altro per aggiungerlo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhum outro dispositivo criptografado. Abra o Meeshy no seu outro dispositivo: ele aparecerá aqui."
+            "value": "Nenhum outro dispositivo. Abra o Meeshy no outro para adicioná-lo."
           }
         }
       }
@@ -329795,43 +330782,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا الرمز لجهاز آخر من أجهزتك. لم يُعتمد أي شيء. اقرأ الرمز الذي يعرضه الجهاز الذي تعتمده."
+            "value": "هذا رمز جهاز آخر من أجهزتك. لم تتم الموافقة على شيء."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Code gehört zu einem anderen deiner Geräte. Nichts wurde genehmigt. Scanne den Code des Geräts, das du genehmigst."
+            "value": "Das ist der Code eines anderen deiner Geräte. Es wurde nichts genehmigt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This code belongs to another of your devices. Nothing was approved. Scan the code shown by the device you are approving."
+            "value": "That’s the code of another of your devices. Nothing was approved."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este código es de otro de tus dispositivos. No se ha aprobado nada. Lee el código que muestra el dispositivo que estás aprobando."
+            "value": "Es el código de otro de tus dispositivos. No se aprobó nada."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce code est celui d’un autre de vos appareils. Rien n’a été approuvé. Lisez le code affiché par l’appareil que vous approuvez."
+            "value": "C’est le code d’un autre de vos appareils. Rien n’a été approuvé."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo codice appartiene a un altro dei tuoi dispositivi. Non è stato approvato nulla. Leggi il codice mostrato dal dispositivo che stai approvando."
+            "value": "È il codice di un altro dei tuoi dispositivi. Nulla è stato approvato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este código é de outro dos seus dispositivos. Nada foi aprovado. Leia o código exibido pelo dispositivo que você está aprovando."
+            "value": "É o código de outro dos seus dispositivos. Nada foi aprovado."
           }
         }
       }
@@ -330923,43 +331910,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اتصل بالإنترنت: في محادثة مشفّرة، يُرسَل هذا الإجراء مشفّرًا ولا يمكنه الانتظار دون اتصال."
+            "value": "دون اتصال: هذا الإجراء لا ينتظر في محادثة مشفّرة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Geh online: In einer verschlüsselten Unterhaltung wird diese Aktion verschlüsselt gesendet und kann nicht offline warten."
+            "value": "Offline: Diese Aktion wartet in einer verschlüsselten Unterhaltung nicht."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Go online: in an encrypted conversation, this action is sent encrypted and can't wait offline."
+            "value": "Offline: this action can't wait in an encrypted conversation."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conéctate: en una conversación cifrada, este gesto se envía cifrado y no puede esperar sin conexión."
+            "value": "Sin conexión: este gesto no espera en una conversación cifrada."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connectez-vous : dans une conversation chiffrée, ce geste part chiffré et n'attend pas hors ligne."
+            "value": "Hors ligne : ce geste n'attend pas dans une conversation chiffrée."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Connettiti: in una conversazione crittografata, questo gesto parte crittografato e non può attendere offline."
+            "value": "Offline: questo gesto non attende in una conversazione crittografata."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conecte-se: em uma conversa criptografada, este gesto é enviado criptografado e não pode esperar offline."
+            "value": "Offline: este gesto não espera em uma conversa criptografada."
           }
         }
       }

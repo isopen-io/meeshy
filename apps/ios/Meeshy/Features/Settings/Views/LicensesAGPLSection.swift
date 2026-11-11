@@ -47,7 +47,7 @@ struct LicensesAGPLSection: View {
                     Text(String(localized: "about.licenses.source.title", defaultValue: "Code source", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundStyle(theme.textPrimary)
-                    Text(String(localized: "about.licenses.source.body", defaultValue: "Le code source correspondant à cette version, scripts de construction compris, est disponible gratuitement.", bundle: .main))
+                    Text(String(localized: "about.licenses.source.body", defaultValue: "Code source de cette version, gratuit.", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                         .foregroundStyle(theme.textMuted)
                         .multilineTextAlignment(.leading)

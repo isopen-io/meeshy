@@ -74,8 +74,8 @@
     },
     "android:feature/settings": {
       "labels": 680,
-      "words": 2883,
-      "long": 41,
+      "words": 2767,
+      "long": 34,
       "explanations": 72
     },
     "android:feature/stories": {

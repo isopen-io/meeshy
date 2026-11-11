@@ -99,13 +99,9 @@ struct DataExportView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos données, votre contrôle", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
+                Text(String(localized: "settings.data.export.info.body", defaultValue: "Exportez vos données personnelles (RGPD).", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     .foregroundStyle(theme.textPrimary)
-
-                Text(String(localized: "settings.data.export.info.body", defaultValue: "Conformément au RGPD, vous pouvez exporter toutes vos données personnelles.", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundStyle(theme.textMuted)
             }
         }
         .padding(MeeshySpacing.mdPlus)
