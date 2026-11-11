@@ -33,7 +33,7 @@
     <string name="game2_prestige_confirm_access">مبارزتك وتحالفك يبقيان مفتوحين.</string>
     <string name="game2_league_pseudonym_drawn">اسمك في المبارزة يُسحب بالقرعة ويتغيّر مع كل رحلة.</string>
     <string name="game2_league_snapshot">يُجمَّد الترتيب كل يوم عند الساعة 4 صباحًا؛ سطرك وحده مباشر.</string>
-    <string name="game2_season_how">الفصول والتحالفات تُقدّمك بضع خطوات.</string>
+    <string name="game2_season_how">الفصول والتحالفات تُقدّمك بضع خطوات. الرحلة كلها مجانية.</string>
     <string name="game2_settings_celebrations_switch">علامات الأسلاف</string>
     <string name="game_guide_step_welcome_what">اللعبة في سبع بطاقات</string>
     <string name="game_guide_more">ماذا تعني هذه اللحظة؟</string>

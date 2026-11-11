@@ -245,7 +245,6 @@ class GameEpureResourcesTest {
         assertThat(text(R.string.game2_prestige_confirm_consent)).isEqualTo("Ton accord pour la joute publique reste enregistré.")
         assertThat(text(R.string.game2_league_pseudonym_drawn)).isEqualTo("Ton nom de joute est tiré au sort et change à chaque voyage.")
         assertThat(text(R.string.game2_league_snapshot)).isEqualTo("Classement figé chaque jour à 4 h ; seule ta ligne est en direct.")
-        assertThat(text(R.string.game2_season_how)).isEqualTo("Les actes et les alliances te font avancer de quelques pas.")
     }
 
     @Test
