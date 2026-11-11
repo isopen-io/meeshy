@@ -42,6 +42,34 @@ class CallInboundAudioLevelTest {
     }
 
     @Test
+    fun `my own level comes from the outgoing audio source only (P11_5)`() {
+        val mine = CallInboundAudioLevel.loudestOutbound(
+            report(
+                stat("A1", "inbound-rtp", mapOf("kind" to "audio", "audioLevel" to 0.4)),
+                stat("S1", "media-source", mapOf("kind" to "audio", "audioLevel" to 0.25)),
+                stat("S2", "media-source", mapOf("kind" to "video", "audioLevel" to 0.9)),
+                stat("O", "outbound-rtp", mapOf("kind" to "audio", "audioLevel" to 0.8)),
+            ),
+        )
+        assertThat(mine).isWithin(1e-9).of(0.25)
+        assertThat(CallInboundAudioLevel.loudestOutbound(report(stat("S", "media-source", mapOf("kind" to "audio"))))).isNull()
+    }
+
+    @Test
+    fun `one report answers both directions`() = runTest {
+        val peer = handle(
+            report(
+                stat("A", "inbound-rtp", mapOf("kind" to "audio", "audioLevel" to 0.4)),
+                stat("S", "media-source", mapOf("kind" to "audio", "audioLevel" to 0.25)),
+            ),
+        )
+        val levels = peer.audioLevels()
+        assertThat(levels?.inbound).isWithin(1e-9).of(0.4)
+        assertThat(levels?.outbound).isWithin(1e-9).of(0.25)
+        assertThat(handle(null).audioLevels()).isNull()
+    }
+
+    @Test
     fun `no measured inbound audio reads as nothing`() {
         assertThat(CallInboundAudioLevel.loudest(report(stat("A", "inbound-rtp", mapOf("kind" to "audio"))))).isNull()
         assertThat(CallInboundAudioLevel.loudest(report())).isNull()

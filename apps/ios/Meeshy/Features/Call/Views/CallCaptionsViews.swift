@@ -516,8 +516,8 @@ private nonisolated struct CallJournalScrollKey: PreferenceKey {
 /// Tout l'appel, DANS la pilule, à la place des sous-titres (#17343) : un en-tête
 /// (« Journal » à gauche, la bascule Traduit / Original à droite — la planche P6 n'y
 /// dessine rien d'autre), puis la liste, qui défile et offre « Revenir au direct ».
-/// Le réglage Traduit / Original est celui du bouton Sous-titres (`showOriginalText`),
-/// un toucher par phrase l'inverse. On le range par le (…) ou par le bouton Journal ;
+/// Le réglage Traduit / Original est celui du journal seul (#17678) : la bande des
+/// sous-titres ne le lit pas. Un toucher par phrase l'inverse. On le range par le (…) ou par le bouton Journal ;
 /// Échap (clavier, geste d'échappement de VoiceOver) le ferme aussi.
 struct CallJournalPanel: View {
     let items: [CallJournalItem<CallTranscriptionSegment>]

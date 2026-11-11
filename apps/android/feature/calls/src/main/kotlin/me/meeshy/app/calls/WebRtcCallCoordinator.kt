@@ -12,6 +12,7 @@ import kotlinx.coroutines.plus
 import me.meeshy.sdk.call.CallQualityStatsFeed
 import me.meeshy.sdk.call.CallStatsCollector
 import me.meeshy.sdk.call.WebRtcEngine
+import me.meeshy.sdk.call.audioLevels
 import me.meeshy.sdk.call.inboundAudioLevel
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallParticipantArrival
@@ -73,7 +74,8 @@ class WebRtcCallCoordinator @Inject constructor(
     private val mesh = GroupCallMesh(
         factory = EngineGroupMeshPeerFactory(engine),
         names = names,
-        primaryAudioLevel = { peerAudioLevel() },
+        primaryAudioLevels = { engine.peerHandle?.audioLevels() },
+        isLocalMicMuted = { userMuted },
         isPrimaryReconnecting = { iceMonitor.stalled },
         primaryVideoCeiling = { engine.setGroupVideoCeiling(it) },
         sender = { callId, to, from, signal ->

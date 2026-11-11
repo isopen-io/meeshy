@@ -57,6 +57,54 @@ enum CaptionsMode: Equatable, Sendable {
 }
 
 
+/// #17678 (loi 7) — deux surfaces lisent les phrases de l'appel : la bande des
+/// sous-titres, qui suit le bouton Sous-titres, et le journal, dont la bascule
+/// Traduit · Original est SA propre. Choisir « Original » dans le journal ne
+/// touche pas la bande, qui reste dans la langue du lecteur (Prisme).
+nonisolated enum CallCaptionsSurface: Equatable, Sendable {
+    case band
+    case journal
+
+    func prefersOriginal(bandOriginal: Bool, journalOriginal: Bool) -> Bool {
+        switch self {
+        case .band: return bandOriginal
+        case .journal: return journalOriginal
+        }
+    }
+}
+
+/// #17678 (loi 7) — les phrases dépliées au toucher, par surface : toucher une
+/// phrase déplie son original sous elle seule, dans la surface touchée. La même
+/// phrase reste repliée dans l'autre (comme le web : `call-captions-panel.tsx`
+/// et `call-journal-panel.tsx` tiennent chacun leur ensemble).
+nonisolated struct CallCaptionsReveals: Equatable, Sendable {
+    private var band: Set<UUID> = []
+    private var journal: Set<UUID> = []
+
+    func isRevealed(_ id: UUID, on surface: CallCaptionsSurface) -> Bool {
+        ids(on: surface).contains(id)
+    }
+
+    func toggling(_ id: UUID, on surface: CallCaptionsSurface) -> CallCaptionsReveals {
+        let current = ids(on: surface)
+        let next = current.contains(id) ? current.subtracting([id]) : current.union([id])
+        var given = self
+        switch surface {
+        case .band: given.band = next
+        case .journal: given.journal = next
+        }
+        return given
+    }
+
+    private func ids(on surface: CallCaptionsSurface) -> Set<UUID> {
+        switch surface {
+        case .band: return band
+        case .journal: return journal
+        }
+    }
+}
+
+
 // MARK: - Transcription capture policy
 
 /// Ce que la couche d'appel doit faire de la capture locale, une fois
