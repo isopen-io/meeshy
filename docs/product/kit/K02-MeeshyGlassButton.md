@@ -140,7 +140,7 @@ Catalogue : entrée K02, vide sur `dev` sur les trois plateformes (`MeeshyKitCat
 - Registre : `CallSelfTileControlButton` n'existe plus (une garde interdit son retour) ; « environ 45 fichiers » se mesure à 35 ; `MeeshyIconButton` n'a ni verre ni appelant ; le web a bien plus qu'un jumeau.
 - Aucun jeton de 48 ; `MeeshyFont.fixedGlyph` et `toggleStateAccessibility` vivent dans l'app iOS. Tailles hors des quatre dans le code : 50 (Sortie), 28, 32, et 56 à 76.
 - iOS, relecture du 2026-11-11 : la recette posait l'ombre de l'actif au rayon 14, le DOUBLE du flou de la planche une fois converti comme K01 ; elle est à 7, et les vecteurs portent le flou de la planche (`blur`), plus aucun rayon propre à SwiftUI.
-- iOS : la cible symétrique de 44 donne à deux 40 accolés 44 et 40, non 42 et 42 ; le partage du débord revient à l'hôte de la paire ↶ ↷ (K16), qui pose sa propre forme de toucher.
+- iOS : la cible symétrique de 44 donne à deux 40 accolés 44 et 40, non 42 et 42 ; le partage du débord revient à l'hôte de la paire ↶ ↷ (K16), qui pose sa propre forme de toucher (#17531).
 
 Choix retenus (mode autonome ; alternatives entre parenthèses) :
 1. Le lot iOS reprend le code de `fdc6f439ad` sans changer un nom d'API, et sa PR porte ses images enregistrées par la CI. (Réécrire le composant ; assouplir la garde.)
