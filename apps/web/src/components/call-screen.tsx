@@ -5,7 +5,6 @@ import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
 import { CallButton } from '@/components/call-glass-button';
 import { CallIncomingAnswer } from '@/components/call-incoming-answer';
-import { CallJournalColumn } from '@/components/call-journal-column';
 import { RoundButton } from '@/components/call-round-button';
 import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveFrameShown, useLiveFrameState } from '@/components/call-live-frame-slots';
 import { Portrait } from '@/components/call-grid';
@@ -22,8 +21,9 @@ import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
 import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
-import { useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
+import { JOURNAL_COLUMN_GUTTER, JOURNAL_COLUMN_WIDTH, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
+import { callPillText, PILL_TEXT_WIDTH_CLASS, type CallPillText } from '@/lib/calls/call-pill-text';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
@@ -85,6 +85,13 @@ import type { EffectsCompanion } from './call-effects-companions';
  *
  * L'appel entrant vit dans `call-incoming-answer.tsx` (P17, #16944) ; l'écran
  * de fin, la pastille, la bulle et la fenêtre PiP ne changent pas.
+ *
+ * LE TEXTE VIT DANS LA PILULE (#17343, `call-pill-text.ts`) : les sous-titres
+ * au repos dans son verre, au-dessus de sa rangée de base, avec « Journal » à
+ * leur pied (#17346) ; le journal s'ouvre à leur place ; `(…)` les range tous
+ * deux et refermer les actions les rend ; la pilule rangée d'un toucher laisse
+ * les sous-titres dans un verre à eux. Sur grand écran, la colonne du journal
+ * (W1) reste ouverte quand `(…)` s'ouvre (porteur, 2026-11-10).
  */
 
 const INK = 'var(--color-on-media)';
@@ -107,7 +114,7 @@ function once<T>(load: () => Promise<T>): () => Promise<T> {
 }
 
 const loadCaptions = once(() => import('./call-captions-panel'));
-const CallCaptionsPanel = lazy(() => loadCaptions().then((module) => ({ default: module.CallCaptionsPanel })));
+const CallCaptionsSlot = lazy(() => loadCaptions().then((module) => ({ default: module.CallCaptionsSlot })));
 
 const loadActions = once(() => import('./call-control-actions'));
 
@@ -159,6 +166,8 @@ const loadPeople = once(() => import('./call-people-sheet'));
 const CallPeopleSheet = lazy(() => loadPeople().then((module) => ({ default: module.CallPeopleSheet })));
 const loadJournal = once(() => import('./call-journal-panel'));
 const CallJournalPanel = lazy(() => loadJournal().then((module) => ({ default: module.CallJournalPanel })));
+/* La colonne du grand écran vit avec le journal, dans son chunk : l'écran d'appel n'en paie que l'`import()`. */
+const CallJournalInColumn = lazy(() => loadJournal().then((module) => ({ default: module.CallJournalInColumn })));
 
 /**
  * CE QU'UN TOUCHER VA DEMANDER, CHARGÉ AVANT LUI (#8735) — chaque mode et
@@ -221,10 +230,13 @@ const PANEL_OPENER: Readonly<Record<CallPanelKind, string>> = {
 
 const MORE = '[data-call-more]';
 
-/** Où va le focus quand la couche change : au bouton qui avait ouvert le panneau, sinon à `(…)`. */
+/** La couleur d'un locuteur : une fonction pure, la même à chaque rendu — les lignes mémoïsées du bandeau et du journal ne se redessinent pas pour elle. */
+const colorOf = (who: Pick<CallCaption, 'speakerId' | 'speakerName'>): string => speakerColor(who.speakerId, who.speakerName);
+
+/** Où va le focus quand la couche change : au bouton qui avait ouvert le panneau, sinon à `(…)` — que le journal rangé (#17343) ne lui prend pas. */
 function focusTarget(from: CallScreenLayer, to: CallScreenLayer): string | null {
   if (from.kind === to.kind && (from.kind !== 'panel' || to.kind !== 'panel' || from.panel === to.panel)) return null;
-  if (to.kind === 'menu' && from.kind === 'panel') return PANEL_OPENER[from.panel];
+  if (to.kind === 'menu' && from.kind === 'panel') return to.stowed === undefined ? PANEL_OPENER[from.panel] : null;
   if (to.kind === 'idle' && (from.kind === 'panel' || from.kind === 'mode')) return MORE;
   return null;
 }
@@ -369,7 +381,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     focusNext.current = focusTarget(shown, next);
     setLayer(next);
   };
-  const { docks, column, panels, reserve, reserveEnd, bleedEnd } = useJournalDock({ wide, available: live && offer.journal && chrome.mode === null, panel: chrome.panel, send });
+  const { column, panels, reserve, reserveEnd, bleedEnd } = useJournalDock({ wide, available: live && offer.journal && chrome.mode === null, panel: chrome.panel, send });
   const nameOf = (userId: string): string | null => call.members[userId]?.name ?? null;
   const closeGlyph = <GlyphSvg glyph={CALL_VIEW_GLYPHS.x} size={20} />;
   const expanded = shown.kind === 'menu' || shown.kind === 'panel';
@@ -509,17 +521,25 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const overlayVideo = layout === 'video-duo' || layout === 'screen';
   const hidden = visibility !== 'shown' || immersive;
   const railsShown = rails.length > 0 && !hidden;
-  /* Les sous-titres ne s'effacent JAMAIS avec les commandes : posés dans le
-     cadre de la pilule déployée, ils en sortent quand elle s'efface, et
-     restent lus (et annoncés) au-dessus de sa place. */
-  const captionsFramed = grown && !hidden && chrome.panel !== 'journal';
-  const colorOf = (who: Pick<CallCaption, 'speakerId' | 'speakerName'>): string => speakerColor(who.speakerId, who.speakerName);
-  const captions =
-    call.captionsMode === 'off' || !live || chrome.panel === 'journal' ? null : (
-      <Suspense fallback={null}>
-        <CallCaptionsPanel call={call} language={language} colorOf={colorOf} surface={captionsFramed ? 'inset' : 'glass'} />
-      </Suspense>
-    );
+  /* LES SOUS-TITRES VIVENT DANS LA PILULE (#17343, `call-pill-text.ts`) : au repos
+     dans son verre, au-dessus de sa rangée de base ; (…) les range, refermer les
+     actions les rend ; le journal s'ouvre à leur place. Ils ne s'effacent JAMAIS
+     avec les commandes : la pilule rangée d'un toucher les laisse dans un verre à
+     eux, à sa place, lus (et annoncés) comme avant. */
+  const text: CallPillText = live ? callPillText({ captionsOn: call.captionsMode !== 'off', layer: shown, chromeShown: !hidden }) : 'none';
+  /* Toujours montés : c'est `CallCaptionsSlot`, dans son chunk, qui les pose quand
+     `visible` et les fait repartir en fondu sinon (#17406) — rangés par (…),
+     éteints, ou laissés seuls quand la pilule revient. */
+  const captionsOf = (slot: 'captions' | 'captionsAlone', visible: boolean): ReactNode => (
+    <Suspense fallback={null}>
+      <CallCaptionsSlot slot={slot} shown={visible} call={call} language={language} colorOf={colorOf} onOpenJournal={joined ? () => panels.toggle('journal') : undefined} />
+    </Suspense>
+  );
+  const standaloneCaptions = (stowed: boolean): ReactNode => (
+    <div className={`${PILL_TEXT_WIDTH_CLASS} ${stowed ? 'absolute inset-x-0 bottom-0 z-10 mx-auto' : 'relative z-10 mx-auto'}`} data-call-captions-band="">
+      {captionsOf('captionsAlone', !stowed || text === 'captionsAlone')}
+    </div>
+  );
   const panelOf = (open: CallPanelKind): ReactNode => {
     const base = {
       id: CALL_PANEL_ID[open],
@@ -534,7 +554,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       case 'record':
         return <CallRecordChoice {...base} onRowKeyDown={onRowKeyDown} onRowWheel={onRowWheel} />;
       case 'journal':
-        return <CallJournalPanel {...base} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />;
+        return <CallJournalPanel {...base} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} windowHeight={viewport.height} />;
       case 'people':
         return <CallPeopleSheet {...base} members={orderedMembers(call.members)} renderModeration={(member) => <CallModerationSlot member={member} language={language} moderation={moderation} />} />;
     }
@@ -641,26 +661,26 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         {overlayVideo ? <div className="flex-1" /> : null}
         {live ? (
           <div className="relative z-20 flex flex-col gap-3 pb-6" style={reserveEnd} data-call-plane="" {...reserve}>
-            {captionsFramed ? null : (
-              <div className={`relative z-10 w-full ${docks ? 'mx-auto max-w-[592px]' : ''}`} data-call-captions-band="">
-                {captions}
-              </div>
-            )}
+            {mode !== null && text === 'captionsAlone' ? standaloneCaptions(false) : null}
             {mode === null ? (
-              <div className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
-                <CallControlPill
-                  call={call}
-                  language={language}
-                  rows={pillRows(disposition, set, shown)}
-                  expanded={expanded}
-                  grown={grown}
-                  onToggle={() => send({ type: 'toggle-menu' })}
-                  prominent={sharedScreenShown}
-                  framedCaptions={captionsFramed ? captions : null}
-                  panels={panels}
-                  kit={ROWS_KIT}
-                  panel={chrome.panel === null ? null : <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense>}
-                />
+              <div className="relative">
+                <div className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
+                  <CallControlPill
+                    call={call}
+                    language={language}
+                    rows={pillRows(disposition, set, shown)}
+                    expanded={expanded}
+                    grown={grown}
+                    onToggle={() => send({ type: 'toggle-menu' })}
+                    prominent={sharedScreenShown}
+                    text={text}
+                    captions={captionsOf('captions', text === 'captions')}
+                    panels={panels}
+                    kit={ROWS_KIT}
+                    panel={chrome.panel === null ? null : <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense>}
+                  />
+                </div>
+                {standaloneCaptions(true)}
               </div>
             ) : (
               <Suspense fallback={<CallModePending label={t('call.close')} glyph={closeGlyph} onExit={exitMode} />}>{mode}</Suspense>
@@ -686,11 +706,9 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           </Suspense>
         ) : null}
         {column.shown ? (
-          <CallJournalColumn>
-            <Suspense fallback={null}>
-              <CallJournalPanel id={CALL_PANEL_ID.journal} closeGlyph={closeGlyph} language={language} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} fill />
-            </Suspense>
-          </CallJournalColumn>
+          <Suspense fallback={null}>
+            <CallJournalInColumn width={JOURNAL_COLUMN_WIDTH} gutter={JOURNAL_COLUMN_GUTTER} id={CALL_PANEL_ID.journal} closeGlyph={closeGlyph} language={language} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />
+          </Suspense>
         ) : null}
         {declineOpen && phase === 'incoming' ? (
           <Suspense fallback={null}>
