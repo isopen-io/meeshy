@@ -26,8 +26,19 @@ class CallPillModelTest {
     }
 
     @Test
-    fun `an audio call offers no camera toggle`() {
-        assertThat(CallPillModel.cameraItem(state(isVideo = false))).isNull()
+    fun `an audio call offers the camera, which turns it into a video call`() {
+        val item = CallPillModel.cameraItem(state(isVideo = false, camera = false))!!
+        assertThat(item.action).isEqualTo(CallAction.Camera)
+        assertThat(item.labelRes).isEqualTo(R.string.call_control_camera_on)
+        assertThat(item.kind).isEqualTo(CallPillKind.Normal)
+        assertThat(CallPillModel.items(state(isVideo = false, camera = false), emptyList()).keys).containsExactly(CallAction.Camera)
+    }
+
+    @Test
+    fun `an audio call has the camera in the left rail but neither flip nor effects`() {
+        val audio = state(isVideo = false, camera = false)
+        val set = CallPillModel.available(audio, CallPillModel.items(audio, emptyList())) { false }
+        assertThat(set.myImage).containsExactly(CallAction.Camera)
     }
 
     @Test
