@@ -53,6 +53,7 @@ const saved: { animate?: PropertyDescriptor | undefined; audio?: PropertyDescrip
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
   await loadPillMotion();
+  await import('@/lib/calls/peer-audio-meter');
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -103,6 +104,8 @@ const mount = (active: ActiveCall, { reducedMotion = false }: { readonly reduced
 
 const ring = '[data-call-incoming-portrait] [data-call-camera-off-speech]';
 const ringRuns = () => runs.filter((run) => run.target.matches(ring));
+/* La mesure se charge à la demande : le module préchargé, `import()` rend la main à la microtâche suivante. */
+const settle = () => act(async () => {});
 const tick = (ms: number) => act(() => jest.advanceTimersByTime(ms));
 
 describe('P9.5 / P10.11 — le disque du duo audio prend la couleur de la personne', () => {
@@ -124,9 +127,10 @@ describe('P9.5 / P10.11 — le disque du duo audio prend la couleur de la person
 });
 
 describe('P9.6 / P10.12 — l’anneau et le halo n’existent qu’à la parole, sans dépendre des sous-titres', () => {
-  test('au repos, l’anneau est transparent et rien ne s’anime', () => {
+  test('au repos, l’anneau est transparent et rien ne s’anime', async () => {
     jest.useFakeTimers();
     const view = mount(call());
+    await settle();
     expect(view.find(ring)?.style.opacity).toBe('0');
     tick(1000);
     expect(view.find(ring)?.style.opacity).toBe('0');
@@ -134,9 +138,11 @@ describe('P9.6 / P10.12 — l’anneau et le halo n’existent qu’à la parole
     view.done();
   });
 
-  test('le niveau audio du pair allume l’anneau en fondu, sous-titres éteints', () => {
+  test('le niveau audio du pair allume l’anneau en fondu, sous-titres éteints', async () => {
     jest.useFakeTimers();
     const view = mount(call({ captionsMode: 'off', captions: [] }));
+    await settle();
+    await settle();
     expect(metered).toContain(heard);
     level.now = 0.2;
     tick(400);
@@ -145,9 +151,10 @@ describe('P9.6 / P10.12 — l’anneau et le halo n’existent qu’à la parole
     view.done();
   });
 
-  test('un silence bref ne l’éteint pas (hystérésis), un silence tenu l’éteint en fondu', () => {
+  test('un silence bref ne l’éteint pas (hystérésis), un silence tenu l’éteint en fondu', async () => {
     jest.useFakeTimers();
     const view = mount(call());
+    await settle();
     level.now = 0.2;
     tick(400);
     level.now = 0;
@@ -159,9 +166,10 @@ describe('P9.6 / P10.12 — l’anneau et le halo n’existent qu’à la parole
     view.done();
   });
 
-  test('le fondu dure 250 ms, 120 ms sous « Réduire les animations » (Web Animations, pas une transition CSS)', () => {
+  test('le fondu dure 250 ms, 120 ms sous « Réduire les animations » (Web Animations, pas une transition CSS)', async () => {
     jest.useFakeTimers();
     const normal = mount(call());
+    await settle();
     level.now = 0.2;
     tick(400);
     expect(ringRuns().at(-1)?.duration).toBe(250);
@@ -169,23 +177,26 @@ describe('P9.6 / P10.12 — l’anneau et le halo n’existent qu’à la parole
     runs.length = 0;
     level.now = 0;
     const reduced = mount(call(), { reducedMotion: true });
+    await settle();
     level.now = 0.2;
     tick(400);
     expect(ringRuns().at(-1)?.duration).toBe(120);
     reduced.done();
   });
 
-  test('un sous-titre en cours n’allume pas l’anneau : seul le niveau audio parle', () => {
+  test('un sous-titre en cours n’allume pas l’anneau : seul le niveau audio parle', async () => {
     jest.useFakeTimers();
     const caption = { id: 's', speakerId: 'u-peer', speakerName: 'Awa', original: '…', translated: null, pair: null, isFinal: false, at: 1, mine: false };
     const view = mount(call({ captions: [caption] as unknown as ActiveCall['captions'] }));
+    await settle();
     tick(1000);
     expect(view.find(ring)?.style.opacity).toBe('0');
     view.done();
   });
 
-  test('sonnerie : pas de mesure tant que l’appel n’est pas joint', () => {
+  test('sonnerie : pas de mesure tant que l’appel n’est pas joint', async () => {
     const view = mount(call({ phase: { kind: 'outgoing' } as ActiveCall['phase'] }));
+    await settle();
     expect(metered).toHaveLength(0);
     view.done();
   });

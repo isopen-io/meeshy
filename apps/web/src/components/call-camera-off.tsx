@@ -25,9 +25,9 @@ import { prefersReducedMotion } from '@/lib/view/reduced-motion';
  * posé sur son disque : la scène noire de la caméra coupée ET le portrait du duo audio le montent,
  * jamais une seconde copie. Seule son OPACITÉ change, en fondu (`useOpacityFade`, Web Animations).
  */
-export function SpeechRing({ color, speaking, ms }: { readonly color: string; readonly speaking: boolean; readonly ms: number }) {
+export function SpeechRing({ color, speaking }: { readonly color: string; readonly speaking: boolean }) {
   const ring = useRef<HTMLSpanElement>(null);
-  useOpacityFade(ring, speaking, ms);
+  useOpacityFade(ring, speaking, cameraOffFadeMs(prefersReducedMotion()));
   return <span ref={ring} className="absolute inset-3 rounded-full" style={{ '--call-tint': color } as CSSProperties} data-call-camera-off-speech="" />;
 }
 
@@ -55,7 +55,7 @@ export function CameraOffStage({ videoOn, video, name, avatar, presenceKey, colo
       <div ref={veil} className={`absolute inset-0 grid place-items-center bg-media-backdrop ${videoOn && settledOn ? 'invisible' : ''}`} style={{ '--call-tint': color } as CSSProperties} data-call-camera-off="">
         <div className="flex flex-col items-center gap-3">
           <Portrait name={name} avatar={avatar} size={96} pulse={false} presenceKey={presenceKey} tint={color}>
-            <SpeechRing color={color} speaking={speaking} ms={ms} />
+            <SpeechRing color={color} speaking={speaking} />
           </Portrait>
           <span className="flex items-center gap-2 text-body text-on-media-3">
             <GlyphSvg glyph={CALL_SCREEN_GLYPHS.videoCamera} size={16} />
