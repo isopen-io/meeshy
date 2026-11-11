@@ -283,7 +283,7 @@ describe('CallEffectsMode', () => {
       media = Object.getOwnPropertyDescriptor(window, 'matchMedia');
       played.length = 0;
       Object.defineProperty(proto(), 'animate', { configurable: true, writable: true, value: function (this: HTMLElement, keyframes: Keyframe[], options: { duration: number }) {
-        played.push({ what: this.getAttribute('data-call-effects-settings') !== null ? 'panel' : this.hasAttribute('data-call-effects-looks') ? 'looks' : this.hasAttribute('data-call-effects-categories-row') ? 'puces' : 'other', keyframes, duration: options.duration });
+        played.push({ what: this.getAttribute('data-call-effects-settings') !== null ? 'panel' : this.hasAttribute('data-call-effects-looks') ? 'looks' : this.hasAttribute('data-call-effects-categories-row') ? 'puces' : this.hasAttribute('data-call-mode-bar-skin') ? 'skin' : this.hasAttribute('data-call-mode-rider') ? 'rider' : 'other', keyframes, duration: options.duration });
         return { cancel: () => undefined, finished: Promise.resolve(), onfinish: null };
       } });
     });
@@ -328,6 +328,46 @@ describe('CallEffectsMode', () => {
       expect(entries.map((entry) => entry.duration)).toEqual([150, 150, 150]);
       expect(entries.every((entry) => entry.keyframes.every((frame) => frame.transform === undefined))).toBe(true);
       view.done();
+    });
+
+    test('la barre se resserre PENDANT que ses puces repartent, et ce qui la surmonte suit son bord du haut : un morphisme, pas deux temps (P8b.6, loi 17)', () => {
+      const saved = (['offsetHeight', 'offsetWidth', 'getBoundingClientRect'] as const).map((name) => [name, Object.getOwnPropertyDescriptor(HTMLElement.prototype, name)] as const);
+      const pucesInFlow = (bar: HTMLElement): boolean => {
+        const row = bar.querySelector<HTMLElement>('[data-call-effects-categories-row]');
+        return row !== null && row.style.position !== 'absolute';
+      };
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get(this: HTMLElement) { return this.hasAttribute('data-call-mode-bar') ? 64 + (pucesInFlow(this) ? 56 : 0) : 20; } });
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get() { return 400; } });
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', { configurable: true, value: () => ({ width: 400, height: 64 }) });
+      const moved = (): Array<[string, unknown]> =>
+        played
+          .filter((entry) => ['puces', 'skin', 'rider'].includes(entry.what))
+          .map((entry): [string, unknown] => [entry.what, entry.keyframes[0]?.transform])
+          .sort(([a], [b]) => a.localeCompare(b));
+      try {
+        const view = mount({ blur: true });
+        played.length = 0;
+        view.press('[data-call-effects-settings-toggle]');
+        expect(view.find('[data-call-effects-categories-row]')).not.toBeNull();
+        expect(moved()).toEqual([
+          ['puces', 'translateY(0)'],
+          ['rider', 'translateY(-56px)'],
+          ['skin', 'scale(1, 1.875)'],
+        ]);
+        played.length = 0;
+        view.press('[data-call-effects-settings-toggle]');
+        expect(moved()).toEqual([
+          ['puces', 'translateY(20px)'],
+          ['rider', 'translateY(56px)'],
+          ['skin', `scale(1, ${64 / 120})`],
+        ]);
+        view.done();
+      } finally {
+        for (const [name, descriptor] of saved) {
+          if (descriptor === undefined) Reflect.deleteProperty(HTMLElement.prototype, name);
+          else Object.defineProperty(HTMLElement.prototype, name, descriptor);
+        }
+      }
     });
 
     test('la première peinture ne joue rien', () => {

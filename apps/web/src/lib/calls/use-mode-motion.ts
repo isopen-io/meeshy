@@ -29,12 +29,15 @@ function useEngine(): Engine | null {
   return engine;
 }
 
-/** Le verre d'une barre de mode : morphisme à chaque changement de taille (les puces qui partent, le panneau qui arrive). */
-export function useModeGlass(box: RefObject<HTMLElement | null>, skin: RefObject<HTMLElement | null>): void {
+/**
+ * Le verre d'une barre de mode : morphisme à chaque changement de taille (les puces qui partent,
+ * ou reviennent), et ce qui la surmonte (`rider`) suit son bord du haut, dans le même mouvement.
+ */
+export function useModeGlass(box: RefObject<HTMLElement | null>, skin: RefObject<HTMLElement | null>, rider?: RefObject<HTMLElement | null>): void {
   const engine = useEngine();
   const glass = useRef<ReturnType<Engine['createPillGlass']> | null>(null);
   useLayoutEffect(() => {
-    if (glass.current === null && engine !== null && box.current !== null && skin.current !== null) glass.current = engine.createPillGlass(box.current, skin.current);
+    if (glass.current === null && engine !== null && box.current !== null && skin.current !== null) glass.current = engine.createPillGlass(box.current, skin.current, rider?.current ?? null);
     glass.current?.update(false);
   });
   useEffect(() => () => glass.current?.dispose(), []);

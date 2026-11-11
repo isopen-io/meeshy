@@ -255,6 +255,13 @@ const TEXT_TAB = 'min-h-11 rounded-full px-3 text-mini font-semibold transition-
 /** Les deux moitiés d'un remplacement se posent l'une sur l'autre, au même endroit : rien ne saute pendant le fondu. */
 const STACKED = { gridArea: '1 / 1' } as const;
 
+/**
+ * Les puces qui repartent quittent la mise en page AUSSITÔT, posées à leur place au-dessus de la
+ * rangée de base (le liseré `p-2` du verre) : la barre se resserre PENDANT qu'elles s'effacent — un
+ * morphisme, pas un fondu suivi d'un saut (P8b.6, loi 17).
+ */
+const LEAVING_ROW = { position: 'absolute', insetInline: '0.5rem', bottom: 'calc(100% - 0.5rem)' } as const;
+
 type TextOf = <K extends CallStudioCatalogKey>(key: K, ...params: TranslateCallStudioArgs<K>) => string;
 
 type SettingsProps = {
@@ -328,6 +335,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const [settings, setSettings] = useState(!colorAvailable);
   const t: TextOf = (key, ...params) => translateCallStudio(language, key, ...params);
   const controls = useRef<HTMLDivElement>(null);
+  const rider = useRef<HTMLDivElement>(null);
   const style = useRef('none');
   const puces = useSwapPresence<HTMLDivElement>(colorAvailable && !settings);
   const looks = useSwapPresence<HTMLDivElement>(colorAvailable && !settings);
@@ -383,32 +391,41 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
       {companions.length === 0 ? null : <CallEffectsCompanions language={language} companions={companions} captions={captions} floor={controls} />}
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
       <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3">
-        <CaptureStatus status={studio.status} />
-        <div className="grid w-full items-end justify-items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
-          {looks.mounted ? (
-            <div ref={looks.ref} className={`flex w-full flex-col items-center gap-3 ${settings ? 'pointer-events-none' : ''}`} style={STACKED} data-call-effects-looks="">
-              <CaptureHint language={language} />
-              <ModeCarousel
-                key={category}
-                label={t('callStudio.mode.pickEffect')}
-                items={items}
-                selected={selected}
-                onSelect={select}
-                onWheel={onWheel}
-                capture={{ recording: studio.recording, onCapture: studio.capture, hint: t('callStudio.capture.gestures') }}
-              />
-            </div>
-          ) : null}
-          {panel.mounted ? (
-            <div ref={panel.ref} role="group" aria-label={t('callStudio.effects.settings')} className={`glass-call flex ${GLASS_WIDTH} flex-col gap-1 rounded-[24px] px-4 py-3 ${settings ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
-              <EffectsSettings language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} />
-            </div>
-          ) : null}
+        <div ref={rider} className="flex w-full flex-col items-center gap-3" data-call-mode-rider="">
+          <CaptureStatus status={studio.status} />
+          <div className="grid w-full items-end justify-items-center" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
+            {looks.mounted ? (
+              <div ref={looks.ref} className={`flex w-full flex-col items-center gap-3 ${settings ? 'pointer-events-none' : ''}`} style={STACKED} data-call-effects-looks="">
+                <CaptureHint language={language} />
+                <ModeCarousel
+                  key={category}
+                  label={t('callStudio.mode.pickEffect')}
+                  items={items}
+                  selected={selected}
+                  onSelect={select}
+                  onWheel={onWheel}
+                  capture={{ recording: studio.recording, onCapture: studio.capture, hint: t('callStudio.capture.gestures') }}
+                />
+              </div>
+            ) : null}
+            {panel.mounted ? (
+              <div ref={panel.ref} role="group" aria-label={t('callStudio.effects.settings')} className={`glass-call flex ${GLASS_WIDTH} flex-col gap-1 rounded-[24px] px-4 py-3 ${settings ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
+                <EffectsSettings language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} />
+              </div>
+            ) : null}
+          </div>
+          <KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />
         </div>
-        <KeyboardRecord language={language} recording={studio.recording} onPress={() => void (studio.recording ? studio.stop() : studio.record())} />
         <CallModeBar
           glass
-          above={puces.mounted ? <div ref={puces.ref} className={`flex w-full flex-col items-center ${settings ? 'pointer-events-none' : ''}`} data-call-effects-categories-row=""><EffectsCategories category={category} onPick={setCategory} t={t} /></div> : null}
+          rider={rider}
+          above={
+            puces.mounted ? (
+              <div ref={puces.ref} className={`flex w-full flex-col items-center ${settings ? 'pointer-events-none' : ''}`} style={settings ? LEAVING_ROW : undefined} data-call-effects-categories-row="">
+                <EffectsCategories category={category} onPick={setCategory} t={t} />
+              </div>
+            ) : null
+          }
           quit={{ label: t('callStudio.mode.backEffects'), glyph: chevron, onPress: onExit, data: { 'data-call-mode-quit': '' } }}
           center={colorAvailable ? <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={gear} caption={t('callStudio.effects.settings')} pressed={settings} onPress={() => setSettings((open) => !open)} data={{ 'data-call-effects-settings-toggle': '' }} /> : null}
           options={colorAvailable ? <ModeOption label={t('callStudio.mode.addLook')} glyph={plus} onPress={addLook} data={{ 'data-call-effects-add-look': '' }} /> : null}

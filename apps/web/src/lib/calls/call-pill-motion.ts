@@ -33,6 +33,16 @@ export function morphKeyframes(from: GlassSize, to: GlassSize, reducedMotion: bo
   return [{ transform: `scale(${from.width / to.width}, ${from.height / to.height})` }];
 }
 
+/**
+ * Ce qui est POSÉ sur un verre qui se déforme depuis son bord du bas (le panneau et la bande de
+ * looks au-dessus de la barre d'un mode) suit son bord du haut : la mise en page l'a déjà posé à
+ * sa place finale, il en repart de l'écart de hauteur (FLIP) et la rejoint avec le verre.
+ */
+export function followKeyframes(from: GlassSize, to: GlassSize, reducedMotion: boolean): readonly Keyframe[] | null {
+  if (reducedMotion || from.height <= 0 || to.height <= 0 || Math.abs(from.height - to.height) < EPSILON_PX) return null;
+  return [{ transform: `translateY(${to.height - from.height}px)` }];
+}
+
 type StowInput = {
   /** La hauteur du verre, déployé. */
   readonly height: number;
