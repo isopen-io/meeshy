@@ -148,14 +148,17 @@ object CallRoute {
         )
 
     /**
-     * Where « Réduire » lands: the call's chat when its conversation is known, the
-     * conversation list otherwise. A blank id must never reach [Routes.chat] — `chat/`
-     * matches no destination and `navigate` throws (an offer, a swap or a push that
-     * carries no room used to crash the app on the chevron).
+     * « Réduire » (#17329, iOS `collapseIntoPip`): the call keeps running in the pill and the user is back
+     * on the screen behind it — `null` means « pop the call ». With nothing behind the call, the conversation list.
      */
-    fun minimize(conversationId: String): String = openConversation(conversationId)
+    fun minimizeFallback(hasScreenBehind: Boolean): String? = if (hasScreenBehind) null else Routes.CONVERSATIONS
 
-    /** Where « Conversation » (header, #17329) lands while the call keeps running — the same destination rule as [minimize]. */
+    /**
+     * Where « Conversation » (header, #17329) lands while the call keeps running: the call's chat when its
+     * conversation is known, the conversation list otherwise. A blank id must never reach [Routes.chat] —
+     * `chat/` matches no destination and `navigate` throws (an offer, a swap or a push that carries no room
+     * used to crash the app).
+     */
     fun openConversation(conversationId: String): String =
         if (conversationId.isBlank()) Routes.CONVERSATIONS else Routes.chat(conversationId)
 }

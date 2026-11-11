@@ -1,14 +1,14 @@
 package me.meeshy.app.calls
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -17,25 +17,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallHeaderAction
@@ -47,6 +48,7 @@ import me.meeshy.sdk.model.call.CallHeaderLaw
 import me.meeshy.sdk.model.call.CallHeaderNames
 import me.meeshy.sdk.model.call.CallSignalStrength
 import me.meeshy.sdk.model.call.CallVideoBadgeAccessibility
+import me.meeshy.ui.accessibility.MetaSeparator
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -54,6 +56,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 private val GLYPH_DIAMETER = 40.dp
 private val CHIP_HEIGHT = 48.dp
 private val TITLE_MAX_WIDTH = 140.dp
+private val CHIP_ICON = 14.dp
 private const val APPEAR_SCALE = 0.8f
 
 /**
@@ -79,33 +82,14 @@ internal fun CallHeaderBar(
     onEnterPictureInPicture: () -> Unit = {},
     onOpenConversation: () -> Unit = onMinimize,
 ) {
-    val actions = if (showsMinimize) {
-        CallHeaderLaw.actions(
-            CallHeaderContext(
-                canEnterPictureInPicture = canEnterPictureInPicture,
-                isPictureInPictureActive = isPictureInPictureActive,
-                hasConversation = CallHeaderLaw.showsConversationButton(conversationId),
-            ),
-        )
-    } else {
-        emptyList()
-    }
+    val actions = headerActions(showsMinimize, conversationId, canEnterPictureInPicture, isPictureInPictureActive)
     val strength = CallHeaderLaw.signalStrength(state.connectionQuality)
-    val capsule = CallHeaderLaw.capsule(
-        CallHeaderCapsuleInput(
-            layout = when {
-                isGroupStage -> CallHeaderCapsuleLayout.Group
-                isVideoStage -> CallHeaderCapsuleLayout.Video
-                else -> CallHeaderCapsuleLayout.Audio
-            },
-            isEstablished = state.showsConnectedLayout,
-            isNetworkDegraded = strength.isDegraded || state.isPeerQualityDegraded || state.status == CallStatus.RECONNECTING,
-            givenName = names.givenName,
-            displayName = state.peerName,
-            groupName = names.groupName,
-            participantCount = participantCount,
-        ),
-    )
+    val layout = when {
+        isGroupStage -> CallHeaderCapsuleLayout.Group
+        isVideoStage -> CallHeaderCapsuleLayout.Video
+        else -> CallHeaderCapsuleLayout.Audio
+    }
+    val capsule = headerCapsule(state, strength, layout, names, participantCount)
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -143,11 +127,45 @@ internal fun CallHeaderBar(
             var lastCapsule by remember { mutableStateOf(capsule) }
             if (capsule != null) lastCapsule = capsule
             CallHeaderAppear(capsule != null, anchorEnd = true) {
-                lastCapsule?.let { CallDurationChip(state, it, strength.label.text().takeIf { strength.isDegraded }, strength, onOpenQualityDetail) }
+                lastCapsule?.let { CallDurationChip(state, it, strength, onOpenQualityDetail) }
             }
         }
     }
 }
+
+private fun headerActions(
+    showsMinimize: Boolean,
+    conversationId: String?,
+    canEnterPictureInPicture: Boolean,
+    isPictureInPictureActive: Boolean,
+): List<CallHeaderAction> {
+    if (!showsMinimize) return emptyList()
+    return CallHeaderLaw.actions(
+        CallHeaderContext(
+            canEnterPictureInPicture = canEnterPictureInPicture,
+            isPictureInPictureActive = isPictureInPictureActive,
+            hasConversation = CallHeaderLaw.showsConversationButton(conversationId),
+        ),
+    )
+}
+
+private fun headerCapsule(
+    state: CallUiState,
+    strength: CallSignalStrength,
+    layout: CallHeaderCapsuleLayout,
+    names: CallHeaderNames,
+    participantCount: Int,
+): CallHeaderCapsule? = CallHeaderLaw.capsule(
+    CallHeaderCapsuleInput(
+        layout = layout,
+        isEstablished = state.showsConnectedLayout,
+        isNetworkDegraded = strength.isDegraded || state.isPeerQualityDegraded || state.status == CallStatus.RECONNECTING,
+        givenName = names.givenName,
+        displayName = state.peerName,
+        groupName = names.groupName,
+        participantCount = participantCount,
+    ),
+)
 
 /** Un élément de l'en-tête entre en fondu depuis son bord et en repart par lui ; « Réduire les animations » ne garde que le fondu. */
 @Composable
@@ -165,13 +183,13 @@ private fun CallHeaderAppear(visible: Boolean, anchorEnd: Boolean = false, conte
  * La capsule de verre (miroir de iOS `durationChip`) : signal transitoire, titre, nombre, durée tabulaire qui se
  * recompose seule, wifi d'alerte du réseau du pair, flèche de reconnexion. #17323 — elle s'ouvre au toucher (la
  * feuille de qualité) : un verre interactif, comme les boutons voisins. TalkBack lit UNE phrase composée
- * ([CallVideoBadgeAccessibility]) : titre, nombre, durée, puis l'état du réseau.
+ * ([CallVideoBadgeAccessibility]) : titre, nombre, durée, puis l'état du réseau. En audio, la sourdine et la
+ * reconnexion ont déjà leur pastille sous l'avatar : la capsule ne les répète pas (iOS `chipWarnings`).
  */
 @Composable
 private fun CallDurationChip(
     state: CallUiState,
     capsule: CallHeaderCapsule,
-    signalDegraded: String?,
     strength: CallSignalStrength,
     onOpenQualityDetail: () -> Unit,
 ) {
@@ -181,12 +199,12 @@ private fun CallDurationChip(
         peerNetworkWeak = stringResource(R.string.call_stage_peer_network),
         reconnecting = stringResource(R.string.call_reconnecting),
     )
-    val reconnecting = state.status == CallStatus.RECONNECTING
+    val reconnecting = capsule.showsDuration && state.status == CallStatus.RECONNECTING
     val participants = capsule.participantCount?.let { "${stringResource(R.string.call_detail_participants)} $it" }
     val description = CallVideoBadgeAccessibility.label(
         phrases = phrases,
-        signalDegraded = signalDegraded,
-        peerMuted = state.isPeerMuted,
+        signalDegraded = strength.label.text().takeIf { strength.isDegraded },
+        peerMuted = capsule.showsDuration && state.isPeerMuted,
         peerNetworkWeak = state.isPeerQualityDegraded,
         reconnecting = reconnecting,
         title = capsule.title,
@@ -219,23 +237,10 @@ private fun CallDurationChip(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
         ) {
             TransientCallSignalGlyph(strength)
-            capsule.title?.let { title ->
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CallPalette.Ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = TITLE_MAX_WIDTH),
-                )
-            }
-            capsule.participantCount?.let { count ->
-                Text(text = "· $count", style = MaterialTheme.typography.labelMedium, color = CallPalette.Ink)
+            ProvideTextStyle(MaterialTheme.typography.labelMedium.copy(color = CallPalette.Ink)) {
+                CallCapsuleIdentity(capsule)
             }
             if (capsule.showsDuration) {
-                if (capsule.title != null || capsule.participantCount != null) {
-                    Text(text = "·", style = MaterialTheme.typography.labelMedium, color = CallPalette.Ink)
-                }
                 CallDurationClockText(
                     hasLiveClock = state.hasLiveClock,
                     fixedSeconds = state.durationSeconds,
@@ -243,12 +248,29 @@ private fun CallDurationChip(
                     color = CallPalette.Ink,
                 )
             }
-            if (state.isPeerQualityDegraded) {
-                Icon(MeeshyIcons.WifiProblem, contentDescription = null, tint = warning, modifier = Modifier.size(14.dp))
+            if (capsule.showsNetwork && state.isPeerQualityDegraded) {
+                Icon(MeeshyIcons.WifiProblem, contentDescription = null, tint = warning, modifier = Modifier.size(CHIP_ICON))
             }
             if (reconnecting) {
-                Icon(MeeshyIcons.Sync, contentDescription = null, tint = warning, modifier = Modifier.size(14.dp))
+                Icon(MeeshyIcons.Sync, contentDescription = null, tint = warning, modifier = Modifier.size(CHIP_ICON))
             }
         }
+    }
+}
+
+/**
+ * Le nom, puis le nombre (glyphe de groupe), chacun suivi du séparateur partagé (iOS `chipIdentity`) : la loi ne les
+ * donne qu'avec la durée, qui les suit, donc aucun séparateur ne reste orphelin. Le séparateur n'est jamais lu.
+ */
+@Composable
+private fun CallCapsuleIdentity(capsule: CallHeaderCapsule) {
+    capsule.title?.let { title ->
+        Text(text = title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = TITLE_MAX_WIDTH))
+        MetaSeparator()
+    }
+    capsule.participantCount?.let { count ->
+        Icon(MeeshyIcons.GroupFilled, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(CHIP_ICON))
+        Text(text = count.toString())
+        MetaSeparator()
     }
 }

@@ -1,5 +1,7 @@
 package me.meeshy.app.calls
 
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -102,6 +104,35 @@ class CallHeaderBarTest {
         rule.onNodeWithContentDescription("Minimize").assertExists()
         rule.onNodeWithContentDescription("Conversation").assertDoesNotExist()
         rule.onNodeWithContentDescription("Call duration", substring = true).assertDoesNotExist()
+        rule.onAllNodes(hasClickAction()).assertCountEquals(1)
+    }
+
+    @Test
+    fun `un groupe sans nom ouvre sa capsule sur le nombre, sans separateur orphelin`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallHeaderBar(
+                    connected(video = false), conversationId = "c1", showsMinimize = true, onMinimize = {},
+                    isVideoStage = false, isGroupStage = true, participantCount = 3,
+                )
+            }
+        }
+        rule.onNodeWithText("3").assertExists()
+        rule.onNodeWithText("· 3").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Participants 3, Call duration").assertExists()
+    }
+
+    @Test
+    fun `en audio la reconnexion reste sous l'avatar, la capsule ne la repete pas`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallHeaderBar(
+                    connected(video = false, peerQualityDegraded = true).copy(status = CallStatus.RECONNECTING),
+                    conversationId = "c1", showsMinimize = true, onMinimize = {},
+                )
+            }
+        }
+        rule.onNodeWithContentDescription("Poor network (contact)").assertExists()
     }
 
     @Test

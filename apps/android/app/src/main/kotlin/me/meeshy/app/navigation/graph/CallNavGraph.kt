@@ -57,10 +57,11 @@ internal fun NavGraphBuilder.callNavGraph(
             // instead. popUpTo the CALL entry (inclusive) so the back stack never accumulates stale
             // call screens that a Back press could re-enter (and re-initiate).
             onMinimize = {
-                if (navController.previousBackStackEntry != null) {
+                val fallback = CallRoute.minimizeFallback(hasScreenBehind = navController.previousBackStackEntry != null)
+                if (fallback == null) {
                     navController.popBackStack()
                 } else {
-                    navController.navigate(Routes.CONVERSATIONS) {
+                    navController.navigate(fallback) {
                         popUpTo(CallRoute.PATTERN) { inclusive = true }
                         launchSingleTop = true
                     }
