@@ -131,6 +131,28 @@ object CallColorLook {
         return if (maxC <= 0f) 0f else (maxC - minOf(rgb.r, rgb.g, rgb.b)) / maxC
     }
 
+    /** How many moods the carousel of the Effects mode shows on each side of the chosen one. */
+    const val VISIBLE_NEIGHBOURS: Int = 2
+
+    /**
+     * What to bake when [preset] is asked: [preset] first, then the moods the carousel shows beside it in [catalog],
+     * nearest first. The next pick is one of them and finds its cube ready; a mood out of sight costs nothing until
+     * it is asked. Natural has no cube; a preset outside [catalog] (an older tint a call still carries) bakes alone.
+     */
+    fun bakeOrder(
+        preset: VideoFilterPreset,
+        catalog: List<VideoFilterPreset> = VideoFilterPreset.catalog,
+        reach: Int = VISIBLE_NEIGHBOURS,
+    ): List<VideoFilterPreset> {
+        val index = catalog.indexOf(preset)
+        val around = if (index < 0) {
+            emptyList()
+        } else {
+            (1..reach).flatMap { distance -> listOfNotNull(catalog.getOrNull(index + distance), catalog.getOrNull(index - distance)) }
+        }
+        return (listOf(preset) + around).filter { recipe(it) != null }
+    }
+
     /** Width and height of the packed strip, in texels. */
     fun stripSize(dimension: Int = DIMENSION): Pair<Int, Int> = dimension * dimension to dimension
 
