@@ -287,6 +287,12 @@ public nonisolated extension MeeshyGlassButtonRecipe {
         }
     }
 
+    /// Le glyphe garde sa taille quel que soit le Dynamic Type : il est figé
+    /// dans son disque, la cible et le Large Content Viewer portent le reste.
+    var glyphFont: Font {
+        Font.system(size: CGFloat(glyphSize), weight: .semibold)
+    }
+
     func inkColor(isDark: Bool) -> Color {
         switch ink {
         case .onMedia: return MeeshyColors.onMedia

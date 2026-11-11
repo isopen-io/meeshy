@@ -79,7 +79,7 @@ public struct MeeshyGlassButtonFace<Glyph: View, Badge: View>: View {
         let recipe = self.recipe
         let isDark = colorScheme == .dark
         return glyph
-            .font(.system(size: recipe.glyphSize, weight: .semibold))
+            .font(recipe.glyphFont)
             .foregroundStyle(recipe.inkColor(isDark: isDark))
             .meeshyAnimation(.easeInOut(duration: MeeshyGlassButtonRecipe.toneFadeDuration), value: recipe.kind)
             .accessibilityHidden(true)
