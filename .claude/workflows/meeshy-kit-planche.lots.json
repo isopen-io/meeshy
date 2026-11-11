@@ -1016,7 +1016,8 @@
     "A15",
     "A16",
     "A17",
-    "A18"
+    "A18",
+    "A19"
    ],
    "lois": [
     8,
@@ -1137,6 +1138,7 @@
    ],
    "contrat": "Sélection sans cadre ; TOUCHER un objet affiche DIRECTEMENT ses outils dans la pilule, sans étape « Modifier » ni mode plein écran : ‹ · outils du type · (…) (vues O1, O14, O4, O15) ; un outil ouvre ses options dans la pilule qui grandit (O5 à O8). Le (…) ouvre le menu (Dupliquer, Mettre devant, Mettre en fond, Verrouiller ; Temps, Description, Faire un sticker pour un média ; Retirer en dernier). Pas de menu à l'appui long : il commence le glisser. GLISSER fait apparaître la duplication en haut et la poubelle en bas (K25) ; la copie se pose un rang au-dessus de l'original. Les outils d'une photo ou d'une vidéo (O4 à O9) sont ceux de la retouche de la prise (ComposerCaptureMount), DÉPLACÉS ici pour qu'il n'en existe qu'un jeu : c'est la même table d'outils que le lot I9 montre depuis une conversation.",
    "depend": [
+    "K04",
     "K18",
     "K23",
     "K25",
@@ -1187,6 +1189,7 @@
    ],
    "contrat": "Fond, cadre, transitions, effet, durée dans la pilule ; frise en mode plein écran.",
    "depend": [
+    "K04",
     "K22",
     "K11",
     "K16",
