@@ -563,7 +563,7 @@ extension CallView {
     // its camera off, so the user sees the peer's avatar rather than a frozen
     // last frame.
     private var remoteCameraOffPlaceholder: some View {
-        CallRemoteCameraOffPlaceholder(peerUserId: callManager.remoteUserId, sampleLevel: { await callManager.primaryAudioLevel() }) {
+        CallRemoteCameraOffPlaceholder(peerUserId: callManager.remoteUserId, relayedSpeaking: CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds, peer: callManager.remoteUserId), sampleLevel: { await callManager.primaryAudioLevel() }) {
             avatarFace(size: 96, accentHex: $0)
         }
     }
@@ -571,14 +571,18 @@ extension CallView {
 
 /// G4.2 — la caméra du pair est coupée : son avatar, et l'anneau et le halo de SA
 /// couleur quand il parle (rien au repos). La décoration de profil reste sous
-/// l'anneau, dans le visage. Le niveau reçu est relevé tant que l'écran est là.
+/// l'anneau, dans le visage. Le niveau reçu est relevé tant que l'écran est là,
+/// sauf quand le maillage d'un groupe le relève déjà (`relayedSpeaking`).
 struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {
     let peerUserId: String?
+    let relayedSpeaking: Bool?
     let sampleLevel: () async -> Double?
     @ViewBuilder let avatar: (String) -> Avatar
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isSpeaking = false
+    @State private var sampledSpeaking = false
+
+    private var isSpeaking: Bool { relayedSpeaking ?? sampledSpeaking }
 
     var body: some View {
         let hex = CallPeerSpeech.colorHex(forPeer: peerUserId)
@@ -617,14 +621,17 @@ struct CallRemoteCameraOffPlaceholder<Avatar: View>: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .task { await followSpeech() }
+        .task(id: relayedSpeaking == nil) {
+            guard relayedSpeaking == nil else { return }
+            await followSpeech()
+        }
     }
 
     private func followSpeech() async {
         var speech = CallPeerSpeech()
         while !Task.isCancelled {
             speech = speech.recording(level: await sampleLevel(), at: Date())
-            if speech.isSpeaking != isSpeaking { isSpeaking = speech.isSpeaking }
+            if speech.isSpeaking != sampledSpeaking { sampledSpeaking = speech.isSpeaking }
             guard await cancellableSleep(for: .milliseconds(400)) else { return }
         }
     }

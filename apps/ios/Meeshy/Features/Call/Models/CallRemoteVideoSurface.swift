@@ -53,4 +53,13 @@ struct CallPeerSpeech: Equatable, Sendable {
     static func colorHex(forPeer userId: String?) -> String {
         userId.map { CallSpeakerColor.hex(for: $0) } ?? MeeshyColors.brandPrimaryHex
     }
+
+    /// Un groupe encore montré en duo : le maillage relève déjà le niveau du pair
+    /// principal toutes les 400 ms (`GroupCallMeshCoordinator.speakingUserIds`), et
+    /// son verdict se relaie. `nil` hors maillage : le placeholder relève lui-même,
+    /// jamais deux relevés `getStats` pour une même connexion.
+    static func relayed(meshActive: Bool, speakers: Set<String>, peer userId: String?) -> Bool? {
+        guard meshActive else { return nil }
+        return userId.map { speakers.contains($0) } ?? false
+    }
 }
