@@ -74,4 +74,25 @@ class CallGroupSceneGuardTest {
     fun `the strip reserves the halo's room and the geometry law knows the same number`() {
         assertThat(GroupCallStageGeometry.STRIP_HALO_PAD).isEqualTo(CALL_TILE_HALO_REACH.value)
     }
+    @Test
+    fun `every tile is composed in ONE composition, so its move never crosses a lazy list or a nested measure (P14_10)`() {
+        val spotlight = code("CallGroupSpotlight.kt")
+        assertThat(spotlight).doesNotContain("LazyRow(")
+        assertThat(spotlight).doesNotContain("LazyColumn(")
+        assertThat(spotlight).doesNotContain("BoxWithConstraints(")
+        val stage = code("CallGroupStage.kt")
+        assertThat(stage.split("BoxWithConstraints(").size - 1).isEqualTo(1)
+        assertThat(stage).contains("key(tile.id)")
+        assertThat(spotlight).contains("key(tile.id)")
+    }
+
+    @Test
+    fun `the featured speaker keeps her halo: only a zoomable shared screen is clipped to its bounds`() {
+        assertThat(code("CallGroupSpotlight.kt")).contains(".then(if (isScreenShare) Modifier.clipToBounds() else Modifier)")
+    }
+
+    @Test
+    fun `an interrupted move starts again from where each tile is`() {
+        assertThat(code("CallGroupStageMotion.kt")).contains("GroupCallStageGeometry.between(")
+    }
 }

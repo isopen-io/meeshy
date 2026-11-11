@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -9,13 +10,13 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
-import androidx.compose.ui.util.lerp
 import me.meeshy.sdk.model.call.CallRemoteVideoFade
 import me.meeshy.sdk.model.call.group.CallStageRect
 import me.meeshy.sdk.model.call.group.GroupCallStageFocus
@@ -50,11 +51,12 @@ internal fun Modifier.callTileMotion(motion: CallTileMotion?): Modifier {
             alpha = p
             return@graphicsLayer
         }
+        val now = GroupCallStageGeometry.between(from, to, p)
         transformOrigin = TransformOrigin(0f, 0f)
-        scaleX = lerp(from.width / to.width, 1f, p)
-        scaleY = lerp(from.height / to.height, 1f, p)
-        translationX = lerp(from.left - to.left, 0f, p) * density
-        translationY = lerp(from.top - to.top, 0f, p) * density
+        scaleX = now.width / to.width
+        scaleY = now.height / to.height
+        translationX = (now.left - to.left) * density
+        translationY = (now.top - to.top) * density
     }
 }
 
@@ -65,6 +67,14 @@ internal fun Modifier.callTileMotionFade(motion: CallTileMotion?): Modifier =
 private class StageMotionMemory(var layout: Pair<GroupCallStageFocus, Boolean>, var rects: Map<String, CallStageRect>) {
     var from: Map<String, CallStageRect> = emptyMap()
     var generation: Int = 0
+    var progress: Animatable<Float, AnimationVector1D>? = null
+
+    /** Là où chaque vignette se trouve à l'instant : un mouvement interrompu repart d'ici, sans saut. */
+    fun whereTilesAre(): Map<String, CallStageRect> {
+        val reached = progress?.let { Snapshot.withoutReadObservation { it.value } } ?: 1f
+        val wasFrom = from
+        return rects.mapValues { (id, to) -> GroupCallStageGeometry.between(wasFrom[id], to, reached) }
+    }
 }
 
 /**
@@ -86,13 +96,14 @@ internal fun rememberCallStageMotion(
     val layout = focus to isFullScreen
     val memory = remember { StageMotionMemory(layout, rects) }
     if (memory.layout != layout) {
-        memory.from = memory.rects
+        memory.from = memory.whereTilesAre()
         memory.layout = layout
         memory.generation += 1
     }
     memory.rects = rects
     val generation = memory.generation
     val progress = remember(generation) { Animatable(if (generation == 0) 1f else 0f) }
+    memory.progress = progress
     LaunchedEffect(generation) {
         if (generation == 0) return@LaunchedEffect
         val millis = if (reduceMotion) CallRemoteVideoFade.durationMillis(true) else STAGE_MOTION_MILLIS

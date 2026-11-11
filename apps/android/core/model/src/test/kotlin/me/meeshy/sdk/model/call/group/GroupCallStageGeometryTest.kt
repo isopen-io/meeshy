@@ -56,4 +56,18 @@ class GroupCallStageGeometryTest {
         assertThat(GroupCallStageGeometry.rects(emptyList(), GroupCallStageFocus.Grid, 400f, 800f, false, false)).isEmpty()
         assertThat(GroupCallStageGeometry.rects(ids, GroupCallStageFocus.Grid, 0f, 800f, false, false)).isEmpty()
     }
+    @Test
+    fun `an interrupted move starts again from where the tile IS, not from where it was going (P14_10)`() {
+        val from = CallStageRect(0f, 0f, 100f, 200f)
+        val to = CallStageRect(200f, 400f, 300f, 400f)
+        assertThat(GroupCallStageGeometry.between(from, to, 0.5f)).isEqualTo(CallStageRect(100f, 200f, 200f, 300f))
+        assertThat(GroupCallStageGeometry.between(from, to, 0f)).isEqualTo(from)
+    }
+
+    @Test
+    fun `a finished move, or one without a start, is at its destination`() {
+        val to = CallStageRect(10f, 20f, 30f, 40f)
+        assertThat(GroupCallStageGeometry.between(CallStageRect(0f, 0f, 1f, 1f), to, 1f)).isEqualTo(to)
+        assertThat(GroupCallStageGeometry.between(null, to, 0.3f)).isEqualTo(to)
+    }
 }

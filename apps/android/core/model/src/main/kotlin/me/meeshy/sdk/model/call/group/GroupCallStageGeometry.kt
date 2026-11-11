@@ -36,6 +36,16 @@ object GroupCallStageGeometry {
         return if (isRtl) leftToRight.mapValues { (_, rect) -> rect.copy(left = width - rect.left - rect.width) } else leftToRight
     }
 
+    /**
+     * Où se trouve une vignette en plein mouvement, à [progress] (0 → 1) de [from] vers [to] : un mouvement interrompu
+     * repart de là, jamais de la case qu'il visait. Sans case de départ, ou mouvement fini, la vignette est arrivée.
+     */
+    fun between(from: CallStageRect?, to: CallStageRect, progress: Float): CallStageRect {
+        if (from == null || progress >= 1f) return to
+        fun mix(start: Float, end: Float) = start + (end - start) * progress
+        return CallStageRect(mix(from.left, to.left), mix(from.top, to.top), mix(from.width, to.width), mix(from.height, to.height))
+    }
+
     private fun grid(tileIds: List<String>, width: Float, height: Float): Map<String, CallStageRect> {
         val layout = GroupCallGridLayout.layout(tileIds.size, isLandscape = width > height)
         val rows = tileIds.chunked(layout.columns)

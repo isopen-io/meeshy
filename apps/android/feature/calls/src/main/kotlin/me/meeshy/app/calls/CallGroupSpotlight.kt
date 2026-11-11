@@ -3,11 +3,10 @@ package me.meeshy.app.calls
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,13 +15,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -97,6 +95,7 @@ internal fun CallGroupSpotlightStage(
     featured: GroupCallStageTile,
     isScreenShare: Boolean,
     isFullScreen: Boolean,
+    isLandscape: Boolean,
     zoom: Float,
     onPinch: (Float) -> Unit,
     onResetZoom: () -> Unit,
@@ -107,8 +106,8 @@ internal fun CallGroupSpotlightStage(
     modifier: Modifier = Modifier,
 ) {
     val others = tiles.filter { it.id != featured.id }
-    BoxWithConstraints(modifier) {
-        val filmstrip = GroupCallSpotlight.filmstrip(isFullScreen, isLandscape = maxWidth > maxHeight)
+    Box(modifier) {
+        val filmstrip = GroupCallSpotlight.filmstrip(isFullScreen, isLandscape = isLandscape)
         val featuredTile: @Composable (Modifier) -> Unit = { tileModifier ->
             CallGroupFeaturedTile(
                 tile = featured,
@@ -140,19 +139,22 @@ internal fun CallGroupSpotlightStage(
 
 /**
  * Le bandeau des autres en portrait (P14.9) : une rangée qui défile, effacée en fondu à ses deux bords. L'air du halo de
- * qui parle (dessus et dessous) est RÉSERVÉ dans sa hauteur, pour qu'il ne soit jamais rogné.
+ * qui parle (dessus et dessous) est RÉSERVÉ dans sa hauteur, pour qu'il ne soit jamais rogné. Une rangée simple, comme
+ * iOS (`ScrollView` + `HStack`) : cinq autres au plus (`CallRules.MAX_PARTICIPANTS`), et chaque vignette reste dans la
+ * composition de la scène — son contenu mobile y arrive de la grille sans jamais traverser une liste paresseuse (P14.10).
  */
 @Composable
 private fun CallGroupFilmstripRow(others: List<GroupCallStageTile>, scope: CallGroupStageScope, modifier: Modifier) {
-    val state = rememberLazyListState()
-    LazyRow(
-        state = state,
-        modifier = modifier.callScrollEdgeFade(state, horizontal = true),
-        contentPadding = PaddingValues(vertical = STRIP_HALO_PAD),
+    val state = rememberScrollState()
+    Row(
+        modifier = modifier
+            .callScrollEdgeFade(state, horizontal = true)
+            .horizontalScroll(state)
+            .padding(vertical = STRIP_HALO_PAD),
         horizontalArrangement = Arrangement.spacedBy(STAGE_SPACING),
     ) {
-        items(others, key = { it.id }) { tile ->
-            CallGroupSelectableTile(tile, scope, Modifier.size(STRIP_TILE_WIDTH, STRIP_TILE_HEIGHT))
+        others.forEach { tile ->
+            key(tile.id) { CallGroupSelectableTile(tile, scope, Modifier.size(STRIP_TILE_WIDTH, STRIP_TILE_HEIGHT)) }
         }
     }
 }
@@ -160,16 +162,17 @@ private fun CallGroupFilmstripRow(others: List<GroupCallStageTile>, scope: CallG
 /** Le bandeau des autres en paysage (P14.9) : une colonne qui défile, effacée en fondu à ses deux bords. */
 @Composable
 private fun CallGroupFilmstripColumn(others: List<GroupCallStageTile>, scope: CallGroupStageScope, modifier: Modifier) {
-    val state = rememberLazyListState()
-    LazyColumn(
-        state = state,
-        modifier = modifier.callScrollEdgeFade(state, horizontal = false),
-        contentPadding = PaddingValues(vertical = STRIP_HALO_PAD),
+    val state = rememberScrollState()
+    Column(
+        modifier = modifier
+            .callScrollEdgeFade(state, horizontal = false)
+            .verticalScroll(state)
+            .padding(vertical = STRIP_HALO_PAD),
         verticalArrangement = Arrangement.spacedBy(STAGE_SPACING),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        items(others, key = { it.id }) { tile ->
-            CallGroupSelectableTile(tile, scope, Modifier.size(STRIP_TILE_WIDTH, STRIP_TILE_HEIGHT))
+        others.forEach { tile ->
+            key(tile.id) { CallGroupSelectableTile(tile, scope, Modifier.size(STRIP_TILE_WIDTH, STRIP_TILE_HEIGHT)) }
         }
     }
 }
@@ -205,7 +208,7 @@ private fun CallGroupFeaturedTile(
             modifier = Modifier
                 .fillMaxSize()
                 .callTileMotion(motion)
-                .clipToBounds()
+                .then(if (isScreenShare) Modifier.clipToBounds() else Modifier)
                 .pointerInput(isScreenShare) {
                     if (!isScreenShare) return@pointerInput
                     detectTransformGestures { _, _, gestureZoom, _ -> onPinch(gestureZoom) }

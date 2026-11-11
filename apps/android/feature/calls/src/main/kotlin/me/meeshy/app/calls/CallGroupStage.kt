@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -130,14 +131,16 @@ internal fun CallGroupStage(
     val featured = spotlight?.let { focused -> tiles.firstOrNull { it.id == focused.tileId } }
     BoxWithConstraints(stageModifier) {
         val staged = scope.copy(motionOf = rememberCallStageMotion(tiles.map { it.id }, focus, isFullScreen, maxWidth, maxHeight))
+        val isLandscape = maxWidth > maxHeight
         if (spotlight == null || featured == null) {
-            CallGroupGrid(tiles, staged, onStageTap, Modifier.fillMaxSize())
+            CallGroupGrid(tiles, staged, isLandscape, onStageTap, Modifier.fillMaxSize())
         } else {
             CallGroupSpotlightStage(
                 tiles = tiles,
                 featured = featured,
                 isScreenShare = spotlight.isScreenShare,
                 isFullScreen = isFullScreen,
+                isLandscape = isLandscape,
                 zoom = zoom,
                 onPinch = { factor -> zoom = GroupCallSpotlight.clampedZoom(zoom * factor) },
                 onResetZoom = { zoom = 1f },
@@ -165,11 +168,15 @@ private fun stageTrackOf(
     }
 }
 
-/** La grille — iOS `GroupCallStageView.grid` ; l'espace entre les vignettes rallume ou éteint le chrome. */
+/**
+ * La grille — iOS `GroupCallStageView.grid` ; l'espace entre les vignettes rallume ou éteint le chrome. Elle se pose
+ * dans la composition de la scène (aucune mesure imbriquée) : une vignette qui passe à la une y DÉPLACE son contenu mobile.
+ */
 @Composable
 private fun CallGroupGrid(
     tiles: List<GroupCallStageTile>,
     scope: CallGroupStageScope,
+    isLandscape: Boolean,
     onStageTap: (() -> Unit)?,
     modifier: Modifier,
 ) {
@@ -178,14 +185,14 @@ private fun CallGroupGrid(
     } else {
         Modifier
     }
-    BoxWithConstraints(modifier.then(stageTap)) {
-        val layout = GroupCallGridLayout.layout(tiles.size, isLandscape = maxWidth > maxHeight)
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
-            tiles.chunked(layout.columns).forEach { row ->
-                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
-                    row.forEach { tile -> CallGroupSelectableTile(tile, scope, Modifier.weight(1f).fillMaxSize()) }
-                    repeat(layout.columns - row.size) { Box(Modifier.weight(1f)) }
+    val layout = GroupCallGridLayout.layout(tiles.size, isLandscape = isLandscape)
+    Column(modifier.then(stageTap), verticalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
+        tiles.chunked(layout.columns).forEach { row ->
+            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
+                row.forEach { tile ->
+                    key(tile.id) { CallGroupSelectableTile(tile, scope, Modifier.weight(1f).fillMaxSize()) }
                 }
+                repeat(layout.columns - row.size) { Box(Modifier.weight(1f)) }
             }
         }
     }
