@@ -76,7 +76,7 @@ final class ComposerCaptureSessionTests: XCTestCase {
     /// #9351 — les deux portes montent LE montage du composer ; seul l'objet de
     /// la capture pose l'aperçu et le chrome.
     func test_lesDeuxMontages_serventLaMemeMachine() throws {
-        for fichier in ["MeeshyComposerHost+Viewfinder.swift", "ComposerViewfinder.swift"] {
+        for fichier in ["ComposerSceneViewfinderMount.swift", "ComposerViewfinder.swift"] {
             XCTAssertTrue(sitesAppelant("ComposerCaptureMount(").contains(fichier),
                           "\(fichier) doit monter le montage partagé")
         }
