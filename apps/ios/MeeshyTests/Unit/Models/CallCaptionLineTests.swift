@@ -156,9 +156,9 @@ final class CallCaptionLineTests: XCTestCase {
         XCTAssertEqual(sut.servedLanguage, "FR")
     }
 
-    func test_settled_beforeTheDeadline_stillAwaits_andAfterIt_givesUpButKeepsTheLabel() {
+    func test_settled_beforeTheDeadline_stillAwaits_andAfterIt_givesUpButKeepsTheLabel() throws {
         let sut = awaiting()
-        let deadline = try! XCTUnwrap(sut.awaitingUntil)
+        let deadline = try XCTUnwrap(sut.awaitingUntil)
         XCTAssertTrue(sut.settled(at: deadline.addingTimeInterval(-0.1)).isAwaitingTranslation)
         let given = sut.settled(at: deadline)
         XCTAssertFalse(given.isAwaitingTranslation)

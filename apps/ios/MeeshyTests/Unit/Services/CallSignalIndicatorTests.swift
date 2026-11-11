@@ -380,7 +380,7 @@ final class CallHangupFastPathTests: XCTestCase {
             "Le NOM porte toujours la couleur de son auteur, dans la phrase comme dans le journal (#16662)."
         )
         XCTAssertTrue(
-            row.contains("textColor: line.textColorHex.map { Color(hex: $0) } ?? .white"),
+            row.contains("private var ink: Color { line.textColorHex.map { Color(hex: $0) } ?? .white }") && row.contains("textColor: ink"),
             "La phrase ne prend la couleur que traduite ; l'original reste à l'encre de l'appel (#16662)."
         )
         XCTAssertTrue(
