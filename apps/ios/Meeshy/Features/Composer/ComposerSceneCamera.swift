@@ -282,6 +282,13 @@ nonisolated enum ComposerViewfinderColumn {
         !toolPresentsSheet
     }
 
+    /// L'outil auquel le viseur a cédé la scène est-il encore ouvert ? Sa fermeture rend le
+    /// viseur. La bande du cadre en est un : sans elle, fermer la bande laissait la scène figée.
+    static func entryToolIsOpen(yieldsToScene: Bool, sceneToolOwnsScreen: Bool,
+                                sheetIsPresented: Bool, bandIsOpen: Bool) -> Bool {
+        yieldsToScene && (sceneToolOwnsScreen || sheetIsPresented || bandIsOpen)
+    }
+
     /// Un trait sépare ce qu'on pose de ce qui teinte la prise, quand le rail porte les deux.
     static func separatesLooks(sceneEntries: [ComposerViewfinderEntry], offersLooks: Bool) -> Bool {
         !sceneEntries.isEmpty && offersLooks

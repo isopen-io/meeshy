@@ -110,6 +110,7 @@ extension MeeshyComposerHost {
     func armSceneCamera() {
         guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
         sceneCameraSize = .armed
+        viewfinderYieldsToScene = false
         sceneCapture.recordingBudget = ComposerCaptureRecordingBudget.maxDuration(for: selectedFormat)
         // **Ce que le viseur prend appartient à la SCÈNE** : le marquage se fait à l'ARMEMENT, car
         // `ingestIntoDocument` consomme le drapeau AVANT d'écrire (#4879).
@@ -132,7 +133,9 @@ extension MeeshyComposerHost {
     }
 
     var viewfinderEntryToolIsOpen: Bool {
-        viewfinderYieldsToScene && (sceneToolOwnsScreen || presentedPortal != nil)
+        ComposerViewfinderColumn.entryToolIsOpen(
+            yieldsToScene: viewfinderYieldsToScene, sceneToolOwnsScreen: sceneToolOwnsScreen,
+            sheetIsPresented: presentedPortal != nil, bandIsOpen: requestedSceneBand != nil)
     }
 
     /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
