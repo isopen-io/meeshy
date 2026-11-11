@@ -31,7 +31,7 @@ const LEVEL_KEY = {
 
 function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
   return (
-    <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true">
+    <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true" data-call-signal="">
       {[0, 1, 2, 3].map((index) => {
         const lit = index < LIT[level];
         const height = 5 + index * 4;

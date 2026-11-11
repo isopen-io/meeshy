@@ -7,6 +7,7 @@ import { visibleTiles } from '@/lib/calls/call-capture-tiles';
 import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Size } from '@/lib/calls/call-montage';
 import type { MontageCall, MontageCircle } from '@/lib/calls/call-montage-circle';
 import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
+import { onRowWheel } from '@/lib/calls/call-row-keys';
 import { browserFaceDetector } from '@/lib/calls/face-tracker';
 import { startFrameClock } from '@/lib/calls/frame-clock';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
@@ -131,7 +132,7 @@ const facesGlyph = (
   </svg>
 );
 
-export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold }: ModeProps) {
+export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = onRowWheel, audio = NO_AUDIO, env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
   const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language, loadShelf });

@@ -23,7 +23,6 @@ import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySid
 import { JOURNAL_COLUMN_GUTTER, JOURNAL_COLUMN_WIDTH, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { callPillText, PILL_TEXT_WIDTH_CLASS, type CallPillText } from '@/lib/calls/call-pill-text';
-import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
@@ -131,9 +130,6 @@ const useEffectsActive = (): boolean => useStore(videoEffectsStore, (state) => e
 const ROWS_KIT: CallRowsKit = {
   Button: CallButton,
   glyphs: CALL_VIEW_GLYPHS,
-  onRowKeyDown,
-  onRowWheel,
-  rowItem: ROW_ITEM,
   actionsId: CALL_ACTIONS_ID,
   panelIds: CALL_PANEL_ID,
   useEffectsActive,
@@ -185,6 +181,7 @@ const PREFETCH: readonly (() => Promise<unknown>)[] = [
   loadCaptions,
   () => import('./call-devices-sheet'),
   () => import('./call-quality-detail'),
+  () => import('./call-waiting-banner'),
 ];
 
 const prefetchCallChunks = (): void => PREFETCH.forEach((load) => void load().catch(() => undefined));
@@ -547,9 +544,9 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     };
     switch (open) {
       case 'react':
-        return <CallReactionPalette {...base} onRowKeyDown={onRowKeyDown} onRowWheel={onRowWheel} />;
+        return <CallReactionPalette {...base} />;
       case 'record':
-        return <CallRecordChoice {...base} onRowKeyDown={onRowKeyDown} onRowWheel={onRowWheel} />;
+        return <CallRecordChoice {...base} />;
       case 'journal':
         return <CallJournalPanel {...base} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} windowHeight={viewport.height} />;
       case 'people':
@@ -582,11 +579,10 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         captions={call.captions}
         quitGlyph={closeGlyph}
         onExit={exitMode}
-        onWheel={onRowWheel}
         audio={callAudio}
       />
     ) : chrome.mode === 'montage' ? (
-      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} onWheel={onRowWheel} audio={callAudio} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} />
+      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} audio={callAudio} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} />
     ) : null;
   /* Le fondu ne retire JAMAIS le doigt à un bouton encore visible (#8735) :
      rangées d'un toucher, les commandes deviennent `invisible` à la FIN du

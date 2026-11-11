@@ -98,12 +98,12 @@ describe('ce que l’écran dit', () => {
     expect(statusPills({ micMuted: false, screenSharing: false, members: { a: member({ micMuted: true }) }, quality: quality('good'), isGroup: true })).toEqual([]);
   });
 
-  test('« Micro coupé » reste à l’appel audio : en duo vidéo, le bouton Micro le dit déjà (P7.4, iOS `audioCallLayout`)', () => {
+  test('« Micro coupé » reste à l’appel audio À DEUX : en vidéo comme dans la grille, le bouton Micro le dit déjà (P7.4, iOS `audioCallLayout`, que la scène de groupe ne monte pas)', () => {
     const muted = { micMuted: true, screenSharing: false, members: { a: member() }, quality: quality('poor'), isGroup: false };
     expect(visibleStatusPills(muted, 'portrait')).toEqual(['mic-muted', 'poor-network']);
     expect(visibleStatusPills(muted, 'video-duo')).toEqual(['poor-network']);
     expect(visibleStatusPills(muted, 'screen')).toEqual(['poor-network']);
-    expect(visibleStatusPills(muted, 'grid')).toEqual(['mic-muted', 'poor-network']);
+    expect(visibleStatusPills(muted, 'grid')).toEqual(['poor-network']);
   });
 
   test('pastilles de survie (#8047) : ma vidéo ralentie, puis en pause, tant que le réseau est faible', () => {

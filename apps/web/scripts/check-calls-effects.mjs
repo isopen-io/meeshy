@@ -13,7 +13,8 @@
  * sombre et aux deux gabarits (390 × 844, 320 × 568) :
  *
  *  1. un appel vocal se connecte, la caméra s'allume ;
- *  2. l'en-tête porte Réduire puis « Conversation » (verre isolé, 44 px), et
+ *  2. l'en-tête porte Réduire · Image dans l'image (là où elle est offerte) ·
+ *     « Conversation » (verre isolé, 44 px, #17329), et
  *     « Messages » a quitté les actions (#8436) ;
  *  3. les commandes de ma caméra, dans ma vignette : Caméra, (Retourner),
  *     Effets, Écran — chaque bouton fait 44, porte son disque de verre sans flou à lui, et le (…) ne
@@ -265,8 +266,11 @@ try {
 
       // ------------------------------------------------ 2. l'en-tête
       const header = await page.$$eval('[data-call-header] button', (buttons) => buttons.map((button) => ({ label: button.getAttribute('aria-label'), glass: button.className.includes('glass-call'), w: button.getBoundingClientRect().width, h: button.getBoundingClientRect().height })));
-      check(header[0]?.label === 'Réduire' && header[1]?.label === 'Conversation', `${label} : l'en-tête porte Réduire puis « Conversation » (${header.map((b) => b.label).join(' · ')})`);
-      check(header[1] !== undefined && header[1].glass && header[1].w >= TAP_FLOOR && header[1].h >= TAP_FLOOR, `${label} : « Conversation » est un verre isolé de ${TAP_FLOOR} au moins`);
+      const conversationAt = header.findIndex((button) => button.label === 'Conversation');
+      const between = header.slice(1, Math.max(conversationAt, 1)).map((button) => button.label);
+      check(header[0]?.label === 'Réduire' && conversationAt > 0 && between.length <= 1 && between.every((name) => name === 'Image dans l’image'), `${label} : l'en-tête porte Réduire · (Image dans l’image, là où elle est offerte) · « Conversation » (${header.map((b) => b.label).join(' · ')})`);
+      const conversation = header[conversationAt];
+      check(conversation !== undefined && conversation.glass && conversation.w >= TAP_FLOOR && conversation.h >= TAP_FLOOR, `${label} : « Conversation » est un verre isolé de ${TAP_FLOOR} au moins`);
       await openActions(page);
       check((await page.$('[data-call-control="messages"]')) === null, `${label} : « Messages » a quitté les actions`);
 

@@ -12,6 +12,7 @@ import { findCachedConversation } from '@/lib/api/conversations';
 import { customNameOf } from '@/lib/api/preferences';
 import { appQueryClient } from '@/lib/api/query-client';
 import { callActions } from '@/lib/calls/call-actions';
+import { participantCountOf } from '@/lib/calls/call-controls-disposition';
 import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegraded, type CallHeaderCapsuleLayout } from '@/lib/calls/call-header';
 import { browserPipSupport, pipOpenStore, requestCallPip, requestCallPipExit, shouldOfferPip } from '@/lib/calls/call-pip';
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
@@ -95,7 +96,7 @@ export function CallScreenHeader({ call, language, joined, prominent }: HeaderPr
     givenName: names.givenName,
     displayName: call.title,
     groupName: names.groupName,
-    participantCount: Object.keys(call.members).length + 1,
+    participantCount: participantCountOf(call, layout),
   });
   return (
     <div className="flex min-h-11 items-center justify-between gap-2 px-4" data-call-header="">
@@ -128,7 +129,11 @@ export function CallScreenHeader({ call, language, joined, prominent }: HeaderPr
           ),
         )}
       </div>
-      {capsule === null ? null : <CallQualityChip capsule={capsule} clock={clock} quality={call.quality} language={language} prominent={prominent} />}
+      {capsule === null ? null : (
+        <div className="min-w-0" data-call-capsule="">
+          <CallQualityChip capsule={capsule} clock={clock} quality={call.quality} language={language} prominent={prominent} />
+        </div>
+      )}
     </div>
   );
 }

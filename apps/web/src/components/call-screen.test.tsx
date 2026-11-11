@@ -183,6 +183,11 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
     expect(html).toMatch(/data-call-chip-count[^>]*>.*?3<\/span>/);
   });
 
+  test('en groupe, un invité qui sonne encore n’entre pas dans le nombre (comme iOS, #17493)', () => {
+    const html = screen({ isGroup: true, title: 'Famille', members: { 'u-a': member({ userId: 'u-a' }), 'u-b': member({ userId: 'u-b', name: 'Bintou' }), 'u-c': member({ userId: 'u-c', name: 'Codou', link: 'ringing' }) } });
+    expect(html).toMatch(/data-call-chip-count[^>]*>.*?3<\/span>/);
+  });
+
   test('Réduire est un bouton de verre isolé', () => {
     expect(screen({ members: { 'u-peer': member() } })).toMatch(/aria-label="Réduire"[^>]*class="glass-call/);
   });

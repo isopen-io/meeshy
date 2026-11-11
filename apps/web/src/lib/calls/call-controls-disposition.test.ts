@@ -47,6 +47,10 @@ describe('participantCountOf', () => {
     expect(participantCountOf({ members: { a: {}, b: {} } as never }, 'grid')).toBe(3);
   });
 
+  test('un invité qui sonne encore n’est pas un participant (`GroupCallRoster` d’iOS n’admet que les arrivées)', () => {
+    expect(participantCountOf({ members: { a: { link: 'connected' }, b: { link: 'ringing' }, c: { link: 'connecting' } } as never }, 'grid')).toBe(3);
+  });
+
   test('hors grille, deux : moi et l’autre', () => {
     expect(participantCountOf({ members: { a: {} } as never }, 'video-duo')).toBe(2);
     expect(participantCountOf({ members: {} }, 'portrait')).toBe(2);

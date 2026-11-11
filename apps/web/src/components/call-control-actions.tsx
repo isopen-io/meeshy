@@ -12,7 +12,7 @@ import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
 import type { CallPanelKind, CallPanels } from '@/lib/calls/call-screen-layer';
 import { callRecording } from '@/lib/calls/call-recording-live';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
-import type { RowKeyHandler, RowWheelHandler } from '@/lib/calls/call-row-keys';
+import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -40,8 +40,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * Comme iOS (#9094, #9095) : sur un ordinateur à plusieurs webcams, le choix
  * de la caméra (`call-camera-picker.tsx`) remplace Retourner ; Effets se
  * montre actif quand un effet est posé ; un appel vocal propose d'ajouter la
- * vidéo (la caméra et son « + ») ; l'image dans l'image ferme la famille
- * « l'appel ».
+ * vidéo (la caméra et son « + »). L'image dans l'image n'est pas une action
+ * de la liste : elle vit dans l'en-tête (#17329).
  *
  * Une chose à la fois (#8578, `call-screen-layer.ts`) : Enregistrer au repos
  * (#8437), Ajouter (#8433) et Réagir (#8439) ouvrent un PANNEAU qui REMPLACE
@@ -51,17 +51,15 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * Chunk à part (`budgets.json` › `call_action_rows`) : les actions ne se
  * montrent qu'au `(…)` ; l'écran d'appel le précharge dès que l'appel vit. Il
  * n'importe RIEN de l'écran d'appel (`call_overlay`, `dynamic_only`) : le
- * bouton de verre, les glyphes, les flèches et la molette d'une rangée, les
- * identifiants lui sont remis (`CallRowsKit`).
+ * bouton de verre, les glyphes et les identifiants lui sont remis
+ * (`CallRowsKit`) ; les flèches et la molette d'une rangée, il les lit lui-même
+ * (`call-row-keys.ts`, que l'écran ne porte plus — #17499).
  */
 
 /** Ce que l'écran d'appel remet aux rangées et aux commandes de ma caméra. */
 export type CallRowsKit = {
   readonly Button: typeof CallButton;
   readonly glyphs: typeof CALL_VIEW_GLYPHS;
-  readonly onRowKeyDown: RowKeyHandler;
-  readonly onRowWheel: RowWheelHandler;
-  readonly rowItem: string;
   readonly actionsId: string;
   readonly panelIds: Readonly<Record<CallPanelKind, string>>;
   /** Un effet est posé sur ma vidéo : Effets se montre actif (`.active` d'iOS, #9095). Un hook. */
@@ -257,7 +255,7 @@ function ActionButton({ view, kit, variant }: { readonly view: ActionView; reado
       {...(view.expanded === undefined || view.panel === undefined ? {} : { expanded: view.expanded, controls: kit.panelIds[view.panel], popup: true })}
       {...(view.disabled === undefined ? {} : { disabled: view.disabled })}
       {...(variant === 'rail' ? { size: RAIL_BUTTON } : { caption: view.caption })}
-      data={{ ...view.data, [kit.rowItem]: '' }}
+      data={{ ...view.data, [ROW_ITEM]: '' }}
     />
   );
 }
@@ -281,7 +279,7 @@ function RecordButton({ language, panels, kit, variant }: { readonly language: I
       {...(idle ? { expanded: choosing, controls: kit.panelIds.record, popup: true } : { pressed: kind === 'recording' })}
       disabled={kind === 'asking'}
       {...(variant === 'rail' ? { size: RAIL_BUTTON } : { caption: translate(language, 'call.record.short') })}
-      data={{ 'data-call-record': kind, [kit.rowItem]: '' }}
+      data={{ 'data-call-record': kind, [ROW_ITEM]: '' }}
     />
   );
 }
@@ -296,7 +294,7 @@ function Family({ actions, context, variant }: { readonly actions: readonly (Min
           {action === 'record' ? (
             <RecordButton language={context.language} panels={context.panels} kit={context.kit} variant={variant} />
           ) : action === 'camera-picker' ? (
-            <CallCameraPicker call={context.call} language={context.language} kit={context.kit} glyph={pickerGlyph(context.kit)} captioned={variant === 'row'} data={{ 'data-call-control': 'camera-picker', [context.kit.rowItem]: '' }} />
+            <CallCameraPicker call={context.call} language={context.language} kit={context.kit} glyph={pickerGlyph(context.kit)} captioned={variant === 'row'} data={{ 'data-call-control': 'camera-picker', [ROW_ITEM]: '' }} />
           ) : action === 'camera' || action === 'flip' || action === 'effects' || action === 'screen' ? (
             <ActionButton view={mineAction(action, context)} kit={context.kit} variant={variant} />
           ) : (
@@ -342,7 +340,7 @@ export function CallActionRail({ call, row, language, panels, kit }: { readonly 
       role="toolbar"
       aria-label={translate(language, FAMILY_LEGEND[row.family])}
       aria-orientation="vertical"
-      onKeyDown={kit.onRowKeyDown}
+      onKeyDown={onRowKeyDown}
       className="glass-call pointer-events-auto flex max-h-full flex-col overflow-hidden rounded-full"
       data-call-rail={row.family}
     >
@@ -363,7 +361,7 @@ export function CallActionRows({ call, rows, language, panels, kit }: { readonly
           <span id={`call-row-${family}`} className={ROW_TITLE} data-call-row-title="">
             {translate(language, FAMILY_LEGEND[family])}
           </span>
-          <div role="toolbar" aria-labelledby={`call-row-${family}`} aria-orientation="horizontal" onKeyDown={kit.onRowKeyDown} onWheel={kit.onRowWheel} className={ROW_SCROLL} data-call-row-scroll="">
+          <div role="toolbar" aria-labelledby={`call-row-${family}`} aria-orientation="horizontal" onKeyDown={onRowKeyDown} onWheel={onRowWheel} className={ROW_SCROLL} data-call-row-scroll="">
             <Family actions={actions} context={context} variant="row" />
           </div>
         </div>

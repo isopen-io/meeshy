@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, test } from 'bun:test';
 
 import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegraded } from './call-header';
@@ -73,5 +75,33 @@ describe('les noms que la conversation en cache donne à la capsule', () => {
     expect(callHeaderNames({ type: 'group', title: 'Famille', customName: 'Les miens' }, 'x')).toEqual({ givenName: null, groupName: 'Les miens' });
     expect(callHeaderNames({ type: 'group', title: 'Famille', customName: undefined }, 'x')).toEqual({ givenName: null, groupName: 'Famille' });
     expect(callHeaderNames({ type: 'group', title: undefined, customName: undefined }, 'Cousins')).toEqual({ givenName: null, groupName: 'Cousins' });
+  });
+});
+
+describe('ce qui paraît dans l’en-tête arrive, jamais d’un coup (#17406, comme `CallView+Header` d’iOS)', () => {
+  const css = readFileSync(new URL('../../styles/glass.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const rule = (selector: string): string => {
+    const start = css.indexOf(selector);
+    return start < 0 ? '' : css.slice(start, css.indexOf('}', start));
+  };
+  const frames = (name: string): readonly string[] => [...css.matchAll(new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\}\\s*\\}`, 'g'))].map((match) => match[1] ?? '');
+
+  test('le bouton Image dans l’image, la capsule et les barres du réseau dégradé entrent comme le texte de la pilule', () => {
+    const entering = rule('[data-call-pip]');
+    expect(entering).toContain('[data-call-capsule]');
+    expect(entering).toContain('[data-call-signal]');
+    expect(entering).toMatch(/animation:\s*call-pill-text-in \d{3}ms/);
+  });
+
+  test('l’arrivée ne se prolonge pas : une transformation tenue ferait de la capsule le bloc conteneur de son détail `fixed`', () => {
+    expect(rule('[data-call-pip]')).toMatch(/\)\s*backwards;/);
+  });
+
+  test('seules la transformation et l’opacité bougent, et « Réduire les animations » n’en garde qu’un fondu', () => {
+    const [motion, reduced] = frames('call-pill-text-in');
+    expect(motion).toContain('opacity: 0');
+    expect(motion).toContain('transform:');
+    expect(reduced).toContain('opacity: 0');
+    expect(reduced).not.toContain('transform');
   });
 });
