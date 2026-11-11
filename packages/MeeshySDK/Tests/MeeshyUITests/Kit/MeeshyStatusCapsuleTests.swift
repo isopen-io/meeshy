@@ -161,7 +161,7 @@ struct MeeshyStatusCapsuleTests {
     @Test("la nature règle l'haptique, la priorité de l'annonce et le rôle ; elle ne colore rien")
     func kind_followsTheVectors() throws {
         for row in try Self.rows("kinds") {
-            let kind = try #require(MeeshyStatusCapsuleKind(rawValue: try #require(row["kind"] as? String)))
+            let kind = try kitRequired(MeeshyStatusCapsuleKind(rawValue: try kitRequired(row["kind"] as? String)))
             #expect(kind.feedback.rawValue == row["haptic"] as? String, "\(row)")
             #expect(kind.announcesUrgently == (row["priority"] as? String == "high"), "\(row)")
             #expect(kind.role.rawValue == row["role"] as? String, "\(row)")

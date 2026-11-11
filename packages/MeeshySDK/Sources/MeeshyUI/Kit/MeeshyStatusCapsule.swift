@@ -116,7 +116,7 @@ public struct MeeshyStatusCapsule<Leading: View>: View {
             leading.accessibilityHidden(true)
         } else if let systemImage {
             Image(systemName: systemImage)
-                .font(.system(size: iconSize, weight: .semibold))
+                .font(MeeshyStatusCapsuleRecipe.font(size: iconSize, weight: .semibold))
                 .foregroundStyle(messageInk)
                 .accessibilityHidden(true)
         }
@@ -125,12 +125,12 @@ public struct MeeshyStatusCapsule<Leading: View>: View {
     private var texts: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(message)
-                .font(.system(size: messageSize, weight: .semibold))
+                .font(MeeshyStatusCapsuleRecipe.font(size: messageSize, weight: .semibold))
                 .foregroundStyle(messageInk)
                 .lineLimit(lines)
             if let detail = MeeshyStatusCapsuleRecipe.visibleDetail(detail) {
                 Text(detail)
-                    .font(.system(size: detailSize, weight: .medium))
+                    .font(MeeshyStatusCapsuleRecipe.font(size: detailSize, weight: .medium))
                     .foregroundStyle(detailInk)
                     .lineLimit(lines)
             }
@@ -167,12 +167,12 @@ public struct MeeshyStatusCapsule<Leading: View>: View {
             HStack(spacing: MeeshyStatusCapsuleRecipe.actionGap) {
                 if let glyph = action.systemImage {
                     Image(systemName: glyph)
-                        .font(.system(size: actionGlyphSize, weight: .bold))
+                        .font(MeeshyStatusCapsuleRecipe.font(size: actionGlyphSize, weight: .bold))
                         .environment(\.layoutDirection, .leftToRight)
                         .accessibilityHidden(true)
                 }
                 Text(action.label)
-                    .font(.system(size: actionSize, weight: .bold))
+                    .font(MeeshyStatusCapsuleRecipe.font(size: actionSize, weight: .bold))
             }
         }
         .buttonStyle(MeeshyStatusCapsuleActionStyle(forcedPressed: isPressed))
@@ -185,7 +185,7 @@ public struct MeeshyStatusCapsule<Leading: View>: View {
         if let closeLabel, let onDismiss {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
-                    .font(.system(size: MeeshyStatusCapsuleRecipe.closeGlyphSize, weight: .bold))
+                    .font(MeeshyStatusCapsuleRecipe.font(size: MeeshyStatusCapsuleRecipe.closeGlyphSize, weight: .bold))
                     .foregroundStyle(messageInk)
                     .frame(minWidth: MeeshyStatusCapsuleRecipe.closeSize, minHeight: MeeshyStatusCapsuleRecipe.closeSize)
                     .contentShape(Rectangle().inset(by: -MeeshyStatusCapsuleRecipe.closeHitSlack))

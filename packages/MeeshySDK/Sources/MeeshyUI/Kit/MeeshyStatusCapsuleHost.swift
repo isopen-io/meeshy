@@ -21,29 +21,31 @@ final class MeeshyStatusCapsuleSession {
 
         /// Le site unique : l'haptique du SDK, l'annonce du lecteur d'écran, le
         /// sommeil de la tâche.
-        static let system = Effects(
-            play: { feedback in
-                switch feedback {
-                case .light: HapticFeedback.light()
-                case .success: HapticFeedback.success()
-                case .warning: HapticFeedback.warning()
-                case .error: HapticFeedback.error()
-                }
-            },
-            announce: { text, urgent in
-                AdaptiveAccessibility.announce(text, priority: urgent ? .high : .normal)
-            },
-            now: { Date() },
-            sleep: { milliseconds in try await Task.sleep(for: .milliseconds(milliseconds)) },
-            isScreenReaderOn: { AdaptiveAccessibility.isAssistiveTechRunning }
-        )
+        static var system: Effects {
+            Effects(
+                play: { feedback in
+                    switch feedback {
+                    case .light: HapticFeedback.light()
+                    case .success: HapticFeedback.success()
+                    case .warning: HapticFeedback.warning()
+                    case .error: HapticFeedback.error()
+                    }
+                },
+                announce: { text, urgent in
+                    AdaptiveAccessibility.announce(text, priority: urgent ? .high : .normal)
+                },
+                now: { Date() },
+                sleep: { milliseconds in try await Task.sleep(for: .milliseconds(milliseconds)) },
+                isScreenReaderOn: { AdaptiveAccessibility.isAssistiveTechRunning }
+            )
+        }
     }
 
     private let effects: Effects
     private var lastSpoken: MeeshyStatusCapsuleTiming.Spoken?
 
-    init(effects: Effects = .system) {
-        self.effects = effects
+    init(effects: Effects? = nil) {
+        self.effects = effects ?? .system
     }
 
     nonisolated deinit {}
