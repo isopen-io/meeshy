@@ -10,7 +10,7 @@ import { tapTogglesChrome, useCallChrome } from './use-call-chrome';
  * QUEL TOUCHER EFFACE LES COMMANDES (#8550) — un toucher sur la scène, oui ;
  * un toucher sur un bouton, jamais : même quand le bouton a REDESSINÉ son
  * glyphe avant que le toucher n'arrive à l'écran d'appel (« Couper le micro »
- * devient « Activer le micro » et son icône est remplacée : à la remontée,
+ * devient « Réactiver le micro » et son icône est remplacée : à la remontée,
  * la cible est détachée du document). L'écran décide donc à la DESCENTE du
  * toucher, en phase de capture, comme `useCallChrome`.
  */

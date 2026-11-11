@@ -179,7 +179,7 @@ describe('les tailles de la bulle (#8145)', () => {
   });
 });
 
-describe('« Choisir les périphériques » dans la bulle (#9097)', () => {
+describe('« Sortie audio » dans la bulle (#9097)', () => {
   test('offert là où l’on choisit la sortie : setSinkId du navigateur, ou les routes de la coque', () => {
     expect(offersOutputChoice({ shell: false, sinks: true })).toBe(true);
     expect(offersOutputChoice({ shell: true, sinks: false })).toBe(true);
