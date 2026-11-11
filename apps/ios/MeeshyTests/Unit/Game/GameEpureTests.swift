@@ -381,4 +381,91 @@ final class GameEpureTests: XCTestCase {
             XCTAssertFalse(line?.hasPrefix("game.") ?? true, "clé brute : \(family)")
         }
     }
+
+    // MARK: - Épure 3/3 : une règle n'est dite qu'une fois par page, le prix et le solde restent aux valeurs (#17687)
+
+    private static let frenchThirdPass: [String: String] = [
+        "game.notebook.empty": "Ta Chronique attend sa première page : à chaque signe de tes aïeux, une photo avec Mee et Meo.",
+        "game2.duo.none": "Fais alliance avec un ami accepté : si chacun réalise sa part dans la semaine, la récompense double.",
+        "game.flame_panel.relight_missing_window": "Rallumage possible dans les 48 h qui suivent l’extinction.",
+        "game.concept.flame.how": "Elle grandit d’un jour à chaque jour où tu fais un geste.",
+        "game.concept.flame.use": "Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Éteinte, elle se rallume avec des Meeshes pendant 48 h.",
+        "game.concept.points.tip.1": "Reviens chaque jour : une Flamme allumée nourrit tes étincelles.",
+        "game.concept.showcase.use": "Un trophée ne rapporte rien : il se montre. Les niveaux de visibilité sont tout le monde, tes amis ou toi seul.",
+        "game.concept.defis.use": "Ouvre la liste : chaque palier dit sa rareté.",
+        "game.concept.succes.use": "Ouvre un haut fait pour lire ce qu’il demande. Accompli, il fait grandir ta gloire.",
+        "game.concept.missions.use": "Ouvre un acte pour voir où tu en es. L’Offrande donne des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.",
+        "game.concept.season.use": "Réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.",
+        "game.concept.atlas.use": "Regarde les échanges à moitié faits. Ton Atlas est privé par défaut : tu choisis qui le voit.",
+    ]
+
+    func test_thirdPass_shortenedTexts_sayTheirNewFrench() throws {
+        let catalog = try Self.catalog()
+        for (key, expected) in Self.frenchThirdPass {
+            XCTAssertEqual(catalog[key]?["fr"], expected, key)
+        }
+    }
+
+    func test_thirdPass_shortenedTexts_areTranslatedInTheSixOtherLanguages_withTheSameMarkers() throws {
+        let catalog = try Self.catalog()
+        for key in Self.frenchThirdPass.keys {
+            let french = try XCTUnwrap(catalog[key]?["fr"], key)
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(catalog[key]?[language], "\(key) [\(language)]")
+                XCTAssertFalse(value.isEmpty, "\(key) [\(language)]")
+                XCTAssertNotEqual(value, french, "\(key) [\(language)] : copié du français")
+                XCTAssertEqual(specifiers(in: value), specifiers(in: french), "\(key) [\(language)] : mêmes marqueurs que le français")
+            }
+        }
+    }
+
+    func test_thirdPass_chronicleEmpty_saysOnlyOnceThatPhotosStayOnTheDevice() throws {
+        let catalog = try Self.catalog()
+        XCTAssertFalse(try XCTUnwrap(catalog["game.notebook.empty"]?["fr"]).contains("appareil"), "le pied de page le dit")
+        XCTAssertEqual(catalog["game.notebook.device_only"]?["fr"], "Tes photos vivent sur cet appareil.")
+        XCTAssertTrue(try XCTUnwrap(catalog["game.notebook.empty"]?["fr"]).contains("Mee et Meo"), "le repère reste visible")
+        XCTAssertTrue(try XCTUnwrap(catalog["game.notebook.when.note"]?["fr"]).contains("Flamme de 7 jours"), "les exemples restent derrière le (i)")
+    }
+
+    func test_thirdPass_allianceWithoutFriends_isOneLine_theContradictingNoteIsGone() throws {
+        let view = try code("Meeshy/Features/Game/Wave2/GameDuoViews.swift")
+        XCTAssertFalse(view.contains("duoNoFriends"), "« Il te faut un ami » contredisait « Choisis un ami »")
+        XCTAssertFalse(try code("Meeshy/Features/Game/Wave2/GameWave2CopyLeague.swift").contains("duoNoFriends"))
+        XCTAssertTrue(view.contains("model.friends.isEmpty"), "sans amis, aucun bouton d'invitation")
+    }
+
+    func test_thirdPass_relightMissingWindow_leavesThePriceToTheValueRow() throws {
+        let flame = try code("Meeshy/Features/Game/GameFlamePanelView.swift")
+        let start = try XCTUnwrap(flame.range(of: "game.flame_panel.relight_missing_window"))
+        let line = flame[start.lowerBound...].prefix(while: { $0 != ")" })
+        XCTAssertFalse(line.contains("relightPrice"), "le prix est dans la rangée de valeurs juste dessous")
+        XCTAssertTrue(flame.contains("spendRow(relightSpend"), "le prix, le solde et le manque restent affichés")
+        XCTAssertTrue(try XCTUnwrap(Self.catalog()["game.flame_panel.relight_missing_window"]?["fr"]).contains("48 h"), "la fenêtre reste dite")
+    }
+
+    func test_thirdPass_progressionSheets_doNotSayTheSameRuleTwice() throws {
+        let catalog = try Self.catalog()
+        func fr(_ key: String) throws -> String { try XCTUnwrap(catalog[key]?["fr"], key) }
+        XCTAssertFalse(try fr("game.concept.flame.use").contains("Veilleuse"), "how, tip.2 et la fiche voisine disent la Veilleuse")
+        XCTAssertEqual(try fr("game.concept.flame.tip.2"), "Garde une Veilleuse pour les jours sans.")
+        XCTAssertFalse(try fr("game.concept.points.tip.1").contains("Publie"), "how dit les gestes")
+        XCTAssertFalse(try fr("game.concept.showcase.use").contains("l’ordre"), "how dit l'ordre")
+        XCTAssertFalse(try fr("game.concept.defis.use").contains("avance vers lui"), "tip.1 le dit")
+        XCTAssertFalse(try fr("game.concept.succes.use").contains("plus il est rare"), "tip.2 le dit")
+        XCTAssertFalse(try fr("game.concept.missions.use").contains("par jour"), "tip.2 le dit")
+        XCTAssertFalse(try fr("game.concept.missions.use").contains("Les trois réalisés"), "how le dit")
+        XCTAssertFalse(try fr("game.concept.season.use").contains("quelques pas"), "how et tip.1 le disent")
+        XCTAssertNotEqual(try fr("game.concept.season.how"), try fr("game.concept.season.tip.1"))
+        XCTAssertFalse(try fr("game.concept.atlas.use").contains("envoyé"), "how et tip.2 disent les deux sens")
+    }
+
+    func test_thirdPass_theLandmarksStayVisible() throws {
+        let catalog = try Self.catalog()
+        XCTAssertTrue(try XCTUnwrap(catalog["game.concept.atlas.use"]?["fr"]).contains("privé par défaut"))
+        XCTAssertTrue(try XCTUnwrap(catalog["game.concept.showcase.use"]?["fr"]).contains("ne rapporte rien"))
+        XCTAssertTrue(try XCTUnwrap(catalog["game.concept.season.use"]?["fr"]).contains("Sceau du voyage"))
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.duo.none"]?["fr"]).contains("la récompense double"))
+        let page = try code("Meeshy/Features/Game/ProgressionConceptPage.swift")
+        XCTAssertTrue(page.contains("sentence(ConceptText.how(concept))"))
+    }
 }
