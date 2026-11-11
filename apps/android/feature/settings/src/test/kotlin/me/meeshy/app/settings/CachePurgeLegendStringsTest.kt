@@ -37,7 +37,7 @@ class CachePurgeLegendStringsTest {
             listOf(
                 "purge_action_empty", "purge_action_with_size", "purge_action_hint", "purge_confirm_title",
                 "purge_confirm_message", "purge_confirm_action", "purge_select_all", "purge_unattributed_label",
-                "purge_unattributed_description", "cache_purge_freed", "data_storage_title",
+                "purge_unattributed_note", "cache_purge_freed", "data_storage_title",
             )
         locales.forEach { folder ->
             assertWithMessage("libellés absents de $folder").that(names(folder)).containsAtLeastElementsIn(required)

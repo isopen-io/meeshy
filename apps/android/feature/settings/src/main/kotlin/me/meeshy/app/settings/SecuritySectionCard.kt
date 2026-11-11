@@ -38,6 +38,7 @@ internal fun SecuritySectionCard(
     icon: ImageVector,
     title: String,
     modifier: Modifier = Modifier,
+    orientation: String? = null,
     content: @Composable () -> Unit,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
@@ -51,6 +52,7 @@ internal fun SecuritySectionCard(
                 color = MeeshyPalette.Indigo500,
             )
         }
+        orientation?.let { SettingsOrientation(it) }
         MeeshyGlassSurface(shape = RoundedCornerShape(MeeshyRadius.lg), modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(MeeshySpacing.lg)) { content() }
         }

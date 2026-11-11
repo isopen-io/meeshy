@@ -37,6 +37,8 @@ import me.meeshy.ui.component.settings.SettingsCard
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoteButton
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -53,6 +55,7 @@ internal fun SelectiveCachePurgeContent(
 ) {
     LaunchedEffect(Unit) { onEvent(SelectiveCachePurgeEvent.Appeared) }
     val report = state.report
+    val noteHost = rememberNoteHost()
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xl)) {
         if (report == null) {
             CachePurgeSkeleton()
@@ -64,9 +67,10 @@ internal fun SelectiveCachePurgeContent(
                     selection = state.selection,
                     onToggleKind = { onEvent(SelectiveCachePurgeEvent.ToggleKind(kind)) },
                     onToggleCell = { onEvent(SelectiveCachePurgeEvent.ToggleCell(it)) },
+                    noteHost = noteHost,
                 )
             }
-            UnattributedSection(report, state.selection.includeUnattributed) {
+            UnattributedSection(report, state.selection.includeUnattributed, noteHost) {
                 onEvent(SelectiveCachePurgeEvent.ToggleUnattributed)
             }
             CachePurgeActions(state, onEvent)
@@ -88,7 +92,7 @@ private fun CachePurgeSkeleton() {
 }
 
 @Composable
-private fun UnattributedSection(report: CachePurgeReport, included: Boolean, onToggle: () -> Unit) {
+private fun UnattributedSection(report: CachePurgeReport, included: Boolean, noteHost: NoteHost, onToggle: () -> Unit) {
     val bytes = report.unattributedBytes
     if (bytes <= 0L) return
     val haptics = rememberMeeshyHaptics()
@@ -108,44 +112,53 @@ private fun UnattributedSection(report: CachePurgeReport, included: Boolean, onT
                 color = neutral,
             )
         }
+        val note = MeeshyInfoNote(
+            question = stringResource(R.string.purge_unattributed_question),
+            text = stringResource(R.string.purge_unattributed_note),
+        )
         SettingsCard(tint = neutral) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .defaultMinSize(minHeight = 48.dp)
-                    .clickable(role = Role.Checkbox) {
-                        haptics.light()
-                        onToggle()
-                    }
-                    .semantics(mergeDescendants = true) { stateDescription = state }
-                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.smPlus),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-            ) {
-                Icon(
-                    imageVector = if (included) MeeshyIcons.CheckBoxChecked else MeeshyIcons.CheckBoxBlank,
-                    contentDescription = null,
-                    tint = if (included) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
-                    modifier = Modifier.size(24.dp),
-                )
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 48.dp)
+                        .clickable(role = Role.Checkbox) {
+                            haptics.light()
+                            onToggle()
+                        }
+                        .semantics(mergeDescendants = true) { stateDescription = state }
+                        .padding(start = MeeshySpacing.lg, top = MeeshySpacing.smPlus, bottom = MeeshySpacing.smPlus),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+                ) {
+                    Icon(
+                        imageVector = if (included) MeeshyIcons.CheckBoxChecked else MeeshyIcons.CheckBoxBlank,
+                        contentDescription = null,
+                        tint = if (included) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textMuted,
+                        modifier = Modifier.size(24.dp),
+                    )
                     Text(
                         text = stringResource(R.string.purge_unattributed_label),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MeeshyTheme.tokens.textPrimary,
+                        modifier = Modifier.weight(1f),
                     )
                     Text(
-                        text = stringResource(R.string.purge_unattributed_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MeeshyTheme.tokens.textMuted,
+                        text = ByteSizeFormatter.format(bytes),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textPrimary,
                     )
                 }
+                MeeshyInfoNoteButton(note = note, expanded = noteHost.isOpen(note), onToggle = { noteHost.toggle(note) })
+            }
+            if (noteHost.isOpen(note)) {
                 Text(
-                    text = ByteSizeFormatter.format(bytes),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MeeshyTheme.tokens.textPrimary,
+                    text = note.text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MeeshyTheme.tokens.textMuted,
+                    modifier = Modifier.padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg, bottom = MeeshySpacing.sm),
                 )
             }
         }

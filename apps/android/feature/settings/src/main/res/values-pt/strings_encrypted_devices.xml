@@ -2,16 +2,12 @@
 <resources>
     <string name="security_section_encrypted_devices">Encriptação ponto a ponto</string>
     <string name="encrypted_devices_title">Os meus dispositivos encriptados</string>
-    <string name="encrypted_devices_notice_title">Este telemóvel Android ainda não lê conversas encriptadas ponto a ponto</string>
-    <string name="encrypted_devices_notice_body">Ainda não aparece nesta lista e, por agora, não pode mostrar o seu código nem ler o de outro dispositivo. Já pode remover um dispositivo perdido: a sessão dele é terminada e deixa de receber as suas mensagens encriptadas.</string>
     <string name="encrypted_devices_loading">A carregar os seus dispositivos encriptados</string>
     <string name="encrypted_devices_offline_empty">Está offline. Ligue-se para ver os seus dispositivos encriptados.</string>
     <string name="encrypted_devices_error">Não foi possível carregar os seus dispositivos encriptados.</string>
     <string name="encrypted_devices_retry">Tentar novamente</string>
     <string name="encrypted_devices_offline">Está offline. Esta lista pode não estar atualizada.</string>
     <string name="encrypted_devices_stale">Não foi possível atualizar esta lista e pode não estar atualizada.</string>
-    <string name="encrypted_devices_empty_title">Ainda nenhum dispositivo encriptado</string>
-    <string name="encrypted_devices_empty_body">Um dispositivo aparece aqui assim que o Meeshy configurar nele a encriptação ponto a ponto.</string>
     <string name="encrypted_devices_current">Este dispositivo</string>
     <string name="encrypted_devices_retiring">A remover %1$s</string>
     <string name="encrypted_devices_retire_a11y">Remover %1$s</string>
@@ -31,5 +27,4 @@
     <string name="encrypted_devices_platform_web">Navegador web</string>
     <string name="encrypted_devices_platform_unknown">Dispositivo desconhecido</string>
     <string name="encrypted_devices_enrolled">Adicionado a %1$s</string>
-    <string name="encrypted_devices_retire_changed">Este dispositivo mudou desde que a lista foi mostrada. A lista foi recarregada: verifique-a antes de remover.</string>
 </resources>

@@ -181,11 +181,12 @@ private fun PrivacyToggleRow(toggle: PrivacyToggle, checked: Boolean, viewModel:
         )
         return
     }
-    val topic = PrivacyCatalog.infoTopic(toggle)
+    val topic = PrivacyCatalog.infoTopic(toggle)?.takeUnless { it == PrivacyInfoTopic.READ_RECEIPTS }
     SettingsSwitchRow(
         icon = icon,
         title = title,
         color = color,
+        subtitle = toggleSubtitle(toggle)?.let { stringResource(it) },
         checked = checked,
         onCheckedChange = { viewModel.setToggle(toggle, it) },
         info = topic?.let { settingsInfo(it, title) },
@@ -214,16 +215,8 @@ private fun EncryptionComingSoonSection() {
         SettingsCard(tint = tint) {
             SettingsRow(
                 icon = Icons.Filled.HourglassEmpty,
-                title = stringResource(R.string.privacy_encryption_coming_soon),
+                title = stringResource(R.string.privacy_encryption_summary),
                 color = tint,
-                trailing = {
-                    Text(
-                        text = stringResource(R.string.privacy_encryption_disabled),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MeeshyTheme.tokens.textSecondary,
-                    )
-                },
             )
         }
     }
@@ -236,6 +229,7 @@ private fun settingsInfo(topic: PrivacyInfoTopic, title: String? = null): Settin
         id = "privacy.${topic.name.lowercase()}",
         title = title ?: stringResource(titleRes),
         message = stringResource(messageRes),
+        question = stringResource(infoQuestion(topic)),
     )
 }
 
@@ -245,13 +239,31 @@ private fun infoStrings(topic: PrivacyInfoTopic): Pair<Int, Int> = when (topic) 
     PrivacyInfoTopic.NOTIFY_CONTACTS_ON_RETURN ->
         R.string.settings_privacy_notify_contacts_on_return to R.string.settings_privacy_notify_contacts_on_return_info
     PrivacyInfoTopic.READ_RECEIPTS ->
-        R.string.privacy_read_receipts to R.string.settings_privacy_read_receipts_info
+        R.string.privacy_read_receipts to R.string.privacy_read_receipts_subtitle
     PrivacyInfoTopic.HIDE_FROM_CONTACT_SEARCH ->
         R.string.settings_privacy_hide_from_contact_search to R.string.settings_privacy_hide_from_contact_search_info
     PrivacyInfoTopic.CALLS_NON_CONTACTS ->
         R.string.privacy_calls_non_contacts to R.string.settings_privacy_calls_non_contacts_info
     PrivacyInfoTopic.ANALYTICS ->
         R.string.privacy_analytics to R.string.settings_privacy_analytics_info
+}
+
+private fun infoQuestion(topic: PrivacyInfoTopic): Int = when (topic) {
+    PrivacyInfoTopic.ONLINE_STATUS -> R.string.settings_privacy_online_status_question
+    PrivacyInfoTopic.NOTIFY_CONTACTS_ON_RETURN -> R.string.settings_privacy_notify_contacts_on_return_question
+    PrivacyInfoTopic.READ_RECEIPTS -> R.string.privacy_read_receipts
+    PrivacyInfoTopic.HIDE_FROM_CONTACT_SEARCH -> R.string.settings_privacy_hide_from_contact_search_question
+    PrivacyInfoTopic.CALLS_NON_CONTACTS -> R.string.settings_privacy_calls_non_contacts_question
+    PrivacyInfoTopic.ANALYTICS -> R.string.settings_privacy_analytics_question
+}
+
+/** La phrase d'orientation visible au repos des réglages propres à Meeshy (règle 7) ; l'usuel n'en reçoit pas. */
+private fun toggleSubtitle(toggle: PrivacyToggle): Int? = when (toggle) {
+    PrivacyToggle.SHOW_ONLINE_STATUS -> R.string.settings_privacy_online_status_subtitle
+    PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN -> R.string.settings_privacy_notify_contacts_on_return_subtitle
+    PrivacyToggle.SHOW_READ_RECEIPTS -> R.string.privacy_read_receipts_subtitle
+    PrivacyToggle.HIDE_PROFILE_FROM_SEARCH -> R.string.settings_privacy_hide_from_contact_search_subtitle
+    else -> null
 }
 
 private const val COMING_SOON_ALPHA = 0.55f

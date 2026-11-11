@@ -18,6 +18,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,17 +104,21 @@ private fun MediaCacheCard(totalBytes: Long?) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                     Icon(MeeshyIcons.Storage, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
-                    Column(modifier = Modifier.weight(1f)) {
+                    var openNote by rememberOpenNote()
+                    MeeshyInfoNoted(
+                        note = MeeshyInfoNote(
+                            question = stringResource(R.string.data_storage_cache_question),
+                            text = stringResource(R.string.data_storage_cache_description),
+                        ),
+                        openNoteId = openNote,
+                        onOpenNoteIdChange = { openNote = it },
+                        modifier = Modifier.weight(1f),
+                    ) {
                         Text(
                             text = stringResource(R.string.data_storage_cache_title),
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MeeshyTheme.tokens.textPrimary,
-                        )
-                        Text(
-                            text = stringResource(R.string.data_storage_cache_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MeeshyTheme.tokens.textSecondary,
                         )
                     }
                     if (totalBytes == null) {
@@ -125,11 +132,6 @@ private fun MediaCacheCard(totalBytes: Long?) {
                         )
                     }
                 }
-                Text(
-                    text = stringResource(R.string.data_storage_cache_description),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MeeshyTheme.tokens.textMuted,
-                )
             }
         }
     }

@@ -4,11 +4,28 @@
     ":feature:settings": {
       "resDir": "feature/settings/src/main/res",
       "entries": [
-        { "catalog": "app", "iosKey": "about.licenses.intro", "androidName": "licenses_intro", "status": "adopted" },
-        { "catalog": "app", "iosKey": "about.licenses.section.open_source", "androidName": "licenses_section_open_source", "status": "adopted" },
-        { "catalog": "app", "iosKey": "about.licenses.card.label", "androidName": "licenses_card_label", "status": "adopted" },
-        { "androidName": "licenses_card_hint", "status": "android-only" },
-        { "catalog": "app", "iosKey": "legal.terms.a11y.languagePicker", "androidName": "legal_language_picker_a11y", "status": "adopted" }
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.section.open_source",
+          "androidName": "licenses_section_open_source",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.licenses.card.label",
+          "androidName": "licenses_card_label",
+          "status": "adopted"
+        },
+        {
+          "androidName": "licenses_card_hint",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "legal.terms.a11y.languagePicker",
+          "androidName": "legal_language_picker_a11y",
+          "status": "adopted"
+        }
       ]
     }
   }

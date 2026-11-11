@@ -36,6 +36,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -207,16 +209,20 @@ private fun InfoCard() {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.BugReport, contentDescription = null, tint = MeeshyPalette.Info)
-        Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
+        var openNote by rememberOpenNote()
+        MeeshyInfoNoted(
+            note = MeeshyInfoNote(
+                question = stringResource(R.string.crash_reports_question),
+                text = stringResource(R.string.crash_reports_note),
+            ),
+            openNoteId = openNote,
+            onOpenNoteIdChange = { openNote = it },
+            modifier = Modifier.weight(1f),
+        ) {
             Text(
-                text = stringResource(R.string.crash_reports_info_title),
-                style = MaterialTheme.typography.titleSmall,
+                text = stringResource(R.string.crash_reports_privacy),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MeeshyTheme.tokens.textPrimary,
-            )
-            Text(
-                text = stringResource(R.string.crash_reports_info_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
             )
         }
     }

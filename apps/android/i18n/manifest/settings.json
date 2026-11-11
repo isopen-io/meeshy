@@ -18,12 +18,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "about.description.body",
-          "androidName": "about_description_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "about.feature.cloudSync",
           "androidName": "about_feature_cloud_sync",
           "status": "adopted"
@@ -88,12 +82,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "about.section.description",
-          "androidName": "about_section_description",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "about.section.features",
           "androidName": "about_section_features",
           "status": "adopted"
@@ -133,22 +121,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "settings.security.email.current",
-          "androidName": "account_contact_email_current_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.security.email.new",
-          "androidName": "account_contact_email_new_label",
-          "status": "adopted"
-        },
-        {
-          "androidName": "account_contact_email_resend",
-          "status": "android-only"
-        },
-        {
           "androidName": "account_contact_email_resend_cooldown",
           "status": "android-only"
         },
@@ -157,20 +129,6 @@
           "iosKey": "contact-card.field.email",
           "androidName": "account_contact_email_section",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.security.email.verification_sent",
-          "androidName": "account_contact_email_sent",
-          "status": "adopted"
-        },
-        {
-          "androidName": "account_contact_error_email_change",
-          "status": "android-only"
-        },
-        {
-          "androidName": "account_contact_error_email_resend",
-          "status": "android-only"
         },
         {
           "androidName": "account_contact_error_phone_change",
@@ -243,10 +201,6 @@
           "iosKey": "call.feedback.send",
           "androidName": "account_contact_send",
           "status": "adopted"
-        },
-        {
-          "androidName": "account_contact_title",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -329,42 +283,6 @@
           "status": "adopted"
         },
         {
-          "catalog": "ui",
-          "iosKey": "auth.password.strength.veryWeak",
-          "androidName": "change_password_strength_0",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "auth.password.strength.weak",
-          "androidName": "change_password_strength_1",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.quality.grade.medium",
-          "androidName": "change_password_strength_2",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "auth.password.strength.good",
-          "androidName": "change_password_strength_3",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "auth.password.strength.strong",
-          "androidName": "change_password_strength_4",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "auth.password.strength.excellent",
-          "androidName": "change_password_strength_5",
-          "status": "adopted"
-        },
-        {
           "catalog": "app",
           "iosKey": "auth.password.change.submit",
           "androidName": "change_password_submit",
@@ -429,26 +347,12 @@
           "status": "android-only"
         },
         {
-          "androidName": "crash_reports_empty",
-          "status": "android-only"
-        },
-        {
           "androidName": "crash_reports_error_clear",
           "status": "android-only"
         },
         {
           "androidName": "crash_reports_error_load",
           "status": "android-only"
-        },
-        {
-          "androidName": "crash_reports_info_body",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "crash.reports.title",
-          "androidName": "crash_reports_info_title",
-          "status": "adopted"
         },
         {
           "catalog": "app",
@@ -501,16 +405,6 @@
         {
           "androidName": "data_export_format_json",
           "status": "android-only"
-        },
-        {
-          "androidName": "data_export_info_body",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.data.export.info.title",
-          "androidName": "data_export_info_title",
-          "status": "adopted"
         },
         {
           "androidName": "data_export_ready_contacts",
@@ -579,12 +473,6 @@
         {
           "androidName": "delete_account_email_title",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "auth.magiclink.error.generic",
-          "androidName": "delete_account_error_generic",
-          "status": "adopted"
         },
         {
           "androidName": "delete_account_error_invalid_password",
@@ -828,81 +716,9 @@
         },
         {
           "catalog": "app",
-          "iosKey": "feed.post.edit.media.kind.audio",
-          "androidName": "media_cache_category_audio",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.media.download.images",
-          "androidName": "media_cache_category_images",
-          "status": "adopted"
-        },
-        {
-          "androidName": "media_cache_category_thumbnails",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.post.edit.media.kind.video",
-          "androidName": "media_cache_category_video",
-          "status": "adopted"
-        },
-        {
-          "androidName": "media_cache_clear_all",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "calls.clearAll.confirm.action",
-          "androidName": "media_cache_clear_category",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "call.link.confirm.cancel",
           "androidName": "media_cache_confirm_cancel",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "calls.clearAll.confirm.action",
-          "androidName": "media_cache_confirm_clear",
-          "status": "adopted"
-        },
-        {
-          "androidName": "media_cache_confirm_message",
-          "status": "android-only"
-        },
-        {
-          "androidName": "media_cache_confirm_title",
-          "status": "android-only"
-        },
-        {
-          "androidName": "media_cache_error_clear",
-          "status": "android-only"
-        },
-        {
-          "androidName": "media_cache_error_scan",
-          "status": "android-only"
-        },
-        {
-          "androidName": "media_cache_info_body",
-          "status": "android-only"
-        },
-        {
-          "androidName": "media_cache_info_title",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.data.storage.cache.title",
-          "androidName": "media_cache_title",
-          "status": "adopted"
-        },
-        {
-          "androidName": "media_cache_total_label",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -920,12 +736,6 @@
           "catalog": "app",
           "iosKey": "settings.media.download.images",
           "androidName": "media_download_images",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.media.download.auto_subtitle",
-          "androidName": "media_download_info",
           "status": "adopted"
         },
         {
@@ -986,18 +796,6 @@
           "catalog": "app",
           "iosKey": "settings.privacy.contact_requests",
           "androidName": "privacy_contact_requests",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.privacy.encryption.coming_soon",
-          "androidName": "privacy_encryption_coming_soon",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "conversation.encryption.detail.translation.disabled",
-          "androidName": "privacy_encryption_disabled",
           "status": "adopted"
         },
         {
@@ -1090,16 +888,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "sessions.revokeAll.confirm.title",
-          "androidName": "sessions_revoke_others",
-          "status": "candidate"
-        },
-        {
-          "androidName": "settings_account_contact",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
           "iosKey": "sessions_title",
           "androidName": "settings_active_sessions",
           "status": "adopted"
@@ -1115,16 +903,6 @@
           "iosKey": "settings.blocked_users",
           "androidName": "settings_blocked_users",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.security.change_password",
-          "androidName": "settings_change_password",
-          "status": "adopted"
-        },
-        {
-          "androidName": "settings_clear_media_cache",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -1161,12 +939,6 @@
         {
           "androidName": "settings_dnd_day_sat",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.flame.form.soleil",
-          "androidName": "settings_dnd_day_sun",
-          "status": "adopted"
         },
         {
           "androidName": "settings_dnd_day_thu",
@@ -1223,18 +995,10 @@
           "status": "adopted"
         },
         {
-          "androidName": "settings_help_support",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "2fa_close",
           "androidName": "settings_language_dialog_close",
           "status": "adopted"
-        },
-        {
-          "androidName": "settings_language_system",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -1407,12 +1171,6 @@
           "status": "android-only"
         },
         {
-          "catalog": "app",
-          "iosKey": "composer.capture.tool.sound",
-          "androidName": "settings_notification_sound",
-          "status": "adopted"
-        },
-        {
           "androidName": "settings_notification_types_empty",
           "status": "android-only"
         },
@@ -1425,18 +1183,10 @@
           "status": "android-only"
         },
         {
-          "androidName": "settings_notification_vibration",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "settings.licenses",
           "androidName": "settings_open_source_licenses",
           "status": "adopted"
-        },
-        {
-          "androidName": "settings_privacy",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -1489,16 +1239,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "settings_section_chats",
-          "status": "android-only"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "community.settings.section.danger",
-          "androidName": "settings_section_danger",
-          "status": "adopted"
-        },
-        {
           "catalog": "app",
           "iosKey": "settings.section.data",
           "androidName": "settings_section_data",
@@ -1506,24 +1246,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "export.card.tab.language",
-          "androidName": "settings_section_language",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "settings.section.notifications",
           "androidName": "settings_section_notifications",
-          "status": "adopted"
-        },
-        {
-          "androidName": "settings_section_privacy",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.title",
-          "androidName": "settings_section_profile",
           "status": "adopted"
         },
         {
@@ -1537,10 +1261,6 @@
           "iosKey": "settings.tools.starred",
           "androidName": "settings_starred_messages",
           "status": "adopted"
-        },
-        {
-          "androidName": "settings_storage_used",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -1579,10 +1299,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "settings_two_factor",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "support.info.build",
           "androidName": "support_info_build",
@@ -1605,10 +1321,6 @@
           "iosKey": "support.report.bug",
           "androidName": "support_link_bug",
           "status": "adopted"
-        },
-        {
-          "androidName": "support_link_email",
-          "status": "android-only"
         },
         {
           "catalog": "app",
@@ -1663,10 +1375,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "twofactor_backup_codes_done",
-          "status": "android-only"
-        },
-        {
           "androidName": "twofactor_backup_codes_remaining",
           "status": "android-only"
         },
@@ -1674,22 +1382,6 @@
           "catalog": "app",
           "iosKey": "2fa_backup_codes_title",
           "androidName": "twofactor_backup_codes_title",
-          "status": "adopted"
-        },
-        {
-          "androidName": "twofactor_backup_codes_warning",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "2fa_cancel",
-          "androidName": "twofactor_cancel",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "2fa_disable_title",
-          "androidName": "twofactor_disable_button",
           "status": "adopted"
         },
         {
@@ -1715,10 +1407,6 @@
           "iosKey": "2fa_disable_title",
           "androidName": "twofactor_disable_title",
           "status": "adopted"
-        },
-        {
-          "androidName": "twofactor_enable_button",
-          "status": "android-only"
         },
         {
           "androidName": "twofactor_error_backup_codes",
@@ -1762,32 +1450,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "settings.security.phone.code_placeholder",
-          "androidName": "twofactor_setup_code_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "shareLink.activate",
           "androidName": "twofactor_setup_confirm",
-          "status": "adopted"
-        },
-        {
-          "androidName": "twofactor_setup_instructions",
-          "status": "android-only"
-        },
-        {
-          "androidName": "twofactor_setup_secret_label",
-          "status": "android-only"
-        },
-        {
-          "androidName": "twofactor_setup_title",
-          "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "2fa_disabled",
-          "androidName": "twofactor_status_disabled",
           "status": "adopted"
         },
         {
