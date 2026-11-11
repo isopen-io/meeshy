@@ -55,7 +55,7 @@ const PLATEFORME = {
     info: 'apps/web/src/components/info-hint.tsx (InfoHintButton + note sr-only, aria-controls / aria-describedby)',
     textes: 'apps/web/src/lib/interface-catalogs/** : SEPT langues (fr, en, es, pt, de, it, ar), une clé absente est une erreur de compilation',
     mesure: 'dans apps/web : bun run build, puis node scripts/capture-verbosity.mjs (mots visibles par vue + captures dans render/) et node scripts/check-verbosity.mjs (budgets de apps/web/verbosity-budgets.json, qui ne peuvent que baisser)',
-    preuve: 'refusionne la base, puis dans apps/web : bun run gate (complet). Vert = toutes les étapes passent.',
+    preuve: 'refusionne la base, puis dans apps/web joue TOUS les maillons du script gate de package.json, un par un et jusqu’au dernier (la chaîne && s’arrête au premier rouge : ne la lance pas d’un bloc), avec CHROMIUM=/opt/pw-browsers/chromium si le navigateur épinglé manque et NODE_OPTIONS=--max-old-space-size=8192 pour type-check. Trois rouges sont connus sur la base et ne sont pas les tiens tant que tu ne les aggraves pas : check:design-harmony (#17591), measure-weight (première peinture au-dessus de 97 Ko) et act-leak-guard sous bun 1.4. Tout autre rouge se compare à la base : rejoue ce seul maillon sur origin/dev (git stash ou worktree détaché) ; rouge aussi sur la base = hérité, à nommer dans le compte rendu ; vert sur la base = le tien, à corriger. Vert = aucun rouge qui soit le tien, et le poids de première peinture ne monte pas.',
     tdd: 'bun test + happy-dom : tests de comportement sur ce que l’utilisateur lit et peut atteindre',
   },
   ios: {
