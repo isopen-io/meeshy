@@ -162,12 +162,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "settings.data.storage.cache.title",
-          "androidName": "data_storage_cache_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "settings.data.storage.section.cache",
           "androidName": "data_storage_section_cache",
           "status": "adopted"

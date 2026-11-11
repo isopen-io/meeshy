@@ -263,6 +263,7 @@ private fun toggleSubtitle(toggle: PrivacyToggle): Int? = when (toggle) {
     PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN -> R.string.settings_privacy_notify_contacts_on_return_subtitle
     PrivacyToggle.SHOW_READ_RECEIPTS -> R.string.privacy_read_receipts_subtitle
     PrivacyToggle.HIDE_PROFILE_FROM_SEARCH -> R.string.settings_privacy_hide_from_contact_search_subtitle
+    PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS -> R.string.settings_privacy_calls_non_contacts_subtitle
     else -> null
 }
 

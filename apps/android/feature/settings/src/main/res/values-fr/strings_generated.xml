@@ -85,7 +85,6 @@
     <string name="data_export_share">Partager</string>
     <string name="data_export_title">Exporter mes données</string>
     <string name="data_storage_cache_description">Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours.</string>
-    <string name="data_storage_cache_title">Cache média</string>
     <string name="data_storage_section_cache">Cache média</string>
     <string name="data_storage_title">Stockage</string>
     <string name="delete_account_button">Supprimer définitivement mon compte</string>
@@ -296,12 +295,10 @@
     <string name="settings_notifications_title">Notifications</string>
     <string name="settings_open_source_licenses">Licences open source</string>
     <string name="settings_packs_domain">Type de pack</string>
-    <string name="settings_privacy_calls_non_contacts_info">Désactivé, seuls vos amis peuvent vous faire sonner. Les autres voient que vous n\'acceptez que les appels de vos contacts.</string>
     <string name="settings_privacy_coming_soon">Bientôt disponible</string>
     <string name="settings_privacy_coming_soon_a11y">bientôt disponible, actuellement sans effet</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">Chiffrement — bientôt disponible, actuellement désactivé</string>
     <string name="settings_privacy_hide_from_contact_search_info">Activé, votre profil ne ressort plus d\'une recherche par numéro ou par e-mail, et vos contacts ne sont pas prévenus de votre arrivée sur Meeshy.</string>
-    <string name="settings_privacy_notify_contacts_on_return_info">Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué.</string>
     <string name="settings_privacy_policy">Politique de confidentialité</string>
     <string name="settings_privacy_title">Confidentialité</string>
     <string name="settings_push_notifications">Notifications push</string>

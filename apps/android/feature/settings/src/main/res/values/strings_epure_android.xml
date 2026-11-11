@@ -9,11 +9,12 @@
     <string name="account_contact_error_email_resend">Unable to resend the verification email.</string>
     <string name="account_contact_title">Email &amp; phone</string>
     <string name="crash_reports_empty">No reports.</string>
-    <string name="crash_reports_note">If the app closes unexpectedly, a report is saved here so you can share it with support. Nothing leaves your device until you share it.</string>
+    <string name="crash_reports_note">If the app closes unexpectedly, a report is saved here for support.</string>
     <string name="crash_reports_privacy">Nothing leaves your device unless you share it.</string>
     <string name="crash_reports_question">What does a report contain?</string>
     <string name="data_export_info_body">GDPR export of your personal data.</string>
     <string name="data_storage_cache_question">What is the cache for?</string>
+    <string name="data_storage_cache_size">Size</string>
     <string name="encrypted_devices_empty">No encrypted device: it shows up here once Meeshy turns encryption on there.</string>
     <string name="encrypted_devices_last_seen">Last used: %1$s</string>
     <string name="encrypted_devices_notice_body">It isn\'t in this list yet. You can already remove a lost device: it stops receiving your encrypted messages.</string>
@@ -57,7 +58,7 @@
     <string name="settings_interface_riviere_mode">Rivière mode</string>
     <string name="settings_interface_riviere_mode_subtitle">In active groups, the conversation reads in lanes, one per voice.</string>
     <string name="settings_languages_orientation">Messages are translated into your display language, then your regional one.</string>
-    <string name="settings_media_autosave_note">Received images and videos join the Meeshy album, once. Never an ephemeral, blurred or view-once media.</string>
+    <string name="settings_media_autosave_note">Once only, images and videos. Never an ephemeral, blurred or view-once media.</string>
     <string name="settings_media_autosave_question">Which media are saved?</string>
     <string name="settings_media_autosave_subtitle">Received media joins the Meeshy album, except ephemeral or view-once.</string>
     <string name="settings_media_capture_original_note">The raw photo or video, with no effect or frame, is saved to Photos with every shot.</string>
@@ -70,11 +71,14 @@
     <string name="settings_packs_title">Shop</string>
     <string name="settings_privacy_analytics_info">Anonymous usage metrics: screens opened, features used, crashes. Never your message content or your contacts.</string>
     <string name="settings_privacy_analytics_question">What does analytics measure?</string>
+    <string name="settings_privacy_calls_non_contacts_info">Others see that you only accept calls from your contacts.</string>
     <string name="settings_privacy_calls_non_contacts_question">Who can call me?</string>
+    <string name="settings_privacy_calls_non_contacts_subtitle">When off, only your friends can make your phone ring.</string>
     <string name="settings_privacy_hide_from_contact_search">Hide my number and email</string>
     <string name="settings_privacy_hide_from_contact_search_question">Who can find me by my number?</string>
     <string name="settings_privacy_hide_from_contact_search_subtitle">My profile no longer shows up in a search by number or email.</string>
     <string name="settings_privacy_notify_contacts_on_return">Announce my return</string>
+    <string name="settings_privacy_notify_contacts_on_return_info">Your friends and people who have your number or email. Never if your online status is hidden.</string>
     <string name="settings_privacy_notify_contacts_on_return_question">Who is told when I\'m back?</string>
     <string name="settings_privacy_notify_contacts_on_return_subtitle">Your contacts see “was on Meeshy recently”, at most every 3 hours.</string>
     <string name="settings_privacy_online_status_info">Turned off, nobody sees this dot. Typing in a conversation still shows you\'re around.</string>
@@ -89,7 +93,7 @@
     <string name="twofactor_disable_button">Disable</string>
     <string name="twofactor_disable_warning">Your account will be less secure without 2FA.</string>
     <string name="twofactor_enable_button">Enable</string>
-    <string name="twofactor_orientation">A code from your app is added to your password.</string>
+    <string name="twofactor_orientation">A code from your app is added to your password. Backup codes work once if you lose your phone.</string>
     <string name="twofactor_regenerate_warning">The new codes replace the old ones.</string>
     <string name="twofactor_status_disabled">Disabled</string>
 </resources>

@@ -95,8 +95,18 @@ fun DataStorageScreen(
 @Composable
 private fun MediaCacheCard(totalBytes: Long?) {
     val tint = MeeshyPalette.Indigo500
+    var openNote by rememberOpenNote()
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-        SettingsSectionHeader(stringResource(R.string.data_storage_section_cache), MeeshyIcons.Storage, tint)
+        MeeshyInfoNoted(
+            note = MeeshyInfoNote(
+                question = stringResource(R.string.data_storage_cache_question),
+                text = stringResource(R.string.data_storage_cache_description),
+            ),
+            openNoteId = openNote,
+            onOpenNoteIdChange = { openNote = it },
+        ) {
+            SettingsSectionHeader(stringResource(R.string.data_storage_section_cache), MeeshyIcons.Storage, tint)
+        }
         SettingsCard(tint = tint) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.lg),
@@ -104,23 +114,13 @@ private fun MediaCacheCard(totalBytes: Long?) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                     Icon(MeeshyIcons.Storage, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
-                    var openNote by rememberOpenNote()
-                    MeeshyInfoNoted(
-                        note = MeeshyInfoNote(
-                            question = stringResource(R.string.data_storage_cache_question),
-                            text = stringResource(R.string.data_storage_cache_description),
-                        ),
-                        openNoteId = openNote,
-                        onOpenNoteIdChange = { openNote = it },
+                    Text(
+                        text = stringResource(R.string.data_storage_cache_size),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textPrimary,
                         modifier = Modifier.weight(1f),
-                    ) {
-                        Text(
-                            text = stringResource(R.string.data_storage_cache_title),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MeeshyTheme.tokens.textPrimary,
-                        )
-                    }
+                    )
                     if (totalBytes == null) {
                         MeeshySkeletonBox(modifier = Modifier.size(width = 56.dp, height = 18.dp))
                     } else {

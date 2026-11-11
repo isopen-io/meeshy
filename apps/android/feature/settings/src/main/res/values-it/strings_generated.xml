@@ -85,7 +85,6 @@
     <string name="data_export_share">Condividi</string>
     <string name="data_export_title">Esporta i miei dati</string>
     <string name="data_storage_cache_description">La cache carica i contenuti più rapidamente e riduce il consumo di dati. I file memorizzati vengono eliminati automaticamente dopo 7 giorni.</string>
-    <string name="data_storage_cache_title">Cache media</string>
     <string name="data_storage_section_cache">Cache media</string>
     <string name="data_storage_title">Archiviazione</string>
     <string name="delete_account_button">Elimina definitivamente il mio account</string>
@@ -296,12 +295,10 @@
     <string name="settings_notifications_title">Notifiche</string>
     <string name="settings_open_source_licenses">Licenze open source</string>
     <string name="settings_packs_domain">Tipo di pacchetto</string>
-    <string name="settings_privacy_calls_non_contacts_info">Se disattivato, solo i tuoi amici possono far squillare il tuo telefono. Gli altri vedono che accetti solo chiamate dai tuoi contatti.</string>
     <string name="settings_privacy_coming_soon">Presto disponibile</string>
     <string name="settings_privacy_coming_soon_a11y">presto disponibile, attualmente senza effetto</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">Crittografia — presto disponibile, attualmente disattivata</string>
     <string name="settings_privacy_hide_from_contact_search_info">Se attivo, il tuo profilo non compare più in una ricerca per numero o e-mail, e i tuoi contatti non vengono avvisati del tuo arrivo su Meeshy.</string>
-    <string name="settings_privacy_notify_contacts_on_return_info">I tuoi amici e chi ha il tuo numero o la tua e-mail vedono «è stato su Meeshy di recente», al massimo una volta ogni 3 ore. Mai se il tuo stato online è nascosto.</string>
     <string name="settings_privacy_policy">Informativa sulla privacy</string>
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_push_notifications">Notifiche push</string>

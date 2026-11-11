@@ -9,11 +9,12 @@
     <string name="account_contact_error_email_resend">تعذّرت إعادة إرسال رسالة التحقق.</string>
     <string name="account_contact_title">البريد الإلكتروني والهاتف</string>
     <string name="crash_reports_empty">لا توجد تقارير.</string>
-    <string name="crash_reports_note">إذا أُغلق التطبيق بشكل غير متوقع، يُحفظ هنا تقرير يمكنك مشاركته مع الدعم. لا يغادر شيء جهازك إلا عندما تشاركه.</string>
+    <string name="crash_reports_note">إذا أُغلق التطبيق بشكل غير متوقع، يُحفظ هنا تقرير للدعم.</string>
     <string name="crash_reports_privacy">لا يغادر شيء الجهاز دون مشاركتك.</string>
     <string name="crash_reports_question">ماذا يحتوي التقرير؟</string>
     <string name="data_export_info_body">تصدير بياناتك الشخصية وفق اللائحة العامة لحماية البيانات.</string>
     <string name="data_storage_cache_question">ما فائدة ذاكرة التخزين المؤقت؟</string>
+    <string name="data_storage_cache_size">الحجم</string>
     <string name="encrypted_devices_empty">لا يوجد جهاز مشفّر: يظهر هنا عندما يفعّل Meeshy التشفير عليه.</string>
     <string name="encrypted_devices_last_seen">آخر استخدام: %1$s</string>
     <string name="encrypted_devices_notice_body">لا يظهر بعد في هذه القائمة. يمكنك إزالة جهاز مفقود: لن يتلقى رسائلك المشفّرة بعد الآن.</string>
@@ -57,7 +58,7 @@
     <string name="settings_interface_riviere_mode">وضع Rivière</string>
     <string name="settings_interface_riviere_mode_subtitle">في المجموعات النشطة تُقرأ المحادثة في مسارات، مسار لكل صوت.</string>
     <string name="settings_languages_orientation">تُترجم الرسائل إلى لغة العرض ثم إلى اللغة الإقليمية.</string>
-    <string name="settings_media_autosave_note">تنضم الصور ومقاطع الفيديو المستلمة إلى ألبوم Meeshy مرة واحدة. لا تُحفظ أبدًا الوسائط المؤقتة أو الضبابية أو ذات العرض الواحد.</string>
+    <string name="settings_media_autosave_note">مرة واحدة فقط، الصور ومقاطع الفيديو. لا تُحفظ أبدًا الوسائط المؤقتة أو الضبابية أو ذات العرض الواحد.</string>
     <string name="settings_media_autosave_question">ما الوسائط التي تُحفظ؟</string>
     <string name="settings_media_autosave_subtitle">تُضاف الوسائط المستلمة إلى ألبوم Meeshy، ما عدا المؤقتة أو ذات المشاهدة الواحدة.</string>
     <string name="settings_media_capture_original_note">تُحفظ الصورة أو الفيديو الخام، دون تأثيرات أو إطار، في الصور مع كل لقطة.</string>
@@ -70,11 +71,14 @@
     <string name="settings_packs_title">المتجر</string>
     <string name="settings_privacy_analytics_info">قياسات استخدام مجهولة: الشاشات المفتوحة والميزات المستخدمة والأعطال. لا محتوى رسائلك ولا جهات اتصالك أبدًا.</string>
     <string name="settings_privacy_analytics_question">ماذا تقيس التحليلات؟</string>
+    <string name="settings_privacy_calls_non_contacts_info">يرى الآخرون أنك لا تقبل إلا المكالمات من جهات اتصالك.</string>
     <string name="settings_privacy_calls_non_contacts_question">من يستطيع الاتصال بي؟</string>
+    <string name="settings_privacy_calls_non_contacts_subtitle">عند إيقافه، لا يستطيع إلا أصدقاؤك جعل هاتفك يرن.</string>
     <string name="settings_privacy_hide_from_contact_search">إخفاء رقمي وبريدي الإلكتروني</string>
     <string name="settings_privacy_hide_from_contact_search_question">من يستطيع العثور عليّ برقمي؟</string>
     <string name="settings_privacy_hide_from_contact_search_subtitle">لا يظهر ملفي بعد الآن في البحث برقم الهاتف أو البريد الإلكتروني.</string>
     <string name="settings_privacy_notify_contacts_on_return">الإعلان عن عودتي</string>
+    <string name="settings_privacy_notify_contacts_on_return_info">أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية.</string>
     <string name="settings_privacy_notify_contacts_on_return_question">من يُبلَّغ بعودتي؟</string>
     <string name="settings_privacy_notify_contacts_on_return_subtitle">يرى جهات اتصالك «كان على Meeshy مؤخرًا»، مرة كل 3 ساعات كحد أقصى.</string>
     <string name="settings_privacy_online_status_info">عند إيقافه لا يرى أحد هذه النقطة. الكتابة في محادثة تبقى دليلًا على نشاطك.</string>
@@ -89,7 +93,7 @@
     <string name="twofactor_disable_button">تعطيل</string>
     <string name="twofactor_disable_warning">سيكون حسابك أقل أمانًا بدون المصادقة الثنائية.</string>
     <string name="twofactor_enable_button">تفعيل</string>
-    <string name="twofactor_orientation">يُضاف رمز من تطبيقك إلى كلمة المرور.</string>
+    <string name="twofactor_orientation">يُضاف رمز من تطبيقك إلى كلمة المرور. تُستخدم الرموز الاحتياطية مرة واحدة إذا فقدت هاتفك.</string>
     <string name="twofactor_regenerate_warning">تحل الرموز الجديدة محل القديمة.</string>
     <string name="twofactor_status_disabled">معطّلة</string>
 </resources>

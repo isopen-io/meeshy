@@ -85,7 +85,6 @@
     <string name="data_export_share">Teilen</string>
     <string name="data_export_title">Meine Daten exportieren</string>
     <string name="data_storage_cache_description">Der Cache lädt Medien schneller und spart Datenvolumen. Zwischengespeicherte Dateien werden nach 7 Tagen automatisch gelöscht.</string>
-    <string name="data_storage_cache_title">Medien-Cache</string>
     <string name="data_storage_section_cache">Medien-Cache</string>
     <string name="data_storage_title">Speicher</string>
     <string name="delete_account_button">Mein Konto endgültig löschen</string>
@@ -296,12 +295,10 @@
     <string name="settings_notifications_title">Mitteilungen</string>
     <string name="settings_open_source_licenses">Open-Source-Lizenzen</string>
     <string name="settings_packs_domain">Pakettyp</string>
-    <string name="settings_privacy_calls_non_contacts_info">Deaktiviert können nur deine Freunde dein Telefon klingeln lassen. Andere sehen, dass du nur Anrufe von deinen Kontakten annimmst.</string>
     <string name="settings_privacy_coming_soon">Demnächst verfügbar</string>
     <string name="settings_privacy_coming_soon_a11y">demnächst verfügbar, derzeit ohne Wirkung</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">Verschlüsselung — demnächst verfügbar, derzeit deaktiviert</string>
     <string name="settings_privacy_hide_from_contact_search_info">Wenn aktiviert, erscheint dein Profil nicht mehr bei einer Suche nach Telefonnummer oder E-Mail, und deine Kontakte werden nicht benachrichtigt, wenn du zu Meeshy kommst.</string>
-    <string name="settings_privacy_notify_contacts_on_return_info">Deine Freunde und alle, die deine Nummer oder E-Mail haben, sehen „war vor Kurzem auf Meeshy“ – höchstens einmal alle 3 Stunden. Nie, wenn dein Online-Status verborgen ist.</string>
     <string name="settings_privacy_policy">Datenschutzrichtlinie</string>
     <string name="settings_privacy_title">Datenschutz</string>
     <string name="settings_push_notifications">Push-Benachrichtigungen</string>

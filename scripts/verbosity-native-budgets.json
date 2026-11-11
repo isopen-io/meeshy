@@ -73,10 +73,10 @@
       "explanations": 5
     },
     "android:feature/settings": {
-      "labels": 651,
-      "words": 2758,
+      "labels": 652,
+      "words": 2732,
       "long": 27,
-      "explanations": 58
+      "explanations": 59
     },
     "android:feature/stories": {
       "labels": 818,

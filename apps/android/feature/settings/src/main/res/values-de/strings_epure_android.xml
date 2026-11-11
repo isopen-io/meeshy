@@ -9,11 +9,12 @@
     <string name="account_contact_error_email_resend">Die Bestätigungs-E-Mail konnte nicht erneut gesendet werden.</string>
     <string name="account_contact_title">E-Mail &amp; Telefon</string>
     <string name="crash_reports_empty">Keine Berichte.</string>
-    <string name="crash_reports_note">Wenn die App unerwartet beendet wird, wird hier ein Bericht gespeichert, den du dem Support schicken kannst. Nichts verlässt dein Gerät, bevor du es teilst.</string>
+    <string name="crash_reports_note">Wenn die App unerwartet beendet wird, wird hier ein Bericht für den Support gespeichert.</string>
     <string name="crash_reports_privacy">Nichts verlässt das Gerät ohne Ihr Teilen.</string>
     <string name="crash_reports_question">Was enthält ein Bericht?</string>
     <string name="data_export_info_body">DSGVO-Export Ihrer persönlichen Daten.</string>
     <string name="data_storage_cache_question">Wofür ist der Cache da?</string>
+    <string name="data_storage_cache_size">Größe</string>
     <string name="encrypted_devices_empty">Kein verschlüsseltes Gerät: Es erscheint hier, sobald Meeshy die Verschlüsselung darauf aktiviert.</string>
     <string name="encrypted_devices_last_seen">Zuletzt genutzt: %1$s</string>
     <string name="encrypted_devices_notice_body">Es steht noch nicht in dieser Liste. Ein verlorenes Gerät können Sie schon entfernen: Es erhält Ihre verschlüsselten Nachrichten nicht mehr.</string>
@@ -57,7 +58,7 @@
     <string name="settings_interface_riviere_mode">Rivière-Modus</string>
     <string name="settings_interface_riviere_mode_subtitle">In aktiven Gruppen liest sich das Gespräch in Spuren, eine pro Stimme.</string>
     <string name="settings_languages_orientation">Nachrichten werden in Ihre Anzeigesprache übersetzt, dann in die regionale.</string>
-    <string name="settings_media_autosave_note">Empfangene Bilder und Videos landen einmalig im Meeshy-Album. Nie ein flüchtiges, verschwommenes oder Einmal-Medium.</string>
+    <string name="settings_media_autosave_note">Nur einmal, Bilder und Videos. Nie ein flüchtiges, verschwommenes oder Einmal-Medium.</string>
     <string name="settings_media_autosave_question">Welche Medien werden gespeichert?</string>
     <string name="settings_media_autosave_subtitle">Empfangene Medien landen im Meeshy-Album, außer flüchtige oder einmal sichtbare.</string>
     <string name="settings_media_capture_original_note">Das unbearbeitete Foto oder Video, ohne Effekt oder Rahmen, wird bei jeder Aufnahme in Fotos gesichert.</string>
@@ -70,11 +71,14 @@
     <string name="settings_packs_title">Shop</string>
     <string name="settings_privacy_analytics_info">Anonyme Nutzungsdaten: geöffnete Bildschirme, genutzte Funktionen, Abstürze. Niemals Nachrichteninhalte oder Kontakte.</string>
     <string name="settings_privacy_analytics_question">Was misst die Analyse?</string>
+    <string name="settings_privacy_calls_non_contacts_info">Andere sehen, dass du nur Anrufe von deinen Kontakten annimmst.</string>
     <string name="settings_privacy_calls_non_contacts_question">Wer kann mich anrufen?</string>
+    <string name="settings_privacy_calls_non_contacts_subtitle">Deaktiviert können nur deine Freunde dein Telefon klingeln lassen.</string>
     <string name="settings_privacy_hide_from_contact_search">Meine Nummer und E-Mail verbergen</string>
     <string name="settings_privacy_hide_from_contact_search_question">Wer kann mich über meine Nummer finden?</string>
     <string name="settings_privacy_hide_from_contact_search_subtitle">Mein Profil erscheint nicht mehr in einer Suche nach Nummer oder E-Mail.</string>
     <string name="settings_privacy_notify_contacts_on_return">Meine Rückkehr ankündigen</string>
+    <string name="settings_privacy_notify_contacts_on_return_info">Deine Freunde und alle, die deine Nummer oder E-Mail haben. Nie, wenn dein Online-Status verborgen ist.</string>
     <string name="settings_privacy_notify_contacts_on_return_question">Wer wird über meine Rückkehr informiert?</string>
     <string name="settings_privacy_notify_contacts_on_return_subtitle">Ihre Kontakte sehen „war kürzlich auf Meeshy“, höchstens alle 3 Stunden.</string>
     <string name="settings_privacy_online_status_info">Ausgeschaltet sieht niemand diesen Punkt. Schreiben in einer Unterhaltung bleibt ein Zeichen von Aktivität.</string>
@@ -89,7 +93,7 @@
     <string name="twofactor_disable_button">Deaktivieren</string>
     <string name="twofactor_disable_warning">Ohne 2FA ist Ihr Konto weniger sicher.</string>
     <string name="twofactor_enable_button">Aktivieren</string>
-    <string name="twofactor_orientation">Ein Code aus Ihrer App kommt zum Passwort hinzu.</string>
+    <string name="twofactor_orientation">Ein Code aus Ihrer App kommt zum Passwort hinzu. Die Backup-Codes gelten einmalig, wenn Sie Ihr Telefon verlieren.</string>
     <string name="twofactor_regenerate_warning">Die neuen Codes ersetzen die alten.</string>
     <string name="twofactor_status_disabled">Deaktiviert</string>
 </resources>

@@ -85,7 +85,6 @@
     <string name="data_export_share">مشاركة</string>
     <string name="data_export_title">تصدير بياناتي</string>
     <string name="data_storage_cache_description">تسرّع الذاكرة المؤقتة تحميل الوسائط وتقلّل استهلاك البيانات. تُحذف الملفات المخزّنة تلقائيًا بعد 7 أيام.</string>
-    <string name="data_storage_cache_title">ذاكرة الوسائط المؤقتة</string>
     <string name="data_storage_section_cache">ذاكرة الوسائط المؤقتة</string>
     <string name="data_storage_title">التخزين</string>
     <string name="delete_account_button">حذف حسابي نهائيًا</string>
@@ -296,12 +295,10 @@
     <string name="settings_notifications_title">الإشعارات</string>
     <string name="settings_open_source_licenses">تراخيص المصدر المفتوح</string>
     <string name="settings_packs_domain">نوع الحزمة</string>
-    <string name="settings_privacy_calls_non_contacts_info">عند إيقافه، لا يستطيع إلا أصدقاؤك جعل هاتفك يرن. يرى الآخرون أنك لا تقبل إلا المكالمات من جهات اتصالك.</string>
     <string name="settings_privacy_coming_soon">قريبًا</string>
     <string name="settings_privacy_coming_soon_a11y">قريبًا، بلا أثر حاليًا</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">التشفير — قريبًا، معطَّل حاليًا</string>
     <string name="settings_privacy_hide_from_contact_search_info">عند التفعيل، لن يظهر ملفك الشخصي في البحث برقم الهاتف أو البريد الإلكتروني، ولن يتم إخطار جهات اتصالك بانضمامك إلى Meeshy.</string>
-    <string name="settings_privacy_notify_contacts_on_return_info">يرى أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني «كان على Meeshy مؤخرًا»، مرة واحدة على الأكثر كل 3 ساعات. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية.</string>
     <string name="settings_privacy_policy">سياسة الخصوصية</string>
     <string name="settings_privacy_title">الخصوصية</string>
     <string name="settings_push_notifications">الإشعارات الفورية</string>

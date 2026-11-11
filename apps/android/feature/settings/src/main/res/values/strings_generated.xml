@@ -85,7 +85,6 @@
     <string name="data_export_share">Share</string>
     <string name="data_export_title">Export my data</string>
     <string name="data_storage_cache_description">The cache loads media faster and reduces data usage. Cached files are deleted automatically after 7 days.</string>
-    <string name="data_storage_cache_title">Media cache</string>
     <string name="data_storage_section_cache">Media cache</string>
     <string name="data_storage_title">Storage</string>
     <string name="delete_account_button">Permanently delete my account</string>
@@ -296,12 +295,10 @@
     <string name="settings_notifications_title">Notifications</string>
     <string name="settings_open_source_licenses">Open source licenses</string>
     <string name="settings_packs_domain">Pack type</string>
-    <string name="settings_privacy_calls_non_contacts_info">When off, only your friends can make your phone ring. Others see that you only accept calls from your contacts.</string>
     <string name="settings_privacy_coming_soon">Coming soon</string>
     <string name="settings_privacy_coming_soon_a11y">coming soon, currently has no effect</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">Encryption — coming soon, currently disabled</string>
     <string name="settings_privacy_hide_from_contact_search_info">When on, your profile no longer shows up in a search by phone number or email, and your contacts aren\'t notified when you join Meeshy.</string>
-    <string name="settings_privacy_notify_contacts_on_return_info">Your friends and people who have your number or email see “was on Meeshy recently”, at most once every 3 hours. Never if your online status is hidden.</string>
     <string name="settings_privacy_policy">Privacy Policy</string>
     <string name="settings_privacy_title">Privacy</string>
     <string name="settings_push_notifications">Push notifications</string>

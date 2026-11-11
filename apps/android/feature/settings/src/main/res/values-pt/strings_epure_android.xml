@@ -9,11 +9,12 @@
     <string name="account_contact_error_email_resend">Não foi possível reenviar o e-mail de verificação.</string>
     <string name="account_contact_title">E-mail e telefone</string>
     <string name="crash_reports_empty">Nenhum relatório.</string>
-    <string name="crash_reports_note">Se o aplicativo fechar inesperadamente, um relatório é salvo aqui para você compartilhar com o suporte. Nada sai do seu dispositivo até você compartilhar.</string>
+    <string name="crash_reports_note">Se o aplicativo fechar inesperadamente, um relatório é salvo aqui para o suporte.</string>
     <string name="crash_reports_privacy">Nada sai do dispositivo sem que você compartilhe.</string>
     <string name="crash_reports_question">O que contém um relatório?</string>
     <string name="data_export_info_body">Exportação RGPD dos seus dados pessoais.</string>
     <string name="data_storage_cache_question">Para que serve o cache?</string>
+    <string name="data_storage_cache_size">Tamanho</string>
     <string name="encrypted_devices_empty">Nenhum dispositivo criptografado: ele aparece aqui assim que o Meeshy ativa a criptografia nele.</string>
     <string name="encrypted_devices_last_seen">Último uso: %1$s</string>
     <string name="encrypted_devices_notice_body">Ele ainda não aparece nesta lista. Você já pode remover um dispositivo perdido: ele deixa de receber suas mensagens criptografadas.</string>
@@ -57,7 +58,7 @@
     <string name="settings_interface_riviere_mode">Modo Rivière</string>
     <string name="settings_interface_riviere_mode_subtitle">Nos grupos ativos, a conversa é lida em faixas, uma por voz.</string>
     <string name="settings_languages_orientation">As mensagens são traduzidas para o idioma de exibição e depois para o regional.</string>
-    <string name="settings_media_autosave_note">As imagens e vídeos recebidos vão para o álbum Meeshy, uma única vez. Nunca uma mídia efêmera, desfocada ou de visualização única.</string>
+    <string name="settings_media_autosave_note">Uma única vez, imagens e vídeos. Nunca uma mídia efêmera, desfocada ou de visualização única.</string>
     <string name="settings_media_autosave_question">Quais mídias são salvas?</string>
     <string name="settings_media_autosave_subtitle">As mídias recebidas vão para o álbum Meeshy, exceto efêmeras ou de visualização única.</string>
     <string name="settings_media_capture_original_note">A foto ou o vídeo bruto, sem efeito nem moldura, é salvo no Fotos a cada captura.</string>
@@ -70,11 +71,14 @@
     <string name="settings_packs_title">Loja</string>
     <string name="settings_privacy_analytics_info">Métricas de uso anônimas: telas abertas, recursos usados, falhas. Nunca o conteúdo das suas mensagens nem seus contatos.</string>
     <string name="settings_privacy_analytics_question">O que a análise mede?</string>
+    <string name="settings_privacy_calls_non_contacts_info">Os outros veem que você só aceita chamadas dos seus contatos.</string>
     <string name="settings_privacy_calls_non_contacts_question">Quem pode me ligar?</string>
+    <string name="settings_privacy_calls_non_contacts_subtitle">Desativado, só seus amigos podem fazer seu telefone tocar.</string>
     <string name="settings_privacy_hide_from_contact_search">Ocultar meu número e meu e-mail</string>
     <string name="settings_privacy_hide_from_contact_search_question">Quem pode me encontrar pelo meu número?</string>
     <string name="settings_privacy_hide_from_contact_search_subtitle">Meu perfil não aparece mais em uma busca por número ou e-mail.</string>
     <string name="settings_privacy_notify_contacts_on_return">Anunciar meu retorno</string>
+    <string name="settings_privacy_notify_contacts_on_return_info">Seus amigos e quem tem seu número ou e-mail. Nunca se seu status online estiver oculto.</string>
     <string name="settings_privacy_notify_contacts_on_return_question">Quem é avisado do meu retorno?</string>
     <string name="settings_privacy_notify_contacts_on_return_subtitle">Seus contatos veem “esteve no Meeshy recentemente”, no máximo a cada 3 horas.</string>
     <string name="settings_privacy_online_status_info">Desativado, ninguém vê esse ponto. Escrever em uma conversa continua sendo prova de atividade.</string>
@@ -89,7 +93,7 @@
     <string name="twofactor_disable_button">Desativar</string>
     <string name="twofactor_disable_warning">Sua conta ficará menos segura sem 2FA.</string>
     <string name="twofactor_enable_button">Ativar</string>
-    <string name="twofactor_orientation">Um código do seu aplicativo se soma à senha.</string>
+    <string name="twofactor_orientation">Um código do seu aplicativo se soma à senha. Os códigos de backup servem uma única vez se você perder o telefone.</string>
     <string name="twofactor_regenerate_warning">Os novos códigos substituem os anteriores.</string>
     <string name="twofactor_status_disabled">Desativada</string>
 </resources>
