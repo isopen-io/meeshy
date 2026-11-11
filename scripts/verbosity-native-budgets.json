@@ -1,5 +1,4 @@
 {
-  "growth": {},
   "families": {
     "android:app": {
       "labels": 320,
@@ -1228,6 +1227,12 @@
     "ios:MeeshyUI/joinFlow": {
       "labels": 37,
       "words": 89,
+      "long": 0,
+      "explanations": 0
+    },
+    "ios:MeeshyUI/kit": {
+      "labels": 2,
+      "words": 2,
       "long": 0,
       "explanations": 0
     },

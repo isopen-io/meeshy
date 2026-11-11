@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { androidEntries, budgetsFromMeasure, iosFamilyOf, measureAndroidFiles, measureIosCatalog, nativeProblems } from '../check-verbosity-native.mjs';
+import { androidEntries, iosFamilyOf, lowerBudgets, measureAndroidFiles, measureIosCatalog, nativeVerdict } from '../check-verbosity-native.mjs';
 
 const counters = (labels, words, long = 0, explanations = 0) => ({ labels, words, long, explanations });
 
@@ -42,49 +42,58 @@ test('Android : famille = module, libellé long et explication comptés', () => 
   assert.deepEqual(measured, { 'android:feature/settings': counters(2, 46, 1, 1) });
 });
 
-test('dépassement : une famille au-dessus de son budget échoue', () => {
-  const budgets = budgetsFromMeasure({ 'android:sdk-ui': counters(10, 30, 1, 2) });
-  const problems = nativeProblems({ measured: { 'android:sdk-ui': counters(10, 30, 2, 3) }, budgets, previous: budgets });
+const budgetsOf = (families) => ({ families });
+
+test('dépassement : plus de libellés longs ou d’explications que le budget échoue', () => {
+  const budgets = budgetsOf({ 'android:sdk-ui': counters(10, 30, 1, 2) });
+  const { problems } = nativeVerdict({ measured: { 'android:sdk-ui': counters(10, 30, 2, 3) }, budgets, previous: budgets });
   assert.equal(problems.length, 2);
   assert.match(problems[0], /80 caractères/);
   assert.match(problems[1], /explication/);
 });
 
+test('dépassement de volume : signalé, sans rougir — chaque feature ajoute des libellés', () => {
+  const budgets = budgetsOf({ 'android:sdk-ui': counters(10, 30, 1, 2) });
+  const { problems, notes } = nativeVerdict({ measured: { 'android:sdk-ui': counters(12, 34, 1, 2) }, budgets, previous: budgets });
+  assert.deepEqual(problems, []);
+  assert.equal(notes.length, 2);
+});
+
 test('sous le budget, tout passe', () => {
-  const budgets = budgetsFromMeasure({ 'android:sdk-ui': counters(10, 30, 1, 2) });
-  assert.deepEqual(nativeProblems({ measured: { 'android:sdk-ui': counters(9, 25, 0, 2) }, budgets, previous: budgets }), []);
+  const budgets = budgetsOf({ 'android:sdk-ui': counters(10, 30, 1, 2) });
+  assert.deepEqual(nativeVerdict({ measured: { 'android:sdk-ui': counters(9, 25, 0, 2) }, budgets, previous: budgets }), { problems: [], notes: [] });
 });
 
-test('cliquet : un budget qui monte par rapport à la base échoue', () => {
-  const previous = budgetsFromMeasure({ 'ios:Meeshy/settings': counters(10, 30, 1, 2) });
-  const budgets = budgetsFromMeasure({ 'ios:Meeshy/settings': counters(10, 30, 1, 3) });
-  const problems = nativeProblems({ measured: { 'ios:Meeshy/settings': counters(10, 30, 1, 3) }, budgets, previous });
-  assert.equal(problems.length, 1);
-  assert.match(problems[0], /ne peut que baisser/);
+test('cliquet : un budget qui monte par rapport à la base échoue, volume compris', () => {
+  const previous = budgetsOf({ 'ios:Meeshy/settings': counters(10, 30, 1, 2) });
+  const budgets = budgetsOf({ 'ios:Meeshy/settings': counters(11, 30, 1, 3) });
+  const { problems } = nativeVerdict({ measured: { 'ios:Meeshy/settings': counters(10, 30, 1, 2) }, budgets, previous });
+  assert.equal(problems.length, 2);
+  for (const problem of problems) assert.match(problem, /ne peut que baisser/);
 });
 
-test('cliquet : « growth » avec son issue relève le volume, jamais le bavardage', () => {
-  const previous = budgetsFromMeasure({ 'ios:Meeshy/settings': counters(10, 30, 1, 2) });
-  const budgets = budgetsFromMeasure({ 'ios:Meeshy/settings': counters(12, 34, 2, 2) }, { 'ios:Meeshy/settings': '#17000 — bascule de présence' });
-  const problems = nativeProblems({ measured: { 'ios:Meeshy/settings': counters(12, 34, 2, 2) }, budgets, previous });
-  assert.equal(problems.length, 1);
-  assert.match(problems[0], /80 caractères/);
+test('cliquet : sans base lisible, seuls les budgets sont tenus', () => {
+  const budgets = budgetsOf({ 'ios:Meeshy/settings': counters(10, 30, 1, 2) });
+  assert.deepEqual(nativeVerdict({ measured: { 'ios:Meeshy/settings': counters(10, 30, 1, 2) }, budgets, previous: null }).problems, []);
 });
 
-test('cliquet : « growth » sans numéro d’issue ne relève rien', () => {
-  const previous = budgetsFromMeasure({ 'ios:Meeshy/settings': counters(10, 30) });
-  const budgets = budgetsFromMeasure({ 'ios:Meeshy/settings': counters(11, 30) }, { 'ios:Meeshy/settings': 'parce que' });
-  assert.equal(nativeProblems({ measured: { 'ios:Meeshy/settings': counters(11, 30) }, budgets, previous }).length, 1);
+test('famille absente des budgets : signalée, son cliquet part du jour où on l’inscrit', () => {
+  const { problems, notes } = nativeVerdict({ measured: { 'android:feature/game': counters(1, 1, 1, 1) }, budgets: budgetsOf({}), previous: null });
+  assert.deepEqual(problems, []);
+  assert.equal(notes.length, 1);
+  assert.match(notes[0], /sans budget/);
 });
 
-test('famille absente : une famille mesurée sans budget échoue', () => {
-  const budgets = budgetsFromMeasure({});
-  const problems = nativeProblems({ measured: { 'android:feature/game': counters(1, 1) }, budgets, previous: null });
-  assert.equal(problems.length, 1);
-  assert.match(problems[0], /sans budget/);
+test('famille absente de la base : son budget n’a pas de cliquet', () => {
+  const budgets = budgetsOf({ 'android:feature/game': counters(5, 9) });
+  assert.deepEqual(nativeVerdict({ measured: { 'android:feature/game': counters(5, 9) }, budgets, previous: budgetsOf({}) }).problems, []);
 });
 
-test('famille neuve à la base : son budget n’a pas de cliquet', () => {
-  const budgets = budgetsFromMeasure({ 'android:feature/game': counters(5, 9) });
-  assert.deepEqual(nativeProblems({ measured: { 'android:feature/game': counters(5, 9) }, budgets, previous: budgetsFromMeasure({}) }), []);
+test('--write n’abaisse que : le plus petit du budget et du relevé, une famille neuve à son relevé', () => {
+  const lowered = lowerBudgets(budgetsOf({ 'ios:Meeshy/settings': counters(10, 30, 1, 2) }), {
+    'ios:Meeshy/settings': counters(12, 25, 0, 2),
+    'android:sdk-ui': counters(3, 4),
+  });
+  assert.deepEqual(lowered, budgetsOf({ 'android:sdk-ui': counters(3, 4), 'ios:Meeshy/settings': counters(10, 25, 0, 2) }));
+  assert.deepEqual(Object.keys(lowered.families), ['android:sdk-ui', 'ios:Meeshy/settings']);
 });

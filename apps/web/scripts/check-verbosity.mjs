@@ -30,6 +30,9 @@ const readBase = () => {
   try {
     return show();
   } catch {
+    // En intégration continue seulement (clone à une profondeur) : localement, un `--depth=1` poserait une
+    // frontière superficielle sur la base et couperait l'historique commun — on y laisse `git fetch origin dev` à la main.
+    if (process.env.CI !== 'true') return null;
     try {
       const [remote, ...branch] = BASE_REF.split('/');
       git(['fetch', '--no-tags', '--depth=1', remote, `${branch.join('/')}:refs/remotes/${BASE_REF}`]);

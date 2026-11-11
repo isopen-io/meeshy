@@ -14,16 +14,16 @@
 // caractères, libellés d'explication (clé qui contient hint, help,
 // description, subtitle, detail, footer, info, explain ou caption).
 //
-// Rouge si un compteur dépasse son budget (`scripts/verbosity-native-budgets.json`),
-// si une famille mesurée n'a pas de budget, ou si un budget MONTE par rapport à
-// la base (`origin/dev`, ou `VERBOSITY_BASE_REF`). Les deux compteurs de
-// BAVARDAGE — longs et explications — ne remontent jamais. Les deux compteurs
-// de VOLUME — libellés et mots — grandissent avec une feature : une famille
-// listée dans `growth` avec son issue (`"#1234 — raison"`) peut les relever,
-// et seulement eux.
+// Deux compteurs mesurent le BAVARDAGE — libellés de plus de 80 caractères et
+// libellés d'explication : rouge si l'un dépasse son budget
+// (`scripts/verbosity-native-budgets.json`). Deux mesurent le VOLUME — libellés
+// et mots : ils grandissent avec chaque feature, le script dit quand ils
+// dépassent, sans rougir. Et rouge si un budget, quel qu'il soit, MONTE par
+// rapport à la base (`origin/dev`, ou `VERBOSITY_BASE_REF`). Une famille neuve
+// (sans budget) est signalée ; son cliquet part du jour où on l'inscrit.
 //
-// `--write` réécrit les budgets depuis le relevé (pour ABAISSER après une
-// épure, ou inscrire une famille neuve) ; `growth` est conservé.
+// `--write` n'ABAISSE que : chaque compteur d'une famille inscrite prend le plus
+// petit du budget et du relevé, une famille neuve est inscrite à son relevé.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -35,7 +35,7 @@ export const IOS_CATALOGS = [
 ];
 export const BUDGETS_PATH = 'scripts/verbosity-native-budgets.json';
 export const COUNTERS = ['labels', 'words', 'long', 'explanations'];
-const VOLUME = new Set(['labels', 'words']);
+const CEILINGS = ['long', 'explanations'];
 const LABELS = { labels: 'libellés', words: 'mots', long: 'libellés de plus de 80 caractères', explanations: "libellés d'explication" };
 const EXPLANATION = /hint|help|description|subtitle|detail|footer|info|explain|caption/i;
 const LONG = 80;
@@ -113,30 +113,43 @@ export const measureAndroidFiles = (files) => {
 
 const sorted = (record) => Object.fromEntries(Object.entries(record).sort(([a], [b]) => a.localeCompare(b)));
 
-export const nativeProblems = ({ measured, budgets, previous }) => {
-  const growth = budgets.growth ?? {};
+const exceeding = (counters, budget, keys) => keys.filter((counter) => counters[counter] > budget[counter]);
+
+export const nativeVerdict = ({ measured, budgets, previous }) => {
+  const notes = [];
   const overBudget = Object.entries(measured).flatMap(([family, counters]) => {
     const budget = budgets.families[family];
-    if (budget === undefined) return [`${family} : famille sans budget — inscris-la (node scripts/check-verbosity-native.mjs --write)`];
-    return COUNTERS.filter((counter) => counters[counter] > budget[counter]).map(
-      (counter) => `${family} : ${counters[counter]} ${LABELS[counter]} pour un budget de ${budget[counter]} — l'écran redevient bavard`,
+    if (budget === undefined) {
+      notes.push(`${family} : famille neuve, sans budget — inscris-la (node scripts/check-verbosity-native.mjs --write)`);
+      return [];
+    }
+    for (const counter of exceeding(counters, budget, ['labels', 'words'])) notes.push(`${family} : ${counters[counter]} ${LABELS[counter]} pour un budget de ${budget[counter]}`);
+    return exceeding(counters, budget, CEILINGS).map(
+      (counter) => `${family} : ${counters[counter]} ${LABELS[counter]} pour un budget de ${budget[counter]} — l'écran redevient bavard, range l'explication derrière un (i)`,
     );
   });
-  if (previous === null) return overBudget;
-  const raised = Object.entries(budgets.families).flatMap(([family, budget]) => {
-    const base = previous.families[family];
-    if (base === undefined) return [];
-    const mayGrow = /#\d+/.test(growth[family] ?? '');
-    return COUNTERS.filter((counter) => budget[counter] > base[counter] && !(VOLUME.has(counter) && mayGrow)).map((counter) =>
-      VOLUME.has(counter)
-        ? `${family} : le budget de ${LABELS[counter]} passe de ${base[counter]} à ${budget[counter]} — un budget ne peut que baisser (une feature qui ajoute des libellés courts inscrit la famille dans « growth » avec son issue)`
-        : `${family} : le budget de ${LABELS[counter]} passe de ${base[counter]} à ${budget[counter]} — un budget ne peut que baisser`,
-    );
-  });
-  return [...overBudget, ...raised];
+  const raised =
+    previous === null
+      ? []
+      : Object.entries(budgets.families).flatMap(([family, budget]) => {
+          const base = previous.families[family];
+          if (base === undefined) return [];
+          return exceeding(budget, base, COUNTERS).map((counter) => `${family} : le budget de ${LABELS[counter]} passe de ${base[counter]} à ${budget[counter]} — un budget ne peut que baisser`);
+        });
+  return { problems: [...overBudget, ...raised], notes };
 };
 
-export const budgetsFromMeasure = (measured, growth = {}) => ({ growth: sorted(growth), families: sorted(measured) });
+export const lowerBudgets = (existing, measured) => ({
+  families: sorted(
+    Object.fromEntries(
+      Object.entries(measured).map(([family, counters]) => {
+        const budget = existing.families?.[family];
+        if (budget === undefined) return [family, counters];
+        return [family, Object.fromEntries(COUNTERS.map((counter) => [counter, Math.min(budget[counter], counters[counter])]))];
+      }),
+    ),
+  ),
+});
 
 const androidFiles = (root) => {
   const found = [];
@@ -163,6 +176,9 @@ const readBase = (root, ref) => {
   try {
     return show();
   } catch {
+    // En intégration continue seulement (clone à une profondeur) : localement, un `--depth=1` poserait une
+    // frontière superficielle sur la base et couperait l'historique commun — on y laisse `git fetch origin dev` à la main.
+    if (process.env.CI !== 'true') return null;
     try {
       const [remote, ...branch] = ref.split('/');
       git(['fetch', '--no-tags', '--depth=1', remote, `${branch.join('/')}:refs/remotes/${ref}`]);
@@ -178,27 +194,28 @@ const main = () => {
   const measured = measureRepository(root);
   const budgetsFile = join(root, BUDGETS_PATH);
   if (process.argv.includes('--write')) {
-    const growth = (() => {
+    const existing = (() => {
       try {
-        return JSON.parse(readFileSync(budgetsFile, 'utf8')).growth ?? {};
+        return JSON.parse(readFileSync(budgetsFile, 'utf8'));
       } catch {
-        return {};
+        return { families: {} };
       }
     })();
-    writeFileSync(budgetsFile, `${JSON.stringify(budgetsFromMeasure(measured, growth), null, 2)}\n`);
-    console.log(`  budgets réécrits : ${Object.keys(measured).length} familles`);
+    writeFileSync(budgetsFile, `${JSON.stringify(lowerBudgets(existing, measured), null, 2)}\n`);
+    console.log(`  budgets abaissés : ${Object.keys(measured).length} familles`);
     return;
   }
   const budgets = JSON.parse(readFileSync(budgetsFile, 'utf8'));
   const ref = process.env.VERBOSITY_BASE_REF ?? 'origin/dev';
   const previous = readBase(root, ref);
   if (previous === null) console.log(`  note  aucun budget lisible sur ${ref} : le cliquet contre la base est sauté, les budgets restent tenus`);
-  const problems = nativeProblems({ measured, budgets, previous });
+  const { problems, notes } = nativeVerdict({ measured, budgets, previous });
+  for (const note of notes) console.log(`  note  ${note}`);
   const below = Object.entries(measured).filter(([family, counters]) => {
     const budget = budgets.families[family];
-    return budget !== undefined && COUNTERS.some((counter) => counters[counter] < budget[counter]);
+    return budget !== undefined && CEILINGS.some((counter) => counters[counter] < budget[counter]);
   });
-  if (below.length > 0) console.log(`  note  ${below.length} familles sous leur budget — abaisse-le (node scripts/check-verbosity-native.mjs --write)`);
+  if (below.length > 0) console.log(`  note  ${below.length} familles ont moins de bavardage que leur budget — abaisse-le (node scripts/check-verbosity-native.mjs --write)`);
   if (problems.length > 0) {
     for (const problem of problems) console.error(`ECHEC ${problem}`);
     process.exit(1);
