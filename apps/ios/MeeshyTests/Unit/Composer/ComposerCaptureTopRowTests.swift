@@ -157,7 +157,7 @@ final class ComposerCaptureTopRowTests: XCTestCase {
 
     /// A9 (#17109, révoque #8653) : en filmant, plus d'en-tête — seul le chrono,
     /// centré ; la prise se clôt au déclencheur rouge.
-    func test_whileRecording_noHeader_noCapsule_onlyTheCentredChrono() {
+    func test_whileRecording_noHeader_noCapsule_onlyTheChrono() {
         let enregistre = Self.input(stage: .recording, segments: 1)
         XCTAssertFalse(ComposerCaptureTopRow.showsHeader(enregistre))
         XCTAssertEqual(ComposerCaptureTopRow.leading(enregistre), [])
@@ -166,15 +166,33 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         XCTAssertTrue(ComposerCaptureTopRow.showsChrono(enregistre))
     }
 
-    // MARK: - (4) La puce du chrono, CENTRÉE (A9, #17109)
+    // MARK: - (4) La puce du chrono, à GAUCHE de la barre des segments (#17469)
 
-    func test_theChrono_isCentred_assoonAsAVideoIsBeingTaken() {
+    func test_theChrono_shows_assoonAsAVideoIsBeingTaken() {
         XCTAssertFalse(ComposerCaptureTopRow.showsChrono(Self.input()), "sans vidéo, pas de chrono")
         XCTAssertTrue(ComposerCaptureTopRow.showsChrono(Self.input(segments: 1)))
         XCTAssertTrue(ComposerCaptureTopRow.showsChrono(Self.input(stage: .recording)))
         XCTAssertFalse(ComposerCaptureTopRow.showsChrono(Self.input(editing: true, segments: 1)), "pas en retouche")
         XCTAssertFalse(ComposerCaptureTopRow.leading(Self.input(segments: 1)).contains(.chrono),
-                       "le chrono ne colle plus à la croix : il est au centre")
+                       "le chrono ne colle plus à la croix : il vit sur la ligne de la barre")
+    }
+
+    /// Porteur (#17469) : le chrono et le nombre de segments se posent juste à
+    /// gauche de la barre des segments, sur SA ligne — l'en-tête ne le porte plus.
+    func test_theChrono_sitsJustLeftOfTheSegmentBar_neverInTheHeader() throws {
+        let source = try String(contentsOfFile: Self.barPath, encoding: .utf8)
+        guard let entete = source.range(of: "private var topControls: some View {"),
+              let finEntete = source.range(of: "private var controlCapsule", range: entete.upperBound..<source.endIndex),
+              let ligne = source.range(of: "private var progressRow: some View {"),
+              let finLigne = source.range(of: "// MARK:", range: ligne.upperBound..<source.endIndex)
+        else { return XCTFail("l'en-tête et la ligne de progression existent") }
+        XCTAssertFalse(source[entete.upperBound..<finEntete.lowerBound].contains("chronoChip"),
+                       "l'en-tête ne porte plus le chrono")
+        let corps = String(source[ligne.upperBound..<finLigne.lowerBound])
+        guard let puce = corps.range(of: "chronoChip"), let barre = corps.range(of: "Bar") else {
+            return XCTFail("la ligne porte la puce puis la barre")
+        }
+        XCTAssertLessThan(puce.lowerBound, barre.lowerBound, "la puce est à GAUCHE de la barre")
     }
 
     func test_theSegmentIndicator_countsTheSegmentBeingRecorded() {
@@ -183,17 +201,17 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         XCTAssertEqual(ComposerCaptureTopRow.segmentCount(pending: 2, recording: false), 2)
     }
 
-    // MARK: - (#10310) « 3 – » à l'écran, « 3 segments » à la voix
+    // MARK: - (#10310, #17469) « 3 » à l'écran, « 3 segments » à la voix
 
-    func test_segmentBadge_threeSegments_showsTheNumberAndADash() {
+    func test_segmentBadge_threeSegments_showsOnlyTheNumber() {
         let badge = ComposerCaptureTopRow.segmentBadge(3, locale: Locale(identifier: "fr_FR"))
-        XCTAssertEqual(badge, "3 \u{2013}")
+        XCTAssertEqual(badge, "3", "porteur : le trait part, le nombre reste")
         XCTAssertFalse(badge.localizedCaseInsensitiveContains("segment"), "le mot ne s'affiche plus")
     }
 
     func test_segmentBadge_arabicLocale_usesTheLocaleDigits() {
         let arabe = Locale(identifier: "ar")
-        XCTAssertEqual(ComposerCaptureTopRow.segmentBadge(3, locale: arabe), LocalizedNumber.exact(3, locale: arabe) + " \u{2013}",
+        XCTAssertEqual(ComposerCaptureTopRow.segmentBadge(3, locale: arabe), LocalizedNumber.exact(3, locale: arabe),
                        "le chiffre suit la locale")
     }
 
