@@ -20,6 +20,12 @@ public nonisolated enum MeeshyChipInk: String, Sendable, Equatable, CaseIterable
 /// recette si. Toute valeur chiffrée de la puce vit ici, nulle part ailleurs.
 /// K04 ne pose aucune matière : un voile plat, jamais de verre ni de liseré.
 public nonisolated struct MeeshyChipRecipe: Equatable, Sendable {
+    /// La police d'une puce à la taille que l'hôte a déjà mise à l'échelle
+    /// (@ScaledMetric du titre, tailles d'icône du système de design).
+    public static func font(size: CGFloat, weight: Font.Weight) -> Font {
+        Font.system(size: size, weight: weight)
+    }
+
     public let fill: MeeshyChipFill
     /// L'opacité du fond, appui et survol compris.
     public let fillOpacity: Double

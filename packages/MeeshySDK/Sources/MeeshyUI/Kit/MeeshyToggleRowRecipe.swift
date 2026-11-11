@@ -36,6 +36,11 @@ public nonisolated enum MeeshyToggleRowValue: Sendable, Equatable {
 /// l'accessibilité. Pure : elle ne lit ni environnement ni singleton, tout lui
 /// est passé. Aucune couleur n'est écrite ici : elle vient des jetons.
 public nonisolated struct MeeshyToggleRowRecipe: Sendable, Equatable {
+    /// Le glyphe de la case à cocher, à la taille de la case.
+    public static var checkboxFont: Font {
+        Font.system(size: checkboxSide, weight: .regular)
+    }
+
     public static let rowMinimumHeight: CGFloat = 46
     public static let checkboxSide: CGFloat = 24
     public static let disabledOpacity: Double = 0.62

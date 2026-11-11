@@ -122,7 +122,7 @@
     },
     "child-safety": {
       "total": 707,
-      "firstScreen": 137
+      "firstScreen": 156
     },
     "communities": {
       "total": 70,
@@ -301,20 +301,20 @@
       "firstScreen": 27
     },
     "settings": {
-      "total": 131,
-      "firstScreen": 63
+      "total": 279,
+      "firstScreen": 74
     },
     "settings-appareils-chiffres": {
-      "total": 48,
-      "firstScreen": 48
+      "total": 89,
+      "firstScreen": 89
     },
     "settings-data-export": {
       "total": 5,
       "firstScreen": 5
     },
     "settings-notifications": {
-      "total": 5,
-      "firstScreen": 5
+      "total": 16,
+      "firstScreen": 16
     },
     "settings-packs": {
       "total": 53,
@@ -325,8 +325,8 @@
       "firstScreen": 46
     },
     "settings-verify-email-change": {
-      "total": 6,
-      "firstScreen": 6
+      "total": 20,
+      "firstScreen": 20
     },
     "share": {
       "total": 329,

@@ -193,7 +193,7 @@ public struct MeeshyToggleRowFace<Leading: View, TitleAccessory: View, Trailing:
             }
         case .checkbox(let isChecked):
             Image(systemName: isChecked ? "checkmark.square.fill" : "square")
-                .font(.system(size: MeeshyToggleRowRecipe.checkboxSide, weight: .regular))
+                .font(MeeshyToggleRowRecipe.checkboxFont)
                 .foregroundStyle(recipe.accessoryColor)
         case .chevron:
             Image(systemName: "chevron.right")

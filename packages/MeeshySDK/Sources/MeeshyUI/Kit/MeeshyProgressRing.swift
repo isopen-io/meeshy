@@ -221,7 +221,7 @@ struct MeeshyProgressRingDigits: View, Equatable {
 
     var body: some View {
         Text(verbatim: text)
-            .font(.system(size: size, weight: .bold))
+            .font(MeeshyProgressRingRecipe.font(size: size))
             .monospacedDigit()
             .foregroundStyle(ink)
             .lineLimit(1)

@@ -18,6 +18,11 @@ public nonisolated enum MeeshyProgressRingInk: Sendable, Equatable, CaseIterable
 /// - Le chiffre n'existe qu'à partir de 22 pt, hors indéterminé, hors `center`
 ///   rempli et si le pourcentage est demandé ; le signe `%` dès 40 pt.
 public nonisolated struct MeeshyProgressRingRecipe: Sendable, Equatable {
+    /// La police du centre de l'anneau, à la taille que l'anneau lui donne.
+    public static func font(size: CGFloat) -> Font {
+        Font.system(size: size, weight: .bold)
+    }
+
     /// Le balayage d'un arc indéterminé ou balayé : 18 % du cercle.
     public static let sweepFraction: Double = 0.18
     /// La durée tour d'un balayage : 1,1 s, linéaire, sans fin.

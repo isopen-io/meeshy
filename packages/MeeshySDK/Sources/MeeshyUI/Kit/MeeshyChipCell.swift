@@ -53,9 +53,9 @@ struct MeeshyChipFace<ID: Hashable & Sendable, ChipLabel: View>: View {
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.colorScheme) private var colorScheme
     @State private var isHovered = false
-    @ScaledMetric(relativeTo: .footnote) private var height: CGFloat
-    @ScaledMetric(relativeTo: .footnote) private var fontSize: CGFloat
-    @ScaledMetric(relativeTo: .footnote) private var padding: CGFloat
+    @ScaledMetric(relativeTo: .footnote) private var height: CGFloat = 0
+    @ScaledMetric(relativeTo: .footnote) private var fontSize: CGFloat = 0
+    @ScaledMetric(relativeTo: .footnote) private var padding: CGFloat = 0
 
     init(spec: MeeshyChipCellSpec<ID>, label: @escaping (MeeshyChip<ID>, Color) -> ChipLabel, isPressed: Bool) {
         self.spec = spec
@@ -99,14 +99,14 @@ struct MeeshyChipFace<ID: Hashable & Sendable, ChipLabel: View>: View {
         HStack(spacing: MeeshySpacing.xsPlus) {
             if let symbol = spec.chip.systemImage {
                 Image(systemName: symbol)
-                    .font(.system(size: spec.chip.isGlyphOnly ? MeeshyIconSize.md : MeeshyIconSize.sm, weight: .semibold))
+                    .font(MeeshyChipRecipe.font(size: spec.chip.isGlyphOnly ? MeeshyIconSize.md : MeeshyIconSize.sm, weight: .semibold))
                     .accessibilityHidden(true)
             }
             label(spec.chip, ink)
-                .font(.system(size: fontSize, weight: .bold))
+                .font(MeeshyChipRecipe.font(size: fontSize, weight: .bold))
             if let symbol = spec.chip.trailing.systemImage {
                 Image(systemName: symbol)
-                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                    .font(MeeshyChipRecipe.font(size: MeeshyIconSize.xs, weight: .semibold))
                     .accessibilityHidden(true)
             }
         }

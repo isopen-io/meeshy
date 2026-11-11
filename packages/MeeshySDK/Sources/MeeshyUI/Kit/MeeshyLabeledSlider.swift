@@ -318,10 +318,14 @@ private struct MeeshyLabeledSliderKeys: ViewModifier {
         }
     }
 
-    private static let keys: Set<KeyEquivalent> = [
-        .leftArrow, .rightArrow, .upArrow, .downArrow, .pageUp, .pageDown, .home, .end, .delete, .deleteForward,
-    ]
+    @available(iOS 17.0, macOS 14.0, *)
+    private static var keys: Set<KeyEquivalent> {
+        [
+            .leftArrow, .rightArrow, .upArrow, .downArrow, .pageUp, .pageDown, .home, .end, .delete, .deleteForward,
+        ]
+    }
 
+    @available(iOS 17.0, macOS 14.0, *)
     private static func command(for key: KeyEquivalent) -> MeeshyLabeledSliderCommand? {
         switch key {
         case .leftArrow: return .arrowLeft
