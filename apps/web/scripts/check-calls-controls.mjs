@@ -412,10 +412,10 @@ try {
       // ------------------------------------------------ 3. enregistrer
       await openActions(page);
       await page.click('[data-call-record]');
-      check(await appears(page, '[data-call-record-choice]'), `${label} : « Enregistrer » demande ce qu'on enregistre`);
+      check(await appears(page, '[data-call-record-choice]'), `${label} : « Enregistrer » ouvre « Enregistrer l'appel »`);
       check(await replacesRows(page, '[data-call-record-choice]'), `${label} : à la place des rangées, dans le cadre de la pilule`);
       const kinds = await page.$$eval('[data-call-record-kind]', (buttons) => buttons.map((button) => [button.getAttribute('data-call-record-kind'), button.hasAttribute('disabled')]));
-      check(JSON.stringify(kinds) === JSON.stringify([['audio', false], ['video', false]]), `${label} : « Audio seul » et « Audio et vidéo » (${JSON.stringify(kinds)})`);
+      check(JSON.stringify(kinds) === JSON.stringify([['audio', false], ['video', false]]), `${label} : deux puces larges Audio | Vidéo (${JSON.stringify(kinds)})`);
       await capture(page, `controles-enregistrement-${slug}`);
       await page.keyboard.press('Escape');
       check(await gone(page, '[data-call-record-choice]'), `${label} : Échap ferme le choix`);
@@ -425,7 +425,13 @@ try {
       await openActions(page);
       await page.click('[data-call-control="invite"]');
       check(await appears(page, '[data-call-people-sheet]'), `${label} : « Ajouter » ouvre la liste des participants`);
-      check(await replacesRows(page, '[data-call-people-sheet]'), `${label} : à la place des rangées, dans le cadre de la pilule`);
+      check(
+        await until(page, () => {
+          const sheet = document.querySelector('[data-call-people-sheet]');
+          return sheet !== null && sheet.closest('[data-call-control-pill]') === null && sheet.closest('[role="dialog"][data-call-people-host]') !== null && document.querySelector('[data-call-row], [data-call-rail]') !== null;
+        }),
+        `${label} : G3.5 — « Ajouter » s'ouvre en FEUILLE, hors de la pilule, et les rangées restent dessous`,
+      );
       check(await appears(page, `[data-call-person="${PEER_ID}"]`), `${label} : le pair y est, dans l'appel`);
       check(await appears(page, '[data-call-invitable="u-bruno"]'), `${label} : Bruno, contact accepté, est proposé`);
       check((await page.$(`[data-call-invitable="${PEER_ID}"]`)) === null, `${label} : personne déjà dans l'appel n'est proposé`);

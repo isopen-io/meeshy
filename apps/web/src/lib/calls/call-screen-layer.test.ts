@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { IDLE, layerChrome, layerOffered, nextLayer, type CallScreenLayer } from './call-screen-layer';
+import { IDLE, layerChrome, layerOffered, nextLayer, panelInThePill, type CallScreenLayer } from './call-screen-layer';
 
 /**
  * UNE CHOSE À LA FOIS (#8578) — l'écran d'appel est dans UN état : repos,
@@ -126,5 +126,19 @@ describe('layerChrome', () => {
 
   test('mode : TOUT le chrome d’appel s’efface, seul le mode reste', () => {
     expect(layerChrome(mode('montage'))).toEqual({ header: false, pill: false, rows: false, panel: null, mode: 'montage', selfZoom: false });
+  });
+});
+
+describe('G3.5 — « Ajouter » (Participants) est une feuille, pas une option de la pilule', () => {
+  test('Réagir, Enregistrer et le Journal se dessinent dans la pilule ; Ajouter, non', () => {
+    expect(panelInThePill('react')).toBe(true);
+    expect(panelInThePill('record')).toBe(true);
+    expect(panelInThePill('journal')).toBe(true);
+    expect(panelInThePill('people')).toBe(false);
+  });
+
+  test('la feuille des personnes laisse les rangées (et les rails) sous elle ; une option de la pilule les remplace', () => {
+    expect(layerChrome(panel('people'))).toEqual({ header: true, pill: true, rows: true, panel: 'people', mode: null, selfZoom: true });
+    expect(layerChrome(panel('record')).rows).toBe(false);
   });
 });

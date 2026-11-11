@@ -5,12 +5,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import type { ClipEnv } from '@/lib/calls/call-capture-live';
+import type { CallMember } from '@/lib/calls/call-store';
 import type { CaptureFile } from '@/lib/calls/call-capture-save';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
 import type { EffectsCompanion } from './call-effects-companions';
-import { CallEffectsMode, type FrameGrab } from './call-effects-mode';
+import { CallEffectsMode, companionsOf, type CallOthers, type FrameGrab } from './call-effects-mode';
 
 /**
  * LE MODE EFFETS (#8578) — l'écran se libère : ma vidéo en plein écran, un
@@ -308,5 +309,35 @@ describe('CallEffectsMode', () => {
     await view.settle('[data-carousel-item="angel"]');
     expect(view.grabbed).toEqual(['self-preview:angel']);
     view.done();
+  });
+});
+
+describe('companionsOf — les autres, composés dans le chunk du mode (#8737)', () => {
+  const peer = (userId: string, overrides: Partial<CallMember> = {}): CallMember => ({ userId, name: userId.toUpperCase(), avatar: null, micMuted: false, cameraOn: false, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected', ...overrides });
+  const Face: CallOthers['Portrait'] = ({ name }) => <span data-face={name} />;
+  const filming = { getVideoTracks: () => [{ readyState: 'live', enabled: true }] } as unknown as MediaStream;
+
+  test('chacun dans l’ordre d’arrivée, à SA couleur ; sa vidéo quand elle se montre, son portrait sinon', () => {
+    const companions = companionsOf({
+      members: { 'u-a': peer('u-a', { cameraOn: true }), 'u-b': peer('u-b', { link: 'ringing' }) },
+      remoteStreams: { 'u-a': filming },
+      localStream: null,
+      Portrait: Face,
+      colorOf: (userId) => `color-${userId}`,
+    });
+    expect(companions.map((companion) => [companion.id, companion.name, companion.color])).toEqual([
+      ['u-a', 'U-A', 'color-u-a'],
+      ['u-b', 'U-B', 'color-u-b'],
+    ]);
+    const [video, portrait] = companions.map((companion) => companion.render(120) as { readonly type: unknown; readonly props: Readonly<Record<string, unknown>> });
+    expect(video?.type).not.toBe(Face);
+    expect(video?.props.label).toBe('U-A');
+    expect(portrait?.type).toBe(Face);
+    expect(portrait?.props).toMatchObject({ name: 'U-B', size: 60, pulse: true, presenceKey: 'u-b' });
+  });
+
+  test('caméra allumée sans image reçue : le portrait, jamais une vidéo noire', () => {
+    const [only] = companionsOf({ members: { 'u-a': peer('u-a', { cameraOn: true }) }, remoteStreams: {}, localStream: null, Portrait: Face, colorOf: () => 'c' });
+    expect((only?.render(80) as { readonly type: unknown } | undefined)?.type).toBe(Face);
   });
 });
