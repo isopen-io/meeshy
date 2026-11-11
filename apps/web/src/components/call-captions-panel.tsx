@@ -59,7 +59,7 @@ import '@/styles/call-captions.css';
 
 /**
  * Les trois points d'attente : l'atome de la frappe (`TypingDots`), à l'encre secondaire.
- * Ils arrivent et retombent en fondu (`PILL_TEXT_EXIT`, `glass.css`) ; pendant qu'ils
+ * Ils arrivent et retombent en fondu (`PILL_TEXT_EXIT`, `call-motion.css`) ; pendant qu'ils
  * repartent, le lecteur d'écran n'entend déjà plus l'attente.
  */
 function WaitingDots({ waiting, label }: { readonly waiting: boolean; readonly label: string }) {

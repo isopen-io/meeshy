@@ -46,6 +46,7 @@ import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered, effec
 import { useMediaSystemBars } from '@/lib/use-media-system-bars';
 
 import type { EffectsCompanion } from './call-effects-companions';
+import '@/styles/call-motion.css';
 
 /**
  * **L'ÉCRAN D'APPEL** (#6382, #8045, #8391) — miroir de `CallView.swift` et
