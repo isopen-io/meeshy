@@ -83,7 +83,9 @@ final class ComposerCaptureMirrorRuleTests: XCTestCase {
         for (chemin, fichiers) in unites {
             let camera = try fichiers.map { try Self.code($0) }.joined(separator: "\n")
             XCTAssertTrue(camera.contains("horizon.follow("), "\(chemin) : l'horizon doit suivre l'objectif installé")
-            let niveau = try XCTUnwrap(camera.range(of: "horizon.level("), "\(chemin) : la photo doit être mise à l'horizon")
+            // Sur la file de la session (#17433), l'angle lu au toucher s'applique par `apply`.
+            let niveau = try XCTUnwrap(camera.range(of: "ComposerCaptureHorizon.apply(") ?? camera.range(of: "horizon.level("),
+                                       "\(chemin) : la photo doit être mise à l'horizon")
             let prise = try XCTUnwrap(camera.range(of: ".capturePhoto(with:"), chemin)
             XCTAssertLessThan(niveau.lowerBound, prise.lowerBound, "\(chemin) : l'horizon se pose AVANT le déclenchement")
         }

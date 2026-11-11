@@ -228,4 +228,16 @@ final class BringStopActionTests: XCTestCase {
 
         XCTAssertTrue(stopped.isEmpty)
     }
+
+    /// #17475 — l'extension est suspendue dès qu'elle livre la bannière : une alarme lancée sans être attendue n'est
+    /// jamais posée. Mesuré sur iPhone réel : app tuée, silencieux, Alarmes autorisées, rien ne sonnait.
+    func test_theExtension_awaitsTheBringAlarm_beforeDeliveringTheBanner() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("MeeshyNotificationExtension/NotificationService.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let awaited = try XCTUnwrap(source.range(of: "await alarm?.value"), "la NSE n'attend pas l'alarme du Bring")
+        let delivered = try XCTUnwrap(source.range(of: "await NotificationService.deliverEnriched("))
+        XCTAssertLessThan(awaited.lowerBound, delivered.lowerBound, "l'alarme est attendue AVANT la livraison")
+    }
 }

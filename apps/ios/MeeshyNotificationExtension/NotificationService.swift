@@ -56,7 +56,17 @@ class NotificationService: UNNotificationServiceExtension {
     private func ringBringAlarm(_ userInfo: [AnyHashable: Any]) {
         let action = BringAlarmPlan.action(push: userInfo, now: Date())
         guard action != .none else { return }
+        BringAlarmLog.note("NSE : push du Bring reçu — \(Self.bringTrace(action))")
         bringAlarm = Task { await BringAlarmCoordinator.system.apply(action, mayAsk: false) }
+    }
+
+    /// Ce que le journal dit d'une action : son genre et l'identifiant du Bring, jamais le titre (le nom de l'expéditeur).
+    private static func bringTrace(_ action: BringAlarmPlan.Action) -> String {
+        switch action {
+        case .ring(let request): "sonner \(request.bringId)"
+        case .silence(let bringId): "taire \(bringId)"
+        case .none: "rien"
+        }
     }
 
     override func serviceExtensionTimeWillExpire() {
@@ -209,7 +219,9 @@ class NotificationService: UNNotificationServiceExtension {
         let isCommunicationType = Self.communicationTypes.contains(userInfo["type"] as? String ?? "")
         let identifier = request.identifier
         let owned = NSEOwnedContent(content: working)
+        let alarm = bringAlarm
         enrichment = Task {
+            _ = await alarm?.value
             await NotificationService.deliverEnriched(
                 owned.content,
                 plan: plan,
