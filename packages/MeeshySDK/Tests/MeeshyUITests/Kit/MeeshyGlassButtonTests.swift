@@ -79,7 +79,7 @@ struct MeeshyGlassButtonTests {
         #expect(rest == MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44, material: .liquid, isNested: true))
     }
 
-    @Test("seul l'actif porte une ombre ; le normal ne porte aucun fond")
+    @Test("seul l'actif porte une ombre, au flou de la planche réduit de moitié comme celle de K01 ; le normal ne porte aucun fond")
     func recipe_onlyTheActiveCastsAShadow() throws {
         let shadow = try Self.object("shadowActive")
         for kind in MeeshyGlassButtonKind.allCases {
@@ -88,7 +88,9 @@ struct MeeshyGlassButtonTests {
         }
         let active = MeeshyGlassButtonRecipe.resolve(kind: .active, size: .s44).shadow
         #expect(active?.opacity == shadow["opacity"] as? Double)
-        #expect(active?.radius == shadow["radius"] as? Double)
+        let blur = try #require(shadow["blur"] as? Double)
+        #expect(MeeshyGlassButtonRecipe.activeShadowBlur == blur)
+        #expect(active?.radius == blur / 2)
         #expect(active?.y == shadow["y"] as? Double)
         #expect(MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .s44).fill == .clear)
     }

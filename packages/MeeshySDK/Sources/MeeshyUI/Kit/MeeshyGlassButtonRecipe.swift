@@ -147,7 +147,10 @@ public nonisolated struct MeeshyGlassButtonRecipe: Equatable, Sendable {
     public static let longPressMaxMovement = 10.0
     public static let toneFadeDuration = MeeshyGlassRecipe.toneFadeDuration
 
-    private static let activeShadow = MeeshyGlassButtonShadow(opacity: 0.22, radius: 14, y: 4)
+    /// Le flou de l'ombre de l'actif sur la planche (`0 4px 14px`). Le rayon
+    /// d'une ombre SwiftUI en est la moitié, comme pour le verre de K01 (28 → 14).
+    public static let activeShadowBlur = 14.0
+    private static let activeShadow = MeeshyGlassButtonShadow(opacity: 0.22, radius: activeShadowBlur / 2, y: 4)
 
     /// `tone` est le ton EFFECTIF (celui de l'hôte quand le bouton n'en pose pas).
     /// `isNested` : le bouton est posé dans un verre dessiné du kit ; sans effet

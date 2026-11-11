@@ -4,7 +4,7 @@
   "toneFadeMs": 200,
   "shadowActive": {
     "opacity": 0.22,
-    "radius": 14,
+    "blur": 14,
     "y": 4
   },
   "tapTarget": {

@@ -312,6 +312,7 @@ public struct MeeshyGlassButton<Glyph: View, Badge: View>: View {
         onLongPress: (() -> Void)?,
         onPressChange: ((Bool) -> Void)?
     ) {
+        assert(!spec.label.isEmpty, "MeeshyGlassButton : le nom accessible est obligatoire et non vide")
         self.spec = spec
         self.glyph = glyph
         self.badge = badge

@@ -67,16 +67,16 @@ private struct MeeshyGlassButtonSample: View {
     var body: some View {
         switch stateID {
         case "normal": container
-        case "seul": cell("xmark", tone: .plain)
-        case "seul-clair": cell("xmark", tone: .onLight)
-        case "actif": cell("ellipsis", kind: .active)
-        case "destructif": cell("trash", kind: .destructive, size: .s40)
-        case "doux": cell("chevron.backward", kind: .soft, size: .s40)
+        case "seul": cell("xmark", "Fermer", tone: .plain)
+        case "seul-clair": cell("xmark", "Fermer", tone: .onLight)
+        case "actif": cell("ellipsis", "Ranger les actions", kind: .active)
+        case "destructif": cell("trash", "Retirer", kind: .destructive, size: .s40)
+        case "doux": cell("chevron.backward", "Retour", kind: .soft, size: .s40)
         case "texte": ownGlyphs
         case "pastille": badged
-        case "teinte": cell("doc.on.clipboard", tint: MeeshyColors.brandPrimary)
+        case "teinte": cell("doc.on.clipboard", "Coller", tint: MeeshyColors.brandPrimary)
         case "theme": themed
-        case "desactive": cell("scribble").disabled(true)
+        case "desactive": cell("scribble", "Marqueur").disabled(true)
         default: sizes
         }
     }
@@ -84,9 +84,9 @@ private struct MeeshyGlassButtonSample: View {
     private var container: some View {
         MeeshyGlassGroup(spacing: MeeshySpacing.sm) {
             HStack(spacing: MeeshySpacing.sm) {
-                cell("arrow.uturn.backward", size: .s40, pressable: false)
-                cell("arrow.uturn.forward", size: .s40)
-                cell("ellipsis", size: .s48, pressable: false)
+                cell("arrow.uturn.backward", "Annuler", size: .s40, pressable: false)
+                cell("arrow.uturn.forward", "Rétablir", size: .s40)
+                cell("ellipsis", "Afficher les actions", size: .s48, pressable: false)
             }
             .padding(MeeshySpacing.xs)
             .modifier(MeeshyGlassButtonSamplePill())
@@ -96,22 +96,22 @@ private struct MeeshyGlassButtonSample: View {
     private var sizes: some View {
         HStack(spacing: MeeshySpacing.sm) {
             ForEach(MeeshyGlassButtonSize.allCases, id: \.self) { size in
-                cell("plus", size: size)
+                cell("plus", "Ajouter", size: size)
             }
         }
     }
 
     private var ownGlyphs: some View {
         HStack(spacing: MeeshySpacing.sm) {
-            glyphCell("Aa") { Text(verbatim: "Aa") }
-            glyphCell("color") { Circle().fill(MeeshyColors.brandPrimary).frame(width: MeeshySpacing.lg, height: MeeshySpacing.lg) }
+            glyphCell("Style du texte") { Text(verbatim: "Aa") }
+            glyphCell("Couleur") { Circle().fill(MeeshyColors.brandPrimary).frame(width: MeeshySpacing.lg, height: MeeshySpacing.lg) }
         }
     }
 
     private var themed: some View {
         HStack(spacing: MeeshySpacing.sm) {
-            cell("pencil", tone: .theme)
-            cell("pencil", kind: .active, tone: .theme)
+            cell("pencil", "Stylo", tone: .theme)
+            cell("pencil", "Stylo", kind: .active, tone: .theme)
         }
         .padding(MeeshySpacing.sm)
         .background(MeeshyColors.backgroundPrimary(isDark: colorScheme == .dark))
@@ -122,7 +122,7 @@ private struct MeeshyGlassButtonSample: View {
         if isPressed {
             MeeshyGlassButtonFace(systemImage: "bell", isPressed: true).glassBadge { badge }
         } else {
-            MeeshyGlassButton(systemImage: "bell", label: "bell", value: "3", action: {}).glassBadge { badge }
+            MeeshyGlassButton(systemImage: "bell", label: "Notifications", value: "3", action: {}).glassBadge { badge }
         }
     }
 
@@ -133,6 +133,7 @@ private struct MeeshyGlassButtonSample: View {
     @ViewBuilder
     private func cell(
         _ symbol: String,
+        _ label: String,
         kind: MeeshyGlassButtonKind = .normal,
         size: MeeshyGlassButtonSize = .s44,
         tone: MeeshyGlassTone? = nil,
@@ -142,7 +143,7 @@ private struct MeeshyGlassButtonSample: View {
         if isPressed && pressable {
             MeeshyGlassButtonFace(systemImage: symbol, kind: kind, size: size, tone: tone, tint: tint, isPressed: true)
         } else {
-            MeeshyGlassButton(systemImage: symbol, label: symbol, kind: kind, size: size, tone: tone, tint: tint, action: {})
+            MeeshyGlassButton(systemImage: symbol, label: label, kind: kind, size: size, tone: tone, tint: tint, action: {})
         }
     }
 
