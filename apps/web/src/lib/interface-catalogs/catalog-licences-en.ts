@@ -10,11 +10,12 @@ const en = {
   'licences.source.title': 'Source code',
   'licences.source.body': 'The source code for this version, build scripts included, is available free of charge.',
   'licences.source.commit': 'Revision {commit}',
-  'licences.source.open': 'Open the source code',
+  'licences.source.open': 'Open',
   'licences.agpl.title': 'AGPL-3.0 license text',
   'licences.libsignal.title': 'libsignal notices',
   'licences.libsignal.body': 'libsignal and the libraries it includes, with the text of their licenses.',
-  'licences.libsignal.open': 'View the notices published by Signal',
+  'licences.libsignal.question': 'What does this notice cover?',
+  'licences.libsignal.open': 'Open',
   'licences.legal_review': 'This information is under legal review.',
 } as const satisfies LicencesCatalog;
 

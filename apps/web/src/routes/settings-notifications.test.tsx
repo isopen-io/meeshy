@@ -63,15 +63,16 @@ describe('/settings/notifications — l’état, puis un geste', () => {
     const host = await mount(<EmailNotificationsPage signedIn language="fr" deps={script.deps} />);
 
     expect(host.querySelector('h1')?.textContent).toBe('E-mails de Meeshy');
-    expect(host.textContent).toContain('Vous recevez les annonces');
+    expect(host.textContent).toContain('Vous recevez les e-mails de Meeshy');
     expect(host.textContent).toContain('Les e-mails de sécurité de votre compte continuent d’arriver.');
+    expect(host.querySelector('button[aria-label="Et les e-mails de sécurité ?"]')).toBeNull();
     expect(script.saved).toEqual([]);
 
-    await click(buttonNamed(host, 'Ne plus recevoir ces e-mails'));
+    await click(buttonNamed(host, 'Désactiver'));
 
     expect(script.saved).toEqual([false]);
     expect(host.textContent).toContain('Vous ne recevez plus');
-    expect(buttonNamed(host, 'Recevoir de nouveau ces e-mails')?.style.minHeight).toBe('52px');
+    expect(buttonNamed(host, 'Réactiver')?.style.minHeight).toBe('52px');
   });
 
   test('le geste se voit avant la réponse', async () => {
@@ -79,7 +80,7 @@ describe('/settings/notifications — l’état, puis un geste', () => {
     const script = scripted([ok(true)], () => new Promise((resolve) => pending.push(resolve)));
     const host = await mount(<EmailNotificationsPage signedIn language="fr" deps={script.deps} />);
 
-    await click(buttonNamed(host, 'Ne plus recevoir ces e-mails'));
+    await click(buttonNamed(host, 'Désactiver'));
     expect(host.textContent).toContain('Vous ne recevez plus');
 
     await act(async () => {
@@ -93,9 +94,9 @@ describe('/settings/notifications — l’état, puis un geste', () => {
     const script = scripted([ok(true)], async () => refused(500));
     const host = await mount(<EmailNotificationsPage signedIn language="fr" deps={script.deps} />);
 
-    await click(buttonNamed(host, 'Ne plus recevoir ces e-mails'));
+    await click(buttonNamed(host, 'Désactiver'));
 
-    expect(host.textContent).toContain('Vous recevez les annonces');
+    expect(host.textContent).toContain('Vous recevez les e-mails de Meeshy');
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('Le changement n’a pas abouti. Réessayez.');
   });
 
