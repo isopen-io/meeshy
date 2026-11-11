@@ -505,7 +505,7 @@ const es = {
   'settings.retry': 'Reintentar',
   'settings.offline.body': 'Sin conexión',
   'settings.offline.question': '¿Qué puedo hacer sin conexión?',
-  'settings.offline.info': 'Tus ajustes siguen visibles; podrás cambiarlos cuando vuelva la red.',
+  'settings.offline.info': 'Tus ajustes siguen visibles; se cambian con la red.',
   'settings.save.error': 'El ajuste no se guardó.',
   'settings.theme.sync_error': 'Tema sin sincronizar',
   'common.cancel': 'Cancelar',

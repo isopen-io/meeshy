@@ -103,7 +103,7 @@ function RowText({
   return (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
       <InfoNoted note={note} inline {...(noteId === undefined ? {} : { noteId })}>
-        <span className="break-words text-body font-medium" style={{ color: SECTION_INK }}>
+        <span className="block break-words text-body font-medium" style={{ color: SECTION_INK }}>
           {label}
         </span>
       </InfoNoted>

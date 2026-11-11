@@ -509,7 +509,7 @@ const pt = {
   'settings.retry': 'Tentar de novo',
   'settings.offline.body': 'Sem conexão',
   'settings.offline.question': 'O que posso fazer sem conexão?',
-  'settings.offline.info': 'Seus ajustes continuam visíveis; você poderá alterá-los quando a rede voltar.',
+  'settings.offline.info': 'Seus ajustes continuam visíveis; mudam com a rede.',
   'settings.save.error': 'O ajuste não foi salvo.',
   'settings.theme.sync_error': 'Tema não sincronizado',
   'common.cancel': 'Cancelar',

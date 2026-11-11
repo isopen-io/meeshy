@@ -26,7 +26,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { e2eeDeviceFields, e2eeDeviceTitle } from '@/lib/view/e2ee-devices';
 import { Link } from '@/routes/route-table';
-import { MoreFields } from '@/routes/settings-security';
+import { MoreFields } from '@/routes/settings-more-fields';
 import { SECURITY_PANEL, SECURITY_PANEL_PARAM } from '@/routes/settings-sections';
 import { sessionsHint } from '@/routes/settings-sessions-hint';
 

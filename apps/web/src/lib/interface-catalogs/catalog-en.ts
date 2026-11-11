@@ -505,7 +505,7 @@ const en = {
   'settings.retry': 'Try again',
   'settings.offline.body': 'Offline',
   'settings.offline.question': 'What can I do offline?',
-  'settings.offline.info': 'Your settings stay readable; you can change them once the network is back.',
+  'settings.offline.info': 'Your settings stay readable; changes wait for the network.',
   'settings.save.error': 'The setting was not saved.',
   'settings.theme.sync_error': 'Theme not synced',
   'common.cancel': 'Cancel',

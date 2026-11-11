@@ -503,7 +503,7 @@ const ar = {
   'settings.retry': 'إعادة المحاولة',
   'settings.offline.body': 'غير متصل',
   'settings.offline.question': 'ماذا أفعل دون اتصال؟',
-  'settings.offline.info': 'تبقى إعداداتك مقروءة، ويمكنك تعديلها عند عودة الشبكة.',
+  'settings.offline.info': 'تبقى إعداداتك مقروءة، وتُعدَّل عند عودة الشبكة.',
   'settings.save.error': 'لم يُحفظ الإعداد.',
   'settings.theme.sync_error': 'المظهر غير متزامن',
   'common.cancel': 'إلغاء',
