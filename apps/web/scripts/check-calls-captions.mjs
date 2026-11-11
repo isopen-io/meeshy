@@ -304,7 +304,7 @@ try {
       check(await vanishes(page, '[data-call-journal-panel]'), `${label} : Échap ferme le journal`);
       check((await page.$('[data-call-screen="connected"]')) !== null, `${label} : sans réduire l'appel`);
 
-      await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+      await page.click('[data-call-screen] button[aria-label="Réduire"]');
       check(await appears(page, '[data-call-pill-bar]'), `${label} : l'appel se réduit`);
       await page.click('[data-call-pill-bar] button >> nth=0');
       check(await appears(page, '[data-call-screen="connected"]'), `${label} : l'appel revient`);

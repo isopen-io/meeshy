@@ -465,9 +465,9 @@ try {
       check((await page.$('[data-call-control-pill="grown"]')) !== null && (await page.$('[data-call-rail]')) === null, `${label} : la pilule grandit et aucun rail ne sort`);
       check((await page.$('[data-call-screen] button[aria-label="Couper le micro"]')) !== null, `${label} : mon micro est ouvert`);
       await page.evaluate(() => window.__meeshyFixtureCallPeer?.muteMe());
-      check(await appears(page, '[data-call-screen] button[aria-label="Activer le micro"]'), `${label} : le pair coupe mon micro`);
+      check(await appears(page, '[data-call-screen] button[aria-label="Réactiver le micro"]'), `${label} : le pair coupe mon micro`);
       check((await page.textContent('[data-call-control-notice="muted-by"]').catch(() => null)) === `${PEER_NAME} a coupé votre micro`, `${label} : « ${PEER_NAME} a coupé votre micro »`);
-      await page.click('[data-call-screen] button[aria-label="Activer le micro"]');
+      await page.click('[data-call-screen] button[aria-label="Réactiver le micro"]');
       check(await appears(page, '[data-call-screen] button[aria-label="Couper le micro"]'), `${label} : je peux le rouvrir`);
 
       await page.click('[data-call-screen] button[aria-label="Raccrocher"]');
