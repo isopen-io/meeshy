@@ -36,7 +36,12 @@ export function ActiveCallView({ call }: { readonly call: ActiveCall }) {
       </Suspense>
     );
   if (reduced && call.display === 'bubble') return null;
-  return <CallScreen call={call} />;
+  /* Ce que l'écran charge à part pour son premier rendu (la réponse d'un appel entrant, #17650) le retient ENTIER : jamais un portrait sans ses boutons. Le son des pairs, monté à côté, n'attend rien. */
+  return (
+    <Suspense fallback={null}>
+      <CallScreen call={call} />
+    </Suspense>
+  );
 }
 
 export function CallOverlay() {

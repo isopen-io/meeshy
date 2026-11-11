@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent, type WheelEvent } from 'react';
 
-import { screenZoomAfterPinch, screenZoomAfterWheel } from '@/lib/calls/call-spotlight';
+import { screenZoomAfterPinch, screenZoomAfterWheel } from '@/lib/calls/call-spotlight-gestures';
 
 /**
  * **ZOOMER UN ÉCRAN PARTAGÉ À LA UNE** (#9098, miroir du `MagnificationGesture`

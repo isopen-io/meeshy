@@ -248,18 +248,19 @@ describe('le menu de modération', () => {
   test('le menu n’est posé que chez qui modère, et pour les seuls pairs qu’il peut modérer', async () => {
     const peers = { 'u-nadia': member('u-nadia', 'Nadia'), 'u-bruno': member('u-bruno', 'Bruno') };
     const { CallGrid } = await import('./call-grid');
+    const { CALL_GRID_KIT } = await import('./call-stage');
     const only = (id: string): CallModeration => ({ canModerate: (userId) => userId === id, mute: () => undefined, remove: () => undefined });
-    const view = mount(<CallGrid members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
+    const view = mount(<CallGrid kit={CALL_GRID_KIT} members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
     await settle(() => import('./call-moderation-menu'));
     expect(view.find('[data-call-moderate="u-bruno"]')).not.toBeNull();
     expect(view.find('[data-call-moderate="u-nadia"]')).toBeNull();
     expect(view.find('[data-call-moderate="u-bruno"]')?.getAttribute('aria-label')).toBe('Options pour Bruno');
     view.done();
-    const spotlight = mount(<CallGrid members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={{ kind: 'member', userId: 'u-bruno' }} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
+    const spotlight = mount(<CallGrid kit={CALL_GRID_KIT} members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={{ kind: 'member', userId: 'u-bruno' }} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
     await settle(() => import('./call-moderation-menu'));
     expect(spotlight.find('[data-call-spotlight] [data-call-moderate="u-bruno"]')).not.toBeNull();
     spotlight.done();
-    const plain = mount(<CallGrid members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} language="fr" />);
+    const plain = mount(<CallGrid kit={CALL_GRID_KIT} members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} language="fr" />);
     expect(plain.find('[data-call-moderate]')).toBeNull();
     plain.done();
   });

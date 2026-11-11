@@ -9,8 +9,12 @@ import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { track, type FakeTrack } from '@/test-support/call-engine-harness';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
+
 import { CallIncomingAnswer } from './call-incoming-answer';
-import { CallScreen } from './call-screen';
+import { CallScreen, loadColdCallViews } from './call-screen';
+
+const colorOf = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
 
 /**
  * DÉCROCHER UN APPEL VIDÉO EN SACHANT CE QUI PART (#16944, vue P17) — ma
@@ -24,6 +28,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  await loadColdCallViews();
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -93,6 +98,7 @@ const answer = (call: ActiveCall, selfPreview: SelfPreviewDeps<MediaStream> = ne
       onAccept={(options) => void accepted.push(options)}
       onDecline={() => void (counts.declined += 1)}
       onDeclineMessage={() => void (counts.messages += 1)}
+      colorOf={colorOf}
     />,
   );
   return { ...view, accepted, counts };
@@ -203,7 +209,7 @@ describe('ma vignette pendant la sonnerie', () => {
   test('décrocher éteint l’aperçu AVANT que le moteur ouvre sa propre caméra : jamais deux ouvertures à la fois', async () => {
     const camera = track('video');
     const seen: string[] = [];
-    const view = mount(<CallIncomingAnswer call={ringing()} language="fr" selfPreview={granted(camera)} onAccept={() => void seen.push(camera.readyState)} onDecline={() => undefined} onDeclineMessage={() => undefined} />);
+    const view = mount(<CallIncomingAnswer call={ringing()} language="fr" selfPreview={granted(camera)} onAccept={() => void seen.push(camera.readyState)} onDecline={() => undefined} onDeclineMessage={() => undefined} colorOf={colorOf} />);
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     expect(view.find('[data-call-incoming-self]')).not.toBeNull();
     view.press('[data-call-incoming-accept]');
