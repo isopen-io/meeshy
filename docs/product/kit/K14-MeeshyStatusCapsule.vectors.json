@@ -1,0 +1,163 @@
+{
+  "kit": "K14",
+  "recipe": {
+    "radius": 22,
+    "maxWidth": 350,
+    "paddingVertical": 10,
+    "paddingHorizontal": 14,
+    "gap": 10,
+    "iconSize": 18,
+    "messageSize": 13,
+    "detailSize": 12,
+    "actionHeight": 36,
+    "actionPaddingHorizontal": 16,
+    "actionGap": 6,
+    "actionGlyphSize": 14,
+    "actionSize": 13,
+    "tapTarget": {
+      "ios": 44,
+      "android": 48,
+      "web": 44
+    },
+    "edgeGap": 14,
+    "sideMargin": 20,
+    "slideOffset": 8,
+    "reducedFadeMs": 150,
+    "dismissThreshold": 24,
+    "messageLines": 2,
+    "messageLinesLargeText": 4,
+    "detailOpacity": 0.85,
+    "actionPressedOpacity": 0.78
+  },
+  "timing": {
+    "automaticMs": 4000,
+    "screenReaderMs": 6000,
+    "silenceMs": 2000
+  },
+  "visible": [
+    {
+      "duration": "automatic",
+      "hasAction": false,
+      "screenReader": false,
+      "ms": 4000
+    },
+    {
+      "duration": "automatic",
+      "hasAction": false,
+      "screenReader": true,
+      "ms": 6000
+    },
+    {
+      "duration": "automatic",
+      "hasAction": true,
+      "screenReader": false,
+      "ms": null
+    },
+    {
+      "duration": "automatic",
+      "hasAction": true,
+      "screenReader": true,
+      "ms": null
+    },
+    {
+      "duration": "persistent",
+      "hasAction": false,
+      "screenReader": false,
+      "ms": null
+    },
+    {
+      "duration": "persistent",
+      "hasAction": true,
+      "screenReader": true,
+      "ms": null
+    },
+    {
+      "duration": "milliseconds",
+      "value": 2500,
+      "hasAction": false,
+      "screenReader": false,
+      "ms": 2500
+    },
+    {
+      "duration": "milliseconds",
+      "value": 2500,
+      "hasAction": false,
+      "screenReader": true,
+      "ms": 6000
+    },
+    {
+      "duration": "milliseconds",
+      "value": 9000,
+      "hasAction": false,
+      "screenReader": true,
+      "ms": 9000
+    },
+    {
+      "duration": "milliseconds",
+      "value": 2500,
+      "hasAction": true,
+      "screenReader": false,
+      "ms": 2500
+    }
+  ],
+  "silence": [
+    {
+      "lastId": null,
+      "id": "limit.text",
+      "elapsedMs": 0,
+      "speaks": true
+    },
+    {
+      "lastId": "limit.text",
+      "id": "limit.text",
+      "elapsedMs": 1999,
+      "speaks": false
+    },
+    {
+      "lastId": "limit.text",
+      "id": "limit.text",
+      "elapsedMs": 2000,
+      "speaks": true
+    },
+    {
+      "lastId": "limit.text",
+      "id": "limit.image",
+      "elapsedMs": 10,
+      "speaks": true
+    }
+  ],
+  "kinds": [
+    {
+      "kind": "info",
+      "haptic": "light",
+      "priority": "normal",
+      "role": "status"
+    },
+    {
+      "kind": "success",
+      "haptic": "success",
+      "priority": "normal",
+      "role": "status"
+    },
+    {
+      "kind": "warning",
+      "haptic": "warning",
+      "priority": "normal",
+      "role": "status"
+    },
+    {
+      "kind": "failure",
+      "haptic": "error",
+      "priority": "high",
+      "role": "alert"
+    }
+  ],
+  "contrast": {
+    "floor": 4.5,
+    "messageDeepDense": 6.12,
+    "messageOnLight": 5.07,
+    "detailDeepDense": 4.97,
+    "actionOnWhite": 15.99,
+    "note": "calculés au pire, sur blanc pur sans flou ; chaque plateforme inscrit sa mesure et reste au-dessus"
+  }
+}
