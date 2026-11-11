@@ -10,6 +10,8 @@ import {
 } from '@/lib/api/email-notifications';
 import type { ApiResult } from '@/lib/api/http';
 import { sessionStore } from '@/lib/api/session';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { InfoNoted } from '@/components/info-hint';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
@@ -128,8 +130,15 @@ function EmailPreference({ language, deps }: { readonly language: InterfaceLangu
       title={title}
       body={
         <>
-          <LinkText>{translate(language, enabled ? 'emailNotifications.on' : 'emailNotifications.off')}</LinkText>
-          <LinkText>{translate(language, 'emailNotifications.security')}</LinkText>
+          <InfoNoted
+            note={{
+              label: translate(language, 'emailNotifications.security.question'),
+              text: translate(language, 'emailNotifications.security'),
+              glyph: SETTINGS_GLYPHS.info,
+            }}
+          >
+            <LinkText>{translate(language, enabled ? 'emailNotifications.on' : 'emailNotifications.off')}</LinkText>
+          </InfoNoted>
           {refused ? <LinkAlert>{translate(language, 'emailNotifications.failed')}</LinkAlert> : null}
         </>
       }

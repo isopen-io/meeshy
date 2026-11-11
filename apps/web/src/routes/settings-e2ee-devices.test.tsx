@@ -115,7 +115,11 @@ describe('ce navigateur', () => {
     const { element } = harness();
     const host = await mount(element);
     await settle();
-    expect(host.querySelector('[data-e2ee-devices-here]')?.textContent).toBe(
+    const here = host.querySelector('[data-e2ee-devices-here]');
+    expect(here?.querySelector('span:not(.sr-only)')?.textContent).toBe('Illisible dans ce navigateur');
+    const note = host.querySelector(`[id="${here?.querySelector('button')?.getAttribute('aria-controls')}"]`);
+    expect(here?.querySelector('button')?.getAttribute('aria-label')).toBe('Où lire mes conversations chiffrées ?');
+    expect(note?.textContent).toBe(
       'Ce navigateur ne lit pas les conversations chiffrées de bout en bout — ouvrez-les dans l’application Meeshy installée.',
     );
   });
@@ -124,7 +128,7 @@ describe('ce navigateur', () => {
     const { element } = harness({}, 'android-shell');
     const host = await mount(element);
     await settle();
-    expect(host.querySelector('[data-e2ee-devices-here]')?.textContent).toContain('Cette application ne lit pas encore');
+    expect(host.querySelector('[data-e2ee-devices-here]')?.textContent).toContain('Illisible dans cette application');
   });
 });
 
@@ -170,7 +174,7 @@ describe('retirer', () => {
     if (retire !== null) await click(retire);
     expect(calls).toEqual([]);
     expect(document.querySelector('[data-confirm-dialog="retire-e2ee-device"]')?.textContent).toContain('iPhone de Awa sera déconnecté');
-    const confirm = confirmButton('Retirer cet appareil');
+    const confirm = confirmButton('Retirer');
     if (confirm !== null) await click(confirm);
     await settle();
     expect(calls).toEqual(['retire:1:4242']);
@@ -184,7 +188,7 @@ describe('retirer', () => {
     await settle();
     const retire = host.querySelector<HTMLButtonElement>('[data-e2ee-device="2"] [data-e2ee-device-retire]');
     if (retire !== null) await click(retire);
-    const confirm = confirmButton('Retirer cet appareil');
+    const confirm = confirmButton('Retirer');
     if (confirm !== null) await click(confirm);
     await settle();
     expect(host.querySelector('[data-e2ee-device="2"]')).not.toBeNull();
@@ -197,7 +201,7 @@ describe('retirer', () => {
     await settle();
     const retire = host.querySelector<HTMLButtonElement>('[data-e2ee-device="2"] [data-e2ee-device-retire]');
     if (retire !== null) await click(retire);
-    const confirm = confirmButton('Retirer cet appareil');
+    const confirm = confirmButton('Retirer');
     if (confirm !== null) await click(confirm);
     await settle();
     expect(host.querySelector('[data-e2ee-devices-announce]')?.textContent).toBe('Appareil retiré');
@@ -243,7 +247,7 @@ describe('une liste confirmée, une génération nommée', () => {
     await settle();
     const retire = host.querySelector<HTMLButtonElement>('[data-e2ee-device="1"] [data-e2ee-device-retire]');
     if (retire !== null) await click(retire);
-    const confirm = confirmButton('Retirer cet appareil');
+    const confirm = confirmButton('Retirer');
     if (confirm !== null) await click(confirm);
     await settle();
     expect(loads.count).toBe(2);

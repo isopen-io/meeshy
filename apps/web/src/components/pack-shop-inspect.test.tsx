@@ -72,7 +72,7 @@ const mount = (adapter: PackShopAdapter<Pack>, packs: readonly Pack[]) => {
   appQueryClient.setQueryData(['test', 'catalogue'], packs);
   return mounter.mount(
     <QueryClientProvider client={appQueryClient}>
-      <PackShop adapter={adapter} language="fr" hint="" />
+      <PackShop adapter={adapter} language="fr" />
     </QueryClientProvider>,
   );
 };

@@ -4,6 +4,7 @@ import type { DeviceTranslationCatalog } from '@/lib/i18n-device-translation-cat
 const esDeviceTranslation = {
   'settings.device_translation': 'Traducir en este dispositivo',
   'settings.device_translation.info': 'Los mensajes se traducen aquí, con un modelo que se descarga una sola vez: unos 110 MB por par de idiomas. Idiomas compatibles: francés, inglés, español, portugués, alemán, italiano y árabe. Los demás idiomas los sigue traduciendo el servidor, en las conversaciones sin cifrado de extremo a extremo. Lo que traduce este dispositivo se comparte con los demás miembros de la conversación, salvo si tienes desactivadas las confirmaciones de lectura.',
+  'settings.device_translation.question': '¿Qué hace la traducción en este dispositivo?',
 } satisfies DeviceTranslationCatalog;
 
 export default esDeviceTranslation;

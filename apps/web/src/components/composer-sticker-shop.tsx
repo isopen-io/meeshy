@@ -28,6 +28,7 @@ import { renderMeeSticker } from '@/lib/mee/render';
 import { isMeeBuiltinPack } from '@/lib/mee/types';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import { stickerPackCoverSrc } from '@/lib/sticker-packs/src';
+import { packShopHint } from '@/components/pack-shop-hint';
 
 /**
  * **LA BOUTIQUE DE STICKERS** (#9141) — le dernier onglet de la feuille.
@@ -158,7 +159,7 @@ export function StickerShop({ language, focusSlug }: { readonly language: Interf
           adapter={stickerShopAdapter(language)}
           language={language}
           focusSlug={focusSlug}
-          hint={translateStickerPacks(language, 'stickerPacks.shop.hint')}
+          hint={packShopHint(language, 'stickerPacks.shop.hint')}
           footer={<SubmissionsFooter language={language} mine={mine} onSubmit={() => setSubmitting(true)} />}
         />
       </Suspense>

@@ -14,6 +14,7 @@ import {
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
 import { GroupedSection, SECTION_BRAND_INK, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import {
   circleNotifyQueryOptions,
   performCircleNotifyEdit,
@@ -63,7 +64,6 @@ function choiceLabel(language: InterfaceLanguage, choice: RelationAudienceChoice
 }
 
 function explanationKey(choice: RelationAudienceChoice): CircleNotifyCatalogKey | null {
-  if (choice === 'NOBODY') return 'circleNotify.explain.NOBODY';
   if (choice === 'COMMUNITY') return 'circleNotify.explain.COMMUNITY';
   if (choice === 'PUBLIC') return 'circleNotify.explain.PUBLIC';
   return null;
@@ -112,20 +112,25 @@ function ActionRow({
   readonly onChoose: (key: CircleNotifyKey, value: RelationAudienceChoice) => void;
 }) {
   const selectId = useId();
-  const explainId = useId();
   const explanation = explanationKey(value);
+  const hint: InfoHint | undefined =
+    explanation === null
+      ? undefined
+      : { label: t(language, 'circleNotify.explain.question'), text: t(language, explanation), glyph: SETTINGS_GLYPHS.info };
+  const state = useInfoHint();
   return (
     <div className="grid gap-1 px-3.5 py-2" style={{ minHeight: 52 }}>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1">
         <label htmlFor={selectId} className="min-w-0 flex-1 text-body" style={{ color: SECTION_INK }}>
           {t(language, `circleNotify.action.${action}` as CircleNotifyCatalogKey)}
         </label>
+        {hint === undefined ? null : <InfoHintButton hint={hint} state={state} />}
         <select
           id={selectId}
           data-circle-key={circleKey}
           value={value}
           disabled={disabled}
-          {...(explanation === null ? {} : { 'aria-describedby': explainId })}
+          {...(hint === undefined ? {} : { 'aria-describedby': state.id })}
           onChange={(event) => {
             const next = RELATION_AUDIENCE_CHOICES.find((choice) => choice === event.currentTarget.value);
             if (next !== undefined && next !== value) onChoose(circleKey, next);
@@ -140,11 +145,7 @@ function ActionRow({
           ))}
         </select>
       </div>
-      {explanation === null ? null : (
-        <p id={explainId} className="text-caption" style={{ color: SECTION_INK_2 }}>
-          {t(language, explanation)}
-        </p>
-      )}
+      {hint === undefined ? null : <InfoHintText hint={hint} state={state} />}
     </div>
   );
 }
@@ -219,10 +220,12 @@ export function CircleNotifySectionView({
 }) {
   if (!useCircleNotifyCatalog(language)) return null;
   return (
-    <GroupedSection id="settings-circle-notify" title={t(language, 'circleNotify.title').toLocaleUpperCase(language)} icon={<Glyph name="users" size={12} />}>
-      <p className="px-3.5 pt-2.5 text-caption" style={{ color: SECTION_INK_2 }}>
-        {t(language, 'circleNotify.intro')}
-      </p>
+    <GroupedSection
+      id="settings-circle-notify"
+      title={t(language, 'circleNotify.title').toLocaleUpperCase(language)}
+      icon={<Glyph name="users" size={12} />}
+      note={{ label: t(language, 'circleNotify.intro.question'), text: t(language, 'circleNotify.intro'), glyph: SETTINGS_GLYPHS.info }}
+    >
       {view.kind === 'loading' ? (
         <p aria-busy="true" className="px-3.5 py-2.5 text-caption" style={{ color: SECTION_INK_2 }}>
           {t(language, 'circleNotify.loading')}

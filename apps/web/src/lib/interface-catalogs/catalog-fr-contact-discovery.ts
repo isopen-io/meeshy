@@ -6,13 +6,15 @@
  * Meeshy (réglage de l'ÉMETTEUR) et sa réception (préférence du DESTINATAIRE).
  */
 const frContactDiscovery = {
-  'settings.privacy.hide_from_search': 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail',
+  'settings.privacy.hide_from_search': 'Masquer mon numéro et mon e-mail',
   'settings.privacy.hide_from_search.info':
     'Vos contacts ne vous retrouveront pas par votre numéro ou votre e-mail, et ne seront pas prévenus de votre arrivée.',
-  'settings.privacy.notify_contacts_on_return': 'Prévenir mes contacts quand je reviens sur Meeshy',
+  'settings.privacy.hide_from_search.question': 'Qui ne me retrouvera plus ?',
+  'settings.privacy.notify_contacts_on_return': 'Annoncer mon retour',
   'settings.privacy.notify_contacts_on_return.info':
     'Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué.',
-  'settings.notif.contact_activity': 'Quand un contact revient sur Meeshy',
+  'settings.privacy.notify_contacts_on_return.question': 'Qui est prévenu de mon retour ?',
+  'settings.notif.contact_activity': 'Retour d’un contact',
 } as const;
 
 export type ContactDiscoveryCatalogSlice = Readonly<Record<keyof typeof frContactDiscovery, string>>;

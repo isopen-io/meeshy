@@ -93,14 +93,10 @@ const rowNote = (language: InterfaceLanguage, keys: RowNoteKeys | undefined): In
 /** `note` ne se pose que sur une rangée qui n'est PAS un lien : le (i) est un bouton (#17587). */
 function RowText({
   label,
-  caption,
-  captionId,
   note,
   noteId,
 }: {
   readonly label: string;
-  readonly caption?: string;
-  readonly captionId?: string;
   readonly note?: InfoHint;
   readonly noteId?: string;
 }) {
@@ -111,11 +107,6 @@ function RowText({
           {label}
         </span>
       </InfoNoted>
-      {caption === undefined ? null : (
-        <span id={captionId} className="text-caption" style={{ color: SECTION_INK_2 }}>
-          {caption}
-        </span>
-      )}
     </span>
   );
 }
@@ -240,7 +231,7 @@ export function DataSection({
 function LocalToggleRow({
   setting,
   name,
-  caption,
+  note,
   icon,
   tint,
   enabled,
@@ -249,26 +240,26 @@ function LocalToggleRow({
 }: {
   readonly setting: string;
   readonly name: string;
-  readonly caption: string;
+  readonly note: InfoHint;
   readonly icon: IconSpec;
   readonly tint?: string;
   readonly enabled: boolean;
   readonly disabled?: boolean;
   readonly onToggle: (enabled: boolean) => void;
 }) {
-  const captionId = useId();
+  const noteId = useId();
   return (
     <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
       <RowIcon {...(tint === undefined ? {} : { tint })}>
         <IconOf icon={icon} size={15} />
       </RowIcon>
-      <RowText label={name} caption={caption} captionId={captionId} />
+      <RowText label={name} note={note} noteId={noteId} />
       <button
         type="button"
         role="switch"
         aria-checked={enabled}
         aria-label={name}
-        aria-describedby={captionId}
+        aria-describedby={noteId}
         data-setting={setting}
         {...(disabled ? { disabled: true } : {})}
         onClick={() => onToggle(!enabled)}
@@ -322,7 +313,11 @@ function DeviceTranslationRow({ language, toggle }: { readonly language: Interfa
     <LocalToggleRow
       setting="deviceTranslation"
       name={translateDeviceTranslation(language, 'settings.device_translation')}
-      caption={translateDeviceTranslation(language, 'settings.device_translation.info')}
+      note={{
+        label: translateDeviceTranslation(language, 'settings.device_translation.question'),
+        text: translateDeviceTranslation(language, 'settings.device_translation.info'),
+        glyph: SETTINGS_GLYPHS.info,
+      }}
       icon={{ set: 'socle', name: 'translate' }}
       enabled={toggle.enabled}
       disabled={!toggle.ready}
@@ -342,7 +337,6 @@ export type BooleanPreference = Exclude<keyof AppPreferences, 'theme' | 'allowAn
 type ToggleSpec = {
   readonly key: BooleanPreference;
   readonly label: SettingsKey;
-  readonly caption?: SettingsKey;
   readonly note?: RowNoteKeys;
   readonly icon: IconSpec;
   readonly tint: string;
@@ -362,23 +356,21 @@ function ToggleRow({
   readonly disabled: boolean;
   readonly onToggle: (key: BooleanPreference, value: boolean) => void;
 }) {
-  const captionId = useId();
   const noteId = useId();
   const label = translate(language, spec.label);
   const note = rowNote(language, spec.note);
-  const describedBy = [spec.caption === undefined ? undefined : captionId, note === undefined ? undefined : noteId].filter((id) => id !== undefined).join(' ');
   return (
     <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
       <RowIcon tint={spec.tint}>
         <IconOf icon={spec.icon} size={15} />
       </RowIcon>
-      <RowText label={label} {...(spec.caption === undefined ? {} : { caption: translate(language, spec.caption), captionId })} {...(note === undefined ? {} : { note, noteId })} />
+      <RowText label={label} {...(note === undefined ? {} : { note, noteId })} />
       <button
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
-        {...(describedBy === '' ? {} : { 'aria-describedby': describedBy })}
+        {...(note === undefined ? {} : { 'aria-describedby': noteId })}
         data-setting={spec.key}
         disabled={disabled}
         onClick={() => onToggle(spec.key, !checked)}
@@ -450,7 +442,7 @@ const PRIVACY_TOGGLES = [
   {
     key: 'showOnlineStatus',
     label: 'settings.privacy.online_status',
-    caption: 'settings.privacy.online_status.info',
+    note: { question: 'settings.privacy.online_status.question', text: 'settings.privacy.online_status.info' },
     icon: { set: 'ecran', name: 'circle' },
     tint: 'var(--color-success)',
   },
@@ -458,7 +450,7 @@ const PRIVACY_TOGGLES = [
   {
     key: 'showReadReceipts',
     label: 'settings.privacy.read_receipts',
-    caption: 'settings.privacy.read_receipts.info',
+    note: { question: 'settings.privacy.read_receipts.question', text: 'settings.privacy.read_receipts.info' },
     icon: { set: 'socle', name: 'checks' },
     tint: 'var(--color-ios-brand)',
   },
@@ -466,21 +458,21 @@ const PRIVACY_TOGGLES = [
   {
     key: 'hideProfileFromSearch',
     label: 'settings.privacy.hide_from_search',
-    caption: 'settings.privacy.hide_from_search.info',
+    note: { question: 'settings.privacy.hide_from_search.question', text: 'settings.privacy.hide_from_search.info' },
     icon: { set: 'ecran', name: 'shieldCheck' },
     tint: 'var(--ios-indigo-500)',
   },
   {
     key: 'acceptCallsFromNonContacts',
     label: 'settings.privacy.calls_non_contacts',
-    caption: 'settings.privacy.calls_non_contacts.info',
+    note: { question: 'settings.privacy.calls_non_contacts.question', text: 'settings.privacy.calls_non_contacts.info' },
     icon: { set: 'socle', name: 'phone' },
     tint: 'var(--color-error)',
   },
   {
     key: 'notifyContactsOnReturn',
     label: 'settings.privacy.notify_contacts_on_return',
-    caption: 'settings.privacy.notify_contacts_on_return.info',
+    note: { question: 'settings.privacy.notify_contacts_on_return.question', text: 'settings.privacy.notify_contacts_on_return.info' },
     icon: { set: 'socle', name: 'users' },
     tint: 'var(--color-success)',
   },
@@ -837,14 +829,15 @@ export function LogoutButton({ language, busy, onPress }: { readonly language: I
 }
 
 export function SettingsOfflineNotice({ language }: { readonly language: InterfaceLanguage }) {
+  const note = rowNote(language, { question: 'settings.offline.question', text: 'settings.offline.info' });
   return (
-    <div role="status" data-settings-offline className="flex items-start gap-3 rounded-card px-3.5 py-3" style={SECTION_CARD_STYLE}>
-      <span aria-hidden="true" className="pt-0.5" style={{ color: 'var(--color-warning)' }}>
+    <div role="status" data-settings-offline className="flex items-center gap-3 rounded-card px-3.5 py-1" style={SECTION_CARD_STYLE}>
+      <span aria-hidden="true" style={{ color: 'var(--color-warning)' }}>
         <Glyph name="warningCircle" size={18} />
       </span>
-      <span className="text-caption" style={{ color: SECTION_INK }}>
-        {translate(language, 'settings.offline.body')}
-      </span>
+      <InfoNoted note={note} className="text-caption">
+        <span style={{ color: SECTION_INK }}>{translate(language, 'settings.offline.body')}</span>
+      </InfoNoted>
     </div>
   );
 }

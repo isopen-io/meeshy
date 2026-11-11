@@ -81,7 +81,7 @@ const familyButton = (host: HTMLElement, family: string) => host.querySelector<H
 describe('« Qui est prévenu » — trois familles, le défaut affiché', () => {
   test('sans configuration : Proche, Proche, Sang, repliées', async () => {
     const host = await mount(section().element);
-    expect(host.querySelector('h2')?.textContent).toBe('QUI EST PRÉVENU');
+    expect(host.querySelector('h2')?.textContent).toBe('PRÉVENIR');
     expect(familyButton(host, 'publication')?.textContent).toContain('Mes publications');
     expect(familyButton(host, 'publication')?.textContent).toContain('Proche');
     expect(familyButton(host, 'onMyContent')?.textContent).toContain('Proche');
@@ -150,6 +150,10 @@ describe('« Qui est prévenu » — se déplier par action, choisir', () => {
     expect(explanation(share)).toContain('membres des communautés');
     expect(explanation(quote)).toContain('aucun inconnu');
     expect(host.querySelector<HTMLSelectElement>('select[data-circle-key="circleOnMyContentComment"]')?.hasAttribute('aria-describedby')).toBe(false);
+    /* L'explication est derrière un (i) nommé par sa question — un par cran qui en a une, jamais pour Personne. */
+    const panel = host.querySelector(`#${button?.getAttribute('aria-controls') ?? 'absent'}`);
+    expect(panel?.querySelectorAll('button[aria-label="Qui est prévenu avec ce choix ?"]')).toHaveLength(2);
+    expect(explanation(share)).not.toBe('');
   });
 
   test('hors ligne, les sélecteurs ne s’offrent pas', async () => {

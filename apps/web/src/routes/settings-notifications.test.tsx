@@ -63,8 +63,13 @@ describe('/settings/notifications — l’état, puis un geste', () => {
     const host = await mount(<EmailNotificationsPage signedIn language="fr" deps={script.deps} />);
 
     expect(host.querySelector('h1')?.textContent).toBe('E-mails de Meeshy');
-    expect(host.textContent).toContain('Vous recevez les annonces');
-    expect(host.textContent).toContain('Les e-mails de sécurité de votre compte continuent d’arriver.');
+    expect(host.textContent).toContain('Vous recevez les e-mails de Meeshy');
+    /* La précision sur les e-mails de sécurité est derrière un (i) : lue, jamais dispersée à l'écran. */
+    const hint = host.querySelector<HTMLButtonElement>('button[aria-label="Et les e-mails de sécurité ?"]');
+    expect(hint?.getAttribute('aria-expanded')).toBe('false');
+    const note = host.querySelector(`[id="${hint?.getAttribute('aria-controls')}"]`);
+    expect(note?.textContent).toBe('Les e-mails de sécurité de votre compte continuent d’arriver.');
+    expect(note?.className).toContain('sr-only');
     expect(script.saved).toEqual([]);
 
     await click(buttonNamed(host, 'Ne plus recevoir ces e-mails'));
@@ -95,7 +100,7 @@ describe('/settings/notifications — l’état, puis un geste', () => {
 
     await click(buttonNamed(host, 'Ne plus recevoir ces e-mails'));
 
-    expect(host.textContent).toContain('Vous recevez les annonces');
+    expect(host.textContent).toContain('Vous recevez les e-mails de Meeshy');
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('Le changement n’a pas abouti. Réessayez.');
   });
 

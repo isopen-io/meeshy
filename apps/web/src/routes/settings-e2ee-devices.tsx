@@ -3,9 +3,9 @@ import { useEffect, useState } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { Glyph, GlyphSvg } from '@/components/glyph';
-import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
-import { GroupedSection, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { Glyph } from '@/components/glyph';
+import { SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { InfoHintButton, InfoHintScope, InfoHintText, InfoNoted, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { securityFailureOf, type SecurityFailure } from '@/lib/api/account-security';
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
@@ -27,6 +27,7 @@ import { useOnline } from '@/lib/net/online';
 import { e2eeDeviceFields, e2eeDeviceTitle } from '@/lib/view/e2ee-devices';
 import { Link } from '@/routes/route-table';
 import { SECURITY_PANEL, SECURITY_PANEL_PARAM } from '@/routes/settings-sections';
+import { sessionsHint } from '@/routes/settings-sessions-hint';
 
 /**
  * **RÉGLAGES › SÉCURITÉ › MES APPAREILS CHIFFRÉS** (#13013) — jumelle web et
@@ -152,63 +153,49 @@ export function SettingsE2eeDevicesScreen({
         </h1>
       </header>
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
-        <div className="mx-auto grid max-w-xl gap-6 pb-24" style={{ paddingTop: 8 }}>
-          {online ? null : (
-            <p role="status" data-e2ee-devices-offline className="rounded-card px-3.5 py-3 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
-              {t('e2eeDevices.offline')}
-            </p>
-          )}
-          <p
-            data-e2ee-devices-here
-            className="flex items-start gap-2 rounded-card px-3.5 py-3 text-caption"
-            style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}
-          >
-            {t(host === 'android-shell' ? 'e2eeDevices.here.shell' : 'e2eeDevices.here.browser')}
-          </p>
-          <GroupedSection
-            id="e2ee-devices-title"
-            title={t('e2eeDevices.section').toLocaleUpperCase(language)}
-            icon={<GlyphSvg glyph={SETTINGS_GLYPHS.shieldCheck} size={12} />}
-            card={false}
-          >
-            <p className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
-              {t('e2eeDevices.intro')}
-            </p>
-            {devices === undefined ? (
-              failure === null ? (
-                <DevicesSkeleton label={t('e2eeDevices.loading')} />
-              ) : (
-                <DevicesError t={t} failure={failure} onRetry={() => void query.refetch()} />
-              )
-            ) : devices.length === 0 ? (
-              <div data-e2ee-devices-empty className="grid gap-1 rounded-card p-4 text-center" style={SECTION_CARD_STYLE}>
-                <span className="text-body font-semibold" style={{ color: SECTION_INK }}>
-                  {t('e2eeDevices.empty.title')}
-                </span>
-                <span className="text-caption" style={{ color: SECTION_INK_2 }}>
-                  {t('e2eeDevices.empty.body')}
-                </span>
+        <InfoHintScope>
+          <div className="mx-auto grid max-w-xl gap-4 pb-24" style={{ paddingTop: 8 }}>
+            {online ? null : (
+              <div role="status" data-e2ee-devices-offline className="flex items-center rounded-card px-3.5 py-1 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
+                <InfoNoted note={sessionsHint(t, 'sessions.offline.question', 'e2eeDevices.offline.info')}>{t('e2eeDevices.offline')}</InfoNoted>
               </div>
-            ) : (
-              <ul className="grid gap-2" aria-labelledby="e2ee-devices-title">
-                {devices.map((device) => (
-                  <DeviceCard
-                    key={device.deviceId}
-                    device={device}
-                    language={language}
-                    t={t}
-                    now={now()}
-                    disabled={!online || !confirmed}
-                    onRetire={() => setPending(device)}
-                  />
-                ))}
-              </ul>
             )}
-            <p className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
-              {t('e2eeDevices.approval')}
-            </p>
-          </GroupedSection>
-        </div>
+            <div data-e2ee-devices-here className="flex items-center rounded-card px-3.5 py-1 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
+              <InfoNoted note={sessionsHint(t, 'e2eeDevices.here.question', host === 'android-shell' ? 'e2eeDevices.here.shell.info' : 'e2eeDevices.here.browser.info')}>
+                {t(host === 'android-shell' ? 'e2eeDevices.here.shell' : 'e2eeDevices.here.browser')}
+              </InfoNoted>
+            </div>
+            <section aria-label={t('e2eeDevices.title')} className="grid gap-2">
+              <ExplainedBy note={sessionsHint(t, 'sessions.intro.question', 'e2eeDevices.intro')} />
+              {devices === undefined ? (
+                failure === null ? (
+                  <DevicesSkeleton label={t('e2eeDevices.loading')} />
+                ) : (
+                  <DevicesError t={t} failure={failure} onRetry={() => void query.refetch()} />
+                )
+              ) : devices.length === 0 ? (
+                <div data-e2ee-devices-empty className="flex items-center justify-center rounded-card p-2 text-body font-semibold" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
+                  <InfoNoted note={sessionsHint(t, 'e2eeDevices.empty.question', 'e2eeDevices.empty.body')}>{t('e2eeDevices.empty.title')}</InfoNoted>
+                </div>
+              ) : (
+                <ul className="grid gap-2">
+                  {devices.map((device) => (
+                    <DeviceCard
+                      key={device.deviceId}
+                      device={device}
+                      language={language}
+                      t={t}
+                      now={now()}
+                      disabled={!online || !confirmed}
+                      onRetire={() => setPending(device)}
+                    />
+                  ))}
+                </ul>
+              )}
+              <ExplainedBy note={sessionsHint(t, 'e2eeDevices.approval.question', 'e2eeDevices.approval')} />
+            </section>
+          </div>
+        </InfoHintScope>
       </main>
       {pending === null ? null : (
         <ConfirmDialog
@@ -231,6 +218,19 @@ export function SettingsE2eeDevicesScreen({
       >
         {announce}
       </p>
+    </div>
+  );
+}
+
+/** Un (i) posé seul, qui dit sa question : l'explication reste lue repliée. */
+function ExplainedBy({ note }: { readonly note: InfoHint }) {
+  const state = useInfoHint();
+  return (
+    <div className="grid ps-1">
+      <span>
+        <InfoHintButton hint={note} state={state} showsLabel />
+      </span>
+      <InfoHintText hint={note} state={state} />
     </div>
   );
 }

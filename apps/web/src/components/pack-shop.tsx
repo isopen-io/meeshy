@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { ApiError } from '@/lib/api/client';
 import type { ApiResult } from '@/lib/api/http';
 import { createPackGestureGuard, newPurchaseRequestId } from '@/lib/api/packs';
@@ -115,6 +116,18 @@ const SKELETON_ROWS = [0, 1, 2] as const;
 const isRetryable = (failure: { readonly status: number; readonly code?: string }): boolean =>
   failure.status === 0 || failure.status >= 500 || failure.code === 'TIMEOUT';
 
+function ShopHint({ hint }: { readonly hint: InfoHint }) {
+  const state = useInfoHint();
+  return (
+    <div className="flex flex-col">
+      <span className="self-end">
+        <InfoHintButton hint={hint} state={state} />
+      </span>
+      <InfoHintText hint={hint} state={state} />
+    </div>
+  );
+}
+
 export function PackShop<P extends ShopPack>({
   adapter,
   language,
@@ -125,7 +138,8 @@ export function PackShop<P extends ShopPack>({
 }: {
   readonly adapter: PackShopAdapter<P>;
   readonly language: InterfaceLanguage;
-  readonly hint: string;
+  /** L'explication de la boutique, derrière un (i) nommé par sa question (#17594). */
+  readonly hint?: InfoHint;
   /** Ce que dit une boutique sans pack — un ancien serveur compris. */
   readonly empty?: string;
   readonly footer?: ReactNode;
@@ -264,9 +278,7 @@ export function PackShop<P extends ShopPack>({
 
   return (
     <div data-pack-shop={adapter.domain} className="flex flex-col gap-4">
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {hint}
-      </p>
+      {hint === undefined ? null : <ShopHint hint={hint} />}
       <p className="text-caption empty:hidden" role="status" aria-live="polite" style={{ color: kept ? 'var(--color-ios-ink-2)' : 'var(--ios-error)' }}>
         {notice}
       </p>

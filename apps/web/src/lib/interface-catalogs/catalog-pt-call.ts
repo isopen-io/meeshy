@@ -45,6 +45,7 @@ const ptCall = {
   'call.ended.refusedNonContacts': 'Esta pessoa só aceita chamadas dos seus contatos',
   'settings.privacy.calls_non_contacts': 'Chamadas de não contatos',
   'settings.privacy.calls_non_contacts.info': 'Desativado, só seus amigos podem fazer você tocar. Os outros veem que você só aceita chamadas dos seus contatos.',
+  'settings.privacy.calls_non_contacts.question': 'Quem pode me chamar?',
   'call.ended.permission': 'Permita o microfone para ligar',
   'call.retry': 'Tentar novamente',
   'call.close': 'Fechar',

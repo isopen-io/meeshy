@@ -4,6 +4,7 @@ import type { DeviceTranslationCatalog } from '@/lib/i18n-device-translation-cat
 const deDeviceTranslation = {
   'settings.device_translation': 'Auf diesem Gerät übersetzen',
   'settings.device_translation.info': 'Nachrichten werden hier übersetzt, mit einem Modell, das nur einmal geladen wird – etwa 110 MB pro Sprachpaar. Unterstützte Sprachen: Französisch, Englisch, Spanisch, Portugiesisch, Deutsch, Italienisch und Arabisch. Andere Sprachen übersetzt weiterhin der Server, in Unterhaltungen ohne Ende-zu-Ende-Verschlüsselung. Was dieses Gerät übersetzt, wird mit den anderen Mitgliedern der Unterhaltung geteilt – außer bei ausgeschalteten Lesebestätigungen.',
+  'settings.device_translation.question': 'Was macht die Übersetzung auf diesem Gerät?',
 } satisfies DeviceTranslationCatalog;
 
 export default deDeviceTranslation;

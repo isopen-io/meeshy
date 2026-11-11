@@ -45,6 +45,7 @@ const deCall = {
   'call.ended.refusedNonContacts': 'Diese Person nimmt nur Anrufe von ihren Kontakten an',
   'settings.privacy.calls_non_contacts': 'Anrufe von Nicht-Kontakten',
   'settings.privacy.calls_non_contacts.info': 'Deaktiviert können nur deine Freunde dich anrufen. Andere sehen, dass du nur Anrufe von deinen Kontakten annimmst.',
+  'settings.privacy.calls_non_contacts.question': 'Wer darf mich anrufen?',
   'call.ended.permission': 'Erlaube das Mikrofon, um anzurufen',
   'call.retry': 'Erneut versuchen',
   'call.close': 'Schließen',

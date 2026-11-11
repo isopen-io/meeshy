@@ -175,7 +175,7 @@ describe('la confidentialité — les bascules que la passerelle obéit', () => 
   /* #8105 — la passerelle applique `hideProfileFromSearch` à toutes les
      recherches par identifiant et à l'annonce « X a rejoint Meeshy » (#8104,
      #8112) : la bascule a un effet, elle se montre. */
-  const DISCRETION = 'Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail';
+  const DISCRETION = 'Masquer mon numéro et mon e-mail';
 
   test('la discrétion de la recherche par identifiant se bascule, et écrit SA clé', () => {
     const edits: Array<readonly [string, boolean]> = [];
@@ -225,7 +225,7 @@ describe('la confidentialité — les bascules que la passerelle obéit', () => 
 
   /* #8285 — la passerelle ne prévient les contacts du retour de X que si ce
      réglage est ouvert (défaut : ouvert), et jamais si sa présence est masquée. */
-  const RETURN = 'Prévenir mes contacts quand je reviens sur Meeshy';
+  const RETURN = 'Annoncer mon retour';
 
   test('« prévenir mes contacts quand je reviens » se bascule, écrit SA clé et dit ce qu’elle montre', () => {
     const host = dom(
@@ -330,8 +330,8 @@ describe('les packs et téléchargements (#10149)', () => {
     const host = dom(<PacksSection language="fr" />);
     const row = host.querySelector<HTMLAnchorElement>('[data-settings-packs]');
     expect(row?.getAttribute('href')).toBe('/settings?volet=packs');
-    expect(row?.textContent).toContain('Boutique des stickers et des cadres');
-    expect(host.textContent).toContain('PACKS ET TÉLÉCHARGEMENTS');
+    expect(row?.textContent).toBe('Boutique');
+    expect(host.textContent).toContain('PACKS');
   });
 });
 
@@ -347,7 +347,7 @@ describe('le téléchargement automatique des médias (#6333)', () => {
   test('la section Données porte une politique par type, images puis vidéos, aux défauts d’iOS', () => {
     const host = dom(<DataSection language="fr" />);
     const row = host.querySelector('[data-settings-media-download]');
-    expect(row?.textContent).toContain('Téléchargement automatique des médias');
+    expect(row?.textContent).toContain('Téléchargement auto');
     expect(row?.textContent).toContain('Sous 100 Ko');
     const images = host.querySelector<HTMLSelectElement>('[data-media-download="image"]');
     const videos = host.querySelector<HTMLSelectElement>('[data-media-download="video"]');
@@ -465,13 +465,13 @@ describe('l’apparence', () => {
 describe('les notifications', () => {
   test('les notifications poussées et leur son, dans leur état réel', () => {
     const host = dom(<NotificationsSection language="fr" view={ready({ soundEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
-    expect(switchNamed(host, 'Notifications')?.getAttribute('aria-checked')).toBe('true');
+    expect(switchNamed(host, 'Push')?.getAttribute('aria-checked')).toBe('true');
     expect(switchNamed(host, 'Sons')?.getAttribute('aria-checked')).toBe('false');
   });
 
   /* #8285 — la passerelle ne pousse « X était sur Meeshy récemment » qu'à
      qui garde cette préférence ouverte (défaut : ouverte). */
-  const CONTACT_BACK = 'Quand un contact revient sur Meeshy';
+  const CONTACT_BACK = 'Retour d’un contact';
 
   test('« quand un contact revient » se bascule et écrit SA clé', () => {
     const host = dom(

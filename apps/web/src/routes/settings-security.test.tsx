@@ -172,7 +172,7 @@ describe('fermer', () => {
     expect(calls).toEqual([]);
     const dialog = document.querySelector('[data-confirm-dialog="revoke-session"]');
     expect(dialog?.textContent).toContain('Pixel 7');
-    const confirm = [...(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => button.textContent === 'Fermer cette session') ?? null;
+    const confirm = [...(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => button.textContent === 'Fermer') ?? null;
     if (confirm !== null) await click(confirm);
     await settle();
     expect(calls).toEqual(['revoke:autre']);
@@ -186,7 +186,7 @@ describe('fermer', () => {
     await settle();
     const revoke = host.querySelector<HTMLButtonElement>('[data-session="autre"] [data-session-revoke]');
     if (revoke !== null) await click(revoke);
-    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[data-confirm-dialog] button')].find((button) => button.textContent === 'Fermer cette session') ?? null;
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[data-confirm-dialog] button')].find((button) => button.textContent === 'Fermer') ?? null;
     if (confirm !== null) await click(confirm);
     await settle();
     expect(host.querySelector('[data-session="autre"]')).not.toBeNull();
@@ -199,7 +199,7 @@ describe('fermer', () => {
     await settle();
     const others = host.querySelector<HTMLButtonElement>('[data-sessions-revoke-others]');
     if (others !== null) await click(others);
-    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[data-confirm-dialog] button')].find((button) => button.textContent === 'Déconnecter les autres appareils') ?? null;
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[data-confirm-dialog] button')].find((button) => button.textContent === 'Fermer les autres') ?? null;
     if (confirm !== null) await click(confirm);
     await settle();
     expect(calls).toEqual(['others']);

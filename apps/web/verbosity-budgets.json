@@ -301,8 +301,12 @@
       "firstScreen": 27
     },
     "settings": {
-      "total": 150,
-      "firstScreen": 90
+      "total": 131,
+      "firstScreen": 63
+    },
+    "settings-appareils-chiffres": {
+      "total": 59,
+      "firstScreen": 59
     },
     "settings-data-export": {
       "total": 16,
@@ -311,6 +315,14 @@
     "settings-notifications": {
       "total": 16,
       "firstScreen": 16
+    },
+    "settings-packs": {
+      "total": 122,
+      "firstScreen": 122
+    },
+    "settings-securite": {
+      "total": 46,
+      "firstScreen": 46
     },
     "settings-verify-email-change": {
       "total": 25,

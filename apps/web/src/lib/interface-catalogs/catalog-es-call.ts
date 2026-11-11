@@ -45,6 +45,7 @@ const esCall = {
   'call.ended.refusedNonContacts': 'Esta persona solo acepta llamadas de sus contactos',
   'settings.privacy.calls_non_contacts': 'Llamadas de no contactos',
   'settings.privacy.calls_non_contacts.info': 'Desactivado, solo tus amigos pueden hacerte sonar. Los demás ven que solo aceptas llamadas de tus contactos.',
+  'settings.privacy.calls_non_contacts.question': '¿Quién puede llamarme?',
   'call.ended.permission': 'Permite el micrófono para llamar',
   'call.retry': 'Reintentar',
   'call.close': 'Cerrar',

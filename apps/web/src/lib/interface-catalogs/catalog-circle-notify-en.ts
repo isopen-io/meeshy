@@ -6,11 +6,12 @@
 import type { CircleNotifyCatalog } from '../i18n-circle-notify-catalog';
 
 const en = {
-  'circleNotify.title': 'Who gets notified',
+  'circleNotify.title': 'Notify',
   'circleNotify.intro': 'Choose, action by action, which circle of your people receives a notification.',
+  'circleNotify.intro.question': 'Who gets these notifications?',
   'circleNotify.family.publication': 'My publications',
-  'circleNotify.family.onMyContent': 'Others’ activity on my content',
-  'circleNotify.family.elsewhere': 'My activity elsewhere',
+  'circleNotify.family.onMyContent': 'On my content',
+  'circleNotify.family.elsewhere': 'Elsewhere',
   'circleNotify.summary.mixed': 'Depends on the action',
   'circleNotify.action.post': 'Post',
   'circleNotify.action.reel': 'Reel',
@@ -24,7 +25,7 @@ const en = {
   'circleNotify.action.reference': 'Reference',
   'circleNotify.action.mention': 'Mention',
   'circleNotify.choice.NOBODY': 'Nobody',
-  'circleNotify.explain.NOBODY': 'No one around you is notified.',
+  'circleNotify.explain.question': 'Who is notified with this choice?',
   'circleNotify.explain.COMMUNITY': 'All your connections, from Blood to Acquaintance, and members of the communities you share.',
   'circleNotify.explain.PUBLIC': 'The same people as Community: Meeshy has no followers, so no stranger is notified.',
   'circleNotify.loading': 'Loading…',

@@ -72,7 +72,12 @@ const noteOf = (host: ParentNode, button: HTMLButtonElement): HTMLElement => {
   return element;
 };
 
-const text = (host: ParentNode): string => host.textContent ?? '';
+/** Ce qu'on VOIT : les notes repliées (`sr-only`) sont lues, pas vues. */
+const text = (host: HTMLElement): string => {
+  const copy = host.cloneNode(true) as HTMLElement;
+  for (const hidden of copy.querySelectorAll('.sr-only')) hidden.remove();
+  return copy.textContent ?? '';
+};
 
 describe('la confidentialité se lit en libellés', () => {
   test('chaque explication est derrière un (i) nommé par sa question, lue repliée', async () => {
