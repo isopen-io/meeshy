@@ -578,7 +578,6 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         selfVideo={() => myPreview.current}
         others={{ ...call, Portrait, colorOf: speakerColor }}
         captions={call.captions}
-        quitGlyph={closeGlyph}
         onExit={exitMode}
       />
     ) : chrome.mode === 'montage' ? (
