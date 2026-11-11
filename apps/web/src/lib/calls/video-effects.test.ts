@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { blurCapable, blurOffered, cameraBlur, colorPipelineSupported, effectsFilter, effectsOffered, effectsUsedOf, FACE_EFFECTS, frameSettings, needsFramePipeline, needsFrames, NO_EFFECTS, segmentationSupported, setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type VideoEffects } from './video-effects';
+import { blurCapable, blurOffered, cameraBlur, colorPipelineSupported, effectsFilter, effectsOffered, effectsUsedOf, FACE_EFFECTS, frameSettings, needsFramePipeline, needsFrames, NO_EFFECTS, segmentationSupported, setVideoEffects, VIDEO_PRESET_CATALOG, VIDEO_PRESETS, videoEffectsStore, type VideoEffects } from './video-effects';
 
 /**
  * LES EFFETS DE MA VIDÉO (#8442) — les règles, sans DOM : ce qu'un préréglage
@@ -11,8 +11,9 @@ import { blurCapable, blurOffered, cameraBlur, colorPipelineSupported, effectsFi
 const effects = (overrides: Partial<VideoEffects> = {}): VideoEffects => ({ ...NO_EFFECTS, ...overrides });
 
 describe('les préréglages', () => {
-  test('cinq préréglages, dans l’ordre d’iOS : naturel, chaud, froid, vif, doux', () => {
-    expect(VIDEO_PRESETS).toEqual(['natural', 'warm', 'cool', 'vivid', 'muted']);
+  test('les huit ambiances d’iOS (#17000) sont proposées ; les quatre teintes d’avant restent lisibles', () => {
+    expect(VIDEO_PRESET_CATALOG).toEqual(['natural', 'golden', 'film', 'softNight', 'bright', 'velvet', 'sky', 'monochrome']);
+    expect(VIDEO_PRESETS).toEqual(['natural', 'warm', 'cool', 'vivid', 'muted', 'golden', 'film', 'softNight', 'bright', 'velvet', 'sky', 'monochrome']);
   });
 
   test('naturel, luminosité neutre : aucun filtre, aucun traitement', () => {
@@ -24,6 +25,12 @@ describe('les préréglages', () => {
     const filters = VIDEO_PRESETS.filter((preset) => preset !== 'natural').map((preset) => effectsFilter(effects({ preset })));
     expect(filters.every((filter) => filter !== 'none')).toBe(true);
     expect(new Set(filters).size).toBe(filters.length);
+  });
+
+  test('chacune des huit ambiances a son filtre ; le noir et blanc ôte la couleur', () => {
+    const filters = VIDEO_PRESET_CATALOG.filter((preset) => preset !== 'natural').map((preset) => effectsFilter(effects({ preset })));
+    expect(filters).toHaveLength(7);
+    expect(effectsFilter(effects({ preset: 'monochrome' }))).toContain('grayscale(1)');
   });
 
   test('la luminosité s’ajoute au préréglage, et se borne à ±50 %', () => {
