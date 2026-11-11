@@ -65,9 +65,11 @@ internal fun groupStageShown(state: CallUiState, mesh: GroupCallMeshUi): Boolean
 
 /**
  * La scène d'un appel de groupe (iOS `GroupCallStageView`), posée ENTRE l'en-tête et la pilule. Grille par défaut :
- * ma vignette d'abord, puis les membres dans l'ordre d'arrivée — la grille ne se réagence jamais. Toucher une vignette
- * la met à la une avec la pellicule des autres ([GroupCallSpotlight]) ; un partage d'écran d'un membre y monte seul ;
- * « Revenir à la grille » rend la grille. Le choix reste LOCAL, jamais partagé.
+ * les membres dans l'ordre d'arrivée, puis MOI en dernier (P11.3) — la grille ne se réagence jamais, même quand quelqu'un
+ * parle. Toucher une vignette la met à la une avec la pellicule des autres ([GroupCallSpotlight], ma vignette comprise,
+ * toujours en queue) ; un partage d'écran d'un membre y monte seul ; « Revenir à la grille » rend la grille. Le choix reste
+ * LOCAL, jamais partagé. D'une disposition à l'autre chaque vignette garde son identité (P14.10) : elle change de place
+ * par un mouvement de transformation et d'opacité, sans que sa vidéo soit recréée.
  */
 @Composable
 internal fun CallGroupStage(
@@ -111,14 +113,7 @@ internal fun CallGroupStage(
         choice = next
     }
     val scope = CallGroupStageScope(
-        trackOf = { tile ->
-            when {
-                !tile.showsVideo -> null
-                tile.isLocal -> localTrack
-                tile.id == mesh.primaryUserId && !mesh.isPrimaryVacated -> primaryTrack
-                else -> mesh.videoTracks[tile.id]
-            }
-        },
+        trackOf = stageTrackOf(mesh, localTrack, primaryTrack),
         eglContext = eglContext,
         mirrorsLocal = state.isFrontCamera,
         onTileTap = { tile ->
@@ -127,28 +122,46 @@ internal fun CallGroupStage(
                 GroupStageTapOutcome.Spotlight -> choose(GroupCallSpotlightChoice.Tile(tile.id))
             }
         },
+        contentOf = rememberCallGroupTileContents(tiles.map { it.id }),
     )
     val stageLabel = stringResource(R.string.call_group_stage)
     val stageModifier = modifier.semantics { contentDescription = stageLabel }
     val spotlight = focus as? GroupCallStageFocus.Spotlight
     val featured = spotlight?.let { focused -> tiles.firstOrNull { it.id == focused.tileId } }
-    if (spotlight == null || featured == null) {
-        CallGroupGrid(tiles, scope, onStageTap, stageModifier)
-    } else {
-        CallGroupSpotlightStage(
-            tiles = tiles,
-            featured = featured,
-            isScreenShare = spotlight.isScreenShare,
-            isFullScreen = isFullScreen,
-            zoom = zoom,
-            onPinch = { factor -> zoom = GroupCallSpotlight.clampedZoom(zoom * factor) },
-            onResetZoom = { zoom = 1f },
-            onGrid = { choose(GroupCallSpotlightChoice.Grid) },
-            onToggleFullScreen = { onFullScreenChange(!isFullScreen) },
-            onStageTap = onStageTap,
-            scope = scope,
-            modifier = stageModifier,
-        )
+    BoxWithConstraints(stageModifier) {
+        val staged = scope.copy(motionOf = rememberCallStageMotion(tiles.map { it.id }, focus, isFullScreen, maxWidth, maxHeight))
+        if (spotlight == null || featured == null) {
+            CallGroupGrid(tiles, staged, onStageTap, Modifier.fillMaxSize())
+        } else {
+            CallGroupSpotlightStage(
+                tiles = tiles,
+                featured = featured,
+                isScreenShare = spotlight.isScreenShare,
+                isFullScreen = isFullScreen,
+                zoom = zoom,
+                onPinch = { factor -> zoom = GroupCallSpotlight.clampedZoom(zoom * factor) },
+                onResetZoom = { zoom = 1f },
+                onGrid = { choose(GroupCallSpotlightChoice.Grid) },
+                onToggleFullScreen = { onFullScreenChange(!isFullScreen) },
+                onStageTap = onStageTap,
+                scope = staged,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/** La vidéo de chaque vignette : la mienne, celle du principal, ou celle du lien du maillage ; rien caméra coupée. */
+private fun stageTrackOf(
+    mesh: GroupCallMeshUi,
+    localTrack: VideoTrack?,
+    primaryTrack: VideoTrack?,
+): (GroupCallStageTile) -> VideoTrack? = { tile ->
+    when {
+        !tile.showsVideo -> null
+        tile.isLocal -> localTrack
+        tile.id == mesh.primaryUserId && !mesh.isPrimaryVacated -> primaryTrack
+        else -> mesh.videoTracks[tile.id]
     }
 }
 
