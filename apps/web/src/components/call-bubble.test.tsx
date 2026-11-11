@@ -128,10 +128,10 @@ describe('un écran partagé dans la bulle (#8164)', () => {
 });
 
 describe('la sortie audio depuis la bulle (#9097)', () => {
-  test('« Choisir les périphériques » est dans la bulle là où le navigateur choisit la sortie ; absent sinon', () => {
+  test('« Sortie audio » est dans la bulle là où le navigateur choisit la sortie ; absent sinon', () => {
     const offered = withSinks(true, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />));
     expect(offered).toContain('data-call-bubble-control="output"');
-    expect(offered).toContain('aria-label="Choisir les périphériques"');
+    expect(offered).toContain('aria-label="Sortie audio"');
     expect(offered).toContain('aria-haspopup="dialog"');
     expect(withSinks(false, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />))).not.toContain('data-call-bubble-control="output"');
   });
@@ -139,8 +139,8 @@ describe('la sortie audio depuis la bulle (#9097)', () => {
 
 describe('l’écran d’appel', () => {
   test('en appel, l’en-tête ouvre les périphériques ; pendant la sonnerie, non', () => {
-    expect(renderToStaticMarkup(<CallScreen call={call()} />)).toContain('aria-label="Choisir les périphériques"');
-    expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming' })} />)).not.toContain('Choisir les périphériques');
+    expect(renderToStaticMarkup(<CallScreen call={call()} />)).toContain('aria-label="Sortie audio"');
+    expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming' })} />)).not.toContain('Sortie audio');
   });
 });
 
