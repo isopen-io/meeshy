@@ -5,6 +5,7 @@
  * bannière de celui qui regarde (`call-screen.tsx`).
  */
 const enCallScreen = {
+  'call.duration.a11y.label': 'Call duration',
   'call.screen.share': 'Share screen',
   'call.screen.stop': 'Stop sharing screen',
   'call.screen.stopShort': 'Stop',

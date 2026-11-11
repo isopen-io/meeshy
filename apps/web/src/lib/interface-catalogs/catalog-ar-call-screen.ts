@@ -5,6 +5,7 @@
  * bannière de celui qui regarde (`call-screen.tsx`).
  */
 const arCallScreen = {
+  'call.duration.a11y.label': 'مدة المكالمة',
   'call.screen.share': 'مشاركة الشاشة',
   'call.screen.stop': 'إيقاف مشاركة الشاشة',
   'call.screen.stopShort': 'إيقاف',

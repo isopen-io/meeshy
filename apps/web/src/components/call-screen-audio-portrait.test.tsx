@@ -1,5 +1,6 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, jest, test } from 'bun:test';
 
 import { loadPillMotion } from '@/lib/calls/use-pill-motion';
@@ -109,7 +110,7 @@ describe('P9.5 / P10.11 — le disque du duo audio prend la couleur de la person
     const view = mount(call({ title: 'Un autre nom', peerKey: 'u-peer' }));
     const tint = speakerColor('u-peer', 'Un autre nom');
     expect(view.find(ring)?.style.getPropertyValue('--call-tint')).toBe(tint);
-    expect(view.find('[data-call-incoming-portrait] [data-avatar], [data-call-incoming-portrait] [style*="background"]')).not.toBeNull();
+    expect(renderToStaticMarkup(<CallScreen call={call({ title: 'Un autre nom', peerKey: 'u-peer' })} canShare={false} />)).toContain(`linear-gradient(135deg, ${tint}`);
     view.done();
   });
 

@@ -11,6 +11,7 @@
  * plutôt qu'une tranche de plus : `catalog-fr.ts` est au plafond du budget.
  */
 const frCallScreen = {
+  'call.duration.a11y.label': 'Durée de l’appel',
   'call.screen.share': 'Partager l’écran',
   'call.screen.stop': 'Arrêter le partage d’écran',
   'call.screen.stopShort': 'Arrêter',

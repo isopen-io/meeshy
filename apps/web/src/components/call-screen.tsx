@@ -7,6 +7,7 @@ import { CallButton } from '@/components/call-glass-button';
 import { CallIncomingAnswer } from '@/components/call-incoming-answer';
 import { RoundButton } from '@/components/call-round-button';
 import { CallLiveFrameStatusSlot, CallLiveFrameSurfaceSlot, liveFrameHold, liveFrameShown, useLiveFrameState } from '@/components/call-live-frame-slots';
+import { SpeechRing } from '@/components/call-camera-off';
 import { Portrait } from '@/components/call-grid';
 import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-control-slots';
 import { CALL_CAPTURE_ROW_CLEARANCE, CallCaptureAlerts, CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
@@ -18,6 +19,7 @@ import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyph
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
+import { cameraOffFadeMs } from '@/lib/calls/call-camera-off';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
 import { controlsDisposition, participantCountOf, pillRows, railRows, railsBySide, unfoldsPill } from '@/lib/calls/call-controls-disposition';
 import { JOURNAL_COLUMN_GUTTER, JOURNAL_COLUMN_WIDTH, useEscapeFolds, useJournalDock } from '@/lib/calls/call-journal-dock';
@@ -27,6 +29,7 @@ import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLa
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
 import { speakerColor } from '@/lib/calls/call-speaker-color';
+import { usePeerSpeaking } from '@/lib/calls/peer-audio-level';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
@@ -344,6 +347,10 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const sharedScreenShown = layout === 'screen' || spotlight?.screen === true;
   const [immersive, toggleImmersive] = useImmersive(stageRef, layout === 'screen' || spotlight !== null);
   const videoScene = live && isVideoScene(call);
+  /* P9.5, P9.6 : le duo audio dessine l'autre à SA couleur (l'identifiant primant) et l'allume à sa parole — mesurée sur son flux, jamais lue dans les sous-titres. */
+  const peerId = call.peerKey ?? null;
+  const peerTint = peerId === null ? undefined : speakerColor(peerId, call.title);
+  const peerHeard = usePeerSpeaking(joined && layout === 'portrait' ? (call.remoteStreams[peerId ?? orderedMembers(call.members)[0]?.userId ?? ''] ?? null) : null);
   const sharer = layout === 'screen' ? screenSharer(call.members) : null;
   const support = useEffectsSupport(call.localStream, effectsSupport);
   const cameraSwitch = useCameraSwitch(call.cameraOn);
@@ -418,7 +425,9 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       {/* P17 (#16944) : la vidéo de l'appelant tient lieu de portrait pendant la sonnerie. */}
       {phase === 'incoming' && hasVideo(call.preview) ? null : (
         <span data-call-incoming-portrait="">
-          <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} />
+          <Portrait name={call.title} avatar={call.avatar} size={112} pulse={phase === 'incoming' || phase === 'outgoing'} presenceKey={call.peerKey ?? undefined} {...(peerTint === undefined ? {} : { tint: peerTint })}>
+            {peerTint === undefined ? null : <SpeechRing color={peerTint} speaking={peerHeard} ms={cameraOffFadeMs(prefersReducedMotion())} />}
+          </Portrait>
         </span>
       )}
       <h2 className="text-[1.6rem] font-bold leading-tight" style={{ color: INK }}>
@@ -440,10 +449,18 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           {translate(language, call.media === 'video' ? 'call.preview.seenBy' : 'call.preview.heardBy', { name: call.title })}
         </p>
       ) : null}
-      <p className="text-body" role="status" aria-live="polite" style={{ color: INK_2 }} data-call-status="">
-        {statusKey === null ? <CallClock call={call} active={joined} /> : t(statusKey)}
-        {endedClock === null ? null : ` · ${endedClock}`}
-      </p>
+      <div className="text-body" style={{ color: INK_2 }} data-call-status="">
+        <span role="status" aria-live="polite">
+          {statusKey === null ? null : t(statusKey)}
+        </span>
+        {statusKey !== null && endedClock !== null ? ' · ' : null}
+        {statusKey === null || endedClock !== null ? (
+          <span data-call-duration="">
+            <span className="sr-only">{t('call.duration.a11y.label')} </span>
+            {statusKey === null ? <CallClock call={call} active={joined} /> : endedClock}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 
