@@ -1,6 +1,7 @@
 import type { CallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 const ar = {
+  'callControls.duration.a11y.label': 'مدة المكالمة',
   'callControls.invite': 'إضافة',
   'callControls.invite.label': 'إضافة أشخاص إلى المكالمة',
   'callControls.react': 'تفاعل',
