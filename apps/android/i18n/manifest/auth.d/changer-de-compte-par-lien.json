@@ -15,18 +15,6 @@
           "iosKey": "signInLink.switchAccount.confirm",
           "androidName": "link_switch_confirm",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "signInLink.switchAccount.message",
-          "androidName": "link_switch_message",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "signInLink.switchAccount.messageUnknownCurrent",
-          "androidName": "link_switch_message_unknown_current",
-          "status": "adopted"
         }
       ]
     }

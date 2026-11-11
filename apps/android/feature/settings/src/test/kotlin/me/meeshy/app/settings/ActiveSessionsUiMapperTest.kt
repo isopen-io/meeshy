@@ -15,7 +15,6 @@ class ActiveSessionsUiMapperTest {
         R.string.sessions_timezone to "Fuseau : %s",
         R.string.sessions_device_browser_on_system to "%s sur %s",
         R.string.sessions_unknown_device to "Appareil inconnu",
-        R.string.sessions_place_approximate to "%s (approximatif)",
         R.string.sessions_opened to "Ouverte le %s",
         R.string.sessions_activity_now to "Active maintenant",
         R.string.sessions_activity_last to "Dernière activité %s",
@@ -85,11 +84,11 @@ class ActiveSessionsUiMapperTest {
     }
 
     @Test
-    fun `the place is approximate, uses the country name and ends with the address`() {
+    fun `the place uses the country name and ends with the address`() {
         val place = SessionRowPresentation.Place("Lyon", "FR", null, "203.0.113.4")
-        assertThat(mapper().texts(row(place = place)).place).isEqualTo("Lyon, France (approximatif) · 203.0.113.4")
+        assertThat(mapper().texts(row(place = place)).place).isEqualTo("Lyon, France · 203.0.113.4")
         val located = SessionRowPresentation.Place(null, null, "Rhône", null)
-        assertThat(mapper().texts(row(place = located)).place).isEqualTo("Rhône (approximatif)")
+        assertThat(mapper().texts(row(place = located)).place).isEqualTo("Rhône")
     }
 
     @Test

@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="onboarding_profile_title">أظهر نفسك</string>
-    <string name="onboarding_profile_body">الوجه واللافتة يجعلان ملفك الشخصي أكثر ظهورًا: يتعرّف عليك الآخرون في الاقتراحات والمحادثات والقصص، وتتلقى المزيد من طلبات التواصل.</string>
     <string name="onboarding_profile_benefit_visibility">ظهور أكبر</string>
     <string name="onboarding_profile_benefit_contacts">جهات اتصال أكثر</string>
     <string name="onboarding_profile_banner_add">إضافة لافتة</string>

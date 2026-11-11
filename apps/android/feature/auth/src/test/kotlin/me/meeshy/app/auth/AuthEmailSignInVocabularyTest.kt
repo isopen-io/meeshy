@@ -106,13 +106,11 @@ class AuthEmailSignInVocabularyTest {
             mapOf(
                 "login_magic_link" to "Sign in with email",
                 "auth_magic_title" to "Email sign-in",
-                "auth_magic_header" to "Your email address",
-                "auth_magic_how_label" to "How it works",
                 "auth_magic_subtitle" to "No password: we email you a link.",
                 "auth_magic_send" to "Get the link",
                 "auth_magic_resend" to "Resend the link",
-                "auth_magic_sent_title" to "Email sent",
-                "auth_magic_sent" to "Open the link sent to %1\$s",
+                "auth_magic_sent_title" to "Code and link sent",
+                "auth_forgot_sent_title" to "Link sent",
             ),
         )
     }
@@ -123,13 +121,11 @@ class AuthEmailSignInVocabularyTest {
             mapOf(
                 "login_magic_link" to "Se connecter par e-mail",
                 "auth_magic_title" to "Connexion par e-mail",
-                "auth_magic_header" to "Votre adresse e-mail",
-                "auth_magic_how_label" to "Comment ça marche",
                 "auth_magic_subtitle" to "Pas de mot de passe : nous envoyons un lien par e-mail.",
                 "auth_magic_send" to "Recevoir le lien",
                 "auth_magic_resend" to "Renvoyer le lien",
-                "auth_magic_sent_title" to "E-mail envoyé",
-                "auth_magic_sent" to "Ouvrez le lien reçu à %1\$s",
+                "auth_magic_sent_title" to "Code et lien envoyés",
+                "auth_forgot_sent_title" to "Lien envoyé",
             ),
         )
     }

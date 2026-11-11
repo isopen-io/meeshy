@@ -2,7 +2,6 @@ package me.meeshy.app.auth
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,19 +22,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
@@ -43,7 +38,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -60,7 +54,6 @@ import me.meeshy.ui.component.auth.AuthTextField
 import me.meeshy.ui.component.auth.FireworksCanvas
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.icons.MeeshyIcons
-import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -116,13 +109,6 @@ internal fun SignupIdentityCard(
                     .animateContentSize(),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {
-                Text(
-                    text = stringResource(R.string.signup_card_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = tokens.textPrimary,
-                    modifier = Modifier.semantics { heading() },
-                )
                 when (val card = state.card) {
                     SignupCard.Editing -> {
                         IdentityInputs(state, actions)
@@ -334,19 +320,12 @@ private fun UsernameSuggestions(candidates: List<String>, onPick: (String) -> Un
 
 /**
  * Le mot de passe, FACULTATIF : il paraît quand l'identité est définie et ne se referme
- * plus. Sa conséquence se déplie sous « Pourquoi mettre un mot de passe maintenant ? ».
+ * plus. Sa conséquence se lit sous le champ, au repos : sans mot de passe, la connexion passe par un lien reçu par e-mail.
  */
 @Composable
 private fun SignupPasswordBlock(state: SignupUiState, actions: SignupCardActions) {
-    var whyExpanded by remember { mutableStateOf(false) }
-    val chevronTurn by animateFloatAsState(
-        targetValue = if (whyExpanded) 180f else 0f,
-        animationSpec = MeeshyMotion.springFast(),
-        label = "signupPasswordWhyChevron",
-    )
     val passwordError = state.validation.password
         ?.let { stringResource(R.string.signup_password_too_short) }
-    val detail = stringResource(R.string.signup_password_why_detail)
     Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
         AuthTextField(
             value = state.form.password,
@@ -362,32 +341,10 @@ private fun SignupPasswordBlock(state: SignupUiState, actions: SignupCardActions
             modifier = Modifier.testTag(SIGNUP_PASSWORD_TAG),
         )
         ErrorHaptic(passwordError)
-        Row(
-            modifier = Modifier
-                .heightIn(min = TAP_TARGET)
-                .clickable(role = Role.Button) { whyExpanded = !whyExpanded },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        ) {
-            Text(
-                text = stringResource(R.string.signup_password_why),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyPalette.Indigo500,
-            )
-            Icon(
-                imageVector = MeeshyIcons.ChevronDown,
-                contentDescription = null,
-                tint = MeeshyPalette.Indigo500,
-                modifier = Modifier.size(16.dp).rotate(chevronTurn),
-            )
-        }
-        AnimatedVisibility(visible = whyExpanded) {
-            Text(
-                text = detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
-        }
+        Text(
+            text = stringResource(R.string.signup_password_why_detail),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
+        )
     }
 }

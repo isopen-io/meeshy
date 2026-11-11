@@ -5,7 +5,6 @@
     <!-- Navigation tabs -->
 
     <!-- Login screen -->
-    <string name="login_welcome_back">مرحبًا بعودتك</string>
 
     <!-- Chat screen -->
     <string name="chat_no_messages">لا توجد رسائل بعد</string>

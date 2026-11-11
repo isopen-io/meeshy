@@ -230,11 +230,6 @@ private fun SignupHeader() {
             color = MeeshyTheme.tokens.textPrimary,
             modifier = Modifier.semantics { heading() },
         )
-        Text(
-            text = stringResource(R.string.signup_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
     }
 }
 

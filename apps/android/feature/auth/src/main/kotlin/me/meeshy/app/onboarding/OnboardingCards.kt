@@ -263,12 +263,7 @@ internal fun VerificationStatus(state: OnboardingUiState) {
             color = tokens.errorInk,
             style = meeshyText(MeeshyFontSize.subhead, FontWeight.Medium),
         )
-        else -> IconLine(
-            MeeshyIcons.Hourglass,
-            stringResource(R.string.onboarding_email_waiting),
-            tokens.textMuted,
-            MeeshyFontSize.footnote,
-        )
+        else -> Unit
     }
 }
 
@@ -348,11 +343,6 @@ private fun GreetingEditor(draft: String, onEdit: (String) -> Unit) {
                 },
             )
         }
-        Text(
-            text = stringResource(R.string.onboarding_global_hint),
-            color = MeeshyTheme.tokens.textMuted,
-            style = meeshyText(MeeshyFontSize.footnote, FontWeight.Medium),
-        )
     }
 }
 
@@ -383,20 +373,14 @@ private fun StoryCard(state: OnboardingUiState, actions: OnboardingCardActions, 
         Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
             when {
                 awaitsVerification -> {
-                    StatusBanner(
-                        text = stringResource(R.string.onboarding_story_verify),
-                        detail = stringResource(R.string.onboarding_story_verify_detail),
-                    )
+                    StatusBanner(text = stringResource(R.string.onboarding_story_verify), detail = null)
                     VerificationStatus(state)
                 }
                 published -> OutcomeBanner(
                     text = stringResource(R.string.onboarding_story_published),
                     reward = state.storyReward?.let { pluralStringResource(R.plurals.onboarding_story_reward, it, it) },
                 )
-                sending -> StatusBanner(
-                    text = stringResource(R.string.onboarding_story_sending),
-                    detail = stringResource(R.string.onboarding_story_sending_detail),
-                )
+                sending -> StatusBanner(text = stringResource(R.string.onboarding_story_sending), detail = null)
                 else -> {
                     val friendsOnly = state.storyVisibility == me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility.FRIENDS
                     IconLine(
@@ -564,7 +548,7 @@ internal fun Modifier.clickableField(onClick: () -> Unit): Modifier =
 
 /** Un état EN COURS ou À REPRENDRE : même gabarit que la réussite, sans coche ni « +N » — rien n'est encore gagné. */
 @Composable
-internal fun StatusBanner(text: String, detail: String) {
+internal fun StatusBanner(text: String, detail: String?) {
     val tint = MeeshyPalette.Indigo500
     Column(
         modifier = Modifier
@@ -575,7 +559,7 @@ internal fun StatusBanner(text: String, detail: String) {
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
     ) {
         Text(text, color = MeeshyTheme.tokens.textPrimary, style = meeshyText(MeeshyFontSize.body, FontWeight.SemiBold))
-        Text(detail, color = MeeshyTheme.tokens.textSecondary, style = meeshyText(MeeshyFontSize.footnote, FontWeight.Medium))
+        detail?.let { Text(it, color = MeeshyTheme.tokens.textSecondary, style = meeshyText(MeeshyFontSize.footnote, FontWeight.Medium)) }
     }
 }
 

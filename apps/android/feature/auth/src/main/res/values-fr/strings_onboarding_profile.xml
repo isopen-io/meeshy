@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="onboarding_profile_title">Montre-toi</string>
-    <string name="onboarding_profile_body">Un visage et une bannière rendent ton profil plus visible : on te reconnaît dans les suggestions, les conversations et les stories, et tu reçois plus de demandes de contact.</string>
     <string name="onboarding_profile_benefit_visibility">Plus de visibilité</string>
     <string name="onboarding_profile_benefit_contacts">Plus de contacts</string>
     <string name="onboarding_profile_banner_add">Ajouter une bannière</string>
