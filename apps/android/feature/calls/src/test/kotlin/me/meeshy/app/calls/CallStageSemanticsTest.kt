@@ -3,6 +3,9 @@ package me.meeshy.app.calls
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -15,7 +18,10 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
+import androidx.compose.ui.graphics.TransformOrigin
 import me.meeshy.sdk.model.call.CallDuoStageLayout
+import me.meeshy.sdk.model.call.CallSelfTileCorner
+import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
 import me.meeshy.sdk.model.call.CallState
@@ -192,5 +198,61 @@ class CallStageSemanticsTest {
         assertThat(sceneTaps).isEqualTo(1)
         rule.onNodeWithContentDescription("Swap videos", substring = true).performClick()
         assertThat(sceneTaps).isEqualTo(1)
+    }
+
+    @Test
+    fun `my tile with the controls shown swaps the videos and does not relight anything (G1_9)`() {
+        var swaps = 0
+        var reveals = 0
+        rule.setContent {
+            MeeshyTheme {
+                CallSelfTile("c", CallSelfTileMemory(), paused = false, reduceMotion = true, onSwap = { swaps++ }, onReveal = { reveals++ }, controlsVisible = true, modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize())
+                }
+            }
+        }
+        rule.onNodeWithContentDescription("Swap videos").performTouchInput { click() }
+        assertThat(swaps).isEqualTo(1)
+        assertThat(reveals).isEqualTo(0)
+    }
+
+    @Test
+    fun `my tile with the controls stowed gives them back first and does not swap (G1_9)`() {
+        var swaps = 0
+        var reveals = 0
+        rule.setContent {
+            MeeshyTheme {
+                CallSelfTile("c", CallSelfTileMemory(), paused = false, reduceMotion = true, onSwap = { swaps++ }, onReveal = { reveals++ }, controlsVisible = false, modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize())
+                }
+            }
+        }
+        rule.onNodeWithContentDescription("Swap videos").performTouchInput { click() }
+        assertThat(swaps).isEqualTo(0)
+        assertThat(reveals).isEqualTo(1)
+    }
+
+    @Test
+    fun `stowing the controls keeps the frame of the chosen scale, the tile only scales (G1_11)`() {
+        var visible by mutableStateOf(true)
+        rule.setContent {
+            MeeshyTheme {
+                CallSelfTile("c", CallSelfTileMemory(), paused = false, reduceMotion = true, onSwap = {}, controlsVisible = visible, modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize())
+                }
+            }
+        }
+        val shown = rule.onNodeWithContentDescription("Swap videos").fetchSemanticsNode().size
+        visible = false
+        rule.waitForIdle()
+        assertThat(rule.onNodeWithContentDescription("Swap videos").fetchSemanticsNode().size).isEqualTo(shown)
+    }
+
+    @Test
+    fun `what keeps the size of a small tile grows from its own corner, mirrored right to left (G1_11)`() {
+        val bottomStart = CallSelfTileLaw.anchor(CallSelfTileCorner.BottomStart)
+        assertThat(bottomStart.transformOrigin(rtl = false)).isEqualTo(TransformOrigin(0f, 1f))
+        assertThat(bottomStart.transformOrigin(rtl = true)).isEqualTo(TransformOrigin(1f, 1f))
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.TopEnd).transformOrigin(rtl = true)).isEqualTo(TransformOrigin(0f, 0f))
     }
 }

@@ -68,6 +68,12 @@ enum CallScreenLayer: Equatable, Sendable {
         return panel
     }
 
+    /// G3.2 — la rangée de base ne reçoit de légendes qu'au (…) ou sous une feuille ; une option
+    /// dessinée dans la pilule la laisse nue, comme la planche la montre.
+    var captionsBaseRow: Bool {
+        pillPanel == nil
+    }
+
     var showsFamilyRows: Bool {
         switch self {
         case .menu, .menuOverJournal: return true

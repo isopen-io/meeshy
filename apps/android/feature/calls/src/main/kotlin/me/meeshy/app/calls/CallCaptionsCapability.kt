@@ -212,6 +212,7 @@ class CallCaptionsController internal constructor(
                 peerName = session.config.peerName
                 peerId = session.config.peerId.ifBlank { peerId }
                 if (listening.isEmpty()) listening = listen()
+                stampCallStart(next)
                 resolveGate(session.config.conversationId)
             }
         }
@@ -251,7 +252,7 @@ class CallCaptionsController internal constructor(
         _journalRequests.tryEmit(Unit)
     }
 
-    /** One of MY lines, captioned on this device: my finals enter my journal even while my panel is closed. */
+    /** One of MY lines, captioned on this device: my words, partials included, enter my journal even while my captions are off (#17342). */
     fun receiveOwn(segment: CallJournalSegment) = _state.update { it.receivingOwn(segment) }
 
     /** Whether this device can caption my words: the button and the journal say it when it cannot. */
@@ -290,6 +291,12 @@ class CallCaptionsController internal constructor(
         ).map { it.launchIn(scope) }
 
     private fun receive(segment: CallJournalSegment) = _state.update { it.receiving(segment) }
+
+    /** The zero of the hour IN the call: the instant the media first flows, kept through a reconnection (P6.4). */
+    private fun stampCallStart(next: CallState) {
+        if (!next.carriesMedia) return
+        _state.update { if (it.callStartedAtMs == null) it.copy(callStartedAtMs = clock()) else it }
+    }
 
     private fun resolveGate(conversationId: String) {
         if (conversationId == this.conversationId && (_state.value.gate != CallCaptionsGate.Unresolved || resolving?.isActive == true)) return

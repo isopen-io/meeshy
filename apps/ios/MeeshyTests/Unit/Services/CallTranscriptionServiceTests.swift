@@ -388,6 +388,59 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertEqual(sut.segments.first?.capturedAt, arrivalTime)
     }
 
+    // MARK: - Le journal garde tout l'appel, sous-titres coupés compris (#17342, P6.8)
+
+    func test_applyRecognitionResult_partialWhileCaptionsAreOff_stillJoinsTheJournal() {
+        // La porte #13720 décide de la CAPTURE (`isTranscribing`), pas de la
+        // lecture : ma phrase en cours entre au journal même panneau fermé.
+        let (sut, _) = makeSUT()
+        sut.setTranscribingForTesting(true)
+        sut.isShowingOverlay = false
+
+        sut.applyRecognitionResult(
+            text: "Bonj", speakerId: "user-1", startMs: 0, endMs: 400,
+            isFinal: false, confidence: 0.5, language: "fr", capturedAt: Date(timeIntervalSince1970: 100)
+        )
+
+        XCTAssertEqual(sut.segments.map(\.text), ["Bonj"])
+    }
+
+    func test_applyRecognitionResult_partialRevisions_keepTheStartOfTheUtterance() {
+        // Mêmes phrases, même ordre, avant et après l'appel, chez moi comme chez
+        // le pair : un énoncé se range à son DÉBUT (le pair garde la plus ancienne
+        // des dates de ses révisions), pas à l'heure de sa dernière révision.
+        let (sut, _) = makeSUT()
+        sut.setTranscribingForTesting(true)
+
+        sut.applyRecognitionResult(
+            text: "Bonj", speakerId: "user-1", startMs: 0, endMs: 400,
+            isFinal: false, confidence: 0.5, language: "fr", capturedAt: Date(timeIntervalSince1970: 100)
+        )
+        sut.applyRecognitionResult(
+            text: "Bonjour à tous", speakerId: "user-1", startMs: 0, endMs: 1_900,
+            isFinal: false, confidence: 0.7, language: "fr", capturedAt: Date(timeIntervalSince1970: 102)
+        )
+
+        XCTAssertEqual(sut.segments.count, 1, "la révision remplace la précédente sur place")
+        XCTAssertEqual(sut.segments.first?.text, "Bonjour à tous")
+        XCTAssertEqual(sut.segments.first?.capturedAt, Date(timeIntervalSince1970: 100))
+    }
+
+    func test_receivePeerEntry_whileCaptionsAreOff_joinsTheJournalAndTheTranscriptHeldForAfterTheCall() {
+        let (sut, _) = makeSUT()
+        sut.isShowingOverlay = false
+
+        sut.receivePeerEntry(makeSegment(wireId: "u-1", text: "Hello", speakerId: "remote-user", isFinal: true, capturedAt: Date(timeIntervalSince1970: 10)))
+        sut.receiveTranslatedSegment(makeSegment(
+            wireId: "u-1", text: "Hello", speakerId: "remote-user", isFinal: true,
+            translatedText: "Bonjour", translatedLanguage: "fr", capturedAt: Date(timeIntervalSince1970: 11)
+        ))
+
+        XCTAssertEqual(sut.segments.count, 1, "une seule ligne, enrichie sur place")
+        XCTAssertEqual(sut.segments.first?.translatedText, "Bonjour")
+        XCTAssertEqual(sut.persistedSegmentsForTesting.count, 1)
+    }
+
     // MARK: - Stale-Callback-After-Redial Guard
 
     func test_applyRecognitionResult_whenCallIdDoesNotMatchActiveCall_dropsStaleResult() {

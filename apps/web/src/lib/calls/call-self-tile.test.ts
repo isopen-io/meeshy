@@ -10,6 +10,9 @@ import {
   scaleAfterWheel,
   selfTileBox,
   selfTileCornerFor,
+  selfTileCounterScaled,
+  selfTileOrigin,
+  selfTileRestingFactor,
   selfTileScaleFor,
   selfTileSize,
   selfTileStore,
@@ -164,5 +167,35 @@ describe('le coin retenu pour l’appel', () => {
     setSelfTileCorner('call-2', 'top-left');
     expect(selfTileScaleFor(selfTileStore.getState(), 'call-2')).toBe(2);
     expect(selfTileCornerFor(selfTileStore.getState(), 'call-1')).toBe('top-right');
+  });
+});
+
+/**
+ * G1.11 (#17536, miroir de `CallSelfTileScale.restingFactor` / `counterScaled` / `anchor`
+ * d'iOS, #17534) — ranger ma vignette est une TRANSFORMATION : son cadre reste celui du
+ * palier choisi, elle est mise à l'échelle de sa petite taille depuis son coin, jamais
+ * relayoutée (largeur et hauteur ne s'animent pas).
+ */
+describe('ma vignette se range par une échelle ancrée à son coin (G1.11)', () => {
+  const screen = { width: 390, height: 844 };
+
+  test('commandes visibles, le facteur est 1 ; rangée, elle se ramène à la petite taille', () => {
+    for (const scale of [1, 2, 3] as const) expect(selfTileRestingFactor(scale, true, screen)).toBe(1);
+    expect(selfTileRestingFactor(3, false, screen)).toBeCloseTo(selfTileSize(1, screen).width / selfTileSize(3, screen).width, 5);
+    expect(selfTileRestingFactor(2, false, screen)).toBeCloseTo(selfTileSize(1, screen).width / selfTileSize(2, screen).width, 5);
+    expect(selfTileRestingFactor(1, false, screen)).toBe(1);
+  });
+
+  test('l’ancre est le coin où la vignette se tient : elle garde sa marge pendant la réduction', () => {
+    expect(selfTileOrigin('top-right')).toBe('top right');
+    expect(selfTileOrigin('bottom-left')).toBe('bottom left');
+  });
+
+  test('ce qui ne doit pas rapetisser (liseré, coins) est contre-mis à l’échelle', () => {
+    const factor = selfTileRestingFactor(3, false, screen);
+    expect(selfTileCounterScaled(2, factor) * factor).toBeCloseTo(2, 5);
+    expect(selfTileCounterScaled(12, 1)).toBe(12);
+    expect(selfTileCounterScaled(2, 0)).toBe(2);
+    expect(selfTileCounterScaled(2, Number.NaN)).toBe(2);
   });
 });

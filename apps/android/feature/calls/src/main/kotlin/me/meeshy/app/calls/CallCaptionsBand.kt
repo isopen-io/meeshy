@@ -59,14 +59,16 @@ import me.meeshy.ui.theme.hexColor
 private val CAPTION_TARGET = 48.dp
 
 /**
- * The captions as the pill carries them (#17343): they read the live state themselves, so the pill and the stowed glass
- * ([hasOwnGlass]) draw the same band. Touching « Journal » asks the screen to open the journal in the pill.
+ * The captions as the pill carries them (#17343): they read the live state themselves, so the pill and the glass of a
+ * mode ([hasOwnGlass]) draw the same band. Touching « Journal » asks the screen to open the journal in the pill; a mode
+ * that frees the screen (Effects, Montage) shows the band without that button ([opensJournal] = false, iOS `opensJournal`).
  */
 @Composable
 internal fun CallCaptionsBandHost(
     state: CallUiState,
     hasOwnGlass: Boolean,
     modifier: Modifier = Modifier,
+    opensJournal: Boolean = true,
     viewModel: CallCaptionsViewModel = hiltViewModel(),
 ) {
     val captions by viewModel.state.collectAsStateWithLifecycle()
@@ -81,6 +83,7 @@ internal fun CallCaptionsBandHost(
         captures = state.liveCaptures,
         peerName = state.peerName,
         hasOwnGlass = hasOwnGlass,
+        opensJournal = opensJournal,
     )
 }
 
@@ -108,8 +111,9 @@ internal fun rememberStableLines(lines: List<CallLiveCaptionLine>): List<CallLiv
 
 /**
  * The two last sentences, a foot (what the line says of its translation) and the Journal button. They live IN the pill,
- * above its base row, in the same glass ([hasOwnGlass] = false); they only take a glass of their own when the pill is
- * stowed (it carries no base row then, law 11), limited to the width of the pill that carries text ([CallPillWidth]).
+ * above its base row, in the same glass ([hasOwnGlass] = false), stowed or not: a touch that stows the chrome tightens
+ * THAT glass around them (G1.3, laws 11 and 17), no second glass. Only a mode (Effects, Montage), which has no pill, gives
+ * them a glass of their own, limited to the width of the pill that carries text ([CallPillWidth]).
  */
 @Composable
 internal fun CallCaptionsBand(
@@ -121,6 +125,7 @@ internal fun CallCaptionsBand(
     captures: List<CallLiveCapture> = emptyList(),
     peerName: String = "",
     hasOwnGlass: Boolean = false,
+    opensJournal: Boolean = true,
 ) {
     val region = stringResource(R.string.call_captions_region)
     val swallowsTouch = Modifier.pointerInput(Unit) { detectTapGestures { } }
@@ -131,6 +136,7 @@ internal fun CallCaptionsBand(
             onOpenJournal = onOpenJournal,
             captures = captures,
             peerName = peerName,
+            opensJournal = opensJournal,
             modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
         )
     }
@@ -150,6 +156,7 @@ private fun CallCaptionsContent(
     onOpenJournal: () -> Unit,
     captures: List<CallLiveCapture>,
     peerName: String,
+    opensJournal: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val you = stringResource(R.string.call_avatar_you)
@@ -190,7 +197,7 @@ private fun CallCaptionsContent(
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
             CallCaptionsFootNote(footer, modifier = Modifier.weight(1f))
-            CallJournalChip(onOpenJournal)
+            if (opensJournal) CallJournalChip(onOpenJournal)
         }
     }
 }

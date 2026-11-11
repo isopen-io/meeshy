@@ -10,11 +10,6 @@
     <string name="call_effects_face_angel">Angel</string>
     <string name="call_effects_face_demon">Demon</string>
     <string name="call_effects_face_volcano">Eruption</string>
-    <string name="call_effects_preset_natural">Natural</string>
-    <string name="call_effects_preset_warm">Warm</string>
-    <string name="call_effects_preset_cool">Cool</string>
-    <string name="call_effects_preset_vivid">Vivid</string>
-    <string name="call_effects_preset_muted">Soft</string>
     <string name="call_effects_settings">Settings</string>
     <string name="call_effects_settings_hint">Shows brightness and background blur instead of the effects</string>
     <string name="call_effects_validate">Apply</string>

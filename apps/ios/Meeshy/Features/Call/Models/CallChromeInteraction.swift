@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // #8735 — chaque bouton de l'écran d'appel répond au premier toucher.
 // #8978 — plus aucun masquage minuté : un toucher sur la scène cache le
@@ -31,6 +32,30 @@ extension CallChromeVisibility {
     }
 }
 
+/// G1.11 · G2.8 — le premier toucher RANGE le chrome vers ses bords, le second le
+/// rend par le chemin inverse : rien n'apparaît ni ne disparaît d'un coup. Seules la
+/// transformation et l'opacité bougent ; « Réduire les animations » les remplace par
+/// un fondu court, sans déplacement.
+enum CallChromeStow {
+    static let reducedFadeDuration: TimeInterval = 0.15
+
+    static func leavesByItsEdge(isVisible: Bool, reduceMotion: Bool) -> Bool {
+        !isVisible && !reduceMotion
+    }
+
+    static func animation(reduceMotion: Bool) -> Animation {
+        .easeInOut(duration: reduceMotion ? reducedFadeDuration : CallChromeVisibility.fadeDuration)
+    }
+
+    /// La translation d'un élément rangé vers SON bord : toute sa hauteur MESURÉE (`extent`) plus
+    /// sa marge à ce bord, si bien qu'une pilule dépliée (rangées, journal) quitte l'écran aussi
+    /// entièrement que la pilule nue. Une hauteur pas encore mesurée ne compte pas.
+    static func travel(toward edge: VerticalEdge, extent: CGFloat, margin: CGFloat) -> CGFloat {
+        let distance = (extent.isFinite ? max(extent, 0) : 0) + margin
+        return edge == .top ? -distance : distance
+    }
+}
+
 /// Ce que fait le toucher d'une vignette de la scène de groupe.
 enum GroupStageTapOutcome: Equatable, Sendable {
     case revealChrome
@@ -39,6 +64,7 @@ enum GroupStageTapOutcome: Equatable, Sendable {
 
 /// #8735 — chrome masqué, une vignette touchée RALLUME les commandes (comme
 /// partout ailleurs sur la scène) ; chrome visible, elle se met à la une.
+/// G1.9 (loi 15) — ma vignette du duo suit la même règle : `.spotlight` la permute.
 enum GroupStageTapRule {
     static func outcome(isChromeVisible: Bool) -> GroupStageTapOutcome {
         isChromeVisible ? .spotlight : .revealChrome

@@ -47,12 +47,17 @@ data class CallLiveCaptionLine(
     val awaitingUntilMs: Long? = null,
     val originLanguage: String? = null,
     val servedLanguage: String? = null,
+    /** The hour IN the call (« 01:15 »), set by [dated] for the journal; `null` elsewhere. */
+    val timeLabel: String? = null,
 ) {
     val isAwaitingTranslation: Boolean get() = awaitingUntilMs != null
 
     /** The line at [nowMs]: the wait falls at its deadline, the origin label stays. */
     fun settled(nowMs: Long): CallLiveCaptionLine =
         if (awaitingUntilMs != null && nowMs >= awaitingUntilMs) copy(awaitingUntilMs = null) else this
+
+    /** The line dated by the time in the call (P6.4); without a start of the call, no hour rather than a wall clock. */
+    fun dated(startedAtMs: Long?): CallLiveCaptionLine = copy(timeLabel = CallJournalClock.label(capturedAtMs, startedAtMs))
 
     /** What TalkBack announces: the FINAL sentence of a peer only — a partial is replaced before it is read. */
     val announcement: String?
@@ -224,6 +229,8 @@ data class CallCaptionsState(
     val gate: CallCaptionsGate = CallCaptionsGate.Unresolved,
     val listeners: CallCaptionListeners = CallCaptionListeners(),
     val ownSpeech: OwnSpeechSupport = OwnSpeechSupport.Unknown,
+    /** The instant the media first flowed: the zero of the hour IN the call (P6.4); `null` until then. */
+    val callStartedAtMs: Long? = null,
 ) {
     val mode: CaptionsMode get() = CaptionsMode.from(isTranscribing = isPanelOpen, showOriginalText = showsOriginal)
 
@@ -254,11 +261,11 @@ data class CallCaptionsState(
 
     /**
      * One of MY lines (#13718), iOS `appendSegment`: my capture may run for a peer while my panel is
-     * closed, and my finals still enter my journal; my partials only while I read. A closed gate
-     * keeps nothing.
+     * closed, and my words, partials included, still enter my journal (#17342) — the gate stays on the
+     * CAPTURE side. A closed gate keeps nothing.
      */
     fun receivingOwn(segment: CallJournalSegment): CallCaptionsState =
-        if (gate.allowsCaptions && (segment.isFinal || isPanelOpen)) copy(journal = journal.receive(segment)) else this
+        if (gate.allowsCaptions) copy(journal = journal.receive(segment)) else this
 
     /** A gate that closes takes the panel down with it. */
     fun gated(gate: CallCaptionsGate): CallCaptionsState =

@@ -278,7 +278,8 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
         let hosts = [
             // #8276 — la minuterie de l'écran d'appel a suivi le découpage.
             "Features/Call/Views/CallView+Connected.swift",
-            "Features/Call/Views/CallView+Header.swift",
+            // #17341 — la capsule de l'en-tête a sa vue : la liste suit l'hôte.
+            "Features/Call/Views/CallView+Header+Capsule.swift",
             "Features/Call/Views/FloatingCallPillView.swift",
             "Features/Auth/Views/MagicLinkView.swift",
             "Features/Main/Views/AudioPostComposerView.swift",

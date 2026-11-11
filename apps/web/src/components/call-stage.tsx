@@ -20,6 +20,9 @@ import {
   SELF_TILE_TOP,
   selfTileBox,
   selfTileCornerFor,
+  selfTileCounterScaled,
+  selfTileOrigin,
+  selfTileRestingFactor,
   selfTileScaleFor,
   selfTileSize,
   selfTileStore,
@@ -135,7 +138,8 @@ function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number): 
   return { left, top };
 }
 
-const PIN_ORIGIN: Readonly<Record<SelfTileCorner, string>> = { 'top-left': 'top left', 'top-right': 'top right', 'bottom-left': 'bottom left', 'bottom-right': 'bottom right' };
+/** Le liseré de ma vignette, à sa taille de petite vignette quand elle est rangée (`CallSelfTileScale.counterScaled`, iOS). */
+const TILE_RIM = 2;
 
 const both =
   <E,>(first: (event: E) => void, second: (event: E) => void) =>
@@ -184,7 +188,7 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
   );
 }
 
-function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: Pick<StageProps, 'call' | 'language' | 'self' | 'chromeVisible' | 'bleedEnd'>) {
+function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome = () => undefined, bleedEnd = 0 }: Pick<StageProps, 'call' | 'language' | 'self' | 'chromeVisible' | 'onRevealChrome' | 'bleedEnd'>) {
   const swapped = self.full;
   const callId = call.callId ?? '';
   const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, callId));
@@ -219,11 +223,16 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
   const cornerVideo = swapped ? remoteVideoOn : call.cameraOn;
   const screen = useCallViewport();
   const compact = !chromeVisible;
-  const size = selfTileSize(compact ? 1 : scale, screen);
+  /* G1.11 : le cadre garde la taille du palier choisi ; rangée, la vignette s'y met à l'échelle de sa petite taille depuis son coin — une transformation, jamais une mise en page. */
+  const size = selfTileSize(scale, screen);
+  const restFactor = selfTileRestingFactor(scale, chromeVisible, screen);
   const topInset = self.topInset ?? 0;
   const rest = selfTileBox({ corner, size, viewport: screen, topInset });
+  const seen = { width: size.width * restFactor, height: size.height * restFactor };
+  const seenX = corner.endsWith('left') ? rest.x : rest.x + rest.width - seen.width;
+  const seenY = corner.startsWith('top') ? rest.y : rest.y + rest.height - seen.height;
   const drop = ({ dx, dy }: TileOffset): void => {
-    const next = nearestSelfCorner({ center: { x: rest.x + rest.width / 2 + dx, y: rest.y + rest.height / 2 + dy }, size, viewport: screen, topInset });
+    const next = nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset });
     if (next !== corner) moveTo(next);
   };
   const drag = useTileDrag(drop);
@@ -237,6 +246,14 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
     onWheel: pinch.onWheel,
   };
   const cornerFrame = useRef<HTMLDivElement>(null);
+  /* G1.9 (loi 15) : contrôles rangés, toucher ma vignette les rend d'abord, comme une tuile du groupe. La décision se prend à la DESCENTE : le focus que le pointeur donne au bouton rend le chrome avant le clic, qui sinon permuterait. */
+  const pressedHidden = useRef<boolean | null>(null);
+  const tap = (): void => {
+    const hidden = pressedHidden.current ?? !chromeVisible;
+    pressedHidden.current = null;
+    if (hidden) onRevealChrome();
+    else self.onToggle();
+  };
   useFlip(cornerFrame, {
     key: cornerShown ? `${corner}:${size.width}x${size.height}:${offset === null ? 'rest' : 'held'}` : null,
     held: offset !== null,
@@ -280,7 +297,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
         <div
           ref={cornerFrame}
           className={`absolute z-10 ${composed ? 'pointer-events-none opacity-0' : ''}`}
-          style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
+          style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
           {...(composed ? { 'aria-hidden': true, inert: true } : {})}
           data-call-corner-frame=""
           data-call-self-tile-composed={composed ? '' : undefined}
@@ -292,11 +309,15 @@ function VideoDuo({ call, language, self, chromeVisible = true, bleedEnd = 0 }: 
             type="button"
             aria-label={translate(language, 'call.video.swap')}
             aria-describedby={swapped ? undefined : hint}
-            onClick={self.onToggle}
-            onKeyDown={onArrow}
-            className={`relative z-10 grid size-full place-items-center overflow-hidden rounded-card border-2 shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
+            onPointerDownCapture={() => (pressedHidden.current = !chromeVisible)}
+            onClick={tap}
+            onKeyDown={(event) => {
+              pressedHidden.current = null;
+              onArrow(event);
+            }}
+            className={`relative z-10 grid size-full place-items-center overflow-hidden border-2 shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
             {...(swapped ? {} : gestures)}
-            style={{ background: 'var(--color-scrim-soft)', borderColor: cornerColor, ...(swapped ? {} : { ...pinch.style, transformOrigin: PIN_ORIGIN[corner] }) }}
+            style={{ background: 'var(--color-scrim-soft)', borderColor: cornerColor, borderWidth: selfTileCounterScaled(TILE_RIM, restFactor), borderRadius: `calc(var(--radius-card) / ${restFactor})`, ...(swapped ? {} : { ...pinch.style, transformOrigin: selfTileOrigin(corner) }) }}
             data-call-corner=""
             data-call-self-tile={swapped ? undefined : String(scale)}
           >
@@ -343,6 +364,6 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
     );
   }
   if (layout === 'screen') return <DuoScreen call={call} language={language} immersive={immersive} onToggleImmersive={onToggleImmersive} />;
-  if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} bleedEnd={bleedEnd} />;
+  if (layout === 'video-duo') return <VideoDuo call={call} language={language} self={self} chromeVisible={chromeVisible} onRevealChrome={onRevealChrome} bleedEnd={bleedEnd} />;
   return null;
 }

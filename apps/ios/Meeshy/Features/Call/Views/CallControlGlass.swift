@@ -166,3 +166,37 @@ enum CallButtonFill {
         Color.white.opacity(isPressed ? 0.22 : 0)
     }
 }
+
+/// G1.11 · G2.8 — rangé, un élément du chrome (l'en-tête, la pilule) sort par SON bord de l'écran
+/// et en revient (loi 17), de toute sa hauteur mesurée ; Réduire les animations : un fondu, rien
+/// ne se déplace. La mesure ne lit que la taille : la translation ne la change pas.
+struct CallEdgeStow: ViewModifier {
+    let edge: VerticalEdge
+    let margin: CGFloat
+    let isVisible: Bool
+    let reduceMotion: Bool
+
+    @State private var extent: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { extent = $0 }
+            .offset(y: CallChromeStow.leavesByItsEdge(isVisible: isVisible, reduceMotion: reduceMotion) ? CallChromeStow.travel(toward: edge, extent: extent, margin: margin) : 0)
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isVisible)
+    }
+}
+
+/// G1.11 — ma vignette se range par une transformation, ancrée à son coin : son cadre ne
+/// change pas. Réduire les animations : elle change de taille sans mouvement.
+struct CallSelfTileStow: ViewModifier {
+    let factor: CGFloat
+    let anchor: UnitPoint
+    let isChromeVisible: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(factor, anchor: anchor)
+            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isChromeVisible)
+    }
+}

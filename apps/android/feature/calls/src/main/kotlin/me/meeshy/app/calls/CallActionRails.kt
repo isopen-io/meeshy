@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallActionFamily
 import me.meeshy.sdk.model.call.CallActionFamilyRow
-import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallRailSide
 import me.meeshy.sdk.model.call.CallRailsLayout
 import me.meeshy.sdk.model.call.railSide
@@ -77,6 +77,8 @@ internal fun CallActionRails(
     onAction: (CallAction) -> Unit,
     bottomClearance: Dp,
     modifier: Modifier = Modifier,
+    /** A rail button touched while its rail is leaving relights the controls first (G2.7). */
+    onRevive: () -> Unit = {},
 ) {
     val safeHorizontal = rememberCallSafeHorizontalDp()
     Box(
@@ -94,6 +96,7 @@ internal fun CallActionRails(
                     dimmed = dimmed,
                     onAction = onAction,
                     safeHorizontalDp = safeHorizontal,
+                    onRevive = onRevive,
                 )
             }
         }
@@ -121,6 +124,7 @@ private fun BoxScope.CallActionRailSlot(
     dimmed: Set<CallAction>,
     onAction: (CallAction) -> Unit,
     safeHorizontalDp: Float,
+    onRevive: () -> Unit,
 ) {
     var lastRow by remember { mutableStateOf(row) }
     SideEffect { if (row != null) lastRow = row }
@@ -128,14 +132,18 @@ private fun BoxScope.CallActionRailSlot(
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val side = family.railSide
     val travelPx = with(LocalDensity.current) { CallRailsLayout.slideOffset(side, rtl, safeHorizontalDp).dp.roundToPx() }
-    val fade = CallChromeVisibility.FADE_DURATION_MILLIS.toInt()
+    val fade = CallChromeStow.fadeMillis(reduceMotion)
     AnimatedVisibility(
         visible = row != null,
         modifier = Modifier.align(if (side == CallRailSide.Leading) Alignment.CenterStart else Alignment.CenterEnd),
         enter = if (reduceMotion) fadeIn(tween(fade)) else slideInHorizontally(tween(RAIL_SLIDE_MILLIS)) { travelPx } + fadeIn(tween(RAIL_SLIDE_MILLIS)),
         exit = if (reduceMotion) fadeOut(tween(fade)) else slideOutHorizontally(tween(RAIL_SLIDE_MILLIS)) { travelPx } + fadeOut(tween(RAIL_SLIDE_MILLIS)),
     ) {
-        (row ?: lastRow)?.let { CallActionRail(it, items, dimmed, onAction) }
+        (row ?: lastRow)?.let { shown ->
+            Box(Modifier.callReviveOnTouch(isHidden = row == null, onRevive = onRevive)) {
+                CallActionRail(shown, items, dimmed, onAction)
+            }
+        }
     }
 }
 

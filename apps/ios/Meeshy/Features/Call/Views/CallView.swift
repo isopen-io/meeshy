@@ -39,8 +39,6 @@ struct CallView: View {
     /// et aucun masquage ne tombe sous un doigt posé.
     @State var showTranscript = false
     @State var showOriginalText = false
-    /// OPUS-4 — mes réglages à l'ouverture d'Effets, gardés à travers le décroché.
-    @State var effectsEntryConfig: VideoFilterConfig?
     /// Progression du morph PiP (0 = plein écran, 1 = contracté vers la
     /// bannière). Piloté par `collapseIntoPip()` (réduction) et par
     /// `onAppear` (expansion depuis la bannière) — voir le trio
@@ -82,6 +80,7 @@ struct CallView: View {
     // l'avatar des cercles d'appel et le fond pleine page.
     @State var remoteProfile: MeeshyUser?
     @State var showQualityDetail = false
+    @State var headerNames = CallHeaderNames(givenName: nil, groupName: nil)
     /// #8276 — le maillage d'un appel de groupe, injecté comme `callManager`
     /// (jamais un `= .shared` par défaut, même hazard P1-16) : sa grille vit
     /// DANS l'écran d'appel, entre l'en-tête et la pilule.

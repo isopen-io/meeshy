@@ -66,7 +66,7 @@ object CallTranscriptReplay {
                         segment.speakerDisplayName?.takeIf { it.isNotBlank() } ?: participantLabel
                     },
                     isLocal = isLocal,
-                    elapsedLabel = startMs?.let { CallDuration.clock(maxOf(0L, segment.capturedAtMs - it) / MILLIS_PER_SECOND) },
+                    elapsedLabel = CallJournalClock.label(segment.capturedAtMs, startMs),
                     original = segment.text,
                     translated = translation?.text,
                     translatedLanguage = translation?.language,
@@ -101,7 +101,7 @@ object CallTranscriptReplay {
         return atMs to CallTranscriptLine(
             speakerName = name,
             isLocal = isLocal,
-            elapsedLabel = startMs?.let { CallDuration.clock(maxOf(0L, atMs - it) / MILLIS_PER_SECOND) },
+            elapsedLabel = CallJournalClock.label(atMs, startMs),
             original = "",
             translated = null,
             translatedLanguage = null,
@@ -116,8 +116,6 @@ object CallTranscriptReplay {
             candidates = segment.translations.map { PrismCandidate(it.targetLanguage, it.translatedText) },
             preferredLanguages = prism,
         )
-
-    private const val MILLIS_PER_SECOND = 1_000L
 }
 
 /**

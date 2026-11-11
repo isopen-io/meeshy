@@ -113,7 +113,6 @@ extension CallView {
                 && (isOnMac || callManager.availableCameras.contains(where: { $0.isExternal })),
             isConnected: isConnected,
             mayRecord: callManager.mayRequestRecording || callManager.recording.phase.isActive,
-            canPictureInPicture: callManager.canActivateSystemPiP || callManager.isSystemPiPActive,
             showsVideo: callManager.isVideoUIActive
         )
     }
@@ -132,8 +131,8 @@ extension CallView {
 
     private static let pillShape = RoundedRectangle(cornerRadius: 32, style: .continuous)
 
-    /// Les rangées naissent du bas du bloc, là où est le (…) ; avec Réduire
-    /// les animations elles apparaissent en fondu, sans rien déplacer.
+    /// Les rangées naissent du bas du bloc, là où est le (…) ; la rangée de base s'y retire par
+    /// le même morphisme (le verre se resserre). Réduire les animations : un fondu, rien ne bouge.
     private var unfoldTransition: AnyTransition {
         reduceMotion
             ? .opacity
@@ -151,7 +150,7 @@ extension CallView {
         let disposition = controlsDisposition
         let text = pillText
         return VStack(spacing: 0) {
-            if disposition.unfoldsPill(for: layer) {
+            if text.hasBaseRow, disposition.unfoldsPill(for: layer) {
                 VStack(spacing: 0) {
                     if layer.pillPanel == .journal {
                         journalPanelRows
@@ -168,14 +167,17 @@ extension CallView {
                 }
                 .transition(unfoldTransition)
             }
-            if text == .captions {
+            if text.showsCaptionsBand {
                 VStack(spacing: 0) {
                     captionsBand(hasOwnGlass: false)
-                    pillHairline
+                    if text.hasBaseRow { pillHairline }
                 }
                 .transition(.opacity)
             }
-            baseRow
+            if text.hasBaseRow {
+                baseRow
+                    .transition(unfoldTransition)
+            }
         }
         .clipShape(Self.pillShape)
         .callControlsGlass(in: Self.pillShape)
@@ -192,14 +194,12 @@ extension CallView {
             .accessibilityHidden(true)
     }
 
-    /// La pilule ET, quand elle est rangée par un toucher, le verre des sous-titres qui
-    /// reste à sa place (loi 11). Un seul emplacement pour le duo et pour le groupe.
+    /// La pilule ; rangée, elle garde ses sous-titres dans le même verre qui se resserre (lois 11, 17).
     var callControlsBlock: some View {
-        ZStack(alignment: .bottom) {
-            callControlsPill
-                .callChromeVisibility(isChromeVisible)
-            stowedCaptions
-        }
+        let isShown = isChromeVisible || pillText.staysWhenChromeStowed
+        return callControlsPill
+            .callChromeVisibility(isShown)
+            .modifier(CallEdgeStow(edge: .bottom, margin: Self.chromeBottomInset, isVisible: isShown, reduceMotion: reduceMotion))
     }
 
     private func unfoldedRows<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -213,7 +213,7 @@ extension CallView {
     /// Les mêmes quatre boutons partout, légendés dès que les rangées
     /// légendées sont déployées au-dessus d'eux.
     private var baseRow: some View {
-        let captioned = controlsDisposition.unfoldsPill(for: layer) && layer.pillPanel != .journal
+        let captioned = controlsDisposition.unfoldsPill(for: layer) && layer.captionsBaseRow
         return AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
             HStack(alignment: .top, spacing: 0) {
                 moreButton(captioned: captioned)
@@ -368,8 +368,6 @@ extension CallView {
             captionsActionButton(captioned: captioned, diameter: diameter)
         case .recording:
             recordingActionButton(captioned: captioned, diameter: diameter)
-        case .pictureInPicture:
-            pictureInPictureActionButton(captioned: captioned, diameter: diameter)
         case .addPeople:
             addPeopleActionButton(captioned: captioned, diameter: diameter)
         case .react:
@@ -433,28 +431,5 @@ extension CallView {
         }
         .menuIndicator(.hidden)
         .accessibilityLabel(String(localized: "call.control.camera", defaultValue: "Choisir la caméra", bundle: .main))
-    }
-
-    /// PiP système : visible seulement si l'appel y est éligible (vidéo, piste
-    /// distante, caméra distante allumée, appareil compatible) — ou déjà actif,
-    /// pour pouvoir en sortir.
-    private func pictureInPictureActionButton(captioned: Bool, diameter: CGFloat) -> some View {
-        let isActive = callManager.isSystemPiPActive
-        return CallPillButton(
-            symbol: isActive ? "pip.exit" : "pip.enter",
-            kind: isActive ? .active : .normal,
-            label: isActive
-                ? String(localized: "call.control.pip.exit", defaultValue: "Quitter le mode Picture-in-Picture", bundle: .main)
-                : String(localized: "call.control.pip", defaultValue: "Réduire en Picture-in-Picture", bundle: .main),
-            caption: captioned ? String(localized: "call.control.pip.caption", defaultValue: "PiP", bundle: .main) : nil,
-            hint: isActive ? nil : String(localized: "call.control.pip.hint", defaultValue: "Ferme l'écran d'appel et garde la vidéo dans une fenêtre flottante", bundle: .main),
-            diameter: diameter
-        ) {
-            if isActive {
-                callManager.stopSystemPiP()
-            } else {
-                enterSystemPiP()
-            }
-        }
     }
 }
