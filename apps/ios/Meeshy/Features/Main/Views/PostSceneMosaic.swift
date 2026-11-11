@@ -145,7 +145,7 @@ struct PostSceneMosaic: View {
             FeedCaptionOverlay(
                 caption: SceneCaption.resolve(sceneIndex: tuile.sceneIndex,
                                               in: document, post: post,
-                                              carrierFallback: false),
+                                              carrierFallback: false, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)),
                 words: MosaicLayout.captionWordLimit(mode: mode,
                                                      visualCount: document.scenes.count,
                                                      tileWidth: tuile.width))

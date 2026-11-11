@@ -68,11 +68,11 @@ extension MeeshyComposerHost {
     /// sinon ; un texte va au contenu ou à la légende selon le format.
     func handlePastedItems(_ items: [StoryPastedItem]) {
         guard sceneIntakeAllowsAnother else { return }
-        var aUnFond = ComposerPasteRouting.sceneHasBackgroundMedia(
-            viewModel.currentSlide.effects, slideImage: viewModel.slideImages[viewModel.currentSlide.id] != nil)
+        var fonds = ComposerPasteBackground(
+            effects: viewModel.currentSlide.effects, slideImage: viewModel.slideImages[viewModel.currentSlide.id] != nil)
         for item in items {
-            let cible = ComposerPasteRouting.target(for: item, format: selectedFormat, sceneHasBackgroundMedia: aUnFond)
-            if cible == .sceneBackground { aUnFond = true }
+            let cible = ComposerPasteRouting.target(for: item, format: selectedFormat, background: fonds)
+            if cible == .sceneBackground { fonds = fonds.posing(item) }
             switch item {
             case .text(let contenu):
                 ComposerPasteRouting.paste(contenu, format: selectedFormat, documentText: &documentText, scene: viewModel)

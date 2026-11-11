@@ -287,4 +287,31 @@ final class SceneCaptionTests: XCTestCase {
         let document = CanvasV3(scenes: [sceneBg("s1", mediaId: "m1")])
         XCTAssertTrue(SceneCaption.addressesAnyMedia(document))
     }
+
+    // MARK: - #13640 — la légende d'une scène est servie par le Prisme
+
+    func test_resolve_withReaderPrism_servesTheTranslatedCaption() {
+        var traduite = media("m1", caption: "the quay")
+        traduite.captionLanguage = "en"
+        traduite.captionTranslations = ["fr": "le quai"]
+        let publication = post(media: [traduite])
+        let document = CanvasV3(scenes: [scene("s1", porte: "m1")])
+
+        XCTAssertEqual(
+            SceneCaption.resolve(sceneIndex: 0, in: document, post: publication,
+                                 carrierFallback: false, preferredLanguages: ["fr", "en"]),
+            "le quai", "la carte de scène du fil sert la légende dans la langue du lecteur")
+    }
+
+    func test_feedSurfaces_passTheReaderPrismToTheSceneCaption() throws {
+        for fichier in ["FeedPostCard.swift", "PostSceneMosaic.swift"] {
+            let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Views/\(fichier)")
+            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            XCTAssertTrue(source.contains("carrierFallback: false, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)"),
+                          "\(fichier) sert la légende de scène par le Prisme")
+        }
+    }
 }
+

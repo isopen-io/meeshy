@@ -150,10 +150,10 @@ extension MeeshyComposerHost {
                     // choisirait « en vague » et la publication partirait dans
                     // le repli.
                     layout: choice.layout),
-                // **Les légendes du composer, enfin remises** (#4756). Cette
-                // carte avait un écrivain et aucun lecteur sur cette voie : ce
-                // qui manquait n'était pas la saisie, c'était ce passage-ci.
-                mediaCaptions: documentMediaCaptions,
+                // **Les légendes du composer, enfin remises** (#4756), et celle
+                // de chaque scène sur son visuel quand elle part en post (#13640).
+                mediaCaptions: ComposerSlideTextRole.carryingSlideLegends(documentMediaCaptions, format: choice.format,
+                    slideIdByMediaURL: slideIdByMediaURL, objectIdBySource: documentMediaObjectIdBySource, slides: viewModel.slides),
                 // **La traduction de clé se fait ICI, et nulle part ailleurs.**
                 //
                 // L'éditeur d'objet écrit par identifiant d'OBJET — c'est ce

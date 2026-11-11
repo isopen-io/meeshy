@@ -133,42 +133,67 @@ final class PasteDestinationTests: XCTestCase {
     // MARK: - Le bouton « Coller » (décision porteur du 2026-11-11, #13640, #17434)
 
     private func cible(_ item: StoryPastedItem, _ format: ComposerFormat = .story,
-                       fond: Bool = false) -> ComposerPasteTarget {
-        ComposerPasteRouting.target(for: item, format: format, sceneHasBackgroundMedia: fond)
+                       visuel: Bool = false, son: Bool = false) -> ComposerPasteTarget {
+        ComposerPasteRouting.target(for: item, format: format,
+                                    background: ComposerPasteBackground(visual: visuel, sound: son))
     }
 
-    func test_target_mediaOnASceneWithoutBackground_becomesTheBackground() {
-        XCTAssertEqual(cible(.image(UIImage())), .sceneBackground)
-        XCTAssertEqual(cible(.video(URL(fileURLWithPath: "/tmp/a.mov"))), .sceneBackground)
-        XCTAssertEqual(cible(.audio(URL(fileURLWithPath: "/tmp/a.m4a"))), .sceneBackground)
+    private let image = StoryPastedItem.image(UIImage())
+    private let video = StoryPastedItem.video(URL(fileURLWithPath: "/tmp/a.mov"))
+    private let audio = StoryPastedItem.audio(URL(fileURLWithPath: "/tmp/a.m4a"))
+
+    func test_target_visualWithoutVisualBackground_becomesTheBackground_evenOverABackgroundSound() {
+        XCTAssertEqual(cible(image), .sceneBackground)
+        XCTAssertEqual(cible(video), .sceneBackground)
+        XCTAssertEqual(cible(image, son: true), .sceneBackground, "un son de fond n'est pas un fond visuel")
+        XCTAssertEqual(cible(video, son: true), .sceneBackground)
     }
 
-    func test_target_mediaOnASceneWithABackground_isPosedOnTheScene() {
-        XCTAssertEqual(cible(.image(UIImage()), fond: true), .sceneObject, "le fond déjà posé reste")
-        XCTAssertEqual(cible(.video(URL(fileURLWithPath: "/tmp/a.mov")), fond: true), .sceneObject)
-        XCTAssertEqual(cible(.audio(URL(fileURLWithPath: "/tmp/a.m4a")), fond: true), .sceneObject)
+    func test_target_visualOnAVisualBackground_isPosedOnTheScene() {
+        XCTAssertEqual(cible(image, visuel: true), .sceneObject, "le fond déjà posé reste")
+        XCTAssertEqual(cible(video, visuel: true, son: true), .sceneObject)
+    }
+
+    func test_target_soundWithoutBackgroundSound_becomesTheBackgroundSound_evenOverAVisual() {
+        XCTAssertEqual(cible(audio), .sceneBackground)
+        XCTAssertEqual(cible(audio, visuel: true), .sceneBackground, "un fond visuel n'est pas un son de fond")
+    }
+
+    func test_target_soundOnABackgroundSound_isPosedOnTheScene() {
+        XCTAssertEqual(cible(audio, son: true), .sceneObject)
+        XCTAssertEqual(cible(audio, visuel: true, son: true), .sceneObject)
+    }
+
+    func test_posing_marksOnlyThePastedFamily() {
+        let vide = ComposerPasteBackground(visual: false, sound: false)
+        XCTAssertEqual(vide.posing(image), ComposerPasteBackground(visual: true, sound: false))
+        XCTAssertEqual(vide.posing(audio), ComposerPasteBackground(visual: false, sound: true))
+        XCTAssertEqual(vide.posing(.text("x")), vide)
     }
 
     func test_target_textOnAPost_goesToThePublicationContent() {
         XCTAssertEqual(cible(.text("Bonjour"), .post), .publicationContent)
-        XCTAssertEqual(cible(.text("Bonjour"), .post, fond: true), .publicationContent)
+        XCTAssertEqual(cible(.text("Bonjour"), .post, visuel: true), .publicationContent)
         XCTAssertEqual(cible(.text("Bonjour"), .status), .publicationContent)
     }
 
     func test_target_textOnAStoryOrAReel_becomesTheSlideLegend() {
         XCTAssertEqual(cible(.text("Bonjour"), .story), .slideLegend)
-        XCTAssertEqual(cible(.text("Bonjour"), .reel, fond: true), .slideLegend)
+        XCTAssertEqual(cible(.text("Bonjour"), .reel, visuel: true), .slideLegend)
         XCTAssertEqual(cible(.text(Array(repeating: "mot", count: 40).joined(separator: " ")), .story),
                        .slideLegend, "un texte long comme un texte court : jamais un objet texte de scène")
     }
 
-    func test_sceneHasBackgroundMedia_countsTheBackgroundSound() {
+    func test_background_readsEachFamilyApart() {
         var effets = StoryEffects()
-        XCTAssertFalse(ComposerPasteRouting.sceneHasBackgroundMedia(effets, slideImage: false))
-        XCTAssertTrue(ComposerPasteRouting.sceneHasBackgroundMedia(effets, slideImage: true), "image de slide")
+        XCTAssertEqual(ComposerPasteBackground(effects: effets, slideImage: false),
+                       ComposerPasteBackground(visual: false, sound: false))
+        XCTAssertEqual(ComposerPasteBackground(effects: effets, slideImage: true),
+                       ComposerPasteBackground(visual: true, sound: false), "l'image de slide est un fond visuel")
         effets.audioPlayerObjects = [StoryAudioPlayerObject(postMediaId: "s", placement: "overlay", x: 0.5, y: 0.5,
                                                             volume: 1, waveformSamples: [], isBackground: true)]
-        XCTAssertTrue(ComposerPasteRouting.sceneHasBackgroundMedia(effets, slideImage: false), "son de fond")
+        XCTAssertEqual(ComposerPasteBackground(effects: effets, slideImage: false),
+                       ComposerPasteBackground(visual: false, sound: true), "le son de fond ne compte que pour un son")
     }
 
     func test_publicationText_emptyContent_takesThePastedText() {
@@ -226,7 +251,8 @@ final class PasteDestinationTests: XCTestCase {
         let corps = String(source[debut.upperBound...].prefix(1800))
         XCTAssertTrue(corps.contains("ComposerPasteRouting.target(for: item, format: selectedFormat"),
                       "la destination vient de la loi, avec le format choisi")
-        XCTAssertTrue(corps.contains("ComposerPasteRouting.sceneHasBackgroundMedia("), "le fond déjà posé compte")
+        XCTAssertTrue(corps.contains("ComposerPasteBackground(") && corps.contains("effects: viewModel.currentSlide.effects"),
+                      "le fond déjà posé compte, par famille")
         XCTAssertTrue(corps.contains("ComposerPasteRouting.paste(contenu, format: selectedFormat"))
         XCTAssertFalse(corps.contains("StoryPastePolicy.placement"), "le texte ne devient plus un objet de scène")
         XCTAssertFalse(corps.contains("backgroundReplacementId"), "coller ne remplace jamais un fond déjà posé")
