@@ -132,7 +132,7 @@ class MeeshyGlassToneTest {
     }
 
     @Test
-    fun `opaque - ni flou, ni reflet, ni ombre pour un verre de ton ; la surface pleine repond par l'echelle`() {
+    fun `opaque - ni flou, ni reflet, ni ombre pour un verre de ton, la surface pleine repond par l echelle`() {
         listOf(MeeshyGlassTone.Plain, MeeshyGlassTone.Deep, MeeshyGlassTone.OnLight).forEach { tone ->
             val rest = recipe(tone, interactive = true, material = MeeshyGlassMaterial.Opaque)
             val pressed = recipe(tone, interactive = true, pressed = true, material = MeeshyGlassMaterial.Opaque)
