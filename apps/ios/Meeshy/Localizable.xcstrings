@@ -239577,7 +239577,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "People read you in your language."
+            "value": "Your contacts read you in their language."
           }
         },
         "es": {
@@ -239589,7 +239589,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos proches vous lisent dans votre langue."
+            "value": "Vos proches vous lisent dans leur langue."
           }
         },
         "it": {

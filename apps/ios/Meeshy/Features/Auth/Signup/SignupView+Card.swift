@@ -427,7 +427,7 @@ extension SignupView {
             Text(String(localized: "auth.signup.card.verified", defaultValue: "Compte validé !", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundStyle(theme.textPrimary)
-            Text(String(localized: "auth.signup.card.verified.lead", defaultValue: "Vos proches vous lisent dans votre langue.", bundle: .main))
+            Text(String(localized: "auth.signup.card.verified.lead", defaultValue: "Vos proches vous lisent dans leur langue.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)

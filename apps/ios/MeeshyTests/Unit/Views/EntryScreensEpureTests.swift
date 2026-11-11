@@ -86,7 +86,7 @@ final class EntryScreensEpureTests: XCTestCase {
         "signInLink.deviceConfirm.messageReplacing": "Ce lien n'a pas été demandé depuis cet appareil. Il ouvre %1$@ à la place de %2$@ (qui reste au sélecteur de comptes) : continuez seulement s'il vous appartient.",
         "onboarding.email.body": "Touche le lien reçu pour confirmer ton compte.",
         "onboarding.profile.body": "Un visage et une bannière : on te reconnaît partout.",
-        "auth.signup.card.verified.lead": "Vos proches vous lisent dans votre langue.",
+        "auth.signup.card.verified.lead": "Vos proches vous lisent dans leur langue.",
         "emailVerification.title": "Confirmez votre adresse e-mail",
         "emailVerification.success": "Adresse confirmée ✓",
         "emailVerification.code.a11yHint": "Entrez le code à 6 chiffres reçu par e-mail",
