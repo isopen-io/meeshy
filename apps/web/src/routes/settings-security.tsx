@@ -328,7 +328,7 @@ function SessionCard({
   );
 }
 
-/** Une ligne de la fiche ; le lieu porte un (i) qui dit d'où il vient (la note couvre les deux colonnes). */
+/** Une ligne de la fiche ; le lieu porte un (i) qui dit d'où il vient, et sa note se lit dans la définition — un `dl` ne porte que des termes et des définitions. */
 function FieldRow({ field, note }: { readonly field: SessionField; readonly note: InfoHint | undefined }) {
   const state = useInfoHint();
   return (
@@ -339,8 +339,8 @@ function FieldRow({ field, note }: { readonly field: SessionField; readonly note
       </dt>
       <dd className="min-w-0 break-words" style={{ color: SECTION_INK }} {...(field.ltr ? { dir: 'ltr' } : {})}>
         {field.value}
+        {note === undefined ? null : <InfoHintText hint={note} state={state} inline />}
       </dd>
-      {note === undefined ? null : <InfoHintText hint={note} state={state} className="col-span-full" />}
     </div>
   );
 }

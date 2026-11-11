@@ -113,6 +113,17 @@ describe('la liste', () => {
     expect(card?.querySelector('[data-session-field="ip"] dd')?.getAttribute('dir')).toBe('ltr');
   });
 
+  test('le (i) du lieu dit d’où il vient, et la fiche reste une liste de termes et de définitions', async () => {
+    const { element } = harness();
+    const host = await mount(element);
+    await settle();
+    const place = host.querySelector('[data-session="autre"] [data-session-field="place"]');
+    const button = place?.querySelector('button');
+    expect(button?.getAttribute('aria-label')).toBe('D’où vient ce lieu ?');
+    expect(host.querySelector(`[id="${button?.getAttribute('aria-controls') ?? ''}"]`)?.textContent).toBe('Lieux approximatifs, déduits de l’adresse IP.');
+    expect([...(place?.children ?? [])].map((child) => child.tagName)).toEqual(['DT', 'DD']);
+  });
+
   test('l’attribution DB-IP servie est un lien vers db-ip.com', async () => {
     const { element } = harness();
     const host = await mount(element);
