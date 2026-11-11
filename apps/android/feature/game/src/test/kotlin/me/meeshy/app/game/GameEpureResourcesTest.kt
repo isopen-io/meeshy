@@ -45,7 +45,19 @@ class GameEpureResourcesTest {
         "game_concept_card_a11y",
         "game_concept_fact_after",
         "game_concept_fact_required",
-    )
+        "game_concept_flame_tip_2",
+        "game_concept_missions_tip_2",
+        "game_concept_prestige_tip_2",
+        "game_concept_meesh_tip_1",
+        "game_concept_meesh_tip_2",
+        "game_concept_season_tip_1",
+        "game_concept_season_tip_2",
+        "game_flame_panel_offline",
+        "game_missions_offline",
+        "game_mint_offline",
+        "game2_door_prestige",
+    ) + listOf("level", "points", "meesh", "glory", "flame", "missions", "league", "season", "prestige")
+        .map { "game_rules_concept_${it}_body" }
 
     private val retiredLanguages = listOf("values", "values-fr", "values-es", "values-pt", "values-de", "values-it", "values-ar")
 
@@ -107,11 +119,62 @@ class GameEpureResourcesTest {
     }
 
     @Test
-    fun `l erreur du nom de joute ne dit que les caracteres permis`() {
-        val invalid = text(R.string.game2_league_pseudonym_invalid)
-        assertThat(invalid).doesNotContain("3 à 20")
-        assertThat(invalid).contains("tiret bas")
-        assertThat(text(R.string.game2_league_pseudonym_hint_change)).contains("3 à 20")
+    fun `l erreur du nom de joute ne dit que non valable et la regle des caracteres n est dite qu une fois`() {
+        assertThat(text(R.string.game2_league_pseudonym_invalid)).isEqualTo("Non valable.")
+        assertThat(text(R.string.game_error_league_pseudonym_invalid)).isEqualTo("Non valable.")
+        assertThat(text(R.string.game2_league_pseudonym_hint_change))
+            .isEqualTo("3 à 20 caractères (lettres, chiffres, . - _). Ni ton nom, ni ton identifiant.")
+    }
+
+    @Test
+    fun `la renaissance dit sa consequence en une phrase`() {
+        assertThat(text(R.string.game2_prestige_meo))
+            .isEqualTo("Ton niveau repart à 1 et tes étincelles à 0 ; ton rang, ta gloire et tes Meeshes restent.")
+    }
+
+    @Test
+    fun `la confidentialite de l atlas tient en une phrase`() {
+        assertThat(text(R.string.game2_atlas_privacy))
+            .isEqualTo("Privé par défaut : le jeu garde la langue et la date, jamais l’interlocuteur ni la conversation.")
+    }
+
+    @Test
+    fun `le voyage et le sceau disent leur repere sans redire la ligne voisine`() {
+        assertThat(text(R.string.game2_season_how)).isEqualTo("Les actes et les alliances te font avancer de quelques pas. Tout le voyage est gratuit.")
+        assertThat(text(R.string.game2_season_seal_body)).isEqualTo("Purement décoratif : un objet à collectionner toutes les %1\$s haltes.")
+    }
+
+    @Test
+    fun `les reglages du jeu nomment et ne repetent pas`() {
+        assertThat(text(R.string.game2_settings_notifications_body)).isEqualTo("Une par jour au plus, sur tous tes appareils.")
+        assertThat(text(R.string.game2_settings_notifications_switch)).isEqualTo("Notifications")
+        assertThat(text(R.string.game2_settings_friends_league_body))
+            .isEqualTo("Tes amis acceptés et toi vous voyez dans le classement de la semaine ; l’interrupteur retire les deux sens.")
+    }
+
+    @Test
+    fun `les intitules du carnet nomment`() {
+        assertThat(text(R.string.game_rules_section_rules)).isEqualTo("Règles")
+        assertThat(text(R.string.game_rules_section_concepts)).isEqualTo("Concepts")
+    }
+
+    @Test
+    fun `chaque regle du carnet tient en une phrase`() {
+        listOf(R.string.game_rules_4_body, R.string.game_rules_5_body, R.string.game_rules_6_body, R.string.game_rules_7_body).forEach {
+            assertThat(text(it).count { c -> c == '.' }).isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `la fiche de la piece et le panneau de la flamme ne gardent que la valeur`() {
+        assertThat(text(R.string.game_detail_coin_what)).isEqualTo("La Meesh, c’est ta lumière figée dans une pièce numérotée.")
+        assertThat(text(R.string.game_detail_fact_mint_next)).isEqualTo("Une sur cent est en or, une sur mille en prisme.")
+        assertThat(text(R.string.game_flame_panel_freeze_full)).isEqualTo("Toutes tes Veilleuses sont là.")
+    }
+
+    @Test
+    fun `la chronique vide tient en une ligne`() {
+        assertThat(text(R.string.game_notebook_empty)).isEqualTo("Chaque signe de tes aïeux peut devenir une photo ici.")
     }
 
     @Test

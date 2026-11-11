@@ -136,9 +136,11 @@ fun ProgressionConceptScreen(
             if (fiche != null && fiche.hasWhere) {
                 FicheSection(stringResource(R.string.game_fiche_where)) { ConceptWhereContent(fiche, concept) }
             }
-            FicheSection(stringResource(R.string.game_fiche_earn)) {
-                Sentence(stringResource(ConceptCopy.tip1(concept)))
-                Sentence(stringResource(ConceptCopy.tip2(concept)))
+            val tips = ConceptCopy.tips(concept)
+            if (tips.isNotEmpty()) {
+                FicheSection(stringResource(R.string.game_fiche_earn)) {
+                    tips.forEach { Sentence(stringResource(it)) }
+                }
             }
             val game = snapshot.game
             // La frappe monte en tête avec l'Héritage : « À toi de jouer » ne la redit pas.
