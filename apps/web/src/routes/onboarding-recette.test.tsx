@@ -180,6 +180,9 @@ describe('#7908 — les points sont ceux du serveur, élan compris', () => {
     const { deps } = harness();
     const host = await mount(<OnboardingJourney deps={deps} search={at('friends')} clearSearch={() => undefined} />);
     expect(text(host, '[data-onb-card="friends"] .onb-reward-hint')).toBe('Au moins +7 chacun quand elle accepte');
+    const card = host.querySelector('[data-onb-card="friends"]')?.textContent ?? '';
+    expect(card).toContain('Ajoute 3 personnes qui te ressemblent.');
+    expect(card).not.toContain('tous les deux');
   });
 });
 

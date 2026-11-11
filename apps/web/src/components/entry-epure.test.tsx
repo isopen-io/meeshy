@@ -46,7 +46,7 @@ function mount(node: React.ReactNode): HTMLDivElement {
 describe('/auth/magic-link — le même panneau que /login', () => {
   test('la phrase qui dit ce que fait la porte est visible au repos ; le (i) ne garde que la durée', () => {
     const el = mount(<MagicLinkPanel />);
-    const lead = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Pas de mot de passe à retenir'));
+    const lead = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Pas de mot de passe'));
     expect(lead).toBeDefined();
     expect(lead?.classList.contains('sr-only')).toBe(false);
     const info = el.querySelector('button[aria-label="Combien de temps le lien reste valable ?"]');

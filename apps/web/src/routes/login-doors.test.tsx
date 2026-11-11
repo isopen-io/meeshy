@@ -82,8 +82,8 @@ describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', 
 
   test('la phrase qui dit ce que fait la porte est LISIBLE AU REPOS, sous le titre, sans (i) ni clic (épure #17584, règle 7)', () => {
     const el = mountAt('/login');
-    const lead = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Pas de mot de passe à retenir'));
-    expect(lead?.textContent).toBe('Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.');
+    const lead = [...el.querySelectorAll('p')].find((p) => (p.textContent ?? '').startsWith('Pas de mot de passe'));
+    expect(lead?.textContent).toBe('Pas de mot de passe : nous vous envoyons un lien de connexion par e-mail.');
     expect(lead?.classList.contains('sr-only')).toBe(false);
   });
 

@@ -195,6 +195,17 @@ const precedes = (first: Element | null, second: Element | null): boolean =>
   first !== null && second !== null && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
 describe('WorldGuestEntry — une vue, un clic (#10098)', () => {
+  test('une ligne d’orientation SOUS le titre dit ce qu’est World Wide, lisible au repos (règle 7, #17666)', async () => {
+    const { deps: d } = deps();
+    const host = await mount({ deps: d });
+    const title = host.querySelector('h1');
+    const about = host.querySelector('[data-world-about]');
+    expect(about?.textContent).toBe('La conversation ouverte à tous, traduite dans votre langue.');
+    expect(about?.classList.contains('sr-only')).toBe(false);
+    expect(precedes(title, about)).toBe(true);
+    expect(precedes(about, nameField(host))).toBe(true);
+  });
+
   test('une phrase LISIBLE AU REPOS dit que l’entrée se fait sans compte et ce que voient les autres (épure #17584, règle 7)', async () => {
     const { deps: d } = deps();
     const host = await mount({ deps: d });
