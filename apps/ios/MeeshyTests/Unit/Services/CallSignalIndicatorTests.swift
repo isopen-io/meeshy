@@ -375,22 +375,59 @@ final class CallHangupFastPathTests: XCTestCase {
             row.contains("private var speakerColor: Color { Color(hex: line.speakerColorHex) }"),
             "La couleur de la ligne est celle de son AUTEUR, dérivée de son identifiant (#16614)."
         )
-        XCTAssertEqual(
-            row.components(separatedBy: ".foregroundStyle(speakerColor)").count - 1, 1,
-            "Le NOM porte toujours la couleur de son auteur (#16662)."
+        XCTAssertTrue(
+            row.contains("nameColor: speakerColor") && row.contains(".foregroundStyle(speakerColor)"),
+            "Le NOM porte toujours la couleur de son auteur, dans la phrase comme dans le journal (#16662)."
         )
         XCTAssertTrue(
-            row.contains(".foregroundColor(line.textColorHex.map { Color(hex: $0) } ?? .white)"),
+            row.contains("textColor: line.textColorHex.map { Color(hex: $0) } ?? .white"),
             "La phrase ne prend la couleur que traduite ; l'original reste à l'encre de l'appel (#16662)."
         )
         XCTAssertTrue(
-            row.contains("Text(speakerHeading)"),
-            "Le nom du locuteur est du texte VISIBLE, pas seulement une pastille."
+            row.contains("CallCaptionSentence.text("),
+            "Le nom du locuteur est du texte VISIBLE, en tête de la phrase : « Moi · texte » (loi 4)."
         )
         XCTAssertTrue(
-            row.contains(".accessibilityLabel(\"\\(line.speakerName) : \\(line.text)\")"),
+            row.contains(".accessibilityLabel(spokenLabel)") && row.contains("\\(line.speakerName) : \\(line.text)"),
             "…et VoiceOver l'annonce aussi : deux exigences distinctes."
         )
+    }
+
+    /// Loi 4 — l'original déplié sous la phrase traduite est en encre secondaire, jamais
+    /// à la couleur de l'auteur ni en blanc plein ; et ma ligne est signée « Moi ».
+    func test_captionRow_unfoldsTheOriginalBelow_inSecondaryInk() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "struct CallCaptionRow: View {"),
+              let end = view.range(of: "struct CallCaptionsBand: View {", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionRow must exist")
+            return
+        }
+        let row = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(row.contains("if let original = line.originalBelow"))
+        XCTAssertTrue(
+            row.contains("\\(CallCaptionsCopy.original) · \\(original)") && row.contains(".foregroundStyle(MeeshyColors.mediaChromeSecondary)"),
+            "« Original · … » en encre secondaire, sous la traduction (#17340)."
+        )
+    }
+
+    func test_localSpeaker_isSignedMoi_notWithTheNameNorVous() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "func speakerName(for segment"),
+              let end = view.range(of: "if isGroupStage,", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("speakerName(for:localUserId:) must exist")
+            return
+        }
+        let local = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(local.contains("\"common.me\""), "Ma ligne est signée « Moi » (loi 4).")
+        XCTAssertFalse(local.contains("call.transcript.you") || local.contains("displayName"), "Ni « Vous », ni mon pseudo.")
+    }
+
+    func test_captionsBand_isALabelledLiveRegion_andAnnouncesInQueue() throws {
+        let view = try AppSourceGuard.callViewSource()
+        XCTAssertTrue(view.contains("String(localized: \"call.captions.region\""), "La zone s'appelle « Sous-titres de l'appel ».")
+        XCTAssertTrue(view.contains(".accessibilityAddTraits(.updatesFrequently)"), "La zone est une région vive.")
+        XCTAssertTrue(view.contains("queuedAnnouncement"), "Une phrase annoncée attend la fin de la précédente.")
+        XCTAssertFalse(view.contains("UIAccessibility.post(notification: .announcement, argument: announcement)"))
     }
 
     func test_advanceCaptionsMode_off_startsTranscriptionAndLandsOnTranslated() throws {
