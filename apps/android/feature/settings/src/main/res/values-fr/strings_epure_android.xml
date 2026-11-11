@@ -71,8 +71,8 @@
     <string name="settings_packs_title">Boutique</string>
     <string name="settings_privacy_analytics_info">Mesure d\'usage anonyme : écrans ouverts, fonctionnalités utilisées, plantages. Jamais le contenu de vos messages, ni vos contacts.</string>
     <string name="settings_privacy_analytics_question">Que mesure l\'analytique ?</string>
-    <string name="settings_privacy_calls_non_contacts_info">Les autres voient que vous n\'acceptez que les appels de vos contacts.</string>
-    <string name="settings_privacy_calls_non_contacts_question">Qui peut m\'appeler ?</string>
+    <string name="settings_privacy_calls_non_contacts_info">Les autres voient que vous n\'acceptez que les appels de vos amis.</string>
+    <string name="settings_privacy_calls_non_contacts_question">Les autres savent-ils que je refuse les appels ?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">Désactivé, seuls vos amis peuvent vous faire sonner.</string>
     <string name="settings_privacy_hide_from_contact_search">Masquer mon numéro et mon e-mail</string>
     <string name="settings_privacy_hide_from_contact_search_question">Qui peut me trouver par mon numéro ?</string>
@@ -85,7 +85,7 @@
     <string name="settings_privacy_online_status_question">Qui voit que je suis en ligne ?</string>
     <string name="settings_privacy_online_status_subtitle">Pastille verte quand vous êtes actif.</string>
     <string name="settings_security_orientation">Mot de passe, 2FA, sessions, appareils chiffrés.</string>
-    <string name="settings_share_links_orientation">Droits, durée et limites de chaque lien.</string>
+    <string name="settings_share_links_orientation">Invitez avec un lien : choisissez ce que les invités peuvent faire, pour combien de temps et combien peuvent rejoindre.</string>
     <string name="settings_tools_progression_orientation">Jeu, saisons et ligues.</string>
     <string name="settings_transcription_orientation">Les vocaux reçus sont transcrits, puis traduits dans votre langue.</string>
     <string name="settings_voice_orientation">Votre voix clonée traduit vos vocaux. Elle demande votre consentement.</string>

@@ -151,10 +151,7 @@
     <string name="pack_shop_remove">Rimuovi</string>
     <string name="pack_shop_retry">Riprova</string>
     <string name="privacy_analytics">Analisi</string>
-    <string name="privacy_block_screenshots">Blocca gli screenshot</string>
     <string name="privacy_calls_non_contacts">Chiamate da non contatti</string>
-    <string name="privacy_contact_requests">Richieste di contatto</string>
-    <string name="privacy_group_invites">Inviti di gruppo</string>
     <string name="privacy_last_seen">Ultimo accesso</string>
     <string name="privacy_online_status">Stato online</string>
     <string name="privacy_read_receipts">Conferme di lettura</string>
@@ -163,7 +160,6 @@
     <string name="privacy_section_encryption">Crittografia</string>
     <string name="privacy_section_media">Media e dati</string>
     <string name="privacy_section_visibility">Visibilità</string>
-    <string name="privacy_share_data">Condivisione dei dati</string>
     <string name="privacy_typing_indicator">Indicatore di digitazione</string>
     <string name="purge_action_empty">Seleziona cosa svuotare</string>
     <string name="purge_action_hint">Elimina definitivamente i dati selezionati; verranno riscaricati quando serve</string>
@@ -188,7 +184,6 @@
     <string name="purge_limitation_no_store">I documenti non vengono memorizzati nella cache: non c\'è nulla da liberare.</string>
     <string name="purge_limitation_not_applicable">Non applicabile a questo ambito.</string>
     <string name="purge_select_all">Seleziona tutto</string>
-    <string name="purge_unattributed_label">Media orfani</string>
     <string name="purge_unattributed_title">Non attribuito</string>
     <string name="security_lock_configure">Configura</string>
     <string name="security_lock_configured">Configurato</string>
@@ -295,8 +290,6 @@
     <string name="settings_notifications_title">Notifiche</string>
     <string name="settings_open_source_licenses">Licenze open source</string>
     <string name="settings_packs_domain">Tipo di pacchetto</string>
-    <string name="settings_privacy_coming_soon">Presto disponibile</string>
-    <string name="settings_privacy_coming_soon_a11y">presto disponibile, attualmente senza effetto</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">Crittografia — presto disponibile, attualmente disattivata</string>
     <string name="settings_privacy_hide_from_contact_search_info">Se attivo, il tuo profilo non compare più in una ricerca per numero o e-mail, e i tuoi contatti non vengono avvisati del tuo arrivo su Meeshy.</string>
     <string name="settings_privacy_policy">Informativa sulla privacy</string>

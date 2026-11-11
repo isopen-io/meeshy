@@ -782,26 +782,8 @@
         },
         {
           "catalog": "app",
-          "iosKey": "settings.privacy.block_screenshots",
-          "androidName": "privacy_block_screenshots",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "settings.privacy.calls_non_contacts",
           "androidName": "privacy_calls_non_contacts",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.privacy.contact_requests",
-          "androidName": "privacy_contact_requests",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.privacy.group_invites",
-          "androidName": "privacy_group_invites",
           "status": "adopted"
         },
         {
@@ -850,12 +832,6 @@
           "catalog": "app",
           "iosKey": "settings.privacy.visibility",
           "androidName": "privacy_section_visibility",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.privacy.share_data",
-          "androidName": "privacy_share_data",
           "status": "adopted"
         },
         {

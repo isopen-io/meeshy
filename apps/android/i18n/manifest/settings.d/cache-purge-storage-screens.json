@@ -144,12 +144,6 @@
         },
         {
           "catalog": "ui",
-          "iosKey": "settings.cache.purge.unattributed.label",
-          "androidName": "purge_unattributed_label",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
           "iosKey": "settings.cache.purge.unattributed.title",
           "androidName": "purge_unattributed_title",
           "status": "adopted"

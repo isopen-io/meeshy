@@ -71,8 +71,8 @@
     <string name="settings_packs_title">Loja</string>
     <string name="settings_privacy_analytics_info">Métricas de uso anônimas: telas abertas, recursos usados, falhas. Nunca o conteúdo das suas mensagens nem seus contatos.</string>
     <string name="settings_privacy_analytics_question">O que a análise mede?</string>
-    <string name="settings_privacy_calls_non_contacts_info">Os outros veem que você só aceita chamadas dos seus contatos.</string>
-    <string name="settings_privacy_calls_non_contacts_question">Quem pode me ligar?</string>
+    <string name="settings_privacy_calls_non_contacts_info">Os outros veem que você só aceita chamadas dos seus amigos.</string>
+    <string name="settings_privacy_calls_non_contacts_question">Os outros sabem que recuso chamadas?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">Desativado, só seus amigos podem fazer seu telefone tocar.</string>
     <string name="settings_privacy_hide_from_contact_search">Ocultar meu número e meu e-mail</string>
     <string name="settings_privacy_hide_from_contact_search_question">Quem pode me encontrar pelo meu número?</string>
@@ -85,7 +85,7 @@
     <string name="settings_privacy_online_status_question">Quem vê que estou online?</string>
     <string name="settings_privacy_online_status_subtitle">Ponto verde quando você está ativo.</string>
     <string name="settings_security_orientation">Senha, 2FA, sessões, dispositivos criptografados.</string>
-    <string name="settings_share_links_orientation">Permissões, duração e limites de cada link.</string>
+    <string name="settings_share_links_orientation">Convide com um link: escolha o que podem fazer, por quanto tempo e quantas pessoas podem entrar.</string>
     <string name="settings_tools_progression_orientation">Jogo, temporadas e ligas.</string>
     <string name="settings_transcription_orientation">Os áudios recebidos são transcritos e depois traduzidos para o seu idioma.</string>
     <string name="settings_voice_orientation">Sua voz clonada traduz seus áudios. Exige seu consentimento.</string>

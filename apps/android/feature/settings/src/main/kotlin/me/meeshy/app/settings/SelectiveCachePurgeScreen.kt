@@ -138,7 +138,7 @@ private fun UnattributedSection(report: CachePurgeReport, included: Boolean, not
                         modifier = Modifier.size(24.dp),
                     )
                     Text(
-                        text = stringResource(R.string.purge_unattributed_label),
+                        text = stringResource(R.string.purge_unattributed_title),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MeeshyTheme.tokens.textPrimary,

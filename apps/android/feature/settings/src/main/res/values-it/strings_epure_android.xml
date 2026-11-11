@@ -71,8 +71,8 @@
     <string name="settings_packs_title">Negozio</string>
     <string name="settings_privacy_analytics_info">Metriche d\'uso anonime: schermate aperte, funzioni usate, arresti anomali. Mai il contenuto dei messaggi né i contatti.</string>
     <string name="settings_privacy_analytics_question">Cosa misura l\'analisi?</string>
-    <string name="settings_privacy_calls_non_contacts_info">Gli altri vedono che accetti solo chiamate dai tuoi contatti.</string>
-    <string name="settings_privacy_calls_non_contacts_question">Chi può chiamarmi?</string>
+    <string name="settings_privacy_calls_non_contacts_info">Gli altri vedono che accetti solo chiamate dai tuoi amici.</string>
+    <string name="settings_privacy_calls_non_contacts_question">Gli altri sanno che rifiuto le chiamate?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">Se disattivato, solo i tuoi amici possono far squillare il tuo telefono.</string>
     <string name="settings_privacy_hide_from_contact_search">Nascondi il mio numero e la mia e-mail</string>
     <string name="settings_privacy_hide_from_contact_search_question">Chi può trovarmi dal mio numero?</string>
@@ -85,7 +85,7 @@
     <string name="settings_privacy_online_status_question">Chi vede che sono online?</string>
     <string name="settings_privacy_online_status_subtitle">Pallino verde quando sei attivo.</string>
     <string name="settings_security_orientation">Password, 2FA, sessioni, dispositivi cifrati.</string>
-    <string name="settings_share_links_orientation">Diritti, durata e limiti di ogni link.</string>
+    <string name="settings_share_links_orientation">Invita con un link: scegli cosa possono fare, per quanto tempo e quante persone possono unirsi.</string>
     <string name="settings_tools_progression_orientation">Gioco, stagioni e leghe.</string>
     <string name="settings_transcription_orientation">I vocali ricevuti vengono trascritti e poi tradotti nella tua lingua.</string>
     <string name="settings_voice_orientation">La tua voce clonata traduce i tuoi vocali. Richiede il tuo consenso.</string>

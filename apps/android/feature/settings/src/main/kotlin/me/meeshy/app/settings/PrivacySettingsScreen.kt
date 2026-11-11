@@ -11,30 +11,24 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Group
-import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -46,7 +40,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
@@ -69,8 +62,8 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 /**
  * Privacy & visibility settings screen — port of iOS `PrivacySettingsView`. Tinted cards, one per
- * [PrivacyCategory], each row a coloured icon tile with an optional "(i)" explanation; the five
- * toggles without any effect yet are greyed out ("coming soon", 0.55, inert). The Location section
+ * [PrivacyCategory], each row a coloured icon tile with an optional "(i)" explanation; the toggles
+ * without any effect yet are not drawn. The Location section
  * is a composable slot inserted between Contacts and Media; Encryption closes the page, dimmed.
  * Pure projection of [PrivacySettingsViewModel]; the rules live in `PrivacyCatalog`.
  */
@@ -140,7 +133,7 @@ private fun PrivacyCategoryCard(
     viewModel: PrivacySettingsViewModel,
 ) {
     val tint = categoryColor(category)
-    val toggles = PrivacyCatalog.descriptors.filter { it.category == category }.map { it.toggle }
+    val toggles = PrivacyCatalog.visibleToggles(category)
     Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(MeeshySpacing.md)) {
         SettingsSectionHeader(
             title = stringResource(categoryTitle(category)),
@@ -161,27 +154,7 @@ private fun PrivacyToggleRow(toggle: PrivacyToggle, checked: Boolean, viewModel:
     val title = stringResource(toggleLabel(toggle))
     val icon = toggleIcon(toggle)
     val color = toggleColor(toggle)
-    if (PrivacyCatalog.isComingSoon(toggle)) {
-        val spoken = "$title — ${stringResource(R.string.settings_privacy_coming_soon_a11y)}"
-        SettingsRow(
-            icon = icon,
-            title = title,
-            color = color,
-            modifier = Modifier
-                .alpha(COMING_SOON_ALPHA)
-                .clearAndSetSemantics { contentDescription = spoken },
-            trailing = {
-                Text(
-                    text = stringResource(R.string.settings_privacy_coming_soon),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MeeshyTheme.tokens.textSecondary,
-                )
-            },
-        )
-        return
-    }
-    val topic = PrivacyCatalog.infoTopic(toggle)?.takeUnless { it == PrivacyInfoTopic.READ_RECEIPTS }
+    val topic = PrivacyCatalog.infoTopic(toggle)
     SettingsSwitchRow(
         icon = icon,
         title = title,
@@ -238,8 +211,6 @@ private fun infoStrings(topic: PrivacyInfoTopic): Pair<Int, Int> = when (topic) 
         R.string.privacy_online_status to R.string.settings_privacy_online_status_info
     PrivacyInfoTopic.NOTIFY_CONTACTS_ON_RETURN ->
         R.string.settings_privacy_notify_contacts_on_return to R.string.settings_privacy_notify_contacts_on_return_info
-    PrivacyInfoTopic.READ_RECEIPTS ->
-        R.string.privacy_read_receipts to R.string.privacy_read_receipts_subtitle
     PrivacyInfoTopic.HIDE_FROM_CONTACT_SEARCH ->
         R.string.settings_privacy_hide_from_contact_search to R.string.settings_privacy_hide_from_contact_search_info
     PrivacyInfoTopic.CALLS_NON_CONTACTS ->
@@ -251,7 +222,6 @@ private fun infoStrings(topic: PrivacyInfoTopic): Pair<Int, Int> = when (topic) 
 private fun infoQuestion(topic: PrivacyInfoTopic): Int = when (topic) {
     PrivacyInfoTopic.ONLINE_STATUS -> R.string.settings_privacy_online_status_question
     PrivacyInfoTopic.NOTIFY_CONTACTS_ON_RETURN -> R.string.settings_privacy_notify_contacts_on_return_question
-    PrivacyInfoTopic.READ_RECEIPTS -> R.string.privacy_read_receipts
     PrivacyInfoTopic.HIDE_FROM_CONTACT_SEARCH -> R.string.settings_privacy_hide_from_contact_search_question
     PrivacyInfoTopic.CALLS_NON_CONTACTS -> R.string.settings_privacy_calls_non_contacts_question
     PrivacyInfoTopic.ANALYTICS -> R.string.settings_privacy_analytics_question
@@ -266,6 +236,9 @@ private fun toggleSubtitle(toggle: PrivacyToggle): Int? = when (toggle) {
     PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS -> R.string.settings_privacy_calls_non_contacts_subtitle
     else -> null
 }
+
+private fun notDrawn(toggle: PrivacyToggle): Nothing =
+    error("$toggle writes nothing yet: PrivacyCatalog.visibleToggles leaves it out")
 
 private const val COMING_SOON_ALPHA = 0.55f
 
@@ -294,13 +267,10 @@ private fun toggleLabel(toggle: PrivacyToggle): Int = when (toggle) {
     PrivacyToggle.SHOW_READ_RECEIPTS -> R.string.privacy_read_receipts
     PrivacyToggle.SHOW_TYPING_INDICATOR -> R.string.privacy_typing_indicator
     PrivacyToggle.HIDE_PROFILE_FROM_SEARCH -> R.string.settings_privacy_hide_from_contact_search
-    PrivacyToggle.ALLOW_CONTACT_REQUESTS -> R.string.privacy_contact_requests
-    PrivacyToggle.ALLOW_GROUP_INVITES -> R.string.privacy_group_invites
     PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS -> R.string.privacy_calls_non_contacts
     PrivacyToggle.SAVE_MEDIA_TO_GALLERY -> R.string.privacy_save_media
     PrivacyToggle.ALLOW_ANALYTICS -> R.string.privacy_analytics
-    PrivacyToggle.SHARE_USAGE_DATA -> R.string.privacy_share_data
-    PrivacyToggle.BLOCK_SCREENSHOTS -> R.string.privacy_block_screenshots
+    else -> notDrawn(toggle)
 }
 
 private fun toggleIcon(toggle: PrivacyToggle): ImageVector = when (toggle) {
@@ -310,23 +280,18 @@ private fun toggleIcon(toggle: PrivacyToggle): ImageVector = when (toggle) {
     PrivacyToggle.SHOW_READ_RECEIPTS -> Icons.Filled.DoneAll
     PrivacyToggle.SHOW_TYPING_INDICATOR -> Icons.Filled.MoreHoriz
     PrivacyToggle.HIDE_PROFILE_FROM_SEARCH -> Icons.Filled.Search
-    PrivacyToggle.ALLOW_CONTACT_REQUESTS -> Icons.Filled.PersonAdd
-    PrivacyToggle.ALLOW_GROUP_INVITES -> Icons.Filled.Groups
     PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS -> Icons.Filled.Phone
     PrivacyToggle.SAVE_MEDIA_TO_GALLERY -> Icons.Filled.Download
     PrivacyToggle.ALLOW_ANALYTICS -> Icons.Filled.BarChart
-    PrivacyToggle.SHARE_USAGE_DATA -> Icons.Filled.Share
-    PrivacyToggle.BLOCK_SCREENSHOTS -> Icons.Filled.CameraAlt
+    else -> notDrawn(toggle)
 }
 
 private fun toggleColor(toggle: PrivacyToggle): Color = when (toggle) {
     PrivacyToggle.SHOW_ONLINE_STATUS, PrivacyToggle.SAVE_MEDIA_TO_GALLERY -> MeeshyPalette.Success
     PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN -> MeeshyPalette.TileTeal
-    PrivacyToggle.SHOW_LAST_SEEN, PrivacyToggle.ALLOW_GROUP_INVITES, PrivacyToggle.ALLOW_ANALYTICS -> MeeshyPalette.Info
+    PrivacyToggle.SHOW_LAST_SEEN, PrivacyToggle.ALLOW_ANALYTICS -> MeeshyPalette.Info
     PrivacyToggle.SHOW_READ_RECEIPTS -> MeeshyPalette.TileBlue
     PrivacyToggle.SHOW_TYPING_INDICATOR -> MeeshyPalette.TileSaffron
-    PrivacyToggle.HIDE_PROFILE_FROM_SEARCH, PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS,
-    PrivacyToggle.BLOCK_SCREENSHOTS -> MeeshyPalette.TileCoral
-    PrivacyToggle.ALLOW_CONTACT_REQUESTS -> MeeshyPalette.Indigo500
-    PrivacyToggle.SHARE_USAGE_DATA -> MeeshyPalette.TileAmethyst
+    PrivacyToggle.HIDE_PROFILE_FROM_SEARCH, PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS -> MeeshyPalette.TileCoral
+    else -> notDrawn(toggle)
 }

@@ -71,8 +71,8 @@
     <string name="settings_packs_title">المتجر</string>
     <string name="settings_privacy_analytics_info">قياسات استخدام مجهولة: الشاشات المفتوحة والميزات المستخدمة والأعطال. لا محتوى رسائلك ولا جهات اتصالك أبدًا.</string>
     <string name="settings_privacy_analytics_question">ماذا تقيس التحليلات؟</string>
-    <string name="settings_privacy_calls_non_contacts_info">يرى الآخرون أنك لا تقبل إلا المكالمات من جهات اتصالك.</string>
-    <string name="settings_privacy_calls_non_contacts_question">من يستطيع الاتصال بي؟</string>
+    <string name="settings_privacy_calls_non_contacts_info">يرى الآخرون أنك لا تقبل إلا المكالمات من أصدقائك.</string>
+    <string name="settings_privacy_calls_non_contacts_question">هل يعرف الآخرون أنني أرفض المكالمات؟</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">عند إيقافه، لا يستطيع إلا أصدقاؤك جعل هاتفك يرن.</string>
     <string name="settings_privacy_hide_from_contact_search">إخفاء رقمي وبريدي الإلكتروني</string>
     <string name="settings_privacy_hide_from_contact_search_question">من يستطيع العثور عليّ برقمي؟</string>
@@ -85,7 +85,7 @@
     <string name="settings_privacy_online_status_question">من يرى أنني متصل؟</string>
     <string name="settings_privacy_online_status_subtitle">نقطة خضراء عندما تكون نشطًا.</string>
     <string name="settings_security_orientation">كلمة المرور، المصادقة الثنائية، الجلسات، الأجهزة المشفّرة.</string>
-    <string name="settings_share_links_orientation">الصلاحيات والمدة والحدود لكل رابط.</string>
+    <string name="settings_share_links_orientation">ادعُ الآخرين برابط: حدّد ما يمكنهم فعله، ولكم من الوقت، وكم شخصًا يمكنه الانضمام.</string>
     <string name="settings_tools_progression_orientation">اللعبة والمواسم والدوريات.</string>
     <string name="settings_transcription_orientation">تُنسخ الرسائل الصوتية الواردة إلى نص ثم تُترجم إلى لغتك.</string>
     <string name="settings_voice_orientation">صوتك المستنسخ يترجم رسائلك الصوتية. ويتطلب موافقتك.</string>

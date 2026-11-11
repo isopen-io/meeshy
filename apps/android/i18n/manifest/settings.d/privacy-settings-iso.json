@@ -11,16 +11,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "settings.privacy.coming_soon",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.privacy.coming_soon.a11y",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "settings.privacy.encryption.coming_soon.a11y",
           "status": "adopted"
         }

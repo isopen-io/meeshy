@@ -151,10 +151,7 @@
     <string name="pack_shop_remove">Entfernen</string>
     <string name="pack_shop_retry">Erneut versuchen</string>
     <string name="privacy_analytics">Analytics</string>
-    <string name="privacy_block_screenshots">Screenshots blockieren</string>
     <string name="privacy_calls_non_contacts">Anrufe von Nicht-Kontakten</string>
-    <string name="privacy_contact_requests">Kontaktanfragen</string>
-    <string name="privacy_group_invites">Gruppeneinladungen</string>
     <string name="privacy_last_seen">Letzte Anmeldung</string>
     <string name="privacy_online_status">Online-Status</string>
     <string name="privacy_read_receipts">Lesebestätigungen</string>
@@ -163,7 +160,6 @@
     <string name="privacy_section_encryption">Verschlüsselung</string>
     <string name="privacy_section_media">Medien &amp; Daten</string>
     <string name="privacy_section_visibility">Sichtbarkeit</string>
-    <string name="privacy_share_data">Datenfreigabe</string>
     <string name="privacy_typing_indicator">Schreibanzeige</string>
     <string name="purge_action_empty">Wählen Sie aus, was geleert werden soll</string>
     <string name="purge_action_hint">Löscht die ausgewählten Daten endgültig; sie werden bei Bedarf erneut geladen</string>
@@ -188,7 +184,6 @@
     <string name="purge_limitation_no_store">Dokumente werden nicht im Cache gespeichert – es gibt nichts freizugeben.</string>
     <string name="purge_limitation_not_applicable">Für diesen Bereich nicht zutreffend.</string>
     <string name="purge_select_all">Alle auswählen</string>
-    <string name="purge_unattributed_label">Verwaiste Medien</string>
     <string name="purge_unattributed_title">Nicht zugeordnet</string>
     <string name="security_lock_configure">Einrichten</string>
     <string name="security_lock_configured">Eingerichtet</string>
@@ -295,8 +290,6 @@
     <string name="settings_notifications_title">Mitteilungen</string>
     <string name="settings_open_source_licenses">Open-Source-Lizenzen</string>
     <string name="settings_packs_domain">Pakettyp</string>
-    <string name="settings_privacy_coming_soon">Demnächst verfügbar</string>
-    <string name="settings_privacy_coming_soon_a11y">demnächst verfügbar, derzeit ohne Wirkung</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">Verschlüsselung — demnächst verfügbar, derzeit deaktiviert</string>
     <string name="settings_privacy_hide_from_contact_search_info">Wenn aktiviert, erscheint dein Profil nicht mehr bei einer Suche nach Telefonnummer oder E-Mail, und deine Kontakte werden nicht benachrichtigt, wenn du zu Meeshy kommst.</string>
     <string name="settings_privacy_policy">Datenschutzrichtlinie</string>

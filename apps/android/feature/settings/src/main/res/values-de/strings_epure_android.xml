@@ -71,8 +71,8 @@
     <string name="settings_packs_title">Shop</string>
     <string name="settings_privacy_analytics_info">Anonyme Nutzungsdaten: geöffnete Bildschirme, genutzte Funktionen, Abstürze. Niemals Nachrichteninhalte oder Kontakte.</string>
     <string name="settings_privacy_analytics_question">Was misst die Analyse?</string>
-    <string name="settings_privacy_calls_non_contacts_info">Andere sehen, dass du nur Anrufe von deinen Kontakten annimmst.</string>
-    <string name="settings_privacy_calls_non_contacts_question">Wer kann mich anrufen?</string>
+    <string name="settings_privacy_calls_non_contacts_info">Andere sehen, dass du nur Anrufe von deinen Freunden annimmst.</string>
+    <string name="settings_privacy_calls_non_contacts_question">Wissen andere, dass ich Anrufe ablehne?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">Deaktiviert können nur deine Freunde dein Telefon klingeln lassen.</string>
     <string name="settings_privacy_hide_from_contact_search">Meine Nummer und E-Mail verbergen</string>
     <string name="settings_privacy_hide_from_contact_search_question">Wer kann mich über meine Nummer finden?</string>
@@ -85,7 +85,7 @@
     <string name="settings_privacy_online_status_question">Wer sieht, dass ich online bin?</string>
     <string name="settings_privacy_online_status_subtitle">Grüner Punkt, wenn Sie aktiv sind.</string>
     <string name="settings_security_orientation">Passwort, 2FA, Sitzungen, verschlüsselte Geräte.</string>
-    <string name="settings_share_links_orientation">Rechte, Dauer und Limits jedes Links.</string>
+    <string name="settings_share_links_orientation">Lade Leute per Link ein: lege fest, was sie tun dürfen, wie lange er gilt und wie viele beitreten können.</string>
     <string name="settings_tools_progression_orientation">Spiel, Saisons und Ligen.</string>
     <string name="settings_transcription_orientation">Empfangene Sprachnachrichten werden transkribiert und in Ihre Sprache übersetzt.</string>
     <string name="settings_voice_orientation">Ihre geklonte Stimme übersetzt Ihre Sprachnachrichten. Dafür ist Ihre Einwilligung nötig.</string>

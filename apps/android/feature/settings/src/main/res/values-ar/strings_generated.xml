@@ -151,10 +151,7 @@
     <string name="pack_shop_remove">إزالة</string>
     <string name="pack_shop_retry">إعادة المحاولة</string>
     <string name="privacy_analytics">التحليلات</string>
-    <string name="privacy_block_screenshots">حظر لقطات الشاشة</string>
     <string name="privacy_calls_non_contacts">مكالمات من خارج جهات الاتصال</string>
-    <string name="privacy_contact_requests">طلبات جهات الاتصال</string>
-    <string name="privacy_group_invites">دعوات المجموعات</string>
     <string name="privacy_last_seen">آخر تسجيل دخول</string>
     <string name="privacy_online_status">حالة الاتصال</string>
     <string name="privacy_read_receipts">إيصالات القراءة</string>
@@ -163,7 +160,6 @@
     <string name="privacy_section_encryption">التشفير</string>
     <string name="privacy_section_media">الوسائط والبيانات</string>
     <string name="privacy_section_visibility">الظهور</string>
-    <string name="privacy_share_data">مشاركة البيانات</string>
     <string name="privacy_typing_indicator">مؤشر الكتابة</string>
     <string name="purge_action_empty">حدد ما تريد إفراغه</string>
     <string name="purge_action_hint">يحذف نهائيًا العناصر المحددة ؛ سيُعاد تنزيلها عند الحاجة</string>
@@ -188,7 +184,6 @@
     <string name="purge_limitation_no_store">لا يتم الاحتفاظ بالمستندات في ذاكرة التخزين المؤقت: لا يوجد ما يمكن تحريره.</string>
     <string name="purge_limitation_not_applicable">لا ينطبق على هذا المجال.</string>
     <string name="purge_select_all">تحديد الكل</string>
-    <string name="purge_unattributed_label">وسائط يتيمة</string>
     <string name="purge_unattributed_title">غير منسوب</string>
     <string name="security_lock_configure">إعداد</string>
     <string name="security_lock_configured">مُهيّأ</string>
@@ -295,8 +290,6 @@
     <string name="settings_notifications_title">الإشعارات</string>
     <string name="settings_open_source_licenses">تراخيص المصدر المفتوح</string>
     <string name="settings_packs_domain">نوع الحزمة</string>
-    <string name="settings_privacy_coming_soon">قريبًا</string>
-    <string name="settings_privacy_coming_soon_a11y">قريبًا، بلا أثر حاليًا</string>
     <string name="settings_privacy_encryption_coming_soon_a11y">التشفير — قريبًا، معطَّل حاليًا</string>
     <string name="settings_privacy_hide_from_contact_search_info">عند التفعيل، لن يظهر ملفك الشخصي في البحث برقم الهاتف أو البريد الإلكتروني، ولن يتم إخطار جهات اتصالك بانضمامك إلى Meeshy.</string>
     <string name="settings_privacy_policy">سياسة الخصوصية</string>

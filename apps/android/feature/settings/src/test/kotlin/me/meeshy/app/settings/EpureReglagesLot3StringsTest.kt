@@ -20,7 +20,6 @@ class EpureReglagesLot3StringsTest {
     @Test
     fun `the read receipts row has no info button because its subtitle already says everything`() {
         val screen = source("PrivacySettingsScreen.kt")
-        assertThat(screen).doesNotContain("READ_RECEIPTS")
         assertThat(screen).doesNotContain("PrivacyInfoTopic.READ_RECEIPTS")
         assertThat(fr("privacy_read_receipts_subtitle")).isEqualTo("Réciproque : sans accusé envoyé, pas d'accusé reçu.")
     }

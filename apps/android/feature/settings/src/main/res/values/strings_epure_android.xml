@@ -71,8 +71,8 @@
     <string name="settings_packs_title">Shop</string>
     <string name="settings_privacy_analytics_info">Anonymous usage metrics: screens opened, features used, crashes. Never your message content or your contacts.</string>
     <string name="settings_privacy_analytics_question">What does analytics measure?</string>
-    <string name="settings_privacy_calls_non_contacts_info">Others see that you only accept calls from your contacts.</string>
-    <string name="settings_privacy_calls_non_contacts_question">Who can call me?</string>
+    <string name="settings_privacy_calls_non_contacts_info">Others see that you only accept calls from friends.</string>
+    <string name="settings_privacy_calls_non_contacts_question">Do others know I refuse calls?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">When off, only your friends can make your phone ring.</string>
     <string name="settings_privacy_hide_from_contact_search">Hide my number and email</string>
     <string name="settings_privacy_hide_from_contact_search_question">Who can find me by my number?</string>
@@ -85,7 +85,7 @@
     <string name="settings_privacy_online_status_question">Who sees that I\'m online?</string>
     <string name="settings_privacy_online_status_subtitle">Green dot when you\'re active.</string>
     <string name="settings_security_orientation">Password, 2FA, sessions, encrypted devices.</string>
-    <string name="settings_share_links_orientation">Rights, duration and limits of each link.</string>
+    <string name="settings_share_links_orientation">Invite people with a link: choose what they can do, for how long and how many can join.</string>
     <string name="settings_tools_progression_orientation">Game, seasons and leagues.</string>
     <string name="settings_transcription_orientation">Voice messages you receive are transcribed, then translated into your language.</string>
     <string name="settings_voice_orientation">Your cloned voice translates your voice messages. It needs your consent.</string>

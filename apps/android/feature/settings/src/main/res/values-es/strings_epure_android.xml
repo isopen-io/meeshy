@@ -71,8 +71,8 @@
     <string name="settings_packs_title">Tienda</string>
     <string name="settings_privacy_analytics_info">Métricas de uso anónimas: pantallas abiertas, funciones utilizadas, fallos. Nunca el contenido de tus mensajes ni tus contactos.</string>
     <string name="settings_privacy_analytics_question">¿Qué mide la analítica?</string>
-    <string name="settings_privacy_calls_non_contacts_info">Los demás ven que solo aceptas llamadas de tus contactos.</string>
-    <string name="settings_privacy_calls_non_contacts_question">¿Quién puede llamarme?</string>
+    <string name="settings_privacy_calls_non_contacts_info">Los demás ven que solo aceptas llamadas de tus amigos.</string>
+    <string name="settings_privacy_calls_non_contacts_question">¿Los demás saben que rechazo las llamadas?</string>
     <string name="settings_privacy_calls_non_contacts_subtitle">Desactivado, solo tus amigos pueden hacer sonar tu teléfono.</string>
     <string name="settings_privacy_hide_from_contact_search">Ocultar mi número y mi correo</string>
     <string name="settings_privacy_hide_from_contact_search_question">¿Quién puede encontrarme por mi número?</string>
@@ -85,7 +85,7 @@
     <string name="settings_privacy_online_status_question">¿Quién ve que estoy en línea?</string>
     <string name="settings_privacy_online_status_subtitle">Punto verde cuando estás activo.</string>
     <string name="settings_security_orientation">Contraseña, 2FA, sesiones, dispositivos cifrados.</string>
-    <string name="settings_share_links_orientation">Permisos, duración y límites de cada enlace.</string>
+    <string name="settings_share_links_orientation">Invita con un enlace: elige qué pueden hacer, durante cuánto tiempo y cuántas personas pueden unirse.</string>
     <string name="settings_tools_progression_orientation">Juego, temporadas y ligas.</string>
     <string name="settings_transcription_orientation">Los audios recibidos se transcriben y luego se traducen a tu idioma.</string>
     <string name="settings_voice_orientation">Tu voz clonada traduce tus audios. Requiere tu consentimiento.</string>
