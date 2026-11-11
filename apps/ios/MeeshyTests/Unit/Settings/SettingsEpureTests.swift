@@ -118,4 +118,65 @@ final class SettingsEpureTests: XCTestCase {
         let note = SettingsInfoNotes.returnAnnouncement.text
         XCTAssertFalse(note.contains("3"), "la fréquence est déjà dite au repos : \(note)")
     }
+
+    // MARK: - L'épure 3/3 (#17652)
+
+    func test_notes_epure3_everyHiddenExplanation_isAnsweredByItsQuestion() {
+        let questions = SettingsInfoNotes.all.map(\.question)
+        for note in [SettingsInfoNotes.captureOriginal, SettingsInfoNotes.libraryOpening, SettingsInfoNotes.readingModes] {
+            XCTAssertTrue(questions.contains(note.question), note.question)
+            XCTAssertFalse(note.text.isEmpty)
+        }
+    }
+
+    func test_notes_readingModes_keepsTheCutOffEffect_behindItsQuestion() {
+        XCTAssertTrue(SettingsInfoNotes.readingModes.text.localizedCaseInsensitiveContains("Script"))
+        XCTAssertNotEqual(SettingsInfoNotes.readingModes.text, SettingsOrientation.readingModes)
+    }
+
+    func test_orientation_readingModes_saysWhatTheModesAre_atRest() {
+        XCTAssertTrue(SettingsOrientation.all.contains(SettingsOrientation.readingModes))
+        XCTAssertFalse(SettingsOrientation.readingModes.hasPrefix("settings."))
+        XCTAssertTrue(SettingsOrientation.readingModes.localizedCaseInsensitiveContains("Script"))
+    }
+
+    // MARK: - Les vues n'ont plus de sous-titre qui répète leur titre (source : ces vues ne se construisent pas hors environnement)
+
+    private func code(_ relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let raw = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        return AppSourceGuard.stripComments(raw)
+    }
+
+    func test_mediaDownload_noRowRepeatsItsTitle_orSpellsOutWhatAnInfoNoteSays() throws {
+        let view = try code("Features/Settings/Views/MediaDownloadSettingsView.swift")
+        for key in ["settings.media.autosave.subtitle", "settings.media.outgoing.compress.subtitle",
+                    "settings.media.capture.original.subtitle", "settings.media.opening.library.subtitle"] {
+            XCTAssertFalse(view.contains("\"\(key)\""), "\(key) ne s'affiche plus sous son titre")
+        }
+        XCTAssertTrue(view.contains("SettingsInfoNotes.captureOriginal"))
+        XCTAssertTrue(view.contains("SettingsInfoNotes.libraryOpening"))
+    }
+
+    func test_changePassword_hasNoSectionHeaderRepeatingTheFieldTitle_norTheMinimumPlaceholder() throws {
+        let view = try code("Features/Settings/Views/ChangePasswordView.swift")
+        for key in ["auth.password.change.current.section", "auth.password.change.new.section", "auth.password.change.new.placeholder"] {
+            XCTAssertFalse(view.contains("\"\(key)\""), key)
+        }
+        XCTAssertTrue(view.contains("auth.password.change.validation.length"), "la ligne de validation reste : elle réagit à la saisie")
+    }
+
+    func test_dataExport_hasNoInfoCardRepeatingTitleAndButton() throws {
+        let view = try code("Features/Settings/Views/DataExportView.swift")
+        XCTAssertFalse(view.contains("settings.data.export.info.body"))
+        XCTAssertFalse(view.contains("infoCard"))
+    }
+
+    func test_readingModes_row_showsItsOrientationSentence_andKeepsTheCutOffEffectBehindAnInfo() throws {
+        let view = try code("Features/Settings/Views/SettingsView.swift")
+        XCTAssertTrue(view.contains("SettingsOrientation.readingModes"))
+        XCTAssertFalse(view.contains("\"settings.interface.reading_modes.subtitle\""))
+    }
 }
