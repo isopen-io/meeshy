@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createElement, type ReactNode, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+
+import type { SwapShape } from './call-pill-motion';
 
 /**
  * **LE MOUVEMENT DU VERRE, CHARGÉ À PART** (#17536) — les crochets minces que l'écran d'appel
@@ -63,4 +65,47 @@ export function useOpacityFade(ref: RefObject<HTMLElement | null>, on: boolean, 
     if (running.current === null) done?.();
     else running.current.finished.then(done, () => undefined);
   }, [on]);
+}
+
+/** Ce que porte ce qui repart : marqué sortant, ni focus ni clic, caché au lecteur d'écran. */
+export const LEAVING = { 'data-leaving': '', inert: true, 'aria-hidden': true } as const;
+
+/**
+ * CE QUI ENTRE ET REPART AVEC SA VALEUR (la capsule de l'en-tête, P9.8, #17509) — la dernière
+ * valeur non nulle reste montée le temps de son départ, marquée {@link LEAVING}, et se démonte
+ * quand le mouvement du moteur (`playSwap`) est FINI : aucune durée redite ici, la sortie dure ce
+ * que dure son mouvement, fondu court sous « Réduire les animations » compris. Un retour pendant
+ * le départ repart de l'opacité affichée. La première peinture ne joue rien ; sans moteur, la
+ * valeur se pose et repart d'un coup.
+ */
+function useHeldSwap<T>(value: T | null, shape: SwapShape): { readonly held: T | null; readonly leaving: typeof LEAVING | null; readonly ref: RefObject<HTMLDivElement | null> } {
+  const engine = usePillEngine();
+  const last = useRef(value);
+  if (value !== null) last.current = value;
+  const present = value !== null;
+  const [gone, setGone] = useState(!present);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const running = useRef<Animation | null>(null);
+  const painted = useRef(false);
+  useLayoutEffect(() => {
+    const played = painted.current && ref.current !== null ? (engine?.playSwap(ref.current, present, running.current, shape) ?? null) : null;
+    painted.current = true;
+    running.current = played;
+    const finished = played?.finished;
+    if (present) setGone(false);
+    else if (finished === undefined) setGone(true);
+    else finished.then(() => setGone(true), () => undefined);
+  }, [present]);
+  return { held: present || !gone ? last.current : null, leaving: present ? null : LEAVING, ref };
+}
+
+/**
+ * L'hôte de {@link useHeldSwap} : un bloc qui porte ses attributs (`className`, `data-*`) et rend
+ * `children` de la valeur retenue ; par défaut il grandit depuis son ancre (`scale`, l'ancre est
+ * `transform-origin`, posée par la feuille). Il vit ici, avec le mouvement, et non dans l'écran d'appel
+ * (`budgets.json` › `call_overlay`).
+ */
+export function HeldSwap<T>({ value, shape = 'scale', children, ...attributes }: { readonly value: T | null; readonly shape?: SwapShape; readonly children: (held: T) => ReactNode; readonly className?: string } & { readonly [data: `data-${string}`]: string }) {
+  const { held, leaving, ref } = useHeldSwap(value, shape);
+  return held === null ? null : createElement('div', { ref, ...attributes, ...leaving }, children(held));
 }
