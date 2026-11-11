@@ -5,8 +5,8 @@ import Foundation
 /// K03 — le choix segmenté, lu comme des VALEURS : la loi pure (rendu, courant,
 /// clavier, changement, répartition) est vérifiée contre les vecteurs partagés
 /// avec le web et Android, jamais contre un rendu.
-@Suite("MeeshySegmentedLaw")
-struct MeeshySegmentedLawTests {
+@Suite("MeeshySegmented")
+struct MeeshySegmentedTests {
 
     @Test("deux à quatre options sont rendues, une ou cinq ne le sont pas")
     func renderable_onlyTwoToFour() throws {
