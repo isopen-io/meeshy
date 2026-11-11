@@ -26,6 +26,14 @@ enum CallControlsCopy {
             : String(localized: "call.control.camera.on", defaultValue: "Activer la caméra", bundle: .main)
     }
 
+    static func cameraCaptionKey(isPaused: Bool) -> String {
+        isPaused ? "call.control.video.paused.caption" : "call.control.camera.caption"
+    }
+
+    static func cameraCaption(isPaused: Bool) -> String {
+        String(localized: String.LocalizationValue(cameraCaptionKey(isPaused: isPaused)), bundle: .main)
+    }
+
     static var outputAudioLabel: String {
         String(localized: "call.control.output.a11y", defaultValue: "Sortie audio", bundle: .main)
     }
@@ -391,11 +399,7 @@ extension CallView {
             label: isPaused
                 ? String(localized: "call.control.video.paused", defaultValue: "Vidéo en pause (connexion faible)", bundle: .main)
                 : CallControlsCopy.cameraLabel(isEnabled: isEnabled),
-            caption: captioned
-                ? (isPaused
-                    ? String(localized: "call.control.video.paused.caption", defaultValue: "En pause", bundle: .main)
-                    : String(localized: "call.control.video.caption", defaultValue: "Vidéo", bundle: .main))
-                : nil,
+            caption: captioned ? CallControlsCopy.cameraCaption(isPaused: isPaused) : nil,
             hint: isPaused
                 ? String(localized: "call.control.video.paused.hint", defaultValue: "Touchez pour éteindre la caméra. La vidéo reprend automatiquement si la connexion s'améliore.", bundle: .main)
                 : nil,
