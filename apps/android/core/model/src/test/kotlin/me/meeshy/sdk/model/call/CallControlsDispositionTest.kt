@@ -19,7 +19,6 @@ class CallControlsDispositionTest {
             hasSelectableCameras = false,
             isConnected = true,
             mayRecord = true,
-            canPictureInPicture = false,
         ),
     )
 
