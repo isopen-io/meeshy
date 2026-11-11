@@ -10,7 +10,7 @@
     <string name="game2_league_pseudonym_invalid">Ungültig.</string>
     <string name="game_rules_2_body">Zusammen bilden deine Funken dein Licht, und dein Level ergibt sich daraus. Eine Million Funken für Level 100, und alle zehn Level eine Prüfung: Solange sie nicht bestanden ist, wartet dein Licht. Zwanzig Gestalten. Die Level steigen bis 499; der Rang Botschafter öffnet sie bis 1.000, der Rang Orakel ohne Grenze. Jedes Level verlangt etwas mehr als das vorherige.</string>
     <string name="game_state_elans_idle">%1$s in diesen Tagen: noch kein Schwung.</string>
-    <string name="game2_prestige_meo">Dein Level beginnt wieder bei 1 und deine Funken bei 0; dein Rang, dein Ruhm und deine Meeshes bleiben.</string>
+    <string name="game2_prestige_meo">Dein Level beginnt wieder bei 1 und deine Funken bei 0; dein Rang, dein Ruhm und deine Meeshes bleiben. Deine Ahnen schenken dir eine nummerierte Trophäe und %1$s Ruhm.</string>
     <string name="game2_season_seal_body">Rein dekorativ: alle %1$s Rasten ein Sammelobjekt.</string>
     <string name="game2_settings_notifications_body">Höchstens eine pro Tag, auf allen deinen Geräten.</string>
     <string name="game2_settings_notifications_switch">Mitteilungen</string>

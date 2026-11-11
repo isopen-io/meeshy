@@ -10,7 +10,7 @@
     <string name="game2_league_pseudonym_invalid">Non valido.</string>
     <string name="game_rules_2_body">Insieme, le tue scintille formano la tua luce, e il tuo livello si legge su di lei. Un milione di scintille per il livello 100, e una prova ogni dieci livelli: finché non è superata, la tua luce aspetta. Venti stati. I livelli salgono fino a 499; il rango Ambasciatore li apre fino a 1000, il rango Oracolo senza limite. Ogni livello richiede un po’ più del precedente.</string>
     <string name="game_state_elans_idle">%1$s in questi giorni: ancora nessuno slancio.</string>
-    <string name="game2_prestige_meo">Il tuo livello riparte da 1 e le tue scintille da 0; il tuo rango, la tua gloria e le tue Meesh restano.</string>
+    <string name="game2_prestige_meo">Il tuo livello riparte da 1 e le tue scintille da 0; il tuo rango, la tua gloria e le tue Meesh restano. I tuoi antenati ti offrono un trofeo numerato e %1$s di gloria.</string>
     <string name="game2_season_seal_body">Puramente decorativo: un oggetto da collezione ogni %1$s soste.</string>
     <string name="game2_settings_notifications_body">Al massimo una al giorno, su tutti i tuoi dispositivi.</string>
     <string name="game2_settings_notifications_switch">Notifiche</string>

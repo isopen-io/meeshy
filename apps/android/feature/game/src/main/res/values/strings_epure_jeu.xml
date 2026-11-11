@@ -10,7 +10,7 @@
     <string name="game2_league_pseudonym_invalid">Not valid.</string>
     <string name="game_rules_2_body">Together, your sparks form your light, and your level is read from it. A million sparks for level 100, and a trial every ten levels: until it is passed, your light waits. Twenty phases. Levels climb up to 499; the Ambassador rank opens them up to 1,000, and the Oracle rank opens them without limit. Each level asks for a little more than the one before.</string>
     <string name="game_state_elans_idle">%1$s these days: no momentum yet.</string>
-    <string name="game2_prestige_meo">Your level restarts at 1 and your sparks at 0; your rank, glory and Meeshes stay.</string>
+    <string name="game2_prestige_meo">Your level restarts at 1 and your sparks at 0; your rank, glory and Meeshes stay. Your ancestors offer you a numbered trophy and %1$s glory.</string>
     <string name="game2_season_seal_body">Purely decorative: a collectible every %1$s stops.</string>
     <string name="game2_settings_notifications_body">At most one a day, on all your devices.</string>
     <string name="game2_settings_notifications_switch">Notifications</string>

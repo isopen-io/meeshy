@@ -10,7 +10,7 @@
     <string name="game2_league_pseudonym_invalid">غير صالح.</string>
     <string name="game_rules_2_body">شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك. مليون شرارة للمستوى 100، واختبار كل عشرة مستويات: ما لم تجتزه، ينتظر نورك. عشرون حالة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله.</string>
     <string name="game_state_elans_idle">%1$s هذه الأيام: لا زخم بعد.</string>
-    <string name="game2_prestige_meo">يعود مستواك إلى 1 وشراراتك إلى 0؛ وتبقى رتبتك ومجدك وعملات Meesh.</string>
+    <string name="game2_prestige_meo">يعود مستواك إلى 1 وشراراتك إلى 0؛ وتبقى رتبتك ومجدك وعملات Meesh. ويهديك أجدادك كأسًا مرقّمة و⁦%1$s⁩ من المجد.</string>
     <string name="game2_season_seal_body">للزينة فقط: قطعة للجمع كل ⁦%1$s⁩ محطات.</string>
     <string name="game2_settings_notifications_body">إشعار واحد في اليوم على الأكثر، على جميع أجهزتك.</string>
     <string name="game2_settings_notifications_switch">الإشعارات</string>

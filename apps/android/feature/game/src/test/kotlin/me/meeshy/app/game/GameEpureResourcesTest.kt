@@ -127,9 +127,13 @@ class GameEpureResourcesTest {
     }
 
     @Test
-    fun `la renaissance dit sa consequence en une phrase`() {
-        assertThat(text(R.string.game2_prestige_meo))
-            .isEqualTo("Ton niveau repart à 1 et tes étincelles à 0 ; ton rang, ta gloire et tes Meeshes restent.")
+    fun `la renaissance dit sa consequence et ce qu elle rapporte, valeur comprise`() {
+        assertThat(context.getString(R.string.game2_prestige_meo, "120"))
+            .isEqualTo(
+                "Ton niveau repart à 1 et tes étincelles à 0 ; ton rang, ta gloire et tes Meeshes restent. " +
+                    "Tes aïeux t’offrent un trophée numéroté et 120 de gloire.",
+            )
+        retiredLanguages.forEach { folder -> assertThat(valueIn(folder, "game2_prestige_meo")).contains("%1\$s") }
     }
 
     @Test
