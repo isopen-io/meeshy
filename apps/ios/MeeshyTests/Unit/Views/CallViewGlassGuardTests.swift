@@ -386,4 +386,22 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(code.contains("CallPiPPolicy.shouldFallBackToPill("))
         XCTAssertTrue(code.contains("CallPiPPolicy.swipeDownOutcome("))
     }
+
+    /// G3.2 — l'option Enregistrer : titre centré, phrase d'accord, deux puces larges
+    /// Audio | Vidéo côte à côte qui lancent la demande ; aucune rangée défilante.
+    func test_recordingPanel_isCenteredTitle_consentLine_andTwoWideChoices() throws {
+        let recording = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Recording.swift"))
+        let panel = try block("var recordingPanelRows: some View {", until: "\n    }\n", in: recording)
+        XCTAssertFalse(panel.contains("CallPillRow"), "Deux puces larges côte à côte, pas une rangée défilante de 68 pt")
+        XCTAssertFalse(panel.contains("CallPillChip"))
+        XCTAssertTrue(panel.contains("CallRecordingCopy.consent"), "Tout le monde doit accepter : la phrase est écrite")
+        XCTAssertTrue(panel.contains("CallRecordingChoiceChip("))
+        XCTAssertTrue(panel.contains("callManager.recording.request(kind: kind)"))
+        let row = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallPillRow.swift"))
+        let header = try block("struct CallPanelHeader: View {", until: "struct CallPanelHeaderButton", in: row)
+        XCTAssertFalse(header.contains("Spacer(minLength: 0)"), "Le titre est centré, il ne suit pas le Retour")
+        XCTAssertTrue(header.contains(".frame(maxWidth: .infinity)"))
+        let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        XCTAssertTrue(pill.contains("layer.captionsBaseRow"), "La rangée de base n'est pas légendée sous une option")
+    }
 }
