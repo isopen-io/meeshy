@@ -50712,43 +50712,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مراسلة فورية، مترجمة إلى لغتك، ومشفّرة من طرف إلى طرف."
+            "value": "مراسلة مترجمة إلى لغتك، وصوت مستنسخ، وتشفير اختياري."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Echtzeit-Messaging, in deine Sprache übersetzt, Ende-zu-Ende-verschlüsselt."
+            "value": "Messaging in deiner Sprache, geklonte Stimme, Verschlüsselung nach Wahl."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Real-time messaging, translated into your language, end-to-end encrypted."
+            "value": "Messaging translated into your language, cloned voice, optional encryption."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mensajería en tiempo real, traducida a tu idioma, cifrada de extremo a extremo."
+            "value": "Mensajería traducida a tu idioma, voz clonada, cifrado opcional."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messagerie en temps réel, traduite dans votre langue, chiffrée de bout en bout."
+            "value": "Messagerie traduite dans votre langue, voix clonée, chiffrement au choix."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Messaggistica in tempo reale, tradotta nella tua lingua, crittografata end-to-end."
+            "value": "Messaggi tradotti nella tua lingua, voce clonata, crittografia a scelta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mensagens em tempo real, traduzidas no seu idioma, criptografadas de ponta a ponta."
+            "value": "Mensagens traduzidas no seu idioma, voz clonada, criptografia opcional."
           }
         }
       }

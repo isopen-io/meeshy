@@ -92,7 +92,7 @@ struct AboutView: View {
                 .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .rounded))
                 .foregroundStyle(theme.textPrimary)
 
-            Text(String(localized: "about.description.body", defaultValue: "Messagerie en temps réel, traduite dans votre langue, chiffrée de bout en bout.", bundle: .main))
+            Text(String(localized: "about.description.body", defaultValue: "Messagerie traduite dans votre langue, voix clonée, chiffrement au choix.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                 .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
