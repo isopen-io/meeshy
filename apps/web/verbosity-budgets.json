@@ -309,24 +309,24 @@
       "firstScreen": 59
     },
     "settings-data-export": {
-      "total": 16,
-      "firstScreen": 16
+      "total": 8,
+      "firstScreen": 8
     },
     "settings-notifications": {
-      "total": 16,
-      "firstScreen": 16
+      "total": 8,
+      "firstScreen": 8
     },
     "settings-packs": {
-      "total": 122,
-      "firstScreen": 122
+      "total": 100,
+      "firstScreen": 100
     },
     "settings-securite": {
       "total": 46,
       "firstScreen": 46
     },
     "settings-verify-email-change": {
-      "total": 25,
-      "firstScreen": 25
+      "total": 10,
+      "firstScreen": 10
     },
     "share": {
       "total": 329,
