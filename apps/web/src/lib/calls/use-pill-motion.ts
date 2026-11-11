@@ -101,10 +101,11 @@ function useHeldSwap<T>(value: T | null, shape: SwapShape): { readonly held: T |
 
 /**
  * L'hôte de {@link useHeldSwap} : un bloc qui porte ses attributs (`className`, `data-*`) et rend
- * `children` de la valeur retenue. Il vit ici, avec le mouvement, et non dans l'écran d'appel
+ * `children` de la valeur retenue ; par défaut il grandit depuis son ancre (`scale`, l'ancre est
+ * `transform-origin`, posée par la feuille). Il vit ici, avec le mouvement, et non dans l'écran d'appel
  * (`budgets.json` › `call_overlay`).
  */
-export function HeldSwap<T>({ value, shape, children, ...attributes }: { readonly value: T | null; readonly shape: SwapShape; readonly children: (held: T) => ReactNode; readonly className?: string } & { readonly [data: `data-${string}`]: string }) {
+export function HeldSwap<T>({ value, shape = 'scale', children, ...attributes }: { readonly value: T | null; readonly shape?: SwapShape; readonly children: (held: T) => ReactNode; readonly className?: string } & { readonly [data: `data-${string}`]: string }) {
   const { held, leaving, ref } = useHeldSwap(value, shape);
   return held === null ? null : createElement('div', { ref, ...attributes, ...leaving }, children(held));
 }

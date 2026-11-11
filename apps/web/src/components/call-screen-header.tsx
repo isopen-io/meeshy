@@ -132,7 +132,7 @@ export function CallScreenHeader({ call, language, joined, prominent }: HeaderPr
       </div>
       {/* LA CAPSULE ENTRE ET SORT PAR UNE MISE À L'ÉCHELLE ANCRÉE À DROITE (P9.8, #17509) : celle que
           décide `call-header.ts` reste à sa place le temps de son départ, inerte, puis se démonte. */}
-      <HeldSwap value={capsule} shape="scale" className="min-w-0" data-call-capsule="">
+      <HeldSwap value={capsule} data-call-capsule="">
         {(held) => <CallQualityChip capsule={held} clock={clock} quality={call.quality} language={language} prominent={prominent} />}
       </HeldSwap>
     </div>
