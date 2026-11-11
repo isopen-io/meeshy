@@ -117,7 +117,7 @@ public struct MeeshySliderTrack: View {
             )
             .meeshyAnimation(settleAnimation, value: value)
             .contentShape(Rectangle())
-            .gesture(gesture(width: geometry.size.width))
+            .gesture(trackGesture(width: geometry.size.width))
             .environment(\.layoutDirection, .leftToRight)
         }
         .frame(height: recipe.hitHeight)
@@ -142,14 +142,14 @@ public struct MeeshySliderTrack: View {
         isPressed ? nil : .easeOut(duration: MeeshyLabeledSliderRecipe.settleDuration)
     }
 
-    private func gesture(width: CGFloat) -> some Gesture {
+    private func trackGesture(width: CGFloat) -> some Gesture {
         let drag = DragGesture(minimumDistance: MeeshyLabeledSliderRecipe.dragThreshold)
             .updating($isTouching) { _, touching, _ in touching = true }
             .onChanged { geste in follow(geste, width: width) }
             .onEnded { _ in release() }
         let tap = SpatialTapGesture()
-            .onEnded { tap in
-                play(interaction.jump(from: value, toFraction: Self.fraction(at: tap.location.x, width: width), isRTL: isRTL))
+            .onEnded { touch in
+                play(interaction.jump(from: value, toFraction: Self.fraction(at: touch.location.x, width: width), isRTL: isRTL))
             }
         return drag.exclusively(before: tap)
     }
