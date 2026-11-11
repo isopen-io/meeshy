@@ -58,4 +58,15 @@ class CallTileRimTest {
         assertThat(CallTileRim.selfTileBorder(paused = false, rimHex = "pas-une-couleur", warning = Color.Yellow))
             .isEqualTo(BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)))
     }
+
+    @Test
+    fun `le visage du pair en caméra coupée prend sa couleur d'auteur, la meme que ses sous-titres`() {
+        assertThat(CallTileRim.peerFace("u-awa")).isEqualTo(CallSpeakerColor.hex("u-awa"))
+    }
+
+    @Test
+    fun `sans identifiant du pair, aucune couleur n'est inventee pour son visage`() {
+        assertThat(CallTileRim.peerFace("")).isNull()
+        assertThat(CallTileRim.peerFace("  ")).isNull()
+    }
 }

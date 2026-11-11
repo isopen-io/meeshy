@@ -222,6 +222,7 @@ fun CallScreen(
                     framed = duo.framed,
                     selfUserId = viewModel.selfUserId,
                     peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
+                    peerSpeech = rememberCallPeerSpeechSource(viewModel, config.peerId.ifBlank { viewModel.activeConfig.peerId }, groupMesh),
                 )
             }
 

@@ -606,6 +606,9 @@ class CallViewModel @Inject constructor(
     val cameraZoom get() = coordinator.cameraZoom
     val remoteVideoTracks get() = coordinator.remoteVideoTracks
 
+    /** Le niveau sonore reçu du pair (G4.2) : l'avatar caméra coupée du duo le relève toutes les 400 ms, tant qu'il est à l'écran. */
+    suspend fun peerAudioLevel(): Double? = coordinator.peerAudioLevel()
+
     /** Le maillage d'un appel de groupe : la scène de groupe le lit (#13740). */
     val groupMesh: StateFlow<GroupCallMeshUi> get() = coordinator.groupMesh
 
