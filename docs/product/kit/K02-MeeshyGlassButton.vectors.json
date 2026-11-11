@@ -1,8 +1,12 @@
 {
   "kit": "K02",
-  "glyphRatio": 0.46,
   "disabledOpacity": 0.4,
   "toneFadeMs": 200,
+  "shadowActive": {
+    "opacity": 0.22,
+    "radius": 14,
+    "y": 4
+  },
   "tapTarget": {
     "ios": 44,
     "android": 48,
@@ -14,129 +18,486 @@
   },
   "sizes": [
     {
-      "size": "small",
+      "size": "s36",
       "diameter": 36,
-      "glyph": 17,
-      "target": 44
+      "glyph": 18,
+      "target": 44,
+      "slack": 4
     },
     {
-      "size": "compact",
+      "size": "s40",
       "diameter": 40,
       "glyph": 18,
-      "target": 44
+      "target": 44,
+      "slack": 2
     },
     {
-      "size": "regular",
+      "size": "s44",
       "diameter": 44,
       "glyph": 20,
-      "target": 44
+      "target": 44,
+      "slack": 0
     },
     {
-      "size": "large",
+      "size": "s48",
       "diameter": 48,
       "glyph": 22,
-      "target": 48
+      "target": 48,
+      "slack": 0
     }
   ],
-  "kinds": [
+  "matter": [
     {
       "kind": "normal",
+      "material": "liquid",
+      "nested": false,
       "fill": "none",
-      "fillOpacity": 0,
-      "pressedFillOpacity": 0,
-      "ink": "onMedia",
-      "shadow": null
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "normal",
+      "material": "drawn",
+      "nested": false,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "normal",
+      "material": "opaque",
+      "nested": false,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
     },
     {
       "kind": "active",
+      "material": "liquid",
+      "nested": false,
       "fill": "white",
-      "fillOpacity": 0.94,
-      "pressedFillOpacity": 0.94,
-      "ink": "indigo950",
-      "shadow": {
-        "opacity": 0.22,
-        "radius": 14,
-        "y": 4
-      }
+      "glass": "neutral",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "active",
+      "material": "drawn",
+      "nested": false,
+      "fill": "white",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.78,
+      "hoveredFill": 0.86,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "active",
+      "material": "opaque",
+      "nested": false,
+      "fill": "white",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.78,
+      "hoveredFill": 0.86,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
     },
     {
       "kind": "destructive",
+      "material": "liquid",
+      "nested": false,
+      "fill": "none",
+      "glass": "red",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "destructive",
+      "material": "drawn",
+      "nested": false,
       "fill": "red",
-      "fillOpacity": 0.94,
-      "pressedFillOpacity": 0.94,
-      "ink": "onMedia",
-      "shadow": null
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "destructive",
+      "material": "opaque",
+      "nested": false,
+      "fill": "red",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
     },
     {
       "kind": "soft",
+      "material": "liquid",
+      "nested": false,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "soft",
+      "material": "drawn",
+      "nested": false,
       "fill": "veil",
-      "fillOpacity": 0.12,
-      "pressedFillOpacity": 0.22,
-      "ink": "onMedia",
-      "shadow": null
+      "glass": "none",
+      "restFill": 0.12,
+      "pressedFill": 0.22,
+      "hoveredFill": 0.17,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "soft",
+      "material": "opaque",
+      "nested": false,
+      "fill": "veil",
+      "glass": "none",
+      "restFill": 0.12,
+      "pressedFill": 0.22,
+      "hoveredFill": 0.17,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "normal",
+      "material": "liquid",
+      "nested": true,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "normal",
+      "material": "drawn",
+      "nested": true,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "normal",
+      "material": "opaque",
+      "nested": true,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "active",
+      "material": "liquid",
+      "nested": true,
+      "fill": "white",
+      "glass": "neutral",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "active",
+      "material": "drawn",
+      "nested": true,
+      "fill": "white",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.78,
+      "hoveredFill": 0.86,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "active",
+      "material": "opaque",
+      "nested": true,
+      "fill": "white",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.78,
+      "hoveredFill": 0.86,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "destructive",
+      "material": "liquid",
+      "nested": true,
+      "fill": "none",
+      "glass": "red",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "destructive",
+      "material": "drawn",
+      "nested": true,
+      "fill": "red",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "destructive",
+      "material": "opaque",
+      "nested": true,
+      "fill": "red",
+      "glass": "none",
+      "restFill": 0.94,
+      "pressedFill": 0.94,
+      "hoveredFill": 0.94,
+      "pressedVeil": 0.22,
+      "hoveredVeil": 0.11
+    },
+    {
+      "kind": "soft",
+      "material": "liquid",
+      "nested": true,
+      "fill": "none",
+      "glass": "neutral",
+      "restFill": 0,
+      "pressedFill": 0,
+      "hoveredFill": 0,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "soft",
+      "material": "drawn",
+      "nested": true,
+      "fill": "veil",
+      "glass": "none",
+      "restFill": 0.12,
+      "pressedFill": 0.22,
+      "hoveredFill": 0.17,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
+    },
+    {
+      "kind": "soft",
+      "material": "opaque",
+      "nested": true,
+      "fill": "veil",
+      "glass": "none",
+      "restFill": 0.12,
+      "pressedFill": 0.22,
+      "hoveredFill": 0.17,
+      "pressedVeil": 0,
+      "hoveredVeil": 0
     }
   ],
+  "ink": [
+    {
+      "kind": "normal",
+      "tone": "deep",
+      "glyphTint": false,
+      "ink": "onMedia"
+    },
+    {
+      "kind": "normal",
+      "tone": "theme",
+      "glyphTint": false,
+      "ink": "themeInk"
+    },
+    {
+      "kind": "normal",
+      "tone": "deep",
+      "glyphTint": true,
+      "ink": "custom"
+    },
+    {
+      "kind": "soft",
+      "tone": "deep",
+      "glyphTint": false,
+      "ink": "onMedia"
+    },
+    {
+      "kind": "soft",
+      "tone": "theme",
+      "glyphTint": false,
+      "ink": "themeInk"
+    },
+    {
+      "kind": "soft",
+      "tone": "deep",
+      "glyphTint": true,
+      "ink": "custom"
+    },
+    {
+      "kind": "active",
+      "tone": "deep",
+      "glyphTint": false,
+      "ink": "onSolid"
+    },
+    {
+      "kind": "active",
+      "tone": "deep",
+      "glyphTint": true,
+      "ink": "onSolid"
+    },
+    {
+      "kind": "active",
+      "tone": "theme",
+      "glyphTint": false,
+      "ink": "themeInverse"
+    },
+    {
+      "kind": "destructive",
+      "tone": "deep",
+      "glyphTint": false,
+      "ink": "onMedia"
+    },
+    {
+      "kind": "destructive",
+      "tone": "deep",
+      "glyphTint": true,
+      "ink": "onMedia"
+    }
+  ],
+  "activeThemeFill": "themeInk",
   "contrast": {
     "glyphMin": 3.0,
-    "activeMin": 15.0,
-    "destructiveNominal": 3.8
+    "active": 15.99,
+    "destructive": 3.76,
+    "tolerance": 0.05
   },
-  "accessibility": [
+  "activation": [
     {
-      "kind": "normal",
-      "isOn": null,
+      "activation": "none",
+      "impliedKind": "normal",
+      "toggle": false,
       "selected": false,
-      "toggle": false
+      "toggleOn": null
     },
     {
-      "kind": "active",
-      "isOn": null,
+      "activation": "toggle(true)",
+      "impliedKind": "active",
+      "toggle": true,
+      "selected": false,
+      "toggleOn": true
+    },
+    {
+      "activation": "toggle(false)",
+      "impliedKind": "normal",
+      "toggle": true,
+      "selected": false,
+      "toggleOn": false
+    },
+    {
+      "activation": "selected(true)",
+      "impliedKind": "active",
+      "toggle": false,
       "selected": true,
-      "toggle": false
+      "toggleOn": null
     },
     {
-      "kind": "normal",
-      "isOn": true,
-      "selected": true,
-      "toggle": true
-    },
-    {
-      "kind": "normal",
-      "isOn": false,
+      "activation": "selected(false)",
+      "impliedKind": "normal",
+      "toggle": false,
       "selected": false,
-      "toggle": true
+      "toggleOn": null
     },
     {
-      "kind": "active",
-      "isOn": false,
+      "activation": "expanded(true)",
+      "impliedKind": "active",
+      "toggle": false,
       "selected": false,
-      "toggle": true
+      "toggleOn": null
+    },
+    {
+      "activation": "expanded(false)",
+      "impliedKind": "normal",
+      "toggle": false,
+      "selected": false,
+      "toggleOn": null
+    }
+  ],
+  "value": [
+    {
+      "toggleWord": null,
+      "value": null,
+      "said": ""
+    },
+    {
+      "toggleWord": "Activé",
+      "value": null,
+      "said": "Activé"
+    },
+    {
+      "toggleWord": "Activé",
+      "value": "AirPods",
+      "said": "Activé, AirPods"
+    },
+    {
+      "toggleWord": null,
+      "value": "3 textes",
+      "said": "3 textes"
     }
   ],
   "states": [
     {
-      "isEnabled": true,
-      "isBusy": false,
+      "enabled": true,
       "action": true,
       "haptic": true,
       "touchResponse": true,
       "opacity": 1
     },
     {
-      "isEnabled": false,
-      "isBusy": false,
+      "enabled": false,
       "action": false,
       "haptic": false,
       "touchResponse": false,
       "opacity": 0.4
-    },
-    {
-      "isEnabled": true,
-      "isBusy": true,
-      "action": false,
-      "haptic": false,
-      "touchResponse": false,
-      "opacity": 1
     }
   ]
 }

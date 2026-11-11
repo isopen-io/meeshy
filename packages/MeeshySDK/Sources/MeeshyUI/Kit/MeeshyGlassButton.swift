@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: - Les emplacements
 
 /// Le glyphe d'un symbole système : une valeur, donc comparable.
-public struct MeeshyGlassSymbol: View, Equatable {
+public struct MeeshyGlassButtonSymbol: View, Equatable {
     public let name: String
 
     public init(_ name: String) {
@@ -16,7 +16,7 @@ public struct MeeshyGlassSymbol: View, Equatable {
 }
 
 /// L'emplacement de pastille vide.
-public struct MeeshyGlassNoBadge: View, Equatable {
+public struct MeeshyGlassButtonNoBadge: View, Equatable {
     public init() {}
 
     public var body: some View {
@@ -27,126 +27,82 @@ public struct MeeshyGlassNoBadge: View, Equatable {
 // MARK: - Le disque
 
 /// **Ce qu'on VOIT d'un bouton rond de verre** (K02) : le glyphe, son fond plein
-/// éventuel (blanc, rouge, voile doux) et le verre de K01, interactif.
+/// éventuel (blanc, rouge, voile doux) et le verre de K01, interactif. C'est
+/// aussi le libellé d'un `Menu` qui s'habille comme un bouton.
 ///
 /// Atome opaque : ni action, ni nom accessible, ni haptique, ni légende. Une
 /// unité « disque + légende » se compose côté app autour de ce disque. Le
 /// glyphe garde sa taille quel que soit le Dynamic Type.
-public struct MeeshyGlassDisc<Glyph: View, Badge: View>: View {
-    private let recipe: MeeshyGlassButtonRecipe
+public struct MeeshyGlassButtonFace<Glyph: View, Badge: View>: View {
+    private let kind: MeeshyGlassButtonKind
+    private let size: MeeshyGlassButtonSize
     private let tone: MeeshyGlassTone?
+    private let tint: Color?
+    private let glyphTint: Color?
     private let isPressed: Bool?
     private let glyph: Glyph
     private let badge: Badge
 
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.meeshyGlassTone) private var hostTone
     @Environment(\.meeshyGlassIsPressed) private var styledPressed
+    @Environment(\.meeshyGlassIsNested) private var isNested
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    #if DEBUG
+    @Environment(\.meeshyGlassForcesDrawn) private var forcesDrawn
+    @Environment(\.meeshyGlassForcesOpaque) private var forcesOpaque
+    #endif
+    @State private var isHovered = false
 
-    init(recipe: MeeshyGlassButtonRecipe, tone: MeeshyGlassTone?, isPressed: Bool?, glyph: Glyph, badge: Badge) {
-        self.recipe = recipe
+    init(
+        kind: MeeshyGlassButtonKind,
+        size: MeeshyGlassButtonSize,
+        tone: MeeshyGlassTone?,
+        tint: Color?,
+        glyphTint: Color?,
+        isPressed: Bool?,
+        glyph: Glyph,
+        badge: Badge
+    ) {
+        self.kind = kind
+        self.size = size
         self.tone = tone
+        self.tint = tint
+        self.glyphTint = glyphTint
         self.isPressed = isPressed
         self.glyph = glyph
         self.badge = badge
     }
 
     public var body: some View {
-        face
-            .frame(width: recipe.diameter, height: recipe.diameter)
-            .background { MeeshyGlassButtonFillLayer(recipe: recipe, isPressed: isPressed ?? styledPressed) }
-            .meeshyGlass(in: Circle(), tone: tone, isInteractive: true, isPressed: isPressed)
-            .transformEnvironment(\.meeshyGlassIsNested) { nested in
-                nested = nested || recipe.fill != .clear
-            }
-            .overlay(alignment: .topTrailing) { badge.accessibilityHidden(true) }
-    }
-
-    private var face: some View {
-        glyph
+        let recipe = self.recipe
+        let isDark = colorScheme == .dark
+        return glyph
             .font(.system(size: recipe.glyphSize, weight: .semibold))
-            .foregroundStyle(recipe.inkColor)
-            .tint(recipe.inkColor)
+            .foregroundStyle(recipe.inkColor(isDark: isDark))
             .meeshyAnimation(.easeInOut(duration: MeeshyGlassButtonRecipe.toneFadeDuration), value: recipe.kind)
             .accessibilityHidden(true)
+            .frame(width: recipe.diameter, height: recipe.diameter)
+            .background { MeeshyGlassButtonFillLayer(recipe: recipe, isDark: isDark) }
+            .modifier(MeeshyGlassButtonGlassLayer(request: recipe.glass, tone: tone, tint: tint, isPressed: isPressed))
+            .onHover { isHovered = $0 }
+            .overlay(alignment: .topTrailing) { badge.accessibilityHidden(true) }
+            .opacity(recipe.opacity)
     }
-}
 
-public extension MeeshyGlassDisc where Badge == MeeshyGlassNoBadge {
-    init(
-        kind: MeeshyGlassButtonKind = .normal,
-        size: MeeshyGlassButtonSize = .regular,
-        ink: Color? = nil,
-        tone: MeeshyGlassTone? = nil,
-        isPressed: Bool? = nil,
-        @ViewBuilder glyph: () -> Glyph
-    ) {
-        self.init(
-            recipe: .resolve(kind: kind, size: size, ink: ink),
-            tone: tone, isPressed: isPressed, glyph: glyph(), badge: MeeshyGlassNoBadge()
+    private var recipe: MeeshyGlassButtonRecipe {
+        MeeshyGlassButtonRecipe.resolve(
+            kind: kind,
+            size: size,
+            tone: tone ?? hostTone,
+            material: material,
+            isNested: isNested,
+            isPressed: isPressed ?? styledPressed,
+            isHovered: isHovered,
+            isEnabled: isEnabled,
+            glyphTint: glyphTint
         )
-    }
-}
-
-public extension MeeshyGlassDisc where Glyph == MeeshyGlassSymbol, Badge == MeeshyGlassNoBadge {
-    init(
-        systemImage: String,
-        kind: MeeshyGlassButtonKind = .normal,
-        size: MeeshyGlassButtonSize = .regular,
-        ink: Color? = nil,
-        tone: MeeshyGlassTone? = nil,
-        isPressed: Bool? = nil
-    ) {
-        self.init(
-            recipe: .resolve(kind: kind, size: size, ink: ink),
-            tone: tone, isPressed: isPressed, glyph: MeeshyGlassSymbol(systemImage), badge: MeeshyGlassNoBadge()
-        )
-    }
-}
-
-public extension MeeshyGlassDisc {
-    /// La pastille du coin haut de fin, muette pour le lecteur d'écran : son
-    /// sens passe par la valeur du bouton.
-    func glassBadge<B: View>(@ViewBuilder _ content: () -> B) -> MeeshyGlassDisc<Glyph, B> {
-        MeeshyGlassDisc<Glyph, B>(recipe: recipe, tone: tone, isPressed: isPressed, glyph: glyph, badge: content())
-    }
-}
-
-extension MeeshyGlassDisc: Equatable where Glyph: Equatable, Badge: Equatable {
-    public static func == (lhs: MeeshyGlassDisc, rhs: MeeshyGlassDisc) -> Bool {
-        lhs.recipe == rhs.recipe && lhs.tone == rhs.tone && lhs.isPressed == rhs.isPressed
-            && lhs.glyph == rhs.glyph && lhs.badge == rhs.badge
-    }
-}
-
-// MARK: - Le fond plein
-
-/// Le fond plein du disque : blanc de l'actif, rouge du destructif, voile doux.
-/// Seul le fond s'anime à un changement de tenue ; l'ombre de l'actif ne bouge
-/// jamais. Sous le Liquid Glass du système, le voile doux n'existe pas.
-private struct MeeshyGlassButtonFillLayer: View {
-    let recipe: MeeshyGlassButtonRecipe
-    let isPressed: Bool
-
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    #if DEBUG
-    @Environment(\.meeshyGlassForcesDrawn) private var forcesDrawn
-    @Environment(\.meeshyGlassForcesOpaque) private var forcesOpaque
-    #endif
-
-    var body: some View {
-        Circle()
-            .fill(recipe.fillColor.opacity(opacity))
-            .meeshyAnimation(.easeInOut(duration: MeeshyGlassButtonRecipe.toneFadeDuration), value: recipe.kind)
-            .shadow(color: shadowColor, radius: recipe.shadow?.radius ?? 0, x: 0, y: recipe.shadow?.y ?? 0)
-            .animation(nil, value: recipe.kind)
-    }
-
-    private var opacity: Double {
-        guard recipe.fillsUnderLiquid || material != .liquid else { return 0 }
-        return recipe.resolvedFillOpacity(isPressed: isPressed)
-    }
-
-    private var shadowColor: Color {
-        recipe.shadow.map { MeeshyColors.mediaBackdrop.opacity($0.opacity) } ?? .clear
     }
 
     private var material: MeeshyGlassMaterial {
@@ -175,21 +131,120 @@ private struct MeeshyGlassButtonFillLayer: View {
     }
 }
 
+public extension MeeshyGlassButtonFace where Badge == MeeshyGlassButtonNoBadge {
+    init(
+        kind: MeeshyGlassButtonKind = .normal,
+        size: MeeshyGlassButtonSize = .s44,
+        tone: MeeshyGlassTone? = nil,
+        tint: Color? = nil,
+        glyphTint: Color? = nil,
+        isPressed: Bool? = nil,
+        @ViewBuilder glyph: () -> Glyph
+    ) {
+        self.init(
+            kind: kind, size: size, tone: tone, tint: tint, glyphTint: glyphTint,
+            isPressed: isPressed, glyph: glyph(), badge: MeeshyGlassButtonNoBadge()
+        )
+    }
+}
+
+public extension MeeshyGlassButtonFace where Glyph == MeeshyGlassButtonSymbol, Badge == MeeshyGlassButtonNoBadge {
+    init(
+        systemImage: String,
+        kind: MeeshyGlassButtonKind = .normal,
+        size: MeeshyGlassButtonSize = .s44,
+        tone: MeeshyGlassTone? = nil,
+        tint: Color? = nil,
+        glyphTint: Color? = nil,
+        isPressed: Bool? = nil
+    ) {
+        self.init(
+            kind: kind, size: size, tone: tone, tint: tint, glyphTint: glyphTint,
+            isPressed: isPressed, glyph: MeeshyGlassButtonSymbol(systemImage), badge: MeeshyGlassButtonNoBadge()
+        )
+    }
+}
+
+public extension MeeshyGlassButtonFace {
+    /// La pastille du coin haut de fin, muette pour le lecteur d'écran : son
+    /// sens passe par la valeur du bouton.
+    func glassBadge<B: View>(@ViewBuilder _ content: () -> B) -> MeeshyGlassButtonFace<Glyph, B> {
+        MeeshyGlassButtonFace<Glyph, B>(
+            kind: kind, size: size, tone: tone, tint: tint, glyphTint: glyphTint,
+            isPressed: isPressed, glyph: glyph, badge: content()
+        )
+    }
+}
+
+extension MeeshyGlassButtonFace: Equatable where Glyph: Equatable, Badge: Equatable {
+    public static func == (lhs: MeeshyGlassButtonFace, rhs: MeeshyGlassButtonFace) -> Bool {
+        lhs.kind == rhs.kind && lhs.size == rhs.size && lhs.tone == rhs.tone && lhs.tint == rhs.tint
+            && lhs.glyphTint == rhs.glyphTint && lhs.isPressed == rhs.isPressed
+            && lhs.glyph == rhs.glyph && lhs.badge == rhs.badge
+    }
+}
+
+// MARK: - Le fond plein
+
+/// Le fond plein du disque : blanc de l'actif, rouge du destructif, voile doux,
+/// plus le voile d'appui là où K01 ne pose pas de matière. Seul le fond s'anime
+/// à un changement de tenue ; l'appui est immédiat et l'ombre de l'actif ne
+/// bouge jamais.
+private struct MeeshyGlassButtonFillLayer: View {
+    let recipe: MeeshyGlassButtonRecipe
+    let isDark: Bool
+
+    var body: some View {
+        Circle()
+            .fill(recipe.fillColor(isDark: isDark).opacity(recipe.fillOpacity))
+            .overlay { Circle().fill(MeeshyColors.onMedia.opacity(recipe.pressVeilOpacity)) }
+            .meeshyAnimation(.easeInOut(duration: MeeshyGlassButtonRecipe.toneFadeDuration), value: recipe.kind)
+            .shadow(color: shadowColor, radius: recipe.shadow?.radius ?? 0, x: 0, y: recipe.shadow?.y ?? 0)
+            .animation(nil, value: recipe.kind)
+    }
+
+    private var shadowColor: Color {
+        recipe.shadow.map { MeeshyColors.mediaBackdrop.opacity($0.opacity) } ?? .clear
+    }
+}
+
+/// La demande faite à K01, l'unique entrée de verre : aucune quand le fond est
+/// plein, un verre interactif sinon (teinté de rouge pour le destructif sous
+/// Liquid Glass).
+private struct MeeshyGlassButtonGlassLayer: ViewModifier {
+    let request: MeeshyGlassButtonGlassRequest
+    let tone: MeeshyGlassTone?
+    let tint: Color?
+    let isPressed: Bool?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch request {
+        case .none:
+            content
+        case .neutral:
+            content.meeshyGlass(in: Circle(), tone: tone, tint: tint, isInteractive: true, isPressed: isPressed)
+        case .red:
+            content.meeshyGlass(in: Circle(), tone: tone, tint: MeeshyColors.errorStrong, isInteractive: true, isPressed: isPressed)
+        }
+    }
+}
+
 // MARK: - L'activation
 
-/// Ce qui se passe quand un bouton est activé : désactivé ou occupé, rien ;
-/// sinon UN impact (sauf `none`, quand l'hôte joue le sien), puis l'action.
-/// Une loi pure, testée sans écran.
-enum MeeshyGlassButtonActivation {
+/// Ce qui se passe quand un bouton est activé : désactivé, rien ; sinon UN
+/// impact (sauf `none`, quand l'hôte joue le sien), puis l'action. Une loi
+/// pure, testée sans écran.
+enum MeeshyGlassButtonTrigger {
     @discardableResult
     static func perform(
-        recipe: MeeshyGlassButtonRecipe,
+        isEnabled: Bool,
         haptic: MeeshyGlassButtonHaptic,
-        play: (MeeshyGlassButtonHaptic) -> Void = MeeshyGlassButtonActivation.playSystemHaptic,
+        play: (MeeshyGlassButtonHaptic) -> Void = MeeshyGlassButtonTrigger.playSystemHaptic,
         action: () -> Void
     ) -> Bool {
-        guard recipe.isActionEnabled else { return false }
-        if recipe.playsHaptic, haptic != .none { play(haptic) }
+        guard isEnabled else { return false }
+        if haptic != .none { play(haptic) }
         action()
         return true
     }
@@ -198,7 +253,6 @@ enum MeeshyGlassButtonActivation {
         switch haptic {
         case .none: break
         case .light: HapticFeedback.light()
-        case .medium: HapticFeedback.medium()
         }
     }
 }
@@ -209,14 +263,14 @@ enum MeeshyGlassButtonActivation {
 /// partie, l'hôte les garde stables.
 struct MeeshyGlassButtonSpec: Equatable {
     let label: String
-    let kind: MeeshyGlassButtonKind
-    let size: MeeshyGlassButtonSize
-    let isOn: Bool?
     let hint: String?
     let value: String?
-    let ink: Color?
+    let kind: MeeshyGlassButtonKind
+    let size: MeeshyGlassButtonSize
+    let activation: MeeshyGlassButtonActivation
     let tone: MeeshyGlassTone?
-    let isBusy: Bool
+    let tint: Color?
+    let glyphTint: Color?
     let haptic: MeeshyGlassButtonHaptic
     let longPressLabel: String?
     let hasLongPress: Bool
@@ -229,9 +283,10 @@ struct MeeshyGlassButtonSpec: Equatable {
 /// - Toucher : l'action part au relâcher, la réponse visuelle est celle de K01.
 /// - Appui long (si `onLongPress`) : 500 ms, annulé au-delà de 10 pt, sans
 ///   déclencher l'action ; le lecteur d'écran l'offre sous `longPressLabel`.
-/// - Désactivé (`.disabled`) ou occupé : ni action, ni haptique, ni appui.
-/// - `isOn` fait une bascule ; une tenue active sans `isOn` s'annonce
-///   « sélectionné ».
+/// - Désactivé (`.disabled`) : ni action, ni haptique, ni appui.
+/// - `activation` dit l'état (bascule, sélection, déplié) et en déduit la tenue
+///   quand `kind` est absent.
+/// - La cible tactile déborde le disque ; l'encombrement reste son diamètre.
 ///
 /// `Equatable` sur les valeurs (fermetures hors comparaison) : un hôte qui se
 /// re-rend à paramètres égaux ne re-rend pas le bouton.
@@ -263,116 +318,104 @@ public struct MeeshyGlassButton<Glyph: View, Badge: View>: View {
     }
 
     public var body: some View {
-        let recipe = MeeshyGlassButtonRecipe.resolve(
-            kind: spec.kind, size: spec.size, ink: spec.ink, isEnabled: isEnabled, isBusy: spec.isBusy
-        )
-        return Button { activate(recipe) } label: { face(recipe) }
+        let state = MeeshyGlassButtonAccessibilityState.resolve(activation: spec.activation)
+        return Button(action: activate) { face }
             .buttonStyle(MeeshyGlassButtonStyle(longPressFired: $longPressFired, onPressChange: onPressChange))
-            .disabled(!recipe.isActionEnabled)
-            .opacity(recipe.opacity)
-            .modifier(MeeshyGlassLongPress(isOn: onLongPress != nil && recipe.respondsToTouch, perform: { fireLongPress(recipe) }))
+            .modifier(MeeshyGlassLongPress(isOn: onLongPress != nil && isEnabled, perform: fireLongPress))
             .accessibilityLabel(spec.label)
             .accessibilityHint(spec.hint ?? "")
-            .accessibilityValue(spec.value ?? "")
-            .modifier(MeeshyGlassTraits(
-                state: .resolve(kind: spec.kind, isOn: spec.isOn),
-                isBusy: spec.isBusy
+            .accessibilityValue(MeeshyGlassButtonAccessibilityState.composeValue(
+                toggleWord: state.toggleIsOn.map(MeeshyGlassButtonWords.toggle), value: spec.value
             ))
+            .modifier(MeeshyGlassTraits(state: state))
             .modifier(MeeshyGlassLongPressAction(label: spec.longPressLabel, perform: onLongPress))
             .accessibilityShowsLargeContentViewer {
                 Label { Text(spec.label) } icon: { glyph }
             }
     }
 
-    private func face(_ recipe: MeeshyGlassButtonRecipe) -> some View {
-        MeeshyGlassDisc(recipe: recipe, tone: spec.tone, isPressed: nil, glyph: glyphContent(recipe), badge: badge)
-            .frame(width: recipe.targetSide, height: recipe.targetSide)
-            .contentShape(Rectangle())
+    private var face: some View {
+        MeeshyGlassButtonFace(
+            kind: spec.kind, size: spec.size, tone: spec.tone, tint: spec.tint, glyphTint: spec.glyphTint,
+            isPressed: nil, glyph: glyph, badge: badge
+        )
+        .contentShape(Rectangle().inset(by: -spec.size.hitSlack))
     }
 
-    @ViewBuilder
-    private func glyphContent(_ recipe: MeeshyGlassButtonRecipe) -> some View {
-        if recipe.showsBusyIndicator {
-            ProgressView()
-        } else {
-            glyph
-        }
-    }
-
-    private func activate(_ recipe: MeeshyGlassButtonRecipe) {
+    private func activate() {
         guard !longPressFired else {
             longPressFired = false
             return
         }
-        MeeshyGlassButtonActivation.perform(recipe: recipe, haptic: spec.haptic, action: action)
+        MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled, haptic: spec.haptic, action: action)
     }
 
-    private func fireLongPress(_ recipe: MeeshyGlassButtonRecipe) {
+    private func fireLongPress() {
         longPressFired = true
         guard let onLongPress else { return }
-        MeeshyGlassButtonActivation.perform(recipe: recipe, haptic: spec.haptic, action: onLongPress)
+        MeeshyGlassButtonTrigger.perform(isEnabled: isEnabled, haptic: spec.haptic, action: onLongPress)
     }
 }
 
 // MARK: - Les inits
 
-public extension MeeshyGlassButton where Glyph == MeeshyGlassSymbol, Badge == MeeshyGlassNoBadge {
+public extension MeeshyGlassButton where Glyph == MeeshyGlassButtonSymbol, Badge == MeeshyGlassButtonNoBadge {
     init(
         systemImage: String,
         label: String,
-        kind: MeeshyGlassButtonKind = .normal,
-        size: MeeshyGlassButtonSize = .regular,
-        isOn: Bool? = nil,
         hint: String? = nil,
         value: String? = nil,
-        ink: Color? = nil,
+        kind: MeeshyGlassButtonKind? = nil,
+        size: MeeshyGlassButtonSize = .s44,
+        activation: MeeshyGlassButtonActivation = .none,
         tone: MeeshyGlassTone? = nil,
-        isBusy: Bool = false,
+        tint: Color? = nil,
+        glyphTint: Color? = nil,
         haptic: MeeshyGlassButtonHaptic = .light,
+        onPressChange: ((Bool) -> Void)? = nil,
         onLongPress: (() -> Void)? = nil,
         longPressLabel: String? = nil,
-        onPressChange: ((Bool) -> Void)? = nil,
         action: @escaping () -> Void
     ) {
         self.init(
             spec: MeeshyGlassButtonSpec(
-                label: label, kind: kind, size: size, isOn: isOn, hint: hint, value: value, ink: ink,
-                tone: tone, isBusy: isBusy, haptic: haptic, longPressLabel: longPressLabel,
-                hasLongPress: onLongPress != nil, hasPressChange: onPressChange != nil
+                label: label, hint: hint, value: value, kind: kind ?? activation.impliedKind, size: size,
+                activation: activation, tone: tone, tint: tint, glyphTint: glyphTint, haptic: haptic,
+                longPressLabel: longPressLabel, hasLongPress: onLongPress != nil, hasPressChange: onPressChange != nil
             ),
-            glyph: MeeshyGlassSymbol(systemImage), badge: MeeshyGlassNoBadge(),
+            glyph: MeeshyGlassButtonSymbol(systemImage), badge: MeeshyGlassButtonNoBadge(),
             action: action, onLongPress: onLongPress, onPressChange: onPressChange
         )
     }
 }
 
-public extension MeeshyGlassButton where Badge == MeeshyGlassNoBadge {
+public extension MeeshyGlassButton where Badge == MeeshyGlassButtonNoBadge {
     /// Le glyphe remplace l'icône (« Aa », pastille de couleur, drapeau) et
     /// reçoit l'encre. `action` se nomme : la fermeture finale est le glyphe.
     init(
         label: String,
-        kind: MeeshyGlassButtonKind = .normal,
-        size: MeeshyGlassButtonSize = .regular,
-        isOn: Bool? = nil,
         hint: String? = nil,
         value: String? = nil,
-        ink: Color? = nil,
+        kind: MeeshyGlassButtonKind? = nil,
+        size: MeeshyGlassButtonSize = .s44,
+        activation: MeeshyGlassButtonActivation = .none,
         tone: MeeshyGlassTone? = nil,
-        isBusy: Bool = false,
+        tint: Color? = nil,
+        glyphTint: Color? = nil,
         haptic: MeeshyGlassButtonHaptic = .light,
+        onPressChange: ((Bool) -> Void)? = nil,
         onLongPress: (() -> Void)? = nil,
         longPressLabel: String? = nil,
-        onPressChange: ((Bool) -> Void)? = nil,
         action: @escaping () -> Void,
         @ViewBuilder glyph: () -> Glyph
     ) {
         self.init(
             spec: MeeshyGlassButtonSpec(
-                label: label, kind: kind, size: size, isOn: isOn, hint: hint, value: value, ink: ink,
-                tone: tone, isBusy: isBusy, haptic: haptic, longPressLabel: longPressLabel,
-                hasLongPress: onLongPress != nil, hasPressChange: onPressChange != nil
+                label: label, hint: hint, value: value, kind: kind ?? activation.impliedKind, size: size,
+                activation: activation, tone: tone, tint: tint, glyphTint: glyphTint, haptic: haptic,
+                longPressLabel: longPressLabel, hasLongPress: onLongPress != nil, hasPressChange: onPressChange != nil
             ),
-            glyph: glyph(), badge: MeeshyGlassNoBadge(),
+            glyph: glyph(), badge: MeeshyGlassButtonNoBadge(),
             action: action, onLongPress: onLongPress, onPressChange: onPressChange
         )
     }
@@ -439,6 +482,7 @@ private struct MeeshyGlassLongPress: ViewModifier {
     let isOn: Bool
     let perform: () -> Void
 
+    @ViewBuilder
     func body(content: Content) -> some View {
         if isOn {
             content.simultaneousGesture(
@@ -455,9 +499,17 @@ private struct MeeshyGlassLongPress: ViewModifier {
 
 // MARK: - Le lecteur d'écran
 
+/// Les deux mots d'une bascule, dans la langue du lecteur d'écran.
+enum MeeshyGlassButtonWords {
+    static func toggle(isOn: Bool) -> String {
+        isOn
+            ? String(localized: "kit.glass_button.toggle.on", defaultValue: "Activé", bundle: .module)
+            : String(localized: "kit.glass_button.toggle.off", defaultValue: "Désactivé", bundle: .module)
+    }
+}
+
 private struct MeeshyGlassTraits: ViewModifier {
     let state: MeeshyGlassButtonAccessibilityState
-    let isBusy: Bool
 
     func body(content: Content) -> some View {
         content.accessibilityAddTraits(traits)
@@ -466,7 +518,6 @@ private struct MeeshyGlassTraits: ViewModifier {
     private var traits: AccessibilityTraits {
         var result: AccessibilityTraits = []
         if state.isSelected { result.insert(.isSelected) }
-        if isBusy { result.insert(.updatesFrequently) }
         if #available(iOS 17.0, *), state.isToggle { result.insert(.isToggle) }
         return result
     }
@@ -476,6 +527,7 @@ private struct MeeshyGlassLongPressAction: ViewModifier {
     let label: String?
     let perform: (() -> Void)?
 
+    @ViewBuilder
     func body(content: Content) -> some View {
         if let label, let perform {
             content.accessibilityAction(named: Text(label), perform)

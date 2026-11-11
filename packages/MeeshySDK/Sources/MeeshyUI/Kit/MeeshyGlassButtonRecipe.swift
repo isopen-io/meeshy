@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// La tenue d'un bouton rond de verre. `warning` (l'ambre de la pause
-/// automatique) n'est pas une tenue : il passe par `ink`.
+/// La tenue d'un bouton rond de verre. L'ambre d'une pause automatique n'est pas
+/// une tenue : il passe par `glyphTint`.
 public nonisolated enum MeeshyGlassButtonKind: String, Sendable, Equatable, CaseIterable {
     case normal
     case active
@@ -12,40 +12,95 @@ public nonisolated enum MeeshyGlassButtonKind: String, Sendable, Equatable, Case
 /// Les quatre diamètres de la planche. La cible tactile occupe au moins
 /// `MeeshyControlSize.tapTarget`, quel que soit le diamètre dessiné.
 public nonisolated enum MeeshyGlassButtonSize: String, Sendable, Equatable, CaseIterable {
-    case small
-    case compact
-    case regular
-    case large
+    case s36
+    case s40
+    case s44
+    case s48
+
+    /// Le jeton `MeeshyControlSize.xLarge` (48) n'existe pas encore : il entre avec
+    /// ses miroirs Android (`MeeshyScales`) et web (`size-12`), que garde
+    /// `MeeshyScalesParityTest`.
+    public static let extraLargeDiameter = 48.0
 
     public var diameter: Double {
         switch self {
-        case .small: return 36
-        case .compact: return 40
-        case .regular: return 44
-        case .large: return 48
+        case .s36: return Double(MeeshyControlSize.regular)
+        case .s40: return Double(MeeshyControlSize.large)
+        case .s44: return Double(MeeshyControlSize.tapTarget)
+        case .s48: return Self.extraLargeDiameter
+        }
+    }
+
+    /// Le côté de la cible tactile : au moins `MeeshyControlSize.tapTarget`.
+    public var targetSide: Double {
+        max(diameter, Double(MeeshyControlSize.tapTarget))
+    }
+
+    /// Ce dont la cible déborde le disque, de chaque côté : l'encombrement reste le diamètre.
+    public var hitSlack: CGFloat {
+        CGFloat((targetSide - diameter) / 2)
+    }
+
+    /// Le glyphe, figé dans son disque (46 % du diamètre à un point près), par
+    /// les jetons d'icône : le Dynamic Type ne le touche pas.
+    public var glyphSize: Double {
+        switch self {
+        case .s36, .s40: return Double(MeeshyIconSize.lg)
+        case .s44: return Double(MeeshyIconSize.xl)
+        case .s48: return Double(MeeshyIconSize.xxl)
         }
     }
 }
 
 /// Le retour haptique d'une activation. `none` quand l'hôte joue le sien.
 public nonisolated enum MeeshyGlassButtonHaptic: String, Sendable, Equatable, CaseIterable {
-    case none
     case light
-    case medium
+    case none
 }
 
-/// Ce que K02 peint lui-même : les fonds pleins. Le verre, lui, vient de K01.
+/// L'état que le bouton DIT à l'hôte et au lecteur d'écran. Vrai ⇒ la tenue
+/// `active` quand l'hôte n'en force pas une autre.
+public nonisolated enum MeeshyGlassButtonActivation: Sendable, Equatable {
+    case none
+    case toggle(Bool)
+    case selected(Bool)
+    case expanded(Bool)
+
+    public var isOn: Bool {
+        switch self {
+        case .none: return false
+        case .toggle(let on), .selected(let on), .expanded(let on): return on
+        }
+    }
+
+    public var impliedKind: MeeshyGlassButtonKind {
+        isOn ? .active : .normal
+    }
+}
+
+/// Le fond plein que K02 peint lui-même. Le verre, lui, vient de K01.
 public nonisolated enum MeeshyGlassButtonFill: String, Sendable, Equatable, CaseIterable {
     case clear
     case white
     case red
     case veil
+    case themeInk
 }
 
-/// L'encre du glyphe : celle de la tenue, ou celle que l'hôte impose.
+/// Ce que K02 demande à K01 : aucune matière, un verre interactif au ton de
+/// l'hôte, ou ce verre teinté de rouge (le destructif sous Liquid Glass).
+public nonisolated enum MeeshyGlassButtonGlassRequest: String, Sendable, Equatable, CaseIterable {
+    case none
+    case neutral
+    case red
+}
+
+/// L'encre du glyphe : celle de la tenue, celle du thème, ou celle que l'hôte impose.
 public nonisolated enum MeeshyGlassButtonInk: Sendable, Equatable {
     case onMedia
     case onSolid
+    case themeInk
+    case themeInverse
     case custom(Color)
 }
 
@@ -64,109 +119,183 @@ public nonisolated struct MeeshyGlassButtonRecipe: Equatable, Sendable {
     public let glyphSize: Double
     public let targetSide: Double
     public let fill: MeeshyGlassButtonFill
+    /// L'opacité du fond plein, appui et survol compris.
     public let fillOpacity: Double
-    public let pressedFillOpacity: Double
-    /// Sous le Liquid Glass du système, le voile doux n'existe pas : le verre
-    /// du système fait le fond.
-    public let fillsUnderLiquid: Bool
+    /// Le voile d'appui blanc, là où K01 ne pose pas de matière (fonds pleins,
+    /// bouton emboîté). Il part au toucher, sans animation.
+    public let pressVeilOpacity: Double
+    public let glass: MeeshyGlassButtonGlassRequest
     public let ink: MeeshyGlassButtonInk
     public let shadow: MeeshyGlassButtonShadow?
     public let opacity: Double
     public let isActionEnabled: Bool
-    public let showsBusyIndicator: Bool
 
-    /// Désactivé ou occupé : ni réponse au toucher, ni haptique, ni action.
+    /// Désactivé : ni réponse au toucher, ni haptique, ni action.
     public var respondsToTouch: Bool { isActionEnabled }
     public var playsHaptic: Bool { isActionEnabled }
 
-    public static let glyphRatio = 0.46
     public static let disabledOpacity = 0.4
+    public static let restFillOpacity = 0.94
+    public static let pressedActiveFillOpacity = 0.78
+    public static let hoveredActiveFillOpacity = 0.86
+    public static let softRestOpacity = 0.12
+    public static let softPressedOpacity = 0.22
+    public static let softHoveredOpacity = 0.17
+    public static let pressVeilPressedOpacity = 0.22
+    public static let pressVeilHoveredOpacity = 0.11
     public static let longPressDuration = 0.5
     public static let longPressMaxMovement = 10.0
     public static let toneFadeDuration = MeeshyGlassRecipe.toneFadeDuration
 
+    private static let activeShadow = MeeshyGlassButtonShadow(opacity: 0.22, radius: 14, y: 4)
+
+    /// `tone` est le ton EFFECTIF (celui de l'hôte quand le bouton n'en pose pas).
+    /// `isNested` : le bouton est posé dans un verre dessiné du kit ; sans effet
+    /// sous le Liquid Glass.
     public static func resolve(
         kind: MeeshyGlassButtonKind,
         size: MeeshyGlassButtonSize,
-        ink: Color? = nil,
+        tone: MeeshyGlassTone = .deep,
+        material: MeeshyGlassMaterial = .drawn,
+        isNested: Bool = false,
+        isPressed: Bool = false,
+        isHovered: Bool = false,
         isEnabled: Bool = true,
-        isBusy: Bool = false
+        glyphTint: Color? = nil
     ) -> MeeshyGlassButtonRecipe {
-        let appearance = appearance(of: kind)
+        let liquid = material == .liquid
+        let pressed = isPressed && isEnabled
+        let hovered = isHovered && isEnabled && !pressed
+        let glass = glassRequest(kind: kind, liquid: liquid)
+        let drawsOwnResponse = !liquid && (glass == .none || isNested)
         return MeeshyGlassButtonRecipe(
             kind: kind,
             size: size,
             diameter: size.diameter,
-            glyphSize: (size.diameter * glyphRatio).rounded(),
-            targetSide: max(size.diameter, Double(MeeshyControlSize.tapTarget)),
-            fill: appearance.fill,
-            fillOpacity: appearance.fillOpacity,
-            pressedFillOpacity: appearance.pressedFillOpacity,
-            fillsUnderLiquid: kind != .soft,
-            ink: kind == .active ? .onSolid : ink.map(MeeshyGlassButtonInk.custom) ?? .onMedia,
-            shadow: kind == .active ? Self.activeShadow : nil,
+            glyphSize: size.glyphSize,
+            targetSide: size.targetSide,
+            fill: solidFill(kind: kind, tone: tone, liquid: liquid),
+            fillOpacity: fillOpacity(kind: kind, liquid: liquid, pressed: pressed, hovered: hovered),
+            pressVeilOpacity: pressVeilOpacity(
+                kind: kind, drawsOwnResponse: drawsOwnResponse, pressed: pressed, hovered: hovered
+            ),
+            glass: glass,
+            ink: ink(kind: kind, tone: tone, glyphTint: glyphTint),
+            shadow: kind == .active ? activeShadow : nil,
             opacity: isEnabled ? 1 : disabledOpacity,
-            isActionEnabled: isEnabled && !isBusy,
-            showsBusyIndicator: isBusy
+            isActionEnabled: isEnabled
         )
     }
 
-    private static let activeShadow = MeeshyGlassButtonShadow(opacity: 0.22, radius: 14, y: 4)
-
-    private static func appearance(of kind: MeeshyGlassButtonKind) -> (fill: MeeshyGlassButtonFill, fillOpacity: Double, pressedFillOpacity: Double) {
+    private static func solidFill(kind: MeeshyGlassButtonKind, tone: MeeshyGlassTone, liquid: Bool) -> MeeshyGlassButtonFill {
         switch kind {
-        case .normal: return (.clear, 0, 0)
-        case .active: return (.white, 0.94, 0.94)
-        case .destructive: return (.red, 0.94, 0.94)
-        case .soft: return (.veil, 0.12, 0.22)
+        case .normal: return .clear
+        case .active: return tone == .theme ? .themeInk : .white
+        case .destructive: return liquid ? .clear : .red
+        case .soft: return liquid ? .clear : .veil
         }
     }
 
-    public func resolvedFillOpacity(isPressed: Bool) -> Double {
-        isPressed ? pressedFillOpacity : fillOpacity
+    private static func glassRequest(kind: MeeshyGlassButtonKind, liquid: Bool) -> MeeshyGlassButtonGlassRequest {
+        switch kind {
+        case .normal: return .neutral
+        case .active: return liquid ? .neutral : .none
+        case .destructive: return liquid ? .red : .none
+        case .soft: return liquid ? .neutral : .none
+        }
+    }
+
+    private static func fillOpacity(kind: MeeshyGlassButtonKind, liquid: Bool, pressed: Bool, hovered: Bool) -> Double {
+        switch kind {
+        case .normal: return 0
+        case .destructive: return liquid ? 0 : restFillOpacity
+        case .active:
+            guard !liquid else { return restFillOpacity }
+            return pressed ? pressedActiveFillOpacity : hovered ? hoveredActiveFillOpacity : restFillOpacity
+        case .soft:
+            guard !liquid else { return 0 }
+            return pressed ? softPressedOpacity : hovered ? softHoveredOpacity : softRestOpacity
+        }
+    }
+
+    private static func pressVeilOpacity(
+        kind: MeeshyGlassButtonKind, drawsOwnResponse: Bool, pressed: Bool, hovered: Bool
+    ) -> Double {
+        guard drawsOwnResponse, kind != .active, kind != .soft else { return 0 }
+        return pressed ? pressVeilPressedOpacity : hovered ? pressVeilHoveredOpacity : 0
+    }
+
+    private static func ink(kind: MeeshyGlassButtonKind, tone: MeeshyGlassTone, glyphTint: Color?) -> MeeshyGlassButtonInk {
+        switch kind {
+        case .active: return tone == .theme ? .themeInverse : .onSolid
+        case .destructive: return .onMedia
+        case .normal, .soft:
+            if let glyphTint { return .custom(glyphTint) }
+            return tone == .theme ? .themeInk : .onMedia
+        }
     }
 }
 
 // MARK: - Ce que le lecteur d'écran entend
 
-/// L'état que le bouton expose au lecteur d'écran. `isOn` fait une bascule ;
-/// sans lui, une tenue active s'annonce « sélectionné » (le trait système
-/// parle la langue du lecteur, aucune chaîne n'est à traduire ici).
+/// L'état que le bouton expose au lecteur d'écran : une bascule dit « Activé »
+/// ou « Désactivé » ; une option sélectionnée se dit « sélectionné » (le trait
+/// système parle la langue du lecteur) ; un bouton déplié change de nom chez
+/// l'hôte, sans état de plus.
 public nonisolated struct MeeshyGlassButtonAccessibilityState: Equatable, Sendable {
     public let isToggle: Bool
     public let isSelected: Bool
+    public let toggleIsOn: Bool?
 
-    public static func resolve(kind: MeeshyGlassButtonKind, isOn: Bool?) -> MeeshyGlassButtonAccessibilityState {
-        guard let isOn else {
-            return MeeshyGlassButtonAccessibilityState(isToggle: false, isSelected: kind == .active)
+    public static func resolve(activation: MeeshyGlassButtonActivation) -> MeeshyGlassButtonAccessibilityState {
+        switch activation {
+        case .none, .expanded:
+            return MeeshyGlassButtonAccessibilityState(isToggle: false, isSelected: false, toggleIsOn: nil)
+        case .toggle(let on):
+            return MeeshyGlassButtonAccessibilityState(isToggle: true, isSelected: false, toggleIsOn: on)
+        case .selected(let on):
+            return MeeshyGlassButtonAccessibilityState(isToggle: false, isSelected: on, toggleIsOn: nil)
         }
-        return MeeshyGlassButtonAccessibilityState(isToggle: true, isSelected: isOn)
+    }
+
+    /// La valeur dite : le mot de la bascule, puis ce que le contrôle porte déjà
+    /// (« Activé, AirPods »).
+    public static func composeValue(toggleWord: String?, value: String?) -> String {
+        [toggleWord, value]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
     }
 }
 
 // MARK: - Jetons
 
 public nonisolated extension MeeshyGlassButtonRecipe {
-    var fillColor: Color {
+    func fillColor(isDark: Bool) -> Color {
         switch fill {
         case .clear: return .clear
         case .white, .veil: return MeeshyColors.onMedia
         case .red: return MeeshyColors.errorStrong
+        case .themeInk: return MeeshyColors.textPrimary(isDark: isDark)
         }
     }
 
-    var inkColor: Color {
+    func inkColor(isDark: Bool) -> Color {
         switch ink {
         case .onMedia: return MeeshyColors.onMedia
         case .onSolid: return MeeshyColors.indigo950
+        case .themeInk: return MeeshyColors.textPrimary(isDark: isDark)
+        case .themeInverse: return MeeshyColors.backgroundPrimary(isDark: isDark)
         case .custom(let color): return color
         }
     }
 
     /// L'encre contre son fond plein à pleine opacité, quand le fond est plein.
     /// `nil` pour le normal et le doux : leur contraste est celui du ton de K01.
-    var solidContrast: Double? {
-        guard fill == .white || fill == .red else { return nil }
-        return CanvasChromeScheme.contrastRatio(Double(inkColor.luminance), Double(fillColor.luminance))
+    func solidContrast(isDark: Bool) -> Double? {
+        guard fill == .white || fill == .red || fill == .themeInk else { return nil }
+        return CanvasChromeScheme.contrastRatio(
+            Double(inkColor(isDark: isDark).luminance), Double(fillColor(isDark: isDark).luminance)
+        )
     }
 }

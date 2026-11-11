@@ -11,135 +11,182 @@ struct MeeshyGlassButtonTests {
 
     // MARK: - Tailles
 
-    @Test("diamètre, glyphe (46 %) et cible de chaque taille suivent les vecteurs", arguments: MeeshyGlassButtonSize.allCases)
+    @Test("diamètre, glyphe, cible et débord de chaque taille suivent les vecteurs", arguments: MeeshyGlassButtonSize.allCases)
     func recipe_size_followsTheVectors(size: MeeshyGlassButtonSize) throws {
         let row = try Self.rows("sizes").first { $0["size"] as? String == size.rawValue }.unwrapped()
         let recipe = MeeshyGlassButtonRecipe.resolve(kind: .normal, size: size)
         #expect(recipe.diameter == row["diameter"] as? Double)
         #expect(recipe.glyphSize == row["glyph"] as? Double)
         #expect(recipe.targetSide == row["target"] as? Double)
+        #expect(Double(size.hitSlack) == row["slack"] as? Double)
     }
 
     @Test("la cible tactile est de 44 pt au moins, quelle que soit la taille dessinée", arguments: MeeshyGlassButtonSize.allCases)
-    func recipe_target_isAtLeastTheTapTarget(size: MeeshyGlassButtonSize) {
+    func recipe_target_isAtLeastTheTapTarget(size: MeeshyGlassButtonSize) throws {
+        let tapTargets = try Self.object("tapTarget")
         let recipe = MeeshyGlassButtonRecipe.resolve(kind: .normal, size: size)
         #expect(recipe.targetSide >= Double(MeeshyControlSize.tapTarget))
         #expect(recipe.targetSide >= recipe.diameter)
+        #expect(Double(MeeshyControlSize.tapTarget) == tapTargets["ios"] as? Double)
     }
 
-    // MARK: - Tenues
+    // MARK: - Matière : fond, verre demandé, appui, survol
 
-    @Test("chaque tenue a le fond, l'encre et l'ombre des vecteurs", arguments: MeeshyGlassButtonKind.allCases)
-    func recipe_kind_followsTheVectors(kind: MeeshyGlassButtonKind) throws {
-        let row = try Self.rows("kinds").first { $0["kind"] as? String == kind.rawValue }.unwrapped()
-        let recipe = MeeshyGlassButtonRecipe.resolve(kind: kind, size: .regular)
-        #expect(recipe.fill.rawValue == Self.fillName(row["fill"] as? String))
-        #expect(recipe.fillOpacity == row["fillOpacity"] as? Double)
-        #expect(recipe.pressedFillOpacity == row["pressedFillOpacity"] as? Double)
-        #expect(Self.inkName(recipe.ink) == row["ink"] as? String)
-        let shadow = row["shadow"] as? [String: Double]
-        #expect(recipe.shadow?.opacity == shadow?["opacity"])
-        #expect(recipe.shadow?.radius == shadow?["radius"])
-        #expect(recipe.shadow?.y == shadow?["y"])
+    @Test("chaque tenue sur chaque matière demande à K01 et peint ce que les vecteurs disent")
+    func recipe_matter_followsTheVectors() throws {
+        for row in try Self.rows("matter") {
+            let kind = try Self.kind(row["kind"])
+            let material = try Self.material(row["material"])
+            let nested = row["nested"] as? Bool ?? false
+            func resolve(pressed: Bool = false, hovered: Bool = false) -> MeeshyGlassButtonRecipe {
+                MeeshyGlassButtonRecipe.resolve(
+                    kind: kind, size: .s44, material: material, isNested: nested, isPressed: pressed, isHovered: hovered
+                )
+            }
+            #expect(Self.vectorName(resolve().fill) == row["fill"] as? String, "\(row)")
+            #expect(resolve().glass.rawValue == row["glass"] as? String, "\(row)")
+            #expect(resolve().fillOpacity == row["restFill"] as? Double, "\(row)")
+            #expect(resolve(pressed: true).fillOpacity == row["pressedFill"] as? Double, "\(row)")
+            #expect(resolve(hovered: true).fillOpacity == row["hoveredFill"] as? Double, "\(row)")
+            #expect(resolve().pressVeilOpacity == 0, "\(row)")
+            #expect(resolve(pressed: true).pressVeilOpacity == row["pressedVeil"] as? Double, "\(row)")
+            #expect(resolve(hovered: true).pressVeilOpacity == row["hoveredVeil"] as? Double, "\(row)")
+        }
+    }
+
+    @Test("le verre dessiné se voit appuyé pour chaque tenue ; seul le normal seul laisse K01 répondre", arguments: MeeshyGlassButtonKind.allCases)
+    func recipe_drawn_pressIsVisible(kind: MeeshyGlassButtonKind) {
+        let rest = MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44, material: .drawn)
+        let pressed = MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44, material: .drawn, isPressed: true)
+        if kind == .normal {
+            #expect(rest == pressed)
+            #expect(rest.glass == .neutral)
+        } else {
+            #expect(rest != pressed)
+        }
+        let nested = MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44, material: .drawn, isNested: true)
+        let nestedPressed = MeeshyGlassButtonRecipe.resolve(
+            kind: kind, size: .s44, material: .drawn, isNested: true, isPressed: true
+        )
+        #expect(nested != nestedPressed)
+    }
+
+    @Test("sous le Liquid Glass, le système répond : la recette ne bouge ni à l'appui ni au survol", arguments: MeeshyGlassButtonKind.allCases)
+    func recipe_liquid_isIdenticalPressedAndHovered(kind: MeeshyGlassButtonKind) {
+        let rest = MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44, material: .liquid)
+        #expect(rest == MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44, material: .liquid, isPressed: true))
+        #expect(rest == MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44, material: .liquid, isHovered: true))
+        #expect(rest == MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44, material: .liquid, isNested: true))
     }
 
     @Test("seul l'actif porte une ombre ; le normal ne porte aucun fond")
-    func recipe_onlyTheActiveCastsAShadow() {
+    func recipe_onlyTheActiveCastsAShadow() throws {
+        let shadow = try Self.object("shadowActive")
         for kind in MeeshyGlassButtonKind.allCases {
-            let recipe = MeeshyGlassButtonRecipe.resolve(kind: kind, size: .regular)
+            let recipe = MeeshyGlassButtonRecipe.resolve(kind: kind, size: .s44)
             #expect((recipe.shadow != nil) == (kind == .active))
         }
-        #expect(MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular).fill == .clear)
+        let active = MeeshyGlassButtonRecipe.resolve(kind: .active, size: .s44).shadow
+        #expect(active?.opacity == shadow["opacity"] as? Double)
+        #expect(active?.radius == shadow["radius"] as? Double)
+        #expect(active?.y == shadow["y"] as? Double)
+        #expect(MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .s44).fill == .clear)
     }
 
-    @Test("le voile doux s'éclaircit sous le doigt, et n'existe pas sous le Liquid Glass")
-    func recipe_soft_veilBrightensAndYieldsToLiquidGlass() {
-        let soft = MeeshyGlassButtonRecipe.resolve(kind: .soft, size: .compact)
-        #expect(soft.resolvedFillOpacity(isPressed: false) == 0.12)
-        #expect(soft.resolvedFillOpacity(isPressed: true) == 0.22)
-        #expect(!soft.fillsUnderLiquid)
-        #expect(MeeshyGlassButtonRecipe.resolve(kind: .active, size: .compact).fillsUnderLiquid)
-    }
+    // MARK: - Encre
 
-    @Test("une encre imposée remplace celle de la tenue, sauf pour l'actif")
-    func recipe_ink_overridesEveryKindButActive() {
-        let amber = MeeshyColors.warning
-        #expect(MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular, ink: amber).ink == .custom(amber))
-        #expect(MeeshyGlassButtonRecipe.resolve(kind: .soft, size: .regular, ink: amber).ink == .custom(amber))
-        #expect(MeeshyGlassButtonRecipe.resolve(kind: .active, size: .regular, ink: amber).ink == .onSolid)
-        #expect(MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular).ink == .onMedia)
+    @Test("l'encre suit la tenue, le ton du thème et l'encre imposée")
+    func recipe_ink_followsTheVectors() throws {
+        let themeFill = try #require(try Self.json()["activeThemeFill"] as? String)
+        for row in try Self.rows("ink") {
+            let kind = try Self.kind(row["kind"])
+            let tone = try Self.tone(row["tone"])
+            let tinted = row["glyphTint"] as? Bool ?? false
+            let recipe = MeeshyGlassButtonRecipe.resolve(
+                kind: kind, size: .s44, tone: tone, glyphTint: tinted ? MeeshyColors.warning : nil
+            )
+            #expect(Self.inkName(recipe.ink) == row["ink"] as? String, "\(row)")
+        }
+        let theme = MeeshyGlassButtonRecipe.resolve(kind: .active, size: .s44, tone: .theme)
+        #expect(theme.fill.rawValue == themeFill)
     }
 
     @Test("le rouge du destructif est le jeton qui tient le contraste promis")
     func recipe_destructive_usesTheStrongRedToken() {
-        let recipe = MeeshyGlassButtonRecipe.resolve(kind: .destructive, size: .compact)
-        #expect(recipe.fillColor == MeeshyColors.errorStrong)
-        #expect(recipe.inkColor == MeeshyColors.onMedia)
+        let recipe = MeeshyGlassButtonRecipe.resolve(kind: .destructive, size: .s40, material: .drawn)
+        #expect(recipe.fillColor(isDark: false) == MeeshyColors.errorStrong)
+        #expect(recipe.inkColor(isDark: false) == MeeshyColors.onMedia)
     }
 
     // MARK: - Contraste
 
-    @Test("actif : encre sombre sur blanc, plus de 15:1 ; destructif : blanc sur rouge, 3:1 au moins")
+    @Test("actif : encre sombre sur blanc ; destructif : blanc sur rouge ; chacun au moins 3:1")
     func contrast_solidKinds_holdTheirPromise() throws {
         let vectors = try Self.object("contrast")
-        let active = try MeeshyGlassButtonRecipe.resolve(kind: .active, size: .regular).solidContrast.unwrapped()
-        let destructive = try MeeshyGlassButtonRecipe.resolve(kind: .destructive, size: .regular).solidContrast.unwrapped()
-        #expect(active > (vectors["activeMin"] as? Double ?? .infinity))
-        #expect(destructive >= (vectors["glyphMin"] as? Double ?? .infinity))
-        #expect(abs(destructive - (vectors["destructiveNominal"] as? Double ?? 0)) < 0.1)
+        let tolerance = try #require(vectors["tolerance"] as? Double)
+        let glyphMin = try #require(vectors["glyphMin"] as? Double)
+        let active = try MeeshyGlassButtonRecipe.resolve(kind: .active, size: .s44).solidContrast(isDark: false).unwrapped()
+        let destructive = try MeeshyGlassButtonRecipe.resolve(kind: .destructive, size: .s44).solidContrast(isDark: false).unwrapped()
+        #expect(abs(active - (vectors["active"] as? Double ?? 0)) < tolerance)
+        #expect(abs(destructive - (vectors["destructive"] as? Double ?? 0)) < tolerance)
+        #expect(active >= glyphMin)
+        #expect(destructive >= glyphMin)
+    }
+
+    @Test("l'actif au ton du thème garde son contraste en clair comme en sombre", arguments: [false, true])
+    func contrast_themeActive_holdsInBothSchemes(isDark: Bool) throws {
+        let glyphMin = try #require(try Self.object("contrast")["glyphMin"] as? Double)
+        let recipe = MeeshyGlassButtonRecipe.resolve(kind: .active, size: .s44, tone: .theme)
+        let contrast = try recipe.solidContrast(isDark: isDark).unwrapped()
+        #expect(contrast >= glyphMin)
     }
 
     @Test("normal et doux n'ont pas de fond plein : leur contraste est celui du ton de K01")
     func contrast_glassKinds_areTheTonesBusiness() {
-        #expect(MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular).solidContrast == nil)
-        #expect(MeeshyGlassButtonRecipe.resolve(kind: .soft, size: .regular).solidContrast == nil)
+        #expect(MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .s44).solidContrast(isDark: false) == nil)
+        #expect(MeeshyGlassButtonRecipe.resolve(kind: .soft, size: .s44).solidContrast(isDark: false) == nil)
     }
 
-    // MARK: - Désactivé et occupé
+    // MARK: - Désactivé
 
-    @Test("désactivé ou occupé : ni action, ni haptique, ni appui ; l'opacité suit les vecteurs")
-    func recipe_disabledAndBusy_followTheVectors() throws {
+    @Test("désactivé : ni action, ni haptique, ni appui, ni voile ; l'opacité suit les vecteurs")
+    func recipe_disabled_followsTheVectors() throws {
         for row in try Self.rows("states") {
-            let recipe = MeeshyGlassButtonRecipe.resolve(
-                kind: .normal, size: .regular,
-                isEnabled: row["isEnabled"] as? Bool ?? true, isBusy: row["isBusy"] as? Bool ?? false
-            )
+            let enabled = row["enabled"] as? Bool ?? true
+            let recipe = MeeshyGlassButtonRecipe.resolve(kind: .destructive, size: .s44, isPressed: true, isEnabled: enabled)
             #expect(recipe.isActionEnabled == row["action"] as? Bool)
             #expect(recipe.playsHaptic == row["haptic"] as? Bool)
             #expect(recipe.respondsToTouch == row["touchResponse"] as? Bool)
             #expect(recipe.opacity == row["opacity"] as? Double)
+            if !enabled {
+                let rest = MeeshyGlassButtonRecipe.resolve(kind: .destructive, size: .s44, isEnabled: false)
+                #expect(recipe == rest)
+                #expect(recipe.pressVeilOpacity == 0)
+            }
         }
-    }
-
-    @Test("occupé : l'indicateur remplace le glyphe")
-    func recipe_busy_showsTheIndicator() {
-        #expect(MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular, isBusy: true).showsBusyIndicator)
-        #expect(!MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular).showsBusyIndicator)
     }
 
     // MARK: - Activation
 
     @MainActor
     @Test("un seul retour haptique par activation, puis l'action")
-    func activation_playsOneHapticThenTheAction() {
+    func trigger_playsOneHapticThenTheAction() {
         var events: [String] = []
-        let recipe = MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular)
-        let fired = MeeshyGlassButtonActivation.perform(
-            recipe: recipe, haptic: .medium,
+        let fired = MeeshyGlassButtonTrigger.perform(
+            isEnabled: true, haptic: .light,
             play: { events.append("haptic:\($0.rawValue)") },
             action: { events.append("action") }
         )
         #expect(fired)
-        #expect(events == ["haptic:medium", "action"])
+        #expect(events == ["haptic:light", "action"])
     }
 
     @MainActor
     @Test("haptic none : l'action part, aucun retour")
-    func activation_noneHaptic_playsNothing() {
+    func trigger_noneHaptic_playsNothing() {
         var events: [String] = []
-        let recipe = MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular)
-        MeeshyGlassButtonActivation.perform(
-            recipe: recipe, haptic: .none,
+        MeeshyGlassButtonTrigger.perform(
+            isEnabled: true, haptic: .none,
             play: { events.append("haptic:\($0.rawValue)") },
             action: { events.append("action") }
         )
@@ -148,11 +195,10 @@ struct MeeshyGlassButtonTests {
 
     @MainActor
     @Test("désactivé : ni action ni haptique")
-    func activation_disabled_doesNothing() {
+    func trigger_disabled_doesNothing() {
         var events: [String] = []
-        let recipe = MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular, isEnabled: false)
-        let fired = MeeshyGlassButtonActivation.perform(
-            recipe: recipe, haptic: .light,
+        let fired = MeeshyGlassButtonTrigger.perform(
+            isEnabled: false, haptic: .light,
             play: { events.append("haptic:\($0.rawValue)") },
             action: { events.append("action") }
         )
@@ -160,21 +206,7 @@ struct MeeshyGlassButtonTests {
         #expect(events.isEmpty)
     }
 
-    @MainActor
-    @Test("occupé : ni action ni haptique")
-    func activation_busy_doesNothing() {
-        var events: [String] = []
-        let recipe = MeeshyGlassButtonRecipe.resolve(kind: .normal, size: .regular, isBusy: true)
-        let fired = MeeshyGlassButtonActivation.perform(
-            recipe: recipe, haptic: .light,
-            play: { events.append("haptic:\($0.rawValue)") },
-            action: { events.append("action") }
-        )
-        #expect(!fired)
-        #expect(events.isEmpty)
-    }
-
-    // MARK: - Appui long
+    // MARK: - Appui long, fondu
 
     @Test("l'appui long dure 500 ms et s'annule au-delà de 10 pt")
     func longPress_followsTheVectors() throws {
@@ -183,26 +215,45 @@ struct MeeshyGlassButtonTests {
         #expect(MeeshyGlassButtonRecipe.longPressMaxMovement == vectors["maxMovement"] as? Double)
     }
 
-    // MARK: - Lecteur d'écran
-
-    @Test("bascule, sélectionné, ou rien : l'état exposé suit les vecteurs")
-    func accessibility_state_followsTheVectors() throws {
-        for row in try Self.rows("accessibility") {
-            let kind = try MeeshyGlassButtonKind(rawValue: (row["kind"] as? String).unwrapped()).unwrapped()
-            let state = MeeshyGlassButtonAccessibilityState.resolve(kind: kind, isOn: row["isOn"] as? Bool)
-            #expect(state.isSelected == row["selected"] as? Bool, "\(row)")
-            #expect(state.isToggle == row["toggle"] as? Bool, "\(row)")
-        }
-    }
-
-    // MARK: - Fondu, performance
-
     @Test("le fondu d'une tenue est celui du ton de K01")
     func fade_isTheToneFade() throws {
         let vectors = try Self.json()
         #expect(MeeshyGlassButtonRecipe.toneFadeDuration == MeeshyGlassRecipe.toneFadeDuration)
         #expect(MeeshyGlassButtonRecipe.toneFadeDuration * 1000 == vectors["toneFadeMs"] as? Double)
     }
+
+    // MARK: - Lecteur d'écran
+
+    @Test("l'état dit déduit la tenue et l'état exposé : bascule, sélection, déplié")
+    func accessibility_activation_followsTheVectors() throws {
+        for row in try Self.rows("activation") {
+            let activation = try Self.activation(row["activation"])
+            let state = MeeshyGlassButtonAccessibilityState.resolve(activation: activation)
+            #expect(activation.impliedKind.rawValue == row["impliedKind"] as? String, "\(row)")
+            #expect(state.isToggle == row["toggle"] as? Bool, "\(row)")
+            #expect(state.isSelected == row["selected"] as? Bool, "\(row)")
+            #expect(state.toggleIsOn == row["toggleOn"] as? Bool, "\(row)")
+        }
+    }
+
+    @Test("la valeur dite compose le mot de la bascule et ce que le contrôle porte déjà")
+    func accessibility_value_isComposed() throws {
+        for row in try Self.rows("value") {
+            let said = MeeshyGlassButtonAccessibilityState.composeValue(
+                toggleWord: row["toggleWord"] as? String, value: row["value"] as? String
+            )
+            #expect(said == row["said"] as? String, "\(row)")
+        }
+    }
+
+    @MainActor
+    @Test("les deux mots de la bascule existent et diffèrent")
+    func accessibility_toggleWords_areDistinct() {
+        #expect(!MeeshyGlassButtonWords.toggle(isOn: true).isEmpty)
+        #expect(MeeshyGlassButtonWords.toggle(isOn: true) != MeeshyGlassButtonWords.toggle(isOn: false))
+    }
+
+    // MARK: - Performance : égalité par valeurs
 
     @MainActor
     @Test("à valeurs égales deux boutons sont égaux, fermetures différentes ; une autre tenue les distingue")
@@ -217,6 +268,16 @@ struct MeeshyGlassButtonTests {
     }
 
     @MainActor
+    @Test("sans tenue explicite, l'état dit choisit la tenue")
+    func equality_activationImpliesTheKind() {
+        let implied = MeeshyGlassButton(systemImage: "plus", label: "Ajouter", activation: .toggle(true), action: {})
+        let forced = MeeshyGlassButton(systemImage: "plus", label: "Ajouter", kind: .active, activation: .toggle(true), action: {})
+        let off = MeeshyGlassButton(systemImage: "plus", label: "Ajouter", activation: .toggle(false), action: {})
+        #expect(implied == forced)
+        #expect(implied != off)
+    }
+
+    @MainActor
     @Test("un bouton avec appui long ne s'égale pas à un bouton sans")
     func equality_distinguishesAPresentLongPress() {
         let plain = MeeshyGlassButton(systemImage: "plus", label: "Ajouter", action: {})
@@ -224,30 +285,44 @@ struct MeeshyGlassButtonTests {
         #expect(plain != longPressable)
     }
 
+    @MainActor
+    @Test("le disque seul se compare par valeurs")
+    func equality_faceComparesValues() {
+        let rest = MeeshyGlassButtonFace(systemImage: "plus")
+        #expect(rest == MeeshyGlassButtonFace(systemImage: "plus"))
+        #expect(rest != MeeshyGlassButtonFace(systemImage: "plus", isPressed: true))
+        #expect(rest != MeeshyGlassButtonFace(systemImage: "plus", kind: .soft))
+    }
+
     // MARK: - Source
 
-    @Test("jamais de légende, aucune couleur en dur, aucun appel de verre direct")
+    @Test("jamais de légende, aucune couleur en dur, aucun verre dessiné dans les fichiers de K02")
     func source_hasNoCaptionNoLiteralColorNoDirectGlass() throws {
         for file in ["MeeshyGlassButton.swift", "MeeshyGlassButtonRecipe.swift"] {
             let code = try Self.code(file)
-            for forbidden in ["caption", "Color(hex:", "Color(red:", "Color.white", "Color.black", "adaptiveGlass", "adaptiveLiquidGlass", ".glassEffect"] {
-                #expect(!code.contains(forbidden), "\(file) contient \(forbidden)")
+            let forbidden = [
+                "caption", "Color(hex:", "Color(red:", "Color.white", "Color.black",
+                "adaptiveGlass", "adaptiveLiquidGlass", ".glassEffect", "UIBlurEffect", ".ultraThinMaterial", ".blur(",
+            ]
+            for word in forbidden {
+                #expect(!code.contains(word), "\(file) contient \(word)")
             }
         }
     }
 
-    @Test("le disque passe par l'unique entrée de verre, interactive")
-    func source_discGoesThroughKitGlass() throws {
+    @Test("le verre passe par l'unique entrée de K01, interactive")
+    func source_goesThroughKitGlass() throws {
         let code = try Self.code("MeeshyGlassButton.swift")
         #expect(code.contains(".meeshyGlass(in: Circle()"))
         #expect(code.contains("isInteractive: true"))
     }
 
-    @Test("aucun rétrécissement de jumeau ne s'empile avec la réponse de K01")
+    @Test("aucun rétrécissement de jumeau ne s'empile avec la réponse de K01, aucun impact maison")
     func source_hasNoPressScaleOfItsOwn() throws {
         let code = try Self.code("MeeshyGlassButton.swift")
         #expect(!code.contains("scaleEffect"))
         #expect(!code.contains("UIImpactFeedbackGenerator"))
+        #expect(!code.contains("sensoryFeedback"))
     }
 
     // MARK: - Aides
@@ -275,14 +350,46 @@ struct MeeshyGlassButtonTests {
         return try #require(vectors[key] as? [String: Any])
     }
 
-    private static func fillName(_ vector: String?) -> String? {
-        vector == "none" ? MeeshyGlassButtonFill.clear.rawValue : vector
+    private static func kind(_ name: Any?) throws -> MeeshyGlassButtonKind {
+        let raw = try #require(name as? String)
+        return try #require(MeeshyGlassButtonKind(rawValue: raw))
+    }
+
+    private static func tone(_ name: Any?) throws -> MeeshyGlassTone {
+        let raw = try #require(name as? String)
+        return try #require(MeeshyGlassTone(rawValue: raw))
+    }
+
+    private static func material(_ name: Any?) throws -> MeeshyGlassMaterial {
+        switch try #require(name as? String) {
+        case "liquid": return .liquid
+        case "drawn": return .drawn
+        default: return .opaque
+        }
+    }
+
+    private static func activation(_ name: Any?) throws -> MeeshyGlassButtonActivation {
+        switch try #require(name as? String) {
+        case "toggle(true)": return .toggle(true)
+        case "toggle(false)": return .toggle(false)
+        case "selected(true)": return .selected(true)
+        case "selected(false)": return .selected(false)
+        case "expanded(true)": return .expanded(true)
+        case "expanded(false)": return .expanded(false)
+        default: return .none
+        }
+    }
+
+    private static func vectorName(_ fill: MeeshyGlassButtonFill) -> String {
+        fill == .clear ? "none" : fill.rawValue
     }
 
     private static func inkName(_ ink: MeeshyGlassButtonInk) -> String {
         switch ink {
         case .onMedia: return "onMedia"
-        case .onSolid: return "indigo950"
+        case .onSolid: return "onSolid"
+        case .themeInk: return "themeInk"
+        case .themeInverse: return "themeInverse"
         case .custom: return "custom"
         }
     }
