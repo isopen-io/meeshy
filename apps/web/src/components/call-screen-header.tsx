@@ -17,6 +17,7 @@ import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegrade
 import { browserPipSupport, pipOpenStore, requestCallPip, requestCallPipExit, shouldOfferPip } from '@/lib/calls/call-pip';
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callLayout } from '@/lib/calls/call-view';
+import { HeldSwap } from '@/lib/calls/use-pill-motion';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { href, navigate } from '@/routes/route-table';
@@ -129,11 +130,11 @@ export function CallScreenHeader({ call, language, joined, prominent }: HeaderPr
           ),
         )}
       </div>
-      {capsule === null ? null : (
-        <div className="min-w-0" data-call-capsule="">
-          <CallQualityChip capsule={capsule} clock={clock} quality={call.quality} language={language} prominent={prominent} />
-        </div>
-      )}
+      {/* LA CAPSULE ENTRE ET SORT PAR UNE MISE À L'ÉCHELLE ANCRÉE À DROITE (P9.8, #17509) : celle que
+          décide `call-header.ts` reste à sa place le temps de son départ, inerte, puis se démonte. */}
+      <HeldSwap value={capsule} data-call-capsule="">
+        {(held) => <CallQualityChip capsule={held} clock={clock} quality={call.quality} language={language} prominent={prominent} />}
+      </HeldSwap>
     </div>
   );
 }

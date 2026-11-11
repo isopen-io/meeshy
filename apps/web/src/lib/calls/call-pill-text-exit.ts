@@ -10,5 +10,5 @@ import type { ExitTiming } from './use-rail-presence';
  */
 export const PILL_TEXT_EXIT: ExitTiming = { exitMs: 180, reducedExitMs: 0 };
 
-/** Ce que porte un texte qui repart : marqué sortant, ni focus ni clic, caché au lecteur d'écran. */
-export const PILL_TEXT_LEAVING = { 'data-leaving': '', inert: true, 'aria-hidden': true } as const;
+/** Ce que porte un texte qui repart : ce que porte tout ce qui repart (`use-pill-motion.ts`). */
+export { LEAVING as PILL_TEXT_LEAVING } from './use-pill-motion';
