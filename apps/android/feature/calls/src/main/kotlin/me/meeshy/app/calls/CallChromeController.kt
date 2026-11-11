@@ -73,7 +73,10 @@ internal class CallChromeController(private val clock: () -> Long = System::curr
 
     fun toggleMenu() = update { it.togglingMenu() }
 
-    fun open(panel: CallScreenPanel) = update { it.opening(panel) }
+    /** Opening a panel relights the chrome, as iOS `togglePanel` does: the Journal button also lives in the stowed captions. */
+    fun open(panel: CallScreenPanel) {
+        _state.update { it.revealed().copy(layer = it.layer.opening(panel)) }
+    }
 
     fun backToMenu() = update { it.backToMenu() }
 

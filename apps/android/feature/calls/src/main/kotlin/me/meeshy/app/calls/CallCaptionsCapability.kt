@@ -441,10 +441,6 @@ interface CallCaptionsCapabilityModule {
     fun bindFeatureController(impl: CallCaptionsController): CallFeatureController
 
     @Binds
-    @IntoSet
-    fun bindOverlay(impl: CallCaptionsBandOverlay): CallOverlay
-
-    @Binds
     @IntoMap
     @CallActionKey(CallAction.Captions)
     fun bindCaptionsHandler(impl: CallCaptionsActionHandler): CallActionHandler

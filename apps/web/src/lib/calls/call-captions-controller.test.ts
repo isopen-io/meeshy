@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import { TRANSLATION_WAIT_MS } from './call-captions';
 import { CHANNEL_PING_MS, createCaptions, type SpeechResult, type SpeechSource } from './call-captions-controller';
 import { createCallStore, type ActiveCall, type CallMember } from './call-store';
 
@@ -96,7 +97,7 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
       shown: () => void (shown += 1),
       bye: (userId) => void byes.push(userId),
     },
-    { speech, language: () => 'fr', viewerName: () => 'Moi Même', newId: () => `w-${++ids}`, serverMayHearCaptions: (conversationId) => conversationId === 'c-1' && regime() === 'clear' },
+    { speech, language: () => 'fr', prism: () => ['fr'], viewerName: () => 'Moi Même', newId: () => `w-${++ids}`, serverMayHearCaptions: (conversationId) => conversationId === 'c-1' && regime() === 'clear' },
   );
   return {
     port,
@@ -122,7 +123,7 @@ describe('recevoir les sous-titres (G1, G2, G4)', () => {
   test('un segment traduit entre au journal ; le mode traduit le lit traduit, le mode original tel qu’il a été dit', () => {
     const h = harness();
     h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated());
-    expect(h.call()?.captions).toEqual([{ id: 'w-peer-1', speakerId: PEER, speakerName: 'Nadia Benali', original: 'Hello everyone', translated: 'Bonjour à tous', pair: { from: 'en', to: 'fr' }, isFinal: true, at: 5_000, mine: false }]);
+    expect(h.call()?.captions).toEqual([{ id: 'w-peer-1', speakerId: PEER, speakerName: 'Nadia Benali', original: 'Hello everyone', translated: 'Bonjour à tous', pair: { from: 'en', to: 'fr' }, origin: { language: 'en', foreign: true, awaitingUntil: null }, isFinal: true, at: 5_000, mine: false }]);
   });
 
   test('un segment sans heure de capture (un client ancien) se range à l’heure où il arrive, jamais en tête du journal', () => {
@@ -185,6 +186,26 @@ describe('le canal de données (B10)', () => {
     h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated());
     expect(h.call()?.captions).toHaveLength(1);
     expect(h.call()?.captions[0]?.translated).toBe('Bonjour à tous');
+  });
+
+  test('l’entrée P2P d’une langue hors du Prisme part tout de suite dans sa langue, et attend sa traduction 8 s ; la traduction y met fin sur place', () => {
+    const h = harness();
+    const peer = channel();
+    h.port.attach(PEER, peer as unknown as RTCDataChannel);
+    peer.onmessage?.({ data: JSON.stringify({ type: 'transcript-entry', entry: { id: 'w-peer-1', callId: 'call-1', speakerId: PEER, speakerDisplayName: 'Nadia Benali', text: 'Hello everyone', language: 'en', capturedAtMs: 5_000, isFinal: true, confidence: 0.9 } }) });
+    expect(h.call()?.captions[0]?.origin).toEqual({ language: 'en', foreign: true, awaitingUntil: 10_000 + TRANSLATION_WAIT_MS });
+    h.tick(2_000);
+    h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated());
+    expect(h.call()?.captions[0]?.origin).toEqual({ language: 'en', foreign: true, awaitingUntil: null });
+  });
+
+  test('une phrase dans une langue du lecteur n’est ni étiquetée ni attendue ; la mienne ne porte aucune langue', () => {
+    const h = harness();
+    h.port.receive(SERVER_EVENTS.CALL_TRANSLATED_SEGMENT, translated({ id: 'fr', text: 'Salut', translatedText: undefined, sourceLanguage: 'fr', targetLanguage: 'fr' }));
+    expect(h.call()?.captions[0]?.origin).toEqual({ language: 'fr', foreign: false, awaitingUntil: null });
+    h.port.toggle();
+    h.say('Bonjour', true);
+    expect(h.call()?.captions.find((line) => line.mine)?.origin ?? null).toBeNull();
   });
 
   test('un « bye » du pair remonte avec son émetteur ; un ping est du bruit (#9085)', () => {
@@ -265,7 +286,7 @@ describe('le web transcrit son micro (G3, G5)', () => {
     expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT)).toEqual([
       { callId: 'call-1', segment: { id: 'w-1', text: 'Bonjour à tous', speakerId: ME, startMs: 1_200, endMs: 2_000, isFinal: true, confidence: 0.87, language: 'fr', capturedAtMs: 11_200 } },
     ]);
-    expect(h.call()?.captions).toEqual([{ id: 'w-1', speakerId: ME, speakerName: 'Moi Même', original: 'Bonjour à tous', translated: null, pair: null, isFinal: true, at: 11_200, mine: true }]);
+    expect(h.call()?.captions).toEqual([{ id: 'w-1', speakerId: ME, speakerName: 'Moi Même', original: 'Bonjour à tous', translated: null, pair: null, origin: null, isFinal: true, at: 11_200, mine: true }]);
     h.say('Deuxième phrase', true);
     expect(h.events(CLIENT_EVENTS.CALL_TRANSCRIPTION_SEGMENT).map((payload) => (payload as { segment: { id: string } }).segment.id)).toEqual(['w-1', 'w-2']);
   });

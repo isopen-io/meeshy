@@ -11,6 +11,7 @@ const enCallDevices = {
   'call.bubble.moveHint': 'Arrow keys move the bubble',
   'call.bubble.resizeHint': '+ and − change its size, as do Ctrl + scroll wheel and pinching',
   'call.pip.enter': 'Picture in picture',
+  'call.pip.exit': 'Exit picture in picture',
   'call.devices.open': 'Audio output',
   'call.devices.title': 'Devices',
   'call.devices.camera': 'Camera',

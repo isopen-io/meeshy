@@ -23,7 +23,7 @@ export function currentScheme(): ColorScheme {
 /** Peint le schema — sans le PERSISTER. Le seul geste que `followSystem` doit faire :
  * persister ici transformerait un suivi automatique en choix explicite, et le
  * PROCHAIN changement systeme se trouverait ignore (defaut trouve par T1). */
-function applyScheme(scheme: ColorScheme): void {
+export function applyScheme(scheme: ColorScheme): void {
   const light = scheme === 'light';
   document.documentElement.classList.toggle('light', light);
   document.documentElement.classList.toggle('dark', !light);

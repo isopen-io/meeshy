@@ -19,7 +19,7 @@ const panel = (name: 'react' | 'record' | 'people' | 'journal'): CallScreenLayer
 const mode: CallScreenLayer = { kind: 'mode', mode: 'effects' };
 
 const set = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) =>
-  callControlSet({ phase: { kind: 'connected' }, callId: 'call-1', cameraOn: true, screenSharing: false, canShare: true, canEffect: true, cameraSwitch: 'flip', canPip: false, videoScene: true, ...overrides });
+  callControlSet({ phase: { kind: 'connected' }, callId: 'call-1', cameraOn: true, screenSharing: false, canShare: true, canEffect: true, cameraSwitch: 'flip', videoScene: true, ...overrides });
 
 const families = (rows: readonly { readonly family: string }[]) => rows.map((row) => row.family);
 
@@ -45,6 +45,10 @@ describe('controlsDisposition', () => {
 describe('participantCountOf', () => {
   test('la grille compte moi et ses pairs', () => {
     expect(participantCountOf({ members: { a: {}, b: {} } as never }, 'grid')).toBe(3);
+  });
+
+  test('un invité qui sonne encore n’est pas un participant (`GroupCallRoster` d’iOS n’admet que les arrivées)', () => {
+    expect(participantCountOf({ members: { a: { link: 'connected' }, b: { link: 'ringing' }, c: { link: 'connecting' } } as never }, 'grid')).toBe(3);
   });
 
   test('hors grille, deux : moi et l’autre', () => {

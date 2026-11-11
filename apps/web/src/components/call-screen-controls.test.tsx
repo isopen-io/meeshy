@@ -170,7 +170,7 @@ describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
 describe('les panneaux « Réagir » et « Enregistrer »', () => {
   test('chaque réaction part aussitôt, et la palette reste ouverte pour enchaîner', () => {
     const sent: string[] = [];
-    const view = mount(<CallReactionPalette id="p" closeGlyph="x" language="fr" onRowKeyDown={() => undefined} onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
+    const view = mount(<CallReactionPalette id="p" closeGlyph="x" language="fr" onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
     view.press('[data-call-react="🎉"]');
     view.press('[data-call-react="👍"]');
     expect(sent).toEqual(['🎉', '👍']);
@@ -181,13 +181,13 @@ describe('les panneaux « Réagir » et « Enregistrer »', () => {
   test('« Audio et vidéo » demande un enregistrement vidéo et ferme le choix ; sans canevas filmable, il n’est pas offert', () => {
     const asked: string[] = [];
     const closed: string[] = [];
-    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onRowKeyDown={() => undefined} onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
+    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
     expect(view.find('[data-call-record-kind="audio"]')?.textContent).toContain('Audio seul');
     view.press('[data-call-record-kind="video"]');
     expect(asked).toEqual(['video']);
     expect(closed).toHaveLength(1);
     view.done();
-    const bare = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onRowKeyDown={() => undefined} onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
+    const bare = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
     expect(bare.find('[data-call-record-kind="video"]')?.hasAttribute('disabled')).toBe(true);
     bare.done();
   });

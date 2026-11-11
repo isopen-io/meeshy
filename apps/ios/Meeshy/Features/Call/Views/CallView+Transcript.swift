@@ -4,24 +4,10 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-// Les sous-titres de l'appel : panneau audio, bandeau de verre (#8396),
+// Les sous-titres de l'appel : le bloc de la pilule (#8396, #17343), le
 // journal, et le bouton Sous-titres. Sortis de `CallView.swift` (#8276).
 
 extension CallView {
-    /// Audio-call captions surface — a real layout element (NOT a floating
-    /// overlay) occupying the space between `compactAudioCallHeader` and the
-    /// pill. User-requested: "la zone de transcription ne doit
-    /// pas être en overlay des autres points d'action".
-    var transcriptPanel: some View {
-        CallJournalList(
-            items: journal.items, line: journal.line,
-            onToggleOriginal: { toggleOriginal(of: $0) },
-            contentPadding: 12
-        )
-        .callChromeGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-    }
-
     // MARK: - Caption lines (#8396)
 
     /// Les phrases de l'appel, résolues pour l'affichage : Prisme, couleur de
@@ -69,8 +55,9 @@ extension CallView {
         }
     }
 
-    /// Le bandeau : les deux dernières phrases. Il reste quand les actions
-    /// sont rangées ; en groupe il se pose dans le verre de la pilule.
+    /// Les sous-titres : les deux dernières phrases, puis leur pied. Ils vivent dans
+    /// la pilule (`hasOwnGlass: false`, #17343) ; seuls les sous-titres rangés (la
+    /// pilule est cachée) et ceux d'un mode (Effets, Montage) ont un verre à eux.
     func captionsBand(hasOwnGlass: Bool, opensJournal: Bool = true) -> some View {
         CallCaptionsBand(
             lines: journal.items.suffix(2).map(journal.line),
@@ -78,6 +65,22 @@ extension CallView {
             onToggleOriginal: { toggleOriginal(of: $0) },
             onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil
         )
+    }
+
+    /// #17343 — ce que la pilule porte de texte au-dessus de sa rangée de base.
+    var pillText: CallPillText {
+        CallPillText.resolve(isCaptionsEnabled: showTranscript, layer: layer, isChromeRevealed: isChromeVisible)
+    }
+
+    /// Loi 11 — un toucher range la pilule, les sous-titres restent dans un verre
+    /// sans sa rangée de base, à la place qu'elle occupait.
+    @ViewBuilder
+    var stowedCaptions: some View {
+        if pillText == .captionsAlone {
+            captionsBand(hasOwnGlass: true)
+                .frame(maxWidth: CallPillWidth.maxWidth(for: .captionsAlone))
+                .transition(.opacity)
+        }
     }
 
     func journalActionButton(captioned: Bool, diameter: CGFloat) -> some View {
@@ -93,11 +96,16 @@ extension CallView {
         }
     }
 
-    var captionsJournal: some View {
-        CallCaptionsJournalSheet(
-            items: journal.items, line: journal.line,
+    /// #17343 — le journal s'ouvre DANS la pilule, à la place des sous-titres, et y
+    /// défile ; sa hauteur est une part de la fenêtre (`CallJournalSizing`).
+    var journalPanelRows: some View {
+        let composed = journal
+        return CallJournalPanel(
+            items: composed.items, line: composed.line,
             showsOriginal: $showOriginalText,
-            onToggleOriginal: { toggleOriginal(of: $0) }
+            height: CallJournalSizing.height(windowHeight: DeviceLayout.windowSize.height),
+            onToggleOriginal: { toggleOriginal(of: $0) },
+            onClose: closePanel
         )
     }
 
@@ -170,20 +178,7 @@ extension CallView {
     /// depuis #8394 — l'ancien bouton flottant a disparu.
     func captionsActionButton(captioned: Bool, diameter: CGFloat) -> some View {
         let mode = captionsMode
-        let icon: String = {
-            switch mode {
-            case .off: return "captions.bubble"
-            case .translated: return "captions.bubble.fill"
-            case .original: return "character.bubble.fill"
-            }
-        }()
-        let stateLabel: String = {
-            switch mode {
-            case .off: return String(localized: "call.control.captions.state.off", defaultValue: "Désactivés", bundle: .main)
-            case .translated: return String(localized: "call.control.captions.state.translated", defaultValue: "Traduction", bundle: .main)
-            case .original: return String(localized: "call.control.captions.state.original", defaultValue: "Texte original", bundle: .main)
-            }
-        }()
+        let stateLabel = mode.stateLabel
 
         // Invitation : le pair transcrit alors que MES sous-titres sont
         // désactivés — point indigo sur l'icône. Statique, pas d'animation
@@ -199,7 +194,7 @@ extension CallView {
 
         return Button(action: advanceCaptionsMode) {
             CallPillButtonLabel(
-                symbol: icon,
+                symbol: mode.symbol,
                 kind: mode == .off ? .normal : .active,
                 caption: captioned ? title : nil,
                 diameter: diameter

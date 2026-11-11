@@ -59,7 +59,7 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
     /// **Un seul plein écran, celui du composer** (décision porteur 2026-10-05).
     func test_bothHosts_mountTheSingleMount_andNoLongerWireTheLayersThemselves() throws {
         for hote in ["Meeshy/Features/Composer/ComposerViewfinder.swift",
-                     "Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift"] {
+                     "Meeshy/Features/Composer/ComposerSceneViewfinderMount.swift"] {
             let code = try Self.code(hote)
             XCTAssertTrue(code.contains("ComposerCaptureMount("), "\(hote) monte le montage unique")
             XCTAssertFalse(code.contains("ComposerCaptureChrome("), "\(hote) recâble le chrome")
@@ -68,8 +68,8 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
         let viseur = try Self.code("Meeshy/Features/Composer/ComposerViewfinder.swift")
         XCTAssertTrue(viseur.contains("size: $size, offersSizeToggle: false"),
                       "la conversation n'a pas de carte : sa taille ne joue que sous le flash d'écran (#9566)")
-        let composer = try Self.code("Meeshy/Features/Composer/MeeshyComposerHost+Viewfinder.swift")
-        XCTAssertTrue(composer.contains("size: $sceneCameraSize"), "le composer pilote carte ↔ plein écran")
+        let composer = try Self.code("Meeshy/Features/Composer/ComposerSceneViewfinderMount.swift")
+        XCTAssertTrue(composer.contains("size: host.$sceneCameraSize"), "le composer pilote carte ↔ plein écran")
         XCTAssertFalse(composer.contains("offersSizeToggle: false"))
     }
 
@@ -104,7 +104,7 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
         let rangee = try XCTUnwrap(barre.range(of: "controlCapsule\n"))
         let curseur = try XCTUnwrap(barre.range(of: "ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity"))
         XCTAssertLessThan(rangee.lowerBound, curseur.lowerBound, "sous la capsule, donc sous le flash")
-        XCTAssertTrue(barre.contains("capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode)"),
+        XCTAssertTrue(barre.contains("capsuleItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode, position: cameraPosition)"),
                       "le curseur n'existe que sous un flash montré et allumé")
         XCTAssertFalse(barre.contains("Exposure"), "plus de curseur de luminosité permanent")
         let vue = try Self.code("Meeshy/Features/Composer/ComposerFlashIntensitySlider.swift")

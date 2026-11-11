@@ -37,6 +37,33 @@ extension CameraModel {
         }
         #endif
         guard recordingId == nil else { return }
+        // Les sons extérieurs s'arrêtent, le son Meeshy qui joue BAISSE sans
+        // s'arrêter. Refusé pendant un appel : la prise se fait sous
+        // la session de l'appel. La session se pose hors du fil principal
+        // (#17038), armée d'avance par `prepare(.video)` quand le micro entre.
+        recordingSession.begin(.video) { _ in }
+        openRecording()
+    }
+
+    /// **La session d'enregistrement d'abord, le segment ensuite, et seulement si la prise est
+    /// encore voulue** (#17469). Changer la session audio sous un fichier qui s'ouvre en retarde
+    /// les premières images ; et une tenue levée pendant l'attente (le micro, puis la session)
+    /// ne trouvait rien à arrêter : le segment partait ensuite, orphelin. Le verdict de la pose
+    /// est ignoré comme avant : pendant un appel, la prise se fait sous la session de l'appel.
+    func startRecording(whileWanted stillWanted: @MainActor () -> Bool) async {
+        guard !runsFixture else {
+            guard stillWanted() else { return }
+            return startRecording()
+        }
+        guard stillWanted(), recordingId == nil else { return }
+        await recordingSession.begin(.video)
+        guard stillWanted(), recordingId == nil else {
+            return recordingSession.finish(handingBackSession: false)
+        }
+        openRecording()
+    }
+
+    private func openRecording() {
         recordedSegmentURLs = []
         isSwitchingCameraDuringRecording = false
         pendingSwitchPosition = nil
@@ -47,11 +74,6 @@ extension CameraModel {
         // une vidéo que rien n'écrit — un enregistrement fantôme, avec son
         // indicateur rouge et son compteur qui monte.
         recordingId = UUID().uuidString
-        // Les sons extérieurs s'arrêtent, le son Meeshy qui joue BAISSE sans
-        // s'arrêter. Refusé pendant un appel : la prise se fait sous
-        // la session de l'appel. La session se pose hors du fil principal
-        // (#17038), armée d'avance par `prepare(.video)` quand le micro entre.
-        recordingSession.begin(.video) { _ in }
         guard startSegment() else {
             recordingSession.finish(handingBackSession: false)
             return closeRecordingToken(recordingId)

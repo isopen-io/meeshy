@@ -1,4 +1,6 @@
 import Foundation
+import MeeshyCore
+import os
 #if canImport(AlarmKit)
 import ActivityKit
 import AlarmKit
@@ -42,7 +44,12 @@ nonisolated struct BringAlarmCoordinator: Sendable {
     /// Sonner. `mayAsk` : l'app ouverte peut montrer la demande système ; l'extension, jamais.
     @discardableResult
     func apply(_ action: BringAlarmPlan.Action, mayAsk: Bool) async -> Bool {
-        guard let scheduler = active else { return false }
+        guard let scheduler = active else {
+            if case .ring(let request) = action {
+                BringAlarmLog.note("bring \(request.bringId) : essai AlarmKit inerte (drapeau \(enabled), AlarmKit \(scheduler != nil))")
+            }
+            return false
+        }
         switch action {
         case .none:
             return false
@@ -52,7 +59,10 @@ nonisolated struct BringAlarmCoordinator: Sendable {
         case .ring(let request):
             var state = await scheduler.authorization()
             if state == .notDetermined, mayAsk { state = await scheduler.requestAuthorization() }
-            guard state == .authorized else { return false }
+            guard state == .authorized else {
+                BringAlarmLog.note("bring \(request.bringId) : alarme non posée, autorisation \(String(describing: state))")
+                return false
+            }
             return await scheduler.schedule(request)
         }
     }
@@ -65,6 +75,32 @@ nonisolated struct BringAlarmCoordinator: Sendable {
     func primeAuthorization() async {
         guard let scheduler = active, await scheduler.authorization() == .notDetermined else { return }
         _ = await scheduler.requestAuthorization()
+    }
+}
+
+/// Le journal de l'essai AlarmKit (#17475) : sans lui, un refus du système était avalé et l'alarme manquait en silence.
+nonisolated enum BringAlarmLog {
+    static let logger = MeeshyLog.logger(.bringAlarm)
+    private static let journalLimit = 200
+
+    /// Le journal, et en Debug sa copie dans le groupe d'apps (`Library/Caches/bring-alarm.log`, 200 lignes) : l'app et
+    /// l'extension y écrivent, et `devicectl device copy from` la relit sur un iPhone réel sans Console.
+    static func note(_ message: String) {
+        logger.notice("\(message, privacy: .public)")
+        #if DEBUG
+        append(message)
+        #endif
+    }
+
+    private static func append(_ message: String) {
+        guard let caches = FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: BringAlarmPlan.appGroupSuite)?
+            .appendingPathComponent("Library/Caches", isDirectory: true) else { return }
+        try? FileManager.default.createDirectory(at: caches, withIntermediateDirectories: true)
+        let file = caches.appendingPathComponent("bring-alarm.log")
+        let previous = (try? String(contentsOf: file, encoding: .utf8))?.split(separator: "\n").map(String.init) ?? []
+        let line = "\(WireDate.string(from: Date())) [\(ProcessInfo.processInfo.processName)] \(message)"
+        try? (previous + [line]).suffix(journalLimit).joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
     }
 }
 
@@ -146,7 +182,14 @@ nonisolated struct AlarmKitBringAlarmScheduler: BringAlarmScheduling {
             stopIntent: BringAlarmStopIntent(bringId: request.bringId),
             sound: .named(BringAlarmPlan.soundName)
         )
-        return (try? await AlarmManager.shared.schedule(id: request.alarmID, configuration: configuration)) != nil
+        do {
+            _ = try await AlarmManager.shared.schedule(id: request.alarmID, configuration: configuration)
+            BringAlarmLog.note("bring \(request.bringId) : alarme posée")
+            return true
+        } catch {
+            BringAlarmLog.note("bring \(request.bringId) : AlarmKit refuse l'alarme — \(String(describing: error))")
+            return false
+        }
     }
 
     func cancel(bringId: String) async {

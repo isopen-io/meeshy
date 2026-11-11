@@ -751,6 +751,17 @@ export const ROUTES = {
   share: { pattern: '/share', screen: () => import('@/routes/share-incoming') },
 } as const;
 
+/* LE CATALOGUE DU KIT (#17335, K00) — un écran de développement, jamais de production : ces deux adresses ne sont
+   inscrites que dans une construction qui lie les fixtures (`__FIXTURES__`). Les images déployées (production,
+   staging) sont construites en `gateway` : le littéral est faux, la table ne les porte pas, et le chunk de l'écran
+   n'est pas émis. Elles restent HORS de `ROUTES` pour que ni le miroir de nginx, ni la table des chemins
+   d'application, ni la garde de session (publique, aucune session) ne les comptent. */
+const kitScreen = () => import('@/routes/kit');
+export const KIT_ROUTES = {
+  kit: { pattern: '/kit', screen: kitScreen },
+  kitComposant: { pattern: '/kit/$composant', screen: kitScreen },
+} as const;
+
 /**
  * L'ÉCRAN D'ADRESSE INCONNUE (#6341) — ses deux textes viennent du catalogue
  * d'interface, comme le reste de l'application. Contrairement à un écran
@@ -803,7 +814,7 @@ export function DeferredSplitFrame(props: FrameProps): ReactNode {
 
 /* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
    son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
-export const { Router, Link, href, navigate, preload } = createRouter(ROUTES, NotFound, {
+export const { Router, Link, href, navigate, preload } = createRouter({ ...ROUTES, ...(__FIXTURES__ ? KIT_ROUTES : {}) }, NotFound, {
   screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
   /* SUR GRAND ÉCRAN, LA LISTE ET LE FIL CÔTE À CÔTE (#10073, D-185) — sous
      1024 px, le cadre rend l'écran routé tel quel. */

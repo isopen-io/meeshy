@@ -27,7 +27,7 @@ enum class CallControlsDisposition {
     Rows,
     ;
 
-    /** The rails on screen: the ones the open « (…) » brings out. Record and React open INSIDE the pill: the rails give way. */
+    /** The rails on screen: the ones the open « (…) » brings out. Record, React and the Journal open INSIDE the pill: the rails give way. */
     fun railRows(set: CallActionSet, layer: CallScreenLayer): List<CallActionFamilyRow> =
         if (this == Rails && layer.showsFamilyRows) set.familyRows else emptyList()
 
@@ -57,7 +57,7 @@ object CallRailsLayout {
     const val BUTTON_SPACING_DP: Float = 8f
     const val PADDING_DP: Float = 8f
     const val EDGE_INSET_DP: Float = 8f
-    const val PILL_MAX_WIDTH_DP: Float = 440f
+    const val PILL_MAX_WIDTH_DP: Float = CallPillWidth.RESTING_DP
     const val PILL_SIDE_PADDING_DP: Float = 20f
     const val PILL_HEIGHT_DP: Float = 68f
     const val PILL_GAP_DP: Float = 8f

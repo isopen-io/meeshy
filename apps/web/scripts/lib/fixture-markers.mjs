@@ -11,5 +11,8 @@
  * besoin (leçon 551 : un réglage écrit à plusieurs endroits finit écrit de
  * plusieurs façons). `scripts/check-gateway-build.mjs` pourra l'adopter —
  * hors périmètre de #5815, non modifié ici.
+ *
+ * Les deux derniers marqueurs sont ceux du catalogue du kit (#17335, K00) : un écran de
+ * développement qui n'est lié que dans une construction de fixtures.
  */
-export const FIXTURE_MARKERS = Object.freeze(['Amina', 'Kwame', 'Fatou', 'u-viewer']);
+export const FIXTURE_MARKERS = Object.freeze(['Amina', 'Kwame', 'Fatou', 'u-viewer', 'data-kit-stage', 'data-kit-empty']);

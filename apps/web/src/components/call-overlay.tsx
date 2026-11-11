@@ -1,8 +1,6 @@
-import { colorForName } from '@meeshy/shared/utils/conversation-colors';
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type PointerEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { PeerAvatar } from '@/components/peer-avatar';
 import { StreamAudio } from '@/components/call-media-elements';
 import { CallScreen } from '@/components/call-screen';
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -10,11 +8,10 @@ import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
 import { PILL_COLLAPSE_DISTANCE } from '@/lib/calls/call-bubble';
-import { callStore, elapsedSeconds, formatCallClock, type ActiveCall, type WaitingCall } from '@/lib/calls/call-store';
+import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callStatusKey } from '@/lib/calls/call-view';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { initialsOf } from '@/lib/view/conversation';
 
 /**
  * **CE QUE LA COUCHE D'APPEL PEINT** (#6382) — l'écran plein, OU la pastille
@@ -37,6 +34,9 @@ const HANGUP = 'var(--ios-error-strong)';
 /** Je partage mon écran (#16664) : la capsule rougit, comme l'indicateur du système. */
 const SHARING_BG = 'color-mix(in srgb, var(--ios-error-strong) 96%, transparent)';
 const ANSWER = 'var(--ios-success)';
+
+/* Le bandeau d'un second appel (#17499) : son chunk, préchargé par l'appel vivant (`call-screen.tsx` › PREFETCH). */
+const CallWaitingBanner = lazy(() => import('./call-waiting-banner').then((module) => ({ default: module.CallWaitingBanner })));
 
 function CallPill({ call }: { readonly call: ActiveCall }) {
   const language = currentInterfaceLanguage();
@@ -119,33 +119,6 @@ function CallPill({ call }: { readonly call: ActiveCall }) {
   );
 }
 
-function WaitingBanner({ waiting }: { readonly waiting: WaitingCall }) {
-  const language = currentInterfaceLanguage();
-  return (
-    <div
-      role="alertdialog"
-      aria-label={translate(language, 'call.waiting.from', { caller: waiting.callerName })}
-      className="fixed inset-x-3 z-[210] mx-auto flex max-w-md items-center gap-3 rounded-card p-3 shadow-lg"
-      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
-      data-call-waiting=""
-    >
-      <PeerAvatar presenceKey={waiting.callerKey ?? undefined} initials={initialsOf(waiting.callerName)} color={colorForName(waiting.callerName)} size={40} {...(waiting.callerAvatar === null ? {} : { src: waiting.callerAvatar })} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-body font-semibold">{waiting.title}</p>
-        <p className="truncate text-mini" style={{ color: 'var(--color-on-media-3)' }}>
-          {translate(language, 'call.waiting.from', { caller: waiting.callerName })}
-        </p>
-      </div>
-      <button type="button" onClick={callActions.declineWaiting} className="min-h-11 rounded-full px-3 text-body font-semibold" style={{ background: HANGUP }}>
-        {translate(language, 'call.waiting.decline')}
-      </button>
-      <button type="button" onClick={callActions.answerWaiting} className="min-h-11 rounded-full px-3 text-body font-semibold" style={{ background: ANSWER }}>
-        {translate(language, 'call.waiting.answer')}
-      </button>
-    </div>
-  );
-}
-
 function Notice() {
   const language = currentInterfaceLanguage();
   useEffect(() => {
@@ -178,7 +151,11 @@ export function CallOverlay() {
         <StreamAudio key={userId} stream={stream} />
       ))}
       {call === null ? null : <ActiveCallView call={call} />}
-      {waiting === null ? null : <WaitingBanner waiting={waiting} />}
+      {waiting === null ? null : (
+        <Suspense fallback={null}>
+          <CallWaitingBanner waiting={waiting} />
+        </Suspense>
+      )}
       {notice === null ? null : <Notice />}
     </>
   );

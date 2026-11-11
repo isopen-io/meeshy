@@ -139,40 +139,48 @@ extension CallView {
             : .opacity.combined(with: .scale(scale: 0.94, anchor: .bottom))
     }
 
-    /// UN bloc de verre : le panneau ouvert OU (en groupe) les familles, PUIS (en
-    /// groupe) les sous-titres, PUIS la rangée de base. Le verre enveloppe le
-    /// tout et grandit avec lui (#8459, #8550, #8578). À deux, `(…)` ne le fait
-    /// pas grandir : ses actions sont sur les rails (#17327).
+    /// UN bloc de verre : le panneau ouvert OU (en groupe) les familles, PUIS les
+    /// sous-titres (ou le journal, à leur place), PUIS la rangée de base. Le verre
+    /// enveloppe le tout et grandit avec lui (#8459, #8550, #8578). À deux, `(…)` ne
+    /// le fait pas grandir : ses actions sont sur les rails (#17327). #17343 — les
+    /// sous-titres et le journal y vivent en duo comme en groupe ; (…) les range. Le journal,
+    /// qui défile à sa hauteur, reste HORS du `ViewThatFits` des rangées (rendu asynchrone, #9456).
     var callControlsPill: some View {
         let actions = currentActionSet
         let disposition = controlsDisposition
+        let text = pillText
         return VStack(spacing: 0) {
             if disposition.unfoldsPill(for: layer) {
                 VStack(spacing: 0) {
-                    unfoldedRows {
-                        if let panel = layer.pillPanel {
-                            panelRows(panel)
-                        } else {
-                            familyRows(disposition.pillRows(actions, layer: layer))
+                    if layer.pillPanel == .journal {
+                        journalPanelRows
+                    } else {
+                        unfoldedRows {
+                            if let panel = layer.pillPanel {
+                                panelRows(panel)
+                            } else {
+                                familyRows(disposition.pillRows(actions, layer: layer))
+                            }
                         }
                     }
                     pillHairline
                 }
                 .transition(unfoldTransition)
             }
-            if isGroupStage && showTranscript {
-                captionsBand(hasOwnGlass: false)
-                    .padding(.leading, MeeshySpacing.mdPlus)
-                    .padding(.trailing, MeeshySpacing.xs)
-                    .padding(.top, MeeshySpacing.xsPlus)
-                pillHairline
+            if text == .captions {
+                VStack(spacing: 0) {
+                    captionsBand(hasOwnGlass: false)
+                    pillHairline
+                }
+                .transition(.opacity)
             }
             baseRow
         }
         .clipShape(Self.pillShape)
         .callControlsGlass(in: Self.pillShape)
-        .frame(maxWidth: 440)
+        .frame(maxWidth: CallPillWidth.maxWidth(for: text))
         .animation(disclosureAnimation, value: layer)
+        .animation(disclosureAnimation, value: text)
     }
 
     var pillHairline: some View {
@@ -181,6 +189,16 @@ extension CallView {
             .frame(height: 0.5)
             .padding(.horizontal, MeeshySpacing.lg)
             .accessibilityHidden(true)
+    }
+
+    /// La pilule ET, quand elle est rangée par un toucher, le verre des sous-titres qui
+    /// reste à sa place (loi 11). Un seul emplacement pour le duo et pour le groupe.
+    var callControlsBlock: some View {
+        ZStack(alignment: .bottom) {
+            callControlsPill
+                .callChromeVisibility(isChromeVisible)
+            stowedCaptions
+        }
     }
 
     private func unfoldedRows<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -194,7 +212,7 @@ extension CallView {
     /// Les mêmes quatre boutons partout, légendés dès que les rangées
     /// légendées sont déployées au-dessus d'eux.
     private var baseRow: some View {
-        let captioned = controlsDisposition.unfoldsPill(for: layer)
+        let captioned = controlsDisposition.unfoldsPill(for: layer) && layer.pillPanel != .journal
         return AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
             HStack(alignment: .top, spacing: 0) {
                 moreButton(captioned: captioned)
