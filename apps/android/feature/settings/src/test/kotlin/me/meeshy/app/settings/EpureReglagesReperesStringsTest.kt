@@ -34,7 +34,7 @@ class EpureReglagesReperesStringsTest {
     fun `calls from non contacts show their rule at rest and keep only the detail behind the info button`() {
         assertThat(fr("settings_privacy_calls_non_contacts_subtitle")).isEqualTo("Désactivé, seuls vos amis peuvent vous faire sonner.")
         assertThat(fr("settings_privacy_calls_non_contacts_info"))
-            .isEqualTo("Les autres voient que vous n'acceptez que les appels de vos contacts.")
+            .isEqualTo("Les autres voient que vous n'acceptez que les appels de vos amis.")
         assertThat(source("PrivacySettingsScreen.kt")).contains("PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS -> R.string.settings_privacy_calls_non_contacts_subtitle")
     }
 

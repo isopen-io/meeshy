@@ -54,6 +54,8 @@ class EpureReglagesStringsTest {
             "privacy_encryption_coming_soon", "purge_unattributed_description", "crash_reports_info_title",
             "crash_reports_info_body", "data_export_info_title", "about_description_body", "about_section_description",
             "licenses_intro", "pack_shop_detail_embedded", "pack_shop_detail_embedded_size",
+            "privacy_block_screenshots", "privacy_contact_requests", "privacy_group_invites", "privacy_share_data",
+            "settings_privacy_coming_soon", "settings_privacy_coming_soon_a11y", "purge_unattributed_label",
         )
         allLocales.forEach { locale ->
             val keys = Tree.entriesOf(locale).keys
