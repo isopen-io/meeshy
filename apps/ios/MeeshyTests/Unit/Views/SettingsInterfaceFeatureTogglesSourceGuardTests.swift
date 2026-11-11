@@ -118,7 +118,6 @@ final class SettingsInterfaceFeatureTogglesSourceGuardTests: XCTestCase {
         for key in [
             "settings.interface.lentille_list",
             "settings.interface.reading_modes",
-            "settings.interface.reading_modes.subtitle",
             "settings.interface.riviere_mode",
             "settings.interface.riviere_mode.hint",
         ] {

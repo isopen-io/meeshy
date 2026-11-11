@@ -15,7 +15,7 @@ struct SessionRowPresentation: Equatable, Identifiable {
     let isCurrent: Bool
     /// « Meeshy 1.2.0 (1874) · iOS 18.2 », « Chrome 129 · macOS 14.5 · Web ».
     let software: String?
-    /// « Lyon, France (approximatif) · 203.0.113.4 ».
+    /// « Lyon, France · 203.0.113.4 ».
     let place: String?
     let timezone: String?
     /// « Ouverte le 1 oct. 2026 · Connexion par lien magique ».
@@ -109,10 +109,7 @@ struct SessionRowPresentation: Equatable, Identifiable {
         let city = session.city.filled
         let named = [city, country].compactMap { $0 }.joined(separator: ", ")
         let located: String? = named.isEmpty ? session.location.filled : named
-        let approximate = located.map {
-            String(format: String(localized: "sessions.place.approximate", defaultValue: "%@ (approximatif)", bundle: .main), $0)
-        }
-        let parts = [approximate, session.ipAddress.filled].compactMap { $0 }
+        let parts = [located, session.ipAddress.filled].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
