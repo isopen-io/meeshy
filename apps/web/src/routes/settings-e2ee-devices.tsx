@@ -3,9 +3,9 @@ import { useEffect, useId, useState } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { Glyph } from '@/components/glyph';
-import { SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
-import { InfoHintButton, InfoHintScope, InfoHintText, InfoNoted, useInfoHint, type InfoHint } from '@/components/info-hint';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
+import { GroupedSection, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import { securityFailureOf, type SecurityFailure } from '@/lib/api/account-security';
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
@@ -28,7 +28,6 @@ import { e2eeDeviceFields, e2eeDeviceTitle } from '@/lib/view/e2ee-devices';
 import { Link } from '@/routes/route-table';
 import { MoreFields } from '@/routes/settings-more-fields';
 import { SECURITY_PANEL, SECURITY_PANEL_PARAM } from '@/routes/settings-sections';
-import { sessionsHint } from '@/routes/settings-sessions-hint';
 
 /**
  * **RÉGLAGES › SÉCURITÉ › MES APPAREILS CHIFFRÉS** (#13013) — jumelle web et
@@ -87,8 +86,6 @@ export function SettingsE2eeDevicesScreen({
   readonly now?: () => Date;
 }) {
   const t = sessionsTextOf(language);
-  const introHint: InfoHint = { ...sessionsHint(t, 'sessions.intro.question', 'e2eeDevices.intro'), text: `${t('e2eeDevices.intro')} ${t('e2eeDevices.approval')}` };
-  const introState = useInfoHint();
   const online = useOnline();
   const [pending, setPending] = useState<E2eeDevice | null>(null);
   const [announce, setAnnounce] = useState('');
@@ -154,51 +151,65 @@ export function SettingsE2eeDevicesScreen({
         <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: SECTION_INK }}>
           {t('e2eeDevices.title')}
         </h1>
-        <InfoHintButton hint={introHint} state={introState} />
       </header>
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
-        <InfoHintScope>
-          <div className="mx-auto grid max-w-xl gap-4 pb-24" style={{ paddingTop: 8 }}>
-            <InfoHintText hint={introHint} state={introState} />
-            {online ? null : (
-              <div role="status" data-e2ee-devices-offline className="flex items-center rounded-card px-3.5 py-1 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
-                <InfoNoted note={sessionsHint(t, 'sessions.offline.question', 'e2eeDevices.offline.info')}>{t('e2eeDevices.offline')}</InfoNoted>
-              </div>
-            )}
-            <div data-e2ee-devices-here className="flex items-center rounded-card px-3.5 py-1 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
-              <InfoNoted note={sessionsHint(t, 'e2eeDevices.here.question', host === 'android-shell' ? 'e2eeDevices.here.shell.info' : 'e2eeDevices.here.browser.info')}>
-                {t(host === 'android-shell' ? 'e2eeDevices.here.shell' : 'e2eeDevices.here.browser')}
-              </InfoNoted>
-            </div>
-            <section aria-label={t('e2eeDevices.title')} className="grid gap-2">
-              {devices === undefined ? (
-                failure === null ? (
-                  <DevicesSkeleton label={t('e2eeDevices.loading')} />
-                ) : (
-                  <DevicesError t={t} failure={failure} onRetry={() => void query.refetch()} />
-                )
-              ) : devices.length === 0 ? (
-                <div data-e2ee-devices-empty className="flex items-center justify-center rounded-card p-2 text-body font-semibold" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
-                  <InfoNoted note={sessionsHint(t, 'e2eeDevices.empty.question', 'e2eeDevices.empty.body')}>{t('e2eeDevices.empty.title')}</InfoNoted>
-                </div>
+        <div className="mx-auto grid max-w-xl gap-6 pb-24" style={{ paddingTop: 8 }}>
+          {online ? null : (
+            <p role="status" data-e2ee-devices-offline className="rounded-card px-3.5 py-3 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
+              {t('e2eeDevices.offline')}
+            </p>
+          )}
+          <p
+            data-e2ee-devices-here
+            className="flex items-start gap-2 rounded-card px-3.5 py-3 text-caption"
+            style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}
+          >
+            {t(host === 'android-shell' ? 'e2eeDevices.here.shell' : 'e2eeDevices.here.browser')}
+          </p>
+          <GroupedSection
+            id="e2ee-devices-title"
+            title={t('e2eeDevices.section').toLocaleUpperCase(language)}
+            icon={<GlyphSvg glyph={SETTINGS_GLYPHS.shieldCheck} size={12} />}
+            card={false}
+          >
+            <p className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
+              {t('e2eeDevices.intro')}
+            </p>
+            {devices === undefined ? (
+              failure === null ? (
+                <DevicesSkeleton label={t('e2eeDevices.loading')} />
               ) : (
-                <ul className="grid gap-2">
-                  {devices.map((device) => (
-                    <DeviceCard
-                      key={device.deviceId}
-                      device={device}
-                      language={language}
-                      t={t}
-                      now={now()}
-                      disabled={!online || !confirmed}
-                      onRetire={() => setPending(device)}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
-          </div>
-        </InfoHintScope>
+                <DevicesError t={t} failure={failure} onRetry={() => void query.refetch()} />
+              )
+            ) : devices.length === 0 ? (
+              <div data-e2ee-devices-empty className="grid gap-1 rounded-card p-4 text-center" style={SECTION_CARD_STYLE}>
+                <span className="text-body font-semibold" style={{ color: SECTION_INK }}>
+                  {t('e2eeDevices.empty.title')}
+                </span>
+                <span className="text-caption" style={{ color: SECTION_INK_2 }}>
+                  {t('e2eeDevices.empty.body')}
+                </span>
+              </div>
+            ) : (
+              <ul className="grid gap-2" aria-labelledby="e2ee-devices-title">
+                {devices.map((device) => (
+                  <DeviceCard
+                    key={device.deviceId}
+                    device={device}
+                    language={language}
+                    t={t}
+                    now={now()}
+                    disabled={!online || !confirmed}
+                    onRetire={() => setPending(device)}
+                  />
+                ))}
+              </ul>
+            )}
+            <p className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
+              {t('e2eeDevices.approval')}
+            </p>
+          </GroupedSection>
+        </div>
       </main>
       {pending === null ? null : (
         <ConfirmDialog
@@ -225,8 +236,13 @@ export function SettingsE2eeDevicesScreen({
   );
 }
 
-/** Ce qu'un appareil dit au repos : le titre nomme déjà la plateforme ; restent l'activation et la dernière activité. */
-const E2EE_DEVICE_REST_FIELDS: ReadonlySet<string> = new Set(['enrolled', 'lastSeen']);
+/**
+ * Ce qui permet de RECONNAÎTRE un appareil, lu sans geste (règle 7 de l'épure,
+ * #17594, retour porteur du 2026-11-11) : sa plateforme, la date où il a été
+ * enregistré et son dernier usage — la pastille « Cet appareil » est au titre.
+ * Seul le numéro d'appareil, technique, vit derrière « Plus ».
+ */
+const E2EE_DEVICE_REST_FIELDS: ReadonlySet<string> = new Set(['platform', 'enrolled', 'lastSeen']);
 
 function DeviceCard({
   device,

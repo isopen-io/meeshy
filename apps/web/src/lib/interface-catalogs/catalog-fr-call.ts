@@ -45,7 +45,6 @@ const frCall = {
   'call.ended.refusedNonContacts': 'Cette personne n’accepte que les appels de ses contacts',
   'settings.privacy.calls_non_contacts': 'Appels hors contacts',
   'settings.privacy.calls_non_contacts.info': 'Désactivé, seuls vos amis peuvent vous faire sonner. Les autres voient que vous n’acceptez que les appels de vos contacts.',
-  'settings.privacy.calls_non_contacts.question': 'Qui peut me faire sonner ?',
   'call.ended.permission': 'Autorisez le micro pour appeler',
   'call.retry': 'Réessayer',
   'call.close': 'Fermer',

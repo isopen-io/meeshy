@@ -68,7 +68,7 @@ describe('/settings/verify-email-change — le jeton, sous session', () => {
     const host = await mount(<VerifyEmailChangePage token={null} signedIn language="fr" deps={script.deps} />);
 
     expect(script.verified).toEqual([]);
-    expect(host.textContent).toContain('Lien incomplet.');
+    expect(host.textContent).toContain('Ce lien ne porte pas de code de confirmation.');
   });
 });
 
@@ -78,18 +78,15 @@ describe('/settings/verify-email-change — un refus motivé', () => {
       <VerifyEmailChangePage token="tok" signedIn language="fr" deps={scripted(refused(400, 'Verification token has expired')).deps} />,
     );
     expect(host.querySelector('h1')?.textContent).toBe('Adresse non modifiée');
-    expect(host.textContent).toContain('Lien expiré');
+    expect(host.textContent).toContain('Ce lien a expiré. Refaites la demande depuis les réglages.');
   });
 
-  test('un lien sans correspondance tient en une ligne, le détail est derrière un (i) en forme de question', async () => {
+  test('un lien sans correspondance dit pourquoi il ne marche plus', async () => {
     const host = await mount(
       <VerifyEmailChangePage token="tok" signedIn language="fr" deps={scripted(refused(400, 'No pending email change')).deps} />,
     );
-    expect(host.textContent).toContain('Lien expiré ou déjà utilisé');
-    const hint = host.querySelector<HTMLButtonElement>('button[aria-label="Pourquoi ce lien ne marche plus ?"]');
-    expect(hint).not.toBeNull();
-    const noteId = hint?.getAttribute('aria-controls') ?? hint?.getAttribute('aria-describedby') ?? '';
-    expect(host.ownerDocument.getElementById(noteId)?.textContent).toContain('aucun changement en attente sur ce compte');
+    expect(host.textContent).toContain('aucun changement en attente sur ce compte');
+    expect(host.querySelector('button[aria-label="Pourquoi ce lien ne marche plus ?"]')).toBeNull();
   });
 
   test('une adresse prise entre-temps', async () => {

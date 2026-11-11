@@ -26,7 +26,6 @@ import { isDecorDomain, packItemsQueryKey } from '@/lib/packs/decor-domains';
 import type { PackItems } from '@/lib/packs/pack-items-load';
 
 import type { PackInspection, PackShopAdapter } from './pack-shop';
-import { packShopHint } from '@/components/pack-shop-hint';
 
 /** La vignette d'un pack Mee intégré : son premier Mee, dessiné par le client (le serveur ne sert aucune image). */
 function MeePackCover({ slug }: { readonly slug: MeeBuiltinPack }) {
@@ -295,7 +294,7 @@ export function UnifiedShop({
         <PackShop
           adapter={adapter}
           language={language}
-          hint={packShopHint(language, 'packs.shop.hint')}
+          hint={translateStickerPacks(language, 'packs.shop.hint')}
           empty={translateStickerPacks(language, 'packs.shop.empty')}
         />
       </Suspense>

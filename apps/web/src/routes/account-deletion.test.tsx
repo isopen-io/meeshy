@@ -105,10 +105,7 @@ describe('le lien de l’e-mail — la conséquence d’abord, le clic ensuite',
 
     await click(buttonNamed(host, 'Confirmer la suppression'));
     expect(host.querySelector('h1')?.textContent).toBe('Ce lien ne sert plus');
-    expect(host.textContent).toContain('Lien expiré');
-    const hint = [...host.querySelectorAll('button')].find((button) => button.getAttribute('aria-label') === 'Comment obtenir un nouveau lien ?');
-    const note = host.querySelector(`[id="${hint?.getAttribute('aria-controls') ?? ''}"]`);
-    expect(note?.textContent).toBe('Refaites la demande depuis les réglages.');
+    expect(host.textContent).toContain('Ce lien a expiré. Refaites la demande depuis les réglages.');
     expect(buttonNamed(host, 'Confirmer la suppression')).toBeNull();
   });
 

@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
-import { InfoAlone } from '@/components/info-hint';
 import { apiDeps } from '@/lib/api/deps';
 import { deliverJsonFile, exportFileName, requestDataExport, type DataExportResult } from '@/lib/api/data-export';
 import type { ApiResult } from '@/lib/api/http';
@@ -13,7 +11,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 
-import { ActionButton, ActionLink, LinkAlert, LinkPage, ReachFailurePage, SignedOutPage } from './link-page-parts';
+import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, ReachFailurePage, SignedOutPage } from './link-page-parts';
 
 /**
  * **`/settings/data-export` — EXPORTER SES DONNÉES** (#6725). À la
@@ -138,13 +136,7 @@ export function DataExportPage({
       busy={exporting}
       body={
         <>
-          <InfoAlone
-            hint={{
-              label: translate(language, 'dataExport.info.question'),
-              text: translate(language, 'dataExport.info.body'),
-              glyph: SETTINGS_GLYPHS.info,
-            }}
-          />
+          <LinkText>{translate(language, 'dataExport.info.body')}</LinkText>
           {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.title')}</LinkAlert>}
         </>
       }

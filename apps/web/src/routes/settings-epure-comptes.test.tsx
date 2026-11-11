@@ -30,9 +30,9 @@ import { LinkPage, ReachFailurePage } from './link-page-parts';
 /**
  * L'ÉPURE DES RÉGLAGES, DEUXIÈME PASSE (#17594, épure #17584) — la rangée d'un
  * pack nomme, la fiche explique ; une session et un appareil chiffré montrent
- * l'essentiel et rangent le reste derrière « Plus » ; les pages de lien tiennent
- * en un titre et une action ; chaque explication retirée de l'écran reste lue
- * derrière un (i) nommé par sa question.
+ * de quoi les reconnaître et rangent le détail technique derrière « Plus » ;
+ * les pages de lien ne gardent qu'une action. Les phrases de sécurité du compte
+ * restent lues au repos (règle 7, `settings-reperes.test.tsx`).
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click, settle } = createActMounter();
@@ -125,15 +125,15 @@ describe('une session ouverte', () => {
     );
   };
 
-  test('au repos : le lieu et la dernière activité seulement', async () => {
+  test('au repos : le lieu, l’ouverture et la dernière activité — pas le détail technique', async () => {
     const host = await mount(screen());
     await settle();
     const card = host.querySelector('[data-session="autre"]');
-    expect(fieldKeys(card, 'data-session-field')).toEqual(['place', 'lastActive']);
+    expect(fieldKeys(card, 'data-session-field')).toEqual(['place', 'opened', 'lastActive']);
     expect(card?.textContent).not.toContain('Adresse IP');
   });
 
-  test('« Plus » range IP, fuseau, plateforme, système, navigateur, ouverture et méthode — atteignables', async () => {
+  test('« Plus » range IP, fuseau, plateforme, système, navigateur et méthode — atteignables', async () => {
     const host = await mount(screen());
     await settle();
     const card = host.querySelector<HTMLElement>('[data-session="autre"]');
@@ -174,26 +174,13 @@ describe('un appareil chiffré', () => {
     />
   );
 
-  test('un seul (i) à icône seule, posé au titre ; les deux questions ne s’affichent plus', async () => {
-    const host = await mount(screen());
-    await settle();
-    expect(seen(host)).not.toContain('À quoi sert cette liste ?');
-    expect(seen(host)).not.toContain('Comment approuver un appareil ?');
-    const hint = infoButton(host, 'À quoi sert cette liste ?');
-    expect(hint.textContent).toBe('');
-    expect(noteOf(host, hint).textContent).toContain('Retirez celui que vous avez perdu');
-    expect(noteOf(host, hint).textContent).toContain('L’approbation entre vos appareils');
-  });
-
-  test('au repos : activation et dernière activité ; « Plus » donne le numéro et la plateforme', async () => {
+  test('au repos : plateforme, activation et dernière activité ; « Plus » ne garde que le numéro', async () => {
     const host = await mount(screen());
     await settle();
     const card = host.querySelector<HTMLElement>('[data-e2ee-device="7"]');
-    expect(fieldKeys(card, 'data-e2ee-device-field')).toEqual(['enrolled', 'lastSeen']);
+    expect(fieldKeys(card, 'data-e2ee-device-field')).toEqual(['platform', 'enrolled', 'lastSeen']);
     await click(moreButton(card as HTMLElement));
-    const keys = fieldKeys(card, 'data-e2ee-device-field');
-    expect(keys).toContain('number');
-    expect(keys).toContain('platform');
+    expect(fieldKeys(card, 'data-e2ee-device-field')).toEqual(['platform', 'enrolled', 'lastSeen', 'number']);
   });
 
   test('son « Plus » dit, au lecteur d’écran, de quel appareil il parle', async () => {
@@ -205,12 +192,10 @@ describe('un appareil chiffré', () => {
 });
 
 describe('Proposer un pack', () => {
-  test('la consigne et la zone de texte passent derrière un (i) nommé par leur question', async () => {
+  test('la consigne se lit au repos : ce qu’il faut, et que le pack est relu avant publication', async () => {
     const host = await mount(<PackSubmitEditor language="fr" onClose={() => undefined} onSubmitted={() => undefined} />);
-    expect(seen(host)).not.toContain('Ajoutez au moins trois images');
-    const how = infoButton(host, 'Comment proposer un pack ?');
-    expect(noteOf(host, how).textContent).toContain('Ajoutez au moins trois images');
-    expect(noteOf(host, how).textContent).toContain('Chaque pack est relu avant publication');
+    expect(seen(host)).toContain('Ajoutez au moins trois images');
+    expect(seen(host)).toContain('Chaque pack est relu avant publication');
   });
 });
 
@@ -281,11 +266,8 @@ describe('les pages de lien', () => {
     expect(unavailable.textContent).not.toContain('momentanément indisponible');
   });
 
-  test('l’export : (i) « Que contient l’export ? », action « Exporter », une seule action secondaire « Réglages »', async () => {
+  test('l’export : action « Exporter », une seule action secondaire « Réglages »', async () => {
     const host = await mount(<DataExportPage signedIn online language="fr" deps={{ request: async () => ({ ok: false, status: 0, error: '' }), download: async () => 'delivered' }} />);
-    expect(seen(host)).not.toContain('RGPD');
-    const hint = infoButton(host, 'Que contient l’export ?');
-    expect(noteOf(host, hint).textContent).toContain('RGPD');
     const labels = [...host.querySelectorAll('button, a')].map((control) => control.textContent).filter((label) => label !== '');
     expect(labels).toContain('Exporter');
     expect(labels).toContain('Réglages');
@@ -303,44 +285,9 @@ describe('les pages de lien', () => {
     expect([...host.querySelectorAll('button')].some((button) => button.textContent === 'Réactiver')).toBe(true);
   });
 
-  test('un lien sans code : « Lien incomplet. », « Réglages », et la consigne derrière « Que faire ? »', async () => {
+  test('un lien refusé garde une seule action, « Réglages »', async () => {
     const host = await mount(<VerifyEmailChangePage token={null} signedIn language="fr" deps={{ verify: async () => ({ ok: false, status: 0, error: '' }) }} />);
-    expect(seen(host)).toContain('Lien incomplet.');
-    expect(seen(host)).not.toContain('Ouvrez celui de l’e-mail');
-    const hint = infoButton(host, 'Que faire ?');
-    expect(noteOf(host, hint).textContent).toContain('Ouvrez celui de l’e-mail le plus récent');
-    const actions = [...host.querySelectorAll('a')].map((link) => link.textContent);
-    expect(actions).toEqual(['Réglages']);
-  });
-
-  test('un lien expiré : « Lien expiré » et l’action « Réglages »', async () => {
-    const host = await mount(
-      <VerifyEmailChangePage
-        token="jeton"
-        signedIn
-        language="fr"
-        deps={{ verify: async () => ({ ok: false, status: 400, error: 'expired', code: 'TOKEN_EXPIRED' }) }}
-      />,
-    );
-    await settle();
-    expect(seen(host)).toContain('Lien expiré');
-    expect(seen(host)).not.toContain('Refaites la demande');
-    const hint = infoButton(host, 'Comment obtenir un nouveau lien ?');
-    expect(noteOf(host, hint).textContent).toBe('Refaites la demande depuis les réglages.');
-    expect([...host.querySelectorAll('a')].map((link) => link.textContent)).toContain('Réglages');
-  });
-
-  test('un lien de confirmation ouvert sans session : la consigne « rouvrez-le depuis l’e-mail » reste derrière son (i)', async () => {
-    const host = await mount(<VerifyEmailChangePage token="jeton" signedIn={false} language="fr" deps={{ verify: async () => ({ ok: false, status: 0, error: '' }) }} />);
-    expect(seen(host)).toContain('Connectez-vous pour continuer');
-    expect(seen(host)).not.toContain('rouvrez-le');
-    const hint = infoButton(host, 'Que faire après la connexion ?');
-    expect(noteOf(host, hint).textContent).toContain('rouvrez-le depuis l’e-mail');
-  });
-
-  test('un lien de désabonnement ouvert sans session : même consigne derrière le même (i)', async () => {
-    const host = await mount(<EmailNotificationsPage signedIn={false} language="fr" deps={pageDeps} />);
-    expect(noteOf(host, infoButton(host, 'Que faire après la connexion ?')).textContent).toContain('rouvrez-le depuis l’e-mail');
+    expect([...host.querySelectorAll('a')].map((link) => link.textContent)).toEqual(['Réglages']);
   });
 
   test('une page de lien ne pose plus de LinkPage vide à elle seule', async () => {
@@ -367,7 +314,6 @@ describe('Licences open source', () => {
 
 describe('sept langues, aucune copie du français', () => {
   const shortLabels = [
-    ['stickerPacks.submit.open', 'Proposer'],
     ['dataExport.action.start', 'Exporter'],
     ['emailNotifications.unsubscribe', 'Désactiver'],
     ['emailNotifications.resubscribe', 'Réactiver'],
@@ -395,7 +341,20 @@ describe('sept langues, aucune copie du français', () => {
       }
     }
     for (const { language, entries } of catalogs) {
-      for (const dead of ['linkPage.signedOut.body', 'linkPage.offline.body', 'linkPage.unavailable.body', 'dataExport.action.again']) {
+      for (const dead of [
+        'linkPage.signedOut.body',
+        'linkPage.offline.body',
+        'linkPage.unavailable.body',
+        'dataExport.action.again',
+        'linkPage.expired.hint',
+        'linkPage.expired.question',
+        'linkPage.signedOut.question',
+        'emailChange.missing.hint',
+        'emailChange.invalid.question',
+        'dataExport.info.question',
+        'packs.hint.question',
+        'settings.offline.question',
+      ]) {
         if (entries[dead] !== undefined) problems.push(`${language} ${dead}`);
       }
     }

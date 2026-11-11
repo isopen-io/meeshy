@@ -2,8 +2,6 @@ import type { CSSProperties, ReactNode } from 'react';
 
 import { AuthColumn } from '@/components/auth-column';
 import { Glyph } from '@/components/glyph';
-import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
-import { InfoAlone } from '@/components/info-hint';
 import type { GlyphName } from '@/components/glyphs';
 import type { ReachFailure } from '@/lib/api/link-failure';
 import { translate } from '@/lib/i18n-catalog';
@@ -238,7 +236,7 @@ export function ReachFailurePage({
 /**
  * Le lien agit sur le compte CONNECTÉ et il n'y a pas de session : rien n'est
  * dépensé, et la page dit quoi faire. La connexion ne sait pas encore ramener
- * ici — d'où « rouvrez-le depuis l'e-mail », derrière son (i) (#17594), posé
+ * ici — d'où « rouvrez-le depuis l'e-mail », LU AU REPOS (règle 7, #17594) mais
  * seulement quand on est VENU d'un e-mail (`fromEmail`) : ailleurs, la phrase
  * serait fausse.
  */
@@ -248,24 +246,11 @@ export function SignedOutPage({ language, fromEmail = false }: { readonly langua
       glyph="lock"
       tone="brand"
       title={translate(language, 'linkPage.signedOut.title')}
-      body={fromEmail ? <LinkHint language={language} question="linkPage.signedOut.question" text="linkPage.signedOut.hint" /> : undefined}
+      body={fromEmail ? <LinkText>{translate(language, 'linkPage.signedOut.hint')}</LinkText> : undefined}
     >
       <ActionLink to="login" tone="primary">
         {translate(language, 'linkPage.signIn')}
       </ActionLink>
     </LinkPage>
   );
-}
-
-/** Le (i) d'une page de lien : la QUESTION nomme le bouton, la consigne est la note (#17594). */
-export function LinkHint({
-  language,
-  question,
-  text,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly question: 'linkPage.signedOut.question' | 'linkPage.expired.question';
-  readonly text: 'linkPage.signedOut.hint' | 'linkPage.expired.hint';
-}) {
-  return <InfoAlone hint={{ label: translate(language, question), text: translate(language, text), glyph: SETTINGS_GLYPHS.info }} />;
 }

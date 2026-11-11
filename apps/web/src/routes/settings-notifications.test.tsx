@@ -64,12 +64,8 @@ describe('/settings/notifications — l’état, puis un geste', () => {
 
     expect(host.querySelector('h1')?.textContent).toBe('E-mails de Meeshy');
     expect(host.textContent).toContain('Vous recevez les e-mails de Meeshy');
-    /* La précision sur les e-mails de sécurité est derrière un (i) : lue, jamais dispersée à l'écran. */
-    const hint = host.querySelector<HTMLButtonElement>('button[aria-label="Et les e-mails de sécurité ?"]');
-    expect(hint?.getAttribute('aria-expanded')).toBe('false');
-    const note = host.querySelector(`[id="${hint?.getAttribute('aria-controls')}"]`);
-    expect(note?.textContent).toBe('Les e-mails de sécurité de votre compte continuent d’arriver.');
-    expect(note?.className).toContain('sr-only');
+    expect(host.textContent).toContain('Les e-mails de sécurité de votre compte continuent d’arriver.');
+    expect(host.querySelector('button[aria-label="Et les e-mails de sécurité ?"]')).toBeNull();
     expect(script.saved).toEqual([]);
 
     await click(buttonNamed(host, 'Désactiver'));

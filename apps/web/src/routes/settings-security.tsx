@@ -6,7 +6,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
 import { GroupedSection, RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
-import { InfoHintButton, InfoHintScope, InfoHintText, InfoNoted, useInfoHint, type InfoHint } from '@/components/info-hint';
+import { InfoHintButton, InfoHintScope, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import {
   loadActiveSessions,
   revokeOtherSessions,
@@ -150,17 +150,14 @@ export function SettingsSecurityScreen({
         <InfoHintScope>
         <div className="mx-auto grid max-w-xl gap-6 pb-24" style={{ paddingTop: 8 }}>
           {online ? null : (
-            <div role="status" data-sessions-offline className="flex items-center rounded-card px-3.5 py-1 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
-              <InfoNoted note={sessionsHint(t, 'sessions.offline.question', 'sessions.offline.info')}>{t('sessions.offline')}</InfoNoted>
-            </div>
+            <p role="status" data-sessions-offline className="rounded-card px-3.5 py-3 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
+              {t('sessions.offline')}
+            </p>
           )}
-          <GroupedSection
-            id="sessions-title"
-            title={t('sessions.section').toLocaleUpperCase(language)}
-            icon={<GlyphSvg glyph={SETTINGS_GLYPHS.shieldCheck} size={12} />}
-            card={false}
-            note={sessionsHint(t, 'sessions.intro.question', 'sessions.intro')}
-          >
+          <GroupedSection id="sessions-title" title={t('sessions.section').toLocaleUpperCase(language)} icon={<GlyphSvg glyph={SETTINGS_GLYPHS.shieldCheck} size={12} />} card={false}>
+            <p data-sessions-intro className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
+              {t('sessions.intro')}
+            </p>
             {view === undefined ? (
               failure === null ? (
                 <SessionsSkeleton label={t('sessions.loading')} />
@@ -168,9 +165,14 @@ export function SettingsSecurityScreen({
                 <SessionsError t={t} failure={failure} onRetry={() => void query.refetch()} />
               )
             ) : sessions.length === 0 ? (
-              <p data-sessions-empty className="rounded-card p-4 text-center text-body font-semibold" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
-                {t('sessions.empty.title')}
-              </p>
+              <div data-sessions-empty className="grid gap-1 rounded-card p-4 text-center" style={SECTION_CARD_STYLE}>
+                <span className="text-body font-semibold" style={{ color: SECTION_INK }}>
+                  {t('sessions.empty.title')}
+                </span>
+                <span className="text-caption" style={{ color: SECTION_INK_2 }}>
+                  {t('sessions.empty.body')}
+                </span>
+              </div>
             ) : (
               <ul className="grid gap-2" aria-labelledby="sessions-title">
                 {sessions.map((session) => (
@@ -266,8 +268,12 @@ export function SettingsSecurityScreen({
   );
 }
 
-/** Ce qu'une session dit au repos : d'où et depuis quand. Le reste vit derrière « Plus ». */
-const SESSION_REST_FIELDS: ReadonlySet<string> = new Set(['place', 'lastActive']);
+/**
+ * Ce qui permet de RECONNAÎTRE une session, lu sans geste (règle 7 de l'épure,
+ * #17594) : d'où, ouverte quand, active quand. Le détail technique (adresse IP,
+ * fuseau, système, navigateur, méthode) vit derrière « Plus ».
+ */
+const SESSION_REST_FIELDS: ReadonlySet<string> = new Set(['place', 'opened', 'lastActive']);
 
 function SessionCard({
   session,

@@ -54,10 +54,8 @@ describe('SettingsPacksScreen', () => {
         <SettingsPacksScreen language="fr" />
       </QueryClientProvider>,
     );
-    expect(host.querySelector('h1')?.textContent).toBe('Packs');
-    /* L'explication de la boutique est derrière un (i) nommé par sa question, lue repliée. */
-    const hint = host.querySelector<HTMLButtonElement>('[data-pack-shop] button[aria-label="Comment fonctionnent les packs ?"]');
-    expect(host.querySelector(`[id="${hint?.getAttribute('aria-controls')}"]`)?.textContent).toContain('Installez les packs');
+    expect(host.querySelector('h1')?.textContent).toBe('Packs et téléchargements');
+    expect(host.querySelector('[data-pack-shop] [data-shop-hint]')?.textContent).toContain('Installez les packs');
     expect(host.querySelector('[data-packs-segment="stickers"]')?.getAttribute('aria-checked')).toBe('true');
     await until(() => host.querySelectorAll('[data-pack-shop="sticker"] [data-shop-pack]').length === 3);
 

@@ -106,7 +106,7 @@ describe('la liste', () => {
     await settle();
     const card = host.querySelector('[data-session="autre"]');
     const keys = () => [...(card?.querySelectorAll('[data-session-field]') ?? [])].map((field) => field.getAttribute('data-session-field'));
-    expect(keys()).toEqual(['place', 'lastActive']);
+    expect(keys()).toEqual(['place', 'opened', 'lastActive']);
     await click([...(card?.querySelectorAll('button') ?? [])].find((button) => button.textContent === 'Plus') ?? null);
     expect([...keys()].sort()).toEqual(['app', 'browser', 'ip', 'lastActive', 'method', 'opened', 'place', 'platform', 'system', 'timezone']);
     expect(card?.querySelector('[data-session-field="place"]')?.textContent).toContain('approximatif');
@@ -185,7 +185,7 @@ describe('fermer', () => {
     expect(calls).toEqual([]);
     const dialog = document.querySelector('[data-confirm-dialog="revoke-session"]');
     expect(dialog?.textContent).toContain('Pixel 7');
-    const confirm = [...(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => button.textContent === 'Fermer') ?? null;
+    const confirm = [...(dialog?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => button.textContent === 'Fermer cette session') ?? null;
     if (confirm !== null) await click(confirm);
     await settle();
     expect(calls).toEqual(['revoke:autre']);
@@ -199,7 +199,7 @@ describe('fermer', () => {
     await settle();
     const revoke = host.querySelector<HTMLButtonElement>('[data-session="autre"] [data-session-revoke]');
     if (revoke !== null) await click(revoke);
-    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[data-confirm-dialog] button')].find((button) => button.textContent === 'Fermer') ?? null;
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[data-confirm-dialog] button')].find((button) => button.textContent === 'Fermer cette session') ?? null;
     if (confirm !== null) await click(confirm);
     await settle();
     expect(host.querySelector('[data-session="autre"]')).not.toBeNull();
@@ -212,7 +212,7 @@ describe('fermer', () => {
     await settle();
     const others = host.querySelector<HTMLButtonElement>('[data-sessions-revoke-others]');
     if (others !== null) await click(others);
-    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[data-confirm-dialog] button')].find((button) => button.textContent === 'Fermer les autres') ?? null;
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('[data-confirm-dialog] button')].find((button) => button.textContent === 'Déconnecter les autres appareils') ?? null;
     if (confirm !== null) await click(confirm);
     await settle();
     expect(calls).toEqual(['others']);

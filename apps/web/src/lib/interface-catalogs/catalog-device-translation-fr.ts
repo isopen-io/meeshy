@@ -11,6 +11,7 @@
  */
 const frDeviceTranslation = {
   'settings.device_translation': 'Traduire sur cet appareil',
+  'settings.device_translation.summary': 'Les messages sont traduits ici, par un modèle téléchargé une seule fois.',
   'settings.device_translation.info': 'Les messages sont traduits ici, avec un modèle téléchargé une seule fois — environ 110 Mo par paire de langues. Langues prises en charge : français, anglais, espagnol, portugais, allemand, italien et arabe. Les autres langues restent traduites par le serveur, dans les conversations non chiffrées de bout en bout. Ce que cet appareil traduit est partagé avec les autres membres de la conversation, sauf si vos accusés de lecture sont désactivés.',
   'settings.device_translation.question': 'Que fait la traduction sur cet appareil ?',
 } as const;

@@ -45,7 +45,6 @@ const itCall = {
   'call.ended.refusedNonContacts': 'Questa persona accetta solo chiamate dai suoi contatti',
   'settings.privacy.calls_non_contacts': 'Chiamate da non contatti',
   'settings.privacy.calls_non_contacts.info': 'Se disattivato, solo i tuoi amici possono farti squillare. Gli altri vedono che accetti solo chiamate dai tuoi contatti.',
-  'settings.privacy.calls_non_contacts.question': 'Chi può farmi squillare?',
   'call.ended.permission': 'Consenti il microfono per chiamare',
   'call.retry': 'Riprova',
   'call.close': 'Chiudi',

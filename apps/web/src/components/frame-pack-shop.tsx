@@ -31,7 +31,6 @@ import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { apiOrigin } from '@/lib/api/api-origin';
 import type { PackAssetStoreDeps } from '@/lib/packs/pack-asset-store';
-import { packShopHint } from '@/components/pack-shop-hint';
 
 /**
  * **LA BOUTIQUE DES CADRES DU JEU** (#10149, LP1 — demande porteur
@@ -255,7 +254,7 @@ function FramePackShopBody({ language, deps = apiDeps, assets, atmosphere }: Fra
           <PackShop
             adapter={frameShopAdapter(language, deps, store.origin, hold)}
             language={language}
-            hint={packShopHint(language, 'packs.frames.hint')}
+            hint={translateStickerPacks(language, 'packs.frames.hint')}
             empty={translateStickerPacks(language, 'packs.frames.empty')}
           />
         </Suspense>

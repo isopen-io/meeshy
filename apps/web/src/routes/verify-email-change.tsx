@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
-import { InfoAlone } from '@/components/info-hint';
 import { apiDeps } from '@/lib/api/deps';
 import { emailChangeFailureOf, verifyEmailChange, type EmailChangeFailure, type EmailChangeResult } from '@/lib/api/email-change';
 import type { ApiResult } from '@/lib/api/http';
@@ -12,7 +10,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 
-import { ActionLink, LinkHint, LinkPage, LinkText, ReachFailurePage, SignedOutPage } from './link-page-parts';
+import { ActionLink, LinkPage, LinkText, ReachFailurePage, SignedOutPage } from './link-page-parts';
 
 /**
  * **`/settings/verify-email-change?token=` — LA NOUVELLE ADRESSE SE CONFIRME**
@@ -140,21 +138,7 @@ function EmailChangeRefused({ language, message }: { readonly language: Interfac
       glyph="warningCircle"
       tone="danger"
       title={translate(language, 'emailChange.failed.title')}
-      body={
-        <>
-          <LinkText>{translate(language, REFUSAL_COPY[message])}</LinkText>
-          {message === 'missing' || message === 'invalid' ? (
-            <InfoAlone
-              hint={{
-                label: translate(language, `emailChange.${message}.question`),
-                text: translate(language, `emailChange.${message}.hint`),
-                glyph: SETTINGS_GLYPHS.info,
-              }}
-            />
-          ) : null}
-          {message === 'expired' ? <LinkHint language={language} question="linkPage.expired.question" text="linkPage.expired.hint" /> : null}
-        </>
-      }
+      body={<LinkText>{translate(language, REFUSAL_COPY[message])}</LinkText>}
     >
       <ActionLink to="settings" tone="secondary">
         {translate(language, 'linkPage.settings')}

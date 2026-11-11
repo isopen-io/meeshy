@@ -100,7 +100,9 @@ export function PackSubmitEditor({
           {translateStickerPacks(language, 'stickerPacks.submit.back')}
         </button>
       </div>
-      <InfoAlone hint={packHint(language, 'stickerPacks.submit.hint.question', 'stickerPacks.submit.hint')} />
+      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translateStickerPacks(language, 'stickerPacks.submit.hint')}
+      </p>
 
       <Field label={translateStickerPacks(language, 'stickerPacks.submit.name')}>
         <input data-pack-name type="text" maxLength={STICKER_PACK_LIMITS.maxNameLength} value={draft.name} onInput={(e) => patch({ name: e.currentTarget.value })} className={INPUT} style={INPUT_STYLE} />

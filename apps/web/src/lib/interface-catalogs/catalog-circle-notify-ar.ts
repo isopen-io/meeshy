@@ -6,12 +6,11 @@
 import type { CircleNotifyCatalog } from '../i18n-circle-notify-catalog';
 
 const ar = {
-  'circleNotify.title': 'إبلاغ',
+  'circleNotify.title': 'من يتلقى الإشعار',
   'circleNotify.intro': 'اختر، لكل إجراء، أي دائرة من محيطك تتلقى إشعارًا.',
-  'circleNotify.intro.question': 'من يتلقى هذه الإشعارات؟',
   'circleNotify.family.publication': 'منشوراتي',
-  'circleNotify.family.onMyContent': 'على محتواي',
-  'circleNotify.family.elsewhere': 'في أماكن أخرى',
+  'circleNotify.family.onMyContent': 'نشاط الآخرين على محتواي',
+  'circleNotify.family.elsewhere': 'نشاطي في أماكن أخرى',
   'circleNotify.summary.mixed': 'حسب الإجراء',
   'circleNotify.action.post': 'منشور',
   'circleNotify.action.reel': 'ريل',
@@ -25,7 +24,7 @@ const ar = {
   'circleNotify.action.reference': 'إشارة مرجعية',
   'circleNotify.action.mention': 'إشارة',
   'circleNotify.choice.NOBODY': 'لا أحد',
-  'circleNotify.explain.question': 'من يُبلَّغ بهذا الاختيار؟',
+  'circleNotify.explain.NOBODY': 'لا يتلقى أحد من محيطك إشعارًا.',
   'circleNotify.explain.COMMUNITY': 'كل روابطك، من الدم إلى المعارف، وأعضاء المجتمعات التي تشاركها.',
   'circleNotify.explain.PUBLIC': 'الأشخاص أنفسهم كما في المجتمع: لا يوجد متابعون في Meeshy، ولا يتلقى أي غريب إشعارًا.',
   'circleNotify.loading': 'جارٍ التحميل…',

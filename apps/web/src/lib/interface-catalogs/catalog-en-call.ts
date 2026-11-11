@@ -45,7 +45,6 @@ const enCall = {
   'call.ended.refusedNonContacts': 'This person only accepts calls from their contacts',
   'settings.privacy.calls_non_contacts': 'Calls from non-contacts',
   'settings.privacy.calls_non_contacts.info': 'When off, only your friends can make you ring. Others see that you only accept calls from your contacts.',
-  'settings.privacy.calls_non_contacts.question': 'Who can ring me?',
   'call.ended.permission': 'Allow the microphone to call',
   'call.retry': 'Try again',
   'call.close': 'Close',

@@ -45,7 +45,6 @@ const arCall = {
   'call.ended.refusedNonContacts': 'هذا الشخص لا يقبل إلا المكالمات من جهات اتصاله',
   'settings.privacy.calls_non_contacts': 'المكالمات من غير جهات الاتصال',
   'settings.privacy.calls_non_contacts.info': 'عند إيقافه، لا يستطيع إلا أصدقاؤك الاتصال بك. يرى الآخرون أنك لا تقبل إلا المكالمات من جهات اتصالك.',
-  'settings.privacy.calls_non_contacts.question': 'من يمكنه الاتصال بي؟',
   'call.ended.permission': 'اسمح بالميكروفون لإجراء المكالمة',
   'call.retry': 'إعادة المحاولة',
   'call.close': 'إغلاق',
