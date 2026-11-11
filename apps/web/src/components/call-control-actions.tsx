@@ -68,9 +68,6 @@ export type CallRowsKit = {
   readonly useEffectsActive: () => boolean;
   /** La caméra derrière la piste envoyée (les effets en font une autre piste). */
   readonly cameraSourceOf: (track: MediaStreamTrack) => MediaStreamTrack;
-  /** L'image dans l'image, ouverte DANS le geste (`requestCallPip`). */
-  readonly requestPip: () => void;
-  readonly pipGlyph: ReactNode;
 };
 
 const CAPTIONS_KEY = { off: 'call.captions.on', translated: 'call.captions.original', original: 'call.captions.off' } as const;
@@ -211,16 +208,6 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       glyph: journalGlyph,
       ...panelView(panels, 'journal'),
       data: { 'data-call-control': 'journal' },
-    };
-  if (action === 'pip')
-    return {
-      key: action,
-      label: translate(language, 'call.pip.enter'),
-      caption: translateCallControls(language, 'callControls.pip'),
-      glyph: kit.pipGlyph,
-      onPress: kit.requestPip,
-      tone: 'disc',
-      data: { 'data-call-control': 'pip', 'data-call-pip': '' },
     };
   if (action === 'capture')
     return {

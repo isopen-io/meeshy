@@ -15,7 +15,6 @@ import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
-import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
@@ -32,7 +31,7 @@ import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall, type CallMember } from '@/lib/calls/call-store';
-import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
+import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
@@ -132,8 +131,6 @@ const ROWS_KIT: CallRowsKit = {
   panelIds: CALL_PANEL_ID,
   useEffectsActive,
   cameraSourceOf,
-  requestPip: requestCallPip,
-  pipGlyph: <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={22} />,
 };
 
 const loadEffectsMode = once(() =>
@@ -334,7 +331,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const sharer = layout === 'screen' ? screenSharer(call.members) : null;
   const support = useEffectsSupport(call.localStream, effectsSupport);
   const cameraSwitch = useCameraSwitch(call.cameraOn);
-  const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), cameraSwitch, canPip: shouldOfferPip(call, browserPipSupport()), videoScene });
+  const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), cameraSwitch, videoScene });
   const framed = liveFrameShown(call, liveFrame, live && layer.kind !== 'mode');
   const place = spotlight !== null && spotlight.featured === null ? 'top' : selfZoomPlace({ layout, selfFull, selfTileShown: call.cameraOn && !framed });
   const local = useLocalZoom(call.callId, call.facing);
@@ -432,7 +429,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     </div>
   );
 
-  const pills = statusPills(call);
+  const pills = visibleStatusPills(call, layout);
   const pillRow = live ? (
     <>
       {pills.length > 0 ? (
