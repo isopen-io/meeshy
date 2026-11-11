@@ -32,8 +32,8 @@ enum GroupCallStage {
         isMeshActive && (roster.members.count >= 2 || roster.members.contains { !$0.isPrimary })
     }
 
-    /// Moi d'abord, puis les membres dans l'ordre d'arrivée : la grille ne se
-    /// réagence jamais quand quelqu'un parle — le liseré suffit à le montrer.
+    /// Les membres dans l'ordre d'arrivée, puis MOI en dernier (P11.3) : la grille
+    /// ne se réagence jamais quand quelqu'un parle — le halo suffit à le montrer.
     static func tiles(
         roster: GroupCallRoster,
         speakingUserIds: Set<String>,
@@ -48,7 +48,7 @@ enum GroupCallStage {
             displayName: localName,
             avatarURL: nil,
             isLocal: true,
-            isSpeaking: false,
+            isSpeaking: speakingUserIds.contains(roster.localUserId),
             isMicMuted: isLocalMicMuted,
             showsVideo: isLocalVideoEnabled,
             isScreenSharing: false,
@@ -68,7 +68,7 @@ enum GroupCallStage {
                 isReconnecting: member.link == .reconnecting
             )
         }
-        return [local] + remote
+        return remote + [local]
     }
 
     static func tiles(mesh: GroupCallMeshCoordinator, callManager: CallManager) -> [GroupCallStageTile] {
@@ -109,6 +109,7 @@ struct GroupCallStageView: View {
     @State private var zoom: CGFloat = 1
     @GestureState private var pinch: CGFloat = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var tileSpace
 
     static let spacing: CGFloat = 8
 
@@ -123,6 +124,7 @@ struct GroupCallStageView: View {
                 spotlight(current, tileId: tileId, isScreenShare: isScreenShare, in: proxy.size)
             }
         }
+        .animation(stageAnimation, value: focus)
         .adaptiveOnChange(of: GroupCallSpotlight.sharerId(in: current)) { oldSharer, newSharer in
             choice = GroupCallSpotlight.choice(choice, afterSharerChangedFrom: oldSharer, to: newSharer)
         }
@@ -147,10 +149,29 @@ struct GroupCallStageView: View {
         GroupCallStage.track(for: tile, mesh: mesh, callManager: callManager)
     }
 
+    /// P14.10 — la vignette choisie grandit depuis sa case et les autres glissent
+    /// vers le bandeau ; sous « Réduire les animations », un fondu court.
+    private var stageAnimation: Animation {
+        GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion)
+            ? .spring(response: 0.4, dampingFraction: 0.85)
+            : .easeInOut(duration: GroupCallStageMotion.fadeDuration)
+    }
+
     private func choose(_ newChoice: GroupCallSpotlightChoice) {
         HapticFeedback.light()
-        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85)) {
+        withAnimation(stageAnimation) {
             choice = newChoice
+        }
+    }
+
+    /// Une identité par personne, la même dans la grille, à la une et dans le
+    /// bandeau : la géométrie suit la vignette d'une disposition à l'autre.
+    @ViewBuilder
+    private func sharingGeometry<Content: View>(of tile: GroupCallStageTile, @ViewBuilder _ content: () -> Content) -> some View {
+        if GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion) {
+            content().matchedGeometryEffect(id: tile.id, in: tileSpace)
+        } else {
+            content()
         }
     }
 
@@ -186,13 +207,15 @@ struct GroupCallStageView: View {
     }
 
     private func selectableTile(_ tile: GroupCallStageTile) -> some View {
-        GroupCallTileView(tile: tile, track: track(for: tile), intendedFront: callManager.isUsingFrontCamera)
-            .contentShape(Rectangle())
-            .onTapGesture { tapTile(tile) }
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(String(localized: "call.group.spotlight.hint", defaultValue: "Touchez pour mettre à la une", bundle: .main))
-            .accessibilityAction { choose(.tile(tile.id)) }
-            .moderationMenu(for: tile, controls: callManager.controls, pendingRemoval: $pendingRemoval, isRemovalPresented: $isRemovalPresented)
+        sharingGeometry(of: tile) {
+            GroupCallTileView(tile: tile, track: track(for: tile), intendedFront: callManager.isUsingFrontCamera)
+                .contentShape(Rectangle())
+                .onTapGesture { tapTile(tile) }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(String(localized: "call.group.spotlight.hint", defaultValue: "Touchez pour mettre à la une", bundle: .main))
+                .accessibilityAction { choose(.tile(tile.id)) }
+                .moderationMenu(for: tile, controls: callManager.controls, pendingRemoval: $pendingRemoval, isRemovalPresented: $isRemovalPresented)
+        }
     }
 
     // MARK: - À la une
@@ -221,23 +244,25 @@ struct GroupCallStageView: View {
     }
 
     private func featuredTile(_ tile: GroupCallStageTile, isScreenShare: Bool) -> some View {
-        GroupCallTileView(
-            tile: tile,
-            track: track(for: tile),
-            intendedFront: callManager.isUsingFrontCamera,
-            contentMode: isScreenShare ? .scaleAspectFit : .scaleAspectFill,
-            title: isScreenShare ? CallScreenShareCopy.screenOf(name: tile.displayName) : nil,
-            zoom: isScreenShare ? GroupCallSpotlight.clampedZoom(zoom * pinch) : 1
-        )
-        .gesture(zoomGesture, including: isScreenShare ? .all : .subviews)
-        .callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)
-        // #8735 — le double toucher n'existe que pour un écran partagé : posé
-        // partout, il faisait attendre CHAQUE toucher simple (rallumer les
-        // commandes) le délai d'un éventuel second toucher.
-        .gesture(zoomResetTap, including: isScreenShare ? .all : .subviews)
-        .onTapGesture { onStageTap() }
-        .accessibilityAction(named: Text(String(localized: "call.stage.controls.toggle.a11y", defaultValue: "Afficher ou masquer les contrôles", bundle: .main))) { onStageTap() }
-        .overlay(alignment: .topTrailing) { spotlightControls.padding(MeeshySpacing.sm) }
+        sharingGeometry(of: tile) {
+            GroupCallTileView(
+                tile: tile,
+                track: track(for: tile),
+                intendedFront: callManager.isUsingFrontCamera,
+                contentMode: isScreenShare ? .scaleAspectFit : .scaleAspectFill,
+                title: isScreenShare ? CallScreenShareCopy.screenOf(name: tile.displayName) : nil,
+                zoom: isScreenShare ? GroupCallSpotlight.clampedZoom(zoom * pinch) : 1
+            )
+            .gesture(zoomGesture, including: isScreenShare ? .all : .subviews)
+            .callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)
+            // #8735 — le double toucher n'existe que pour un écran partagé : posé
+            // partout, il faisait attendre CHAQUE toucher simple (rallumer les
+            // commandes) le délai d'un éventuel second toucher.
+            .gesture(zoomResetTap, including: isScreenShare ? .all : .subviews)
+            .onTapGesture { onStageTap() }
+            .accessibilityAction(named: Text(String(localized: "call.stage.controls.toggle.a11y", defaultValue: "Afficher ou masquer les contrôles", bundle: .main))) { onStageTap() }
+            .overlay(alignment: .topTrailing) { spotlightControls.padding(MeeshySpacing.sm) }
+        }
     }
 
     private var zoomResetTap: some Gesture {
@@ -289,6 +314,7 @@ struct GroupCallStageView: View {
                 VStack(spacing: Self.spacing) { stripTiles(others) }
             }
         }
+        .mask { CallEdgeFadeMask(axis: axis) }
     }
 
     private func stripTiles(_ others: [GroupCallStageTile]) -> some View {
@@ -300,8 +326,8 @@ struct GroupCallStageView: View {
 }
 
 /// Une tuile : la vidéo du membre, ou son avatar caméra coupée ; son nom, son
-/// micro, son partage d'écran ; un liseré à SA couleur, épaissi tant qu'il
-/// parle.
+/// micro, son partage d'écran ; un liseré à SA couleur, et un halo de cette
+/// couleur tant qu'il parle (moi compris).
 struct GroupCallTileView: View {
     let tile: GroupCallStageTile
     let track: Any?
@@ -339,13 +365,34 @@ struct GroupCallTileView: View {
             .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-                    .stroke(Color(hex: tile.accentHex).opacity(tile.isSpeaking ? 1 : 0.55), lineWidth: tile.isSpeaking ? 3 : 1.5)
+                    .stroke(speakerColor.opacity(tile.isSpeaking ? 1 : 0.55), lineWidth: tile.isSpeaking ? 3 : 1.5)
             )
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: tile.isSpeaking)
+            .background { speakerHalo }
+            .animation(
+                .easeInOut(duration: CallRemoteVideoFade.duration(reduceMotion: reduceMotion)),
+                value: tile.isSpeaking
+            )
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityName)
         .accessibilityValue(accessibilityValue)
+    }
+
+    /// La couleur de la personne : la même que ses sous-titres et que son anneau en duo.
+    private var speakerColor: Color {
+        Color(uiColor: HexColor(hex: CallPeerSpeech.colorHex(forPeer: tile.colorKey))?.uiColor ?? .white)
+    }
+
+    /// P11.5 · P14.4 — qui parle s'illumine de sa couleur : un halo derrière la
+    /// vignette, absent au repos mais jamais retiré de l'arbre, qui se fond avec
+    /// la durée partagée (plus courte sous « Réduire les animations »).
+    private var speakerHalo: some View {
+        RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+            .fill(speakerColor.opacity(MeeshyOpacity.medium))
+            .scaleEffect(1.04)
+            .blur(radius: 14)
+            .opacity(tile.isSpeaking ? 1 : 0)
+            .allowsHitTesting(false)
     }
 
     private var accessibilityName: String {

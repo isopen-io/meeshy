@@ -563,7 +563,7 @@ extension CallView {
     // its camera off, so the user sees the peer's avatar rather than a frozen
     // last frame.
     private var remoteCameraOffPlaceholder: some View {
-        CallRemoteCameraOffPlaceholder(peerUserId: callManager.remoteUserId, relayedSpeaking: CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds, peer: callManager.remoteUserId), sampleLevel: { await callManager.primaryAudioLevel() }) {
+        CallRemoteCameraOffPlaceholder(peerUserId: callManager.remoteUserId, relayedSpeaking: CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds, peer: callManager.remoteUserId), sampleLevel: { await callManager.primaryAudioLevels()?.primary }) {
             avatarFace(size: 96, accentHex: $0)
         }
     }
@@ -638,7 +638,7 @@ extension CallPeerSpeechRing {
             peerUserId: callManager.remoteUserId,
             relayedSpeaking: CallPeerSpeech.relayed(meshActive: mesh.isGroupCallActive, speakers: mesh.speakingUserIds, peer: callManager.remoteUserId),
             follows: established,
-            sampleLevel: { await callManager.primaryAudioLevel() },
+            sampleLevel: { await callManager.primaryAudioLevels()?.primary },
             avatar: avatar
         )
     }
