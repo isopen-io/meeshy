@@ -213,8 +213,50 @@ describe('(…) les range et les rend (P6.12)', () => {
     view.press('[data-call-more]');
     await view.settle();
     expect(view.find('[data-call-control-pill]')?.getAttribute('data-call-control-pill')).toBe('grown');
-    expect(view.find('[data-call-captions-panel]')).toBeNull();
     expect(inPill(view, '[data-call-row]')).not.toBeNull();
+    await outlast();
+    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    view.done();
+  });
+
+  test('#17700 (P13.12) — en groupe, (…) ne remplace pas les sous-titres d’un coup : ils repartent en fondu, inertes, AU-DESSUS des rangées qui arrivent', async () => {
+    const view = mount(group);
+    await view.settle();
+    view.press('[data-call-more]');
+    await view.settle();
+    const leaving = inPill(view, '[data-call-captions-panel]');
+    expect(leaving).not.toBeNull();
+    expect(leavingOf(leaving)).toEqual({ inert: true, hidden: true });
+    const pill = view.find('[data-call-control-pill]');
+    const order = [...(pill?.querySelectorAll('[data-call-captions-panel], [data-call-row], [data-call-more]') ?? [])].map((node) => (node.hasAttribute('data-call-captions-panel') ? 'captions' : node.hasAttribute('data-call-more') ? 'base' : 'rows'));
+    expect(order.at(0)).toBe('captions');
+    expect(order.at(-1)).toBe('base');
+    await outlast();
+    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    view.done();
+  });
+
+  test('#17700 (P13.12) — le journal ouvert depuis les sous-titres les remplace en fondu, pas d’un coup', async () => {
+    const view = mount();
+    await view.settle();
+    view.press('[data-call-captions-journal]');
+    await view.settle();
+    expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
+    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toEqual({ inert: true, hidden: true });
+    await outlast();
+    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    view.done();
+  });
+
+  test('#17700 (P13.12) — refermer le journal les rend aussitôt, même pendant leur fondu (interruptible)', async () => {
+    const view = mount(group);
+    await view.settle();
+    view.press('[data-call-more]');
+    await view.settle();
+    view.press('[data-call-more]');
+    await view.settle();
+    expect(view.host.querySelectorAll('[data-call-captions-panel]')).toHaveLength(1);
+    expect(leavingOf(inPill(view, '[data-call-captions-panel]'))).toBeNull();
     view.done();
   });
 
@@ -260,6 +302,7 @@ describe('le journal, DANS la pilule, à la place des sous-titres (P6)', () => {
     view.press('[data-call-captions-journal]');
     await view.settle();
     expect(inPill(view, '[data-call-journal-panel]')).not.toBeNull();
+    await outlast();
     expect(view.find('[data-call-captions-panel]')).toBeNull();
     expect(view.find('[data-call-control-pill]')?.className.split(' ')).toContain('w-[min(calc(100%-1.5rem),560px)]');
     expect(inPill(view, '[data-call-more]')).not.toBeNull();

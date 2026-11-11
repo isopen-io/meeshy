@@ -615,7 +615,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-row]')).toBeNull();
     expect(railsState(view.host)).not.toBe('shown');
     expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(250);
-    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
     view.press('[data-panel-back]');
     expect(document.activeElement?.getAttribute('data-call-control')).toBe('journal');
     view.done();

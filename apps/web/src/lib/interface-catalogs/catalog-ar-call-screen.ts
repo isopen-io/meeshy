@@ -23,7 +23,7 @@ const arCallScreen = {
   'call.fullscreen.enter': 'ملء الشاشة',
   'call.fullscreen.exit': 'الخروج من ملء الشاشة',
   'call.screen.of': 'شاشة {name}',
-  'call.effects': 'التأثيرات',
+  'call.effects': 'تأثيرات',
   'call.effects.open': 'تأثيرات الكاميرا الخاصة بي',
   'call.effects.close': 'إغلاق التأثيرات',
   'call.effects.presets': 'الإعدادات المسبقة',

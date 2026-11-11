@@ -59,7 +59,7 @@ const fr = {
   'callControls.record.consent': 'Tout le monde doit accepter. L’enregistrement s’arrête si quelqu’un rejoint.',
   'callControls.record.audio': 'Audio',
   'callControls.record.video': 'Vidéo',
-  'callControls.capture': 'Capturer',
+  'callControls.capture': 'Capture',
   'callControls.capture.label': 'Capturer l’appel',
   'callControls.back': 'Retour',
   'callControls.journal': 'Journal',

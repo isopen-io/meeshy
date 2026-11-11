@@ -58,7 +58,7 @@ const it = {
   'callControls.capture': 'Cattura',
   'callControls.capture.label': 'Cattura la chiamata',
   'callControls.back': 'Indietro',
-  'callControls.journal': 'Diario',
+  'callControls.journal': 'Registro',
   'callControls.journal.label': 'Apri il diario della chiamata',
   'callControls.journal.live': 'Torna alla diretta',
   'callControls.journal.empty': 'Ancora nulla di trascritto. Attiva i sottotitoli: ogni frase detta compare qui con la sua traduzione, per tutta la chiamata.',

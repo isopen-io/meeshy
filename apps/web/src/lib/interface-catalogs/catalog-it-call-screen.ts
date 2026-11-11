@@ -14,7 +14,7 @@ const itCallScreen = {
   'call.more.hide': 'Nascondi le azioni',
   'call.section.mine': 'La mia immagine',
   'call.section.call': 'La chiamata',
-  'call.flip': 'Capovolgi',
+  'call.flip': 'Gira',
   'call.screen.short': 'Schermo',
   'call.record.short': 'Registra',
   'call.conversation.open': 'Apri la conversazione',
