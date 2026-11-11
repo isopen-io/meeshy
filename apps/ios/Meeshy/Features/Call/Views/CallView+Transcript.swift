@@ -19,7 +19,7 @@ extension CallView {
             isLocal: segment.speakerId == localUserId,
             speakerName: speakerName(for: segment, localUserId: localUserId),
             prefersOriginal: surface.prefersOriginal(bandOriginal: showOriginalText, journalOriginal: journalShowsOriginal),
-            isRevealed: revealedCaptionIds.contains(segment.id),
+            isRevealed: revealedCaptions.isRevealed(segment.id, on: surface),
             readerPrism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         )
     }
@@ -44,12 +44,9 @@ extension CallView {
             ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main)
     }
 
-    private func toggleOriginal(of lineId: UUID) {
-        if revealedCaptionIds.contains(lineId) {
-            revealedCaptionIds.remove(lineId)
-        } else {
-            revealedCaptionIds.insert(lineId)
-        }
+    /// Loi 7 — la phrase touchée se déplie dans la surface touchée seule (#17678).
+    private func toggleOriginal(of lineId: UUID, on surface: CallCaptionsSurface) {
+        revealedCaptions = revealedCaptions.toggling(lineId, on: surface)
     }
 
     /// Les sous-titres : les deux dernières phrases, puis leur pied. Ils vivent dans
@@ -60,7 +57,7 @@ extension CallView {
         return CallCaptionsBand(
             lines: band.items.suffix(2).map(band.line),
             hasOwnGlass: hasOwnGlass,
-            onToggleOriginal: { toggleOriginal(of: $0) },
+            onToggleOriginal: { toggleOriginal(of: $0, on: .band) },
             onOpenJournal: opensJournal ? { togglePanel(.journal) } : nil
         )
     }
@@ -91,7 +88,7 @@ extension CallView {
             items: composed.items, line: composed.line,
             showsOriginal: $journalShowsOriginal,
             height: CallJournalSizing.height(windowHeight: DeviceLayout.windowSize.height),
-            onToggleOriginal: { toggleOriginal(of: $0) },
+            onToggleOriginal: { toggleOriginal(of: $0, on: .journal) },
             onClose: closePanel
         )
     }
@@ -152,7 +149,7 @@ extension CallView {
         case .off:
             showOriginalText = false
             showTranscript = false
-            revealedCaptionIds = []
+            revealedCaptions = CallCaptionsReveals()
             transcriptionService.isShowingOverlay = false
             callManager.toggleTranscription()
         }
