@@ -51605,43 +51605,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الكود المصدري لهذا الإصدار، مجاني."
+            "value": "الكود المصدري المقابل لهذا الإصدار، بما في ذلك سكربتات البناء، متاح مجانًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quellcode dieser Version, kostenlos."
+            "value": "Der Quellcode dieser Version, einschließlich der Build-Skripte, ist kostenlos verfügbar."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Source code for this version, free."
+            "value": "The source code for this version, build scripts included, is available free of charge."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código fuente de esta versión, gratis."
+            "value": "El código fuente de esta versión, scripts de compilación incluidos, está disponible de forma gratuita."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Code source de cette version, gratuit."
+            "value": "Le code source correspondant à cette version, scripts de construction compris, est disponible gratuitement."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Codice sorgente di questa versione, gratuito."
+            "value": "Il codice sorgente di questa versione, script di compilazione inclusi, è disponibile gratuitamente."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Código-fonte desta versão, gratuito."
+            "value": "O código-fonte desta versão, scripts de compilação incluídos, está disponível gratuitamente."
           }
         }
       }
