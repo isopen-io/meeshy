@@ -1,7 +1,5 @@
 package me.meeshy.app.settings
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,6 +13,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -38,7 +37,7 @@ class CaptureToggleNoteComposeTest {
                 var open by remember { mutableStateOf<String?>(null) }
                 val host = NoteHost(open) { open = it }
                 CaptureToggleRow(
-                    icon = Icons.Filled.Image,
+                    icon = MeeshyIcons.Photo,
                     title = "Save the original",
                     checked = false,
                     onCheckedChange = onChecked,
