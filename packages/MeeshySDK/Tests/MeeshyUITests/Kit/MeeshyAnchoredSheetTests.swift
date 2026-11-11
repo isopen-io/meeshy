@@ -174,6 +174,50 @@ struct MeeshyAnchoredSheetTests {
         #expect(reduced.animation == nil)
     }
 
+    // MARK: - Loi 13 et rôle
+
+    @Test("loi 13 : ni poignée, ni en-tête, ni ✕, ni voile hors de leurs conditions ; modale en « dismisses » seulement")
+    func chrome_followsTheVectors() throws {
+        for row in try Self.rows("law13") {
+            let expect = try #require(row["expect"] as? [String: Any])
+            let outside = try #require(MeeshyAnchoredSheetOutside(rawValue: try #require(row["outside"] as? String)))
+            let chrome = MeeshyAnchoredSheetChrome.resolve(
+                hasTitle: try #require(row["title"] as? Bool),
+                hasTrailing: try #require(row["trailing"] as? Bool),
+                hasCloseLabel: try #require(row["closeLabel"] as? Bool),
+                showsHandle: try #require(row["showsHandle"] as? Bool),
+                isDragDismissEnabled: try #require(row["drag"] as? Bool),
+                hasDetents: try #require(row["detents"] as? Bool),
+                outside: outside,
+                scrim: try #require(row["scrim"] as? Bool)
+            )
+            #expect(chrome.showsHandle == expect["handle"] as? Bool, "\(row)")
+            #expect(chrome.handleIsAdjustable == expect["adjustable"] as? Bool, "\(row)")
+            #expect(chrome.showsHeader == expect["header"] as? Bool, "\(row)")
+            #expect(chrome.showsClose == expect["close"] as? Bool, "\(row)")
+            #expect(chrome.showsScrim == expect["scrim"] as? Bool, "\(row)")
+            #expect(chrome.isModal == expect["modal"] as? Bool, "\(row)")
+        }
+    }
+
+    @Test("la poignée à crans dit « agrandie » sur le cran le plus haut, « réduite » ailleurs")
+    func handleValue_followsTheVectors() throws {
+        for row in try Self.rows("handleValue") {
+            let expanded = MeeshyAnchoredSheetMetrics.isExpanded(
+                detentIndex: try #require(row["index"] as? Int), detentCount: try #require(row["count"] as? Int)
+            )
+            #expect(expanded == row["expanded"] as? Bool, "\(row)")
+        }
+    }
+
+    @Test("la feuille lit sa loi 13 dans la loi pure, sans la réécrire")
+    func source_chromeIsResolvedByTheLaw() throws {
+        let code = try Self.code("MeeshyAnchoredSheet.swift")
+        #expect(code.contains("MeeshyAnchoredSheetChrome.resolve("))
+        #expect(code.contains("MeeshyAnchoredSheetMetrics.isExpanded("))
+        #expect(!code.contains("outside == .dismisses"))
+    }
+
     // MARK: - Mesures et jetons
 
     @Test("la poignée, l'ombre et le voile de la planche vivent dans la loi, nulle part ailleurs")
@@ -334,8 +378,7 @@ struct MeeshyAnchoredSheetTests {
 
     @MainActor
     private static func lproj(_ code: String) throws -> Bundle {
-        let language = Locale(identifier: code).language.languageCode?.identifier ?? code
-        let path = try #require(Bundle.module.path(forResource: language, ofType: "lproj"), "\(language).lproj absent")
+        let path = try #require(Bundle.module.path(forResource: code, ofType: "lproj"), "\(code).lproj absent")
         return try #require(Bundle(path: path))
     }
 

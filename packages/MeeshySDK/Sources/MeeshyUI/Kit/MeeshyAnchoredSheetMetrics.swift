@@ -49,6 +49,42 @@ public nonisolated struct MeeshyAnchoredSheetMotion: Sendable, Equatable {
     }
 }
 
+/// **Ce que la feuille montre autour de son contenu, et ce qu'elle dit au lecteur d'écran** (loi 13) :
+/// aucune poignée sans glissé, aucune rangée d'en-tête sans titre ni fin d'en-tête, aucun ✕ quand la fin
+/// d'en-tête le remplace ou que son nom est absent, aucun voile hors de la fermeture au toucher extérieur.
+public nonisolated struct MeeshyAnchoredSheetChrome: Sendable, Equatable {
+    public let showsHandle: Bool
+    /// La poignée est un contrôle réglable (« Hauteur de la feuille ») : il faut des crans.
+    public let handleIsAdjustable: Bool
+    public let showsHeader: Bool
+    public let showsClose: Bool
+    public let showsScrim: Bool
+    /// Un toucher hors de la feuille la ferme, et la feuille est une fenêtre modale.
+    public let isModal: Bool
+
+    public static func resolve(
+        hasTitle: Bool,
+        hasTrailing: Bool,
+        hasCloseLabel: Bool,
+        showsHandle: Bool,
+        isDragDismissEnabled: Bool,
+        hasDetents: Bool,
+        outside: MeeshyAnchoredSheetOutside,
+        scrim: Bool
+    ) -> MeeshyAnchoredSheetChrome {
+        let handle = showsHandle && isDragDismissEnabled
+        let modal = outside == .dismisses
+        return MeeshyAnchoredSheetChrome(
+            showsHandle: handle,
+            handleIsAdjustable: handle && hasDetents,
+            showsHeader: hasTitle || hasTrailing,
+            showsClose: hasTitle && !hasTrailing && hasCloseLabel,
+            showsScrim: scrim && modal,
+            isModal: modal
+        )
+    }
+}
+
 /// **La loi pure d'une feuille ancrée, lue par les trois plateformes** (K15) : hauteurs,
 /// plafond, fermeture au glissé, crans, place publiée et mouvement.
 ///
@@ -186,6 +222,11 @@ public nonisolated enum MeeshyAnchoredSheetMetrics {
     }
 
     // MARK: - Encre
+
+    /// La valeur dite de la poignée à crans : « agrandie » sur le cran le plus haut, « réduite » sinon.
+    public static func isExpanded(detentIndex: Int, detentCount: Int) -> Bool {
+        detentCount > 1 && detentIndex >= detentCount - 1
+    }
 
     public static func handleOpacity(surface: MeeshyAnchoredSheetSurface) -> Double {
         surface == .dark ? handleOpacityDark : handleOpacityTheme

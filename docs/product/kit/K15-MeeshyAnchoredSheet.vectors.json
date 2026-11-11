@@ -58,6 +58,17 @@
     { "containerMaxY": 800, "height": 400, "top": 400 },
     { "containerMaxY": 852, "height": 420, "top": 432 }
   ],
+  "law13": [
+    {"case": "la feuille de la planche : poignée, titre, ✕, sans voile", "title": true, "trailing": false, "closeLabel": true, "showsHandle": true, "drag": true, "detents": false, "outside": "dismisses", "scrim": false, "expect": {"handle": true, "adjustable": false, "header": true, "close": true, "scrim": false, "modal": true}},
+    {"case": "la fin d'en-tête remplace le ✕ (A15)", "title": true, "trailing": true, "closeLabel": true, "showsHandle": true, "drag": true, "detents": false, "outside": "dismisses", "scrim": false, "expect": {"handle": true, "adjustable": false, "header": true, "close": false, "scrim": false, "modal": true}},
+    {"case": "sans nom de fermeture, pas de ✕", "title": true, "trailing": false, "closeLabel": false, "showsHandle": true, "drag": true, "detents": false, "outside": "dismisses", "scrim": false, "expect": {"handle": true, "adjustable": false, "header": true, "close": false, "scrim": false, "modal": true}},
+    {"case": "sans titre ni fin d'en-tête, pas de rangée", "title": false, "trailing": false, "closeLabel": true, "showsHandle": true, "drag": true, "detents": false, "outside": "dismisses", "scrim": false, "expect": {"handle": true, "adjustable": false, "header": false, "close": false, "scrim": false, "modal": true}},
+    {"case": "la poignée masquée", "title": true, "trailing": false, "closeLabel": true, "showsHandle": false, "drag": true, "detents": false, "outside": "dismisses", "scrim": false, "expect": {"handle": false, "adjustable": false, "header": true, "close": true, "scrim": false, "modal": true}},
+    {"case": "le glissé coupé retire la poignée", "title": true, "trailing": false, "closeLabel": true, "showsHandle": true, "drag": false, "detents": true, "outside": "dismisses", "scrim": false, "expect": {"handle": false, "adjustable": false, "header": true, "close": true, "scrim": false, "modal": true}},
+    {"case": "des crans : la poignée se règle", "title": true, "trailing": false, "closeLabel": true, "showsHandle": true, "drag": true, "detents": true, "outside": "dismisses", "scrim": false, "expect": {"handle": true, "adjustable": true, "header": true, "close": true, "scrim": false, "modal": true}},
+    {"case": "le voile demandé", "title": true, "trailing": false, "closeLabel": true, "showsHandle": true, "drag": true, "detents": false, "outside": "dismisses", "scrim": true, "expect": {"handle": true, "adjustable": false, "header": true, "close": true, "scrim": true, "modal": true}},
+    {"case": "par-dessus un contenu vivant (A19) : ni voile ni modalité", "title": true, "trailing": false, "closeLabel": true, "showsHandle": true, "drag": true, "detents": false, "outside": "passesThrough", "scrim": true, "expect": {"handle": true, "adjustable": false, "header": true, "close": true, "scrim": false, "modal": false}}
+  ],
   "motion": {
     "response": 0.32,
     "dampingFraction": 0.88,
@@ -72,6 +83,12 @@
     "bottomMargin": 24,
     "headerMinHeight": 44
   },
+  "handleValue": [
+    { "index": 0, "count": 2, "expanded": false },
+    { "index": 1, "count": 2, "expanded": true },
+    { "index": 1, "count": 3, "expanded": false },
+    { "index": 0, "count": 1, "expanded": false }
+  ],
   "contrast": {
     "titleMin": 4.5,
     "handleMin": 3.0

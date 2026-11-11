@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - La place publiée
 
@@ -84,25 +85,6 @@ nonisolated struct MeeshyAnchoredSheetLayout: Equatable {
             height, content: content ?? 0, available: available, maximumFraction: maximumFraction
         )
         return MeeshyAnchoredSheetLayout(rests: [rest], index: 0, hasDetents: false)
-    }
-}
-
-private nonisolated struct MeeshyAnchoredSheetShape: Shape {
-    let radius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let r = min(radius, rect.width / 2, rect.height / 2)
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
-        p.addArc(center: CGPoint(x: rect.minX + r, y: rect.minY + r), radius: r,
-                 startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
-        p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
-        p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.minY + r), radius: r,
-                 startAngle: .degrees(270), endAngle: .degrees(0), clockwise: false)
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        p.closeSubpath()
-        return p
     }
 }
 
@@ -223,9 +205,10 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
             height: height, content: contentHeight, available: geo.size.height,
             maximumFraction: maximumFraction, detentIndex: detentIndex
         )
+        let chrome = resolvedChrome(hasDetents: layout.hasDetents)
         return ZStack(alignment: .bottom) {
-            outsideLayer
-            sheet(layout: layout, available: geo.size.height)
+            outsideLayer(chrome)
+            sheet(layout: layout, chrome: chrome, available: geo.size.height)
         }
         .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
         .preference(key: MeeshyAnchoredSheetFootprintKey.self, value: footprint(layout: layout, geo: geo))
@@ -242,9 +225,9 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
     // MARK: Hors de la feuille
 
     @ViewBuilder
-    private var outsideLayer: some View {
-        if outside == .dismisses {
-            (scrim ? MeeshyColors.mediaBackdrop.opacity(MeeshyAnchoredSheetMetrics.scrimOpacity) : Color.clear)
+    private func outsideLayer(_ chrome: MeeshyAnchoredSheetChrome) -> some View {
+        if chrome.isModal {
+            (chrome.showsScrim ? MeeshyColors.mediaBackdrop.opacity(MeeshyAnchoredSheetMetrics.scrimOpacity) : Color.clear)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onDismiss)
                 .accessibilityHidden(true)
@@ -253,9 +236,9 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
 
     // MARK: La feuille
 
-    private func sheet(layout: MeeshyAnchoredSheetLayout, available: CGFloat) -> some View {
+    private func sheet(layout: MeeshyAnchoredSheetLayout, chrome: MeeshyAnchoredSheetChrome, available: CGFloat) -> some View {
         let ceiling = MeeshyAnchoredSheetMetrics.ceiling(available: available, maximumFraction: maximumFraction)
-        return stack(layout: layout)
+        return stack(layout: layout, chrome: chrome)
             .modifier(MeeshyAnchoredSheetFrame(height: height, layoutHeight: layout.layoutHeight, ceiling: ceiling))
             .frame(maxWidth: maxWidth ?? .infinity)
             .contentShape(Rectangle())
@@ -264,14 +247,14 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
             .environment(\.meeshySheetClose, onDismiss)
             .modifier(MeeshyAnchoredSheetScheme(forcesDark: surface == .dark))
             .modifier(MeeshyAnchoredSheetAccessibility(
-                label: title == nil ? accessibilityLabel : nil, isModal: outside == .dismisses
+                label: title == nil ? accessibilityLabel : nil, isModal: chrome.isModal
             ))
             .dismissOnEscape(onDismiss)
     }
 
-    private func stack(layout: MeeshyAnchoredSheetLayout) -> some View {
+    private func stack(layout: MeeshyAnchoredSheetLayout, chrome: MeeshyAnchoredSheetChrome) -> some View {
         VStack(spacing: 0) {
-            chrome(layout: layout)
+            header(layout: layout, chrome: chrome)
             content
                 .frame(maxWidth: .infinity, maxHeight: fillsHeight ? CGFloat.infinity : nil)
                 .padding(.bottom, layout.restOffset)
@@ -291,7 +274,7 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
     }
 
     private var surfaceShape: some View {
-        MeeshyAnchoredSheetShape(radius: MeeshyRadius.xxl)
+        RoundedCorner(radius: MeeshyRadius.xxl, corners: [.topLeft, .topRight])
             .fill(surface == .dark ? MeeshyColors.indigo950 : MeeshyColors.backgroundPrimary(isDark: colorScheme == .dark))
             .shadow(
                 color: MeeshyColors.mediaBackdrop.opacity(MeeshyAnchoredSheetMetrics.shadowOpacity),
@@ -307,16 +290,21 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
     // MARK: Poignée et en-tête
 
     private var hasTrailing: Bool { Trailing.self != EmptyView.self }
-    private var hasRow: Bool { title != nil || hasTrailing }
-    private var showsClose: Bool { hasRow && !hasTrailing && closeLabel != nil }
-    private var handleIsShown: Bool { showsHandle && isDragDismissEnabled }
+
+    private func resolvedChrome(hasDetents: Bool) -> MeeshyAnchoredSheetChrome {
+        MeeshyAnchoredSheetChrome.resolve(
+            hasTitle: title != nil, hasTrailing: hasTrailing, hasCloseLabel: closeLabel != nil,
+            showsHandle: showsHandle, isDragDismissEnabled: isDragDismissEnabled, hasDetents: hasDetents,
+            outside: outside, scrim: scrim
+        )
+    }
 
     @ViewBuilder
-    private func chrome(layout: MeeshyAnchoredSheetLayout) -> some View {
-        if handleIsShown || hasRow {
+    private func header(layout: MeeshyAnchoredSheetLayout, chrome: MeeshyAnchoredSheetChrome) -> some View {
+        if chrome.showsHandle || chrome.showsHeader {
             VStack(spacing: 0) {
-                if handleIsShown { handle(layout: layout) }
-                if hasRow { headerRow }
+                if chrome.showsHandle { handle(layout: layout, isAdjustable: chrome.handleIsAdjustable) }
+                if chrome.showsHeader { headerRow(chrome) }
             }
             .contentShape(Rectangle())
             .gesture(dragGesture(layout: layout), including: isDragDismissEnabled ? GestureMask.all : GestureMask.subviews)
@@ -324,18 +312,18 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
     }
 
     @ViewBuilder
-    private func handle(layout: MeeshyAnchoredSheetLayout) -> some View {
+    private func handle(layout: MeeshyAnchoredSheetLayout, isAdjustable: Bool) -> some View {
         let bar = Capsule()
             .fill(ink.opacity(MeeshyAnchoredSheetMetrics.handleOpacity(surface: surface)))
             .frame(width: MeeshyAnchoredSheetMetrics.handleWidth, height: MeeshyAnchoredSheetMetrics.handleHeight)
             .frame(maxWidth: .infinity)
             .padding(.top, MeeshySpacing.sm)
             .padding(.bottom, MeeshySpacing.md)
-        if layout.hasDetents {
+        if isAdjustable {
             bar
                 .accessibilityElement()
                 .accessibilityLabel(MeeshyAnchoredSheetCopy.heightLabel)
-                .accessibilityValue(layout.index == layout.rests.count - 1
+                .accessibilityValue(MeeshyAnchoredSheetMetrics.isExpanded(detentIndex: layout.index, detentCount: layout.rests.count)
                                     ? MeeshyAnchoredSheetCopy.expanded : MeeshyAnchoredSheetCopy.reduced)
                 .accessibilityAdjustableAction { direction in
                     adjust(direction, layout: layout)
@@ -345,7 +333,7 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
         }
     }
 
-    private var headerRow: some View {
+    private func headerRow(_ chrome: MeeshyAnchoredSheetChrome) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             if let title {
                 Text(title)
@@ -360,13 +348,13 @@ public struct MeeshyAnchoredSheet<Trailing: View, Content: View>: View {
             }
             if hasTrailing {
                 trailing
-            } else if showsClose, let closeLabel {
+            } else if chrome.showsClose, let closeLabel {
                 MeeshyGlassButton(systemImage: "xmark", label: closeLabel, kind: .soft, size: .s36,
                                   tone: surface == .dark ? MeeshyGlassTone.deep : MeeshyGlassTone.theme, action: onDismiss)
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, handleIsShown ? 0 : MeeshySpacing.sm)
+        .padding(.top, chrome.showsHandle ? 0 : MeeshySpacing.sm)
         .padding(.bottom, MeeshySpacing.md)
         .frame(minHeight: MeeshyControlSize.tapTarget)
         .onAppear { titleFocused = true }
