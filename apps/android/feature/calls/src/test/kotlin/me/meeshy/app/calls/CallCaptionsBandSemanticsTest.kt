@@ -2,7 +2,13 @@ package me.meeshy.app.calls
 
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -62,6 +68,55 @@ class CallCaptionsBandSemanticsTest {
         val labels = collectLabels(described)
         assertThat(labels).contains("Ada : Bonjour")
         assertThat(labels).doesNotContain("Ada : Comment")
+    }
+
+    @Test
+    fun `the foot tells what the line says of its translation (#17343)`() {
+        rule.setContent {
+            MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour")), onToggleOriginal = {}, onOpenJournal = {}) }
+        }
+
+        rule.onNodeWithText("EN → FR · tap = original").assertIsDisplayed()
+    }
+
+    @Test
+    fun `an original line says nothing in the foot`() {
+        rule.setContent {
+            MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Hello", tag = null)), onToggleOriginal = {}, onOpenJournal = {}) }
+        }
+
+        rule.onNodeWithText("tap = original", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun `the Journal button is a 48 dp target that opens the journal`() {
+        var opened = 0
+        rule.setContent {
+            MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour")), onToggleOriginal = {}, onOpenJournal = { opened++ }) }
+        }
+
+        rule.onNodeWithText("Journal").assertHeightIsAtLeast(48.dp).performClick()
+
+        assertThat(opened).isEqualTo(1)
+    }
+
+    @Test
+    @Config(sdk = [34], qualifiers = "w1000dp-h800dp")
+    fun `the stowed captions take a glass of their own, limited to 560 dp (#17343)`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallCaptionsBand(
+                    lines = listOf(line("a", "Bonjour")),
+                    onToggleOriginal = {},
+                    onOpenJournal = {},
+                    modifier = Modifier.testTag("stowed"),
+                    hasOwnGlass = true,
+                )
+            }
+        }
+
+        rule.onNodeWithTag("stowed").assertWidthIsEqualTo(560.dp)
+        rule.onNodeWithText("Bonjour").assertIsDisplayed()
     }
 
     private fun collectLabels(node: androidx.compose.ui.semantics.SemanticsNode): List<String> =

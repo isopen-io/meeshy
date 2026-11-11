@@ -401,11 +401,6 @@ fun CallScreen(
                 )
             }
 
-            // Le journal de la transcription : une feuille, comme iOS ; la fermer rend le menu de la pilule.
-            if (chromeState.layer.openPanel == CallScreenPanel.Journal) {
-                CallCaptionsJournalSheet(onDismiss = chrome::backToMenu, viewModel = captionsViewModel, captures = state.liveCaptures, peerName = state.peerName)
-            }
-
             CallToastHost(
                 toasts = extensions.toasts.toasts,
                 modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),

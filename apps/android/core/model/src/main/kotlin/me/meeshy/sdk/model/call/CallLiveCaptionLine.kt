@@ -204,11 +204,12 @@ data class CallCaptionsState(
         copy(revealed = if (key in revealed) revealed - key else revealed + key)
 
     /**
-     * Reception is tied to the panel, like iOS: a closed panel drops the segment instead of piling it
-     * up in silence; a closed gate drops everything.
+     * The journal keeps the whole call, my captions on or off (#17342): what was transcribed for the call is
+     * kept, and the gate stays on the CAPTURE side (nothing is transcribed when nobody listens, #13720). Only a
+     * closed gate drops everything: an end-to-end conversation keeps no plain text.
      */
     fun receiving(segment: CallJournalSegment): CallCaptionsState =
-        if (isPanelOpen && gate.allowsCaptions) copy(journal = journal.receive(segment)) else this
+        if (gate.allowsCaptions) copy(journal = journal.receive(segment)) else this
 
     /**
      * One of MY lines (#13718), iOS `appendSegment`: my capture may run for a peer while my panel is
