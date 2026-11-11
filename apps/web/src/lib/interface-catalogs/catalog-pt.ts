@@ -1089,7 +1089,7 @@ const pt = {
   ...ptStoriesMine,
   'settings.tools.sounds': 'Meus sons',
   'settings.section.packs': 'Pacotes e downloads',
-  'settings.packs.shop': 'Loja de figurinhas e molduras',
+  'settings.packs.shop': 'Loja',
   ...ptContactCard,
   ...ptQuote,
   ...ptCommentRow,
