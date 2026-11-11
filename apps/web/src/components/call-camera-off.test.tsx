@@ -75,26 +75,24 @@ describe('G4.1 — la scène noire de la caméra coupée', () => {
   });
 });
 
-describe('G4.2 — anneau et halo : à la parole seulement', () => {
+describe('G4.2 — anneau et halo (un seul calque, une ombre) : à la parole seulement', () => {
   test('au repos, aucun anneau ni halo visible ; à la parole, ils prennent la couleur de la personne', () => {
     const view = mount(call());
-    expect(view.find('[data-call-camera-off-ring]')?.style.opacity).toBe('0');
-    expect(view.find('[data-call-camera-off-halo]')?.style.opacity).toBe('0');
+    expect(view.find('[data-call-camera-off-speech]')?.style.opacity).toBe('0');
     view.render(call({ captions: [speech(false)] }));
-    expect(view.find('[data-call-camera-off-ring]')?.style.opacity).toBe('1');
-    expect(view.find('[data-call-camera-off-halo]')?.style.opacity).toBe('1');
-    expect(view.find('[data-call-camera-off-ring]')?.getAttribute('style')).toContain('border-color');
+    expect(view.find('[data-call-camera-off-speech]')?.style.opacity).toBe('1');
+    expect(view.find('[data-call-camera-off-speech]')?.getAttribute('style')).toContain('box-shadow');
     view.render(call({ captions: [speech(true)] }));
-    expect(view.find('[data-call-camera-off-ring]')?.style.opacity).toBe('0');
+    expect(view.find('[data-call-camera-off-speech]')?.style.opacity).toBe('0');
     view.done();
   });
 
   test('ne bouge qu’en opacité : l’anneau garde sa place, son fondu suit la durée de la loi', () => {
     const view = mount(call());
-    expect(view.find('[data-call-camera-off-ring]')?.style.transitionDuration).toBe('250ms');
+    expect(view.find('[data-call-camera-off-speech]')?.style.transitionDuration).toBe('250ms');
     view.done();
     const reduced = mount(call(), { reducedMotion: true });
-    expect(reduced.find('[data-call-camera-off-ring]')?.style.transitionDuration).toBe('120ms');
+    expect(reduced.find('[data-call-camera-off-speech]')?.style.transitionDuration).toBe('120ms');
     reduced.done();
   });
 });
@@ -106,12 +104,12 @@ describe('G4.6 — l’image cède la place à l’avatar (et revient) en fondu'
     view.render(call());
     const veil = view.find('[data-call-camera-off]');
     expect(veil).not.toBeNull();
-    expect(view.find('[data-call-duo-stage] video')).not.toBeNull();
+    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).not.toBeNull();
     await wait(60);
     expect(view.find('[data-call-camera-off]')?.style.opacity).toBe('1');
-    expect(view.find('[data-call-duo-stage] video')).not.toBeNull();
+    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).not.toBeNull();
     await wait(160);
-    expect(view.find('[data-call-duo-stage] video')).toBeNull();
+    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).toBeNull();
     view.done();
   });
 
@@ -119,7 +117,7 @@ describe('G4.6 — l’image cède la place à l’avatar (et revient) en fondu'
     const view = mount(call(), { reducedMotion: true });
     view.render(call({ members: { 'u-peer': member({ cameraOn: true }) } }));
     expect(view.find('[data-call-camera-off]')).not.toBeNull();
-    expect(view.find('[data-call-duo-stage] video')).not.toBeNull();
+    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).not.toBeNull();
     await wait(60);
     expect(view.find('[data-call-camera-off]')?.style.opacity).toBe('0');
     await wait(160);
@@ -136,7 +134,7 @@ describe('G4.6 — l’image cède la place à l’avatar (et revient) en fondu'
     expect(view.find('[data-call-camera-off]')?.style.opacity).toBe('0');
     await wait(160);
     expect(view.find('[data-call-camera-off]')).toBeNull();
-    expect(view.find('[data-call-duo-stage] video')).not.toBeNull();
+    expect(view.find('[data-call-duo-stage] video:not([data-call-self])')).not.toBeNull();
     view.done();
   });
 });

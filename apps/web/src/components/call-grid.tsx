@@ -53,11 +53,11 @@ const TILE = 'var(--color-media-fill)';
  * D-60 levée par #10955) : `presenceKey` est REQUIS, même `undefined` (mon
  * portrait, un groupe), pour que chaque hôte DISE de qui il s'agit.
  */
-export function Portrait({ name, avatar, size, pulse, presenceKey }: { readonly name: string; readonly avatar: string | null; readonly size: number; readonly pulse: boolean; readonly presenceKey: string | undefined }) {
+export function Portrait({ name, avatar, size, pulse, presenceKey, tint }: { readonly name: string; readonly avatar: string | null; readonly size: number; readonly pulse: boolean; readonly presenceKey: string | undefined; readonly tint?: string }) {
   return (
     <div className="relative grid place-items-center" style={{ width: size + 24, height: size + 24 }}>
       {pulse ? <span aria-hidden className="absolute inset-0 animate-ping rounded-full motion-reduce:animate-none" style={{ background: 'var(--color-media-fill)' }} /> : null}
-      <PeerAvatar presenceKey={presenceKey} initials={initialsOf(name)} color={colorForName(name)} size={size} {...(avatar === null ? {} : { src: avatar })} />
+      <PeerAvatar presenceKey={presenceKey} initials={initialsOf(name)} color={tint ?? colorForName(name)} size={size} {...(avatar === null ? {} : { src: avatar })} />
     </div>
   );
 }
