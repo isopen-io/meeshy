@@ -221,12 +221,18 @@ public struct MeeshyField<Trailing: View>: View {
         }
     }
 
+    private func promptText(ink: Color) -> Text {
+        var invite = AttributedString(prompt ?? "")
+        invite.foregroundColor = ink.opacity(MeeshyFieldRecipe.mutedOpacity)
+        return Text(invite)
+    }
+
     private func textField(_ recipe: MeeshyFieldRecipe, ink: Color) -> some View {
         TextField(
             "",
             text: $draft,
             prompt: MeeshyFieldRecipe.showsPrompt(text: draft, caption: caption)
-                ? Text(prompt ?? "").foregroundColor(ink.opacity(MeeshyFieldRecipe.mutedOpacity))
+                ? promptText(ink: ink)
                 : nil,
             axis: recipe.lineRange.upperBound > 1 ? .vertical : .horizontal
         )

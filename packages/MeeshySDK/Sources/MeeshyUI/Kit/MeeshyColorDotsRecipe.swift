@@ -133,6 +133,10 @@ public nonisolated struct MeeshyColorDotsRecipe: Sendable, Equatable {
     /// L'encre du glyphe : la plus contrastée du blanc et de l'indigo le plus
     /// sombre contre le disque (le pire arrêt d'un dégradé) ; l'encre du groupe
     /// sur un disque creux.
+    public static func glyphFont(diameter: Double) -> Font {
+        Font.system(size: CGFloat(diameter * glyphScale), weight: .semibold)
+    }
+
     public static func glyphInk(on fill: MeeshyColorDotFill, groupInk: Color) -> Color {
         let stops: [Color]
         switch fill {
