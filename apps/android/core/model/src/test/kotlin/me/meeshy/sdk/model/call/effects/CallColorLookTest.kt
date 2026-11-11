@@ -104,4 +104,22 @@ class CallColorLookTest {
         assertThat(blueOnly[2]).isEqualTo(255)
         assertThat(blueOnly[0]).isEqualTo(0)
     }
+
+    @Test
+    fun `a look bakes first, then only the neighbours the carousel shows beside it, nearest first`() {
+        assertThat(CallColorLook.bakeOrder(mood("softNight")).map { it.id })
+            .containsExactly("softNight", "bright", "film", "velvet", "golden").inOrder()
+    }
+
+    @Test
+    fun `the bake never reaches past the visible neighbours nor bakes Natural, which has no cube`() {
+        assertThat(CallColorLook.bakeOrder(mood("golden")).map { it.id }).containsExactly("golden", "film", "softNight").inOrder()
+        assertThat(CallColorLook.bakeOrder(mood("monochrome")).map { it.id }).containsExactly("monochrome", "sky", "velvet").inOrder()
+        assertThat(CallColorLook.bakeOrder(mood("film")).size).isAtMost(1 + 2 * CallColorLook.VISIBLE_NEIGHBOURS)
+    }
+
+    @Test
+    fun `an older tint that a call still carries bakes alone, the catalogue does not frame it`() {
+        assertThat(CallColorLook.bakeOrder(VideoFilterPreset.Warm)).containsExactly(VideoFilterPreset.Warm)
+    }
 }
