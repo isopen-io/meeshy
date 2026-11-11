@@ -109,25 +109,44 @@ class CallPillTextTest {
 }
 
 class CallCaptionsFooterTest {
-    private fun line(tag: String? = null) = CallLiveCaptionLine(
-        key = "k", speakerId = "u", speakerName = "Awa", isLocal = false, text = "Salut", languageTag = tag,
-        isFinal = true, capturedAtMs = 0, isShowingOriginal = tag == null, canRevealOriginal = tag != null,
+    private fun line(
+        origin: String? = null,
+        served: String? = null,
+        awaitingUntilMs: Long? = null,
+        isLocal: Boolean = false,
+    ) = CallLiveCaptionLine(
+        key = "k", speakerId = "u", speakerName = "Awa", isLocal = isLocal, text = "Salut",
+        languageTag = if (origin != null && served != null) "$origin → $served" else origin,
+        isFinal = true, capturedAtMs = 0, isShowingOriginal = served == null, canRevealOriginal = served != null,
+        awaitingUntilMs = awaitingUntilMs, originLanguage = origin, servedLanguage = served,
     )
 
     @Test
     fun `a translated line tells how to see the original`() {
-        assertThat(CallCaptionsFooter.resolve(listOf(line("EN → FR")))).isEqualTo(CallCaptionsFooter.TouchForOriginal("EN → FR"))
+        assertThat(CallCaptionsFooter.resolve(listOf(line("EN", "FR")))).isEqualTo(CallCaptionsFooter.TouchForOriginal("EN → FR"))
     }
 
     @Test
     fun `the newest translated line decides the pair`() {
-        val lines = listOf(line("ES → FR"), line("EN → FR"), line())
+        val lines = listOf(line("ES", "FR"), line("EN", "FR"), line())
         assertThat(CallCaptionsFooter.resolve(lines)).isEqualTo(CallCaptionsFooter.TouchForOriginal("EN → FR"))
     }
 
     @Test
-    fun `originals only say nothing`() {
-        assertThat(CallCaptionsFooter.resolve(listOf(line(), line()))).isEqualTo(CallCaptionsFooter.None)
+    fun `a translation awaited speaks before any pair`() {
+        val lines = listOf(line("ES", "FR"), line("EN", awaitingUntilMs = 9_000))
+        assertThat(CallCaptionsFooter.resolve(lines)).isEqualTo(CallCaptionsFooter.Translating("EN"))
+    }
+
+    @Test
+    fun `several pairs of languages are counted once, not named`() {
+        val lines = listOf(line("ES", "FR"), line("EN", "FR"), line("EN", "FR"))
+        assertThat(CallCaptionsFooter.resolve(lines)).isEqualTo(CallCaptionsFooter.TranslatedLanguages(count = 3))
+    }
+
+    @Test
+    fun `an origin label alone says nothing in the foot`() {
+        assertThat(CallCaptionsFooter.resolve(listOf(line("EN"), line("EN")))).isEqualTo(CallCaptionsFooter.None)
     }
 
     @Test
