@@ -98,7 +98,7 @@ final class VoiceProfileWizardViewModel: ObservableObject {
     /// lu en UTC, un minuit choisi à l'est de Greenwich partait la veille (#17309).
     static func formatBirthDate(_ date: Date, calendar: Calendar = .current) -> String {
         let tzIdentifier = calendar.timeZone.identifier
-        return formatterCache.withLock { cache in
+        return formatterCache.mutateUnchecked { cache in
             let formatter: DateFormatter
             if let cached = cache[tzIdentifier] {
                 formatter = cached
