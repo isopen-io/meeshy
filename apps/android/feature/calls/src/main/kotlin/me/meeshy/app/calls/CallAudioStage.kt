@@ -66,8 +66,7 @@ internal fun CallAudioStage(
             name = state.peerName,
             peer = peer,
             size = PAIR_AVATAR_SIZE,
-            faceHex = CallTileRim.peerFace(peerSpeech.peerUserId),
-            speaking = rememberPeerSpeaking(peerSpeech),
+            peerSpeech = peerSpeech,
         )
         Text(
             text = callPeerTitle(state.peerName),
@@ -87,10 +86,8 @@ internal fun CallAvatarPair(
     peer: CallPeerVisual,
     size: Dp,
     modifier: Modifier = Modifier,
-    /** La couleur d'auteur du pair (fonction partagée) ; `null` = la marque. */
-    faceHex: String? = null,
-    /** Il parle : l'anneau et le halo de [faceHex] fondent à l'opacité ; au repos, rien. */
-    speaking: Boolean = false,
+    /** Sa couleur d'auteur ([CallTileRim.peerFace]) et sa parole : l'anneau et le halo fondent à l'opacité ; au repos, rien. */
+    peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
     val badge = maxOf(LOCAL_BADGE_MIN, size * LOCAL_BADGE_RATIO)
     val reach = callSpeakingReach(compact = false)
@@ -99,8 +96,8 @@ internal fun CallAvatarPair(
             name = name,
             size = size,
             avatarUrl = peer.avatarUrl,
-            colorHex = faceHex,
-            speaking = speaking,
+            colorHex = CallTileRim.peerFace(peerSpeech.peerUserId),
+            speaking = rememberPeerSpeaking(peerSpeech),
             reduceMotion = rememberCallReduceMotion(),
             compact = false,
             ring = peer.ring,
