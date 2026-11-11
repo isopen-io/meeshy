@@ -84,6 +84,24 @@ describe('Réglages remplace la bande de looks, en fondu et en montée (P8b.6, `
   });
 });
 
+describe('la capsule de l’en-tête entre et sort par une mise à l’échelle (P9.8, `.scale(scale: 0.8, anchor: .trailing)` d’iOS)', () => {
+  test('0,8 → 1 avec l’opacité, l’inverse au départ : transformation et opacité seules', () => {
+    expect(swapKeyframes(true, false, 'scale')).toEqual([
+      { opacity: 0, transform: 'scale(0.8)' },
+      { opacity: 1, transform: 'scale(1)' },
+    ]);
+    expect(swapKeyframes(false, false, 'scale')).toEqual([
+      { opacity: 1, transform: 'scale(1)' },
+      { opacity: 0, transform: 'scale(0.8)' },
+    ]);
+  });
+
+  test('« Réduire les animations » : un fondu seul, sans échelle', () => {
+    expect(swapKeyframes(true, true, 'scale')).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(swapKeyframes(false, true, 'scale')).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+  });
+});
+
 describe('ce qui est posé sur un verre qui se déforme suit son bord du haut (P8b.6, loi 17)', () => {
   test('le verre perd 56 px : ce qui le surmonte part de sa place d’avant, 56 px plus haut, et descend avec lui', () => {
     expect(followKeyframes({ width: 400, height: 120 }, { width: 400, height: 64 }, false)).toEqual([{ transform: 'translateY(-56px)' }]);
