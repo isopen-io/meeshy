@@ -3,12 +3,16 @@ package me.meeshy.app.calls
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import me.meeshy.sdk.model.call.CallCaptionLabels
 import me.meeshy.sdk.model.call.CallCaptionReader
 import me.meeshy.sdk.model.call.CallCaptionsState
 import me.meeshy.sdk.model.call.CallJournalSegment
+import me.meeshy.sdk.model.call.CallJournalView
 import me.meeshy.sdk.model.call.CallLiveCaptionLine
 import me.meeshy.sdk.model.call.CallLiveCaptionLines
 
@@ -24,20 +28,30 @@ class CallCaptionsViewModel @Inject constructor(
     val reader: CallCaptionReader get() = captions.reader
     val peerName: String get() = captions.peerDisplayName
 
+    private val _journalView = MutableStateFlow(CallJournalView())
+
+    /** The journal's own reading (its switch, its touched sentences): the band never reads it (P13.5, law 7). */
+    val journalView: StateFlow<CallJournalView> = _journalView.asStateFlow()
+
     /** One tap on « Sous-titres »: Off, Translated, Original, Off. */
     fun advance() = captions.advance()
 
-    /** The band: the last two sentences. */
+    /** The band: the last two sentences, read in the « Sous-titres » button's mode only. */
     fun bandLines(state: CallCaptionsState, labels: CallCaptionLabels): List<CallLiveCaptionLine> =
-        captions.captionLines(state.journal.tail(BAND_LINES), state, labels)
+        captions.captionLines(state.journal.tail(BAND_LINES), state.showsOriginal, state.revealed, labels)
 
-    /** The journal: every sentence of the call, each dated by the time in the call (P6.4). */
-    fun journalLines(state: CallCaptionsState, labels: CallCaptionLabels): List<CallLiveCaptionLine> =
-        captions.captionLines(state.journal.segments, state, labels).map { it.dated(state.callStartedAtMs) }
+    /** The journal: every sentence of the call, read in ITS switch, each dated by the time in the call (P6.4). */
+    fun journalLines(state: CallCaptionsState, view: CallJournalView, labels: CallCaptionLabels): List<CallLiveCaptionLine> =
+        captions.captionLines(state.journal.segments, view.showsOriginal, view.revealed, labels).map { it.dated(state.callStartedAtMs) }
 
+    /** A touch on a sentence of the band. */
     fun toggleReveal(key: String) = captions.toggleReveal(key)
 
-    fun setShowsOriginal(showsOriginal: Boolean) = captions.setShowsOriginal(showsOriginal)
+    /** A touch on a sentence of the journal: it unfolds there only. */
+    fun toggleJournalReveal(key: String) = _journalView.update { it.togglingReveal(key) }
+
+    /** The journal's Translated · Original switch: the band does not follow. */
+    fun setJournalShowsOriginal(showsOriginal: Boolean) = _journalView.update { it.showing(showsOriginal) }
 
     fun openJournal() = captions.openJournal()
 }
@@ -45,13 +59,14 @@ class CallCaptionsViewModel @Inject constructor(
 /** The Prisme projection of journal segments onto the lines the band, the sheet and the panel draw. */
 internal fun CallCaptionsController.captionLines(
     segments: List<CallJournalSegment>,
-    state: CallCaptionsState,
+    prefersOriginal: Boolean,
+    revealed: Set<String>,
     labels: CallCaptionLabels,
 ): List<CallLiveCaptionLine> = CallLiveCaptionLines.lines(
     segments = segments,
     reader = reader,
     peerName = peerDisplayName,
-    prefersOriginal = state.showsOriginal,
-    revealed = state.revealed,
+    prefersOriginal = prefersOriginal,
+    revealed = revealed,
     labels = labels,
 )
