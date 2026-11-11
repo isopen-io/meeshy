@@ -50,8 +50,8 @@
     },
     "android:feature/game": {
       "labels": 1335,
-      "words": 10107,
-      "long": 165,
+      "words": 9413,
+      "long": 141,
       "explanations": 117
     },
     "android:feature/notifications": {
@@ -152,8 +152,8 @@
     },
     "ios:Meeshy/activation": {
       "labels": 20,
-      "words": 151,
-      "long": 6,
+      "words": 112,
+      "long": 1,
       "explanations": 0
     },
     "ios:Meeshy/affiliate": {
@@ -187,10 +187,10 @@
       "explanations": 0
     },
     "ios:Meeshy/auth": {
-      "labels": 100,
-      "words": 524,
-      "long": 6,
-      "explanations": 11
+      "labels": 94,
+      "words": 461,
+      "long": 1,
+      "explanations": 8
     },
     "ios:Meeshy/block": {
       "labels": 2,
@@ -229,10 +229,10 @@
       "explanations": 16
     },
     "ios:Meeshy/call": {
-      "labels": 445,
-      "words": 1665,
+      "labels": 444,
+      "words": 1664,
       "long": 11,
-      "explanations": 88
+      "explanations": 87
     },
     "ios:Meeshy/calls": {
       "labels": 50,
@@ -451,9 +451,9 @@
       "explanations": 0
     },
     "ios:Meeshy/emailVerification": {
-      "labels": 25,
-      "words": 160,
-      "long": 2,
+      "labels": 23,
+      "words": 130,
+      "long": 0,
       "explanations": 4
     },
     "ios:Meeshy/emoji": {
@@ -506,14 +506,14 @@
     },
     "ios:Meeshy/game": {
       "labels": 963,
-      "words": 7758,
-      "long": 126,
+      "words": 7030,
+      "long": 111,
       "explanations": 105
     },
     "ios:Meeshy/game2": {
       "labels": 287,
-      "words": 1996,
-      "long": 37,
+      "words": 1816,
+      "long": 26,
       "explanations": 7
     },
     "ios:Meeshy/guest": {
@@ -715,10 +715,10 @@
       "explanations": 0
     },
     "ios:Meeshy/onboarding": {
-      "labels": 129,
-      "words": 885,
-      "long": 12,
-      "explanations": 6
+      "labels": 122,
+      "words": 714,
+      "long": 3,
+      "explanations": 3
     },
     "ios:Meeshy/outbox": {
       "labels": 1,
@@ -877,9 +877,9 @@
       "explanations": 0
     },
     "ios:Meeshy/sessionClosed": {
-      "labels": 15,
-      "words": 134,
-      "long": 5,
+      "labels": 13,
+      "words": 79,
+      "long": 0,
       "explanations": 0
     },
     "ios:Meeshy/sessions": {
@@ -908,7 +908,7 @@
     },
     "ios:Meeshy/signInLink": {
       "labels": 10,
-      "words": 142,
+      "words": 115,
       "long": 4,
       "explanations": 0
     },
@@ -1141,10 +1141,10 @@
       "explanations": 2
     },
     "ios:MeeshyUI/auth": {
-      "labels": 105,
-      "words": 529,
-      "long": 10,
-      "explanations": 12
+      "labels": 81,
+      "words": 281,
+      "long": 0,
+      "explanations": 4
     },
     "ios:MeeshyUI/avatar": {
       "labels": 4,
