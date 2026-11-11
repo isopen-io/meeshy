@@ -30,6 +30,17 @@ enum CallPillText: Equatable, Sendable {
         self != .captionsAlone
     }
 
+    /// Les sous-titres sont dans le verre : au repos, ou seuls quand la pilule est rangée.
+    var showsCaptionsBand: Bool {
+        self == .captions || self == .captionsAlone
+    }
+
+    /// Loi 11 · 17 — rangée, la pilule ne s'efface pas : son verre reste à l'écran, privé de sa
+    /// rangée de base, et se resserre autour des sous-titres. Pas de second verre.
+    var staysWhenChromeStowed: Bool {
+        self == .captionsAlone
+    }
+
     /// Le journal prend une part de la fenêtre (`CallJournalSizing`) : en audio,
     /// l'avatar se resserre alors en en-tête compact pour lui laisser la place.
     var compactsAudioLayout: Bool {

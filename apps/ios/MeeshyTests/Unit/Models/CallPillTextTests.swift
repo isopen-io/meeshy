@@ -87,6 +87,28 @@ final class CallPillTextTests: XCTestCase {
         XCTAssertTrue([CallPillText.none, .captions, .journal].allSatisfy(\.hasBaseRow))
     }
 
+    /// G1.3 · G1.11 — UN seul verre : la pilule rangée reste à l'écran avec ses sous-titres
+    /// (elle ne s'efface pas), sa rangée de base se retire par morphisme et le verre se resserre.
+    func test_onlyTheCaptionsAlone_staysOnScreenWhenTheChromeIsStowed() {
+        XCTAssertTrue(CallPillText.captionsAlone.staysWhenChromeStowed)
+        XCTAssertTrue([CallPillText.none, .captions, .journal].allSatisfy { !$0.staysWhenChromeStowed })
+    }
+
+    func test_captionsBand_isInTheGlass_forCaptionsAndForTheStowedCaptions() {
+        XCTAssertTrue(CallPillText.captions.showsCaptionsBand)
+        XCTAssertTrue(CallPillText.captionsAlone.showsCaptionsBand)
+        XCTAssertFalse(CallPillText.none.showsCaptionsBand)
+        XCTAssertFalse(CallPillText.journal.showsCaptionsBand)
+    }
+
+    func test_stowedPill_withCaptions_isTheSameGlassWithoutItsRows_atEveryLayer() {
+        for layer in [CallScreenLayer.idle, .menu, .panel(.journal), .menuOverJournal] {
+            let stowed = text(layer, revealed: false)
+            XCTAssertTrue(stowed.staysWhenChromeStowed, "\(layer) : un seul verre, jamais un second")
+            XCTAssertFalse(stowed.hasBaseRow, "\(layer) : la rangée de base se retire")
+        }
+    }
+
     /// En audio, seul le journal ouvert resserre l'avatar en en-tête compact : deux
     /// phrases de sous-titres laissent la personne au centre.
     func test_onlyTheOpenJournal_compactsTheAudioLayout() {

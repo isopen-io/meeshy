@@ -131,6 +131,20 @@ final class CallSelfTileTests: XCTestCase {
         XCTAssertEqual(CallSelfTileScale.resting(.x3, isChromeVisible: true), .x3)
         XCTAssertEqual(CallSelfTileScale.resting(.x1, isChromeVisible: true), .x1)
     }
+    /// G1.11 — ma vignette se range par une TRANSFORMATION (un facteur d'échelle), pas
+    /// par un nouveau cadre : son cadre reste celui du palier choisi.
+    func test_restingFactor_chromeVisible_isOne() {
+        for scale in CallSelfTileScale.allCases {
+            XCTAssertEqual(CallSelfTileScale.restingFactor(scale, isChromeVisible: true), 1, accuracy: 0.0001)
+        }
+    }
+
+    func test_restingFactor_chromeHidden_scalesTheChosenFrameDownToTheSmallest() {
+        XCTAssertEqual(CallSelfTileScale.restingFactor(.x3, isChromeVisible: false), CallSelfTileScale.x1.width / CallSelfTileScale.x3.width, accuracy: 0.0001)
+        XCTAssertEqual(CallSelfTileScale.restingFactor(.x2, isChromeVisible: false), CallSelfTileScale.x1.width / CallSelfTileScale.x2.width, accuracy: 0.0001)
+        XCTAssertEqual(CallSelfTileScale.restingFactor(.x1, isChromeVisible: false), 1, accuracy: 0.0001)
+    }
+
     // MARK: - Loi 4 — le liseré porte la couleur de qui est DANS la vignette
 
     func test_strokeKey_myImageInTheTile_isMyId() {

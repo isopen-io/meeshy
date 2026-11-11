@@ -57,6 +57,12 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
         isChromeVisible ? chosen : .x1
     }
 
+    /// G1.11 — le rangement est une TRANSFORMATION : le cadre reste celui du palier choisi et la
+    /// vignette est mise à l'échelle de sa petite taille, jamais relayoutée.
+    static func restingFactor(_ chosen: CallSelfTileScale, isChromeVisible: Bool) -> CGFloat {
+        resting(chosen, isChromeVisible: isChromeVisible).width / chosen.width
+    }
+
     static func fitted(_ size: CGSize, in available: CGSize) -> CGSize {
         guard size.width > 0, size.height > 0, available.width > 0, available.height > 0 else { return size }
         let ratio = min(1, available.width / size.width, available.height / size.height)
