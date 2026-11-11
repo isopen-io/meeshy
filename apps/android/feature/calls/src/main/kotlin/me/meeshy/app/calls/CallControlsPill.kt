@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,8 +56,10 @@ private val ROWS_MAX_HEIGHT = 340.dp
  * rails on the edges instead and the pill does not grow (#17327, [CallControlsDisposition]). A panel drawn in the pill
  * REPLACES the rows, never stacks with them. It is ONE glass block that grows with what it holds, and each button
  * inside is its own glass disc (#17323). The captions live in it too, above the base row, and the journal opens in place
- * of them (#17343, [CallPillText]): (…) stows them, and the base row stays under the journal. Pure projection: the layer,
- * the rows and every callback come from the caller.
+ * of them (#17343, [CallPillText]): (…) stows them, and the base row stays under the journal. When a touch stows the
+ * chrome and the captions stay, THIS glass stays: its base row folds out by the same morphism that unfolds the rows, the
+ * glass tightens around the captions, and the base row comes back the way it left (G1.3, laws 11 and 17). Pure
+ * projection: the layer, the rows and every callback come from the caller.
  */
 @Composable
 internal fun CallControlsPill(
@@ -79,19 +82,22 @@ internal fun CallControlsPill(
     panelContent: @Composable (CallScreenPanel) -> Unit = {},
 ) {
     val reduceMotion = rememberCallReduceMotion()
-    val expanded = disposition.unfoldsPill(layer)
+    val expanded = disposition.unfoldsPill(layer) && pillText.hasBaseRow
     val unfoldScale = if (reduceMotion) EnterTransition.None else
         scaleIn(initialScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
+    val foldScale = if (reduceMotion) ExitTransition.None else
+        scaleOut(targetScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 1f))
     val grow = if (reduceMotion) EnterTransition.None else expandVertically(tween(UNFOLD_MILLIS), expandFrom = Alignment.Bottom)
     val shrink = if (reduceMotion) ExitTransition.None else shrinkVertically(tween(UNFOLD_MILLIS), shrinkTowards = Alignment.Bottom)
     val panel = layer.pillPanel
     val held = remember { HeldLayer() }
     if (expanded) held.layer = layer
+    if (pillText.hasBaseRow) held.rowText = pillText
     CallControlsGlass(modifier = modifier.widthIn(max = CallPillWidth.maxWidthDp(pillText).dp).fillMaxWidth()) {
         AnimatedVisibility(
             visible = expanded,
             enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale + grow,
-            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink,
+            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink + foldScale,
         ) {
             // What is leaving (a panel, the rows) keeps its content until it has faded: it does not vanish at once.
             val shownLayer = if (expanded) layer else held.layer
@@ -112,16 +118,21 @@ internal fun CallControlsPill(
             }
         }
         AnimatedVisibility(
-            visible = pillText == CallPillText.Captions,
+            visible = pillText.showsCaptionsBand,
             enter = fadeIn(tween(UNFOLD_MILLIS)) + grow,
             exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink,
+        ) { captions() }
+        AnimatedVisibility(
+            visible = pillText.hasBaseRow,
+            enter = fadeIn(tween(UNFOLD_MILLIS)) + unfoldScale + grow,
+            exit = fadeOut(tween(UNFOLD_MILLIS)) + shrink + foldScale,
         ) {
             Column {
-                captions()
-                CallPillHairline()
+                // The line between the captions and the base row leaves with the base row, never before it.
+                if (held.rowText == CallPillText.Captions) CallPillHairline()
+                BaseRow(state, captioned = expanded && panel != CallScreenPanel.Journal, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
             }
         }
-        BaseRow(state, captioned = expanded && panel != CallScreenPanel.Journal, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
     }
 }
 
@@ -156,6 +167,9 @@ private fun FamilyRows(
 /** The layer the pill last drew unfolded: what a folding pill keeps showing while it fades (not state, never recomposes). */
 private class HeldLayer {
     var layer: CallScreenLayer = CallScreenLayer.Idle
+
+    /** The text the pill carried while it had a base row: what a folding base row keeps showing (its hairline). */
+    var rowText: CallPillText = CallPillText.None
 }
 
 @Composable
@@ -180,7 +194,8 @@ private fun BaseRow(
                 kind = if (menuOpen) CallPillKind.Active else CallPillKind.Normal,
                 label = stringResource(if (menuOpen) R.string.call_control_more_hide else R.string.call_control_more_show),
                 hint = stringResource(R.string.call_control_more_hint),
-                caption = if (captioned) stringResource(R.string.call_control_more_caption) else null,
+                caption = stringResource(R.string.call_control_more_caption),
+                captionShown = captioned,
                 onClick = onToggleMenu,
                 modifier = Modifier.semantics { stateDescription = expandedLabel },
             )
@@ -194,7 +209,8 @@ private fun BaseRow(
                 kind = if (state.isMuted) CallPillKind.Active else CallPillKind.Normal,
                 label = stringResource(if (state.isMuted) R.string.call_control_unmute_label else R.string.call_control_mute_label),
                 hint = stringResource(R.string.call_control_mute_hint),
-                caption = if (captioned) stringResource(R.string.call_control_mute_caption) else null,
+                caption = stringResource(R.string.call_control_mute_caption),
+                captionShown = captioned,
                 toggleState = state.isMuted,
                 onClick = onToggleMute,
             )
@@ -205,7 +221,8 @@ private fun BaseRow(
                 kind = CallPillKind.Normal,
                 label = stringResource(R.string.call_control_output_a11y),
                 hint = stringResource(R.string.call_control_output_hint),
-                caption = if (captioned) stringResource(R.string.call_audio_button) else null,
+                caption = stringResource(R.string.call_audio_button),
+                captionShown = captioned,
                 onClick = onOutput,
             )
         }
@@ -215,7 +232,8 @@ private fun BaseRow(
                 kind = CallPillKind.Destructive,
                 label = stringResource(R.string.call_action_hang_up),
                 hint = stringResource(R.string.call_control_end_hint),
-                caption = if (captioned) stringResource(R.string.call_control_end_caption) else null,
+                caption = stringResource(R.string.call_control_end_caption),
+                captionShown = captioned,
                 onClick = onHangUp,
             )
         }

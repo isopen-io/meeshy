@@ -194,20 +194,20 @@ class CallCaptionsBandSemanticsTest {
 
     @Test
     @Config(sdk = [34], qualifiers = "w1000dp-h800dp")
-    fun `the stowed captions take a glass of their own, limited to 560 dp (#17343)`() {
+    fun `the captions of a mode, which has no pill, take a glass of their own limited to 560 dp (#17343, G1_3)`() {
         rule.setContent {
             MeeshyTheme {
                 CallCaptionsBand(
                     lines = listOf(line("a", "Bonjour")),
                     onToggleOriginal = {},
                     onOpenJournal = {},
-                    modifier = Modifier.testTag("stowed"),
+                    modifier = Modifier.testTag("mode"),
                     hasOwnGlass = true,
                 )
             }
         }
 
-        rule.onNodeWithTag("stowed").assertWidthIsEqualTo(560.dp)
+        rule.onNodeWithTag("mode").assertWidthIsEqualTo(560.dp)
         rule.onNodeWithText("Ada · Bonjour", substring = true).assertIsDisplayed()
     }
 

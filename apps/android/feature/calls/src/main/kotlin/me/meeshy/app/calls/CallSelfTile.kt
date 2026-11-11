@@ -3,7 +3,10 @@ package me.meeshy.app.calls
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -26,7 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -48,12 +54,14 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallSafeInsets
 import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
 import me.meeshy.sdk.model.call.CallTilePoint
 import me.meeshy.sdk.model.call.CallTileSize
+import me.meeshy.sdk.model.call.GroupStageTapRule
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
 import kotlin.math.roundToInt
@@ -68,7 +76,10 @@ private val TileShadow = 8.dp
 /**
  * La vignette locale (ratio 1,4) : on la glisse, elle s'accroche au coin le plus proche en
  * ressort avec une haptique ; on la pince sur trois paliers (72 / 100 / 150 dp), retenus par
- * appel ; un toucher permute les deux vidéos. Pour TalkBack elle est ajustable (petite, moyenne,
+ * appel ; un toucher permute les deux vidéos quand les contrôles sont montrés, et les rend d'abord quand ils sont
+ * rangés ([GroupStageTapRule], loi 15, [onReveal]). Rangée, elle se range par une TRANSFORMATION (G1.11) : son cadre reste
+ * celui du palier choisi, une échelle ancrée à son coin d'écran la ramène à sa petite taille (immédiate avec « Réduire
+ * les animations »), et son liseré, ses coins et son badge gardent ceux d'une petite vignette. Pour TalkBack elle est ajustable (petite, moyenne,
  * grande) et dit son état de survie quand [paused].
  *
  * Elle ne porte AUCUNE commande autour d'elle (#17327) : Caméra, Retourner, Effets et Écran sont le rail « Mon image » du
@@ -88,8 +99,11 @@ internal fun CallSelfTile(
     onSwap: () -> Unit,
     modifier: Modifier = Modifier,
     controlsVisible: Boolean = true,
+    /** Le toucher d'une vignette dont les contrôles sont rangés : ils reviennent d'abord (G1.9). */
+    onReveal: () -> Unit = {},
     rimHex: String? = null,
-    overlay: @Composable BoxScope.() -> Unit = {},
+    /** Posé par-dessus, au coin ; reçoit le facteur de rangement pour garder sa taille de petite vignette. */
+    overlay: @Composable BoxScope.(stowFactor: Float) -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
     BoxWithConstraints(modifier) {
@@ -105,7 +119,13 @@ internal fun CallSelfTile(
         val scope = rememberCoroutineScope()
         val haptics = LocalHapticFeedback.current
 
-        val size = CallSelfTileLaw.tileSize(container, insets, CallSelfTileLaw.resting(scale, controlsVisible), pinch)
+        val size = CallSelfTileLaw.tileSize(container, insets, scale, pinch)
+        val stowTarget = CallSelfTileLaw.restingFactor(scale, controlsVisible)
+        val stowFactor by animateFloatAsState(
+            targetValue = stowTarget,
+            animationSpec = if (reduceMotion) snap<Float>() else tween<Float>(CallChromeStow.fadeMillis(reduceMotion = false)),
+            label = "callSelfTileStow",
+        )
         val center = CallSelfTileLaw.center(corner, container, size, insets)
 
         fun settle(target: CallSelfTileScale) {
@@ -150,7 +170,7 @@ internal fun CallSelfTile(
                 drag += delta
             },
             onPinch = { magnification -> pinch = magnification },
-            onTap = onSwap,
+            onTap = { if (GroupStageTapRule.tapsTheSwap(controlsVisible)) onSwap() else onReveal() },
             onEnd = { dragged, pinched ->
                 if (dragged) {
                     val shift = drag / density.density
@@ -165,7 +185,10 @@ internal fun CallSelfTile(
             },
         )
 
-        val shape = RoundedCornerShape(MeeshyRadius.smPlus)
+        val shape = RoundedCornerShape(CallSelfTileLaw.counterScaled(MeeshyRadius.smPlus.value, stowFactor).dp)
+        val rim = CallTileRim.selfTileBorder(paused, rimHex, MeeshyTheme.tokens.warning)
+        val anchor = CallSelfTileLaw.anchor(corner)
+        val pivot = TransformOrigin(if (rtl) 1f - anchor.xDp else anchor.xDp, anchor.yDp)
         val abs = absolutePx(center, container, rtl, density)
         val widthPx = size.widthDp * density.density
         val heightPx = size.heightDp * density.density
@@ -181,9 +204,14 @@ internal fun CallSelfTile(
             modifier = Modifier
                 .offset { IntOffset((abs.x - widthPx / 2 + drag.x).roundToInt(), (abs.y - heightPx / 2 + drag.y).roundToInt()) }
                 .size(size.widthDp.dp, size.heightDp.dp)
-                .shadow(TileShadow, shape)
+                .graphicsLayer {
+                    scaleX = stowFactor
+                    scaleY = stowFactor
+                    transformOrigin = pivot
+                }
+                .shadow(CallSelfTileLaw.counterScaled(TileShadow.value, stowFactor).dp, shape)
                 .clip(shape)
-                .border(CallTileRim.selfTileBorder(paused, rimHex, MeeshyTheme.tokens.warning), shape)
+                .border(BorderStroke(CallSelfTileLaw.counterScaled(rim.width.value, stowFactor).dp, rim.brush), shape)
                 .callSelfTileGestures(handlers)
                 .semantics(mergeDescendants = true) {
                     contentDescription = if (paused) "$swapLabel, $pausedName. $pausedHint" else swapLabel
@@ -202,7 +230,7 @@ internal fun CallSelfTile(
             contentAlignment = Alignment.Center,
         ) {
             content()
-            overlay()
+            overlay(stowFactor)
         }
     }
 }

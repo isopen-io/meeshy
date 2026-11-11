@@ -3,6 +3,9 @@ package me.meeshy.app.calls
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -192,5 +195,53 @@ class CallStageSemanticsTest {
         assertThat(sceneTaps).isEqualTo(1)
         rule.onNodeWithContentDescription("Swap videos", substring = true).performClick()
         assertThat(sceneTaps).isEqualTo(1)
+    }
+
+    @Test
+    fun `my tile with the controls shown swaps the videos and does not relight anything (G1_9)`() {
+        var swaps = 0
+        var reveals = 0
+        rule.setContent {
+            MeeshyTheme {
+                CallSelfTile("c", CallSelfTileMemory(), paused = false, reduceMotion = true, onSwap = { swaps++ }, onReveal = { reveals++ }, controlsVisible = true, modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize())
+                }
+            }
+        }
+        rule.onNodeWithContentDescription("Swap videos").performTouchInput { click() }
+        assertThat(swaps).isEqualTo(1)
+        assertThat(reveals).isEqualTo(0)
+    }
+
+    @Test
+    fun `my tile with the controls stowed gives them back first and does not swap (G1_9)`() {
+        var swaps = 0
+        var reveals = 0
+        rule.setContent {
+            MeeshyTheme {
+                CallSelfTile("c", CallSelfTileMemory(), paused = false, reduceMotion = true, onSwap = { swaps++ }, onReveal = { reveals++ }, controlsVisible = false, modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize())
+                }
+            }
+        }
+        rule.onNodeWithContentDescription("Swap videos").performTouchInput { click() }
+        assertThat(swaps).isEqualTo(0)
+        assertThat(reveals).isEqualTo(1)
+    }
+
+    @Test
+    fun `stowing the controls keeps the frame of the chosen scale, the tile only scales (G1_11)`() {
+        var visible by mutableStateOf(true)
+        rule.setContent {
+            MeeshyTheme {
+                CallSelfTile("c", CallSelfTileMemory(), paused = false, reduceMotion = true, onSwap = {}, controlsVisible = visible, modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize())
+                }
+            }
+        }
+        val shown = rule.onNodeWithContentDescription("Swap videos").fetchSemanticsNode().size
+        visible = false
+        rule.waitForIdle()
+        assertThat(rule.onNodeWithContentDescription("Swap videos").fetchSemanticsNode().size).isEqualTo(shown)
     }
 }

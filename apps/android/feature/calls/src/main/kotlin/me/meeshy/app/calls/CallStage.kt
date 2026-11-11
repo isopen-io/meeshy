@@ -25,6 +25,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallDuoStageLayout
+import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.ScreenShareCapturePolicy
 import me.meeshy.ui.theme.MeeshySpacing
@@ -71,6 +74,8 @@ internal fun CallDuoVideoStage(
     layout: CallDuoStageLayout,
     modifier: Modifier = Modifier,
     onSwap: () -> Unit = {},
+    /** Ma vignette touchée, contrôles rangés : ils reviennent d'abord (G1.9). */
+    onRevive: () -> Unit = {},
     selfTileMemory: CallSelfTileMemory = CallSelfTileMemories.shared,
     onSceneTap: (() -> Unit)? = null,
     selfCamera: CallSelfCameraActions? = null,
@@ -154,15 +159,24 @@ internal fun CallDuoVideoStage(
                     paused = state.isVideoAutoPaused && state.isCameraOn,
                     reduceMotion = reduceMotion,
                     onSwap = onSwap,
+                    onReveal = onRevive,
                     controlsVisible = controlsVisible,
                     rimHex = CallTileRim.duoSelfTile(selfUserId, peerUserId, showsPeer = featuresLocal),
                     modifier = Modifier.fillMaxSize(),
-                    overlay = {
+                    overlay = { stowFactor ->
                         if (showsMyImage && selfCamera != null) CallSelfTileZoomSlot(selfCamera.zoom, visible = controlsVisible)
                         if (state.isPeerMuted && featuresLocal) {
                             CallPeerMutedBadge(
                                 compact = true,
-                                modifier = Modifier.align(Alignment.BottomStart).padding(MeeshySpacing.xs),
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(MeeshySpacing.xs)
+                                    .graphicsLayer {
+                                        val keep = CallSelfTileLaw.counterScaled(1f, stowFactor)
+                                        scaleX = keep
+                                        scaleY = keep
+                                        transformOrigin = TransformOrigin(0f, 1f)
+                                    },
                             )
                         }
                     },

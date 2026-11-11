@@ -93,4 +93,31 @@ class CallRailsGuardTest {
             assertThat(source).doesNotContain("CallCameraRailRowSlot")
         }
     }
+
+    @Test
+    fun `le rangement tient dans un seul verre, sans second verre de sous-titres (G1_3)`() {
+        val block = code("CallControlsBlock.kt")
+        assertThat(block).doesNotContain("stowedCaptions")
+        assertThat(block).contains("staysWhenChromeStowed")
+        assertThat(code("CallConnectedLayout.kt")).doesNotContain("hasOwnGlass = true")
+        assertThat(code("CallControlsPill.kt")).contains("pillText.hasBaseRow")
+    }
+
+    @Test
+    fun `le rangement passe par la transformation et l'opacite, jamais par un relayout (G1_11, G2_8)`() {
+        val fade = code("CallConnectedLayout.kt")
+        assertThat(fade).contains("CallChromeStow.travel(")
+        assertThat(fade).contains("graphicsLayer {")
+        assertThat(fade).doesNotContain(".alpha(alpha)")
+        val tile = code("CallSelfTile.kt")
+        assertThat(tile).contains("CallSelfTileLaw.restingFactor(")
+        assertThat(tile).doesNotContain("CallSelfTileLaw.resting(")
+        assertThat(code("CallScreen.kt")).contains("stowsToward = CallVerticalEdge.Top")
+    }
+
+    @Test
+    fun `un bouton de rail touche pendant la sortie rend d'abord les contrôles (G2_7)`() {
+        assertThat(code("CallActionRails.kt")).contains("callReviveOnTouch(")
+        assertThat(code("CallConnectedLayout.kt")).contains("onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) }")
+    }
 }

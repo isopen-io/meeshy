@@ -131,4 +131,34 @@ class CallActionRailsTest {
         rule.onNodeWithContentDescription("The call").assertDoesNotExist()
         rule.onNodeWithContentDescription("My image").assertDoesNotExist()
     }
+
+    @Test
+    fun `a rail button touched while its rail leaves relights the controls first (G2_7)`() {
+        var rows by mutableStateOf(both)
+        var revived = 0
+        val actions = mutableListOf<CallAction>()
+        rule.setContent {
+            MeeshyTheme {
+                CallActionRails(rows, items, emptySet(), { actions += it }, bottomClearance = 0.dp, onRevive = { revived++ })
+            }
+        }
+        rule.mainClock.autoAdvance = false
+        rows = emptyList()
+        rule.mainClock.advanceTimeBy(100)
+
+        rule.onNodeWithContentDescription("Effects").performClick()
+
+        assertThat(revived).isAtLeast(1)
+        assertThat(actions).containsExactly(CallAction.Effects)
+    }
+
+    @Test
+    fun `a rail that stays does not ask for the controls, they are already there`() {
+        var revived = 0
+        rule.setContent {
+            MeeshyTheme { CallActionRails(both, items, emptySet(), {}, bottomClearance = 0.dp, onRevive = { revived++ }) }
+        }
+        rule.onNodeWithContentDescription("Effects").performClick()
+        assertThat(revived).isEqualTo(0)
+    }
 }
