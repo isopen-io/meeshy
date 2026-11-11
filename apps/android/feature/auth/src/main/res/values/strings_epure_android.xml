@@ -12,10 +12,13 @@
     <string name="email_gate_more_links">Beyond 5 active links, a code is required. Your link will be created as soon as it is confirmed.</string>
     <string name="email_gate_publish">Your post is kept and will go out as soon as the code is confirmed.</string>
     <string name="email_gate_sent">Code sent to %1$s.</string>
+    <string name="email_verification_code_a11y_hint">Enter the 6-digit code sent by email</string>
     <string name="email_verification_subtitle_account_created">Account created. Code and link sent to <b>%1$s</b>.</string>
     <string name="email_verification_subtitle_activation_required">Activate your account: a code was sent to <b>%1$s</b> to prove this address.</string>
+    <string name="email_verification_success">Email verified!</string>
+    <string name="email_verification_title">Check your email</string>
     <string name="link_signin_message">This link was not requested from this device. It opens %1$s: only continue if it belongs to you.</string>
-    <string name="link_signin_message_replacing">This link was not requested from this device. It opens %1$s instead of %2$s, which stays in the account switcher: only continue if it belongs to you.</string>
+    <string name="link_signin_message_replacing">This link was not requested from this device. It replaces %2$s, which stays in the account switcher. Only continue if it belongs to you.</string>
     <string name="link_switch_message">This link opens ANOTHER account than %2$s: %1$s. Only open it if it belongs to you.</string>
     <string name="link_switch_message_unknown_current">This link opens ANOTHER account than the one that is open: %1$s. Only open it if it belongs to you.</string>
     <string name="login_two_factor_description_with_backup">Enter the 6-digit code from your authenticator app, or a backup code.</string>
@@ -35,7 +38,7 @@
     <string name="onboarding_story_audience_friends">Visible to your friends</string>
     <string name="onboarding_story_audience_public">Visible to everyone</string>
     <string name="onboarding_story_body">One pic, one line: a story.</string>
-    <string name="onboarding_story_verify_detail">Tap the link we emailed you.</string>
+    <string name="onboarding_story_verify">Confirm your email to post your story</string>
     <string name="session_closed_activation_message">Sign in again, then enter the code you received by email.</string>
     <string name="session_closed_admin_message">To protect your account.</string>
     <string name="session_closed_admin_title">Session closed by the Meeshy team</string>
@@ -44,7 +47,7 @@
     <string name="session_closed_signed_out_message">This session was closed.</string>
     <string name="session_closed_user_revoke_message">Closed from another of your devices. Not you? Change your password.</string>
     <string name="signup_display_name_invalid_characters">Letters, spaces, apostrophes, periods and hyphens only.</string>
-    <string name="signup_password_why_detail">Without a password, you always sign in with a link sent by email.</string>
+    <string name="signup_password_why_detail">Without a password, you sign in with a link sent by email.</string>
     <string name="signup_phone_conflict">Number already linked to an account: leave it empty to continue.</string>
     <string name="visitor_body">To react, comment and read everything in your language.</string>
     <string name="welcome_tagline">Every message, in your language.</string>

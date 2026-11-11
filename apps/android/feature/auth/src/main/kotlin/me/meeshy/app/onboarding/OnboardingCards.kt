@@ -373,10 +373,7 @@ private fun StoryCard(state: OnboardingUiState, actions: OnboardingCardActions, 
         Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
             when {
                 awaitsVerification -> {
-                    StatusBanner(
-                        text = stringResource(R.string.onboarding_story_verify),
-                        detail = stringResource(R.string.onboarding_story_verify_detail),
-                    )
+                    StatusBanner(text = stringResource(R.string.onboarding_story_verify), detail = null)
                     VerificationStatus(state)
                 }
                 published -> OutcomeBanner(

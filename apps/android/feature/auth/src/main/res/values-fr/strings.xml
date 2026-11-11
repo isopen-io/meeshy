@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="login_welcome_back">Bon retour</string>
     <string name="login_error_required">Le nom d\'utilisateur et le mot de passe sont requis</string>
     <string name="login_custom_host_label">Hôte personnalisé</string>
     <string name="login_apply_custom_host">Appliquer l\'hôte personnalisé</string>
@@ -17,7 +16,6 @@
 
     <!-- Account recovery -->
     <string name="auth_back_to_login">Retour à la connexion</string>
-    <string name="auth_magic_countdown">Lien valide pendant %1$s</string>
     <string name="auth_magic_validating">Connexion en cours…</string>
 
     <!-- Account creation (one screen, no wizard) -->
@@ -26,9 +24,7 @@
     <string name="signup_display_name_taken">Ce nom est déjà pris. Essayez-en un autre.</string>
     <string name="signup_email_invalid">Cette adresse e-mail semble incomplète.</string>
     <string name="signup_phone_invalid">Ce numéro n\'est pas composable.</string>
-    <string name="signup_choose_country">Choisir le pays</string>
     <string name="signup_country_picker_title">Choisir un pays</string>
     <string name="signup_password_too_short">6 caractères minimum.</string>
-    <string name="signup_submit">Créer mon compte</string>
     <string name="signup_error_invalid_field">Cette valeur a été refusée.</string>
 </resources>

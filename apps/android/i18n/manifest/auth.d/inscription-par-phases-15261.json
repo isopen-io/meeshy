@@ -6,12 +6,6 @@
       "entries": [
         {
           "catalog": "app",
-          "iosKey": "auth.signup.card.title",
-          "androidName": "signup_card_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "auth.signup.email.placeholder",
           "androidName": "signup_email_placeholder",
           "status": "adopted"
@@ -32,12 +26,6 @@
           "catalog": "app",
           "iosKey": "auth.signup.password.placeholder",
           "androidName": "signup_password_placeholder",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "auth.signup.password.why",
-          "androidName": "signup_password_why",
           "status": "adopted"
         },
         {

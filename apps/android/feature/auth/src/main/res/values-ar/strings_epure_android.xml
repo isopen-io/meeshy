@@ -12,10 +12,13 @@
     <string name="email_gate_more_links">بعد 5 روابط نشطة يُطلب رمز. سيُنشأ رابطك فور تأكيده.</string>
     <string name="email_gate_publish">منشورك محفوظ وسيُنشر فور تأكيد الرمز.</string>
     <string name="email_gate_sent">أُرسل الرمز إلى %1$s.</string>
+    <string name="email_verification_code_a11y_hint">أدخل الرمز المكوّن من 6 أرقام الذي وصلك بالبريد</string>
     <string name="email_verification_subtitle_account_created">تم إنشاء الحساب. أُرسل الرمز والرابط إلى <b>%1$s</b>.</string>
     <string name="email_verification_subtitle_activation_required">فعّل حسابك: أُرسل رمز إلى <b>%1$s</b> لإثبات هذا العنوان.</string>
+    <string name="email_verification_success">تم التحقق من البريد!</string>
+    <string name="email_verification_title">تحقّق من بريدك الإلكتروني</string>
     <string name="link_signin_message">لم يُطلب هذا الرابط من هذا الجهاز. إنه يفتح %1$s: لا تتابع إلا إذا كان ملكك.</string>
-    <string name="link_signin_message_replacing">لم يُطلب هذا الرابط من هذا الجهاز. إنه يفتح %1$s بدلًا من %2$s الذي يبقى في محدد الحسابات: لا تتابع إلا إذا كان ملكك.</string>
+    <string name="link_signin_message_replacing">لم يُطلب هذا الرابط من هذا الجهاز. سيحلّ محلّ %2$s الذي يبقى في محدد الحسابات. لا تتابع إلا إذا كان ملكك.</string>
     <string name="link_switch_message">يفتح هذا الرابط حسابًا آخر غير %2$s: %1$s. لا تفتحه إلا إذا كان ملكك.</string>
     <string name="link_switch_message_unknown_current">يفتح هذا الرابط حسابًا آخر غير الحساب المفتوح: %1$s. لا تفتحه إلا إذا كان ملكك.</string>
     <string name="login_two_factor_description_with_backup">أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة، أو رمزًا احتياطيًا.</string>
@@ -35,7 +38,7 @@
     <string name="onboarding_story_audience_friends">مرئية لأصدقائك</string>
     <string name="onboarding_story_audience_public">مرئية للجميع</string>
     <string name="onboarding_story_body">صورة وكلمة: قصة.</string>
-    <string name="onboarding_story_verify_detail">المس الرابط الذي وصلك بالبريد.</string>
+    <string name="onboarding_story_verify">أكّد بريدك الإلكتروني لنشر قصتك</string>
     <string name="session_closed_activation_message">سجّل الدخول مجددًا ثم أدخل الرمز الذي وصلك بالبريد الإلكتروني.</string>
     <string name="session_closed_admin_message">لحماية حسابك.</string>
     <string name="session_closed_admin_title">أغلق فريق Meeshy الجلسة</string>
@@ -44,7 +47,7 @@
     <string name="session_closed_signed_out_message">أُغلقت هذه الجلسة.</string>
     <string name="session_closed_user_revoke_message">أُغلقت من جهاز آخر لديك. لست أنت؟ غيّر كلمة المرور.</string>
     <string name="signup_display_name_invalid_characters">حروف ومسافات وفواصل عليا ونقاط وشرطات فقط.</string>
-    <string name="signup_password_why_detail">بدون كلمة مرور، تسجّل الدخول دائمًا عبر رابط يصلك بالبريد الإلكتروني.</string>
+    <string name="signup_password_why_detail">بدون كلمة مرور، تسجّل الدخول عبر رابط يصلك بالبريد الإلكتروني.</string>
     <string name="signup_phone_conflict">الرقم مرتبط بحساب بالفعل: اتركه فارغًا للمتابعة.</string>
     <string name="visitor_body">للتفاعل والتعليق وقراءة كل شيء بلغتك.</string>
     <string name="welcome_tagline">كل رسالة بلغتك.</string>

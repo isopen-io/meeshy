@@ -11,11 +11,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "auth.login.two_factor.description",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "auth.login.two_factor.placeholder",
           "status": "adopted"
         },
@@ -28,12 +23,6 @@
           "catalog": "app",
           "iosKey": "common.error.generic",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "emailVerification.title",
-          "status": "adopted",
-          "androidName": "email_verification_title"
         },
         {
           "catalog": "app",

@@ -22,7 +22,6 @@
     <string name="auth_forgot_never_had_text">Lo stesso link ti permette di crearne una.</string>
     <string name="auth_forgot_subtitle">Ricevi via email un link per scegliere una nuova password.</string>
     <string name="auth_forgot_title">Password dimenticata</string>
-    <string name="auth_login_two_factor_description">Inserisci il codice di verifica a 6 cifre generato dalla tua app di autenticazione.</string>
     <string name="auth_login_two_factor_label">Codice di verifica a due fattori</string>
     <string name="auth_login_two_factor_placeholder">Codice di verifica</string>
     <string name="auth_login_two_factor_title">Due fattori</string>
@@ -40,7 +39,6 @@
     <string name="email_gate_send">Ricevi il codice</string>
     <string name="email_gate_sending">Invio…</string>
     <string name="email_gate_title">Convalida il tuo indirizzo e-mail</string>
-    <string name="email_verification_code_a11y_hint">Inserisci il codice a 6 cifre ricevuto via email</string>
     <string name="email_verification_code_a11y_label">Codice di verifica</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">Questo codice è scaduto. Richiedine uno nuovo.</string>
@@ -51,15 +49,12 @@
     <string name="email_verification_error_too_many_attempts">Troppi tentativi. Riprova tra qualche minuto.</string>
     <string name="email_verification_error_weak_password">Questa password è troppo debole. Scegline una più sicura.</string>
     <string name="email_verification_nav_close">Chiudi</string>
-    <string name="email_verification_nav_title">Verifica dell\'email</string>
     <string name="email_verification_proven_elsewhere_body">Inserisci il codice ricevuto per accedere su questo telefono.</string>
     <string name="email_verification_proven_elsewhere_title">Indirizzo confermato ✓</string>
     <string name="email_verification_resend_button">Invia di nuovo il codice</string>
     <string name="email_verification_resend_confirmed">Codice inviato di nuovo!</string>
     <string name="email_verification_resending_a11y">Invio del codice in corso</string>
     <string name="email_verification_subtitle">Inserisci il codice a 6 cifre inviato a <b>%1$s</b></string>
-    <string name="email_verification_success">Email verificata!</string>
-    <string name="email_verification_title">Controlla la tua email</string>
     <string name="email_verification_verify_button">Verifica</string>
     <string name="email_verification_verifying_a11y">Verifica in corso</string>
     <string name="guest_ended_expired_message">Questo link non dà più accesso alla conversazione. Chiedi un nuovo link alla persona che te l\'ha inviato.</string>
@@ -238,7 +233,6 @@
     <string name="onboarding_languages_change">Cambia</string>
     <string name="onboarding_languages_confirm">È la mia lingua</string>
     <string name="onboarding_languages_demo_translated">Ciao, come va?</string>
-    <string name="onboarding_languages_failed">Non è stato possibile salvare la tua lingua. Puoi cambiarla nel tuo profilo.</string>
     <string name="onboarding_languages_primary">La tua lingua</string>
     <string name="onboarding_languages_primary_a11y">La tua lingua: %1$s. Cambia</string>
     <string name="onboarding_languages_secondary">Una seconda lingua? (facoltativa)</string>
@@ -284,7 +278,6 @@
     </plurals>
     <string name="onboarding_story_sending">La tua storia sta partendo…</string>
     <string name="onboarding_story_title">Fatti vedere</string>
-    <string name="onboarding_story_verify">Conferma la tua e-mail per pubblicare la tua storia</string>
     <string name="registration_back">Indietro</string>
     <string name="session_closed_activation_title">Conferma il tuo indirizzo e-mail</string>
     <string name="session_closed_contact">Scrivi al team Meeshy</string>
@@ -295,24 +288,19 @@
     <string name="session_closed_user_revoke_title">Questo dispositivo è stato disconnesso</string>
     <string name="share_link_join_anonymously">Unisciti in anonimo</string>
     <string name="share_link_resume_anonymously">Riprendi in forma anonima</string>
-    <string name="signup_back">Indietro</string>
     <string name="signup_card_code_lead">Inserisci il codice a 6 cifre inviato a %1$s o apri il link ricevuto.</string>
-    <string name="signup_card_title">Il tuo account</string>
     <string name="signup_card_verified">Account convalidato!</string>
     <string name="signup_card_verified_lead">Tutto pronto: i tuoi contatti ti leggono nella loro lingua.</string>
     <string name="signup_close">Chiudi</string>
     <string name="signup_country_search_hint">Cerca un paese</string>
-    <string name="signup_display_name_label">Come dobbiamo chiamarti?</string>
     <string name="signup_email_forgot_password">Password dimenticata?</string>
     <string name="signup_email_is_it_you">Sei tu?</string>
     <string name="signup_email_its_me">Sono io — recupera il mio account</string>
-    <string name="signup_email_label">E-mail</string>
     <string name="signup_email_not_me">Non sono io</string>
     <string name="signup_email_not_me_note">Per ottenerlo verrà richiesto il codice inviato a questo indirizzo.</string>
     <string name="signup_email_placeholder">tu@esempio.com</string>
     <string name="signup_email_send_sign_in_link">Ricevi un link di accesso</string>
     <string name="signup_email_taken">Esiste già un account con questo indirizzo.</string>
-    <string name="signup_error_generic">Creazione dell\'account non riuscita. Riprova.</string>
     <string name="signup_error_network">Nessuna connessione. Controlla la rete e riprova.</string>
     <string name="signup_error_rejected">La registrazione è stata rifiutata — riprova tra un momento.</string>
     <string name="signup_have_account">Hai già un account?</string>
@@ -326,11 +314,7 @@
     <string name="signup_legal_privacy">Informativa sulla privacy</string>
     <string name="signup_legal_terms">Termini di servizio</string>
     <string name="signup_min_characters">Almeno %1$d caratteri.</string>
-    <string name="signup_password_hide">Nascondi password</string>
-    <string name="signup_password_label">Password</string>
     <string name="signup_password_placeholder">Minimo 6 caratteri</string>
-    <string name="signup_password_show">Mostra password</string>
-    <string name="signup_password_why">Perché impostare una password adesso?</string>
     <string name="signup_phased_submit">Iscriviti</string>
     <string name="signup_phone_benefit">Ti permetterà di accedere e ai tuoi contatti di trovarti.</string>
     <string name="signup_phone_country_hint">Cambia paese</string>
@@ -373,7 +357,6 @@
     <string name="world_entry_language_greeting">Ciao %1$s, leggerai tutto in…</string>
     <string name="world_entry_language_group">Lingua principale</string>
     <string name="world_entry_language_hint">Suggerita dal tuo dispositivo.</string>
-    <string name="world_entry_name_label">Il tuo nome</string>
     <string name="world_entry_name_placeholder">Es. Amina</string>
     <string name="world_entry_name_prompt">Come dobbiamo chiamarti?</string>
     <string name="world_entry_step">Passo %1$d di %2$d</string>

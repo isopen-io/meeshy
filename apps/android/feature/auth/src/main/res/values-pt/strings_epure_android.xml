@@ -12,10 +12,13 @@
     <string name="email_gate_more_links">Além de 5 links ativos, é pedido um código. Seu link será criado assim que for validado.</string>
     <string name="email_gate_publish">Sua publicação fica guardada e será enviada assim que o código for validado.</string>
     <string name="email_gate_sent">Código enviado para %1$s.</string>
+    <string name="email_verification_code_a11y_hint">Digite o código de 6 dígitos recebido por e-mail</string>
     <string name="email_verification_subtitle_account_created">Conta criada. Código e link enviados para <b>%1$s</b>.</string>
     <string name="email_verification_subtitle_activation_required">Ative sua conta: enviamos um código para <b>%1$s</b> para comprovar este endereço.</string>
+    <string name="email_verification_success">E-mail verificado!</string>
+    <string name="email_verification_title">Verifique seu e-mail</string>
     <string name="link_signin_message">Este link não foi solicitado neste aparelho. Ele abre %1$s: só continue se for seu.</string>
-    <string name="link_signin_message_replacing">Este link não foi solicitado neste aparelho. Ele abre %1$s no lugar de %2$s, que continua no seletor de contas: só continue se for seu.</string>
+    <string name="link_signin_message_replacing">Este link não foi solicitado neste aparelho. Ele substitui %2$s, que continua no seletor de contas. Só continue se for seu.</string>
     <string name="link_switch_message">Este link abre OUTRA conta, diferente de %2$s: %1$s. Só abra se for sua.</string>
     <string name="link_switch_message_unknown_current">Este link abre OUTRA conta, diferente da que está aberta: %1$s. Só abra se for sua.</string>
     <string name="login_two_factor_description_with_backup">Digite o código de 6 dígitos do seu aplicativo autenticador ou um código de backup.</string>
@@ -35,7 +38,7 @@
     <string name="onboarding_story_audience_friends">Visível para seus amigos</string>
     <string name="onboarding_story_audience_public">Visível para todos</string>
     <string name="onboarding_story_body">Uma foto, uma frase: um story.</string>
-    <string name="onboarding_story_verify_detail">Toque no link recebido por e-mail.</string>
+    <string name="onboarding_story_verify">Confirme seu e-mail para publicar seu story</string>
     <string name="session_closed_activation_message">Entre novamente e digite o código recebido por e-mail.</string>
     <string name="session_closed_admin_message">Para proteger sua conta.</string>
     <string name="session_closed_admin_title">Sessão encerrada pela equipe Meeshy</string>
@@ -44,7 +47,7 @@
     <string name="session_closed_signed_out_message">Esta sessão foi encerrada.</string>
     <string name="session_closed_user_revoke_message">Encerrada em outro aparelho seu. Não foi você? Altere sua senha.</string>
     <string name="signup_display_name_invalid_characters">Apenas letras, espaços, apóstrofos, pontos e hifens.</string>
-    <string name="signup_password_why_detail">Sem senha, você sempre entra por um link recebido por e-mail.</string>
+    <string name="signup_password_why_detail">Sem senha, você entra por um link recebido por e-mail.</string>
     <string name="signup_phone_conflict">Número já vinculado a uma conta: deixe-o vazio para continuar.</string>
     <string name="visitor_body">Para reagir, comentar e ler tudo no seu idioma.</string>
     <string name="welcome_tagline">Cada mensagem, no seu idioma.</string>

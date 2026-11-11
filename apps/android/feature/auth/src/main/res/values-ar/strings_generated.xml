@@ -22,7 +22,6 @@
     <string name="auth_forgot_never_had_text">يتيح لك الرابط نفسه إنشاء واحدة.</string>
     <string name="auth_forgot_subtitle">استلم عبر البريد الإلكتروني رابطًا لاختيار كلمة مرور جديدة.</string>
     <string name="auth_forgot_title">نسيت كلمة المرور</string>
-    <string name="auth_login_two_factor_description">أدخل رمز التحقق المكوّن من 6 أرقام الذي أنشأه تطبيق المصادقة الخاص بك.</string>
     <string name="auth_login_two_factor_label">رمز التحقق بخطوتين</string>
     <string name="auth_login_two_factor_placeholder">رمز التحقق</string>
     <string name="auth_login_two_factor_title">التحقق بخطوتين</string>
@@ -40,7 +39,6 @@
     <string name="email_gate_send">استلام الرمز</string>
     <string name="email_gate_sending">جارٍ الإرسال…</string>
     <string name="email_gate_title">أكّد عنوان بريدك الإلكتروني</string>
-    <string name="email_verification_code_a11y_hint">أدخل الرمز المكوّن من 6 أرقام الذي وصلك بالبريد</string>
     <string name="email_verification_code_a11y_label">رمز التحقّق</string>
     <string name="email_verification_code_placeholder">000000</string>
     <string name="email_verification_error_expired_code">انتهت صلاحية هذا الرمز. اطلب رمزًا جديدًا.</string>
@@ -51,15 +49,12 @@
     <string name="email_verification_error_too_many_attempts">محاولات كثيرة جدًا. أعد المحاولة بعد بضع دقائق.</string>
     <string name="email_verification_error_weak_password">كلمة المرور هذه ضعيفة جدًا. اختر كلمة مرور أقوى.</string>
     <string name="email_verification_nav_close">إغلاق</string>
-    <string name="email_verification_nav_title">التحقق من البريد الإلكتروني</string>
     <string name="email_verification_proven_elsewhere_body">أدخل الرمز الذي تلقيته لتسجيل الدخول على هذا الهاتف.</string>
     <string name="email_verification_proven_elsewhere_title">تم تأكيد العنوان ✓</string>
     <string name="email_verification_resend_button">إعادة إرسال الرمز</string>
     <string name="email_verification_resend_confirmed">تمت إعادة إرسال الرمز!</string>
     <string name="email_verification_resending_a11y">جارٍ إرسال الرمز</string>
     <string name="email_verification_subtitle">أدخل الرمز المكوّن من 6 أرقام المُرسَل إلى <b>%1$s</b></string>
-    <string name="email_verification_success">تم التحقق من البريد!</string>
-    <string name="email_verification_title">تحقّق من بريدك الإلكتروني</string>
     <string name="email_verification_verify_button">تحقّق</string>
     <string name="email_verification_verifying_a11y">جارٍ التحقّق</string>
     <string name="guest_ended_expired_message">لم يعد هذا الرابط يتيح الوصول إلى المحادثة. اطلب رابطًا جديدًا من الشخص الذي أرسله إليك.</string>
@@ -241,7 +236,6 @@
     <string name="onboarding_languages_change">تغيير</string>
     <string name="onboarding_languages_confirm">هذه لغتي</string>
     <string name="onboarding_languages_demo_translated">مرحبًا، كيف حالك؟</string>
-    <string name="onboarding_languages_failed">تعذّر حفظ لغتك. يمكنك تغييرها من ملفك الشخصي.</string>
     <string name="onboarding_languages_primary">لغتك</string>
     <string name="onboarding_languages_primary_a11y">لغتك: %1$s. تغيير</string>
     <string name="onboarding_languages_secondary">لغة ثانية؟ (اختياري)</string>
@@ -299,7 +293,6 @@
     </plurals>
     <string name="onboarding_story_sending">قصتك في الطريق…</string>
     <string name="onboarding_story_title">أظهِر نفسك</string>
-    <string name="onboarding_story_verify">أكّد بريدك الإلكتروني لنشر قصتك</string>
     <string name="registration_back">رجوع</string>
     <string name="session_closed_activation_title">أكّد عنوان بريدك الإلكتروني</string>
     <string name="session_closed_contact">راسل فريق Meeshy</string>
@@ -310,24 +303,19 @@
     <string name="session_closed_user_revoke_title">تم تسجيل خروج هذا الجهاز</string>
     <string name="share_link_join_anonymously">انضمام دون الكشف عن الهوية</string>
     <string name="share_link_resume_anonymously">الاستئناف دون الكشف عن هويتي</string>
-    <string name="signup_back">رجوع</string>
     <string name="signup_card_code_lead">أدخل الرمز المكوّن من 6 أرقام المرسل إلى %1$s، أو افتح الرابط الذي وصلك.</string>
-    <string name="signup_card_title">حسابك</string>
     <string name="signup_card_verified">تم تأكيد الحساب!</string>
     <string name="signup_card_verified_lead">كل شيء جاهز: يقرأك الآخرون بلغتهم.</string>
     <string name="signup_close">إغلاق</string>
     <string name="signup_country_search_hint">ابحث عن بلد</string>
-    <string name="signup_display_name_label">بماذا نناديك؟</string>
     <string name="signup_email_forgot_password">نسيت كلمة المرور؟</string>
     <string name="signup_email_is_it_you">هل هذا أنت؟</string>
     <string name="signup_email_its_me">هذا أنا — استعادة حسابي</string>
-    <string name="signup_email_label">البريد الإلكتروني</string>
     <string name="signup_email_not_me">ليس أنا</string>
     <string name="signup_email_not_me_note">سيُطلب الرمز المرسل إلى هذا العنوان للحصول عليه.</string>
     <string name="signup_email_placeholder">you@example.com</string>
     <string name="signup_email_send_sign_in_link">تلقي رابط تسجيل الدخول</string>
     <string name="signup_email_taken">يوجد حساب بهذا العنوان بالفعل.</string>
-    <string name="signup_error_generic">تعذّر إنشاء الحساب. حاول مرة أخرى.</string>
     <string name="signup_error_network">لا يوجد اتصال. تحقق من شبكتك وحاول مرة أخرى.</string>
     <string name="signup_error_rejected">تم رفض التسجيل — أعد المحاولة بعد قليل.</string>
     <string name="signup_have_account">لديك حساب بالفعل؟</string>
@@ -341,11 +329,7 @@
     <string name="signup_legal_privacy">سياسة الخصوصية</string>
     <string name="signup_legal_terms">شروط الاستخدام</string>
     <string name="signup_min_characters">%1$d أحرف على الأقل.</string>
-    <string name="signup_password_hide">إخفاء كلمة المرور</string>
-    <string name="signup_password_label">كلمة المرور</string>
     <string name="signup_password_placeholder">6 أحرف على الأقل</string>
-    <string name="signup_password_show">إظهار كلمة المرور</string>
-    <string name="signup_password_why">لماذا تضع كلمة مرور الآن؟</string>
     <string name="signup_phased_submit">إنشاء حساب</string>
     <string name="signup_phone_benefit">سيتيح لك تسجيل الدخول، ويسمح لمن تعرفهم بالعثور عليك.</string>
     <string name="signup_phone_country_hint">تغيير البلد</string>
@@ -388,7 +372,6 @@
     <string name="world_entry_language_greeting">مرحبًا %1$s، ستقرأ كل شيء بـ…</string>
     <string name="world_entry_language_group">اللغة الرئيسية</string>
     <string name="world_entry_language_hint">مقترحة من جهازك.</string>
-    <string name="world_entry_name_label">اسمك</string>
     <string name="world_entry_name_placeholder">مثال: أمينة</string>
     <string name="world_entry_name_prompt">بماذا نناديك؟</string>
     <string name="world_entry_step">الخطوة %1$d من %2$d</string>

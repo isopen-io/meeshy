@@ -53,11 +53,23 @@
           "status": "android-only"
         },
         {
+          "androidName": "email_verification_code_a11y_hint",
+          "status": "android-only"
+        },
+        {
           "androidName": "email_verification_subtitle_account_created",
           "status": "android-only"
         },
         {
           "androidName": "email_verification_subtitle_activation_required",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_verification_success",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_verification_title",
           "status": "android-only"
         },
         {
@@ -137,7 +149,7 @@
           "status": "android-only"
         },
         {
-          "androidName": "onboarding_story_verify_detail",
+          "androidName": "onboarding_story_verify",
           "status": "android-only"
         },
         {

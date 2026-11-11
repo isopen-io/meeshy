@@ -46,11 +46,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "onboarding.languages.failed",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "onboarding.email.title",
           "status": "adopted"
         },
@@ -177,11 +172,6 @@
         {
           "catalog": "app",
           "iosKey": "onboarding.story.sending",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "onboarding.story.verify",
           "status": "adopted"
         },
         {
