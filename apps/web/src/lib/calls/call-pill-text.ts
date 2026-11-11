@@ -11,10 +11,21 @@ import type { CallScreenLayer } from './call-screen-layer';
  * - `none` : rien au-dessus de la rangée de base ;
  * - `captions` : les deux dernières lignes, dans le verre de la pilule ;
  * - `journal` : tout l'appel, à la place des sous-titres ;
- * - `captionsAlone` : la pilule est rangée (ou un mode a pris l'écran) : les
- *   sous-titres restent dans un verre à eux, à la place qu'elle occupait.
+ * - `captionsAlone` : la pilule est rangée (G1.3, #17536) : UN SEUL verre, le sien,
+ *   reste à l'écran, privé de sa rangée de base, et se resserre autour des
+ *   sous-titres. Quand un mode a pris l'écran, la pilule n'existe pas : ils
+ *   portent alors le verre des sous-titres seuls.
  */
 export type CallPillText = 'none' | 'captions' | 'journal' | 'captionsAlone';
+
+/** Les sous-titres sont dans le verre : au repos, ou seuls quand la pilule est rangée (`CallPillText.showsCaptionsBand`, iOS). */
+export const pillShowsCaptionsBand = (text: CallPillText): boolean => text === 'captions' || text === 'captionsAlone';
+
+/** Rangée, la pilule ne s'efface pas : son verre reste, et se resserre autour des sous-titres (`staysWhenChromeStowed`, iOS). */
+export const pillStaysWhenChromeStowed = (text: CallPillText): boolean => text === 'captionsAlone';
+
+/** La rangée de base (`(…)` · Micro · Sortie · Fin) est dans le verre : jamais pour les sous-titres seuls (`hasBaseRow`, iOS). */
+export const pillHasBaseRow = (text: CallPillText): boolean => text !== 'captionsAlone';
 
 export type CallPillTextInput = {
   /** Le réglage Sous-titres : le journal, lui, garde tout l'appel sous-titres allumés ou non (#17342). */
