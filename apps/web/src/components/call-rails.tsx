@@ -1,4 +1,4 @@
-import { Suspense, useRef, type ComponentType } from 'react';
+import { Suspense, useRef, type ComponentType, type ReactNode } from 'react';
 
 import type { CallActionRail, CallRowsKit } from '@/components/call-control-actions';
 import type { RailSide, RailsBySide } from '@/lib/calls/call-controls-disposition';
@@ -6,6 +6,7 @@ import { railLength, railsClearance, type RailClearance } from '@/lib/calls/call
 import type { CallPanels } from '@/lib/calls/call-screen-layer';
 import type { TileFootprint, TileSize } from '@/lib/calls/call-self-tile';
 import type { ActiveCall } from '@/lib/calls/call-store';
+import { useRailFade } from '@/lib/calls/use-mode-motion';
 import { useRailPresence } from '@/lib/calls/use-rail-presence';
 import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -33,9 +34,14 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * tant qu'il est demandé — pas pendant sa sortie, où les rangées d'un groupe
  * peuvent déjà l'avoir pris.
  *
- * Un rail qui repart est INERTE (ni focus, ni clic, ni lecteur d'écran) ; un
- * rail qui revient ne l'est plus dès sa demande, avant même d'avoir glissé : le
- * focus que `call-screen.tsx` lui rend en revenant d'un panneau doit l'atteindre.
+ * Un rail qui repart reste TOUCHABLE jusqu'à la fin de sa sortie (#17643) : un
+ * bouton touché pendant le mouvement répond, comme sur iOS qui garde le hit-test
+ * pendant le fondu. Il se démonte ensuite ; un rail qui revient reçoit le focus
+ * que `call-screen.tsx` lui rend en revenant d'un panneau.
+ *
+ * Sous « Réduire les animations », la feuille de l'application coupe les
+ * transitions CSS : le fondu court est joué par le moteur Web Animations
+ * (`useRailFade`), que cette règle n'éteint pas.
  *
  * Ce cadre est un chunk à part (`budgets.json` › `call_rails`) qui n'importe
  * rien de l'écran d'appel (`dynamic_only`) : l'écran lui REMET ses rails par
@@ -75,6 +81,20 @@ const slotStyle = (side: RailSide, { top, bottom, inline }: RailClearance) => ({
   ...(inline === 0 ? {} : side === 'leading' ? { paddingInlineStart: `${inline}px` } : { paddingInlineEnd: `${inline}px` }),
 });
 
+/** Un rail et son mouvement : il glisse depuis son bord, ou fond sous « Réduire les animations ». Touchable jusqu'au bout de sa sortie (iOS garde le hit-test pendant le fondu). */
+function SlidingRail({ side, shown, children }: { readonly side: RailSide; readonly shown: boolean; readonly children: ReactNode }) {
+  const ref = useRailFade<HTMLDivElement>(shown);
+  return (
+    <div
+      ref={ref}
+      className={`flex max-h-full transition-[translate,opacity] duration-300 ease-out motion-reduce:translate-x-0 ${shown ? 'translate-x-0 opacity-100' : `${AWAY[side]} opacity-0`}`}
+      data-call-rail-side={side}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** Les rails qui sortent, retenus un instant après la demande de fermeture : leur sortie se joue encore. */
 export function CallRails({ call, rails, open, language, panels, kit, Rail, viewport, inset = 0, tile = null }: RailsProps) {
   const { mounted, shown } = useRailPresence(open);
@@ -102,15 +122,11 @@ export function CallRails({ call, rails, open, language, panels, kit, Rail, view
         return (
           <div key={side} className="flex max-h-full items-center" style={slotStyle(side, clearance[side])} data-call-rail-slot={side}>
             {row === undefined ? null : (
-              <div
-                className={`flex max-h-full transition-[translate,opacity] duration-300 ease-out motion-reduce:translate-x-0 motion-reduce:duration-150 ${shown ? 'translate-x-0 opacity-100' : `${AWAY[side]} opacity-0`}`}
-                {...(open ? {} : { 'aria-hidden': true, inert: true })}
-                data-call-rail-side={side}
-              >
+              <SlidingRail side={side} shown={shown}>
                 <Suspense fallback={null}>
                   <Rail call={call} row={row} language={language} panels={panels} kit={kit} />
                 </Suspense>
-              </div>
+              </SlidingRail>
             )}
           </div>
         );

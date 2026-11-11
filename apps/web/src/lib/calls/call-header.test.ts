@@ -86,14 +86,14 @@ describe('ce qui paraît dans l’en-tête arrive, jamais d’un coup (#17406, c
   };
   const frames = (name: string): readonly string[] => [...css.matchAll(new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\}\\s*\\}`, 'g'))].map((match) => match[1] ?? '');
 
-  test('le bouton Image dans l’image, la capsule et les barres du réseau dégradé entrent comme le texte de la pilule', () => {
+  test('le bouton Image dans l’image et les barres du réseau dégradé entrent comme le texte de la pilule (la capsule, par une échelle ancrée à droite : P9.8)', () => {
     const entering = rule('[data-call-pip]');
-    expect(entering).toContain('[data-call-capsule]');
+    expect(entering).not.toContain('[data-call-capsule]');
     expect(entering).toContain('[data-call-signal]');
     expect(entering).toMatch(/animation:\s*call-pill-text-in \d{3}ms/);
   });
 
-  test('l’arrivée ne se prolonge pas : une transformation tenue ferait de la capsule le bloc conteneur de son détail `fixed`', () => {
+  test('l’arrivée ne se prolonge pas : une transformation tenue ferait de leur hôte le bloc conteneur d’un détail `fixed`', () => {
     expect(rule('[data-call-pip]')).toMatch(/\)\s*backwards;/);
   });
 

@@ -318,8 +318,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail-side="leading"]')?.className).toContain('-translate-x-[calc(100%+1.5rem)]');
     expect(view.find('[data-call-rail-side="trailing"]')?.className).toContain('translate-x-[calc(100%+1.5rem)]');
     expect(view.find('[data-call-rail-side="leading"]')?.className).toContain('opacity-0');
-    expect(view.find('[data-call-rail-side="leading"]')?.getAttribute('aria-hidden')).toBe('true');
-    expect(view.find('[data-call-rail-side="leading"]')?.hasAttribute('inert')).toBe(true);
+    expect(view.find('[data-call-rail-side="leading"]')?.hasAttribute('inert')).toBe(false);
     await leaving();
     expect(railsState(view.host)).toBeNull();
     expect(view.find('[data-call-rail]')).toBeNull();
@@ -333,7 +332,6 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     const classes = view.find('[data-call-rail-side="leading"]')?.className ?? '';
     expect(classes).toContain('transition-[translate,opacity]');
     expect(classes).toContain('motion-reduce:translate-x-0');
-    expect(classes).toContain('motion-reduce:duration-150');
     expect(classes).not.toContain('transition-all');
     view.done();
   });
@@ -442,8 +440,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(railsState(view.host)).toBe('shown');
     tapStage(view);
     expect(railsState(view.host)).toBe('away');
-    expect(view.find('[data-call-rail-side="leading"]')?.getAttribute('aria-hidden')).toBe('true');
-    expect(view.find('[data-call-rail-side="trailing"]')?.hasAttribute('inert')).toBe(true);
+    expect(view.find('[data-call-rail-side="trailing"]')?.hasAttribute('inert')).toBe(false);
     tapStage(view);
     await frame();
     expect(railsState(view.host)).toBe('shown');

@@ -1,6 +1,7 @@
 import type { CallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 const it = {
+  'callControls.duration.a11y.label': 'Durata della chiamata',
   'callControls.invite': 'Aggiungi',
   'callControls.invite.label': 'Aggiungi persone alla chiamata',
   'callControls.react': 'Reagisci',
