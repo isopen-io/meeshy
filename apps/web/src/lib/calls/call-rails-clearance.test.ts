@@ -13,7 +13,8 @@ import { SCREEN_SELF_TILE, SELF_TILE_MARGIN, selfTileBox, selfTileFootprint, sel
 
 const phone = { width: 390, height: 844 };
 const small = { width: 375, height: 667 };
-const landscape = { width: 568, height: 320 };
+const landscape = { width: 568, height: 240 };
+const landscapeRoomy = { width: 568, height: 320 };
 
 const tile = (corner: SelfTileCorner, viewport: { readonly width: number; readonly height: number }, scale: 1 | 2 | 3 = 2): TileFootprint => ({
   corner,
@@ -102,7 +103,13 @@ describe('railsClearance', () => {
     expect(railSpan(small, clearance.trailing, lengths.trailing).bottom - railSpan(small, clearance.trailing, lengths.trailing).top).toBeGreaterThanOrEqual(RAIL_MIN_BAND);
   });
 
-  test('en paysage, sans bande utile sous ma vignette, le rail se pose À CÔTÉ d’elle et s’arrête au-dessus de la pilule', () => {
+  test('en paysage, ma vignette couchée est plus basse que haute : le rail tient encore sous elle (L1.5)', () => {
+    const mine = tile('top-right', landscapeRoomy);
+    const clearance = railsClearance({ tile: mine, viewport: landscapeRoomy, rtl: false, lengths });
+    expect(clearance.trailing).toEqual({ top: mine.y + mine.height - 56 + RAIL_TILE_GAP, bottom: 0, inline: 0 });
+  });
+
+  test('en paysage court, sans bande utile sous ma vignette, le rail se pose À CÔTÉ d’elle et s’arrête au-dessus de la pilule', () => {
     const mine = tile('top-right', landscape);
     const clearance = railsClearance({ tile: mine, viewport: landscape, rtl: false, lengths });
     expect(clearance.trailing).toEqual({ top: 0, bottom: 104, inline: SELF_TILE_MARGIN + mine.width + RAIL_TILE_GAP });

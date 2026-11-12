@@ -118,6 +118,69 @@ final class CallTopBannerStackTests: XCTestCase {
         )
     }
 
+    // MARK: - #17833 — en groupe, la grille cède sa place à la pile (L4.11)
+
+    func test_groupGridClearance_noBanner_takesNoPlace() {
+        XCTAssertEqual(CallTopBannerStack.groupGridClearance(present: [], heights: [:], isStageFullScreen: false), 0)
+    }
+
+    func test_groupGridClearance_isTheSamePlaceAsMySelfTile_forTheSameBanners() {
+        let heights: [CallTopBanner: CGFloat] = [.capture: 62]
+        XCTAssertEqual(
+            CallTopBannerStack.groupGridClearance(present: [.screenShare, .recording, .capture], heights: heights, isStageFullScreen: false),
+            CallTopBannerStack.selfTileClearance(counted: [.screenShare, .recording, .capture], heights: heights),
+            "UNE loi pour la pile : la grille et ma vignette de duo lui cèdent la même place"
+        )
+    }
+
+    func test_groupGridClearance_countsAReceivedShareAndTheLiveFrame() {
+        XCTAssertEqual(CallTopBannerStack.groupGridClearance(present: [.screenShare, .liveFrame], heights: [:], isStageFullScreen: false), 52 + 52)
+    }
+
+    func test_groupGridClearance_fullScreenStage_takesNoPlace_theBannersAreStowed() {
+        XCTAssertEqual(
+            CallTopBannerStack.groupGridClearance(present: [.screenShare, .recording, .capture], heights: [.capture: 62], isStageFullScreen: true),
+            0,
+            "plein écran : la scène prend tout l'écran, la pile rangée ne lui laisse pas de bande vide"
+        )
+    }
+
+    func test_present_gathersEveryBannerOfTheStack() {
+        XCTAssertEqual(
+            CallTopBannerStack.present(isScreenShareShown: true, isRecordingShown: true, isCaptureAlertShown: true, isLiveFrameShown: true),
+            [.screenShare, .recording, .capture, .liveFrame]
+        )
+        XCTAssertEqual(CallTopBannerStack.present(isScreenShareShown: false, isRecordingShown: false, isCaptureAlertShown: false, isLiveFrameShown: false), [])
+    }
+
+    func test_groupGrid_yieldsToTheStack_inMotion() throws {
+        let connected = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift")
+        )
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(layout.contains("CallGroupStageTopReserve("), "la réserve haute de la grille compte la pile mesurée")
+        XCTAssertTrue(layout.contains("heights: topBannerHeights"))
+        XCTAssertTrue(layout.contains("isStageFullScreen: isStageFullScreen"), "plein écran : la réserve ne compte plus la pile rangée")
+        let reserve = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTopBannerHeights.swift")
+        )
+        XCTAssertTrue(reserve.contains(".frame(height: base + clearance)"))
+        XCTAssertTrue(
+            reserve.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: clearance)"),
+            "la grille glisse avec la pile ; Réduire les animations : un fondu court"
+        )
+        XCTAssertTrue(reserve.contains("CallTopBannerStack.groupGridClearance("))
+        XCTAssertTrue(reserve.contains("isStageFullScreen: isStageFullScreen"))
+    }
+
+    func test_bannerStack_andGroupGrid_readThePresenceFromTheSameLaw() throws {
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        XCTAssertTrue(stack.contains("CallTopBannerStack.present("), "la pile et la grille lisent UNE présence")
+        XCTAssertFalse(stack.contains("present.insert("), "aucune jumelle de la présence dans la vue de la pile")
+        let reserve = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTopBannerHeights.swift"))
+        XCTAssertTrue(reserve.contains("CallTopBannerStack.present("))
+    }
+
     func test_bannerGap_isTheStackSpacing() {
         XCTAssertEqual(CallTopBannerStack.bannerGap, MeeshySpacing.sm)
     }
@@ -185,6 +248,12 @@ final class CallTopBannerStackTests: XCTestCase {
             recording.contains(".modifier(CallTopBannerHeightReporter(banner: .recording))"),
             "la carte d'accord, la capsule (attente puis enregistrement) et l'avis à deux lignes rendent leur hauteur : la vignette descend sous la vraie capsule"
         )
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        let live = try XCTUnwrap(stack.range(of: "case .liveFrame:"))
+        XCTAssertTrue(
+            String(stack[live.upperBound...]).contains(".modifier(CallTopBannerHeightReporter(banner: .liveFrame))"),
+            "le cadre en direct rend sa hauteur : une carte à deux lignes ne passe pas sur la grille"
+        )
         XCTAssertTrue(screen.contains(".onPreferenceChange(CallTopBannerHeightsKey.self)"))
         let key = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTopBannerHeights.swift"))
         XCTAssertTrue(key.contains("nonisolated struct CallTopBannerHeightsKey: PreferenceKey"), "la cible isole sur le MainActor par défaut ; la clé reste hors acteur, comme les autres clés de l'appel")
@@ -224,5 +293,38 @@ final class CallTopBannerStackTests: XCTestCase {
             "le bandeau porte le verre dessiné de la loi 18 : reflet, liseré, ombre sous iOS 16 à 25"
         )
         XCTAssertFalse(controls.contains(".adaptiveGlass("), "adaptiveGlass : matériau nu sous iOS 16 à 25, pas le verre de la loi 18")
+    }
+    // MARK: - #17815 — la carte du cadre en direct : duo vidéo seulement, marge de la pile (C2.10, C2.1)
+
+    func test_mayShowProposal_videoDuo_isShown() {
+        XCTAssertTrue(CallLiveFrameRule.mayShowProposal(participants: CallLiveFrameRule.people, showsVideo: true, isGroupStage: false))
+    }
+
+    func test_mayShowProposal_audioDuo_isHidden() {
+        XCTAssertFalse(CallLiveFrameRule.mayShowProposal(participants: CallLiveFrameRule.people, showsVideo: false, isGroupStage: false))
+    }
+
+    func test_mayShowProposal_groupStageWithTwoConnected_isHidden() {
+        XCTAssertFalse(CallLiveFrameRule.mayShowProposal(participants: CallLiveFrameRule.people, showsVideo: true, isGroupStage: true))
+    }
+
+    func test_mayShowProposal_morePeopleThanADuo_isHidden() {
+        XCTAssertFalse(CallLiveFrameRule.mayShowProposal(participants: CallLiveFrameRule.people + 1, showsVideo: true, isGroupStage: false))
+    }
+
+    func test_liveFrameStatus_proposalIsGatedByTheDuoVideoLaw_notByTheCatalogueAlone() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+LiveFrame.swift"))
+        let status = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var hasLiveFrameStatus: Bool", in: source))
+        XCTAssertTrue(status.contains("offersLiveFrame &&"), "la proposition ne se compte que si le duo vidéo l'offre")
+        let view = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var liveFrameStatus: some View", in: source))
+        XCTAssertTrue(view.contains("if offersLiveFrame, let proposal"), "la carte n'est montrée qu'en duo vidéo")
+    }
+
+    func test_liveFrameBanner_holdsTheStackLateralMargin_likeTheOtherBanners() throws {
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        let live = try XCTUnwrap(stack.range(of: "case .liveFrame:"))
+        let tail = String(stack[live.upperBound...])
+        XCTAssertTrue(tail.contains(".padding(.horizontal, CallTopBannerStack.horizontalMargin)"))
+        XCTAssertFalse(tail.contains("MeeshySpacing.lg"), "P16.4 : la marge de la pile, celle du bandeau de partage")
     }
 }

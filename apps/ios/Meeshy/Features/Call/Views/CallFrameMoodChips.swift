@@ -128,6 +128,7 @@ struct CallFrameMoodChips: View {
                     .padding(.horizontal, MeeshySpacing.lg)
                 }
             }
+            .mask { ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true) }
             .disabled(!isEnabled)
             .opacity(isEnabled ? 1 : 0.5)
             .onAppear {

@@ -12,8 +12,10 @@ import type { ActiveCall } from '@/lib/calls/call-store';
 import { callAudioOf } from '@/lib/calls/call-view';
 import { browserFaceDetector } from '@/lib/calls/face-tracker';
 import { startFrameClock } from '@/lib/calls/frame-clock';
+import type { FrameScope } from '@/lib/calls/frames/frame-filter';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
+import { loadModeMotion, useModeRise } from '@/lib/calls/use-mode-motion';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
 import { frameUsageText, loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -50,6 +52,10 @@ import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFram
  * repeints à chaque image, jamais en miroir ; ses vignettes ne se rendent
  * que pour la fenêtre visible du carrousel (± 3). Pendant une vidéo, les
  * puces s'effacent : sur un petit écran, elles couvraient le stop.
+ * Les ambiances s'ouvrent d'office par leur mise en avant (`spotlight.json`, #12692) : une dernière puce,
+ * « Plus d'ambiances » / « Moins d'ambiances », ouvre tout le catalogue ou le range ; le cadre choisi reste
+ * toujours visible. Les vignettes sont PORTRAIT (48 × 85, C1.5), sans ligne « où il sert » (C1.2 : le texte
+ * reste lu) ; sur le cadre choisi, un balayage vertical passe d'une déclinaison à l'autre (C1.6).
  * L'aperçu d'un cadre du DIRECT se resserre entre les commandes mesurées
  * (#10481, comme iOS #9777) : aucun de ses textes ne passe dessous. La
  * photo et la vidéo, elles, partent pleines — pendant une vidéo, l'aperçu
@@ -61,7 +67,7 @@ import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFram
  * remet par `loadFrames` et que le mode charge à son entrée.
  */
 
-export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadFrameUsageCatalog(language)]);
+export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadFrameUsageCatalog(language), loadModeMotion()]);
 
 export const MONTAGE_PREVIEW_FPS = 5;
 
@@ -74,6 +80,9 @@ export const MONTAGE_RECORD_FPS = 30;
 export const FRAME_THUMB_WINDOW = 3;
 
 const CLASSICS = 'classics';
+
+/** La vignette du carrousel, portrait comme iOS et Android (C1.5) : le 9:16 du cadre se voit en entier. */
+const THUMBNAIL = { width: 48, height: 85 } as const;
 
 type Shelf = typeof CLASSICS | FrameMood;
 
@@ -99,6 +108,9 @@ type ModeProps = {
   readonly loadShelf?: ShelfLoader;
   /** L'interrupteur « Cadre » du cadre en direct (#16943, loi 16) : sans lui, le Montage ne fait que capturer. */
   readonly hold?: LiveFrameHold;
+  /** Le mode repart (C1.12) : il redescend par le bord du bas, puis appelle `onGone`. */
+  readonly leaving?: boolean;
+  readonly onGone?: () => void;
 };
 
 export type { LiveFrameHold };
@@ -133,17 +145,21 @@ const facesGlyph = (
   </svg>
 );
 
-export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = onRowWheel, audio = () => callAudioOf(call), env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold }: ModeProps) {
+export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = onRowWheel, audio = () => callAudioOf(call), env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold, leaving = false, onGone = () => undefined }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
+  const [requestedScope, setRequestedScope] = useState<FrameScope>('spotlight');
   const { studio: frames, circle } = useMontageFrames({ loadFrames, call, circleOf, language, loadShelf });
   const people = circle?.people.length ?? 0;
   const frame = frames === null || frameId === null ? null : frames.reconcile(frameId, people);
   const shelf: Shelf = frame?.mood ?? CLASSICS;
+  const scope: FrameScope = frames === null ? 'all' : frames.scopeShowing(frame?.id ?? null, people, requestedScope);
   const lastInMood = useRef(new Map<FrameMood, string>());
   const root = useRef<HTMLDivElement>(null);
   const preview = useRef<HTMLCanvasElement>(null);
   const controls = useRef<HTMLDivElement>(null);
+  const backdrop = useRef<HTMLDivElement>(null);
+  const leavingAttributes = useModeRise(controls, backdrop, leaving, onGone);
   const thumbs = useRef(new Map<string, HTMLCanvasElement>());
   const painted = useRef(new WeakSet<HTMLCanvasElement>());
   const current = useRef<string>(style);
@@ -224,6 +240,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
   }, [studio.recording]);
 
   const chosenId = frame?.id ?? style;
+  const chosenBase = frames?.baseId(chosenId) ?? chosenId;
 
   useEffect(() => {
     paintRef.current(preview.current, chosenId, 'preview');
@@ -275,22 +292,35 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
       label: t(language, `callStudio.montage.${option}`),
       visual: <canvas ref={thumbRef(option)} aria-hidden width={thumbSize.width} height={thumbSize.height} className="size-full object-cover" data-call-capture-thumb={option} />,
     }));
+  const frameThumb = (id: string) => <canvas ref={thumbRef(id)} aria-hidden width={frameThumbSize.width} height={frameThumbSize.height} className="size-full object-cover" data-call-frame-thumb={id} />;
   const frameItems = (atelier: FrameStudio, offered: readonly CaptureFrame[]): readonly CarouselItem[] => {
-    const at = Math.max(0, offered.findIndex((option) => option.id === chosenId));
-    return offered.map((option, index) => ({
-      id: option.id,
-      label: frameDisplayName(option, language),
-      detail: frameUsageText(language, atelier.usageLabel(option)),
-      visual:
-        Math.abs(index - at) <= FRAME_THUMB_WINDOW ? (
-          <canvas ref={thumbRef(option.id)} aria-hidden width={frameThumbSize.width} height={frameThumbSize.height} className="size-full object-cover" data-call-frame-thumb={option.id} />
-        ) : (
-          <span aria-hidden className="size-full" data-call-frame-thumb-idle="" />
-        ),
-    }));
+    const at = Math.max(0, offered.findIndex((option) => option.id === chosenBase));
+    return offered.map((option, index) => {
+      const versions = option.id === chosenBase ? atelier.declinations(option) : [option];
+      const shown = Math.max(0, versions.findIndex((version) => version.id === chosenId));
+      const style = shown === 0 ? undefined : option.styles?.[shown - 1];
+      const label = style === undefined ? frameDisplayName(option, language) : `${frameDisplayName(option, language)} · ${frameDisplayName(style, language)}`;
+      return {
+        id: option.id,
+        label,
+        detail: frameUsageText(language, atelier.usageLabel(option)),
+        visual: Math.abs(index - at) <= FRAME_THUMB_WINDOW ? frameThumb(option.id) : <span aria-hidden className="size-full" data-call-frame-thumb-idle="" />,
+        ...(versions.length < 2
+          ? {}
+          : { declinations: { pages: versions.map((version) => frameThumb(version.id)), index: shown, onSelect: (to: number) => void choose(versions[to]?.id ?? option.id), next: t(language, 'callStudio.frames.style.next'), previous: t(language, 'callStudio.frames.style.previous') } }),
+      };
+    });
   };
-  const items = frames === null || shelf === CLASSICS ? classicItems() : frameItems(frames, frames.framesOf(people, shelf));
-  const moods = frames === null ? [] : frames.moods(people);
+  const items = frames === null || shelf === CLASSICS ? classicItems() : frameItems(frames, frames.framesOf(people, shelf, scope));
+  const moods = frames === null ? [] : frames.moods(people, scope);
+  const scopeToggle =
+    frames === null || !frames.hidesBeyondSpotlight(people)
+      ? undefined
+      : {
+          showsAll: scope === 'all',
+          label: t(language, scope === 'all' ? 'callStudio.frames.less' : 'callStudio.frames.more'),
+          onToggle: () => setRequestedScope(scope === 'all' ? 'spotlight' : 'all'),
+        };
   const chips = [{ id: CLASSICS, label: t(language, 'callStudio.frames.mood.classics') }, ...moods.map((mood) => ({ id: mood, label: t(language, `callStudio.frames.mood.${mood}`) }))];
 
   const choose = (id: string): void => {
@@ -311,15 +341,16 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
     }
     const remembered = lastInMood.current.get(mood);
     const again = remembered === undefined ? null : frames.reconcile(remembered, people);
-    const next = again?.mood === mood ? again : frames.framesOf(people, mood)[0];
+    const offered = frames.framesOf(people, mood, scope);
+    const next = again?.mood === mood && offered.some((option) => option.id === frames.baseId(again.id)) ? again : offered[0];
     setFrameId(next?.id ?? null);
   };
 
   const previewLabel = frame === null ? t(language, 'callStudio.capture.preview', { style: t(language, `callStudio.montage.${style}`) }) : t(language, 'callStudio.capture.framePreview', { name: frameDisplayName(frame, language) });
 
   return (
-    <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="montage">
-      <div className="pointer-events-none fixed inset-0 z-0 grid place-items-center bg-media-backdrop" data-call-mode-preview="montage">
+    <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="montage" {...leavingAttributes}>
+      <div ref={backdrop} className="pointer-events-none fixed inset-0 z-0 grid place-items-center bg-media-backdrop" data-call-mode-preview="montage">
         <canvas
           ref={preview}
           width={previewSize.width}
@@ -334,12 +365,13 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
       <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3" data-call-montage-controls="">
         <CaptureStatus status={studio.status} />
         <CaptureHint language={language} />
-        {studio.recording ? null : <MoodChips label={t(language, 'callStudio.frames.moods')} chips={chips} selected={shelf} onPick={pickShelf} onWheel={onWheel} />}
+        {studio.recording ? null : <MoodChips label={t(language, 'callStudio.frames.moods')} chips={chips} selected={shelf} onPick={pickShelf} onWheel={onWheel} scopeToggle={scopeToggle} />}
         <ModeCarousel
-          key={shelf}
+          key={`${shelf}:${scope}`}
           label={t(language, shelf === CLASSICS ? 'callStudio.mode.pickMontage' : 'callStudio.mode.pickFrame')}
           items={items}
-          selected={chosenId}
+          selected={chosenBase}
+          itemSize={THUMBNAIL}
           onSelect={choose}
           onWheel={onWheel}
           capture={{ recording: studio.recording, onCapture: studio.capture, hint: t(language, 'callStudio.capture.gestures') }}

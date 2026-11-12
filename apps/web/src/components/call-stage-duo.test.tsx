@@ -1,6 +1,6 @@
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { AuthenticatedSession } from '@/lib/api/session';
@@ -105,7 +105,9 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
     const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) + Number(moved?.[1] ?? 0);
     const lifted = /\+ (\d+(?:\.\d+)?)px\)/.exec(this.style.top);
     const top = 80 + Number(lifted?.[1] ?? 0) + Number(moved?.[2] ?? 0);
-    return { left, top, right: left, bottom: top, width: 0, height: 0, x: left, y: top, toJSON: () => ({}) };
+    const width = Number.parseFloat(this.style.width) || 0;
+    const height = Number.parseFloat(this.style.height) || 0;
+    return { left, top, right: left + width, bottom: top + height, width, height, x: left, y: top, toJSON: () => ({}) };
   };
   Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: reducedMotion }) });
   try {
@@ -264,6 +266,75 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
       view.done();
     }, { reducedMotion: true });
     expect(played).toEqual([]);
+  });
+});
+
+describe('L1.5 — en paysage, ma vignette se couche en 130 × 96 à sa hauteur de coin', () => {
+  const turn = (width: number, height: number) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: height });
+    act(() => window.dispatchEvent(new Event('resize')));
+  };
+  const upright = { width: 390, height: 844 };
+  const real = { width: 0, height: 0 };
+  beforeEach(() => {
+    real.width = window.innerWidth;
+    real.height = window.innerHeight;
+  });
+  afterEach(() => turn(real.width, real.height));
+
+  test('fenêtre couchée : le cadre fait 130 × 96, à 60 sous la zone sûre ; debout, il garde 112 × 160 à 128', () => {
+    fresh();
+    turn(844, 390);
+    const view = mount();
+    expect(view.frame().style.width).toBe('130px');
+    expect(view.frame().style.height).toBe('96px');
+    expect(view.frame().style.top).toBe('calc(env(safe-area-inset-top) + 60px)');
+    view.done();
+    turn(upright.width, upright.height);
+    const standing = mount();
+    expect(standing.frame().style.width).toBe('112px');
+    expect(standing.frame().style.top).toBe('calc(env(safe-area-inset-top) + 128px)');
+    standing.done();
+  });
+
+  test('tourner l’écran joue le changement de taille en transform (translation + échelle autour du coin), sans saut', () => {
+    fresh();
+    turn(upright.width, upright.height);
+    const played = withFlipProbe(() => {
+      const view = mount();
+      turn(844, 390);
+      view.done();
+    });
+    const [first] = played;
+    expect(first).toHaveLength(2);
+    expect(first?.[0]?.transform).toMatch(/^translate\(.+\) scale\(.+\)$/);
+    expect(first?.[1]).toEqual({ transform: 'none' });
+    expect(Object.keys(first?.[0] ?? {})).toEqual(['transform']);
+  });
+
+  test('redimensionner la fenêtre sans changer de forme ne rejoue rien : la vignette suit la fenêtre, aucune mesure ni animation à chaque image', () => {
+    fresh();
+    turn(568, 200);
+    const played = withFlipProbe(() => {
+      const view = mount();
+      const before = view.frame().style.width;
+      turn(568, 220);
+      expect(view.frame().style.width).not.toBe(before);
+      view.done();
+    });
+    expect(played).toEqual([]);
+  });
+
+  test('mouvement réduit : la rotation se remplace par un fondu court, opacité seule', () => {
+    fresh();
+    turn(upright.width, upright.height);
+    const played = withFlipProbe(() => {
+      const view = mount();
+      turn(844, 390);
+      view.done();
+    }, { reducedMotion: true });
+    expect(played).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
   });
 });
 

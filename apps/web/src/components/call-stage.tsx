@@ -4,6 +4,7 @@ import { useStore } from 'zustand/react';
 import { CallButton } from '@/components/call-glass-button';
 import { Arrives } from '@/components/call-arrives';
 import { HeldSwap } from '@/lib/calls/use-pill-motion';
+import { STOW_REDUCED_MS } from '@/lib/calls/call-pill-motion';
 import { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallModerationSlot } from '@/components/call-control-slots';
 import type { CallGridKit } from '@/components/call-grid';
@@ -18,13 +19,13 @@ import { useTilePinch } from '@/components/use-tile-pinch';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import {
   cornerAfterArrow,
+  isLandscapeWindow,
   isTileDrag,
   nearestSelfCorner,
   SCREEN_SELF_TILE,
-  SELF_TILE_BOTTOM,
   SELF_TILE_MARGIN,
-  SELF_TILE_TOP,
   selfTileBox,
+  selfTileCornerInsets,
   selfTileCornerFor,
   selfTileCounterScaled,
   selfTileOrigin,
@@ -171,10 +172,11 @@ const TILE_CORNER_SAID: Readonly<Record<SelfTileCorner, `callControls.selfTile.c
 };
 
 /** Le coin de repos, en marges de zone sûre : ce que `selfTileBox` calcule sans elles. */
-function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number): { readonly left: string; readonly top: string } {
+function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number, viewport: TileSize): { readonly left: string; readonly top: string } {
+  const clearance = selfTileCornerInsets(viewport);
   const left = corner.endsWith('left') ? `calc(env(safe-area-inset-left) + ${SELF_TILE_MARGIN}px)` : `calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + size.width}px)`;
-  const tileTop = SELF_TILE_TOP + topInset;
-  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${tileTop}px)` : `max(calc(env(safe-area-inset-top) + ${tileTop}px), calc(100% - env(safe-area-inset-bottom) - ${SELF_TILE_BOTTOM + size.height}px))`;
+  const tileTop = clearance.top + topInset;
+  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${tileTop}px)` : `max(calc(env(safe-area-inset-top) + ${tileTop}px), calc(100% - env(safe-area-inset-bottom) - ${clearance.bottom + size.height}px))`;
   return { left, top };
 }
 
@@ -302,10 +304,13 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
     if (pressed.release()) onRevealChrome();
     else self.onToggle();
   };
+  /* La clé dit la FORME (palier, fenêtre couchée ou debout), jamais les pixels : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
   useFlip(cornerFrame, {
-    key: cornerShown ? `${corner}:${size.width}x${size.height}:${topInset}:${offset === null ? 'rest' : 'held'}` : null,
+    key: cornerShown ? `${corner}:${scale}:${isLandscapeWindow(screen) ? 'couchée' : 'debout'}:${topInset}:${offset === null ? 'rest' : 'held'}` : null,
+    origin: { x: corner.endsWith('left') ? 0 : 1, y: corner.startsWith('top') ? 0 : 1 },
     held: offset !== null,
     duration: SELF_TILE_FLIP_MS,
+    reducedDuration: STOW_REDUCED_MS,
     easing: 'ease-out',
   });
   const onArrow = (event: KeyboardEvent<HTMLButtonElement>): void => {
@@ -341,7 +346,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
         <div
           ref={cornerFrame}
           className={`absolute z-10 ${composed ? 'pointer-events-none opacity-0' : ''}`}
-          style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
+          style={{ ...cornerPlace(corner, size, topInset, screen), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
           {...(composed ? { 'aria-hidden': true, inert: true } : {})}
           data-call-corner-frame=""
           data-call-self-tile-composed={composed ? '' : undefined}

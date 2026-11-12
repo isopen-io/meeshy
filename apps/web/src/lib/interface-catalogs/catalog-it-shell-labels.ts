@@ -150,7 +150,7 @@ const itShellLabels = {
   'list.quick.mood.hint': 'Un’emoji dice come stai, senza scrivere un messaggio.',
   'list.header.share': 'Crea un link di condivisione',
   'list.header.new': 'Nuova conversazione',
-  'list.header.progression': 'Progressi — badge, livello e serie',
+  'list.header.progression': 'La mia Leggenda — badge, livello e Fiamma',
   'list.footer.exhausted': 'Tutte le conversazioni sono caricate',
   'list.footer.loadingMore': 'Caricamento in corso',
   'list.footer.failed': 'Impossibile caricarne altre',

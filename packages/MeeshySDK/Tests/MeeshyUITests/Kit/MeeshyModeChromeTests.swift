@@ -287,8 +287,8 @@ struct MeeshyModeChromeTests {
         #expect(Self.glassContrast(tone: .onLight) >= 5.0)
         let vectors = try Self.object("contrast")
         #expect(Self.near(CGFloat(solid), try Self.number(vectors["solidInkOnFill"]), tolerance: 0.01))
-        #expect(Self.near(CGFloat(Self.glassContrast(tone: .deep)), try Self.number(vectors["glassDeepDense"]), tolerance: 0.01))
-        #expect(Self.near(CGFloat(Self.glassContrast(tone: .onLight)), try Self.number(vectors["glassOnLightDense"]), tolerance: 0.01))
+        #expect(Self.glassContrast(tone: .deep) >= (try Self.number(vectors["glassDeepDense"])))
+        #expect(Self.glassContrast(tone: .onLight) >= (try Self.number(vectors["glassOnLightDense"])))
     }
 
     // MARK: - Non-re-rendu

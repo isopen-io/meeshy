@@ -1,6 +1,6 @@
 /** LES CONCEPTS DE « PROGRESSION » (#9542, #9563) — ce que disent la première page et les fiches (`game.concept.*`, `game.fiche.*`, `game.fact.*`). Chargé avec les routes de Progression, jamais avec le bandeau ni le carnet des règles. Le français est la SOURCE des clés ; les six autres langues portent exactement les mêmes. */
 const fr = {
-  'game.progression.title': 'Progression',
+  'game.progression.title': 'Ma Légende',
   'game.concept.why_label': 'À quoi ça sert',
   'game.concept.how_label': 'Comment ça marche',
   'game.fiche.what': 'C’est quoi ?',

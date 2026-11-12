@@ -15,4 +15,10 @@ class CallPillMotionTest {
         assertThat(CallPillMotion.millis(reduceMotion = true)).isEqualTo(200)
         assertThat(CallPillMotion.scalesOnUnfold(reduceMotion = true)).isFalse()
     }
+
+    @Test
+    fun `the width of the pill travels over the unfold duration, and only snaps under reduce motion (L3_3)`() {
+        assertThat(CallPillMotion.widthMillis(reduceMotion = false)).isEqualTo(CallPillMotion.UNFOLD_MILLIS)
+        assertThat(CallPillMotion.widthMillis(reduceMotion = true)).isEqualTo(0)
+    }
 }

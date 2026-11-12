@@ -29,7 +29,7 @@ struct ProfileProgressionEntry: View {
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(String(localized: "profile.progression.title", defaultValue: "Progression", bundle: .main))
+                    Text(String(localized: "profile.progression.title", defaultValue: "Ma Légende", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundStyle(theme.textPrimary)
                     Text(String(localized: "profile.progression.subtitle", defaultValue: "Badges, niveau et série", bundle: .main))
@@ -57,7 +57,7 @@ struct ProfileProgressionEntry: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "profile.progression.title", defaultValue: "Progression", bundle: .main))
+        .accessibilityLabel(String(localized: "profile.progression.title", defaultValue: "Ma Légende", bundle: .main))
         .accessibilityHint(String(localized: "profile.progression.hint", defaultValue: "Ouvre votre progression", bundle: .main))
     }
 }

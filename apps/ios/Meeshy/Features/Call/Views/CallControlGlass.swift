@@ -64,6 +64,20 @@ struct CallGlassVeil<S: Shape>: ViewModifier {
     }
 }
 
+/// Loi 18 · R2.11 · R3.12 · #17815 — le verre d'un bandeau de la pile du haut (carte d'accord et
+/// capsule d'enregistrement, carte et capsule du cadre en direct) : `adaptiveLiquidGlass` par son
+/// entrée du kit (`meeshyGlass`, ton `theme`) — Liquid Glass sur iOS 26, verre dessiné avant, plein
+/// sous « Réduire la transparence » — sous le voile d'appel qui l'assombrit sur un contenu clair (loi 3).
+struct CallBannerGlass<S: Shape>: ViewModifier {
+    let shape: S
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(CallGlassVeil(shape: shape, resting: 0.22))
+            .meeshyGlass(in: shape, tone: .theme)
+    }
+}
+
 extension View {
     /// #17323 — Liquid Glass interactif sous iOS 26, verre dessiné avant. Active
     /// state tints the glass; inactive renders plain glass.
@@ -251,9 +265,11 @@ struct CallSelfTileStow: ViewModifier {
 
 /// P16.8 · R1.6 · R3.10 — ma vignette descend sous la pile des bandeaux (partage, enregistrement,
 /// capture) quand elle grandit et remonte quand elle rétrécit, dans le même mouvement qu'elle.
+/// L1.5 — quand la fenêtre change de forme, elle se couche ou se relève dans le même mouvement que sa place.
 /// Réduire les animations : elle se pose sans mouvement. Seule la pile anime la place : un glisser ou un coin choisi garde son ressort.
 struct CallSelfTilePlacement: ViewModifier {
     let position: CGPoint
+    let isLandscape: Bool
     let clearance: CGFloat
     let reduceMotion: Bool
 
@@ -261,5 +277,6 @@ struct CallSelfTilePlacement: ViewModifier {
         content
             .position(position)
             .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: clearance)
+            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isLandscape)
     }
 }

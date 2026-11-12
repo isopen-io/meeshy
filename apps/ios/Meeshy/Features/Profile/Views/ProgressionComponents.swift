@@ -310,7 +310,7 @@ struct ProgressionSkeleton: View {
         }
         .skeletonShimmer()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "progression.loading", defaultValue: "Progression en cours de chargement", bundle: .main))
+        .accessibilityLabel(String(localized: "progression.loading", defaultValue: "Ma Légende se charge", bundle: .main))
     }
 }
 

@@ -555,8 +555,8 @@ private struct MeeshyGlassTraits: ViewModifier {
 
     private var traits: AccessibilityTraits {
         var result: AccessibilityTraits = []
-        if state.isSelected { result.insert(.isSelected) }
-        if #available(iOS 17.0, *), state.isToggle { result.insert(.isToggle) }
+        if state.isSelected { result.formUnion(.isSelected) }
+        if #available(iOS 17.0, *), state.isToggle { result.formUnion(.isToggle) }
         return result
     }
 }

@@ -529,6 +529,12 @@ final class CallViewGlassGuardTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
     }
 
+    /// Le verre des bandeaux de la pile du haut : UNE recette, posée avec les autres verres de l'appel.
+    private func bannerGlass() throws -> String {
+        let glass = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift"))
+        return try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallBannerGlass<S: Shape>: ViewModifier", in: glass))
+    }
+
     /// Loi 18 : la carte, la capsule et l'avis sont le verre d'`adaptiveLiquidGlass` (Liquid Glass
     /// sur iOS 26, verre dessiné avant, plein sous « Réduire la transparence ») sous le voile
     /// d'appel qui l'assombrit sur un contenu clair (loi 3) ; jamais un matériau système.
@@ -536,11 +542,11 @@ final class CallViewGlassGuardTests: XCTestCase {
         let controls = try recordingControls()
         XCTAssertFalse(controls.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
         XCTAssertFalse(controls.contains(".callChromeGlass(in:"), "callChromeGlass retombe sur un matériau avant iOS 26")
-        let glass = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private struct CallRecordingGlass<S: Shape>: ViewModifier", in: controls))
+        let glass = try bannerGlass()
         XCTAssertTrue(glass.contains("CallGlassVeil(shape: shape"))
         XCTAssertTrue(glass.contains(".meeshyGlass(in: shape, tone: .theme)"), "la recette d'adaptiveLiquidGlass, par l'entrée du kit")
         let overlay = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallRecordingOverlay: View, Equatable", in: controls))
-        XCTAssertEqual(overlay.components(separatedBy: ".modifier(CallRecordingGlass(shape:").count - 1, 3, "carte, capsule et avis")
+        XCTAssertEqual(overlay.components(separatedBy: ".modifier(CallBannerGlass(shape:").count - 1, 3, "carte, capsule et avis")
     }
 
     /// R2.2 — la planche dessine la question puis les deux boutons : aucune phrase d'appoint.
@@ -579,5 +585,45 @@ final class CallViewGlassGuardTests: XCTestCase {
             XCTAssertTrue(body.contains("\"\(language)\""), "\(language) manque pour « Arrêter »")
         }
         XCTAssertTrue(body.contains("\"value\": \"Arrêter\""))
+    }
+
+    // MARK: - #17815 C2.1 · C3.4 — la carte de proposition et la capsule de réponse du cadre en direct
+
+    /// Loi 18 : la carte et la capsule sont le verre des bandeaux de la pile (celui de la carte
+    /// d'accord), sous le voile d'appel ; jamais un matériau système forcé en sombre, et aucune
+    /// recette recopiée dans la vue.
+    func test_liveFrameCardAndNotice_areTheBannerGlass_notASystemMaterial() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallLiveFrameProposal.swift"))
+        XCTAssertFalse(source.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
+        let card = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallLiveFrameProposalCard: View", in: source))
+        XCTAssertTrue(card.contains(".modifier(CallBannerGlass(shape:"))
+        let notice = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallLiveFrameNotice: View", in: source))
+        XCTAssertTrue(notice.contains(".modifier(CallBannerGlass(shape:"))
+        _ = try bannerGlass()
+        for unit in [source, try recordingControls()] {
+            XCTAssertFalse(unit.contains("CallGlassVeil("), "le verre sous le voile se réutilise, il ne se recopie pas")
+            XCTAssertFalse(unit.contains(".meeshyGlass("), "le verre sous le voile se réutilise, il ne se recopie pas")
+        }
+    }
+
+    /// L1.3 — le bouton « Sortie » de la pilule demande son état à la loi pure,
+    /// avec la nature de l'appel ; la vue ne recompose plus `isSpeaker ? .active`.
+    func test_outputPillButton_takesItsKindFromThePureRule() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallDeviceControls.swift"))
+        let button = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallOutputPillButton: View", in: controls))
+        XCTAssertTrue(button.contains("CallOutputButtonRule.kind("))
+        XCTAssertTrue(button.contains("isVideoCall"))
+        XCTAssertFalse(button.contains("isSpeaker || route.routesExternally ? .active : .normal"))
+        let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        XCTAssertTrue(pill.contains("isVideoCall: callManager.isVideoUIActive"))
+    }
+
+    /// L2.7 — un rail trop long pour la hauteur défile ET s'efface en fondu à ses
+    /// deux bords (le masque de l'appel, axe vertical), au lieu d'être coupé net.
+    func test_actionRail_thatScrolls_fadesAtItsTwoEdges() throws {
+        let rails = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Rails.swift"))
+        let rail = try block("private func actionRail(", until: "/// G1.11", in: rails)
+        XCTAssertTrue(rail.contains("ScrollView(.vertical, showsIndicators: false)"))
+        XCTAssertTrue(rail.contains(".mask { ScrollEdgeFadeMask(axis: .vertical, start: true, end: true) }"))
     }
 }

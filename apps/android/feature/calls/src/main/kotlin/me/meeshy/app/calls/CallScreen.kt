@@ -159,6 +159,7 @@ fun CallScreen(
         chrome = chromeVisibility,
         onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
         inPip = inPip,
+        isGroupStage = groupShown,
     )
     BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
     LaunchedEffect(captionsViewModel, chrome) { captionsViewModel.journalRequests.collect { chrome.open(CallScreenPanel.Journal) } }
@@ -178,6 +179,9 @@ fun CallScreen(
     // R1.5 : ma vignette descend sous la pile entière des bandeaux (partage, enregistrement, capture), à leur hauteur mesurée.
     val bannerHeights = remember { CallTopBannerHeights() }
     val selfTileClearance = rememberSelfTileBannerClearance(bannerHeights, state.isPeerScreenCapturing && !inPip, reduceMotion)
+    val groupGridClearance = rememberGroupGridBannerClearance(
+        bannerHeights, state.isPeerScreenSharing, state.isPeerScreenCapturing && !inPip, chromeState.isStageFullScreen, reduceMotion,
+    )
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
@@ -185,8 +189,10 @@ fun CallScreen(
         CompositionLocalProvider(
             LocalCallLiveSeconds provides liveSeconds,
             LocalCallGlassTone provides glassTone,
+            LocalCallGlassToneProgress provides rememberCallGlassToneProgress(glassTone, reduceMotion),
             LocalCallSelfTileBannerClearance provides selfTileClearance,
             LocalCallTopBannerHeights provides bannerHeights,
+            LocalCallGroupGridClearance provides groupGridClearance,
         ) {
         Box(
             modifier = Modifier
@@ -396,17 +402,15 @@ fun CallScreen(
 
             // Le mode « Capturer l'appel » : la scène qui se photographie (deux tapes) ou se filme (appui
             // long), sous le choix du cadre en direct ; le chrome de l'appel s'efface.
-            if (chromeState.layer.activeMode == CallScreenMode.Montage) {
-                CallMontageMode(
-                    state = state,
-                    localTrack = viewModel.localVideoTrack,
-                    remoteTrack = remoteVideo,
-                    eglContext = viewModel.eglBaseContext,
-                    reduceMotion = reduceMotion,
-                    onClose = chrome::exitMode,
-                    pickerModifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
-                )
-            }
+            CallMontageMode(
+                visible = chromeState.layer.activeMode == CallScreenMode.Montage,
+                state = state,
+                localTrack = viewModel.localVideoTrack,
+                remoteTrack = remoteVideo,
+                eglContext = viewModel.eglBaseContext,
+                reduceMotion = reduceMotion,
+                onClose = chrome::exitMode,
+            )
 
             // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet.
             if (chromeState.layer.activeMode == CallScreenMode.Effects) {

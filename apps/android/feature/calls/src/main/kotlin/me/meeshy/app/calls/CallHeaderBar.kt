@@ -215,7 +215,6 @@ private fun CallDurationChip(
     )
     val hint = stringResource(R.string.call_quality_open_hint)
     val warning = MeeshyTheme.tokens.warning
-    val glassTone = LocalCallGlassTone.current
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     CallGlassPlate(
@@ -232,7 +231,7 @@ private fun CallDurationChip(
         Row(
             modifier = Modifier
                 .fillMaxHeight()
-                .background(glassTone.veil(glassTone.chipScrimAlpha))
+                .callToneVeil(CallGlassTone::chipScrimAlpha)
                 .background(CallButtonFill.pressedHighlight(pressed))
                 .padding(horizontal = MeeshySpacing.smPlus, vertical = MeeshySpacing.xs),
             verticalAlignment = Alignment.CenterVertically,

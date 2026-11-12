@@ -1,6 +1,6 @@
-import { createElement, type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createElement, type CSSProperties, type ReactNode, type RefCallback, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
-import type { MorphRect, SwapShape } from './call-pill-motion';
+import { LEAVING, type MorphRect, type SwapShape } from './call-pill-motion';
 
 /**
  * **LE MOUVEMENT DU VERRE, CHARGÉ À PART** (#17536) — les crochets minces que l'écran d'appel
@@ -67,8 +67,33 @@ export function useOpacityFade(ref: RefObject<HTMLElement | null>, on: boolean, 
   }, [on]);
 }
 
-/** Ce que porte ce qui repart : marqué sortant, ni focus ni clic, caché au lecteur d'écran. */
-export const LEAVING = { 'data-leaving': '', inert: true, 'aria-hidden': true } as const;
+/**
+ * Le ton du verre d'appel change en fondu (L5.8, #17849) : quand `prominent` change, la classe a déjà
+ * posé le ton visé et le moteur fait passer le voile de l'ancien au nouveau, en Web Animations (que
+ * « Réduire les animations » raccourcit au lieu de couper). La première peinture ne joue rien ; sans
+ * moteur, le ton se pose d'un coup. Interruptible.
+ */
+export function useGlassTone(glass: RefObject<HTMLElement | null>, prominent: boolean): void {
+  const engine = usePillEngine();
+  const running = useRef<Animation | null>(null);
+  const before = useRef(prominent);
+  useLayoutEffect(() => {
+    if (before.current === prominent) return;
+    before.current = prominent;
+    if (glass.current !== null) running.current = engine?.playGlassTone(glass.current, prominent, running.current) ?? null;
+  }, [prominent]);
+}
+
+/** {@link useGlassTone} pour un verre dont l'élément varie (bouton ou étiquette) : la référence à poser dessus. */
+export function useGlassToneRef(prominent: boolean): RefCallback<HTMLElement> {
+  const glass = useRef<HTMLElement | null>(null);
+  useGlassTone(glass, prominent);
+  return useCallback((node: HTMLElement | null) => {
+    glass.current = node;
+  }, []);
+}
+
+export { LEAVING };
 
 /**
  * CE QUI ENTRE ET REPART AVEC SA VALEUR (la capsule de l'en-tête, P9.8, #17509) — la dernière
@@ -78,7 +103,7 @@ export const LEAVING = { 'data-leaving': '', inert: true, 'aria-hidden': true } 
  * le départ repart de l'opacité affichée. La première peinture ne joue rien ; sans moteur, la
  * valeur se pose et repart d'un coup.
  */
-function useHeldSwap<T>(value: T | null, shape: SwapShape): { readonly held: T | null; readonly leaving: typeof LEAVING | null; readonly ref: RefObject<HTMLDivElement | null> } {
+function useHeldSwap<T>(value: T | null, shape: SwapShape, appear: boolean): { readonly held: T | null; readonly leaving: typeof LEAVING | null; readonly ref: RefObject<HTMLDivElement | null> } {
   const engine = usePillEngine();
   const last = useRef(value);
   if (value !== null) last.current = value;
@@ -86,7 +111,7 @@ function useHeldSwap<T>(value: T | null, shape: SwapShape): { readonly held: T |
   const [gone, setGone] = useState(!present);
   const ref = useRef<HTMLDivElement | null>(null);
   const running = useRef<Animation | null>(null);
-  const painted = useRef(false);
+  const painted = useRef(appear);
   useLayoutEffect(() => {
     const played = painted.current && ref.current !== null ? (engine?.playSwap(ref.current, present, running.current, shape) ?? null) : null;
     painted.current = true;
@@ -102,11 +127,13 @@ function useHeldSwap<T>(value: T | null, shape: SwapShape): { readonly held: T |
 /**
  * L'hôte de {@link useHeldSwap} : un bloc qui porte ses attributs (`className`, `data-*`) et rend
  * `children` de la valeur retenue ; par défaut il grandit depuis son ancre (`scale`, l'ancre est
- * `transform-origin`, posée par la feuille). Il vit ici, avec le mouvement, et non dans l'écran d'appel
+ * `transform-origin`, posée par la feuille). `appear` : un hôte monté PAR la valeur qu'il porte (la carte du
+ * cadre, chargée à part quand elle devient utile) joue son arrivée à son premier rendu, là où la première
+ * peinture de la page n'en joue aucune. Il vit ici, avec le mouvement, et non dans l'écran d'appel
  * (`budgets.json` › `call_overlay`).
  */
-export function HeldSwap<T>({ value, shape = 'scale', children, ...attributes }: { readonly value: T | null; readonly shape?: SwapShape; readonly children: (held: T) => ReactNode; readonly className?: string; readonly style?: CSSProperties } & { readonly [data: `data-${string}`]: string }) {
-  const { held, leaving, ref } = useHeldSwap(value, shape);
+export function HeldSwap<T>({ value, shape = 'scale', appear = false, children, ...attributes }: { readonly value: T | null; readonly shape?: SwapShape; readonly appear?: boolean; readonly children: (held: T) => ReactNode; readonly className?: string; readonly style?: CSSProperties } & { readonly 'aria-hidden'?: true | undefined } & { readonly [data: `data-${string}`]: string }) {
+  const { held, leaving, ref } = useHeldSwap(value, shape, appear);
   return held === null ? null : createElement('div', { ref, ...attributes, ...leaving }, children(held));
 }
 
@@ -234,4 +261,26 @@ export function useFollowPlace(node: RefObject<HTMLElement | null>, place: numbe
     committed.current = place;
     if (from !== undefined && node.current !== null) engine?.slideFrom(node.current, from);
   }, [place]);
+}
+
+/**
+ * **LE MODE QUI REPART RESTE MONTÉ LE TEMPS DE SON DÉPART** (C1.12, #17813) — `mode` est celui que la
+ * couche d'appel demande ; quand il retombe à `null`, celui des `plays` qui vient de repartir (le Montage,
+ * qui redescend par le bas) reste monté, `leaving`, jusqu'à ce que son mouvement appelle `gone`. Les autres
+ * modes se démontent à l'instant. Revenir au mode qui repart le rend à l'arrivée, sans le remonter.
+ */
+export function useModeHold<M extends string>(mode: M | null, plays: readonly M[]): { readonly mode: M | null; readonly leaving: boolean; readonly gone: () => void } {
+  const last = useRef<M | null>(mode);
+  const held = useRef<M | null>(null);
+  const [, redraw] = useState(0);
+  if (mode !== last.current) {
+    held.current = mode === null && last.current !== null && plays.includes(last.current) ? last.current : null;
+    last.current = mode;
+  }
+  const gone = () => {
+    if (held.current === null) return;
+    held.current = null;
+    redraw((count) => count + 1);
+  };
+  return mode === null && held.current !== null ? { mode: held.current, leaving: true, gone } : { mode, leaving: false, gone };
 }

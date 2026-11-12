@@ -196,6 +196,12 @@
         },
         {
           "catalog": "app",
+          "iosKey": "root.menu.game",
+          "androidName": "menu_game",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "root.menu.links",
           "androidName": "menu_my_links",
           "status": "adopted"

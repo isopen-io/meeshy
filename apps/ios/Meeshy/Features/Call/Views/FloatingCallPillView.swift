@@ -391,13 +391,23 @@ struct FloatingCallPillView: View {
                 .font(.subheadline.weight(.medium))
                 // indigo200, pas indigo400 : ce dernier ne tient que 2.1:1
                 // contre l'aplat indigo de la bannière (CallBannerContrastTests).
-                .foregroundColor(callManager.isSpeaker || route.routesExternally ? CallBannerContrast.speakerActiveTint : .white)
+                .foregroundColor(isOutputLit(route) ? CallBannerContrast.speakerActiveTint : .white)
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
-                        .fill(callManager.isSpeaker || route.routesExternally ? CallBannerContrast.speakerActiveTint.opacity(0.2) : Color.white.opacity(0.1))
+                        .fill(isOutputLit(route) ? CallBannerContrast.speakerActiveTint.opacity(0.2) : Color.white.opacity(0.1))
                 )
         }
+    }
+
+    /// L1.3 — même loi que la pilule de l'écran : le haut-parleur d'office d'un
+    /// appel vidéo est le repos, un appareil externe reste allumé.
+    private func isOutputLit(_ route: CallAudioRouteState) -> Bool {
+        CallOutputButtonRule.kind(
+            isSpeaker: callManager.isSpeaker,
+            routesExternally: route.routesExternally,
+            isVideoCall: callManager.isVideoUIActive
+        ) == .active
     }
 
     private var hangupButton: some View {

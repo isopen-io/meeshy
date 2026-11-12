@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { liveFrameDuo, toggledHold } from '@/lib/calls/call-live-frame';
@@ -8,6 +8,7 @@ import type { ActiveCall } from '@/lib/calls/call-store';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import type { LiveFrameHold } from './call-montage-mode';
+import type { ShownFrame } from './call-live-frame-layer';
 import type { FrameStudioLoader } from './use-montage-frames';
 
 /**
@@ -38,7 +39,7 @@ const Status = lazy(() =>
   })),
 );
 
-type SurfaceProps = { readonly language: InterfaceLanguage; readonly call: ActiveCall; readonly frameId: string; readonly remoteSharedName: string | null; readonly stage: () => Element | null; readonly load: FrameStudioLoader };
+type SurfaceProps = { readonly language: InterfaceLanguage; readonly call: ActiveCall; readonly shown: ShownFrame | null; readonly stage: () => Element | null; readonly load: FrameStudioLoader };
 
 const Surface = lazy(() =>
   loadLayer().then((module) => ({
@@ -54,27 +55,34 @@ export const useLiveFrameState = (): CallLiveFrameState => useStore(callLiveFram
 /** Un avis du cadre en direct (proposition, réponse, notice) attend-il sa place dans la pile des bandeaux ? */
 export const liveFrameStatusPresent = (state: CallLiveFrameState): boolean => state.proposal !== null || state.answer !== null || state.notice !== null;
 
-/** La proposition, la réponse, ou le cadre resté chez moi — sous l'en-tête, jamais rangé avec les commandes (loi 11). */
+/**
+ * La proposition, la réponse, ou le cadre resté chez moi — sous l'en-tête, jamais rangé avec les commandes (loi 11).
+ * Sa case (`data-call-live-frame-slot`, pleine largeur) est posée par le chunk du cadre, qui la fait entrer et repartir en
+ * mouvement : l'écran ne monte le chunk qu'au premier avis, et le garde monté ensuite, le temps de laisser repartir le dernier.
+ */
 export function CallLiveFrameStatusSlot({ language, state, load }: { readonly language: InterfaceLanguage; readonly state: CallLiveFrameState; readonly load: FrameStudioLoader }) {
-  if (!liveFrameStatusPresent(state)) return null;
+  const engaged = useRef(false);
+  if (liveFrameStatusPresent(state)) engaged.current = true;
+  if (!engaged.current) return null;
   return (
-    <div className="relative z-30 flex justify-center" data-call-live-frame-slot="">
-      <Suspense fallback={null}>
-        <Status language={language} state={state} load={load} />
-      </Suspense>
-    </div>
+    <Suspense fallback={null}>
+      <Status language={language} state={state} load={load} />
+    </Suspense>
   );
 }
 
 /** Le cadre gardé se montre-t-il ? À deux, en vidéo, hors des modes. */
 export const liveFrameShown = (call: ActiveCall, state: CallLiveFrameState, available: boolean): boolean => available && state.frameId !== null && liveFrameDuo(call);
 
-/** Le cadre gardé, autour des deux vidéos. */
-export function CallLiveFrameSurfaceSlot({ shown, state, ...props }: Omit<SurfaceProps, 'frameId' | 'remoteSharedName'> & { readonly shown: boolean; readonly state: CallLiveFrameState }) {
-  if (!shown || state.frameId === null) return null;
+/** Le cadre gardé, autour des deux vidéos — monté au premier cadre, puis gardé le temps de s'effacer en fondu. */
+export function CallLiveFrameSurfaceSlot({ shown, state, ...props }: Omit<SurfaceProps, 'shown'> & { readonly shown: boolean; readonly state: CallLiveFrameState }) {
+  const engaged = useRef(false);
+  const frame: ShownFrame | null = shown && state.frameId !== null ? { frameId: state.frameId, remoteSharedName: state.remoteSharedName } : null;
+  if (frame !== null) engaged.current = true;
+  if (!engaged.current) return null;
   return (
     <Suspense fallback={null}>
-      <Surface {...props} frameId={state.frameId} remoteSharedName={state.remoteSharedName} />
+      <Surface {...props} shown={frame} />
     </Suspense>
   );
 }

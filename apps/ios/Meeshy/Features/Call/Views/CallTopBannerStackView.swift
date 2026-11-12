@@ -34,12 +34,12 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
     }
 
     private var present: Set<CallTopBanner> {
-        var present: Set<CallTopBanner> = []
-        if screenShare.isSharing || screenShare.isRemoteSharing { present.insert(.screenShare) }
-        if recording.phase != .idle || recording.notice != nil { present.insert(.recording) }
-        if captureJournal.alert != nil { present.insert(.capture) }
-        if hasLiveFrameStatus { present.insert(.liveFrame) }
-        return present
+        CallTopBannerStack.present(
+            isScreenShareShown: screenShare.isSharing || screenShare.isRemoteSharing,
+            isRecordingShown: recording.phase != .idle || recording.notice != nil,
+            isCaptureAlertShown: captureJournal.alert != nil,
+            isLiveFrameShown: hasLiveFrameStatus
+        )
     }
 
     @ViewBuilder
@@ -60,7 +60,8 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
                 .padding(.horizontal, MeeshySpacing.lg)
         case .liveFrame:
             liveFrameStatus()
-                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.horizontal, CallTopBannerStack.horizontalMargin)
+                .modifier(CallTopBannerHeightReporter(banner: .liveFrame))
         }
     }
 }

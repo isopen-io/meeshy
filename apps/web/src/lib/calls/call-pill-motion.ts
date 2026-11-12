@@ -59,6 +59,9 @@ export function stowedGlass({ height, keptTop, keptHeight, padding }: StowInput)
   return { scale: Math.min(1, (keptHeight + 2 * padding) / height), shift: Math.max(0, height - padding - (keptTop + keptHeight)) };
 }
 
+/** Ce que porte ce qui repart : marqué sortant, ni focus ni clic, caché au lecteur d'écran. */
+export const LEAVING = { 'data-leaving': '', inert: true, 'aria-hidden': true } as const;
+
 /** Le fondu court : l'opacité seule, jamais un déplacement. */
 export const stowFadeKeyframes = (stowing: boolean): readonly Keyframe[] =>
   stowing
@@ -171,3 +174,23 @@ export function bannerCloseKeyframes(delta: number, reducedMotion: boolean): rea
   if (Math.abs(delta) < EPSILON_PX) return null;
   return reducedMotion ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: `translateY(${delta}px)` }, { transform: 'none' }];
 }
+
+/**
+ * LE TON DU VERRE CHANGE EN FONDU (L5.8, #17849 ; `CallGlassVeil` d'iOS, loi 17) — sur un écran reçu
+ * le verre d'appel s'assombrit (`glass-call` → `glass-call-prominent`, `glass.css`), puis revient. Le
+ * passage n'est pas un fond recalculé à chaque image : le verre garde sa densité régulière et un VOILE
+ * (le calque `::before`, de la couleur du verre) monte de zéro à la mesure qui, posée dessus, rend
+ * EXACTEMENT la densité proéminente. Seule son opacité bouge. Sous « Réduire les animations », le
+ * même fondu, plus court.
+ */
+export const GLASS_REGULAR_DENSITY = 72;
+
+/** Les densités de `glass.css` (`.glass-call`, `.glass-call-prominent`) ; un témoin les relit dans la feuille. */
+export const GLASS_PROMINENT_DENSITY = 86;
+
+/** L'opacité du voile : ce qui manque à la densité régulière pour atteindre la proéminente. */
+export const glassVeil = (prominent: boolean): number => (prominent ? (GLASS_PROMINENT_DENSITY - GLASS_REGULAR_DENSITY) / (100 - GLASS_REGULAR_DENSITY) : 0);
+
+export const glassToneKeyframes = (from: number, to: number): readonly Keyframe[] => [{ opacity: from }, { opacity: to }];
+
+export const glassToneMs = swapMs;

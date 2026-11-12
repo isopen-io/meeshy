@@ -945,11 +945,11 @@
     <string name="game_photo_title_start">Mi comienzo en Meeshy</string>
     <string name="game_photo_title_tier">Tu luz en %1$s</string>
     <string name="game_progression_load_error">No se pudo cargar el progreso</string>
-    <string name="game_progression_loading">Cargando el progreso</string>
+    <string name="game_progression_loading">Cargando Mi Leyenda</string>
     <string name="game_progression_offline">Sin conexión — progreso tal como en la última apertura</string>
     <string name="game_progression_offline_empty">Sin conexión — ningún progreso en memoria. Aparecerá al reconectarse.</string>
     <string name="game_progression_retry">Reintentar</string>
-    <string name="game_progression_title">Progreso</string>
+    <string name="game_progression_title">Mi Leyenda</string>
     <string name="game_rank_ambassadeur">Embajador</string>
     <string name="game_rank_conteur">Narrador</string>
     <string name="game_rank_echo">Eco</string>
