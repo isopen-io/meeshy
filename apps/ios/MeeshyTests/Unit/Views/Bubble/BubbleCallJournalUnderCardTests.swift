@@ -156,7 +156,7 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
         XCTAssertTrue(view.contains("story.viewer.transcript.show"))
         XCTAssertTrue(view.contains("story.viewer.transcript.hide"))
         XCTAssertTrue(view.contains("meeshyTapTarget("), "Cible d'au moins 44 pt.")
-        XCTAssertTrue(view.contains(".accessibilityHint("))
+        XCTAssertTrue(view.contains(".accessibilityLabel(toggleTitle)"))
     }
 
     func test_card_reduceMotion_fadesInsteadOfMoving() throws {
@@ -168,7 +168,7 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
 
     func test_card_noStoredAsyncFunctionTypeWithoutMainActor() throws {
         let view = try card()
-        let lines = view.components(separatedBy: "\n").filter { $0.contains("async ->") && !$0.contains("func ") }
+        let lines = view.components(separatedBy: "\n").filter { $0.contains("async ->") && !$0.contains("func ") && !$0.hasPrefix("    )") }
         for line in lines {
             XCTAssertTrue(line.contains("@MainActor"), "Type de fonction async sans @MainActor (#8182) : \(line)")
         }

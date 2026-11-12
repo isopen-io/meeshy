@@ -80,6 +80,7 @@ struct CallTranscriptSection: View {
                 } label: {
                     Image(systemName: showOriginalText ? "character.bubble.fill" : "captions.bubble.fill")
                         .foregroundStyle(Color(hex: accentHex))
+                        .meeshyTapTarget()
                 }
                 .accessibilityLabel(showOriginalText
                     ? String(localized: "call.control.translation.showTranslated", defaultValue: "Afficher la traduction", bundle: .main)
