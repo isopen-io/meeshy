@@ -67,13 +67,19 @@ export type CallLayout = 'portrait' | 'video-duo' | 'grid' | 'screen';
  * direct dont au moins une caméra tourne passe en vidéo plein cadre avec la
  * vignette locale ; le reste est le portrait audio d'iOS.
  */
-export function callLayout(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup'>): CallLayout {
+export function callLayout(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'cameraPreview' | 'remoteStreams' | 'isGroup'>): CallLayout {
   const members = Object.values(call.members);
   if (call.isGroup && members.length > 1) return 'grid';
   if (members.some((member) => member.screenSharing && hasVideo(call.remoteStreams[member.userId]))) return 'screen';
   const remoteVideo = members.some((member) => member.cameraOn && hasVideo(call.remoteStreams[member.userId]));
-  return call.cameraOn || remoteVideo ? 'video-duo' : 'portrait';
+  return selfCameraShown(call) || remoteVideo ? 'video-duo' : 'portrait';
 }
+
+/** Ma caméra se montre : émise, ou gardée en aperçu local pendant mon partage (S2.8). */
+export const selfCameraShown = (call: Pick<ActiveCall, 'cameraOn' | 'cameraPreview'>): boolean => call.cameraOn || (call.cameraPreview ?? null) !== null;
+
+/** Le flux de ma vignette : l'aperçu de ma caméra pendant mon partage, sinon mon flux local. */
+export const selfCameraStream = (call: Pick<ActiveCall, 'cameraPreview' | 'localStream'>): MediaStream | null => call.cameraPreview ?? call.localStream;
 
 export function hasVideo(stream: MediaStream | undefined | null): boolean {
   return stream !== undefined && stream !== null && stream.getVideoTracks().some((track) => track.readyState !== 'ended');

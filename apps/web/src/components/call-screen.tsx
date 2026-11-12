@@ -32,7 +32,7 @@ import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { orderedTopBanners, recordingBannerPresent, selfTileClearance, type PresentBanners, type TopBanner } from '@/lib/calls/call-top-banners';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import type { CallLiveFrameState } from '@/lib/calls/call-live-frame-store';
-import { callLayout, callStatusKey, type PlainCallKey, canShareScreen, hasVideo, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
+import { callLayout, callStatusKey, selfCameraShown, type PlainCallKey, canShareScreen, hasVideo, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
@@ -402,7 +402,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const cameraSwitch = useCameraSwitch(call.cameraOn);
   const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), cameraSwitch, videoScene });
   const framed = liveFrameShown(call, liveFrame, live && layer.kind !== 'mode');
-  const place = spotlight !== null && spotlight.featured === null ? 'top' : selfZoomPlace({ layout, selfFull, selfTileShown: call.cameraOn && !framed });
+  const place = spotlight !== null && spotlight.featured === null ? 'top' : selfZoomPlace({ layout, selfFull, selfTileShown: selfCameraShown(call) && !framed });
   const local = useLocalZoom(call.callId, call.facing);
   const offer: LayerOffer = {
     effects: set.mine.includes('effects'),
@@ -768,7 +768,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
               Rail={CallActionRail}
               viewport={viewport}
               inset={bleedEnd}
-              tile={selfTileFootprint({ layout, cameraOn: call.cameraOn, swapped: selfFull, framed, immersive, corner: tileCorner, scale: tileScale, viewport, topInset: selfTopInset })}
+              tile={selfTileFootprint({ layout, cameraOn: selfCameraShown(call), swapped: selfFull, framed, immersive, corner: tileCorner, scale: tileScale, viewport, topInset: selfTopInset })}
             />
           </Suspense>
         ) : null}
