@@ -31,7 +31,8 @@ struct MeeshyModeHeaderLayout: Layout {
             exit: ideals[.exit] ?? 0, center: ideals[.center], accessory: ideals[.accessory], confirm: ideals[.confirm]
         )
         let height = subviews.map { $0.sizeThatFits(.unspecified).height }.max() ?? 0
-        return CGSize(width: proposal.width ?? required, height: height)
+        let offered = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+        return CGSize(width: offered ?? required, height: height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
