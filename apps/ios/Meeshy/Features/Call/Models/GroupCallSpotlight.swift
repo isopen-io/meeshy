@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import SwiftUI
 
 /// #8395 — ce que la scène d'un appel de groupe montre : la grille, ou une
 /// vignette « à la une » (grande) avec les autres en bande.
@@ -89,4 +90,23 @@ enum GroupCallStageMotion {
     static func movesTiles(reduceMotion: Bool) -> Bool { !reduceMotion }
 
     static var fadeDuration: TimeInterval { CallRemoteVideoFade.duration(reduceMotion: true) }
+
+    /// U2.10 · #17726 — la translation qui fait sortir le bandeau des autres par SON bord de
+    /// l'écran : la distance MESURÉE du bord de la scène à celui de la fenêtre (la pilule, la zone
+    /// sûre), plus l'épaisseur du bandeau. `.move(edge:)` ne déplaçait que de cette épaisseur : en
+    /// portrait, le bandeau s'arrêtait à la place de la pilule. La translation est physique (comme
+    /// `CallRailsLayout.slideOffset`) : en droite à gauche, le bord de fin est à gauche.
+    static func stripTravel(toward edge: Edge, stage: CGRect, window: CGSize, stripExtent: CGFloat, isRightToLeft: Bool) -> CGSize {
+        let measured = stage.isNull || stage.isInfinite ? CGRect.zero : stage
+        let toTop = max(measured.minY, 0) + stripExtent
+        let toBottom = max(window.height - measured.maxY, 0) + stripExtent
+        let toLeft = max(measured.minX, 0) + stripExtent
+        let toRight = max(window.width - measured.maxX, 0) + stripExtent
+        switch edge {
+        case .top: return CGSize(width: 0, height: -toTop)
+        case .bottom: return CGSize(width: 0, height: toBottom)
+        case .leading: return CGSize(width: isRightToLeft ? toRight : -toLeft, height: 0)
+        case .trailing: return CGSize(width: isRightToLeft ? -toLeft : toRight, height: 0)
+        }
+    }
 }
