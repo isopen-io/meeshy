@@ -18,8 +18,9 @@
  *     choix est un radio de 44 de haut, le focus entre dans la feuille,
  *     Échap la ferme SANS réduire l'appel, et le choix est RETENU sur
  *     l'appareil (`meeshy.call.devices.v1`) ;
- *  3. réduire → la pastille ; « Réduire en bulle » → la bulle, qui porte la
- *     vidéo et trois commandes de 44 ;
+ *  3. réduire → la pastille ; « Réduire en bulle » → la bulle, qui porte le
+ *     portrait de l'autre (il n'envoie pas d'image : jamais ma caméra, P18.3),
+ *     son liseré, « nom · état », et trois commandes de 44 ;
  *  4. on revient à la liste, on ouvre une AUTRE conversation : la bulle
  *     survit à la navigation, ne recouvre ni le champ d'écriture ni
  *     « Envoyer », et un message part pendant l'appel ;
@@ -153,7 +154,15 @@ try {
       check(pillH.every((h) => h >= TAP_FLOOR), `${label} : les commandes de la pastille font au moins ${TAP_FLOOR} (${JSON.stringify(pillH)})`);
       await page.click('[data-call-pill-collapse]');
       check(await appears(page, '[data-call-bubble]'), `${label} : « Réduire en bulle » rend la bulle`);
-      check((await page.$('[data-call-bubble] video')) !== null, `${label} : la bulle porte la vidéo`);
+      /* P18.3 (#17756) : l'appel sonne, l'autre n'envoie aucune image — la bulle porte SON portrait, son liseré et
+         « nom · état », jamais ma caméra (qui, elle, est allumée). La vidéo de l'autre, quand il en envoie, est le
+         témoin `call-bubble.test.tsx` (« sa caméra allumée : sa vidéo »). */
+      const bubbleShows = await page.$eval('[data-call-bubble]', (el) => ({
+        video: el.querySelector('video') !== null,
+        ring: el.querySelector('[data-call-bubble-ring]') !== null,
+        caption: (el.querySelector('[data-call-bubble-caption]')?.textContent ?? '').trim(),
+      }));
+      check(!bubbleShows.video && bubbleShows.ring && bubbleShows.caption.includes(' · '), `${label} : l'autre n'envoie pas d'image — la bulle porte son portrait, son liseré et « nom · état », jamais ma caméra (${JSON.stringify(bubbleShows)})`);
       const bubbleH = await heights(page, '[data-call-bubble] [data-call-bubble-control]');
       check(bubbleH.length >= 2 && bubbleH.every((h) => h >= TAP_FLOOR), `${label} : les commandes de la bulle font au moins ${TAP_FLOOR} (${JSON.stringify(bubbleH)})`);
 

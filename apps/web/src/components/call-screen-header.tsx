@@ -8,12 +8,10 @@ import { GlyphSvg } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
-import { findCachedConversation } from '@/lib/api/conversations';
-import { customNameOf } from '@/lib/api/preferences';
-import { appQueryClient } from '@/lib/api/query-client';
 import { callActions } from '@/lib/calls/call-actions';
 import { participantCountOf } from '@/lib/calls/call-controls-disposition';
-import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegraded, type CallHeaderCapsuleLayout } from '@/lib/calls/call-header';
+import { callHeaderActions, callHeaderCapsule, isNetworkDegraded, type CallHeaderCapsuleLayout } from '@/lib/calls/call-header';
+import { cachedCallNames } from '@/lib/calls/call-header-names';
 import { browserPipSupport, pipOpenStore, requestCallPip, requestCallPipExit, shouldOfferPip } from '@/lib/calls/call-pip';
 import { elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callLayout } from '@/lib/calls/call-view';
@@ -75,12 +73,6 @@ type HeaderProps = {
 
 const CAPSULE_LAYOUT: Readonly<Record<ReturnType<typeof callLayout>, CallHeaderCapsuleLayout>> = { portrait: 'audio', 'video-duo': 'video', screen: 'video', grid: 'group' };
 
-/** Les noms que la conversation en cache donne à la capsule : lus à froid, l'en-tête se redessine chaque seconde. */
-function capsuleNames(call: ActiveCall) {
-  const conversation = call.conversationId === '' ? undefined : findCachedConversation(appQueryClient, call.conversationId);
-  return callHeaderNames(conversation === undefined ? undefined : { type: conversation.type, title: conversation.title, customName: customNameOf(conversation) }, call.isGroup ? call.title : null);
-}
-
 export function CallScreenHeader({ call, language, joined, prominent }: HeaderProps) {
   const live = call.phase.kind !== 'ended' && call.phase.kind !== 'incoming';
   const ticking = useCallClock(call, live && joined);
@@ -89,7 +81,7 @@ export function CallScreenHeader({ call, language, joined, prominent }: HeaderPr
   if (!live) return <div className="min-h-11" />;
   const actions = callHeaderActions({ pipEligible: shouldOfferPip(call, browserPipSupport()), pipActive, hasConversation: call.conversationId !== '' });
   const layout = callLayout(call);
-  const names = capsuleNames(call);
+  const names = cachedCallNames(call);
   const capsule = callHeaderCapsule({
     layout: CAPSULE_LAYOUT[layout],
     established: clock !== null,
