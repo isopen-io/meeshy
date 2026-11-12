@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import me.meeshy.app.calls.CallHeaderNamesViewModel
 import me.meeshy.app.calls.CallScreenShareViewModel
 import me.meeshy.app.calls.CallViewModel
 import me.meeshy.ui.component.viewer.LocalViewerTopOverlay
@@ -18,8 +19,8 @@ import me.meeshy.ui.theme.MeeshySpacing
  * média. Elles sont des `Dialog` : une fenêtre à part qui recouvre celle de l'application, pastille comprise. La pastille
  * se redessine donc DANS leur fenêtre ([LocalViewerTopOverlay]), tant que l'appel est réduit ([shown]).
  *
- * Les deux modèles de vue sont pris ICI, à la racine : une pastille composée dans la fenêtre d'une visionneuse lirait sinon
- * ceux de l'écran qui l'héberge, et son partage d'écran ne dirait jamais « Arrêter ».
+ * Les modèles de vue sont pris ICI, à la racine, comme ceux de la pastille de l'application : une pastille composée dans la
+ * fenêtre d'une visionneuse lirait sinon ceux de l'écran qui l'héberge. Un seul état d'appel, une seule pastille à la fois.
  */
 @Composable
 internal fun ProvideViewerCallPill(
@@ -29,13 +30,15 @@ internal fun ProvideViewerCallPill(
     content: @Composable () -> Unit,
 ) {
     val screenShare: CallScreenShareViewModel = hiltViewModel()
-    val pill = remember<@Composable () -> Unit>(callViewModel, navController, screenShare) {
+    val namesSource: CallHeaderNamesViewModel = hiltViewModel()
+    val pill = remember<@Composable () -> Unit>(callViewModel, navController, screenShare, namesSource) {
         {
             MinimizedCallPill(
                 callViewModel = callViewModel,
                 navController = navController,
                 modifier = Modifier.statusBarsPadding().padding(vertical = MeeshySpacing.xs),
                 screenShare = screenShare,
+                namesSource = namesSource,
             )
         }
     }

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
-import androidx.compose.material.icons.filled.ScreenShare
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -30,8 +29,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallHeaderNames
 import me.meeshy.sdk.model.call.CallReducedCaption
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -94,7 +95,8 @@ enum class CallBackAction { Inert, Minimize, Close }
  * the pill shows the real avatar, its initials only standing in while it loads (#12569).
  *
  * While I share my screen ([isScreenSharing]) the pill turns red and offers one control, « Arrêter »
- * ([onStopScreenShare]) — the capsule of law 12 (#16664), like iOS `FloatingCallPillView` and the web `CallPill`.
+ * ([onStopScreenShare]) — the capsule of law 12 (#16664), like iOS `FloatingCallPillView` and the web `CallPill`. It
+ * then says « name · duration » (P18.10), the name being the header's ([names], iOS `CallReducedRule.title`).
  */
 @Composable
 fun CallPill(
@@ -108,6 +110,7 @@ fun CallPill(
     isScreenSharing: Boolean = false,
     onStopScreenShare: () -> Unit = {},
     peerUserId: String = "",
+    names: CallHeaderNames = CallHeaderNames(givenName = null, groupName = null),
 ) {
     val accent = hexColor(CallTileRim.peerAvatar(peerUserId, state.peerName))
     val rim = CallTileRim.reducedRim(peerUserId, state.peerName, MeeshyTheme.tokens.warning)
@@ -137,7 +140,8 @@ fun CallPill(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (isScreenSharing) {
-                CallPillSharingIdentity(CallReducedCaption.caption(state.peerName, pillStatusLine(state)))
+                val title = CallReducedCaption.title(names.givenName, names.groupName, displayName = state.peerName)
+                CallPillSharingIdentity(CallReducedCaption.caption(title, pillStatusLine(state)))
             } else {
                 CallPillIdentity(state = state, peerAvatarUrl = peerAvatarUrl, accent = accent)
             }
@@ -197,7 +201,7 @@ private fun RowScope.CallPillIdentity(state: CallUiState, peerAvatarUrl: String?
 @Composable
 private fun RowScope.CallPillSharingIdentity(caption: String) {
     Icon(
-        imageVector = Icons.Filled.ScreenShare,
+        imageVector = MeeshyIcons.FlipToFront,
         contentDescription = null,
         tint = Color.White,
         modifier = Modifier.clearAndSetSemantics { },
