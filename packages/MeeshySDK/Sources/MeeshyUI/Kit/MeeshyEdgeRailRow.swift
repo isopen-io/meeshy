@@ -62,7 +62,7 @@ public struct MeeshyEdgeRailRowFace: View, Equatable {
             case .text(let text): Text(text)
             }
         }
-        .font(.system(size: MeeshyEdgeRailsRecipe.glyphSize, weight: .semibold))
+        .font(MeeshyEdgeRailsRecipe.glyphFont)
         .frame(width: MeeshyEdgeRailsRecipe.glyphSide, height: MeeshyEdgeRailsRecipe.glyphSide)
         .accessibilityHidden(true)
     }

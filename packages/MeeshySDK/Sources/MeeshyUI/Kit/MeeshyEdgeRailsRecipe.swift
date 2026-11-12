@@ -82,6 +82,11 @@ public nonisolated enum MeeshyEdgeRailsRecipe {
     public static let rowSpacing: CGFloat = MeeshySpacing.xs
     public static let glyphSide: CGFloat = MeeshyControlSize.tapTarget
     public static let glyphSize: CGFloat = MeeshyIconSize.xl
+    /// Le glyphe garde sa taille quel que soit le Dynamic Type : il est figé
+    /// dans sa case de `glyphSide`, le mot de la ligne porte la grande police.
+    public static var glyphFont: Font {
+        Font.system(size: glyphSize, weight: .semibold)
+    }
     public static let trailingInset: CGFloat = MeeshySpacing.md
     public static let headerSize: CGFloat = MeeshyFont.smallSize
     public static let headerTrackingEm = 0.08

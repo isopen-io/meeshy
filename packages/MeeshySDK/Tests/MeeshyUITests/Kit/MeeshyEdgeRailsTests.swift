@@ -86,6 +86,7 @@ struct MeeshyEdgeRailsTests {
         #expect(MeeshyEdgeRailsRecipe.rowRadius == MeeshyRadius.xlPlus)
         #expect(MeeshyEdgeRailsRecipe.rowSpacing == MeeshySpacing.xs)
         #expect(MeeshyEdgeRailsRecipe.glyphSize == MeeshyIconSize.xl)
+        #expect(MeeshyEdgeRailsRecipe.glyphFont == Font.system(size: MeeshyIconSize.xl, weight: .semibold))
         #expect(MeeshyEdgeRailsRecipe.trailingInset == MeeshySpacing.md)
         #expect(MeeshyEdgeRailsRecipe.padding(.regular) == MeeshySpacing.smPlus)
         #expect(MeeshyEdgeRailsRecipe.padding(.narrow) == MeeshySpacing.sm)
