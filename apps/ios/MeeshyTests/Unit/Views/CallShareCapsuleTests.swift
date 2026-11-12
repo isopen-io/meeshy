@@ -66,8 +66,8 @@ final class CallShareCapsuleTests: XCTestCase {
         let button = try source("Meeshy/Features/Call/Views/CallShareStopButton.swift")
         XCTAssertTrue(button.contains("Capsule().fill(Color.white)"))
         XCTAssertTrue(button.contains("MeeshyColors.errorInk"))
-        XCTAssertTrue(try source("Meeshy/Features/Call/Views/FloatingCallPillView.swift").contains("CallShareStopButton("))
-        XCTAssertTrue(try source("Meeshy/Features/Call/Views/CallBubbleView.swift").contains("CallShareStopButton("))
+        XCTAssertTrue(try source("Meeshy/Features/Call/Views/FloatingCallPillView.swift").contains("CallShareStopButton {"))
+        XCTAssertTrue(try source("Meeshy/Features/Call/Views/CallBubbleView.swift").contains("CallShareStopButton {"))
     }
 
     // MARK: - S1.8 / P18.10 — pendant MON partage, l'appel réduit reste la capsule (comme le web, #17760)
@@ -101,7 +101,7 @@ final class CallShareCapsuleTests: XCTestCase {
             pill.contains(".accessibilityAction(named: String(localized: \"a11y.call.pill.collapse\""),
             "L'action « Réduire en bulle » n'est offerte que quand elle a un effet."
         )
-        let actions = try XCTUnwrap(DeclarationBodyScanner.body(containing: ".accessibilityActions {", in: pill))
+        let actions = try XCTUnwrap(DeclarationBodyScanner.body(containing: ".accessibilityActions", in: pill))
         XCTAssertTrue(actions.contains("if mayCollapseToBubble {"))
         XCTAssertTrue(actions.contains("collapseToBubble(exitTranslation: 1)"))
         let collapse = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func collapseToBubble(", in: pill))
