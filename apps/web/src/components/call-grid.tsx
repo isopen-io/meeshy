@@ -153,7 +153,7 @@ function selfSubject(kit: CallGridKit, self: CallGridProps['self'], language: In
 
 function NameLabel({ name, muted, suffix }: { readonly name: string; readonly muted: boolean; readonly suffix: string | null }) {
   return (
-    <span className="glass-call absolute bottom-2 left-2 flex max-w-[85%] items-center gap-1 truncate rounded-full px-2 py-0.5 text-mini">
+    <span className="glass-call absolute bottom-2 start-2 flex max-w-[85%] items-center gap-1 truncate rounded-full px-2 py-0.5 text-mini">
       {muted ? (
         <span className="contents" data-call-tile-muted="">
           <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={12} />
@@ -347,14 +347,13 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
               />
             </Suspense>
           ) : null}
-          <div className="absolute right-2 top-2 flex flex-col items-end gap-2" data-call-chrome-fade="">
+          <div className="absolute end-2 top-2 flex flex-col items-end gap-2" data-call-chrome-fade="" {...(fullscreen ? { 'data-call-chrome-keep': '' } : {})}>
             <kit.Arrives className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
               <kit.Button label={back} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />} onPress={() => onChoose(chooseGrid(sharer?.userId ?? null))} size={44} data={{ 'data-call-grid-back': '' }} />
               <kit.Button
                 label={full}
                 glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[fullscreen ? 'cornersIn' : 'cornersOut']} size={20} />}
                 onPress={onToggleImmersive}
-                tone={fullscreen ? 'active' : 'disc'}
                 pressed={fullscreen}
                 size={44}
                 data={{ 'data-call-fullscreen': '' }}

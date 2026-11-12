@@ -16,7 +16,7 @@ const PILL_PADDING = 6;
 const EASING = 'cubic-bezier(0.2, 0.9, 0.3, 1)';
 
 /** Ce qui se range par le fondu : l'élément lui-même ou ses descendants. */
-const STOW_TARGETS = '[data-call-stow], [data-call-chrome-fade], [data-call-pill-rest]';
+const STOW_TARGETS = '[data-call-stow], [data-call-chrome-fade]:not([data-call-chrome-keep]), [data-call-pill-rest]';
 
 const changed = (from: GlassSize, to: GlassSize): boolean => morphKeyframes(from, to, false) !== null;
 

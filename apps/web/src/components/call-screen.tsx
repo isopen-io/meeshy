@@ -25,7 +25,7 @@ import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLa
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
-import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
+import { autoSharer, resolveSpotlight } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callLayout, callStatusKey, type PlainCallKey, canShareScreen, hasVideo, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
@@ -36,6 +36,7 @@ import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { usePublishChrome } from '@/lib/calls/call-chrome-store';
 import { useStageMorph, useStowFade } from '@/lib/calls/use-pill-motion';
 import { useCallSwipeDown } from '@/lib/calls/use-call-swipe-down';
+import { useSpotlightChoice } from '@/lib/calls/use-spotlight-choice';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -319,7 +320,6 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
   const [layer, setLayer] = useState<CallScreenLayer>(initiallyExpanded ? { kind: 'menu' } : IDLE);
-  const [choice, setChoice] = useState<SpotlightChoice>(null);
   const [selfFull, setSelfFull] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
   const focusNext = useRef<string | null>(null);
@@ -335,14 +335,9 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const layout = joined ? callLayout(call) : 'portrait';
   const live = phase !== 'ended' && phase !== 'incoming';
   const endedClock = phase === 'ended' && call.endedDurationSec !== null && call.endedDurationSec > 0 ? formatCallClock(call.endedDurationSec) : null;
-  const spotlight =
-    layout === 'grid'
-      ? resolveSpotlight({
-          members: membersInArrival(call.members),
-          choice,
-          remoteStreams: call.remoteStreams,
-        })
-      : null;
+  const arrived = layout === 'grid' ? membersInArrival(call.members) : [];
+  const [choice, setChoice] = useSpotlightChoice(autoSharer(arrived, call.remoteStreams)?.userId ?? null);
+  const spotlight = layout === 'grid' ? resolveSpotlight({ members: arrived, choice, remoteStreams: call.remoteStreams }) : null;
   const sharedScreenShown = layout === 'screen' || spotlight?.screen === true;
   const [immersive, toggleImmersive] = useImmersive(stageRef, layout === 'screen' || spotlight !== null);
   const videoScene = live && isVideoScene(call);

@@ -61,3 +61,10 @@ export function resolveSpotlight(input: SpotlightInput): SpotlightView | null {
   if (choice?.kind === 'grid' && choice.dismissedSharer === (sharer?.userId ?? null)) return null;
   return sharer === null ? null : featuring(sharer, input, true);
 }
+
+/**
+ * « Grille » ne vaut que pour le partage qu'il a congédié (`GroupCallSpotlight.choice(afterSharerChangedFrom:)`
+ * d'iOS) : dès que le partageur change — il s'arrête, un autre partage, ou le même qui repart —, le choix
+ * tombe et la règle reprend la main. Un membre épinglé ou ma tuile restent.
+ */
+export const choiceAfterSharerChange = (choice: SpotlightChoice, from: string | null, to: string | null): SpotlightChoice => (from !== to && choice?.kind === 'grid' ? null : choice);

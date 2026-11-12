@@ -192,3 +192,30 @@ describe('CallScreen — la scène d’un groupe (#17699)', () => {
     view.done();
   });
 });
+
+const liveScreen = () => Object.defineProperty(new MediaStream(), 'getVideoTracks', { value: () => [{ readyState: 'live' }] });
+
+describe('CallScreen — une personne qui repartage remonte à la une (U2.1)', () => {
+  test('« Revenir à la grille » congédie CE partage : à sa fin, puis au repartage de la même personne, son écran remonte seul (`GroupCallSpotlight.choice(afterSharerChangedFrom:)` d’iOS)', () => {
+    const stream = liveScreen();
+    const sharing = { ...peers, 'u-peer': member({ screenSharing: true }) };
+    const view = mount({ members: sharing, remoteStreams: { 'u-peer': stream } });
+    expect(view.find('[data-call-shared-screen]')).not.toBeNull();
+    view.press('[data-call-grid-back]');
+    expect(view.find('[data-call-shared-screen]')).toBeNull();
+    act(() => view.rerender({ members: peers, remoteStreams: {} }));
+    act(() => view.rerender({ members: sharing, remoteStreams: { 'u-peer': stream } }));
+    expect(view.find('[data-call-shared-screen]')).not.toBeNull();
+    view.done();
+  });
+
+  test('tant que le même partage dure, la grille congédiée reste la grille', () => {
+    const stream = liveScreen();
+    const sharing = { ...peers, 'u-peer': member({ screenSharing: true }) };
+    const view = mount({ members: sharing, remoteStreams: { 'u-peer': stream } });
+    view.press('[data-call-grid-back]');
+    act(() => view.rerender({ members: { ...sharing, 'u-b': member({ userId: 'u-b', name: 'Bintou', micMuted: true }) }, remoteStreams: { 'u-peer': stream } }));
+    expect(view.find('[data-call-shared-screen]')).toBeNull();
+    view.done();
+  });
+});
