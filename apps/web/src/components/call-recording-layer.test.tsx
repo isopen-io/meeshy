@@ -1,8 +1,12 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { CallRecordingState } from '@/lib/calls/call-recording';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { loadCallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CallRecordingPanel } from './call-recording-layer';
 
@@ -95,5 +99,96 @@ describe('un toucher qui range tout range aussi l’indicateur d’enregistremen
     const html = render(pending(false, true), 'Nadia', true);
     expect(html).toContain('role="alertdialog"');
     expect(html).not.toContain('data-call-stowed');
+  });
+});
+
+/**
+ * LA PLACE DE L'INDICATEUR SUIT LA PILE EN MOUVEMENT (S2.6, #17774) — l'indicateur flotte au-dessus de l'écran
+ * d'appel, à la place que la pile lui garde sous le bandeau de partage. Quand ce bandeau repart (ou arrive), sa case
+ * remonte en translation : l'indicateur la suit de la même façon, au lieu de sauter de 60 px d'un coup.
+ */
+describe('l’indicateur d’enregistrement suit sa case quand la pile se referme (S2.6)', () => {
+  const recording: CallRecordingState = { view: { kind: 'recording', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-1', recorderId: 'u-peer', mine: false }, notice: null };
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(async () => {
+    await loadPillMotion();
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  /** La place de l'indicateur à l'écran : l'en-tête, plus ce que la pile pose avant lui (le décalage inscrit dans son `top`). */
+  function layOut() {
+    const real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value(this: HTMLElement) {
+        const top = 60 + Number(/([\d.]+)px\)$/.exec(this.style.top)?.[1] ?? 0);
+        return { top, left: 0, right: 0, bottom: top, width: 0, height: 0, x: 0, y: top, toJSON: () => ({}) };
+      },
+    });
+    return () => (real === undefined ? Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect') : Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', real));
+  }
+
+  function recordAnimations() {
+    const played: { readonly element: Element; readonly frames: Keyframe[] }[] = [];
+    const real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+    Object.defineProperty(HTMLElement.prototype, 'animate', {
+      configurable: true,
+      value(this: Element, frames: Keyframe[]) {
+        played.push({ element: this, frames });
+        return { finished: new Promise(() => undefined), cancel: () => undefined, effect: null };
+      },
+    });
+    return { played, restore: () => (real === undefined ? Reflect.deleteProperty(HTMLElement.prototype, 'animate') : Object.defineProperty(HTMLElement.prototype, 'animate', real)) };
+  }
+
+  const mountAt = async (offset: number) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const renderAt = (next: number) =>
+      act(async () => {
+        root.render(<CallRecordingPanel state={recording} requesterName="Nadia" language="fr" onAnswer={noop} onStop={noop} onDismiss={noop} offset={next} />);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      });
+    await renderAt(offset);
+    return {
+      indicator: () => host.querySelector('[data-call-recording-indicator]'),
+      renderAt,
+      done: async () => {
+        await act(async () => root.unmount());
+        host.remove();
+      },
+    };
+  };
+
+  test('le bandeau de partage repart : l’indicateur remonte de ses 60 px en translation, sans sauter', async () => {
+    const motion = recordAnimations();
+    const unlay = layOut();
+    const view = await mountAt(60);
+    motion.played.length = 0;
+    await view.renderAt(0);
+    expect(motion.played.find((move) => move.element === view.indicator())?.frames).toEqual([{ transform: 'translateY(60px)' }, { transform: 'none' }]);
+    await view.done();
+    unlay();
+    motion.restore();
+  });
+
+  test('le bandeau arrive : l’indicateur descend de même ; sans changement de place, rien ne bouge', async () => {
+    const motion = recordAnimations();
+    const unlay = layOut();
+    const view = await mountAt(0);
+    expect(motion.played.filter((move) => move.element === view.indicator())).toEqual([]);
+    await view.renderAt(60);
+    expect(motion.played.find((move) => move.element === view.indicator())?.frames).toEqual([{ transform: 'translateY(-60px)' }, { transform: 'none' }]);
+    await view.done();
+    unlay();
+    motion.restore();
   });
 });

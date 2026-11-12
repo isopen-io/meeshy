@@ -38,7 +38,7 @@ import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { usePublishChrome } from '@/lib/calls/call-chrome-store';
-import { useStageMorph, useStowFade } from '@/lib/calls/use-pill-motion';
+import { LEAVING, useBannersClose, useStageMorph, useStowFade, useViewMotion, type ViewMotion } from '@/lib/calls/use-pill-motion';
 import { useCallSwipeDown } from '@/lib/calls/use-call-swipe-down';
 import { useSpotlightChoice } from '@/lib/calls/use-spotlight-choice';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
@@ -325,6 +325,8 @@ function useImmersive(screen: React.RefObject<HTMLElement | null>, available: bo
 
 type CallScreenProps = {
   readonly call: ActiveCall;
+  /** Son rôle dans l'échange avec la capsule (S1.7, S2.1) : l'écran qui repart reste monté, sortant, le temps de son mouvement. */
+  readonly motion?: ViewMotion;
   readonly canShare?: boolean;
   /** Les actions sorties dès l'ouverture — pour un rendu sans geste (témoins, captures). */
   readonly initiallyExpanded?: boolean;
@@ -343,9 +345,12 @@ function usePresentBanners(call: ActiveCall, live: boolean, liveFrame: CallLiveF
 /**
  * P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage se retient lui-même le temps de repartir par le haut ; l'indicateur d'enregistrement flotte (`call-recording-layer.tsx`) et ne laisse ici que sa place.
  */
-function CallTopBannerStack({ call, present, language, hidden, liveFrame }: { readonly call: ActiveCall; readonly present: PresentBanners; readonly language: InterfaceLanguage; readonly hidden: boolean; readonly liveFrame: CallLiveFrameState }) {
+export function CallTopBannerStack({ call, present, language, hidden, liveFrame }: { readonly call: ActiveCall; readonly present: PresentBanners; readonly language: InterfaceLanguage; readonly hidden: boolean; readonly liveFrame: CallLiveFrameState }) {
   const sharedOnce = useRef(false);
   if (present['screen-share'] === true) sharedOnce.current = true;
+  /* La pile se referme (ou s'ouvre) en mouvement (S2.6, #17774) : le bandeau qui repart quitte la mise en page (`call-motion.css`), les suivants rejoignent leur place par une translation. */
+  const stack = useRef<HTMLDivElement>(null);
+  useBannersClose(stack, orderedTopBanners(present).join());
   const item: Readonly<Record<TopBanner, ReactNode>> = {
     'screen-share': null,
     recording: <div key="recording" aria-hidden className="h-[3.25rem]" data-call-banner-slot="recording" />,
@@ -357,7 +362,7 @@ function CallTopBannerStack({ call, present, language, hidden, liveFrame }: { re
     'live-frame': <CallLiveFrameStatusSlot key="live-frame" language={language} state={liveFrame} load={loadFrameStudio} />,
   };
   return (
-    <div className="relative z-30 flex flex-col items-center gap-2 empty:hidden" data-call-banner-stack="">
+    <div ref={stack} className="relative z-30 flex flex-col items-center gap-2 empty:hidden" data-call-banner-stack="">
       {sharedOnce.current ? (
         <Suspense fallback={null}>
           <CallScreenShareBanner sharing={present['screen-share'] === true} language={language} hidden={hidden} />
@@ -368,7 +373,7 @@ function CallTopBannerStack({ call, present, language, hidden, liveFrame }: { re
   );
 }
 
-export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false, effectsSupport, wide }: CallScreenProps) {
+export function CallScreen({ call, motion, canShare = browserCanShare(), initiallyExpanded = false, effectsSupport, wide }: CallScreenProps) {
   useMediaSystemBars();
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
@@ -663,6 +668,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     ) : null;
   /* LE CHROME SE RANGE VERS SES BORDS, ET REVIENT PAR LE MÊME CHEMIN (G1.11, G2.8, #17406) : l'en-tête par le haut, la pilule par le bas, les bandeaux en fondu (`data-call-stow`, `call-motion.css`). Il ne retire JAMAIS le doigt à un bouton encore visible (#8735) : rangés d'un toucher, ils deviennent `invisible` à la FIN du mouvement, et reviennent d'un coup. Sous « Réduire les animations » : un fondu court, sans déplacement (`useStowFade`). */
   useStowFade(root, hidden);
+  useViewMotion(root, motion);
   useStageMorph(audioStage, compactStage);
   usePublishChrome(hidden);
 
@@ -679,6 +685,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       data-call-chrome={hidden ? 'hidden' : 'shown'}
       data-call-layer={shown.kind}
       data-call-journal-dock={column.shown ? 'column' : undefined}
+      {...(motion?.leaving ? LEAVING : {})}
     >
       {call.preview === null ? null : (
         <Suspense fallback={null}>

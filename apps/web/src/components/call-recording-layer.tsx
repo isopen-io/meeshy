@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { callChromeStore } from '@/lib/calls/call-chrome-store';
-import { useStowFade } from '@/lib/calls/use-pill-motion';
+import { useFollowPlace, useStowFade } from '@/lib/calls/use-pill-motion';
 import type { CallRecordingNotice, CallRecordingState } from '@/lib/calls/call-recording';
 import { callRecording } from '@/lib/calls/call-recording-live';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
@@ -51,11 +51,13 @@ const topOf = (offset: number): string => `calc(env(safe-area-inset-top) + 3.75r
  * L'indicateur « Enregistrement en cours » (et son bouton Arrêter) se range avec le reste de
  * l'appel quand un toucher range tout (G1.1, #17536) : il repart vers le haut, comme l'en-tête,
  * et revient avec lui (`call-motion.css`, `call-chrome-store.ts`). La carte d'accord, elle,
- * ne se range jamais (G1.6).
+ * ne se range jamais (G1.6). Sa place suit sa case de la pile en glissant quand un bandeau arrive ou repart (S2.6).
  */
-function RecordingStatus({ recording, label, stowed, top, children }: { readonly recording: boolean; readonly label: string; readonly stowed: boolean; readonly top: string; readonly children: ReactNode }) {
+function RecordingStatus({ recording, label, stowed, offset, children }: { readonly recording: boolean; readonly label: string; readonly stowed: boolean; readonly offset: number; readonly children: ReactNode }) {
   const node = useRef<HTMLDivElement>(null);
+  const top = topOf(offset);
   useStowFade(node, stowed);
+  useFollowPlace(node, offset);
   return (
     <div
       ref={node}
@@ -126,7 +128,7 @@ export function CallRecordingPanel({
     const recording = view.kind === 'recording';
     const label = translate(language, recording ? 'callRecording.active' : 'callRecording.waiting');
     return (
-      <RecordingStatus recording={recording} label={label} stowed={stowed} top={top}>
+      <RecordingStatus recording={recording} label={label} stowed={stowed} offset={offset}>
         {view.kind === 'asking' ? <span className="size-11" /> : (
           <button
             type="button"

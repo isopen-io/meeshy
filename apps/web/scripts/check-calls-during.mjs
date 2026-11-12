@@ -71,6 +71,8 @@ const capture = async (page, name) => {
 };
 
 const appears = (page, selector, timeout = 5000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
+/** L'écran d'appel et la capsule s'échangent en mouvement (S1.7, S2.1, #17774) : on ne mesure qu'une fois la vue qui repart démontée et plus aucune animation Web finie en cours (une pulsation sans fin ne se termine jamais : elle n'est pas attendue). */
+const swapped = (page) => page.waitForFunction(() => document.querySelector('[data-leaving][data-call-screen], [data-leaving][data-call-pill-bar]') === null && document.getAnimations().every((animation) => animation instanceof CSSTransition || animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity), undefined, { timeout: 5000 }).then(() => true, () => false);
 const heights = (page, selector) => page.$$eval(selector, (els) => els.map((el) => Math.round(el.getBoundingClientRect().height)));
 const stored = (page, key) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? 'null'), key);
 
@@ -150,6 +152,7 @@ try {
       // ------------------------------------------------ 3. pastille puis bulle
       await page.click('[data-call-screen] button[aria-label="Réduire"]');
       check(await appears(page, '[data-call-pill-bar]'), `${label} : réduire l'appel rend la pastille`);
+      check(await swapped(page), `${label} : l'échange se termine — la vue qui repart est démontée, aucun mouvement fini ne court encore`);
       const pillH = await heights(page, '[data-call-pill-bar] button');
       check(pillH.every((h) => h >= TAP_FLOOR), `${label} : les commandes de la pastille font au moins ${TAP_FLOOR} (${JSON.stringify(pillH)})`);
       await page.click('[data-call-pill-collapse]');

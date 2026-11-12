@@ -68,6 +68,8 @@ const capture = async (page, name) => {
 
 const appears = (page, selector, timeout = 8000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
+/** L'écran d'appel et la capsule s'échangent en mouvement (S1.7, S2.1, #17774) : on ne mesure qu'une fois la vue qui repart démontée et plus aucune animation Web finie en cours (une pulsation sans fin ne se termine jamais : elle n'est pas attendue). */
+const swapped = (page) => page.waitForFunction(() => document.querySelector('[data-leaving][data-call-screen], [data-leaving][data-call-pill-bar]') === null && document.getAnimations().every((animation) => animation instanceof CSSTransition || animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity), undefined, { timeout: 5000 }).then(() => true, () => false);
 
 /* Le pair est armé, et getDisplayMedia rend un canevas animé : ce qu'un écran enverrait. */
 const ARM_PEER_AND_DISPLAY = () => {
@@ -171,7 +173,9 @@ try {
           });
           await page.waitForTimeout(150);
           await page.mouse.up();
-          return { from: [x, y], distance, held };
+          /* Relâché assez loin, l'écran repart en se contractant LÀ OÙ le doigt l'a laissé (#17774) : son départ part de la translation du glissé, jamais d'un retour en haut. */
+          const released = await page.evaluate(() => document.querySelector('[data-call-screen][data-leaving]')?.getAnimations().filter((animation) => !(animation instanceof CSSTransition)).map((animation) => String(animation.effect?.getKeyframes()[0]?.transform ?? '')) ?? null);
+          return { from: [x, y], distance, held, released };
         };
         await drag(30);
         await page.waitForTimeout(300);
@@ -180,6 +184,8 @@ try {
         check(swiped.held?.swipe === 'dragging' && swiped.held.transform !== '', `${label} : pendant le glissé, l'écran suit le pointeur — aucun glisser-déposer du navigateur ne l'annule (${JSON.stringify(swiped.held)})`);
         const reduced = await appears(page, '[data-call-pill-bar]', 3000);
         check(reduced, `${label} : glissé aux trois quarts et relâché, l'appel se réduit — ${JSON.stringify(swiped)}`);
+        check(swiped.released?.some((from) => /matrix|translate/.test(from)) === true, `${label} : relâché, l'écran se contracte depuis la place où le doigt l'a laissé, sans sauter en haut (${JSON.stringify(swiped.released)})`);
+        check(await swapped(page), `${label} : l'échange se termine — la vue qui repart est démontée, aucun mouvement fini ne court encore`);
         check((await page.$('[data-call-screen]')) === null, `${label} : réduit, l'écran d'appel a quitté le plein écran`);
         await capture(page, `glisse-reduit-${slug}`);
         if (reduced) {
@@ -200,6 +206,7 @@ try {
         await capture(page, `partage-capsule-${slug}`);
         await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
         check(await appears(page, '[data-call-screen-share-banner] [data-call-screen-share-stop]'), `${label} : le bandeau « Vous partagez votre écran · Arrêter » s'affiche sous l'en-tête (P16.4)`);
+        check(await swapped(page), `${label} : l'échange se termine — la vue qui repart est démontée, aucun mouvement fini ne court encore`);
         const shareStop = await page.locator('[data-call-screen-share-stop]').boundingBox();
         check(shareStop !== null && shareStop.height >= TAP_FLOOR, `${label} : « Arrêter » fait au moins ${TAP_FLOOR} de haut (${JSON.stringify(shareStop && Math.round(shareStop.height))})`);
         await openActions(page);
