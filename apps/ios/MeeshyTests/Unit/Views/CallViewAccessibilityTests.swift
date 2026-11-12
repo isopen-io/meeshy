@@ -686,20 +686,23 @@ final class CallViewAccessibilityTests: XCTestCase {
     /// TransientCallSignalGlyph is mounted TWICE (audio capsule status area + the header's
     /// duration chip, #8394) — these tests scope their search to the chip, inside
     /// `durationChip`, or they'd silently inspect the unrelated audio-layout mount instead.
-    private func videoDurationBadgeVicinity(_ source: String, window: Int = 2200) -> String {
-        guard let layoutRange = source.range(of: "var durationChip: some View {") else {
+    private func videoDurationBadgeVicinity(_ source: String) -> String {
+        guard source.contains("var durationChip: some View {") else {
             XCTFail("CallView must define durationChip")
             return ""
         }
-        guard let badgeRange = source.range(
-            of: "TransientCallSignalGlyph(strength: signalStrength)",
-            range: layoutRange.upperBound..<source.endIndex
-        ) else {
+        guard let chipRange = source.range(of: "struct CallHeaderCapsuleChip: View {") else {
+            XCTFail("The duration badge must be drawn by CallHeaderCapsuleChip")
+            return ""
+        }
+        let chip = source[chipRange.lowerBound...]
+        let end = chip.range(of: "\n}\n")?.upperBound ?? chip.endIndex
+        let body = String(chip[..<end])
+        guard body.contains("TransientCallSignalGlyph(strength: signalStrength)") else {
             XCTFail("CallView must mount TransientCallSignalGlyph in the video duration badge")
             return ""
         }
-        let end = source.index(badgeRange.lowerBound, offsetBy: window, limitedBy: source.endIndex) ?? source.endIndex
-        return String(source[badgeRange.lowerBound ..< end])
+        return body
     }
 
     func test_videoDurationBadge_isExplicitOpaqueAccessibilityElement() throws {

@@ -17,6 +17,7 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { autoSharer, resolveSpotlight, SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { chooseGrid, chooseMember, chooseSelf } from '@/lib/calls/call-spotlight-gestures';
+import { edgeFadeMask } from '@/lib/calls/call-row-keys';
 import type { CallMember } from '@/lib/calls/call-store';
 import { zoomLabel } from '@/lib/calls/camera-zoom';
 import { filmstripOf, type Filmstrip, STRIP_COLUMN_WIDTH, STRIP_HALO_PAD, STRIP_TILE_HEIGHT, STRIP_TILE_WIDTH } from '@/lib/calls/call-group-stage';
@@ -271,7 +272,7 @@ function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGri
  */
 const stripBox = (strip: Filmstrip): CSSProperties => {
   const bottom = strip !== 'trailing';
-  const fade = `linear-gradient(to ${bottom ? 'right' : 'bottom'}, transparent, #000 8px, #000 calc(100% - 8px), transparent)`;
+  const fade = edgeFadeMask(bottom ? 'to right' : 'to bottom');
   return bottom ? { maskImage: fade, gridAutoColumns: STRIP_TILE_WIDTH, gridTemplateRows: STRIP_TILE_HEIGHT, height: STRIP_TILE_HEIGHT + 2 * STRIP_HALO_PAD } : { maskImage: fade, gridAutoRows: STRIP_TILE_HEIGHT, gridTemplateColumns: STRIP_TILE_WIDTH, width: STRIP_COLUMN_WIDTH };
 };
 
