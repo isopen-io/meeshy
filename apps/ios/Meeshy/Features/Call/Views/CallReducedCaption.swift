@@ -36,6 +36,7 @@ struct CallReducedCaption: View {
         switch style {
         case .glass:
             CallTileNameplate(title: text)
+                .monospacedDigit()
         case .screenShare:
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "rectangle.on.rectangle")

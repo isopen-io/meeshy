@@ -221,7 +221,6 @@ struct FloatingCallPillView: View {
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
-            guard allowsCollapse else { return }
             collapseToBubble(exitTranslation: 1)
         }
         .callQualityDetailSheet(isPresented: $showQualityDetail)
@@ -229,11 +228,12 @@ struct FloatingCallPillView: View {
 
     // MARK: - User Info
 
-    /// P18.10 — pendant mon partage, la bannière dit l'écran et « nom · durée » ; hors
-    /// partage, l'avatar, le nom et la durée.
+    /// P18.10 — pendant mon partage, la bannière dit l'écran et « nom · durée » sur sa
+    /// seule ligne d'état (signal dégradé et feuille « Qualité » compris) ; hors
+    /// partage, l'avatar, le nom et la ligne d'état.
     @ViewBuilder private var identitySection: some View {
         if callManager.screenShare.isSharing {
-            CallReducedCaption(callManager: callManager, style: .screenShare)
+            statusEntry
         } else {
             CallParticipantVisual(diameter: 44, callManager: callManager)
             userInfoSection
@@ -275,9 +275,7 @@ struct FloatingCallPillView: View {
                     // l'arrêt haut de l'aplat indigo — sous le seuil 4.5:1 du
                     // texte courant (CallBannerContrastTests). L'état « établi »
                     // reste porté par le glyphe signal.
-                    Text(formattedDuration)
-                        .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundStyle(Color.white)
+                    durationLabel
                 } else if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
                     Image(systemName: glyph)
                         .font(.caption.weight(.semibold))
@@ -294,6 +292,16 @@ struct FloatingCallPillView: View {
                 : pillStatus.label)
             .accessibilityValue(pillStatus.isConnected ? spokenDuration : "")
             .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
+
+    @ViewBuilder private var durationLabel: some View {
+        if callManager.screenShare.isSharing {
+            CallReducedCaption(callManager: callManager, style: .screenShare)
+        } else {
+            Text(formattedDuration)
+                .font(.caption.weight(.medium).monospacedDigit())
+                .foregroundStyle(Color.white)
         }
     }
 
@@ -448,7 +456,7 @@ struct FloatingCallPillView: View {
                 }
                 pillLastDragSample = nil
 
-                if allowsCollapse && CallBubbleGestureResolver.shouldCollapse(
+                if CallBubbleGestureResolver.shouldCollapse(
                     translationWidth: value.translation.width,
                     velocityWidth: velocityWidth
                 ) {
@@ -460,11 +468,6 @@ struct FloatingCallPillView: View {
                     HapticFeedback.light()
                 }
             }
-    }
-
-    /// P18.10 — la bannière qui porte « Arrêter » ne se replie pas en bulle.
-    private var allowsCollapse: Bool {
-        CallReducedRule.allowsCollapseToBubble(isSharingScreen: callManager.screenShare.isSharing)
     }
 
     private func collapseToBubble(exitTranslation: CGFloat) {

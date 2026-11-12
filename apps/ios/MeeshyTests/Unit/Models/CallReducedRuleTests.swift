@@ -4,7 +4,7 @@ import XCTest
 /// P18.4 · P18.5 · P18.10 — l'appel réduit (planche `appels-vue-finale`, vues P18 et S1) :
 /// le liseré et l'avatar de la bulle portent la couleur de l'autre, la bulle porte
 /// l'étiquette de verre « nom · durée », et pendant mon partage la bannière dit l'écran
-/// et « nom · durée » sans jamais se replier en bulle. La loi est pure ; les vues la dessinent.
+/// et « nom · durée » à côté d'« Arrêter ». La loi est pure ; les vues la dessinent.
 @MainActor
 final class CallReducedRuleTests: XCTestCase {
 
@@ -38,13 +38,6 @@ final class CallReducedRuleTests: XCTestCase {
         XCTAssertEqual(CallReducedRule.caption(title: nil, duration: "04:12"), "04:12")
     }
 
-    // MARK: - Pas de repli en bulle pendant mon partage
-
-    func test_collapse_whileSharing_isRefused() {
-        XCTAssertFalse(CallReducedRule.allowsCollapseToBubble(isSharingScreen: true))
-        XCTAssertTrue(CallReducedRule.allowsCollapseToBubble(isSharingScreen: false))
-    }
-
     // MARK: - La couleur de l'autre (fonction partagée)
 
     func test_peerColor_isTheSharedSpeakerColor_andIsStablePerPerson() {
@@ -76,6 +69,8 @@ final class CallReducedWiringTests: XCTestCase {
         let source = try code("CallBubbleView.swift")
         XCTAssertTrue(source.contains("ringsInPeerColor: true"))
         XCTAssertTrue(source.contains("CallReducedCaption(callManager: callManager, style: .glass)"))
+        XCTAssertTrue(source.contains(".opacity(isCircleRegion && isMenuRevealed ? 0 : 1)"), "sous le cercle, l'étiquette laisse la place à Raccrocher")
+        XCTAssertTrue(source.contains("value: isCircleRegion)"), "elle change de place en mouvement, jamais d'un coup")
     }
 
     func test_caption_glassIsTheSharedNameplate_andReadsTheHeaderNamesUnderTheClock() throws {
@@ -86,11 +81,21 @@ final class CallReducedWiringTests: XCTestCase {
         XCTAssertTrue(source.contains("CallReducedRule.caption("))
     }
 
-    func test_pill_whileSharing_showsTheScreenCaption_andNeverCollapses() throws {
+    func test_pill_whileSharing_showsTheScreenCaption_onItsStatusLine() throws {
         let source = try code("FloatingCallPillView.swift")
         XCTAssertTrue(source.contains("CallReducedCaption(callManager: callManager, style: .screenShare)"))
-        XCTAssertTrue(source.contains("allowsCollapse && CallBubbleGestureResolver.shouldCollapse("))
-        XCTAssertTrue(source.contains("guard allowsCollapse else { return }"))
-        XCTAssertTrue(source.contains("CallReducedRule.allowsCollapseToBubble(isSharingScreen: callManager.screenShare.isSharing)"))
+        let identity = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var identitySection", in: source))
+        XCTAssertTrue(identity.contains("if callManager.screenShare.isSharing {\n            statusEntry"),
+                      "pendant le partage, la ligne d'état garde le signal dégradé et la feuille « Qualité »")
+        let line = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var statusLine", in: source))
+        XCTAssertTrue(line.contains("durationLabel"))
+    }
+
+    /// #17731 — la forme de l'appel réduit est en décision : la bannière se replie
+    /// toujours en bulle, partage compris. Ce lot n'y touche pas.
+    func test_pill_collapseToBubble_isUntouchedByTheShare() throws {
+        let source = try code("FloatingCallPillView.swift")
+        XCTAssertFalse(source.contains("allowsCollapse"))
+        XCTAssertTrue(source.contains("if CallBubbleGestureResolver.shouldCollapse("))
     }
 }
