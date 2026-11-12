@@ -587,7 +587,17 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     let before: PropertyDescriptor | undefined;
     let media: PropertyDescriptor | undefined;
     const labelOf = (element: HTMLElement): string =>
-      element.hasAttribute('data-call-montage-controls') ? 'controls' : element.hasAttribute('data-call-mode-preview') ? 'preview' : element.hasAttribute('data-call-header-slot') ? 'header' : element.hasAttribute('data-call-controls') ? 'pill' : 'other';
+      element.closest('[data-call-mode="effects"]') !== null
+        ? 'effects'
+        : element.hasAttribute('data-call-montage-controls')
+          ? 'controls'
+          : element.hasAttribute('data-call-mode-preview')
+            ? 'preview'
+            : element.hasAttribute('data-call-header-slot')
+              ? 'header'
+              : element.hasAttribute('data-call-controls')
+                ? 'pill'
+                : 'other';
 
     beforeAll(async () => {
       await import('./call-montage-mode');
@@ -677,6 +687,25 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       await act(async () => {});
       expect(view.find('[data-call-mode="montage"]')).toBe(root);
       expect(root?.hasAttribute('data-leaving')).toBe(false);
+      view.done();
+    });
+
+    /* La loi 17 excepte Effets, qui emprunte au composer (loi 9) : iOS borne la montée au Montage (`CallModeChromeMotion.risesFromBottom`, #17813). */
+    test('Effets ne monte pas du bas, et ne reste pas monté pour y redescendre : seuls l’en-tête et la pilule partent par leurs bords', async () => {
+      const view = mount({ cameraOn: true, members: { 'u-peer': member() } }, { color: true, blur: false });
+      view.press('[data-call-more]');
+      await frame();
+      view.press('[data-call-rail="mine"] [data-call-control="effects"]');
+      await settle(() => import('./call-effects-mode'));
+      expect(view.find('[data-call-mode="effects"]')).not.toBeNull();
+      const rises = (entry: Played) => entry.keyframes.some((frame) => frame.transform === 'translateY(100%)');
+      expect(played.filter((entry) => entry.what === 'effects' && rises(entry))).toEqual([]);
+      expect(of('pill').map((entry) => entry.keyframes[1]?.transform)).toEqual(['translateY(100%)']);
+      await finish();
+      played.length = 0;
+      view.press('[data-call-mode-quit]');
+      expect(view.find('[data-call-mode="effects"]')).toBeNull();
+      expect(played.filter((entry) => entry.what === 'effects')).toEqual([]);
       view.done();
     });
   });

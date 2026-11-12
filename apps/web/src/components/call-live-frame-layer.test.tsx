@@ -244,10 +244,20 @@ describe('la carte et la capsule entrent et repartent en mouvement (C2.1, C2.7, 
   const slots = () => played.filter((entry) => entry.what === 'slot');
   const finish = () => act(async () => void finishers.splice(0).forEach((resolve) => resolve()));
 
-  test('la carte tient la largeur de la pile : sa case est pleine largeur, la carte garde sa marge', () => {
+  /* La case est une rangée flexible centrée : une carte sans `flex-1` y épouse sa phrase (mesuré dans Chromium à 390 px :
+     321 px contre 366 px pour le bandeau de partage) ; avec, elle prend toute la case moins sa marge, comme lui. */
+  test('la carte tient la largeur de la pile : sa case est pleine largeur, la carte la remplit en gardant sa marge', () => {
     const view = mountNode(status(proposal, spy()));
     expect(view.find('[data-call-live-frame-slot]')?.className.split(' ')).toContain('w-full');
-    expect(view.find('[data-call-live-frame-proposal]')?.className.split(' ')).toContain('mx-3');
+    const card = view.find('[data-call-live-frame-proposal]')?.className.split(' ') ?? [];
+    expect(['mx-3', 'flex-1'].filter((name) => !card.includes(name))).toEqual([]);
+    view.done();
+  });
+
+  test('la capsule de réponse reste à sa mesure, centrée dans la case', () => {
+    const view = mountNode(status(answer, spy()));
+    expect(view.find('[data-call-live-frame-slot]')?.className.split(' ')).toContain('justify-center');
+    expect(view.find('[data-call-live-frame-answer]')?.className.split(' ')).not.toContain('flex-1');
     view.done();
   });
 

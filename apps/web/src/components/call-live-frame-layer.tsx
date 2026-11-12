@@ -114,7 +114,7 @@ function statusCard({ language, state, nameOf, onAccept, onDecline }: Pick<Statu
   const proposed = state.proposal === null ? null : nameOf(state.proposal.frameId);
   if (state.proposal !== null && proposed !== null) {
     return (
-      <div role="group" aria-label={proposalText(language, state.proposal.from, proposed)} className="glass-call-prominent mx-3 flex flex-col gap-3 rounded-[22px] p-3.5" style={{ color: INK }} data-call-live-frame-proposal={state.proposal.frameId}>
+      <div role="group" aria-label={proposalText(language, state.proposal.from, proposed)} className="glass-call-prominent mx-3 flex flex-1 flex-col gap-3 rounded-[22px] p-3.5" style={{ color: INK }} data-call-live-frame-proposal={state.proposal.frameId}>
         <p className="flex items-center gap-2.5 text-body font-semibold">
           <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={20} />
           <span>{proposalText(language, state.proposal.from, proposed)}</span>
