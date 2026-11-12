@@ -406,7 +406,7 @@ function GroupStage({ call, language, choice, onChoose, immersive, onToggleImmer
           kit={CALL_GRID_KIT}
           members={membersInArrival(call.members)}
           remoteStreams={call.remoteStreams}
-          self={{ id: me?.id ?? null, stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
+          self={{ id: me?.id ?? null, stream: selfCameraStream(call), cameraOn: selfCameraShown(call), mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
           choice={choice}
           onChoose={onChoose}
           immersive={immersive}
