@@ -761,7 +761,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
                 />
               )}
             </HeldSwap>
-            {mode === null ? null : <Suspense fallback={<CallModePending label={t('call.close')} glyph={closeGlyph} onExit={exitMode} />}>{mode}</Suspense>}
+            {mode === null ? null : <Suspense fallback={held.leaving ? null : <CallModePending label={t('call.close')} glyph={closeGlyph} onExit={exitMode} />}>{mode}</Suspense>}
           </div>
         ) : (
           <div className="pb-6">{phase === 'incoming' ? incomingControls : endedView}</div>

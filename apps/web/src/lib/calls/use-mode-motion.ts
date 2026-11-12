@@ -100,7 +100,12 @@ export function useModeRise(controls: RefObject<HTMLElement | null>, backdrop: R
   done.current = gone;
   useLayoutEffect(() => {
     if (phase.current === leaving) return;
+    const arriving = phase.current === null;
     phase.current = leaving;
+    if (leaving && arriving) {
+      done.current();
+      return;
+    }
     const parts: ReadonlyArray<readonly [HTMLElement | null, SwapShape]> = [
       [controls.current, 'bottom'],
       [backdrop.current, 'fade'],
