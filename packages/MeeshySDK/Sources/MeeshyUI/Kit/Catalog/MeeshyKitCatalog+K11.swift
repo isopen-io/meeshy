@@ -298,7 +298,7 @@ private struct MeeshyExpandingPillSample: View {
 
     private static let objectTools = [
         MeeshyExpandingPillSampleTool("chevron.backward", "Retour"),
-        MeeshyExpandingPillSampleTool("sliders.horizontal", "Réglages", activation: .selected(true)),
+        MeeshyExpandingPillSampleTool("slider.horizontal.3", "Réglages", activation: .selected(true)),
         MeeshyExpandingPillSampleTool("crop", "Recadrer"),
         MeeshyExpandingPillSampleTool("ellipsis", "Plus d'actions"),
     ]
