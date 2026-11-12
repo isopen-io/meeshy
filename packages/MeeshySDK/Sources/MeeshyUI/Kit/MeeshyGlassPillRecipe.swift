@@ -78,6 +78,20 @@ public nonisolated enum MeeshyGlassPillRecipe {
         }
     }
 
+    /// Loi 13 : la pilule ne demande un verre que si elle porte quelque chose.
+    /// Le dessus compte toujours ; la rangée et l'action principale qu'elle
+    /// porte, seulement montrées, et des boutons seulement s'ils ne se mesurent
+    /// pas vides (un `ForEach` sans élément n'est pas un `EmptyView`).
+    public static func carriesGlass(
+        hasButtons: Bool,
+        hasPrimary: Bool,
+        hasAbove: Bool,
+        showsRow: Bool,
+        rowMeasuresEmpty: Bool
+    ) -> Bool {
+        hasAbove || (showsRow && (hasPrimary || (hasButtons && !rowMeasuresEmpty)))
+    }
+
     /// La distance du bas de l'écran : la zone sûre plus l'écart, jamais sous le plancher.
     public static func bottomMargin(safeBottom: CGFloat, bottomGap: CGFloat, minimumBottom: CGFloat) -> CGFloat {
         max(safeBottom + bottomGap, minimumBottom)

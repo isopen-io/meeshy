@@ -17,6 +17,8 @@ struct MeeshyGlassPillMorph: ViewModifier {
     let tone: MeeshyGlassTone?
     let density: MeeshyGlassDensity
     let showsRow: Bool
+    /// Faux quand la pilule n'a rien à porter (loi 13) : aucun verre.
+    let drawsGlass: Bool
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userReduceMotion
@@ -36,8 +38,10 @@ struct MeeshyGlassPillMorph: ViewModifier {
             }
             .mask(alignment: .bottom) { framed(shape.fill(MeeshyColors.onMedia)) }
             .background(alignment: .bottom) {
-                framed(Color.clear)
-                    .meeshyGlass(in: shape, tone: tone, density: density)
+                if drawsGlass {
+                    framed(Color.clear)
+                        .meeshyGlass(in: shape, tone: tone, density: density)
+                }
             }
             .contentShape(Rectangle().inset(by: -MeeshyGlassPillRecipe.overflow))
             .animation(
