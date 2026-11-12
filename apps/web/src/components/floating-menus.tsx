@@ -26,9 +26,8 @@ import {
   floatingLeft,
   floatingTop,
   ladderExpandsDown,
-  ladderPitch,
   ladderRooms,
-  ladderRungOffset,
+  ladderRungPlaces,
   type LadderRooms,
 } from '@/lib/view/floating-pose';
 import { useAdminAccess } from '@/lib/view/use-admin-access';
@@ -182,7 +181,12 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
     onResize: () => setRooms(measureLadderRooms(roving.buttonRef.current)),
   });
   const { open, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = roving;
-  const pitch = ladderPitch({ count: ladder.length, room: rooms === null ? null : expandsDown ? rooms.down : rooms.up });
+  const places = ladderRungPlaces({
+    count: ladder.length,
+    room: rooms === null ? null : expandsDown ? rooms.down : rooms.up,
+    expandsDown,
+    inward: menu.position.x >= 0.5 ? -1 : 1,
+  });
 
   /* La langue d'INTERFACE, lue au rendu : son catalogue est chargé avec le
      chunk de ce composant (`shell.tsx`, #6206). */
@@ -363,8 +367,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
                 style={
                   {
                     '--rung': index,
-                    left: '50%',
-                    top: `calc(50% + ${ladderRungOffset(index, expandsDown, pitch)}px)`,
+                    left: `calc(50% + ${places[index]?.dx ?? 0}px)`,
+                    top: `calc(50% + ${places[index]?.dy ?? 0}px)`,
                     width: LADDER_RUNG,
                     height: LADDER_RUNG,
                     backgroundImage: `linear-gradient(135deg, ${destination.tint}, color-mix(in srgb, ${destination.tint} 70%, var(--color-media-backdrop)))`,
