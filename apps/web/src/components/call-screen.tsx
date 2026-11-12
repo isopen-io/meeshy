@@ -11,7 +11,7 @@ import { CallControlFeedbackSlot, CallModerationSlot } from '@/components/call-c
 import { CALL_CAPTURE_ROW_CLEARANCE, CallCaptureAlerts, CallPeerAlerts, someoneCaptures } from '@/components/call-quality';
 import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
-import { CallStage, callGridView, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
+import { CallStage, callGridView, screenZoomSurfaceView, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
@@ -109,8 +109,8 @@ const CallIncomingAnswer = incomingAnswer.View;
 const endedControls = preloadedView(() => import('./call-ring-and-end').then((module) => module.CallEndedControls));
 const CallEndedControls = endedControls.View;
 
-/** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, la fin. */
-export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), endedControls.load()]);
+/** Tout ce que l'écran charge à part pour un PREMIER rendu selon l'appel — la sonnerie, la grille d'un groupe, l'écran reçu, la fin. */
+export const loadColdCallViews = (): Promise<unknown> => Promise.all([incomingAnswer.load(), callGridView.load(), screenZoomSurfaceView.load(), endedControls.load()]);
 
 /** La couleur STABLE d'une personne, remise aux vues chargées à part — `null` : moi sans identifiant, le liseré neutre. */
 const personColor = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
@@ -193,6 +193,7 @@ const PREFETCH: readonly (() => Promise<unknown>)[] = [
   loadFloatingPill,
   callGridView.load,
   endedControls.load,
+  screenZoomSurfaceView.load,
 ];
 
 const prefetchCallChunks = (): void => PREFETCH.forEach((load) => void load().catch(() => undefined));

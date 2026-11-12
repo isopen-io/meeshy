@@ -3,7 +3,6 @@ import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { Arrives } from '@/components/call-arrives';
-import { useScreenZoom } from '@/components/use-screen-zoom';
 import { HeldSwap } from '@/lib/calls/use-pill-motion';
 import { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallModerationSlot } from '@/components/call-control-slots';
@@ -19,6 +18,7 @@ import { useTilePinch } from '@/components/use-tile-pinch';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import {
   cornerAfterArrow,
+  isTileDrag,
   nearestSelfCorner,
   SCREEN_SELF_TILE,
   SELF_TILE_BOTTOM,
@@ -119,8 +119,14 @@ export const CALL_GRID_KIT: CallGridKit = {
   useStageFlip,
   Arrives,
   HeldSwap,
-  useScreenZoom,
 };
+
+/**
+ * LA SURFACE QUI ZOOME L'ÉCRAN REÇU EN DUO (P15.11), CHARGÉE À PART : le crochet du zoom et ses lois ne pèsent plus sur
+ * `call_overlay`. L'écran la précharge avec l'appel (`PREFETCH`) ; pas encore là, l'écran reçu se montre entier.
+ */
+export const screenZoomSurfaceView = preloadedView(() => import('./call-screen-zoom-surface').then((module) => module.ScreenZoomSurface));
+const ScreenZoomSurface = screenZoomSurfaceView.View;
 
 /** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */
 const ZOOM_STEP_ROOM = 52;
@@ -199,9 +205,15 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
   const sharer = screenSharer(call.members);
   const selfMirrored = selfPreviewMirrored(call);
   if (sharer === null) return null;
+  const screen = <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />;
   return (
     <div className="absolute inset-0" data-call-shared-screen="">
-      <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />
+      {/* L'écran reçu se zoome (P15.11) : la surface des gestes et son calque GPU ne portent QUE l'image — ma vignette et le bouton plein écran, posés après, ne bougent jamais. */}
+      <Suspense fallback={screen}>
+        <ScreenZoomSurface hint={translateCallControls(language, 'callControls.screenZoom.hint')} isDrag={isTileDrag}>
+          {screen}
+        </ScreenZoomSurface>
+      </Suspense>
       {call.cameraOn && !immersive ? (
         <div className="absolute overflow-hidden rounded-card shadow-lg" style={screenCorner} data-call-corner="">
           <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" self />
