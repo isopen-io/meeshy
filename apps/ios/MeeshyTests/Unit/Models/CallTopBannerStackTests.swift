@@ -225,4 +225,37 @@ final class CallTopBannerStackTests: XCTestCase {
         )
         XCTAssertFalse(controls.contains(".adaptiveGlass("), "adaptiveGlass : matériau nu sous iOS 16 à 25, pas le verre de la loi 18")
     }
+    // MARK: - #17815 — la carte du cadre en direct : duo vidéo seulement, marge de la pile (C2.10, C2.1)
+
+    func test_mayShowProposal_videoDuo_isShown() {
+        XCTAssertTrue(CallLiveFrameRule.mayShowProposal(participants: CallLiveFrameRule.people, showsVideo: true, isGroupStage: false))
+    }
+
+    func test_mayShowProposal_audioDuo_isHidden() {
+        XCTAssertFalse(CallLiveFrameRule.mayShowProposal(participants: CallLiveFrameRule.people, showsVideo: false, isGroupStage: false))
+    }
+
+    func test_mayShowProposal_groupStageWithTwoConnected_isHidden() {
+        XCTAssertFalse(CallLiveFrameRule.mayShowProposal(participants: CallLiveFrameRule.people, showsVideo: true, isGroupStage: true))
+    }
+
+    func test_mayShowProposal_morePeopleThanADuo_isHidden() {
+        XCTAssertFalse(CallLiveFrameRule.mayShowProposal(participants: CallLiveFrameRule.people + 1, showsVideo: true, isGroupStage: false))
+    }
+
+    func test_liveFrameStatus_proposalIsGatedByTheDuoVideoLaw_notByTheCatalogueAlone() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+LiveFrame.swift"))
+        let status = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var hasLiveFrameStatus: Bool", in: source))
+        XCTAssertTrue(status.contains("offersLiveFrame"), "la proposition ne se compte que si le duo vidéo l'offre")
+        let view = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var liveFrameStatus: some View", in: source))
+        XCTAssertTrue(view.contains("offersLiveFrame"), "la carte n'est montrée qu'en duo vidéo")
+    }
+
+    func test_liveFrameBanner_holdsTheStackLateralMargin_likeTheOtherBanners() throws {
+        let stack = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift"))
+        let live = try XCTUnwrap(stack.range(of: "case .liveFrame:"))
+        let tail = String(stack[live.upperBound...])
+        XCTAssertTrue(tail.contains(".padding(.horizontal, CallTopBannerStack.horizontalMargin)"))
+        XCTAssertFalse(tail.contains("MeeshySpacing.lg"), "P16.4 : la même marge que partage et enregistrement")
+    }
 }

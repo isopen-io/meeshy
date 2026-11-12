@@ -580,4 +580,19 @@ final class CallViewGlassGuardTests: XCTestCase {
         }
         XCTAssertTrue(body.contains("\"value\": \"Arrêter\""))
     }
+
+    // MARK: - #17815 C2.1 · C3.4 — la carte de proposition et la capsule de réponse du cadre en direct
+
+    /// Loi 18 : la carte et la capsule sont le verre du kit (celui de la carte d'accord), sous le
+    /// voile d'appel ; jamais un matériau système forcé en sombre.
+    func test_liveFrameCardAndNotice_areTheKitGlass_notASystemMaterial() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallLiveFrameProposal.swift"))
+        XCTAssertFalse(source.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
+        let card = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallLiveFrameProposalCard: View", in: source))
+        XCTAssertTrue(card.contains(".modifier(CallRecordingGlass(shape:"))
+        let notice = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallLiveFrameNotice: View", in: source))
+        XCTAssertTrue(notice.contains(".modifier(CallRecordingGlass(shape:"))
+        let controls = try recordingControls()
+        XCTAssertFalse(controls.contains("private struct CallRecordingGlass"), "le verre du kit sous le voile se réutilise, il ne se recopie pas")
+    }
 }
