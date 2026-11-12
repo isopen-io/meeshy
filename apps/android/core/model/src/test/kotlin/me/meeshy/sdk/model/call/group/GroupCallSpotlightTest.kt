@@ -2,6 +2,7 @@ package me.meeshy.sdk.model.call.group
 
 import com.google.common.truth.Truth.assertThat
 import java.util.Locale
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
 import org.junit.Test
 
@@ -98,6 +99,24 @@ class GroupCallSpotlightTest {
         assertThat(GroupCallSpotlight.clampedZoom(0.5f)).isEqualTo(1f)
         assertThat(GroupCallSpotlight.clampedZoom(2.5f)).isEqualTo(2.5f)
         assertThat(GroupCallSpotlight.clampedZoom(9f)).isEqualTo(GroupCallSpotlight.MAX_ZOOM)
+    }
+
+    @Test
+    fun `the screen received in a duo zooms by the same law, a pinch in progress applies to the committed zoom`() {
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 2f, pinch = 1.5f, isReceivingScreen = true)).isEqualTo(3f)
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 2f, pinch = 9f, isReceivingScreen = true)).isEqualTo(GroupCallSpotlight.MAX_ZOOM)
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 3f, pinch = 0.1f, isReceivingScreen = true)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `the return to 1x of a received screen takes 0,2 s, the short fade of the chrome under reduce motion`() {
+        assertThat(GroupCallSpotlight.receivedScreenResetMillis(reduceMotion = false)).isEqualTo(200)
+        assertThat(GroupCallSpotlight.receivedScreenResetMillis(reduceMotion = true)).isEqualTo(CallChromeStow.REDUCED_FADE_MILLIS)
+    }
+
+    @Test
+    fun `a zoom does not outlive the share that made it`() {
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 3f, pinch = 1.2f, isReceivingScreen = false)).isEqualTo(1f)
     }
 
     @Test
