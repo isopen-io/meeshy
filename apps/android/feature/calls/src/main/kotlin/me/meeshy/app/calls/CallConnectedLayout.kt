@@ -19,7 +19,6 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -234,10 +233,11 @@ internal fun CallConnectedColumn(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            CallGroupStageTopReserve(base = MeeshySpacing.xl, clearance = LocalCallGroupGridClearance.current)
+            val gridClearance = LocalCallGroupGridClearance.current.takeIf { groupStage != null }
+            CallGroupStageTopReserve(base = MeeshySpacing.xl, clearance = gridClearance)
 
-            if (groupStage != null) {
-                groupStage(Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md))
+            if (groupStage != null && gridClearance != null) {
+                groupStage(Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance))
             } else if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
                 // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; la capture, dans la capsule ci-dessous.
@@ -337,11 +337,17 @@ internal fun CallConnectedColumn(
 }
 
 /**
- * L4.11 — la réserve haute de la scène : la marge fixe d'avant, plus la place que la pile des bandeaux prend sous l'en-tête
- * (même loi que ma vignette de duo, hauteurs mesurées, cadre en direct compris), pour que la grille de groupe lui cède sa place au
- * lieu de passer dessous. Elle lit son état À LA MESURE : le glissement ne recompose pas tout l'appel à chaque image.
+ * L4.11 — la réserve haute de la scène : la marge fixe d'avant, plus, en groupe, la place que la pile des bandeaux prend sous
+ * l'en-tête (même loi que ma vignette de duo, hauteurs mesurées, cadre en direct compris), pour que la grille lui cède sa place au
+ * lieu de passer dessous. Elle lit À LA MESURE la seule réserve mise en page ([CallGroupGridClearance.layout]), qui ne change
+ * qu'une fois par mouvement : la grille glisse par sa translation, ni l'appel ne se recompose ni la colonne ne se remesure à
+ * chaque image. En duo ([clearance] nul), la pile ne pousse rien.
  */
 @Composable
-private fun CallGroupStageTopReserve(base: Dp, clearance: State<Dp>) {
-    Spacer(Modifier.layout { _, _ -> layout(0, (base + clearance.value).roundToPx()) {} })
+private fun CallGroupStageTopReserve(base: Dp, clearance: CallGroupGridClearance?) {
+    Spacer(Modifier.layout { _, _ -> layout(0, (base + (clearance?.layout ?: 0.dp)).roundToPx()) {} })
 }
+
+/** L4.11 — la grille suit la pile des bandeaux par sa seule translation, lue au dessin : ni remesure ni recomposition par image. */
+private fun Modifier.glidesUnderTheBannerStack(clearance: CallGroupGridClearance): Modifier =
+    graphicsLayer { translationY = clearance.shift.toPx() }

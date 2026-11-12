@@ -228,7 +228,7 @@ class CallTopBannerStackWiringTest {
         val host = code("CallTopBannerStackHost.kt")
         val glide = block(host, "internal fun Modifier.glidesToItsPlace(", "\n}")
         assertThat(glide).contains("CallTopBannerStack.glideTranslationPx(")
-        assertThat(glide).contains("graphicsLayer {")
+        assertThat(glide).contains("translationY =")
         assertThat(block(host, "internal fun <T : Any> CallBannerPresence(", "\n}")).contains("glidesToItsPlace(")
     }
 
@@ -283,7 +283,8 @@ class CallTopBannerStackWiringTest {
         assertThat(host).contains("CallTopBannerStack.groupGridShiftDp(")
 
         val layout = code("CallConnectedLayout.kt")
-        assertThat(layout).contains("translationY = gridClearance.shift.toPx()")
+        assertThat(layout).contains("glidesUnderTheBannerStack(gridClearance)")
+        assertThat(layout).contains("graphicsLayer { translationY = clearance.shift.toPx() }")
         assertThat(block(layout, "private fun CallGroupStageTopReserve(", "\n}")).contains("clearance?.layout")
     }
 

@@ -89,10 +89,29 @@ object CallTopBannerStack {
     fun presenceTranslationFraction(progress: Float, travels: Boolean): Float = if (travels) progress - 1f else 0f
 
     /**
-     * #17845 (L1.9) — un bandeau voisin dont la place vient de changer (un bandeau au-dessus est parti ou arrivé) repart du
-     * point où l'œil le voyait : l'écart entre sa place d'avant, déjà décalée, et la nouvelle, résorbé ensuite par la transformation.
+     * #17845 (L1.9) — un bandeau voisin dont la place vient de changer (un bandeau au-dessus est parti ou arrivé) se dessine là
+     * où l'œil le voyait ([shownTopPx], la place qu'il rejoint en glissant) et non à sa nouvelle place ([placedTopPx]) : l'écart,
+     * résorbé ensuite par la transformation seule.
      */
-    fun placementShiftPx(previousTopPx: Float, previousShiftPx: Float, newTopPx: Float): Float = previousTopPx + previousShiftPx - newTopPx
+    fun glideTranslationPx(shownTopPx: Float, placedTopPx: Float): Float = shownTopPx - placedTopPx
+
+    /**
+     * #17845 (L1.9) — un bandeau qui repart vers le haut rend sa place dès le départ (une seule mise en page), pour que la pile se
+     * referme PENDANT qu'il monte et non après : sans trou. Un bandeau qui ne fait que se fondre (sans déplacement, ou sous
+     * « Réduire les animations ») garde la sienne jusqu'au bout, pour ne pas se fondre par-dessus son voisin.
+     */
+    fun keepsPlaceWhileLeaving(travels: Boolean, reduceMotion: Boolean): Boolean = !(travels && leavesTowardTop(reduceMotion))
+
+    /**
+     * #17845 (L4.11) — la réserve que la grille de groupe MET EN PAGE pendant que la pile bouge : la plus petite de celle d'où
+     * elle part ([settledDp]) et de celle où elle va ([targetDp]). Elle ne change donc qu'une fois par mouvement (à la fin quand
+     * la pile grandit, au départ quand elle se referme), et la grille n'y laisse jamais de vide : elle déborde sous la pilule le
+     * temps du geste, jamais au-dessus.
+     */
+    fun groupGridLayoutClearanceDp(settledDp: Float, targetDp: Float): Float = minOf(settledDp, targetDp)
+
+    /** #17845 (L4.11) — le décalage de la grille, lu au dessin : ce qui sépare la place montrée ([shownDp]) de la place mise en page. */
+    fun groupGridShiftDp(shownDp: Float, layoutDp: Float): Float = shownDp - layoutDp
 
     /** P16.6 — un bandeau repart vers le haut, d'où il vient ; « Réduire les animations » ne garde que le fondu court. */
     fun leavesTowardTop(reduceMotion: Boolean): Boolean = !reduceMotion
