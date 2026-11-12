@@ -139,12 +139,14 @@ struct MeeshyModeChromeTests {
     func action_performIsThePathOfTouch() {
         var fired = 0
         let action = MeeshyModeAction(title: "Quitter", haptic: .none) { fired += 1 }
-        #expect(action.perform())
-        #expect(fired == 1)
         let busy = MeeshyModeAction(title: "Terminé", isBusy: true, haptic: .none) { fired += 1 }
-        #expect(!busy.perform())
         let disabled = MeeshyModeAction(title: "Valider", isEnabled: false, haptic: .none) { fired += 1 }
-        #expect(!disabled.perform())
+        let ran = action.perform()
+        let afterFirst = fired
+        let ranBusy = busy.perform()
+        let ranDisabled = disabled.perform()
+        #expect(ran && afterFirst == 1)
+        #expect(!ranBusy && !ranDisabled)
         #expect(fired == 1)
     }
 
@@ -288,45 +290,64 @@ struct MeeshyModeChromeTests {
 
     // MARK: - Non-re-rendu
 
+    @MainActor
     @Test("l'en-tête est comparable : à valeurs égales il n'est pas réévalué")
     func header_isEquatable() {
         let exit = MeeshyModeAction(title: "Quitter") {}
-        let confirm = MeeshyModeAction(title: "Valider") {}
-        typealias Header = MeeshyModeHeader<MeeshyModeNoSlot, MeeshyModeNoSlot>
-        func make(_ confirm: MeeshyModeAction?) -> Header {
-            Header(label: "Dessin", exit: exit, confirm: confirm, center: { MeeshyModeNoSlot() }, accessory: { MeeshyModeNoSlot() })
-        }
-        #expect(make(confirm) == make(MeeshyModeAction(title: "Valider") {}))
-        #expect(make(confirm) != make(nil))
-        #expect(make(confirm) != make(MeeshyModeAction(title: "Valider", isBusy: true) {}))
+        let base = Self.header(exit: exit, confirm: MeeshyModeAction(title: "Valider") {})
+        let twin = Self.header(exit: exit, confirm: MeeshyModeAction(title: "Valider") {})
+        let bare = Self.header(exit: exit, confirm: nil)
+        let busy = Self.header(exit: exit, confirm: MeeshyModeAction(title: "Valider", isBusy: true) {})
+        let isTwin = base == twin
+        let differsFromBare = base != bare
+        let differsFromBusy = base != busy
+        #expect(isTwin)
+        #expect(differsFromBare)
+        #expect(differsFromBusy)
     }
 
+    @MainActor
     @Test("la capsule est comparable sur ses valeurs, fermeture exclue")
     func capsule_isEquatable() {
-        #expect(MeeshyModeCapsule(title: "Photos", systemImage: "arrow.down.to.line") {}
-            == MeeshyModeCapsule(title: "Photos", systemImage: "arrow.down.to.line") {})
-        #expect(MeeshyModeCapsule(title: "Photos") {} != MeeshyModeCapsule(title: "Photos", isBusy: true) {})
-        #expect(MeeshyModeCapsule(title: "Photos") {} != MeeshyModeCapsule(title: "Photos", kind: .solid) {})
+        let base = MeeshyModeCapsule(title: "Photos", systemImage: "arrow.down.to.line") {}
+        let twin = MeeshyModeCapsule(title: "Photos", systemImage: "arrow.down.to.line") {}
+        let plain = MeeshyModeCapsule(title: "Photos") {}
+        let busy = MeeshyModeCapsule(title: "Photos", isBusy: true) {}
+        let solid = MeeshyModeCapsule(title: "Photos", kind: .solid) {}
+        let isTwin = base == twin
+        let busyDiffers = plain != busy
+        let solidDiffers = plain != solid
+        #expect(isTwin)
+        #expect(busyDiffers)
+        #expect(solidDiffers)
     }
 
     @Test("sans plaque, ni verre ni bande : le cadre le sait avant de dessiner")
     func empty_slotsAreRecognised() {
-        #expect(!MeeshyModeHeader<EmptyView, EmptyView>.hasCenter && !MeeshyModeHeader<EmptyView, EmptyView>.hasAccessory)
-        #expect(!MeeshyModeHeader<MeeshyModeNoSlot, MeeshyModeNoSlot>.hasCenter)
-        #expect(MeeshyModeHeader<Text, Text>.hasCenter && MeeshyModeHeader<Text, Text>.hasAccessory)
+        let bareCenter = MeeshyModeHeader<EmptyView, EmptyView>.hasCenter
+        let bareAccessory = MeeshyModeHeader<EmptyView, EmptyView>.hasAccessory
+        let noSlot = MeeshyModeHeader<MeeshyModeNoSlot, MeeshyModeNoSlot>.hasCenter
+        let filledCenter = MeeshyModeHeader<Text, Text>.hasCenter
+        let filledAccessory = MeeshyModeHeader<Text, Text>.hasAccessory
+        #expect(!bareCenter && !bareAccessory && !noSlot)
+        #expect(filledCenter && filledAccessory)
     }
 
     // MARK: - Source
 
     @Test("un seul verre par pièce, demandé à K01 : les capsules de verre et la plaque ; le cadre n'en pose aucun")
     func source_oneGlassPerPiece() throws {
-        #expect(try Self.code("MeeshyModeCapsule.swift").components(separatedBy: ".meeshyGlass(").count == 2)
-        #expect(try Self.code("MeeshyModePlate.swift").components(separatedBy: ".meeshyGlass(").count == 2)
-        #expect(try Self.code("MeeshyModeHeader.swift").components(separatedBy: ".meeshyGlass(").count == 1)
-        #expect(try Self.code("MeeshyModeChrome.swift").components(separatedBy: ".meeshyGlass(").count == 1)
-        #expect(try Self.code("MeeshyModeHeader.swift").contains("MeeshyGlassGroup("))
-        #expect(try Self.code("MeeshyModeCapsule.swift").contains("density: .dense"))
-        #expect(try Self.code("MeeshyModePlate.swift").contains("density: .dense"))
+        let capsule = try Self.code("MeeshyModeCapsule.swift")
+        let plate = try Self.code("MeeshyModePlate.swift")
+        let header = try Self.code("MeeshyModeHeader.swift")
+        let chrome = try Self.code("MeeshyModeChrome.swift")
+        #expect(capsule.components(separatedBy: ".meeshyGlass(").count == 2)
+        #expect(plate.components(separatedBy: ".meeshyGlass(").count == 2)
+        #expect(header.components(separatedBy: ".meeshyGlass(").count == 1)
+        #expect(chrome.components(separatedBy: ".meeshyGlass(").count == 1)
+        #expect(header.contains("MeeshyGlassGroup("))
+        #expect(capsule.contains("density: .dense"))
+        #expect(plate.contains("density: .dense"))
     }
 
     @Test("la loi d'ajustement : quatre candidats dans l'ordre des pas, par ViewThatFits")
@@ -418,6 +439,13 @@ struct MeeshyModeChromeTests {
     }
 
     // MARK: - Aides
+
+    @MainActor
+    private static func header(exit: MeeshyModeAction, confirm: MeeshyModeAction?) -> MeeshyModeHeader<MeeshyModeNoSlot, MeeshyModeNoSlot> {
+        MeeshyModeHeader(
+            label: "Dessin", exit: exit, confirm: confirm, center: { MeeshyModeNoSlot() }, accessory: { MeeshyModeNoSlot() }
+        )
+    }
 
     private static var repositoryRoot: URL {
         URL(fileURLWithPath: #filePath)
