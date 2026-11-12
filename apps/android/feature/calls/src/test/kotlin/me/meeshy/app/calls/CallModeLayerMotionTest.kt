@@ -45,6 +45,7 @@ class CallModeLayerMotionTest {
 
     private fun toggleAndReachMidway(shown: MutableState<Boolean>) {
         rule.runOnIdle { shown.value = !shown.value }
+        rule.waitForIdle()
         rule.mainClock.advanceTimeByFrame()
         rule.mainClock.advanceTimeBy(MIDWAY_MILLIS)
     }
