@@ -1,6 +1,7 @@
 package me.meeshy.app.calls
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
@@ -28,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,7 +56,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.lerp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
@@ -252,33 +253,49 @@ private fun Modifier.callSelfTileStowed(stowFactor: Float, pivot: TransformOrigi
 }
 
 /** L1.5 — la transition d'une rotation : d'où part la taille ([start], rapport de l'ancienne) et où elle en est ([progress], 0 → 1). */
-internal class CallSelfTileRotation(val start: CallTilePoint, val progress: Animatable<Float, *>)
+internal class CallSelfTileRotation(val start: CallTilePoint, val progress: Animatable<Float, AnimationVector1D>)
+
+/** Ce que la vignette montrait à la composition d'avant : sa taille posée, et la rotation qui la mettait à l'échelle. */
+private class CallSelfTileShown(var layout: CallTileSize, var rotation: CallSelfTileRotation?) {
+    fun size(): CallTileSize {
+        val running = rotation ?: return layout
+        val fraction = Snapshot.withoutReadObservation { running.progress.value }
+        return CallSelfTileLaw.shownDuringRotation(layout, running.start, fraction)
+    }
+}
 
 /**
- * L1.5 — quand la fenêtre change de forme, la vignette se couche ou se relève dans le même mouvement que la place :
- * sa taille d'avant, en rapport de la nouvelle ([CallSelfTileLaw.rotationStart]), revient à 1. « Réduire les animations » :
- * elle se pose sans mouvement. Une nouvelle transition par forme de fenêtre, donc interruptible par la rotation suivante.
+ * L1.5 — quand la fenêtre change de forme, la vignette se couche ou se relève : la taille qu'elle MONTRAIT, en rapport
+ * de la nouvelle ([CallSelfTileLaw.rotationStart]), revient à 1, ancrée à son coin d'écran qui garde sa marge.
+ * Interruptible : une rotation reprise à mi-course repart de la taille montrée ([CallSelfTileLaw.shownDuringRotation]).
+ * « Réduire les animations » : elle se pose sans mouvement, comme le rangement.
  */
 @Composable
 private fun rememberCallSelfTileRotation(isLandscape: Boolean, size: CallTileSize, reduceMotion: Boolean): CallSelfTileRotation {
-    val lastSize = remember { floatArrayOf(size.widthDp, size.heightDp) }
-    val start = remember(isLandscape) { CallSelfTileLaw.rotationStart(CallTileSize(lastSize[0], lastSize[1]), size) }
-    val progress = remember(isLandscape) { Animatable(0f) }
+    val shown = remember { CallSelfTileShown(size, rotation = null) }
+    val rotation = remember(isLandscape) {
+        val settled = shown.rotation == null
+        CallSelfTileRotation(CallSelfTileLaw.rotationStart(shown.size(), size), Animatable(if (settled) 1f else 0f))
+    }
     SideEffect {
-        lastSize[0] = size.widthDp
-        lastSize[1] = size.heightDp
+        shown.layout = size
+        shown.rotation = rotation
     }
-    LaunchedEffect(progress) {
-        if (reduceMotion) progress.snapTo(1f) else progress.animateTo(1f, tween(CallChromeStow.fadeMillis(reduceMotion = false)))
+    LaunchedEffect(rotation) {
+        if (reduceMotion) {
+            rotation.progress.snapTo(1f)
+        } else {
+            rotation.progress.animateTo(1f, tween(CallChromeStow.fadeMillis(reduceMotion = false)))
+        }
     }
-    return CallSelfTileRotation(start, progress)
+    return rotation
 }
 
 /** La rotation est une TRANSFORMATION lue à la phase de dessin : aucune recomposition par image. */
 private fun Modifier.callSelfTileRotating(rotation: CallSelfTileRotation, pivot: TransformOrigin): Modifier = graphicsLayer {
     val fraction = rotation.progress.value
-    scaleX = lerp(rotation.start.xDp, 1f, fraction)
-    scaleY = lerp(rotation.start.yDp, 1f, fraction)
+    scaleX = CallSelfTileLaw.rotationScale(rotation.start.xDp, fraction)
+    scaleY = CallSelfTileLaw.rotationScale(rotation.start.yDp, fraction)
     transformOrigin = pivot
 }
 

@@ -104,6 +104,15 @@ object CallSelfTileLaw {
             CallTilePoint(previous.widthDp / target.widthDp, previous.heightDp / target.heightDp)
         }
 
+    /** L1.5 — l'échelle d'un axe pendant la rotation : de [start] vers 1 à mesure que [fraction] va de 0 à 1. */
+    fun rotationScale(start: Float, fraction: Float): Float = start + (1f - start) * fraction
+
+    /** L1.5 — la taille que la vignette MONTRE à [fraction] d'une rotation : c'est d'elle que repart la rotation suivante. */
+    fun shownDuringRotation(layout: CallTileSize, start: CallTilePoint, fraction: Float): CallTileSize = CallTileSize(
+        layout.widthDp * rotationScale(start.xDp, fraction),
+        layout.heightDp * rotationScale(start.yDp, fraction),
+    )
+
     /** Réduit [size] (jamais ne l'agrandit) pour tenir dans [available], à rapport constant. */
     fun fitted(size: CallTileSize, available: CallTileSize): CallTileSize {
         if (size.widthDp <= 0f || size.heightDp <= 0f || available.widthDp <= 0f || available.heightDp <= 0f) return size
