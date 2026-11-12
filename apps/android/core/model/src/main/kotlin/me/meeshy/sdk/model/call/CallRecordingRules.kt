@@ -15,8 +15,6 @@ data class CallRecordingReduction(
  * une diffusion d'un autre appel est ignorée.
  */
 object CallRecordingRules {
-    const val CONSENT_TIMEOUT_MILLIS: Long = 30_000L
-
     fun isEndToEnd(encryptionMode: String?): Boolean = encryptionMode?.trim()?.lowercase() == "e2ee"
 
     fun admission(connected: Boolean, callId: String?, endToEnd: Boolean): CallRecordingAdmission = when {

@@ -2,11 +2,11 @@ import type { CallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
 
 const it = {
   'callRecording.stop': 'Interrompi la registrazione',
+  'callRecording.stopShort': 'Interrompi',
   'callRecording.active': 'Registrazione in corso',
   'callRecording.waiting': 'In attesa del consenso di tutti…',
   'callRecording.ask': '{name} vuole registrare la chiamata',
   'callRecording.askVideo': '{name} vuole registrare la chiamata in video',
-  'callRecording.askDetail': 'La registrazione inizia solo se tutti accettano, poi viene aggiunta alla conversazione.',
   'callRecording.accept': 'Accetta',
   'callRecording.refuse': 'Rifiuta',
   'callRecording.cancel': 'Annulla',

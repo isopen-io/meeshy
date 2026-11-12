@@ -46,6 +46,8 @@ data class CallOverlayContext(
     val chrome: CallChromeVisibility = CallChromeVisibility(),
     /** A touch on a fading chrome overlay relights the chrome. */
     val onChromeRevive: () -> Unit = {},
+    /** The call lives in the picture-in-picture window: what only suits the full screen (the capture capsule) stays out. */
+    val inPip: Boolean = false,
 )
 
 /**
