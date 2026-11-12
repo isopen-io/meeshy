@@ -140,4 +140,27 @@ class CallButtonGlassGuardTest {
         assertThat(fill).contains("PRESSED_SCALE: Float = 0.88f")
         assertThat(block(glass, "internal fun CallPillButton(", "Column(")).contains("HapticFeedbackType.TextHandleMove")
     }
+
+    @Test
+    fun `P17_2 - la puce du type, la barre d'avant le decroche et la puce du son sont du verre, pas un disque plein`() {
+        val parts = code("IncomingVideoParts.kt")
+
+        assertThat(Regex("""CallGlassPlate\(""").findAll(parts).count()).isEqualTo(2)
+        assertThat(parts).doesNotContain("MeeshyGlassSurface(")
+        assertThat(parts).doesNotContain("Color.White.copy(alpha = 0.16f)")
+        assertThat(block(parts, "internal fun IncomingPreAnswerBar(", "private fun incomingExposureText")).contains("CallPillButton(")
+
+        val sound = block(code("CallPreviewViews.kt"), "internal fun CallPreviewSoundButton(", "private fun CallPreviewSoundLabel(")
+        assertThat(sound).contains("role = CallButtonRole.Neutral")
+        assertThat(sound).doesNotContain("CallButtonRole.Active")
+    }
+
+    @Test
+    fun `P16_12 - le bandeau de partage reste le verre teinte de la surface partagee, a 48 dp`() {
+        val banner = code("CallScreenShareBanner.kt")
+
+        assertThat(banner).contains("MeeshyGlassSurface(")
+        assertThat(banner).contains("CallTopBannerStack.BANNER_HEIGHT_DP")
+        assertThat(banner).doesNotContain("44.dp")
+    }
 }

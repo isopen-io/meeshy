@@ -27,7 +27,7 @@ class CallTopBannerStackTest {
     fun `la priorite d'un overlay decroit dans l'ordre de la pile, le partage d'abord`() {
         val priorities = CallTopBanner.entries.map(CallTopBannerStack::priority)
 
-        assertThat(priorities).isInOrder(Comparator.reverseOrder<Int>())
+        assertThat(priorities).isEqualTo(priorities.sortedDescending())
         assertThat(priorities.toSet()).hasSize(CallTopBanner.entries.size)
         assertThat(CallTopBannerStack.priority(CallTopBanner.ScreenShare)).isGreaterThan(CallTopBannerStack.priority(CallTopBanner.Recording))
     }

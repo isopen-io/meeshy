@@ -52,6 +52,8 @@ data class CallSafeInsets(
     val bottomDp: Float = 0f,
     val startDp: Float = 0f,
     val endDp: Float = 0f,
+    /** P16.8 — la place que prend, sous l'en-tête, le bandeau « Vous partagez » : ma vignette se range dessous. */
+    val bannerDp: Float = 0f,
 )
 
 enum class CallSelfTileCorner { TopStart, TopEnd, BottomStart, BottomEnd }
@@ -109,7 +111,7 @@ object CallSelfTileLaw {
     fun tileSize(container: CallTileSize, insets: CallSafeInsets, scale: CallSelfTileScale, pinch: Float): CallTileSize {
         val available = CallTileSize(
             widthDp = container.widthDp - insets.startDp - insets.endDp - 2 * MARGIN_DP,
-            heightDp = container.heightDp - insets.topDp - insets.bottomDp - TOP_CLEARANCE_DP - BOTTOM_CLEARANCE_DP,
+            heightDp = container.heightDp - insets.topDp - insets.bottomDp - insets.bannerDp - TOP_CLEARANCE_DP - BOTTOM_CLEARANCE_DP,
         )
         return fitted(liveSize(pinch, scale), available)
     }
@@ -125,7 +127,7 @@ object CallSelfTileLaw {
         val halfH = size.heightDp / 2
         val startX = insets.startDp + MARGIN_DP + halfW
         val endX = container.widthDp - insets.endDp - MARGIN_DP - halfW
-        val topY = insets.topDp + TOP_CLEARANCE_DP + halfH
+        val topY = insets.topDp + insets.bannerDp + TOP_CLEARANCE_DP + halfH
         val bottomY = container.heightDp - insets.bottomDp - BOTTOM_CLEARANCE_DP - halfH
         return when (corner) {
             CallSelfTileCorner.TopStart -> CallTilePoint(startX, topY)

@@ -141,6 +141,13 @@
     <string name="call_incoming_answer_no_video">بدون فيديو</string>
     <string name="call_incoming_answer_no_video_hint">يرد والكاميرا مطفأة: يرى المتصل صورتك الرمزية</string>
     <string name="call_incoming_answer_no_video_label">الرد بدون فيديو</string>
+    <string name="call_incoming_pre_answer_camera_hint">يحدد ما إذا كان %1$s يراك عند الرد</string>
+    <string name="call_incoming_pre_answer_heard_only">سيسمعك %1$s دون أن يراك</string>
+    <string name="call_incoming_pre_answer_mic_hint">يحدد ما إذا كان %1$s يسمعك عند الرد</string>
+    <string name="call_incoming_pre_answer_neither">لن يراك %1$s ولن يسمعك</string>
+    <string name="call_incoming_pre_answer_seen_and_heard">سيراك %1$s عند الرد</string>
+    <string name="call_incoming_pre_answer_seen_muted">سيراك %1$s والميكروفون مكتوم</string>
+    <string name="call_incoming_self_preview_label">كاميرتك، لا تُرسل قبل الرد</string>
     <string name="call_invite_declined">رفض %1$s المكالمة</string>
     <string name="call_invite_failed">تعذّرت دعوة هذا الشخص</string>
     <string name="call_invite_ringing">يرنّ…</string>

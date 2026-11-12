@@ -141,6 +141,13 @@
     <string name="call_incoming_answer_no_video">Ohne Video</string>
     <string name="call_incoming_answer_no_video_hint">Nimmt mit ausgeschalteter Kamera an: der Anrufer sieht deinen Avatar</string>
     <string name="call_incoming_answer_no_video_label">Ohne Video annehmen</string>
+    <string name="call_incoming_pre_answer_camera_hint">Legt fest, ob %1$s Sie beim Annehmen sieht</string>
+    <string name="call_incoming_pre_answer_heard_only">%1$s hört Sie, ohne Sie zu sehen</string>
+    <string name="call_incoming_pre_answer_mic_hint">Legt fest, ob %1$s Sie beim Annehmen hört</string>
+    <string name="call_incoming_pre_answer_neither">%1$s wird Sie weder sehen noch hören</string>
+    <string name="call_incoming_pre_answer_seen_and_heard">%1$s sieht Sie, sobald Sie annehmen</string>
+    <string name="call_incoming_pre_answer_seen_muted">%1$s sieht Sie, Mikrofon aus</string>
+    <string name="call_incoming_self_preview_label">Deine Kamera, wird erst nach dem Annehmen gesendet</string>
     <string name="call_invite_declined">%1$s hat abgelehnt</string>
     <string name="call_invite_failed">Diese Person konnte nicht eingeladen werden</string>
     <string name="call_invite_ringing">Klingelt …</string>

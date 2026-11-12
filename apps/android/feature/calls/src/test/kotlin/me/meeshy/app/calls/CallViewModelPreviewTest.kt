@@ -100,7 +100,7 @@ class CallViewModelPreviewTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = CallViewModel(
+    private fun vm(ringSilencer: CallRingSilencing = CallRingSilencing.Inert) = CallViewModel(
         signalManager, coordinator, sessionRepository,
         object : CallSecondsTicker { override val seconds: Flow<Unit> = emptyFlow() },
         tones,
@@ -130,6 +130,7 @@ class CallViewModelPreviewTest {
         testGroupTitleWording,
         CallEndReconciler(signalManager),
         CallTeardownController(emptySet()),
+        ringSilencer = ringSilencer,
     )
 
     private fun offer() = CallSignalEnvelope("call-9", CallSignalPayload(type = "offer", sdp = "v=0", from = "caller", to = "me", negotiationId = 1))
@@ -224,5 +225,86 @@ class CallViewModelPreviewTest {
         clear.invoke(vm)
 
         assertThat(links.last.closed).isTrue()
+    }
+
+    @Test
+    fun `P17_3 - activer le son coupe aussi la sonnerie de la notification d'un appel arrive par push`() {
+        val silenced = mutableListOf<String>()
+        val vm = vm(ringSilencer = { callId -> silenced += callId })
+        vm.start(incomingVideo)
+        signaling.signals.tryEmit(offer())
+        links.last.onEvent(CallPreviewLinkEvent.Connection(connected = true))
+        assertThat(silenced).isEmpty()
+
+        vm.togglePreviewSound()
+
+        assertThat(silenced).containsExactly("call-9")
+    }
+
+    @Test
+    fun `P17_3 - couper de nouveau le son ne touche plus la notification`() {
+        val silenced = mutableListOf<String>()
+        val vm = vm(ringSilencer = { callId -> silenced += callId })
+        vm.start(incomingVideo)
+        signaling.signals.tryEmit(offer())
+        links.last.onEvent(CallPreviewLinkEvent.Connection(connected = true))
+        vm.togglePreviewSound()
+
+        vm.togglePreviewSound()
+
+        assertThat(silenced).containsExactly("call-9")
+    }
+
+    @Test
+    fun `P17_4 - ma camera ne demarre pour ma vignette que pendant la sonnerie, et s'eteint quand on la coupe`() {
+        val track = mockk<VideoTrack>(relaxed = true)
+        every { coordinator.startSelfPreview() } returns true
+        every { coordinator.localVideoTrack } returns track
+        val vm = vm()
+        vm.setSelfPreviewOn(true)
+        verify(exactly = 0) { coordinator.startSelfPreview() }
+
+        vm.start(incomingVideo)
+        vm.setSelfPreviewOn(true)
+
+        assertThat(vm.selfPreviewTrack.value).isSameInstanceAs(track)
+
+        vm.setSelfPreviewOn(false)
+
+        verify(exactly = 1) { coordinator.stopSelfPreview() }
+        assertThat(vm.selfPreviewTrack.value).isNull()
+    }
+
+    @Test
+    fun `P17_4 - sans camera disponible la vignette ne s'invente pas`() {
+        every { coordinator.startSelfPreview() } returns false
+        val vm = vm()
+        vm.start(incomingVideo)
+
+        vm.setSelfPreviewOn(true)
+
+        assertThat(vm.selfPreviewTrack.value).isNull()
+    }
+
+    @Test
+    fun `P17_9 - le micro coupe de la barre se pose apres la reponse, jamais avant`() {
+        val vm = vm()
+        vm.start(incomingVideo)
+        vm.answerWithMicrophoneMuted(true)
+        verify(exactly = 0) { coordinator.setMuted(any()) }
+
+        vm.accept()
+
+        verify(exactly = 1) { coordinator.setMuted(true) }
+    }
+
+    @Test
+    fun `P17_9 - sans micro coupe dans la barre, la reponse ne touche pas au micro`() {
+        val vm = vm()
+        vm.start(incomingVideo)
+
+        vm.accept()
+
+        verify(exactly = 0) { coordinator.setMuted(any()) }
     }
 }

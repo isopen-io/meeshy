@@ -141,6 +141,13 @@
     <string name="call_incoming_answer_no_video">Sans vidéo</string>
     <string name="call_incoming_answer_no_video_hint">Décroche caméra coupée : l\'appelant voit votre avatar</string>
     <string name="call_incoming_answer_no_video_label">Répondre sans vidéo</string>
+    <string name="call_incoming_pre_answer_camera_hint">Décide si %1$s vous voit en décrochant</string>
+    <string name="call_incoming_pre_answer_heard_only">%1$s vous entendra sans vous voir</string>
+    <string name="call_incoming_pre_answer_mic_hint">Décide si %1$s vous entend en décrochant</string>
+    <string name="call_incoming_pre_answer_neither">%1$s ne vous verra ni ne vous entendra</string>
+    <string name="call_incoming_pre_answer_seen_and_heard">%1$s vous verra en décrochant</string>
+    <string name="call_incoming_pre_answer_seen_muted">%1$s vous verra, micro coupé</string>
+    <string name="call_incoming_self_preview_label">Votre caméra, non envoyée avant de décrocher</string>
     <string name="call_invite_declined">%1$s a refusé</string>
     <string name="call_invite_failed">Impossible d’inviter cette personne</string>
     <string name="call_invite_ringing">Sonne…</string>

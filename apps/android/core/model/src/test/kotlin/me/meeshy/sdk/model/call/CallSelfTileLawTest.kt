@@ -129,7 +129,7 @@ class CallSelfTileLawTest {
 
         val tall = CallSelfTileLaw.tileSize(CallTileSize(200f, 400f), noInsets, CallSelfTileScale.X3, 1f)
         val shorter = CallSelfTileLaw.tileSize(CallTileSize(200f, 400f), banner, CallSelfTileScale.X3, 1f)
-        assertThat(shorter.heightDp).isAtMost(tall.heightDp - 0f)
+        assertThat(shorter.heightDp).isLessThan(tall.heightDp)
         assertThat(shorter.heightDp).isAtMost(400f - 60f - 130f - 56f)
     }
 }

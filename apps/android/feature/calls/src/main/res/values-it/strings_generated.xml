@@ -141,6 +141,13 @@
     <string name="call_incoming_answer_no_video">Senza video</string>
     <string name="call_incoming_answer_no_video_hint">Risponde con la fotocamera spenta: chi chiama vede il tuo avatar</string>
     <string name="call_incoming_answer_no_video_label">Rispondi senza video</string>
+    <string name="call_incoming_pre_answer_camera_hint">Decide se %1$s ti vede quando rispondi</string>
+    <string name="call_incoming_pre_answer_heard_only">%1$s ti sentirà senza vederti</string>
+    <string name="call_incoming_pre_answer_mic_hint">Decide se %1$s ti sente quando rispondi</string>
+    <string name="call_incoming_pre_answer_neither">%1$s non ti vedrà né ti sentirà</string>
+    <string name="call_incoming_pre_answer_seen_and_heard">%1$s ti vedrà quando rispondi</string>
+    <string name="call_incoming_pre_answer_seen_muted">%1$s ti vedrà, microfono disattivato</string>
+    <string name="call_incoming_self_preview_label">La tua fotocamera, non inviata prima di rispondere</string>
     <string name="call_invite_declined">%1$s ha rifiutato</string>
     <string name="call_invite_failed">Impossibile invitare questa persona</string>
     <string name="call_invite_ringing">Squilla…</string>

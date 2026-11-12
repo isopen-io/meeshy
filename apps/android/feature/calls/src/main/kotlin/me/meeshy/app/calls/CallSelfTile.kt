@@ -111,7 +111,9 @@ internal fun CallSelfTile(
         val density = LocalDensity.current
         val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
         val container = CallTileSize(maxWidth.value, maxHeight.value)
-        val insets = rememberCallSafeInsets(rtl)
+        val safe = rememberCallSafeInsets(rtl)
+        val bannerClearance = LocalCallSelfTileBannerClearance.current.value
+        val insets = remember(safe, bannerClearance) { safe.copy(bannerDp = bannerClearance) }
         var corner by remember { mutableStateOf(CallSelfTileLaw.InitialCorner) }
         var scale by remember(callKey) { mutableStateOf(memory.scale(callKey)) }
         var pinch by remember { mutableFloatStateOf(1f) }

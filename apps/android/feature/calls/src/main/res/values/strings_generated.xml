@@ -141,6 +141,13 @@
     <string name="call_incoming_answer_no_video">No video</string>
     <string name="call_incoming_answer_no_video_hint">Answers with your camera off: the caller sees your avatar</string>
     <string name="call_incoming_answer_no_video_label">Answer without video</string>
+    <string name="call_incoming_pre_answer_camera_hint">Decides whether %1$s sees you when you answer</string>
+    <string name="call_incoming_pre_answer_heard_only">%1$s will hear you without seeing you</string>
+    <string name="call_incoming_pre_answer_mic_hint">Decides whether %1$s hears you when you answer</string>
+    <string name="call_incoming_pre_answer_neither">%1$s will neither see nor hear you</string>
+    <string name="call_incoming_pre_answer_seen_and_heard">%1$s will see you when you answer</string>
+    <string name="call_incoming_pre_answer_seen_muted">%1$s will see you, microphone off</string>
+    <string name="call_incoming_self_preview_label">Your camera, not sent until you answer</string>
     <string name="call_invite_declined">%1$s declined</string>
     <string name="call_invite_failed">Couldn’t invite this person</string>
     <string name="call_invite_ringing">Ringing…</string>
