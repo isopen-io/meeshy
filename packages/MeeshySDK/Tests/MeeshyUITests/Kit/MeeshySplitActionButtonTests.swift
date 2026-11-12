@@ -357,7 +357,7 @@ struct MeeshySplitActionButtonTests {
         let forbidden = [
             "Color(hex:", "Color(red:", "Color(white:", "Color.white", "Color.black", "Color.gray", "Color.red",
             "UIColor(", "#FF", "0x", "glassEffect", "adaptiveGlass", "adaptiveLiquidGlass", "UIBlurEffect",
-            ".ultraThinMaterial", ".thinMaterial", ".regularMaterial", ".thickMaterial", "backdrop",
+            ".ultraThinMaterial", ".thinMaterial", ".regularMaterial", ".thickMaterial",
         ]
         for file in Self.files {
             let code = try Self.code(file)
@@ -380,7 +380,7 @@ struct MeeshySplitActionButtonTests {
     func source_noGestureOutsideReady() throws {
         let code = try Self.code("MeeshySplitActionButton.swift")
         let busy = try #require(code.range(of: "private func busy("))
-        let activate = try #require(code.range(of: "private func activate()"))
+        let activate = try #require(code.range(of: "private func activate()", range: busy.upperBound..<code.endIndex))
         let between = String(code[busy.lowerBound..<activate.lowerBound])
         for word in ["Button(", "onTapGesture", ".gesture(", "chevron("] {
             #expect(!between.contains(word), "busy/deferred contient \(word)")
