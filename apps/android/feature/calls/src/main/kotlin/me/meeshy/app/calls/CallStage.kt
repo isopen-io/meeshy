@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -93,6 +94,9 @@ internal fun CallDuoVideoStage(
         } else {
             val featuresLocal = layout.isMyImageFullScreen
             val fit = ScreenShareCapturePolicy.remoteFits(state.isPeerScreenSharing, rememberCallVideoFit())
+            // P15.11 : l'écran reçu tient la une (la permutation est refusée), il se pince jusqu'à 4×.
+            val receivingScreen = state.isPeerScreenSharing && !featuresLocal && !framed
+            val screenZoom = rememberCallReceivedScreenZoom(receivingScreen, callKey)
             if (!framed) {
                 if (featuresLocal && localTrack != null) {
                     VideoRenderer(track = localTrack, eglContext = eglContext, modifier = Modifier.fillMaxSize(), mirror = state.mirrorsLocalPreview, fit = fit)
@@ -106,7 +110,7 @@ internal fun CallDuoVideoStage(
                         eglContext = eglContext,
                         peerName = state.peerName,
                         avatarUrl = peerAvatarUrl,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().clipToBounds().callReceivedScreenZoomLayer(screenZoom, receivingScreen),
                         fit = fit,
                         peerSpeech = peerSpeech,
                     )
@@ -117,10 +121,11 @@ internal fun CallDuoVideoStage(
             // Ma propre image en plein écran se pince (zoom de la caméra envoyée) ; zoomée, un double toucher
             // revient à 1×.
             val pinchZoom = if (featuresLocal) selfCamera?.zoom else null
-            if (onSceneTap != null || pinchZoom != null) {
-                Box(
+            if (onSceneTap != null || pinchZoom != null || receivingScreen) {
+                val sceneGestures = if (receivingScreen) {
+                    Modifier.callReceivedScreenZoomGestures(screenZoom, reduceMotion, onSceneTap)
+                } else {
                     Modifier
-                        .fillMaxSize()
                         .let { if (pinchZoom != null) it.callCameraPinch(enabled = true, zoom = pinchZoom).callCameraZoomAdjustable(pinchZoom) else it }
                         .pointerInput(onSceneTap, pinchZoom) {
                             detectTapGestures(
@@ -129,8 +134,9 @@ internal fun CallDuoVideoStage(
                                 },
                                 onTap = { onSceneTap?.invoke() },
                             )
-                        },
-                )
+                        }
+                }
+                Box(Modifier.fillMaxSize().then(sceneGestures))
             }
             if (pinchZoom != null) {
                 CallZoomIndicator(pinchZoom, Modifier.align(Alignment.BottomCenter).padding(bottom = ZOOM_INDICATOR_BOTTOM))

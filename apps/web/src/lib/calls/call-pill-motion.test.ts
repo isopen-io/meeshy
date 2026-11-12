@@ -102,6 +102,33 @@ describe('la capsule de l’en-tête entre et sort par une mise à l’échelle 
   });
 });
 
+describe('ce qui sort par un bord y retourne par le même chemin : le bandeau des autres et la capsule de la une (U2.10, U1.12)', () => {
+  test('le bandeau du bas repart vers le bas de l’écran, et en revient : transformation et opacité seules', () => {
+    expect(swapKeyframes(false, false, 'bottom')).toEqual([
+      { opacity: 1, transform: 'translateY(0)' },
+      { opacity: 0, transform: 'translateY(100%)' },
+    ]);
+    expect(swapKeyframes(true, false, 'bottom')[0]).toEqual({ opacity: 0, transform: 'translateY(100%)' });
+  });
+
+  test('la colonne du bandeau repart par le bord de FIN : à droite en gauche à droite, à gauche en droite à gauche', () => {
+    expect(swapKeyframes(false, false, 'end')[1]).toEqual({ opacity: 0, transform: 'translateX(100%)' });
+    expect(swapKeyframes(false, false, 'end', true)[1]).toEqual({ opacity: 0, transform: 'translateX(-100%)' });
+    expect(swapKeyframes(true, false, 'end', true)[0]).toEqual({ opacity: 0, transform: 'translateX(-100%)' });
+  });
+
+  test('la capsule repart en fondu, sans déplacement ni échelle', () => {
+    expect(swapKeyframes(false, false, 'fade')).toEqual([
+      { opacity: 1, transform: 'none' },
+      { opacity: 0, transform: 'none' },
+    ]);
+  });
+
+  test('« Réduire les animations » : un fondu court, sans déplacement, pour chacune', () => {
+    for (const shape of ['bottom', 'end', 'fade'] as const) expect(swapKeyframes(false, true, shape, true)).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+  });
+});
+
 describe('ce qui est posé sur un verre qui se déforme suit son bord du haut (P8b.6, loi 17)', () => {
   test('le verre perd 56 px : ce qui le surmonte part de sa place d’avant, 56 px plus haut, et descend avec lui', () => {
     expect(followKeyframes({ width: 400, height: 120 }, { width: 400, height: 64 }, false)).toEqual([{ transform: 'translateY(-56px)' }]);

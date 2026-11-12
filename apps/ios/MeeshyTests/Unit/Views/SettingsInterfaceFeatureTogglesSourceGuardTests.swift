@@ -110,7 +110,11 @@ final class SettingsInterfaceFeatureTogglesSourceGuardTests: XCTestCase {
         let helper = try XCTUnwrap(settings.range(of: "private func featureToggle("), "Fabrique d'interrupteur introuvable.")
         let riverRow = settings[river.upperBound..<helper.lowerBound]
         XCTAssertTrue(riverRow.contains(".disabled(!readingModesEnabled)"), "La Rivière est un mode de lecture : sa rangée se désactive quand ils sont coupés.")
-        XCTAssertTrue(riverRow.contains("settings.interface.riviere_mode.hint"), "La rangée désactivée dit POURQUOI (indice d'accessibilité).")
+        XCTAssertTrue(riverRow.contains("SettingsOrientation.riviereUnavailable"), "La rangée désactivée dit POURQUOI, en phrase visible (#17652).")
+        XCTAssertTrue(
+            try code("Features/Settings/Views/SettingsSectionCard.swift").contains("String(localized: \"settings.interface.riviere_mode.hint\""),
+            "La phrase d'indisponibilité garde sa clé localisée."
+        )
     }
 
     func test_toggles_useTheirLocalizedKeys() throws {
@@ -119,7 +123,6 @@ final class SettingsInterfaceFeatureTogglesSourceGuardTests: XCTestCase {
             "settings.interface.lentille_list",
             "settings.interface.reading_modes",
             "settings.interface.riviere_mode",
-            "settings.interface.riviere_mode.hint",
         ] {
             XCTAssertTrue(settings.contains("String(localized: \"\(key)\""), "Clé « \(key) » absente de SettingsView.")
         }

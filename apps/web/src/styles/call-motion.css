@@ -229,6 +229,25 @@
     visibility 0s linear 0.3s;
 }
 
+/* LE BANDEAU DES AUTRES QUI REPART (U2.10) — plein écran, il quitte la mise en page à l'instant : la une
+   grandit sans l'attendre (`useStageFlip`), et lui glisse vers son bord, là où il était, par `HeldSwap`
+   (transformation et opacité seules ; marqué `data-leaving`, ni focus ni clic). La rangée du bas retient
+   ses 4 de liseré (`px-3` moins `-mx-2`), la colonne ses 12 de bord et ses 8 de débord (`-my-2`). */
+[data-call-strip][data-leaving] {
+  position: absolute;
+  margin: 0;
+}
+
+[data-call-strip-edge='bottom'][data-leaving] {
+  inset-inline: 0.25rem;
+  bottom: 0;
+}
+
+[data-call-strip-edge='trailing'][data-leaving] {
+  inset-block: -0.5rem;
+  inset-inline-end: 0.75rem;
+}
+
 /* Ma vignette se range par une échelle ancrée à son coin (G1.11, `selfTileRestingFactor`) :
    la transformation seule, jamais sa largeur ni sa hauteur. */
 [data-call-corner-frame] {

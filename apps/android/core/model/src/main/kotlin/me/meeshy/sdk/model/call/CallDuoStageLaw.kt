@@ -12,6 +12,8 @@ data class CallDuoStageInputs(
     val hasLocalTrack: Boolean,
     val isCameraOn: Boolean,
     val isVideoAutoPaused: Boolean,
+    /** L'autre partage son écran : il tient la une, ma permutation ne compte pas (iOS `effectiveSwapStreams`). */
+    val isPeerScreenSharing: Boolean = false,
 )
 
 /** Where MY image sits on the duo stage, hence where the controls of my camera live. */
@@ -33,8 +35,15 @@ object CallDuoStageLaw {
     fun layout(inputs: CallDuoStageInputs): CallDuoStageLayout = with(inputs) {
         if (!isStageShown || !isConnected || isFramed) return CallDuoStageLayout.Hidden
         CallDuoStageLayout(
-            isMyImageFullScreen = isSwapped && hasLocalTrack && isCameraOn,
+            isMyImageFullScreen = isSwapped && hasLocalTrack && isCameraOn && !isPeerScreenSharing,
             showsSelfTile = !isCameraOn || hasLocalTrack || isVideoAutoPaused,
         )
     }
+
+    /**
+     * Un toucher sur ma vignette permute-t-il les deux images ? Pas pendant un écran reçu : il garde la une, comme
+     * iOS (`effectiveSwapStreams`). Le choix déjà fait n'est pas effacé, il revient avec la fin du partage.
+     */
+    fun acceptsSwap(isPeerScreenSharing: Boolean, hasLocalTrack: Boolean, isCameraOn: Boolean): Boolean =
+        !isPeerScreenSharing && hasLocalTrack && isCameraOn
 }

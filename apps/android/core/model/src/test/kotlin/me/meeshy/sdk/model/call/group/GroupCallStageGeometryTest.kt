@@ -70,4 +70,38 @@ class GroupCallStageGeometryTest {
         assertThat(GroupCallStageGeometry.between(CallStageRect(0f, 0f, 1f, 1f), to, 1f)).isEqualTo(to)
         assertThat(GroupCallStageGeometry.between(null, to, 0.3f)).isEqualTo(to)
     }
+
+    /** U2.10 — the strip of the others leaves by ITS edge of the screen, measured. */
+    @Test
+    fun `in portrait the strip top lands on the bottom edge of the window`() {
+        val stage = CallStageRect(left = 12f, top = 120f, width = 366f, height = 500f)
+        val travel = GroupCallStageGeometry.stripTravel(GroupCallFilmstrip.Bottom, stage, windowWidth = 390f, windowHeight = 844f, stripExtent = 112f, isRtl = false)
+        assertThat(travel.dx).isEqualTo(0f)
+        assertThat(stage.top + stage.height - 112f + travel.dy).isEqualTo(844f)
+    }
+
+    @Test
+    fun `in landscape the column leaves by the right edge, and by the left one right to left`() {
+        val stage = CallStageRect(left = 59f, top = 20f, width = 700f, height = 340f)
+        val ltr = GroupCallStageGeometry.stripTravel(GroupCallFilmstrip.Trailing, stage, windowWidth = 844f, windowHeight = 390f, stripExtent = 128f, isRtl = false)
+        assertThat(ltr.dy).isEqualTo(0f)
+        assertThat(stage.left + stage.width - 128f + ltr.dx).isEqualTo(844f)
+        val rtl = GroupCallStageGeometry.stripTravel(GroupCallFilmstrip.Trailing, stage, windowWidth = 844f, windowHeight = 390f, stripExtent = 128f, isRtl = true)
+        assertThat(stage.left + 128f + rtl.dx).isEqualTo(0f)
+    }
+
+    @Test
+    fun `a stage at the edge moves the strip by its own size, and an unmeasured stage still leaves the screen`() {
+        val atEdge = CallStageRect(0f, 0f, 390f, 844f)
+        assertThat(GroupCallStageGeometry.stripTravel(GroupCallFilmstrip.Bottom, atEdge, 390f, 844f, 112f, false).dy).isEqualTo(112f)
+        val unmeasured = GroupCallStageGeometry.stripTravel(GroupCallFilmstrip.Bottom, null, 390f, 844f, 112f, false)
+        assertThat(unmeasured.dy).isAtLeast(844f)
+    }
+
+    @Test
+    fun `without a strip nothing travels`() {
+        val travel = GroupCallStageGeometry.stripTravel(GroupCallFilmstrip.None, CallStageRect(0f, 0f, 1f, 1f), 390f, 844f, 112f, false)
+        assertThat(travel.dx).isEqualTo(0f)
+        assertThat(travel.dy).isEqualTo(0f)
+    }
 }

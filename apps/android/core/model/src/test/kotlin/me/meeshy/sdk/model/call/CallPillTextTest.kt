@@ -166,4 +166,24 @@ class CallCaptionsFooterTest {
     fun `no line says nothing`() {
         assertThat(CallCaptionsFooter.resolve(emptyList())).isEqualTo(CallCaptionsFooter.None)
     }
+
+    /** U2.9 — in group full screen the pill is stowed with the controls: only the captions glass, without its base row, stays. */
+    @Test
+    fun `the full screen keeps the pill only when it carries the captions alone`() {
+        assertThat(CallPillText.CaptionsAlone.isOnStage(isStageFullScreen = true)).isTrue()
+        assertThat(CallPillText.None.isOnStage(isStageFullScreen = true)).isFalse()
+        assertThat(CallPillText.Captions.isOnStage(isStageFullScreen = true)).isFalse()
+        assertThat(CallPillText.Journal.isOnStage(isStageFullScreen = true)).isFalse()
+    }
+
+    @Test
+    fun `a stage that is not full screen always keeps the pill`() {
+        CallPillText.entries.forEach { assertThat(it.isOnStage(isStageFullScreen = false)).isTrue() }
+    }
+
+    @Test
+    fun `in full screen with the captions on the pill resolves to the captions alone, and without them to nothing`() {
+        assertThat(CallPillText.resolve(isCaptionsEnabled = true, layer = CallScreenLayer.Idle, isChromeRevealed = false).isOnStage(isStageFullScreen = true)).isTrue()
+        assertThat(CallPillText.resolve(isCaptionsEnabled = false, layer = CallScreenLayer.Idle, isChromeRevealed = false).isOnStage(isStageFullScreen = true)).isFalse()
+    }
 }

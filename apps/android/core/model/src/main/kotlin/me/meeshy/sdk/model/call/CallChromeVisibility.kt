@@ -2,6 +2,9 @@ package me.meeshy.sdk.model.call
 
 enum class CallChromeElement {
     Header, Controls, OpenPanel, RecordingStatus, RecordingConsent, ScreenShareBanner, Captions, SelfView,
+
+    /** The « Back to grid · Full screen » capsule of the featured person of a group (U1.10, #8550). */
+    FeaturedCapsule,
 }
 
 /**
@@ -24,6 +27,8 @@ data class CallChromeVisibility(
         CallChromeElement.RecordingStatus,
         CallChromeElement.ScreenShareBanner,
         -> isRevealed && !isStageFullScreen && !isModeActive
+        // Stowed WITH the controls, but the full screen does not stow it: it is the way out of it.
+        CallChromeElement.FeaturedCapsule -> isRevealed && !isModeActive
     }
 
     fun toggled(): CallChromeVisibility = copy(isRevealed = !isRevealed)

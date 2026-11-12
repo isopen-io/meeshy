@@ -25,7 +25,7 @@ extension CallView {
         let halfW = size.width / 2
         let halfH = size.height / 2
         let margin = Self.pipMargin
-        let topInset = safeArea.top + QualityThresholds.pipTopClearance + CallCaptureAlertClearance.top(isAlertShown: transcriptionService.captureJournal.alert != nil)
+        let topInset = safeArea.top + QualityThresholds.pipTopClearance + CallCaptureAlertClearance.top(isAlertShown: transcriptionService.captureJournal.alert != nil) + CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: callManager.screenShare.isSharing)
         let bottomInset = safeArea.bottom + QualityThresholds.pipBottomClearance
         let leadingX = safeArea.leading + margin + halfW
         let trailingX = container.width - safeArea.trailing - margin - halfW
@@ -48,7 +48,7 @@ extension CallView {
         let available = CGSize(
             width: container.width - safeArea.leading - safeArea.trailing - 2 * Self.pipMargin,
             height: container.height - safeArea.top - safeArea.bottom
-                - QualityThresholds.pipTopClearance - QualityThresholds.pipBottomClearance
+                - QualityThresholds.pipTopClearance - QualityThresholds.pipBottomClearance - CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: callManager.screenShare.isSharing)
         )
         return CallSelfTileScale.fitted(CallSelfTileScale.liveSize(pinch: selfTilePinch, from: selfTileScale), in: available)
     }
@@ -81,7 +81,7 @@ extension CallView {
                     }
                     .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                     .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
-                    .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
+                    .modifier(CallSelfTilePlacement(position: CGPoint(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height), reservesBanner: callManager.screenShare.isSharing, reduceMotion: reduceMotion))
                     .gesture(
                         DragGesture()
                             .onChanged { pipDragOffset = $0.translation }
@@ -164,7 +164,7 @@ extension CallView {
                 .modifier(CallSelfTileOutline(color: MeeshyColors.warning.opacity(MeeshyOpacity.heavy), lineWidth: 1, stowFactor: selfTileStowFactor))
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                 .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
-                .position(x: base.x, y: base.y)
+                .modifier(CallSelfTilePlacement(position: base, reservesBanner: callManager.screenShare.isSharing, reduceMotion: reduceMotion))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
                 .accessibilityHint(String(localized: "call.video.suspended.hint", defaultValue: "Connexion faible, la vidéo reprendra automatiquement", bundle: .main))

@@ -120,6 +120,7 @@ struct CallScreenShareBanner: View, Equatable {
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
             if showsStop {
                 Button(action: onStop) {
                     Text(CallScreenShareCopy.stopCaption)
@@ -134,7 +135,7 @@ struct CallScreenShareBanner: View, Equatable {
         }
         .padding(.leading, MeeshySpacing.mdPlus)
         .padding(.trailing, showsStop ? 4 : 14)
-        .frame(minHeight: 44)
+        .frame(maxWidth: .infinity, minHeight: 44)
         .adaptiveGlass(in: Capsule(), tint: MeeshyColors.error.opacity(MeeshyOpacity.medium), interactive: showsStop)
         .accessibilityElement(children: .contain)
     }

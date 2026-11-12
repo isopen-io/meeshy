@@ -178,7 +178,11 @@ fun CallScreen(
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
     MeeshyTheme(darkTheme = true) {
-        CompositionLocalProvider(LocalCallLiveSeconds provides liveSeconds, LocalCallGlassTone provides glassTone) {
+        CompositionLocalProvider(
+            LocalCallLiveSeconds provides liveSeconds,
+            LocalCallGlassTone provides glassTone,
+            LocalCallSelfTileBannerClearance provides rememberSelfTileBannerClearance(reduceMotion),
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -260,6 +264,8 @@ fun CallScreen(
                                 primaryTrack = remoteVideo,
                                 eglContext = viewModel.eglBaseContext,
                                 isChromeVisible = chromeVisibility.isVisible(CallChromeElement.Controls),
+                                isCapsuleVisible = chromeVisibility.isVisible(CallChromeElement.FeaturedCapsule),
+                                onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                                 isFullScreen = chromeState.isStageFullScreen,
                                 onFullScreenChange = chrome::setStageFullScreen,
                                 onStageTap = sceneTap,
@@ -288,6 +294,7 @@ fun CallScreen(
                     },
                     preview = preview,
                     onTogglePreviewSound = viewModel::togglePreviewSound,
+                    preAnswer = rememberIncomingPreAnswerHost(viewModel, state.isVideoCall),
                     // « Sans vidéo » (P17) : seul le micro est demandé, et ma caméra ne s'ouvre jamais.
                     onAcceptWithoutVideo = {
                         permissionGate.answerIncoming(isVideo = false) { answer -> answerWithoutVideo(viewModel, answer) }
@@ -339,10 +346,7 @@ fun CallScreen(
                 extensions.overlays, CallOverlaySlot.Panel, overlayContext,
                 Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
             )
-            CallOverlaySlotHost(
-                extensions.overlays, CallOverlaySlot.TopBanner, overlayContext,
-                Modifier.align(Alignment.TopCenter).systemBarsPadding(),
-            )
+            CallTopBannerStackHost(extensions.overlays, overlayContext, Modifier.align(Alignment.TopCenter))
 
             state.waitingBanner?.let { banner ->
                 CallWaitingBanner(

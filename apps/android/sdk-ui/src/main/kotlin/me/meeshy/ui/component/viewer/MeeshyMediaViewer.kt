@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
@@ -72,7 +71,7 @@ public fun MeeshyMediaViewer(
     onImageSaved: ((Result<Unit>) -> Unit)? = null,
 ) {
     if (gallery.isEmpty) return
-    Dialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = false)) {
+    ViewerDialog(onDismissRequest = onDismiss, properties = viewerDialogProperties(secure = false)) {
         MediaViewerContent(
             gallery = gallery,
             initialIndex = initialIndex,

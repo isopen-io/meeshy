@@ -16,7 +16,7 @@ final class MeeshyStatusCapsuleSession {
         var play: (MeeshyStatusCapsuleFeedback) -> Void
         var announce: (String, Bool) -> Void
         var now: () -> Date
-        var sleep: (Int) async throws -> Void
+        var sleep: @MainActor (Int) async throws -> Void
         var isScreenReaderOn: () -> Bool
 
         /// Le site unique : l'haptique du SDK, l'annonce du lecteur d'écran, le

@@ -148,6 +148,12 @@ class WebRtcCallCoordinator @Inject constructor(
     /** The local camera preview track (video calls only), for the self PiP. */
     val localVideoTrack get() = engine.localVideoTrack
 
+    /** Avant le décroché : ma caméra pour MON aperçu, sans pair ; `true` si elle tourne (accès refusé ou aucune caméra ⇒ `false`). */
+    fun startSelfPreview(): Boolean = engine.startSelfPreview() == null
+
+    /** Ma caméra d'aperçu s'éteint avant le décroché. */
+    fun stopSelfPreview() = engine.stopSelfPreview()
+
     /** The remote video track stream, for the full-screen remote renderer. */
     val remoteVideoTracks get() = engine.remoteVideoTracks
 

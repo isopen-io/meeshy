@@ -174,4 +174,20 @@ class CallHeaderBarTest {
         }
         rule.onNodeWithContentDescription("Call duration", substring = true).assertExists()
     }
+
+    @Test
+    fun `un ecran recu en duo remplace le nom et la duree par Ecran de la personne`() {
+        rule.setContent {
+            MeeshyTheme {
+                CallHeaderBar(
+                    connected(video = true).copy(isPeerScreenSharing = true), conversationId = "c1", showsMinimize = true, onMinimize = {},
+                    names = CallHeaderNames(givenName = "Maman", groupName = null),
+                )
+            }
+        }
+        rule.onNodeWithText("Maman's screen").assertExists()
+        rule.onNodeWithText("Maman").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Maman's screen").assertExists()
+        rule.onNodeWithContentDescription("Call duration", substring = true).assertDoesNotExist()
+    }
 }
