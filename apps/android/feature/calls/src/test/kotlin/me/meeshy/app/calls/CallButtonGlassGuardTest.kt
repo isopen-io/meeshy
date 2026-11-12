@@ -176,4 +176,17 @@ class CallButtonGlassGuardTest {
         assertThat(banner).contains("CallTopBannerStack.BANNER_HEIGHT_DP")
         assertThat(banner).doesNotContain("44.dp")
     }
+
+    @Test
+    fun `S1 et S2 - Arreter est UNE capsule blanche a encre rouge, la meme sur la capsule de partage et sur le bandeau`() {
+        val stop = block(code("CallPillControls.kt"), "internal fun CallShareStopButton(", "\n}")
+        assertThat(stop).contains(".background(Color.White, CircleShape)")
+        assertThat(stop).contains("color = MeeshyPalette.ErrorInk")
+        assertThat(stop).doesNotContain("Color.White.copy(")
+
+        assertThat(code("CallPill.kt")).contains("CallShareStopButton(")
+        val banner = code("CallScreenShareBanner.kt")
+        assertThat(banner).contains("CallShareStopButton(")
+        assertThat(banner).doesNotContain("fun ScreenShareStopButton(")
+    }
 }
