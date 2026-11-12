@@ -257,10 +257,12 @@ final class FloatingCallPillViewTests: XCTestCase {
     func test_speakerButton_takesItsLitStateFromTheOutputRule_withTheCallKind() throws {
         let source = AppSourceGuard.stripComments(try pillSource())
         let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var speakerButton", in: source))
-        XCTAssertTrue(body.contains("CallOutputButtonRule.kind("))
-        XCTAssertTrue(body.contains("isVideoCall: callManager.isVideoUIActive"))
+        XCTAssertEqual(body.components(separatedBy: "isOutputLit(route)").count - 1, 2, "la teinte ET le disque suivent la loi")
         XCTAssertFalse(body.contains("callManager.isSpeaker || route.routesExternally"),
                        "la bannière ne recompose pas l'état allumé à côté de la loi")
+        let lit = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func isOutputLit(", in: source))
+        XCTAssertTrue(lit.contains("CallOutputButtonRule.kind("))
+        XCTAssertTrue(lit.contains("isVideoCall: callManager.isVideoUIActive"))
     }
 
     func test_pill_neverReimplementsTheRoutePickerOrTheQualitySheet() throws {
