@@ -235,6 +235,8 @@
     <string name="focal_call_join_a11y_hint_double_tap">Zum Beitreten des Anrufs doppeltippen</string>
     <string name="focal_call_join_action">Anruf beitreten</string>
     <string name="focal_call_join_hint">Zum Beitreten tippen</string>
+    <string name="focal_call_journal_hide">Transkript ausblenden</string>
+    <string name="focal_call_journal_show">Transkript anzeigen</string>
     <string name="focal_call_outgoing">Ausgehend</string>
     <string name="focal_call_outgoing_suffix">ausgehend</string>
     <string name="focal_call_rejected_received">Anruf abgewiesen</string>
