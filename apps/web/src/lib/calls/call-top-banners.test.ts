@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { orderedTopBanners, recordingBannerPresent, topBannersAbove, topBannersClearance, TOP_BANNER_CLEARANCE } from './call-top-banners';
+import { orderedTopBanners, recordingBannerPresent, selfTileClearance, topBannersAbove, TOP_BANNER_CLEARANCE } from './call-top-banners';
 
 /**
  * LA PILE DES BANDEAUX DU HAUT (P16.7, `CallTopBannerStack.ordered` d'iOS) — ordre fixe, quel que
  * soit l'ordre d'arrivée : partage → enregistrement → capture → cadre en direct. Un bandeau absent
- * ne laisse pas de trou, et la place de ma vignette est la somme de ce qui est posé au-dessus d'elle.
+ * ne laisse pas de trou, et ma vignette ne descend que sous MON partage et la capture, comme sur iOS et Android.
  */
 describe('l’ordre de la pile', () => {
   test('partage, enregistrement, capture, cadre : toujours dans cet ordre', () => {
@@ -19,10 +19,16 @@ describe('l’ordre de la pile', () => {
 });
 
 describe('la place réservée', () => {
-  test('ma vignette descend de la somme des bandeaux posés (partage 60, enregistrement 60, capture 56)', () => {
-    expect(topBannersClearance({ 'screen-share': true })).toBe(TOP_BANNER_CLEARANCE['screen-share']);
-    expect(topBannersClearance({ 'screen-share': true, capture: true })).toBe(TOP_BANNER_CLEARANCE['screen-share'] + TOP_BANNER_CLEARANCE.capture);
-    expect(topBannersClearance({})).toBe(0);
+  test('ma vignette descend sous MON bandeau de partage et sous la capture (partage 60, capture 56)', () => {
+    expect(selfTileClearance({ 'screen-share': true })).toBe(TOP_BANNER_CLEARANCE['screen-share']);
+    expect(selfTileClearance({ 'screen-share': true, capture: true })).toBe(TOP_BANNER_CLEARANCE['screen-share'] + TOP_BANNER_CLEARANCE.capture);
+    expect(selfTileClearance({})).toBe(0);
+  });
+
+  test('l’enregistrement et le cadre ne déplacent pas ma vignette (`CallTopBannerStack.selfTileClearance` d’iOS, `selfTileClearanceDp` d’Android)', () => {
+    expect(selfTileClearance({ recording: true })).toBe(0);
+    expect(selfTileClearance({ 'live-frame': true })).toBe(0);
+    expect(selfTileClearance({ 'screen-share': true, recording: true, capture: true, 'live-frame': true })).toBe(TOP_BANNER_CLEARANCE['screen-share'] + TOP_BANNER_CLEARANCE.capture);
   });
 
   test('l’indicateur d’enregistrement se pose sous le partage, et lui seul', () => {

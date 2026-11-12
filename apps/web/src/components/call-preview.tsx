@@ -33,7 +33,7 @@ type SoundProps = { readonly language: InterfaceLanguage; readonly kit: CallPrev
  * appel vidéo qui sonne — la puce « Appel vidéo entrant », le nom, puis lui —, ou en haut au
  * centre pour un appel vocal. L'état « audible » est celui de l'écran, qui le rend aussi à l'aperçu.
  */
-export function CallPreviewSound({ language, kit, audible, onAudible, className = '', style }: SoundProps & { readonly stream?: MediaStream }) {
+export function CallPreviewSound({ language, kit, audible, onAudible, className = '', style }: SoundProps) {
   const label = translate(language, audible ? 'call.preview.soundOff' : 'call.preview.soundOn');
   return (
     <button

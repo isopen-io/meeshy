@@ -1191,6 +1191,7 @@ describe('CallScreen — voir et entendre l’appelant avant de décrocher (#848
     expect(chip?.className.split(' ')).toContain('glass-call');
     expect(chip?.querySelector('svg')).not.toBeNull();
     expect(chip?.textContent).toBe('Appel vidéo entrant');
+    expect(chip?.className.split(' ')).toContain('text-mini');
     const name = view.find('h2');
     const sound = view.find('[data-call-preview-sound]');
     const before = (a: Element | null, b: Element | null) => ((a?.compareDocumentPosition(b as Node) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;

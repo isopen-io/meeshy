@@ -15,8 +15,14 @@ export const TOP_BANNER_CLEARANCE: Readonly<Record<TopBanner, number>> = { 'scre
 
 export const orderedTopBanners = (present: PresentBanners): readonly TopBanner[] => ORDER.filter((banner) => present[banner] === true);
 
-/** Ce que les bandeaux posés prennent sous l'en-tête : ma vignette et ses commandes descendent d'autant. */
-export const topBannersClearance = (present: PresentBanners): number => orderedTopBanners(present).reduce((sum, banner) => sum + TOP_BANNER_CLEARANCE[banner], 0);
+/** Les bandeaux qui couvrent le coin de ma vignette : MON partage (pleine largeur) et la capture. L'enregistrement et le cadre ne la déplacent pas, comme sur iOS (`CallTopBannerStack.selfTileClearance`) et Android (`selfTileClearanceDp`) ; un partage REÇU n'est pas dans la pile (#17730). */
+const SELF_TILE_BANNERS: ReadonlySet<TopBanner> = new Set(['screen-share', 'capture']);
+
+/** Ce que ma vignette et ses commandes descendent sous l'en-tête. */
+export const selfTileClearance = (present: PresentBanners): number =>
+  orderedTopBanners(present)
+    .filter((banner) => SELF_TILE_BANNERS.has(banner))
+    .reduce((sum, banner) => sum + TOP_BANNER_CLEARANCE[banner], 0);
 
 /** Ce qui est posé AVANT `banner` dans la pile : de combien il descend sous l'en-tête. */
 export const topBannersAbove = (banner: TopBanner, present: PresentBanners): number =>

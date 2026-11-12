@@ -29,8 +29,9 @@ import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color
 import { autoSharer, resolveSpotlight } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
-import { orderedTopBanners, recordingBannerPresent, topBannersClearance } from '@/lib/calls/call-top-banners';
+import { orderedTopBanners, recordingBannerPresent, selfTileClearance, type PresentBanners, type TopBanner } from '@/lib/calls/call-top-banners';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
+import type { CallLiveFrameState } from '@/lib/calls/call-live-frame-store';
 import { callLayout, callStatusKey, type PlainCallKey, canShareScreen, hasVideo, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
@@ -43,7 +44,7 @@ import { useSpotlightChoice } from '@/lib/calls/use-spotlight-choice';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered, effectsUsedOf, videoEffectsStore } from '@/lib/calls/video-effects';
 import { useMediaSystemBars } from '@/lib/use-media-system-bars';
@@ -136,6 +137,9 @@ const loadShareBanner = once(() => import('./call-share-banner'));
 const CallScreenShareBanner = lazy(loadShareBanner);
 const CallPreview = lazy(() => loadPreview().then((module) => ({ default: module.CallPreview })));
 const CallPreviewSound = lazy(() => loadPreview().then((module) => ({ default: module.CallPreviewSound })));
+
+/** La puce de verre posée sur la scène d'appel — « Appel vidéo entrant » (P17.13), « X vous voit » avant qu'il décroche, les pastilles d'état : un seul dessin. */
+const STAGE_CHIP = 'glass-call rounded-full px-3 py-1 text-mini';
 
 const PREVIEW_KIT = { Video: StreamVideo, Audio: StreamAudio, soundOn: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerHigh} size={22} />, soundOff: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerSlash} size={22} /> };
 
@@ -330,6 +334,40 @@ type CallScreenProps = {
   readonly wide?: boolean;
 };
 
+/** Ce que la pile des bandeaux porte (P16.7) : MON partage, l'indicateur d'enregistrement, la capture, l'avis du cadre en direct — rien tant que l'appel ne vit pas. */
+function usePresentBanners(call: ActiveCall, live: boolean, liveFrame: CallLiveFrameState): PresentBanners {
+  const recording = useStore(callRecordingStore, recordingBannerPresent);
+  return { 'screen-share': live && call.screenSharing, recording: live && recording, capture: live && someoneCaptures(call.members), 'live-frame': live && liveFrameStatusPresent(liveFrame) };
+}
+
+/**
+ * P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage se retient lui-même le temps de repartir par le haut ; l'indicateur d'enregistrement flotte (`call-recording-layer.tsx`) et ne laisse ici que sa place.
+ */
+function CallTopBannerStack({ call, present, language, hidden, liveFrame }: { readonly call: ActiveCall; readonly present: PresentBanners; readonly language: InterfaceLanguage; readonly hidden: boolean; readonly liveFrame: CallLiveFrameState }) {
+  const sharedOnce = useRef(false);
+  if (present['screen-share'] === true) sharedOnce.current = true;
+  const item: Readonly<Record<TopBanner, ReactNode>> = {
+    'screen-share': null,
+    recording: <div key="recording" aria-hidden className="h-[3.25rem]" data-call-banner-slot="recording" />,
+    capture: (
+      <div key="capture" className="flex justify-center" data-call-capture-slot="">
+        <CallCaptureAlerts members={call.members} language={language} />
+      </div>
+    ),
+    'live-frame': <CallLiveFrameStatusSlot key="live-frame" language={language} state={liveFrame} load={loadFrameStudio} />,
+  };
+  return (
+    <div className="relative z-30 flex flex-col items-center gap-2 empty:hidden" data-call-banner-stack="">
+      {sharedOnce.current ? (
+        <Suspense fallback={null}>
+          <CallScreenShareBanner sharing={present['screen-share'] === true} language={language} hidden={hidden} />
+        </Suspense>
+      ) : null}
+      {orderedTopBanners(present).map((banner) => item[banner])}
+    </div>
+  );
+}
+
 export function CallScreen({ call, canShare = browserCanShare(), initiallyExpanded = false, effectsSupport, wide }: CallScreenProps) {
   useMediaSystemBars();
   const language = currentInterfaceLanguage();
@@ -455,8 +493,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const identity = (
     <div className={compactStage ? 'flex w-full items-center gap-3 px-6 text-start' : 'flex flex-col items-center gap-3 px-6 text-center'}>
       {videoRinging ? (
-        <p className="glass-call inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-body font-semibold" data-call-status="" data-call-stage-label="">
-          <GlyphSvg glyph={CALL_SCREEN_GLYPHS.videoCamera} size={18} />
+        <p className={`${STAGE_CHIP} inline-flex items-center gap-2 font-semibold`} data-call-status="" data-call-stage-label="">
+          <GlyphSvg glyph={CALL_SCREEN_GLYPHS.videoCamera} size={14} />
           {status}
         </p>
       ) : null}
@@ -485,7 +523,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         </p>
       ) : null}
       {phase === 'outgoing' && call.previewed ? (
-        <p className="glass-call rounded-full px-3 py-1 text-mini" data-call-previewed="">
+        <p className={STAGE_CHIP} data-call-previewed="">
           {translate(language, call.media === 'video' ? 'call.preview.seenBy' : 'call.preview.heardBy', { name: call.title })}
         </p>
       ) : null}
@@ -503,7 +541,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       )}
       {videoRinging && call.preview !== null ? (
         <Suspense fallback={null}>
-          <CallPreviewSound stream={call.preview} language={language} kit={PREVIEW_KIT} audible={audible} onAudible={setAudible} />
+          <CallPreviewSound language={language} kit={PREVIEW_KIT} audible={audible} onAudible={setAudible} />
         </Suspense>
       ) : null}
       </div>
@@ -516,7 +554,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       {pills.length > 0 ? (
         <div className="flex flex-wrap justify-center gap-2 px-4" data-call-pill-row="" data-call-chrome-fade="">
           {pills.map((pill) => (
-            <span key={pill} className="glass-call rounded-full px-3 py-1 text-mini" data-call-pill={pill}>
+            <span key={pill} className={STAGE_CHIP} data-call-pill={pill}>
               {t(STATUS_PILL_KEY[pill])}
             </span>
           ))}
@@ -526,34 +564,10 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     </>
   ) : null;
 
-  const captureShown = live && someoneCaptures(call.members);
-  const recordingShown = useStore(callRecordingStore, recordingBannerPresent) && live;
-  /* P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage se retient lui-même le temps de repartir par le haut ; l'indicateur d'enregistrement flotte (`call-recording-layer.tsx`) et ne laisse ici que sa place. */
-  const present = { 'screen-share': live && call.screenSharing, recording: recordingShown, capture: captureShown, 'live-frame': live && liveFrameStatusPresent(liveFrame) };
-  const sharedOnce = useRef(false);
-  if (present['screen-share']) sharedOnce.current = true;
-  const bannerItem = {
-    'screen-share': null,
-    recording: <div key="recording" aria-hidden className="h-[3.25rem]" data-call-banner-slot="recording" />,
-    capture: (
-      <div key="capture" className="flex justify-center" data-call-capture-slot="">
-        <CallCaptureAlerts members={call.members} language={language} />
-      </div>
-    ),
-    'live-frame': <CallLiveFrameStatusSlot key="live-frame" language={language} state={liveFrame} load={loadFrameStudio} />,
-  };
-  const bannerStack = live ? (
-    <div className="relative z-30 flex flex-col items-center gap-2 empty:hidden" data-call-banner-stack="">
-      {sharedOnce.current ? (
-        <Suspense fallback={null}>
-          <CallScreenShareBanner sharing={present['screen-share']} language={language} hidden={hidden} />
-        </Suspense>
-      ) : null}
-      {orderedTopBanners(present).map((banner) => bannerItem[banner])}
-    </div>
-  ) : null;
+  const present = usePresentBanners(call, live, liveFrame);
+  const bannerStack = live ? <CallTopBannerStack call={call} present={present} language={language} hidden={hidden} liveFrame={liveFrame} /> : null;
 
-  const selfTopInset = topBannersClearance(present);
+  const selfTopInset = selfTileClearance(present);
   const self: SelfView = {
     topInset: selfTopInset,
     full: selfFull,
