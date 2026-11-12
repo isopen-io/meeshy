@@ -88,7 +88,7 @@ internal fun CallPillStopShare(onStop: () -> Unit) {
     val label = stringResource(R.string.call_screen_share_stop)
     Box(
         modifier = Modifier
-            .defaultMinSize(minWidth = PILL_BUTTON, minHeight = PILL_BUTTON)
+            .defaultMinSize(minWidth = STOP_SHARE_TARGET, minHeight = STOP_SHARE_TARGET)
             .clip(CircleShape)
             .background(Color.White.copy(alpha = 0.22f), CircleShape)
             .clickable(onClickLabel = label, role = Role.Button, onClick = onStop)
@@ -129,3 +129,6 @@ private fun PillButton(
 }
 
 private val PILL_BUTTON = 44.dp
+
+/** P18.10 : « Arrêter » est la seule action de la bannière en partage, donc une cible pleine (CONVENTIONS 18). */
+private val STOP_SHARE_TARGET = 48.dp

@@ -1,10 +1,12 @@
 package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,7 +29,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallHeaderNames
+import me.meeshy.sdk.model.call.CallReducedCaption
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -90,7 +95,8 @@ enum class CallBackAction { Inert, Minimize, Close }
  * the pill shows the real avatar, its initials only standing in while it loads (#12569).
  *
  * While I share my screen ([isScreenSharing]) the pill turns red and offers one control, « Arrêter »
- * ([onStopScreenShare]) — the capsule of law 12 (#16664), like iOS `FloatingCallPillView` and the web `CallPill`.
+ * ([onStopScreenShare]) — the capsule of law 12 (#16664), like iOS `FloatingCallPillView` and the web `CallPill`. It
+ * then says « name · duration » (P18.10), the name being the header's ([names], iOS `CallReducedRule.title`).
  */
 @Composable
 fun CallPill(
@@ -104,8 +110,11 @@ fun CallPill(
     isScreenSharing: Boolean = false,
     onStopScreenShare: () -> Unit = {},
     peerUserId: String = "",
+    names: CallHeaderNames = CallHeaderNames(givenName = null, groupName = null),
 ) {
     val accent = hexColor(CallTileRim.peerAvatar(peerUserId, state.peerName))
+    val rim = CallTileRim.reducedRim(peerUserId, state.peerName, MeeshyTheme.tokens.warning)
+    val shape = RoundedCornerShape(MeeshyRadius.xxl)
     val ongoingLabel = stringResource(R.string.call_pill_ongoing, state.peerName)
     val reopenLabel = stringResource(R.string.call_pill_reopen)
 
@@ -113,8 +122,9 @@ fun CallPill(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = MeeshySpacing.md)
-            .clip(RoundedCornerShape(MeeshyRadius.xxl))
+            .clip(shape)
             .background(if (isScreenSharing) MeeshyTheme.tokens.error else MeeshyTheme.tokens.backgroundSecondary)
+            .border(rim, shape)
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.Start),
         verticalAlignment = Alignment.CenterVertically,
@@ -129,38 +139,12 @@ fun CallPill(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.Start),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Decorative: the identity row's label already names the peer.
-            MeeshyAvatar(
-                name = state.peerName,
-                size = 40.dp,
-                containerColor = accent,
-                imageUrl = peerAvatarUrl,
-                modifier = Modifier.clearAndSetSemantics { },
-            )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = state.peerName,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isScreenSharing) Color.White else MeeshyTheme.tokens.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = if (isScreenSharing) stringResource(R.string.call_screen_share_local_banner) else pillStatusLine(state),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isScreenSharing) Color.White else pillStatusColor(state.status),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            if (isScreenSharing) {
+                val title = CallReducedCaption.title(names.givenName, names.groupName, displayName = state.peerName)
+                CallPillSharingIdentity(CallReducedCaption.caption(title, pillStatusLine(state)))
+            } else {
+                CallPillIdentity(state = state, peerAvatarUrl = peerAvatarUrl, accent = accent)
             }
-
-            Icon(
-                imageVector = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
-                contentDescription = null,
-                tint = if (isScreenSharing) Color.White else accent,
-            )
         }
 
         if (isScreenSharing) {
@@ -174,6 +158,63 @@ fun CallPill(
             )
         }
     }
+}
+
+/** Hors partage : l'avatar à la couleur de l'autre, son nom, la ligne d'état et le glyphe d'appel ou de vidéo. */
+@Composable
+private fun RowScope.CallPillIdentity(state: CallUiState, peerAvatarUrl: String?, accent: Color) {
+    // Decorative: the identity row's label already names the peer.
+    MeeshyAvatar(
+        name = state.peerName,
+        size = 40.dp,
+        containerColor = accent,
+        imageUrl = peerAvatarUrl,
+        modifier = Modifier.clearAndSetSemantics { },
+    )
+
+    Column(modifier = Modifier.weight(1f)) {
+        Text(
+            text = state.peerName,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = pillStatusLine(state),
+            style = MaterialTheme.typography.bodySmall,
+            color = pillStatusColor(state.status),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+
+    Icon(
+        imageVector = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
+        contentDescription = null,
+        tint = accent,
+    )
+}
+
+/** P18.10 — pendant MON partage : l'icône d'écran puis « nom · durée » ; la bannière garde sa forme, « Arrêter » est à côté. */
+@Composable
+private fun RowScope.CallPillSharingIdentity(caption: String) {
+    Icon(
+        imageVector = MeeshyIcons.FlipToFront,
+        contentDescription = null,
+        tint = Color.White,
+        modifier = Modifier.clearAndSetSemantics { },
+    )
+    Text(
+        text = caption,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = Color.White,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f),
+    )
 }
 
 /**
