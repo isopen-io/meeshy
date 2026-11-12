@@ -124,18 +124,20 @@ const panelView = (panels: CallPanels, panel: CallPanelKind) => ({
 
 function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, language, panels, kit, effectsActive }: ActionContext): ActionView {
   switch (action) {
-    case 'camera':
+    case 'camera': {
+      const shown = selfCameraShown(call);
       return {
         key: action,
-        label: translate(language, call.cameraOn ? 'call.camera.off' : 'call.camera.on'),
+        label: translate(language, shown ? 'call.camera.off' : 'call.camera.on'),
         caption: translate(language, 'call.devices.camera'),
         glyph: cameraGlyph(call, kit),
         onPress: callActions.toggleCamera,
-        tone: selfCameraShown(call) ? 'active' : 'disc',
-        pressed: selfCameraShown(call),
+        tone: shown ? 'active' : 'disc',
+        pressed: shown,
         disabled: call.screenSharing,
         data: { 'data-call-control': 'camera' },
       };
+    }
     case 'flip':
       return {
         key: action,

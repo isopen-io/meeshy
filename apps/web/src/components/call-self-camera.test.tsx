@@ -275,6 +275,20 @@ describe('mon image pendant un appel', () => {
     view.done();
   });
 
+  test('en groupe, pendant MON partage, ma tuile montre ma caméra gardée en aperçu, jamais mon portrait ni mon écran (S2.8)', async () => {
+    fresh();
+    const mine = streamOf(zoomCamera());
+    const view = mount(call(zoomCamera(), { isGroup: true, cameraOn: false, screenSharing: true, cameraPreview: mine, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }), { layout: 'grid' });
+    await act(async () => {
+      await import('./call-grid');
+    });
+    await act(async () => {});
+    const video = view.find('[data-call-tile-self] video[data-call-self]') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    expect(video?.srcObject).toBe(mine);
+    view.done();
+  });
+
   test('en groupe, ma tuile caméra coupée ne porte pas de zoom, même à la une', async () => {
     fresh();
     const view = mount(call(zoomCamera(), { isGroup: true, cameraOn: false, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }), { layout: 'grid', choice: { kind: 'self' } });
