@@ -150,7 +150,7 @@ const arShellLabels = {
   'list.quick.mood.hint': 'رمز تعبيري يقول كيف حالك، دون كتابة رسالة.',
   'list.header.share': 'إنشاء رابط مشاركة',
   'list.header.new': 'محادثة جديدة',
-  'list.header.progression': 'التقدّم — الشارات والمستوى والسلسلة',
+  'list.header.progression': 'أسطورتي — الشارات والمستوى واللهب',
   'list.footer.exhausted': 'تم تحميل جميع المحادثات',
   'list.footer.loadingMore': 'جارٍ تحميل المزيد',
   'list.footer.failed': 'تعذّر تحميل المزيد',

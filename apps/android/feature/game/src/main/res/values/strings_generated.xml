@@ -945,11 +945,11 @@
     <string name="game_photo_title_start">My start on Meeshy</string>
     <string name="game_photo_title_tier">Your light as %1$s</string>
     <string name="game_progression_load_error">Couldn’t load your progress</string>
-    <string name="game_progression_loading">Loading your progress</string>
+    <string name="game_progression_loading">Loading My Legend</string>
     <string name="game_progression_offline">Offline — progress as of the last opening</string>
     <string name="game_progression_offline_empty">Offline — no progress in memory. It will show once you’re back online.</string>
     <string name="game_progression_retry">Try again</string>
-    <string name="game_progression_title">Progress</string>
+    <string name="game_progression_title">My Legend</string>
     <string name="game_rank_ambassadeur">Ambassador</string>
     <string name="game_rank_conteur">Storyteller</string>
     <string name="game_rank_echo">Echo</string>

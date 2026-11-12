@@ -150,7 +150,7 @@ const esShellLabels = {
   'list.quick.mood.hint': 'Un emoji dice cómo estás, sin escribir un mensaje.',
   'list.header.share': 'Crear un enlace para compartir',
   'list.header.new': 'Nueva conversación',
-  'list.header.progression': 'Progreso — insignias, nivel y racha',
+  'list.header.progression': 'Mi Leyenda — insignias, nivel y Llama',
   'list.footer.exhausted': 'Todas las conversaciones están cargadas',
   'list.footer.loadingMore': 'Cargando más',
   'list.footer.failed': 'No se pudo cargar más',
