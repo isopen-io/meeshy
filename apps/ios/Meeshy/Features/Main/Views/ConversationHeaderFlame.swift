@@ -416,7 +416,7 @@ struct HeaderFlameDecoration: ViewModifier {
             bundle: .main
         ))
         .accessibilityIdentifier("conversation.header.flame")
-        .modifier(HeaderFlameCardPresentation(isPresented: $isCardOpen) {
+        .anchoredBubble(isPresented: $isCardOpen, compactHeight: 240) {
             if let model = HeaderFlameCardModel.make(shown) {
                 HeaderFlameCard(
                     model: model,
@@ -430,7 +430,7 @@ struct HeaderFlameDecoration: ViewModifier {
                     }
                 )
             }
-        })
+        }
     }
 
     private func replay(holding current: Int) {
@@ -535,24 +535,5 @@ struct HeaderFlameCard: View {
         }
         .font(.footnote)
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// Une bulle posée sous la flamme à partir d'iOS 16.4 ; avant, une feuille
-/// basse — le contenu et les gestes restent les mêmes.
-private struct HeaderFlameCardPresentation<Card: View>: ViewModifier {
-    @Binding var isPresented: Bool
-    @ViewBuilder let card: () -> Card
-
-    func body(content: Content) -> some View {
-        if #available(iOS 16.4, *) {
-            content.popover(isPresented: $isPresented, arrowEdge: .top) {
-                card().presentationCompactAdaptation(.popover)
-            }
-        } else {
-            content.sheet(isPresented: $isPresented) {
-                card().presentationDetents([.height(240)])
-            }
-        }
     }
 }

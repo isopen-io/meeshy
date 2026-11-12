@@ -96,6 +96,10 @@ nonisolated struct MeeshyModeActionValues: Equatable, Sendable {
 /// ce qui n'a pas de jeton (le plafond de la plaque, sa largeur large, l'échelle des libellés) vit ici.
 public nonisolated enum MeeshyModeChromeRecipe {
 
+    public static func font(size: CGFloat, weight: Font.Weight) -> Font {
+        .system(size: size, weight: weight)
+    }
+
     // MARK: Capsules
 
     public static let capsuleHeight: CGFloat = MeeshyControlSize.tapTarget

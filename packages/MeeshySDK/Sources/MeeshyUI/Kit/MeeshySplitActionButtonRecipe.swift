@@ -100,6 +100,10 @@ public nonisolated struct MeeshySplitActionShadow: Sendable, Equatable {
 /// **La recette de K13 en VALEURS** : toute mesure du bouton vit ici, nulle part
 /// ailleurs. Un `View` ne s'inspecte pas, sa recette si.
 public nonisolated struct MeeshySplitActionButtonRecipe: Equatable, Sendable {
+    public static func font(size: CGFloat, weight: Font.Weight) -> Font {
+        .system(size: size, weight: weight)
+    }
+
     public let content: MeeshySplitActionContent
     public let height: Double
     public let labelSize: Double
