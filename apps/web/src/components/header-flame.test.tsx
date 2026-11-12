@@ -24,7 +24,7 @@ import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { HeaderFlame } from './header-flame';
+import { HeaderFlame, loadFlameCard } from './header-flame';
 import { ThreadHeader } from './thread-header';
 
 /**
@@ -41,7 +41,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/c' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await Promise.all([loadInterfaceCatalog('fr'), loadNotificationRowCatalog('fr')]);
+  await Promise.all([loadInterfaceCatalog('fr'), loadNotificationRowCatalog('fr'), loadFlameCard()]);
 });
 
 afterAll(async () => {
