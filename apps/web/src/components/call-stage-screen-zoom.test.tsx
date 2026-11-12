@@ -6,12 +6,17 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
-import { CallStage } from './call-stage';
+import { DOUBLE_TAP_MS } from '@/lib/view/tap-gate';
+
+import { CallStage, screenZoomSurfaceView } from './call-stage';
 
 /**
  * L'ÉCRAN REÇU EN DUO SE ZOOME (P15.11) — jusqu'à 4× au pincement, à Ctrl + molette, se déplace une fois
- * zoomé, et ne se rend entier que par un double clic qui n'agit QU'une fois zoomé. Un seul calque GPU
+ * zoomé, et ne se rend entier que par un double toucher qui n'agit QU'une fois zoomé. Un seul calque GPU
  * (`translate3d` + `scale`) porte l'image : ma vignette et le bouton de plein écran, eux, ne bougent jamais.
+ * Et l'ARBITRAGE avec l'écran d'appel, qui range ses commandes au toucher (écouteur de clic en capture sur sa
+ * racine, `use-call-chrome.ts`) : un glissé n'est pas un toucher, et zoomé, deux touchers rendent 1× sans
+ * ranger puis rendre les commandes.
  */
 
 const camera = { kind: 'video', readyState: 'live', getCapabilities: () => ({}), getSettings: () => ({}), applyConstraints: async () => undefined };
@@ -54,6 +59,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 beforeAll(async () => {
   await loadCallControlsCatalog('fr');
+  await screenZoomSurfaceView.load();
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -67,20 +73,26 @@ afterAll(async () => {
 const mount = () => {
   const host = document.createElement('div');
   document.body.appendChild(host);
+  const taps: Event[] = [];
+  host.addEventListener('click', (event) => taps.push(event), { capture: true });
   const root = createRoot(host);
   act(() => root.render(<CallStage call={sharing()} layout="screen" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={{ full: false, onToggle: () => undefined, zoom: 'step' as const, column: () => null }} />));
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
   const layer = () => find('[data-call-screen-layer]') as HTMLElement;
   const screen = () => find('[data-call-screen-surface]') as HTMLElement;
-  const pointer = (type: string, id: number, x: number, y: number) => act(() => void screen().dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: id, clientX: x, clientY: y, pointerType: 'touch' })));
+  const pointer = (type: string, id: number, x: number, y: number, pointerType = 'touch', button = 0) => act(() => void screen().dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: id, clientX: x, clientY: y, pointerType, button })));
+  const click = () => act(() => void layer().dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 })));
+  const frame = () => Object.defineProperty(screen(), 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, right: 400, bottom: 200, width: 400, height: 200, x: 0, y: 0, toJSON: () => ({}) }) });
   const wheel = (deltaY: number) => act(() => void screen().dispatchEvent(Object.defineProperty(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }), 'ctrlKey', { value: true })));
   const flush = () => act(async () => void (await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))));
   const done = () => {
     act(() => root.unmount());
     host.remove();
   };
-  return { find, layer, screen, pointer, wheel, flush, done };
+  return { find, layer, screen, pointer, click, frame, taps, wheel, flush, done };
 };
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const scaleOf = (element: HTMLElement): number => Number(/scale\(([\d.]+)\)/.exec(element.style.transform)?.[1] ?? 1);
 
@@ -143,6 +155,91 @@ describe('le zoom de l’écran reçu en duo (P15.11)', () => {
     await view.flush();
     view.pointer('pointerup', 1, 260, 90);
     expect(view.layer().style.transform).toMatch(/translate3d\(60px, -10px, 0\)/);
+    view.done();
+  });
+
+  test('sous le seuil d’un glissé, l’image ne bouge pas et le toucher reste un toucher', async () => {
+    const view = mount();
+    view.frame();
+    view.wheel(-69.3 * 3);
+    const zoomed = view.layer().style.transform;
+    view.pointer('pointerdown', 1, 200, 100);
+    view.pointer('pointermove', 1, 203, 101);
+    await view.flush();
+    view.pointer('pointerup', 1, 203, 101);
+    expect(view.layer().style.transform).toBe(zoomed);
+    view.done();
+  });
+
+  test('le bouton droit de la souris ne déplace pas l’image', async () => {
+    const view = mount();
+    view.frame();
+    view.wheel(-69.3 * 3);
+    const zoomed = view.layer().style.transform;
+    view.pointer('pointerdown', 1, 200, 100, 'mouse', 2);
+    view.pointer('pointermove', 1, 260, 100, 'mouse', 2);
+    await view.flush();
+    view.pointer('pointerup', 1, 260, 100, 'mouse', 2);
+    expect(view.layer().style.transform).toBe(zoomed);
+    view.done();
+  });
+
+  test('le clic qui suit un glissé à la souris n’est pas un toucher : il ne range pas les commandes', async () => {
+    const view = mount();
+    view.frame();
+    view.wheel(-69.3 * 3);
+    view.pointer('pointerdown', 1, 200, 100, 'mouse');
+    view.pointer('pointermove', 1, 260, 100, 'mouse');
+    await view.flush();
+    view.pointer('pointerup', 1, 260, 100, 'mouse');
+    view.click();
+    await pause(DOUBLE_TAP_MS + 50);
+    expect(view.taps).toHaveLength(0);
+    view.done();
+  });
+
+  test('zoomée, la surface garde le doigt : le glissé vers le bas de l’écran d’appel ne le prend pas', () => {
+    const view = mount();
+    expect(view.screen().hasAttribute('data-call-owns-drag')).toBe(false);
+    view.wheel(-300);
+    expect(view.screen().hasAttribute('data-call-owns-drag')).toBe(true);
+    view.done();
+  });
+
+  test('à 1×, un toucher range les commandes aussitôt : rien n’attend un second toucher', () => {
+    const view = mount();
+    view.click();
+    expect(view.taps).toHaveLength(1);
+    view.done();
+  });
+
+  test('zoomé, un toucher seul range les commandes une fois passé le délai du double toucher', async () => {
+    const view = mount();
+    view.wheel(-300);
+    view.click();
+    expect(view.taps).toHaveLength(0);
+    await act(() => pause(DOUBLE_TAP_MS + 50));
+    expect(view.taps).toHaveLength(1);
+    expect(view.layer().style.transform).not.toBe('');
+    view.done();
+  });
+
+  test('zoomé, deux touchers rendent 1× sans ranger puis rendre les commandes', async () => {
+    const view = mount();
+    view.wheel(-300);
+    view.click();
+    view.click();
+    expect(view.layer().style.transform).toBe('');
+    await act(() => pause(DOUBLE_TAP_MS + 50));
+    expect(view.taps).toHaveLength(0);
+    view.done();
+  });
+
+  test('le lecteur d’écran apprend le geste, dans la langue de l’interface', () => {
+    const view = mount();
+    const described = view.screen().getAttribute('aria-describedby');
+    expect(described).not.toBeNull();
+    expect(view.find(`[id="${described}"]`)?.textContent).toContain('pincez ou Ctrl + molette');
     view.done();
   });
 
