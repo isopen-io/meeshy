@@ -290,7 +290,7 @@ public extension MeeshyGlassPill where Buttons == EmptyView {
 /// répartie (chacun centré dans une case de largeur égale). Les positions
 /// viennent de `MeeshyGlassPillRecipe.rowOffsets`, comptées depuis le DÉBUT :
 /// SwiftUI retourne lui-même une disposition en RTL, et un second retournement
-/// à la main la remettait à l'endroit (capture `planche.rtl` du 2026-11-12).
+/// à la main la remettait à l'endroit (capture `planche.rtl`).
 struct MeeshyGlassPillRowLayout: Layout {
     let gap: CGFloat
     let spreads: Bool
