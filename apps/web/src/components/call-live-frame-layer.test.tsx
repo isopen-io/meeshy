@@ -181,6 +181,19 @@ describe('l’écran d’appel pose la carte', () => {
     expect(slot?.className.split(' ')).not.toContain('invisible');
     view.done();
   });
+
+  /* La garde « duo vidéo seulement » (#17828, `liveFrameMayShowProposal`) écrit `proposal` ou `withheld` : la couche ne lit que le premier. */
+  test('une proposition gardée hors du duo vidéo ne pose aucune carte, ni case vide', async () => {
+    const view = mountNode(<CallScreen call={duoCall()} canShare effectsSupport={{ color: false, blur: false }} />);
+    act(() => callLiveFrameStore.setState({ callId: '6650c0ffee0000000000c411', proposal: null, withheld: { frameId: 'jovial.fete.duo', from: 'Awa' } }));
+    await act(async () => {
+      await import('@/lib/calls/frames/frame-studio');
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(view.find('[data-call-live-frame-slot]')).toBeNull();
+    expect(view.find('[data-call-live-frame-proposal]')).toBeNull();
+    view.done();
+  });
 });
 
 describe('le cadre gardé à l’écran (C3)', () => {
