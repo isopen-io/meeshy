@@ -43,6 +43,27 @@ final class CallPillTextTests: XCTestCase {
         XCTAssertEqual(text(.panel(.record)), .none)
     }
 
+    // MARK: - U2.9 — le plein écran de groupe garde les sous-titres
+
+    func test_fullScreenStage_keepsThePillOnlyWhenItCarriesTheCaptionsAlone() {
+        XCTAssertTrue(CallPillText.captionsAlone.isOnStage(isStageFullScreen: true), "les sous-titres allumés survivent au plein écran, dans leur verre sans rangée")
+        XCTAssertFalse(CallPillText.none.isOnStage(isStageFullScreen: true), "sans sous-titres, le plein écran ne garde aucun verre")
+        XCTAssertFalse(CallPillText.captions.isOnStage(isStageFullScreen: true), "la pilule avec sa rangée de base est rangée")
+        XCTAssertFalse(CallPillText.journal.isOnStage(isStageFullScreen: true))
+    }
+
+    func test_stageNotFullScreen_alwaysKeepsThePill() {
+        for content in [CallPillText.none, .captions, .journal, .captionsAlone] {
+            XCTAssertTrue(content.isOnStage(isStageFullScreen: false))
+        }
+    }
+
+    func test_fullScreen_withCaptionsOn_resolvesToTheCaptionsAlone() {
+        XCTAssertEqual(text(captions: true, .idle, revealed: false), .captionsAlone)
+        XCTAssertTrue(text(captions: true, .idle, revealed: false).isOnStage(isStageFullScreen: true))
+        XCTAssertFalse(text(captions: false, .idle, revealed: false).isOnStage(isStageFullScreen: true))
+    }
+
     // MARK: - Le journal, à la place des sous-titres
 
     func test_openJournal_takesThePlaceOfTheCaptions() {

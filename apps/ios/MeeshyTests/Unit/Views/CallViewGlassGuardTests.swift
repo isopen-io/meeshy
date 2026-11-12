@@ -445,4 +445,64 @@ final class CallViewGlassGuardTests: XCTestCase {
         let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
         XCTAssertTrue(pill.contains("layer.captionsBaseRow"), "La rangée de base n'est pas légendée sous une option")
     }
+
+    // MARK: - U1.7 · U1.10 · U2.9 · U2.10 — la une et le plein écran de groupe
+
+    private func stageSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+    }
+
+    /// U1.7 — la plaque de nom est posée sur l'atome de verre adaptatif : sur un contenu clair
+    /// elle s'assombrit comme le reste du chrome (loi 3), au lieu d'un matériau système.
+    func test_tileNameplate_isOnTheAdaptiveGlass_notASystemMaterial() throws {
+        let chrome = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTileChrome.swift"))
+        let plate = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallTileNameplate: View", in: chrome))
+        XCTAssertTrue(plate.contains(".callChromeGlass(in: Capsule())"))
+        XCTAssertFalse(chrome.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
+    }
+
+    /// U1.10 · #8550 — la capsule de la une se range avec les contrôles, par son bord, et ne prend
+    /// plus de toucher une fois rangée.
+    func test_featuredCapsule_isStowedWithTheControls_byItsTopEdge() throws {
+        let stage = try stageSource()
+        let featured = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func featuredTile(", in: stage))
+        XCTAssertTrue(featured.contains(".callChromeVisibility(isCapsuleVisible)"))
+        XCTAssertTrue(featured.contains("CallEdgeStow(edge: .top, margin: capsuleStowMargin"))
+        XCTAssertTrue(featured.contains("isVisible: isCapsuleVisible, reduceMotion: reduceMotion"))
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(layout.contains("isCapsuleVisible: chromeVisibility.isVisible(.featuredCapsule)"), "la visibilité vient de la loi pure")
+    }
+
+    /// U2.9 — en plein écran de groupe, les sous-titres allumés restent (verre sans rangée) ;
+    /// c'est la loi pure qui dit si la pilule est sur la scène.
+    func test_fullScreenGroupStage_keepsTheCaptionsPill() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(layout.contains("if pillText.isOnStage(isStageFullScreen: isStageFullScreen) {"))
+        XCTAssertFalse(layout.contains("if !isStageFullScreen {"), "le plein écran ne retire plus la pilule d'un bloc")
+    }
+
+    /// U2.10 — Réduire les animations remplace le mouvement par un fondu court, jamais une bascule
+    /// sèche ; le bandeau des autres sort par SON bord (bas en portrait, côté en paysage).
+    func test_fullScreen_underReduceMotion_isAShortFade_andTheStripLeavesByItsEdge() throws {
+        let stage = try stageSource()
+        XCTAssertFalse(stage.contains("reduceMotion ? nil"), "une bascule sèche n'est pas un fondu court")
+        let controls = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var spotlightControls: some View", in: stage))
+        XCTAssertTrue(controls.contains("withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { isFullScreen.toggle() }"))
+        let spotlight = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func spotlight(", in: stage))
+        XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .bottom))"))
+        XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .trailing))"))
+        XCTAssertFalse(spotlight.contains("if isFullScreen {"), "le bandeau quitte la scène par une transition, pas par un changement de branche")
+        let exit = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func stripExit(", in: stage))
+        XCTAssertTrue(exit.contains("GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion)"))
+        XCTAssertTrue(exit.contains(".move(edge: edge)"))
+        XCTAssertTrue(exit.contains(".opacity"), "Réduire les animations : un fondu")
+
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(layout.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isStageFullScreen)"))
+        XCTAssertTrue(layout.contains(".transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))"))
+        XCTAssertFalse(layout.contains("reduceMotion ? nil"))
+    }
 }

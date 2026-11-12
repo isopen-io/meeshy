@@ -8,7 +8,7 @@ import XCTest
 @MainActor
 final class CallChromeVisibilityTests: XCTestCase {
 
-    private let hideable: [CallChromeElement] = [.header, .controls, .openPanel, .recordingStatus, .screenShareBanner]
+    private let hideable: [CallChromeElement] = [.header, .controls, .openPanel, .recordingStatus, .screenShareBanner, .featuredCapsule]
     private let permanent: [CallChromeElement] = [.captions, .selfView, .recordingConsent]
 
     func test_isVisible_revealed_showsEveryElement() {
@@ -31,6 +31,17 @@ final class CallChromeVisibilityTests: XCTestCase {
         XCTAssertFalse(visibility.isVisible(.controls))
         XCTAssertFalse(visibility.isVisible(.header))
         XCTAssertTrue(visibility.isVisible(.captions))
+    }
+
+    /// U1.10 · #8550 — la capsule « Revenir à la grille · Plein écran » se range AVEC les
+    /// contrôles et revient au second toucher ; le plein écran, lui, ne la range pas : c'est
+    /// par elle qu'on en sort.
+    func test_featuredCapsule_followsTheControls_butSurvivesTheFullScreen() {
+        XCTAssertTrue(CallChromeVisibility(isRevealed: true).isVisible(.featuredCapsule))
+        XCTAssertTrue(CallChromeVisibility(isRevealed: true, isStageFullScreen: true).isVisible(.featuredCapsule))
+        XCTAssertFalse(CallChromeVisibility(isRevealed: false).isVisible(.featuredCapsule))
+        XCTAssertFalse(CallChromeVisibility(isRevealed: false, isStageFullScreen: true).isVisible(.featuredCapsule))
+        XCTAssertTrue(CallChromeVisibility(isRevealed: false).toggled().isVisible(.featuredCapsule), "le second toucher la rend")
     }
 
     func test_everyElement_isEitherHideableOrPermanent() {
