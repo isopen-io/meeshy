@@ -194,12 +194,13 @@ class CallTopBannerStackWiringTest {
     }
 
     @Test
-    fun `#17820 C3_6 - le cadre lui-meme entre et sort en fondu, court sous Reduire les animations`() {
+    fun `#17820 C3_6 - le cadre lui-meme entre et sort en fondu par la meme loi de presence, sans glisser`() {
         val overlay = block(liveFrameUi(), "class CallLiveFrameOverlay", "internal object CallLiveFrameSources")
-        assertThat(overlay).contains("CallFadePresence(")
-        val fade = block(code("CallTopBannerStackHost.kt"), "internal fun <T : Any> CallFadePresence(", "\n}")
-        assertThat(fade).contains("CallChromeStow.fadeMillis(reduceMotion)")
-        assertThat(fade).doesNotContain("slideInVertically(")
+        assertThat(overlay).contains("CallBannerPresence(design, travels = false)")
+        val host = code("CallTopBannerStackHost.kt")
+        assertThat(host).doesNotContain("CallFadePresence(")
+        val presence = block(host, "internal fun <T : Any> CallBannerPresence(", "\n}")
+        assertThat(presence).contains("travels && CallTopBannerStack.leavesTowardTop(reduceMotion)")
     }
 
     @Test
