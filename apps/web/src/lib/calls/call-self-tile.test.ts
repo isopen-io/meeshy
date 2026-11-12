@@ -10,7 +10,7 @@ import {
   scaleAfterPinch,
   scaleAfterWheel,
   selfTileBox,
-  selfTileClearance,
+  selfTileCornerInsets,
   selfTileCornerFor,
   selfTileCounterScaled,
   selfTileOrigin,
@@ -227,8 +227,8 @@ describe('L1.5 — dans une fenêtre plus large que haute, ma vignette se couche
   });
 
   test('sa hauteur de coin : 60 sous le haut, 130 au-dessus du bas (iOS, Android) ; portrait 128 et 176', () => {
-    expect(selfTileClearance(landscape)).toEqual({ top: 60, bottom: 130 });
-    expect(selfTileClearance(phone)).toEqual({ top: 128, bottom: 176 });
+    expect(selfTileCornerInsets(landscape)).toEqual({ top: 60, bottom: 130 });
+    expect(selfTileCornerInsets(phone)).toEqual({ top: 128, bottom: 176 });
   });
 
   test('les quatre coins couchés sont quatre places distinctes — les coins bas ne retombent plus sur les hauts', () => {

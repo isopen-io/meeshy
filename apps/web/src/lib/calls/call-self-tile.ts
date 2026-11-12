@@ -99,8 +99,8 @@ export const SELF_TILE_TOP_LANDSCAPE = 60;
 
 export const SELF_TILE_BOTTOM_LANDSCAPE = 130;
 
-/** Ce que ma vignette laisse libre sous la zone sûre, en haut et en bas, selon la forme de la fenêtre. */
-export const selfTileClearance = (viewport: TileSize): { readonly top: number; readonly bottom: number } =>
+/** Ce que ma vignette laisse libre sous la zone sûre, en haut et en bas, selon la forme de la fenêtre — ce que la pile des bandeaux AJOUTE au-dessus est `selfTileClearance` (`call-top-banners.ts`). */
+export const selfTileCornerInsets = (viewport: TileSize): { readonly top: number; readonly bottom: number } =>
   isLandscapeWindow(viewport) ? { top: SELF_TILE_TOP_LANDSCAPE, bottom: SELF_TILE_BOTTOM_LANDSCAPE } : { top: SELF_TILE_TOP, bottom: SELF_TILE_BOTTOM };
 
 const DRAG_THRESHOLD = 8;
@@ -147,7 +147,7 @@ const onLeft = (corner: SelfTileCorner): boolean => corner.endsWith('left');
 type BoxInput = { readonly corner: SelfTileCorner; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number };
 
 export function selfTileBox({ corner, size, viewport, topInset = 0 }: BoxInput): TileBox {
-  const clearance = selfTileClearance(viewport);
+  const clearance = selfTileCornerInsets(viewport);
   const top = clearance.top + topInset;
   const x = onLeft(corner) ? SELF_TILE_MARGIN : viewport.width - SELF_TILE_MARGIN - size.width;
   const y = onTop(corner) ? top : Math.max(top, viewport.height - clearance.bottom - size.height);
