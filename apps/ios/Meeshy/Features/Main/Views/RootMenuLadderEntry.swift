@@ -15,7 +15,7 @@ enum RootMenuBadge: Hashable {
 /// générales). L'ordre de `allCases` EST l'ordre de l'échelle.
 ///
 /// Le PREMIER barreau, au plus près du bouton, ouvre le **jeu** (la Progression, #17769), nommé « Ma Légende » —
-/// l'objectif visé, pas l'outil (décision porteur du 2026-11-12), sous le trophée du Profil et des Réglages. Il disparaît quand le joueur a masqué le jeu
+/// l'objectif visé, pas l'outil (décision du porteur, #17769), sous le trophée du Profil et des Réglages. Il disparaît quand le joueur a masqué le jeu
 /// (`ladder(gameHidden:)`). La Progression reste un écran profond, pas un hub : le bandeau du jeu ne
 /// se pose pas au-dessus du jeu lui-même.
 ///

@@ -1,15 +1,15 @@
-# Une destination du jeu se nomme par l'objectif visé, jamais par l'outil
+## 2026-11-12 — Une destination du jeu se nomme par l'objectif visé, jamais par l'outil (#17769)
 
-**Date** : 2026-11-12 · **Issue** : #17769 · **Correction du porteur**
+Correction du porteur.
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 Pour le barreau du menu qui ouvre le jeu, j'ai proposé « Progression » (le nom
 de l'écran), puis retenu « Le Jeu » parmi « Le Jeu », « Exploits » et « Mon
 rang ». Le porteur a refusé les deux : « il faut le désigner par l'objectif
 visé, par exemple la Légende ».
 
-## La règle
+### La règle
 
 Un nom de destination du jeu dit **ce que le joueur poursuit**, pas ce qu'est
 l'écran (« Progression ») ni la catégorie de produit (« Le Jeu »). Le nom
@@ -17,7 +17,7 @@ retenu : **« Ma Légende »**. Il est appliqué partout où il désigne la
 destination : barreau du menu, titre de l'écran, rangées du Profil et des
 Réglages, lien d'en-tête web, annonce de chargement.
 
-## Avant de proposer un nom
+### Avant de proposer un nom
 
 1. Lire le glossaire de l'épopée (`packages/shared/design/game-epic-vocabulary/<langue>.json`).
    Il bannit des mots (« rang », « série ») et fixe les noms canoniques (paliers, rangs).
