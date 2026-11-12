@@ -91,7 +91,7 @@ extension CallView {
                     }
                     .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                     .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
-                    .modifier(CallSelfTilePlacement(position: CGPoint(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height), clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))
+                    .modifier(CallSelfTilePlacement(position: CGPoint(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height), isLandscape: CallSelfTileScale.isLandscape(geo.size), clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))
                     .gesture(
                         DragGesture()
                             .onChanged { pipDragOffset = $0.translation }
@@ -174,7 +174,7 @@ extension CallView {
                 .modifier(CallSelfTileOutline(color: MeeshyColors.warning.opacity(MeeshyOpacity.heavy), lineWidth: 1, stowFactor: selfTileStowFactor))
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                 .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
-                .modifier(CallSelfTilePlacement(position: base, clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))
+                .modifier(CallSelfTilePlacement(position: base, isLandscape: CallSelfTileScale.isLandscape(geo.size), clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
                 .accessibilityHint(String(localized: "call.video.suspended.hint", defaultValue: "Connexion faible, la vidéo reprendra automatiquement", bundle: .main))
