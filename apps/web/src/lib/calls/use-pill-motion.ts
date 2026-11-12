@@ -1,4 +1,4 @@
-import { createElement, type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createElement, type CSSProperties, type ReactNode, type RefCallback, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
 import { LEAVING, type MorphRect, type SwapShape } from './call-pill-motion';
 
@@ -65,6 +65,32 @@ export function useOpacityFade(ref: RefObject<HTMLElement | null>, on: boolean, 
     if (running.current === null) done?.();
     else running.current.finished.then(done, () => undefined);
   }, [on]);
+}
+
+/**
+ * Le ton du verre d'appel change en fondu (L5.8, #17849) : quand `prominent` change, la classe a déjà
+ * posé le ton visé et le moteur fait passer le voile de l'ancien au nouveau, en Web Animations (que
+ * « Réduire les animations » raccourcit au lieu de couper). La première peinture ne joue rien ; sans
+ * moteur, le ton se pose d'un coup. Interruptible.
+ */
+export function useGlassTone(glass: RefObject<HTMLElement | null>, prominent: boolean): void {
+  const engine = usePillEngine();
+  const running = useRef<Animation | null>(null);
+  const before = useRef(prominent);
+  useLayoutEffect(() => {
+    if (before.current === prominent) return;
+    before.current = prominent;
+    if (glass.current !== null) running.current = engine?.playGlassTone(glass.current, prominent, running.current) ?? null;
+  }, [prominent]);
+}
+
+/** {@link useGlassTone} pour un verre dont l'élément varie (bouton ou étiquette) : la référence à poser dessus. */
+export function useGlassToneRef(prominent: boolean): RefCallback<HTMLElement> {
+  const glass = useRef<HTMLElement | null>(null);
+  useGlassTone(glass, prominent);
+  return useCallback((node: HTMLElement | null) => {
+    glass.current = node;
+  }, []);
 }
 
 export { LEAVING };
