@@ -62,6 +62,19 @@ enum GroupCallSpotlight {
         min(max(scale, 1), maxZoom)
     }
 
+    /// U2.5 — le facteur que la puce de l'écran à la une annonce : arrondi au dixième, jamais
+    /// au-delà du plafond ; `nil` à 1× (la puce ne porte alors que « Écran de X »).
+    static func displayedZoom(_ zoom: CGFloat) -> CGFloat? {
+        let tenths = (clampedZoom(zoom) * 10).rounded() / 10
+        return tenths > 1 ? tenths : nil
+    }
+
+    /// « Écran de Karim · 2× » : le titre déjà localisé, puis le facteur de zoom quand il y en a un.
+    static func featuredChipText(title: String, zoom: CGFloat, locale: Locale) -> String {
+        guard let factor = displayedZoom(zoom) else { return title }
+        return title + " · " + CameraZoomPolicy.label(forDisplay: factor, locale: locale)
+    }
+
     private static func automaticFocus(_ tiles: [GroupCallStageTile]) -> GroupCallStageFocus {
         guard let sharer = sharerId(in: tiles) else { return .grid }
         return .spotlight(tileId: sharer, isScreenShare: true)
