@@ -163,4 +163,49 @@ class CallTopBannerStackWiringTest {
         assertThat(swap).contains("SizeTransform(")
         assertThat(swap).contains("CallChromeStow.fadeMillis(reduceMotion)")
     }
+
+    private fun liveFrameUi() = code("CallLiveFrameUi.kt")
+
+    @Test
+    fun `#17820 C2_1 et C3_4 - la carte de proposition et la capsule de reponse sont le verre de l'appel, plus un aplat noir`() {
+        val ui = liveFrameUi()
+        assertThat(ui).doesNotContain("Color.Black.copy(alpha = 0.55f)")
+        assertThat(ui).doesNotContain("MeeshyGlassSurface(")
+        val card = block(ui, "internal fun CallLiveFrameProposalCard(", "\n}")
+        assertThat(card).contains("CallGlassPlate(")
+        assertThat(card).contains("CallToneScrim()")
+        val notice = block(ui, "internal fun CallLiveFrameNotice(", "\n}")
+        assertThat(notice).contains("CallGlassPlate(")
+        assertThat(notice).contains("CallToneScrim()")
+    }
+
+    @Test
+    fun `#17820 C2_1 - le bandeau du cadre tient la marge laterale de la pile, celle du partage`() {
+        val status = block(liveFrameUi(), "internal fun CallLiveFrameStatus(", "\nprivate fun suspendedText(")
+        assertThat(status).contains("CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp")
+        assertThat(status).doesNotContain("MeeshySpacing.lg")
+    }
+
+    @Test
+    fun `#17820 C2_7 et C3_6 - carte, capsule, avis et pause entrent et repartent par CallBannerPresence`() {
+        val status = block(liveFrameUi(), "internal fun CallLiveFrameStatus(", "\nprivate fun suspendedText(")
+        assertThat(status).contains("CallBannerPresence(")
+        assertThat(status).doesNotContain("reportsTopBannerHeight(")
+    }
+
+    @Test
+    fun `#17820 C3_6 - le cadre lui-meme entre et sort en fondu, court sous Reduire les animations`() {
+        val overlay = block(liveFrameUi(), "class CallLiveFrameOverlay", "internal object CallLiveFrameSources")
+        assertThat(overlay).contains("CallFadePresence(")
+        val fade = block(code("CallTopBannerStackHost.kt"), "internal fun <T : Any> CallFadePresence(", "\n}")
+        assertThat(fade).contains("CallChromeStow.fadeMillis(reduceMotion)")
+        assertThat(fade).doesNotContain("slideInVertically(")
+    }
+
+    @Test
+    fun `#17820 C2_10 - la proposition ne se montre que par la loi du duo video`() {
+        val ui = liveFrameUi()
+        assertThat(ui).contains("CallLiveFrameRule.mayShowProposal(")
+        assertThat(code("CallScreen.kt")).contains("isGroupStage = groupShown")
+    }
 }
