@@ -21,10 +21,9 @@ import {
   isTileDrag,
   nearestSelfCorner,
   SCREEN_SELF_TILE,
-  SELF_TILE_BOTTOM,
   SELF_TILE_MARGIN,
-  SELF_TILE_TOP,
   selfTileBox,
+  selfTileClearance,
   selfTileCornerFor,
   selfTileCounterScaled,
   selfTileOrigin,
@@ -171,10 +170,11 @@ const TILE_CORNER_SAID: Readonly<Record<SelfTileCorner, `callControls.selfTile.c
 };
 
 /** Le coin de repos, en marges de zone sûre : ce que `selfTileBox` calcule sans elles. */
-function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number): { readonly left: string; readonly top: string } {
+function cornerPlace(corner: SelfTileCorner, size: TileSize, topInset: number, viewport: TileSize): { readonly left: string; readonly top: string } {
+  const clearance = selfTileClearance(viewport);
   const left = corner.endsWith('left') ? `calc(env(safe-area-inset-left) + ${SELF_TILE_MARGIN}px)` : `calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + size.width}px)`;
-  const tileTop = SELF_TILE_TOP + topInset;
-  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${tileTop}px)` : `max(calc(env(safe-area-inset-top) + ${tileTop}px), calc(100% - env(safe-area-inset-bottom) - ${SELF_TILE_BOTTOM + size.height}px))`;
+  const tileTop = clearance.top + topInset;
+  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${tileTop}px)` : `max(calc(env(safe-area-inset-top) + ${tileTop}px), calc(100% - env(safe-area-inset-bottom) - ${clearance.bottom + size.height}px))`;
   return { left, top };
 }
 
@@ -304,6 +304,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   };
   useFlip(cornerFrame, {
     key: cornerShown ? `${corner}:${size.width}x${size.height}:${topInset}:${offset === null ? 'rest' : 'held'}` : null,
+    origin: { x: corner.endsWith('left') ? 0 : 1, y: corner.startsWith('top') ? 0 : 1 },
     held: offset !== null,
     duration: SELF_TILE_FLIP_MS,
     easing: 'ease-out',
@@ -341,7 +342,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
         <div
           ref={cornerFrame}
           className={`absolute z-10 ${composed ? 'pointer-events-none opacity-0' : ''}`}
-          style={{ ...cornerPlace(corner, size, topInset), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
+          style={{ ...cornerPlace(corner, size, topInset, screen), width: size.width, height: size.height, scale: String(restFactor), transformOrigin: selfTileOrigin(corner), transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
           {...(composed ? { 'aria-hidden': true, inert: true } : {})}
           data-call-corner-frame=""
           data-call-self-tile-composed={composed ? '' : undefined}

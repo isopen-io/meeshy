@@ -189,8 +189,8 @@ describe('CallGrid — la grille suit l’orientation (P11.1, GroupCallGridLayou
     expect([1, 2, 3, 4, 5].map((count) => columnsOf(grid({ members: peers(count) })))).toEqual([1, 2, 2, 2, 2]);
   });
 
-  test('paysage : deux tuiles se côtoient, cinq et six font 3 colonnes × 2 rangées', () => {
-    expect([1, 2, 3, 4, 5].map((count) => columnsOf(grid({ members: peers(count), landscape: true })))).toEqual([2, 2, 2, 3, 3]);
+  test('paysage (L4.1) : deux tuiles se côtoient, trois personnes (quatre tuiles avec moi) tiennent sur une seule rangée, cinq et six font 3 colonnes × 2 rangées', () => {
+    expect([1, 2, 3, 4, 5].map((count) => columnsOf(grid({ members: peers(count), landscape: true })))).toEqual([2, 2, 4, 3, 3]);
   });
 
   test('la grille garde 140 de haut au moins, et chaque case se partage la hauteur à parts égales (P12.7)', () => {

@@ -183,18 +183,18 @@ describe('CallScreen — tourner l’écran replace le rail (#17429)', () => {
       window.dispatchEvent(new Event('resize'));
     });
 
-  test('du portrait au paysage, le rail « l’appel » passe de sous ma vignette à côté d’elle, et ma vignette suit l’écran', () => {
+  test('du portrait à un paysage court, le rail « l’appel » passe de sous ma vignette à côté d’elle, et ma vignette suit l’écran', () => {
     const real = { width: window.innerWidth, height: window.innerHeight };
     resize(390, 844);
     const view = mount();
     const counts = { leading: railCount(view.host, 'mine'), trailing: railCount(view.host, 'call') };
     expect(view.side('trailing')?.style.paddingTop).toBe(`${expected('top-right', counts).trailing.top}px`);
-    resize(568, 320);
+    resize(568, 240);
     const turned = expected('top-right', counts);
     expect(turned.trailing.inline).toBeGreaterThan(0);
     expect(view.side('trailing')?.style.paddingTop ?? '').toBe('');
     expect(view.side('trailing')?.style.paddingInlineEnd).toBe(`${turned.trailing.inline}px`);
-    expect(view.host.querySelector<HTMLElement>('[data-call-corner-frame]')?.style.height).toBe(`${selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right', scale: DEFAULT_SELF_TILE, viewport: { width: 568, height: 320 }, topInset: 0 })?.height}px`);
+    expect(view.host.querySelector<HTMLElement>('[data-call-corner-frame]')?.style.height).toBe(`${selfTileFootprint({ layout: 'video-duo', cameraOn: true, swapped: false, framed: false, immersive: false, corner: 'top-right', scale: DEFAULT_SELF_TILE, viewport: { width: 568, height: 240 }, topInset: 0 })?.height}px`);
     view.done();
     resize(real.width, real.height);
   });

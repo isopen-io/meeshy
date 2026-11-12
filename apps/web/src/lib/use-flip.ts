@@ -1,12 +1,12 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 
-import { flipKeyframes, type FlipPoint } from '@/lib/view/flip';
+import { flipKeyframes, type FlipBox, type FlipPoint } from '@/lib/view/flip';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-const pointOf = (element: HTMLElement | null): FlipPoint | null => {
+const pointOf = (element: HTMLElement | null): FlipBox | null => {
   if (element === null) return null;
   const rect = element.getBoundingClientRect();
-  return { x: rect.left, y: rect.top };
+  return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
 };
 
 /**
@@ -31,10 +31,19 @@ export function useFlip(
     easing,
     fadeFrom,
     held = false,
-  }: { readonly key: string | null; readonly duration: number; readonly easing: string; readonly fadeFrom?: number; readonly held?: boolean },
+    origin,
+  }: {
+    readonly key: string | null;
+    readonly duration: number;
+    readonly easing: string;
+    readonly fadeFrom?: number;
+    readonly held?: boolean;
+    /** Déclarée, la boîte joue aussi son changement de taille, en échelle autour de cette ancre (fractions de sa taille). */
+    readonly origin?: FlipPoint;
+  },
 ): void {
   const committed = useRef<string | null>(null);
-  const first = useRef<FlipPoint | null>(null);
+  const first = useRef<FlipBox | null>(null);
   const running = useRef<Animation | null>(null);
 
   if (key !== committed.current) first.current = key === null || committed.current === null ? null : pointOf(ref.current);
@@ -51,7 +60,7 @@ export function useFlip(
     if (held || typeof element.animate !== 'function') return;
     const last = pointOf(element);
     if (last === null) return;
-    const frames = flipKeyframes({ first: from, last, reducedMotion: prefersReducedMotion(), ...(fadeFrom === undefined ? {} : { fadeFrom }) });
+    const frames = flipKeyframes({ first: from, last, reducedMotion: prefersReducedMotion(), ...(fadeFrom === undefined ? {} : { fadeFrom }), ...(origin === undefined ? {} : { origin }) });
     if (frames === null) return;
     running.current = element.animate([...frames], { duration, easing });
   }, [key]);
