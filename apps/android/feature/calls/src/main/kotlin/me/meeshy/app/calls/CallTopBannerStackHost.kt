@@ -57,14 +57,16 @@ private class HeldFace<T : Any>(var value: T? = null)
  * P16.6 · R1.6 · R2.10 — la présence d'un bandeau de la pile : il arrive du haut, en fondu, et y repart quand [face] devient
  * `null`, pendant que les bandeaux suivants glissent à sa place. « Réduire les animations » : un fondu court, sans déplacement.
  * Le dernier visage reste le temps de la sortie, pour que le texte ne saute pas pendant que le bandeau repart.
+ * [travels] faux : un habit qui ne se déplace pas (le cadre en direct autour des deux vidéos, #17820 C3.6) n'en garde que
+ * le fondu.
  */
 @Composable
-internal fun <T : Any> CallBannerPresence(face: T?, content: @Composable (T) -> Unit) {
+internal fun <T : Any> CallBannerPresence(face: T?, travels: Boolean = true, content: @Composable (T) -> Unit) {
     val held = remember { HeldFace<T>() }
     if (face != null) held.value = face
     val reduceMotion = rememberCallReduceMotion()
     val millis = CallChromeStow.fadeMillis(reduceMotion)
-    val towardTop = CallTopBannerStack.leavesTowardTop(reduceMotion)
+    val towardTop = travels && CallTopBannerStack.leavesTowardTop(reduceMotion)
     AnimatedVisibility(
         visible = face != null,
         enter = fadeIn(tween(millis)) + if (towardTop) {
@@ -78,21 +80,6 @@ internal fun <T : Any> CallBannerPresence(face: T?, content: @Composable (T) -> 
             ExitTransition.None
         },
     ) {
-        (face ?: held.value)?.let { content(it) }
-    }
-}
-
-/**
- * #17820 C3.6 — la présence d'un habit qui ne se déplace pas (le cadre en direct autour des deux vidéos) : il entre et sort en
- * fondu, court sous « Réduire les animations » ([CallChromeStow.fadeMillis]), et garde son dernier visage le temps de la sortie.
- */
-@Composable
-internal fun <T : Any> CallFadePresence(face: T?, content: @Composable (T) -> Unit) {
-    val held = remember { HeldFace<T>() }
-    if (face != null) held.value = face
-    val reduceMotion = rememberCallReduceMotion()
-    val millis = CallChromeStow.fadeMillis(reduceMotion)
-    AnimatedVisibility(visible = face != null, enter = fadeIn(tween(millis)), exit = fadeOut(tween(millis))) {
         (face ?: held.value)?.let { content(it) }
     }
 }

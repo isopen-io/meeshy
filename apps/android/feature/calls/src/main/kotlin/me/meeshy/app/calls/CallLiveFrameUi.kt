@@ -88,7 +88,7 @@ class CallLiveFrameOverlay @Inject constructor(
         val constrained = rememberCallDeviceConstrained()
         val design = CallLiveFrameRule.display(shared.frameId, CallLiveFrameRule.PEOPLE, constrained, reduceMotion).design
         // #17820 C3.6 : le cadre entre et sort en fondu (court sous « Réduire les animations »), il ne surgit plus d'un coup.
-        CallFadePresence(design) { shown ->
+        CallBannerPresence(design, travels = false) { shown ->
             Layer(shown, context.state, shared.remoteSharedName, reduceMotion, constrained)
         }
     }
