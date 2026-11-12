@@ -190,7 +190,7 @@ class CallTopBannerStackWiringTest {
     fun `#17820 C2_7 et C3_6 - carte, capsule, avis et pause entrent et repartent par CallBannerPresence`() {
         val status = block(liveFrameUi(), "internal fun CallLiveFrameStatus(", "\nprivate fun suspendedText(")
         assertThat(status).contains("CallBannerPresence(")
-        assertThat(status).doesNotContain("reportsTopBannerHeight(")
+        assertThat(status).contains("reportsTopBannerHeight(CallTopBanner.LiveFrame)")
     }
 
     @Test
@@ -208,5 +208,52 @@ class CallTopBannerStackWiringTest {
         val ui = liveFrameUi()
         assertThat(ui).contains("CallLiveFrameRule.mayShowProposal(")
         assertThat(code("CallScreen.kt")).contains("isGroupStage = groupShown")
+    }
+
+    @Test
+    fun `#17845 L1_9 - la presence d'un bandeau ne remesure jamais la pile, elle ne touche que la transformation et l'opacite`() {
+        val presence = block(code("CallTopBannerStackHost.kt"), "internal fun <T : Any> CallBannerPresence(", "\n}")
+        assertThat(presence).doesNotContain("expandVertically(")
+        assertThat(presence).doesNotContain("shrinkVertically(")
+        assertThat(presence).doesNotContain("AnimatedVisibility(")
+        assertThat(presence).contains("graphicsLayer {")
+        assertThat(presence).contains("CallTopBannerStack.presenceTranslationFraction(")
+        assertThat(presence).contains("CallChromeStow.fadeMillis(reduceMotion)")
+        assertThat(code("CallTopBannerStackHost.kt")).doesNotContain("androidx.compose.animation.expandVertically")
+    }
+
+    @Test
+    fun `#17845 L1_9 - les bandeaux voisins glissent a leur nouvelle place par une transformation lue au dessin`() {
+        val host = code("CallTopBannerStackHost.kt")
+        val glide = block(host, "internal fun Modifier.glidesToItsPlace(", "\n}")
+        assertThat(glide).contains("CallTopBannerStack.placementShiftPx(")
+        assertThat(glide).contains("onPlaced {")
+        assertThat(glide).contains("graphicsLayer {")
+        assertThat(block(host, "internal fun <T : Any> CallBannerPresence(", "\n}")).contains("glidesToItsPlace(")
+    }
+
+    @Test
+    fun `#17845 L4_11 - la grille de groupe cede la place a la pile mesuree, comme ma vignette, au lieu de passer dessous`() {
+        val host = code("CallTopBannerStackHost.kt")
+        assertThat(host).contains("internal val LocalCallGroupGridClearance")
+        assertThat(host).contains("CallTopBannerStack.present(")
+        assertThat(host).contains("CallTopBannerStack.groupGridClearanceDp(")
+        assertThat(host).contains("animateDpAsState(")
+
+        val layout = code("CallConnectedLayout.kt")
+        assertThat(layout).contains("CallGroupStageTopReserve(")
+        assertThat(layout).contains("LocalCallGroupGridClearance.current")
+        assertThat(layout).doesNotContain("Spacer(Modifier.height(MeeshySpacing.xl))\n\n            if (groupStage != null)")
+
+        val screen = code("CallScreen.kt")
+        assertThat(screen).contains("rememberGroupGridBannerClearance(")
+        assertThat(screen).contains("LocalCallGroupGridClearance provides")
+    }
+
+    @Test
+    fun `#17845 L4_11 - le cadre en direct dit sa hauteur et s'oublie en partant, pour que la grille lui cede sa place`() {
+        val host = code("CallTopBannerStackHost.kt")
+        assertThat(host).contains("fun forget(banner: CallTopBanner)")
+        assertThat(host).contains("onDispose { heights.forget(banner) }")
     }
 }

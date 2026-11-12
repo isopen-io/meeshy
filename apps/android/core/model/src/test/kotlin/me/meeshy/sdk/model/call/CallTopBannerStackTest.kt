@@ -96,4 +96,44 @@ class CallTopBannerStackTest {
         assertThat(CallTopBannerStack.leavesTowardTop(reduceMotion = false)).isTrue()
         assertThat(CallTopBannerStack.leavesTowardTop(reduceMotion = true)).isFalse()
     }
+
+    @Test
+    fun `#17845 L4_11 - la presence compte le partage recu et le cadre en direct, que ma vignette ignore`() {
+        assertThat(
+            CallTopBannerStack.present(isScreenShareShown = true, isRecordingShown = false, isCaptureAlertShown = false, isLiveFrameShown = true),
+        ).containsExactly(CallTopBanner.ScreenShare, CallTopBanner.LiveFrame)
+        assertThat(
+            CallTopBannerStack.present(isScreenShareShown = false, isRecordingShown = false, isCaptureAlertShown = false, isLiveFrameShown = false),
+        ).isEmpty()
+    }
+
+    @Test
+    fun `#17845 L4_11 - la grille de groupe cede la place de la pile entiere, cadre en direct compris, a la meme loi que ma vignette`() {
+        val heights = mapOf(CallTopBanner.Recording to 112f)
+        val present = setOf(CallTopBanner.ScreenShare, CallTopBanner.Recording, CallTopBanner.LiveFrame)
+
+        assertThat(CallTopBannerStack.groupGridClearanceDp(present, heights, isStageFullScreen = false))
+            .isEqualTo(bannerPlace + (112f + CallTopBannerStack.GAP_DP) + bannerPlace)
+        assertThat(CallTopBannerStack.groupGridClearanceDp(emptySet(), heights, isStageFullScreen = false)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `#17845 L4_11 - plein ecran, la pile est rangee et la grille reprend toute la place`() {
+        assertThat(CallTopBannerStack.groupGridClearanceDp(setOf(CallTopBanner.Capture), emptyMap(), isStageFullScreen = true)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `#17845 L1_9 - un bandeau arrive et repart par sa seule translation, a la hauteur de sa propre mesure`() {
+        assertThat(CallTopBannerStack.presenceTranslationFraction(progress = 1f, travels = true)).isEqualTo(0f)
+        assertThat(CallTopBannerStack.presenceTranslationFraction(progress = 0f, travels = true)).isEqualTo(-1f)
+        assertThat(CallTopBannerStack.presenceTranslationFraction(progress = 0.25f, travels = true)).isEqualTo(-0.75f)
+        assertThat(CallTopBannerStack.presenceTranslationFraction(progress = 0f, travels = false)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `#17845 L1_9 - un bandeau qui change de place sans mesure repart de sa place d'avant, puis glisse`() {
+        assertThat(CallTopBannerStack.placementShiftPx(previousTopPx = 200f, previousShiftPx = 0f, newTopPx = 120f)).isEqualTo(80f)
+        assertThat(CallTopBannerStack.placementShiftPx(previousTopPx = 200f, previousShiftPx = 30f, newTopPx = 120f)).isEqualTo(110f)
+        assertThat(CallTopBannerStack.placementShiftPx(previousTopPx = 120f, previousShiftPx = 0f, newTopPx = 120f)).isEqualTo(0f)
+    }
 }
