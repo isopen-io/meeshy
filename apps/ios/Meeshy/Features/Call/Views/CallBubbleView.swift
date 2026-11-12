@@ -87,14 +87,10 @@ struct CallBubbleView: View {
                 hangupButton.offset(y: sideButtonOffset)
             }
 
-            CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, callManager: callManager)
+            CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, ringsInPeerColor: true, callManager: callManager)
                 .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
-                .overlay(alignment: .topTrailing) {
-                    TransientCallSignalGlyph(strength: signalStrength)
-                        .padding(MeeshySpacing.xsPlus)
-                        .background(Circle().fill(Color.black.opacity(MeeshyOpacity.strong)))
-                        .offset(x: 16, y: -16)
-                }
+                .overlay(alignment: .topTrailing) { signalBadge }
+                .overlay(alignment: .bottom) { nameplate }
                 .overlay(alignment: .top) {
                     tierControlBar
                         .opacity(controlOpacity)
@@ -120,14 +116,7 @@ struct CallBubbleView: View {
             LongPressGesture(minimumDuration: 0.5, maximumDistance: 6)
                 .onEnded { _ in revealMenu() }
         )
-        .onTapGesture {
-            if isMenuRevealed {
-                closeMenu()
-            } else {
-                HapticFeedback.medium()
-                callManager.displayMode = .fullScreen
-            }
-        }
+        .onTapGesture(perform: handleTap)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             String(localized: "call.bubble.ongoing", defaultValue: "Appel en cours")
@@ -162,6 +151,32 @@ struct CallBubbleView: View {
             HapticFeedback.light()
         }
     }
+
+    private func handleTap() {
+        guard !isMenuRevealed else { return closeMenu() }
+        HapticFeedback.medium()
+        callManager.displayMode = .fullScreen
+    }
+
+    private var signalBadge: some View {
+        TransientCallSignalGlyph(strength: signalStrength)
+            .padding(MeeshySpacing.xsPlus)
+            .background(Circle().fill(Color.black.opacity(MeeshyOpacity.strong)))
+            .offset(x: 16, y: -16)
+    }
+
+    /// P18.5 — l'étiquette de verre « nom · durée » : dans le cadre aux paliers rectangle,
+    /// sous le cercle au palier cercle (trop petit pour la porter). Elle ne prend aucun toucher.
+    private var nameplate: some View {
+        CallReducedCaption(callManager: callManager, style: .glass)
+            .fixedSize()
+            .padding(.bottom, isCircleRegion ? 0 : MeeshySpacing.sm)
+            .offset(y: isCircleRegion ? nameplateBelowOffset : 0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private let nameplateBelowOffset: CGFloat = 32
 
     private var touchReach: CGFloat {
         guard isCircleRegion && isMenuRevealed else { return 16 }

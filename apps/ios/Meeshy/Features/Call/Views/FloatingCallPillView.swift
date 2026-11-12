@@ -165,8 +165,7 @@ struct FloatingCallPillView: View {
 
     private var pillContent: some View {
         HStack(spacing: MeeshySpacing.md) {
-            CallParticipantVisual(diameter: 44, callManager: callManager)
-            userInfoSection
+            identitySection
             Spacer(minLength: 8)
             controlButtons
         }
@@ -222,12 +221,24 @@ struct FloatingCallPillView: View {
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction(named: String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
+            guard allowsCollapse else { return }
             collapseToBubble(exitTranslation: 1)
         }
         .callQualityDetailSheet(isPresented: $showQualityDetail)
     }
 
     // MARK: - User Info
+
+    /// P18.10 — pendant mon partage, la bannière dit l'écran et « nom · durée » ; hors
+    /// partage, l'avatar, le nom et la durée.
+    @ViewBuilder private var identitySection: some View {
+        if callManager.screenShare.isSharing {
+            CallReducedCaption(callManager: callManager, style: .screenShare)
+        } else {
+            CallParticipantVisual(diameter: 44, callManager: callManager)
+            userInfoSection
+        }
+    }
 
     private var userInfoSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -437,7 +448,7 @@ struct FloatingCallPillView: View {
                 }
                 pillLastDragSample = nil
 
-                if CallBubbleGestureResolver.shouldCollapse(
+                if allowsCollapse && CallBubbleGestureResolver.shouldCollapse(
                     translationWidth: value.translation.width,
                     velocityWidth: velocityWidth
                 ) {
@@ -449,6 +460,11 @@ struct FloatingCallPillView: View {
                     HapticFeedback.light()
                 }
             }
+    }
+
+    /// P18.10 — la bannière qui porte « Arrêter » ne se replie pas en bulle.
+    private var allowsCollapse: Bool {
+        CallReducedRule.allowsCollapseToBubble(isSharingScreen: callManager.screenShare.isSharing)
     }
 
     private func collapseToBubble(exitTranslation: CGFloat) {
