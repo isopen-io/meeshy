@@ -117,4 +117,16 @@ class CallModeRulesTest {
         assertThat(CallModeGestureRule.showsHint(hasSeenHint = true, isRecording = false)).isFalse()
         assertThat(CallModeGestureRule.clock(75_000)).isEqualTo("1:15")
     }
+
+    @Test
+    fun `seul le Montage monte du bas, Effets garde le fondu de sa couche (loi 17 excepte Effets)`() {
+        assertThat(CallModeChromeMotion.risesFromBottom(CallScreenMode.Montage, reduceMotion = false)).isTrue()
+        assertThat(CallModeChromeMotion.risesFromBottom(CallScreenMode.Effects, reduceMotion = false)).isFalse()
+    }
+
+    @Test
+    fun `sous Reduire les animations le Montage ne se deplace plus, il ne garde que le fondu`() {
+        assertThat(CallModeChromeMotion.risesFromBottom(CallScreenMode.Montage, reduceMotion = true)).isFalse()
+        assertThat(CallModeChromeMotion.risesFromBottom(CallScreenMode.Effects, reduceMotion = true)).isFalse()
+    }
 }

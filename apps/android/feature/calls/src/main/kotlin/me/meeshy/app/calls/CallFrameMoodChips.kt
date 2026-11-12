@@ -103,6 +103,7 @@ internal fun MoodChips(
     LaunchedEffect(index) { if (index >= 0) list.animateScrollToItem(index) }
     LazyRow(
         state = list,
+        modifier = Modifier.callScrollEdgeFade(list, horizontal = true),
         contentPadding = PaddingValues(horizontal = MeeshySpacing.lg),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
         userScrollEnabled = isEnabled,
