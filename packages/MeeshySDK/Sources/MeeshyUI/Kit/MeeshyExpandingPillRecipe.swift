@@ -100,6 +100,29 @@ public nonisolated enum MeeshyExpandingPillRule {
     public static func hasBack(onBack: Bool) -> Bool { onBack }
     public static func hasClose(onClose: Bool) -> Bool { onClose }
 
+    /// Ce que l'en-tête pose à ses deux bords.
+    public nonisolated struct HeaderSlots: Equatable, Sendable {
+        public let back: Bool
+        public let close: Bool
+        /// ‹ absent : sa place reste réservée, le titre ne glisse pas vers le début.
+        public let reservesStart: Bool
+        /// Ni ✕ ni accessoire : la place de ✕ reste réservée. Sans ✕, un accessoire
+        /// prend le bord de fin (O9).
+        public let reservesEnd: Bool
+    }
+
+    public static func headerSlots(hasBack: Bool, hasClose: Bool, hasTrailing: Bool) -> HeaderSlots {
+        HeaderSlots(back: hasBack, close: hasClose, reservesStart: !hasBack, reservesEnd: !hasClose && !hasTrailing)
+    }
+
+    /// La marge du titre, la même des deux côtés : la plus large des deux bords plus
+    /// l'écart. Le titre reste centré et ne passe jamais sous un bouton ni sous
+    /// l'accessoire.
+    public static func headerTitleInset(start: CGFloat, end: CGFloat, gap: CGFloat) -> CGFloat {
+        let widest = [start, end].filter(\.isFinite).max() ?? 0
+        return max(widest, 0) + (gap.isFinite ? max(gap, 0) : 0)
+    }
+
     /// Échap, retour matériel, échappement du lecteur d'écran : le rappel dédié de
     /// l'hôte, sinon ‹, sinon ✕. Fermée, K11 n'écoute rien.
     public static func escapeTarget(isOpen: Bool, hasEscape: Bool, hasBack: Bool, hasClose: Bool) -> EscapeTarget {

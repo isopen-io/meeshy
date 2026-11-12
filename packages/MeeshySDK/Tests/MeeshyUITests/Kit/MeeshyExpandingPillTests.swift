@@ -54,6 +54,34 @@ struct MeeshyExpandingPillTests {
         }
     }
 
+    // MARK: - En-tête
+
+    @Test("un bouton d'en-tête n'existe que si son rappel existe ; sans ✕, l'accessoire prend le bord de fin (O9)")
+    func headerSlots_followTheVectors() throws {
+        for row in try Self.rows("header") {
+            let slots = MeeshyExpandingPillRule.headerSlots(
+                hasBack: row["hasBack"] as? Bool ?? false, hasClose: row["hasClose"] as? Bool ?? false,
+                hasTrailing: row["hasTrailing"] as? Bool ?? false
+            )
+            #expect(slots.back == row["back"] as? Bool, "\(row)")
+            #expect(slots.close == row["close"] as? Bool, "\(row)")
+            #expect(slots.reservesStart == row["reservesStart"] as? Bool, "\(row)")
+            #expect(slots.reservesEnd == row["reservesEnd"] as? Bool, "\(row)")
+        }
+    }
+
+    @Test("le titre a la même marge des deux côtés : le bord le plus large plus l'écart, il ne passe sous rien")
+    func headerTitleInset_followsTheVectors() throws {
+        for row in try Self.rows("headerInset") {
+            let inset = MeeshyExpandingPillRule.headerTitleInset(
+                start: CGFloat(try Self.number(row["start"])), end: CGFloat(try Self.number(row["end"])),
+                gap: CGFloat(try Self.number(row["gap"]))
+            )
+            #expect(inset == CGFloat(try Self.number(row["inset"])), "\(row)")
+        }
+        #expect(MeeshyExpandingPillRule.headerTitleInset(start: .nan, end: .infinity, gap: 6) == 6)
+    }
+
     // MARK: - Marges et hauteur
 
     @Test("10 en haut, 12 sur les côtés, de quoi faire 12 sous le corps avec la rangée ; une confirmation a ses 16")
@@ -301,6 +329,9 @@ struct MeeshyExpandingPillTests {
         #expect(panel.contains(".onGeometryChange(for: CGFloat.self)"))
         #expect(panel.contains(".frame(maxHeight: ceiling)"))
         #expect(panel.contains(".fixedSize(horizontal: false, vertical: true)"))
+        #expect(panel.contains(".onGeometryChange(for: Bool.self) { $0.size.height <= 0 } action: { isEmpty = $0 }"))
+        #expect(panel.contains(".scrollDismissesKeyboard(.never)"))
+        #expect(panel.contains(".padding(isCollapsed ? EdgeInsets() : MeeshyExpandingPillRule.insets(for: option))"))
     }
 
     @Test("K11 enveloppe K10 : un seul MeeshyGlassPill, et le dessus est dit montré ou non à l'exécution")
@@ -319,9 +350,28 @@ struct MeeshyExpandingPillTests {
         let panel = try Self.code("MeeshyExpandingPillPanel.swift")
         #expect(main.contains("isOpen: option != nil"))
         #expect(main.contains(".scale(scale: MeeshyExpandingPillRecipe.enterScale, anchor: .bottom)"))
-        #expect(main.contains("reduceMotion\n            ? .opacity"))
+        #expect(main.contains("reduceMotion\n                ? .opacity"))
+        #expect(main.contains(".meeshyExpandingPill("))
         #expect(main.contains(".id(option.id)"))
         #expect(panel.contains(".accessibilityAction(.escape, action)"))
+    }
+
+    @Test("ce qui part reste peint jusqu'au terme du fondu, mais inerte et absent du lecteur d'écran")
+    func source_departureIsInertAndSilent() throws {
+        let panel = try Self.code("MeeshyExpandingPillPanel.swift")
+        #expect(panel.contains("removal: fade.combined(with: .modifier("))
+        #expect(panel.contains("active: MeeshyExpandingPillDeparture(isLeaving: true)"))
+        #expect(panel.contains(".allowsHitTesting(!isLeaving)"))
+        #expect(panel.contains(".accessibilityHidden(isLeaving)"))
+    }
+
+    @Test("l'en-tête se dispose par sa loi : le titre centré à marge égale, ‹ au début, accessoire et ✕ à la fin")
+    func source_headerUsesItsLayout() throws {
+        let header = try Self.code("MeeshyExpandingPillHeader.swift")
+        #expect(header.contains("MeeshyExpandingPillHeaderLayout(gap: gap)"))
+        #expect(header.contains("MeeshyExpandingPillRule.headerTitleInset(start: start.width, end: end.width, gap: gap)"))
+        #expect(header.contains("if slots.reservesEnd"))
+        #expect(!header.contains("ZStack"))
     }
 
     @Test("accessibilité : le panneau est un groupe nommé, la confirmation est modale et l'échappement vaut Annuler")

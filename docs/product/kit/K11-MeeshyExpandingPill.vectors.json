@@ -147,6 +147,84 @@
       "target": "none"
     }
   ],
+  "header": [
+    {
+      "view": "R7",
+      "hasBack": true,
+      "hasClose": true,
+      "hasTrailing": false,
+      "back": true,
+      "close": true,
+      "reservesStart": false,
+      "reservesEnd": false
+    },
+    {
+      "view": "O9",
+      "hasBack": true,
+      "hasClose": false,
+      "hasTrailing": true,
+      "back": true,
+      "close": false,
+      "reservesStart": false,
+      "reservesEnd": false
+    },
+    {
+      "view": "retour seul",
+      "hasBack": true,
+      "hasClose": false,
+      "hasTrailing": false,
+      "back": true,
+      "close": false,
+      "reservesStart": false,
+      "reservesEnd": true
+    },
+    {
+      "view": "journal",
+      "hasBack": false,
+      "hasClose": true,
+      "hasTrailing": true,
+      "back": false,
+      "close": true,
+      "reservesStart": true,
+      "reservesEnd": false
+    },
+    {
+      "view": "titre seul",
+      "hasBack": false,
+      "hasClose": false,
+      "hasTrailing": false,
+      "back": false,
+      "close": false,
+      "reservesStart": true,
+      "reservesEnd": true
+    }
+  ],
+  "headerInset": [
+    {
+      "start": 40,
+      "end": 40,
+      "gap": 6,
+      "inset": 46
+    },
+    {
+      "start": 40,
+      "end": 72,
+      "gap": 6,
+      "inset": 78
+    },
+    {
+      "start": 40,
+      "end": 132,
+      "gap": 6,
+      "inset": 138
+    },
+    {
+      "start": 0,
+      "end": 0,
+      "gap": 6,
+      "inset": 6
+    }
+  ],
   "insets": [
     {
       "showsHeader": true,

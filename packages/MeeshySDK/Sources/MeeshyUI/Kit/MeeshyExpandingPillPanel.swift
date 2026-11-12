@@ -15,6 +15,9 @@ struct MeeshyExpandingPillPanel<HeaderTrailing: View, Content: View>: View {
     let maxBodyHeight: CGFloat?
     let isBodyScrollLocked: Bool
     let takesFocus: Bool
+    /// Un corps vide sans en-tête : la pilule reste fermée, donc le panneau ne pose
+    /// aucune marge (jamais une bande vide, loi 13) ; le corps reste mesuré.
+    let isCollapsed: Bool
     @Binding var bodyIsEmpty: Bool
     let headerTrailing: HeaderTrailing
     let content: Content
@@ -31,7 +34,7 @@ struct MeeshyExpandingPillPanel<HeaderTrailing: View, Content: View>: View {
                 content: content
             )
         }
-        .padding(MeeshyExpandingPillRule.insets(for: option))
+        .padding(isCollapsed ? EdgeInsets() : MeeshyExpandingPillRule.insets(for: option))
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(option.title)
@@ -93,7 +96,9 @@ private struct MeeshyExpandingPillEscape: ViewModifier {
 /// la hauteur idéale est celle du corps (`fixedSize` vertical), donc jamais plus
 /// haut que lui ni que le plafond. Sa hauteur NATURELLE n'est mesurée que pour
 /// couper le rebond d'un corps qui tient (`scrolls`) et détecter un corps vide,
-/// au changement de taille, jamais à chaque image. Pas de `ViewThatFits` autour du
+/// au changement de taille, jamais à chaque image ; le vide est un booléen qui ne
+/// remonte à la pilule qu'au seuil, jamais à chaque frappe d'un corps qui grandit.
+/// Défiler ne renvoie pas le clavier (#9146). Pas de `ViewThatFits` autour du
 /// corps (rendu asynchrone d'iOS 26, #9456).
 struct MeeshyExpandingPillBody<Content: View>: View {
     let ceiling: CGFloat
@@ -113,6 +118,7 @@ struct MeeshyExpandingPillBody<Content: View>: View {
     var body: some View {
         MeeshyFadingScrollView(axis: .vertical, fade: MeeshyExpandingPillRecipe.edgeFade) { measured }
             .scrollDisabled(isScrollLocked || !MeeshyExpandingPillRule.scrolls(contentHeight: naturalHeight, ceiling: ceiling))
+            .scrollDismissesKeyboard(.never)
             .frame(maxHeight: ceiling)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -120,9 +126,36 @@ struct MeeshyExpandingPillBody<Content: View>: View {
     private var measured: some View {
         content
             .frame(maxWidth: .infinity)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-                naturalHeight = height
-                isEmpty = height <= 0
-            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { naturalHeight = $0 }
+            .onGeometryChange(for: Bool.self) { $0.size.height <= 0 } action: { isEmpty = $0 }
+    }
+}
+
+// MARK: - Le panneau qui part
+
+/// Ce qui part reste peint jusqu'au terme de son fondu, mais INERTE et MUET : il
+/// ne prend plus aucun toucher et sort de l'arbre du lecteur d'écran dès le début
+/// de la sortie (un changement d'option, une fermeture).
+struct MeeshyExpandingPillDeparture: ViewModifier {
+    let isLeaving: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .allowsHitTesting(!isLeaving)
+            .accessibilityHidden(isLeaving)
+    }
+}
+
+extension AnyTransition {
+    /// L'entrée et la sortie du panneau : le fondu (et l'échelle, hors « réduire les
+    /// animations »), la sortie rendue inerte et muette.
+    static func meeshyExpandingPill(_ fade: AnyTransition) -> AnyTransition {
+        .asymmetric(
+            insertion: fade,
+            removal: fade.combined(with: .modifier(
+                active: MeeshyExpandingPillDeparture(isLeaving: true),
+                identity: MeeshyExpandingPillDeparture(isLeaving: false)
+            ))
+        )
     }
 }
