@@ -3,8 +3,10 @@ package me.meeshy.ui.component.viewer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import com.google.common.truth.Truth.assertThat
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -44,5 +46,14 @@ class ViewerDialogTest {
 
         compose.onNodeWithText("visionneuse").assertExists()
         compose.onNodeWithText("pastille d'appel").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the viewer sits below the call pill, so its close button is never covered`() {
+        show(overlay = { Text("pastille d'appel") })
+
+        val pill = compose.onNodeWithText("pastille d'appel").getUnclippedBoundsInRoot()
+        val viewer = compose.onNodeWithText("visionneuse").getUnclippedBoundsInRoot()
+        assertThat(viewer.top.value).isAtLeast(pill.bottom.value)
     }
 }

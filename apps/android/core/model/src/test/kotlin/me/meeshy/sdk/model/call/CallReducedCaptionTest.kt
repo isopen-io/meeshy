@@ -24,4 +24,20 @@ class CallReducedCaptionTest {
     fun `the name is trimmed`() {
         assertThat(CallReducedCaption.caption(title = " Awa ", duration = "00:09")).isEqualTo("Awa · 00:09")
     }
+
+    @Test
+    fun `the title is the name I gave the person, otherwise their display name`() {
+        assertThat(CallReducedCaption.title(givenName = "Mamie", groupName = null, displayName = "Awa Diop")).isEqualTo("Mamie")
+        assertThat(CallReducedCaption.title(givenName = " ", groupName = null, displayName = "Awa Diop")).isEqualTo("Awa Diop")
+    }
+
+    @Test
+    fun `in a group the title is the group name, like the header capsule`() {
+        assertThat(CallReducedCaption.title(givenName = "Mamie", groupName = "Famille", displayName = "Awa")).isEqualTo("Famille")
+    }
+
+    @Test
+    fun `without any name there is no title`() {
+        assertThat(CallReducedCaption.title(givenName = null, groupName = "", displayName = "  ")).isNull()
+    }
 }

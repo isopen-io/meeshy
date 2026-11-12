@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.call.CallHeaderNames
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -34,7 +35,11 @@ class CallPillControlsTest {
         var stopShare = 0
     }
 
-    private fun show(state: CallUiState, sharing: Boolean = false): Taps {
+    private fun show(
+        state: CallUiState,
+        sharing: Boolean = false,
+        names: CallHeaderNames = CallHeaderNames(givenName = null, groupName = null),
+    ): Taps {
         val taps = Taps()
         rule.setContent {
             MeeshyTheme {
@@ -46,6 +51,7 @@ class CallPillControlsTest {
                     onHangUp = { taps.hangUp++ },
                     isScreenSharing = sharing,
                     onStopScreenShare = { taps.stopShare++ },
+                    names = names,
                 )
             }
         }
@@ -115,5 +121,13 @@ class CallPillControlsTest {
         show(connected(), sharing = true)
 
         rule.onNodeWithContentDescription("Stop sharing screen").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+    }
+
+    @Test
+    fun `while I share my screen the banner names the person as the header does, by the name I gave them`() {
+        show(connected(), sharing = true, names = CallHeaderNames(givenName = "Mamie", groupName = null))
+
+        rule.onNodeWithText("Mamie · 01:05").assertExists()
+        rule.onNodeWithText("Alice · 01:05").assertDoesNotExist()
     }
 }
