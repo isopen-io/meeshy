@@ -104,4 +104,26 @@ class GroupCallSpotlightTest {
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = false, isLandscape = true)).isEqualTo(GroupCallFilmstrip.Trailing)
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = true, isLandscape = true)).isEqualTo(GroupCallFilmstrip.None)
     }
+
+    /** U2.5 — the factor announced by the « Screen of X · 2× » chip. */
+    @Test
+    fun `the displayed zoom is null at one, and otherwise rounded to tenths under the ceiling`() {
+        assertThat(GroupCallSpotlight.displayedZoom(1f)).isNull()
+        assertThat(GroupCallSpotlight.displayedZoom(1.04f)).isNull()
+        assertThat(GroupCallSpotlight.displayedZoom(2f)).isEqualTo(2f)
+        assertThat(GroupCallSpotlight.displayedZoom(2.46f)).isEqualTo(2.5f)
+        assertThat(GroupCallSpotlight.displayedZoom(9f)).isEqualTo(GroupCallSpotlight.MAX_ZOOM)
+    }
+
+    @Test
+    fun `the chip carries the zoom factor after the title, with the local decimal separator`() {
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2f, decimalSeparator = ',')).isEqualTo("Écran de Karim · 2×")
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2.5f, decimalSeparator = ',')).isEqualTo("Écran de Karim · 2,5×")
+        assertThat(GroupCallSpotlight.featuredChipText("Karim's screen", zoom = 2.5f, decimalSeparator = '.')).isEqualTo("Karim's screen · 2.5×")
+    }
+
+    @Test
+    fun `at one times the chip is the title alone`() {
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 1f, decimalSeparator = ',')).isEqualTo("Écran de Karim")
+    }
 }
