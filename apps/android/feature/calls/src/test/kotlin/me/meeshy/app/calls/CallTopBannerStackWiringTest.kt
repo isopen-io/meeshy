@@ -147,4 +147,20 @@ class CallTopBannerStackWiringTest {
         assertThat(stop).contains("word: String")
         assertThat(stop).contains("label: String")
     }
+
+    @Test
+    fun `R3_3 - Annuler devient Arreter en fondu croise, et la capsule prend sa nouvelle largeur sans saut`() {
+        val stop = block(code("CallPillControls.kt"), "internal fun CallShareStopButton(", "\n}")
+        assertThat(stop).contains("AnimatedContent(")
+        assertThat(stop).contains("callWordSwap(")
+
+        val pill = block(code("CallRecordingControls.kt"), "internal fun CallRecordingStatusPill(", "\n}")
+        assertThat(pill).contains("AnimatedContent(")
+        assertThat(pill).contains("callWordSwap(")
+        assertThat(pill).doesNotContain("Crossfade(")
+
+        val swap = block(code("CallPillControls.kt"), "internal fun callWordSwap(", "\n}")
+        assertThat(swap).contains("SizeTransform(")
+        assertThat(swap).contains("CallChromeStow.fadeMillis(reduceMotion)")
+    }
 }
