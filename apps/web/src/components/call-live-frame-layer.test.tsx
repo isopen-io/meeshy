@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
@@ -168,13 +169,14 @@ describe('l’écran d’appel pose la carte', () => {
   test('une proposition reçue paraît sous l’en-tête, hors de ce qu’un toucher range (loi 11)', async () => {
     const view = mountNode(<CallScreen call={duoCall()} canShare effectsSupport={{ color: false, blur: false }} />);
     expect(view.find('[data-call-live-frame-slot]')).toBeNull();
-    act(() => callLiveFrameStore.setState({ callId: '6650c0ffee0000000000c411', proposal: { frameId: 'jovial.confettis', from: 'Awa' } }));
+    act(() => callLiveFrameStore.setState({ callId: '6650c0ffee0000000000c411', proposal: { frameId: 'jovial.fete.duo', from: 'Awa' } }));
     await act(async () => {
       await import('@/lib/calls/frames/frame-studio');
     });
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    for (let tries = 0; tries < 40 && view.find('[data-call-live-frame-slot]') === null; tries += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 25)));
     const slot = view.find('[data-call-live-frame-slot]');
     expect(slot).not.toBeNull();
+    expect(slot?.querySelector('[data-call-live-frame-proposal]')).not.toBeNull();
     expect(slot?.closest('[data-call-chrome-fade]')).toBeNull();
     expect(slot?.className.split(' ')).not.toContain('invisible');
     view.done();
@@ -238,7 +240,7 @@ describe('la carte et la capsule entrent et repartent en mouvement (C2.1, C2.7, 
 
   const none = { proposal: null, answer: null, notice: null } as const;
   const proposal = { proposal: { frameId: 'jovial.confettis', from: 'Awa' }, answer: null, notice: null } as const;
-  const answer = { proposal: null, answer: { from: 'Awa', reply: 'accepted' as const }, notice: null };
+  const answer = { proposal: null, answer: { frameId: 'jovial.fete.duo', from: 'Awa', reply: 'accepted' as const }, notice: null };
   const slots = () => played.filter((entry) => entry.what === 'slot');
   const finish = () => act(async () => void finishers.splice(0).forEach((resolve) => resolve()));
 
@@ -302,6 +304,11 @@ describe('la carte et la capsule entrent et repartent en mouvement (C2.1, C2.7, 
     view.done();
   });
 
+  test('la feuille sort la case qui repart de la mise en page, pour que la pile se referme sans l’attendre', () => {
+    const sheet = readFileSync(new URL('../styles/call-motion.css', import.meta.url), 'utf8');
+    expect(sheet).toMatch(/\[data-call-banner-stack\]\s*>\s*\[data-call-live-frame-slot\]\[data-leaving\][^{]*\{[^}]*position:\s*absolute/);
+  });
+
   test('le cadre gardé se fond : sa toile paraît et s’efface en fondu, sans déplacement, et ne prend aucun toucher', async () => {
     const studio = (await import('@/lib/calls/frames/frame-studio')).createFrameStudio();
     const surface = (frameId: string | null) => <CallLiveFrameSurface language="fr" studio={studio} shown={frameId === null ? null : { frameId, remoteSharedName: null }} call={duoCall()} stage={() => null} />;
@@ -309,13 +316,13 @@ describe('la carte et la capsule entrent et repartent en mouvement (C2.1, C2.7, 
     expect(view.find('[data-call-live-frame-surface-host]')).toBeNull();
     view.rerender(surface('jovial.fete.duo'));
     expect(view.find('[data-call-live-frame-surface-host] canvas[data-call-live-frame-surface]')).not.toBeNull();
-    expect(played.filter((entry) => entry.what === 'surface').map((entry) => entry.keyframes)).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
+    expect(played.filter((entry) => entry.what === 'surface').map((entry) => entry.keyframes)).toEqual([[{ opacity: 0, transform: 'none' }, { opacity: 1, transform: 'none' }]]);
     await finish();
     view.rerender(surface(null));
     const leaving = view.find('[data-call-live-frame-surface-host]');
     expect(leaving?.hasAttribute('data-leaving')).toBe(true);
     expect(leaving?.querySelector('canvas')).not.toBeNull();
-    expect(played.filter((entry) => entry.what === 'surface').map((entry) => entry.keyframes[1])).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+    expect(played.filter((entry) => entry.what === 'surface').map((entry) => entry.keyframes[1]?.opacity)).toEqual([1, 0]);
     await finish();
     expect(view.find('[data-call-live-frame-surface-host]')).toBeNull();
     view.done();

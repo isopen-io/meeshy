@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-import { STOW_REDUCED_MS, SWAP_MS } from './call-pill-motion';
+import { LEAVING, STOW_REDUCED_MS, SWAP_MS, type SwapShape } from './call-pill-motion';
 import { useRailPresence } from './use-rail-presence';
 
 /**
@@ -81,4 +81,36 @@ export function useRailFade<E extends HTMLElement>(shown: boolean): RefObject<E 
     painted.current = true;
   }, [shown]);
   return ref;
+}
+
+/**
+ * **LE MONTAGE MONTE DU BAS ET Y REDESCEND** (C1.12, #17813 ; `CallModeChromeMotion.risesFromBottom` d'iOS,
+ * Effets excepté) — sa barre et son carrousel (`controls`) arrivent par le bord du bas et repartent par lui,
+ * son fond (`backdrop`, l'aperçu plein écran) se fond ; sous « Réduire les animations », un fondu court sans
+ * montée. Joué par le moteur, que la règle générale n'éteint pas, et interruptible : revenir pendant le départ
+ * repart de l'opacité affichée. Le mode qui repart reste monté jusqu'à la fin de son mouvement, puis appelle
+ * `gone`. Retourne ce que porte l'élément qui repart (ni focus ni clic). Le moteur est chargé AVEC le mode
+ * (`loadMontageModeText`) : l'arrivée est jouée dès le premier rendu ; sans moteur, le mode se pose et repart d'un coup.
+ */
+export function useModeRise(controls: RefObject<HTMLElement | null>, backdrop: RefObject<HTMLElement | null>, leaving: boolean, gone: () => void): typeof LEAVING | Record<string, never> {
+  const engine = useEngine();
+  const running = useRef<ReadonlyArray<Animation | null>>([]);
+  const phase = useRef<boolean | null>(null);
+  const done = useRef(gone);
+  done.current = gone;
+  useLayoutEffect(() => {
+    if (phase.current === leaving) return;
+    phase.current = leaving;
+    const parts: ReadonlyArray<readonly [HTMLElement | null, SwapShape]> = [
+      [controls.current, 'bottom'],
+      [backdrop.current, 'fade'],
+    ];
+    const played = parts.map(([element, shape], index) => (element === null || engine === null ? null : engine.playSwap(element, !leaving, running.current[index] ?? null, shape)));
+    running.current = played;
+    if (!leaving) return;
+    const moving = played.filter((animation): animation is Animation => animation !== null);
+    if (moving.length === 0) done.current();
+    else void Promise.all(moving.map((animation) => animation.finished)).then(() => done.current(), () => undefined);
+  }, [leaving, engine]);
+  return leaving ? LEAVING : {};
 }

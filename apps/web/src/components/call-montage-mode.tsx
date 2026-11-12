@@ -15,6 +15,7 @@ import { startFrameClock } from '@/lib/calls/frame-clock';
 import type { FrameScope } from '@/lib/calls/frames/frame-filter';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
+import { loadModeMotion, useModeRise } from '@/lib/calls/use-mode-motion';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
 import { frameUsageText, loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -66,7 +67,7 @@ import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFram
  * remet par `loadFrames` et que le mode charge à son entrée.
  */
 
-export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadFrameUsageCatalog(language)]);
+export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadFrameUsageCatalog(language), loadModeMotion()]);
 
 export const MONTAGE_PREVIEW_FPS = 5;
 
@@ -107,6 +108,9 @@ type ModeProps = {
   readonly loadShelf?: ShelfLoader;
   /** L'interrupteur « Cadre » du cadre en direct (#16943, loi 16) : sans lui, le Montage ne fait que capturer. */
   readonly hold?: LiveFrameHold;
+  /** Le mode repart (C1.12) : il redescend par le bord du bas, puis appelle `onGone`. */
+  readonly leaving?: boolean;
+  readonly onGone?: () => void;
 };
 
 export type { LiveFrameHold };
@@ -141,7 +145,7 @@ const facesGlyph = (
   </svg>
 );
 
-export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = onRowWheel, audio = () => callAudioOf(call), env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold }: ModeProps) {
+export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = onRowWheel, audio = () => callAudioOf(call), env, save = saveCaptures, clipEnv, viewport = windowViewport, call, loadFrames, circleOf = browserCircle, loadShelf = browserShelf, hold, leaving = false, onGone = () => undefined }: ModeProps) {
   const [style, setStyle] = useState<MontageStyle>('grid');
   const [frameId, setFrameId] = useState<string | null>(null);
   const [requestedScope, setRequestedScope] = useState<FrameScope>('spotlight');
@@ -154,6 +158,8 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
   const root = useRef<HTMLDivElement>(null);
   const preview = useRef<HTMLCanvasElement>(null);
   const controls = useRef<HTMLDivElement>(null);
+  const backdrop = useRef<HTMLDivElement>(null);
+  const leavingAttributes = useModeRise(controls, backdrop, leaving, onGone);
   const thumbs = useRef(new Map<string, HTMLCanvasElement>());
   const painted = useRef(new WeakSet<HTMLCanvasElement>());
   const current = useRef<string>(style);
@@ -343,8 +349,8 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
   const previewLabel = frame === null ? t(language, 'callStudio.capture.preview', { style: t(language, `callStudio.montage.${style}`) }) : t(language, 'callStudio.capture.framePreview', { name: frameDisplayName(frame, language) });
 
   return (
-    <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="montage">
-      <div className="pointer-events-none fixed inset-0 z-0 grid place-items-center bg-media-backdrop" data-call-mode-preview="montage">
+    <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="montage" {...leavingAttributes}>
+      <div ref={backdrop} className="pointer-events-none fixed inset-0 z-0 grid place-items-center bg-media-backdrop" data-call-mode-preview="montage">
         <canvas
           ref={preview}
           width={previewSize.width}

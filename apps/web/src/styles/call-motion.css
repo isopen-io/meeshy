@@ -323,10 +323,38 @@
    capture (R1.6) qui repartent quittent la mise en page à l'instant et glissent vers le haut (`HeldSwap`),
    si bien que les bandeaux qui les suivaient remontent aussitôt, en translation (`useBannersClose`), au
    lieu de sauter quand ils se démontent. Le haut (`top`) de chacun est épinglé à sa place d'avant par
-   le moteur ; 0 tient pour le premier. */
+   le moteur ; 0 tient pour le premier. La case du cadre en direct (la carte de proposition, la capsule
+   de réponse) en fait autant (C2.7, C3.6). */
 [data-call-banner-stack] > [data-call-capture-slot][data-leaving],
+[data-call-banner-stack] > [data-call-live-frame-slot][data-leaving],
 [data-call-banner-stack] > [data-call-screen-share-banner][data-leaving] {
   position: absolute;
   inset-inline: 0;
   top: 0;
+}
+
+/* LE MONTAGE MONTE DU BAS ET Y REDESCEND (C1.12, #17813) — sa barre et son carrousel arrivent par le bord du bas
+   et repartent par lui (`useModeRise`, Web Animations : fondu court sous « Réduire les animations »). Qui repart
+   quitte la mise en page à l'instant, posé au bas du plan des commandes (`pb-6`), pour que la pilule qui revient
+   reprenne sa place sans attendre ; il ne prend plus le doigt. */
+[data-call-mode][data-leaving] {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 1.5rem;
+  pointer-events: none;
+}
+
+/* L'EN-TÊTE ET LA PILULE QUE LE MODE RELÈVE PARTENT PAR LEUR BORD (C1.12) — l'en-tête par le haut, la pilule par le
+   bas (`HeldSwap`), à leur place d'avant et sans repousser le reste ; la pilule qui revient, ou le mode qui repart,
+   ne se bousculent pas dans le plan des commandes. */
+[data-call-header-slot][data-leaving] {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+}
+
+[data-call-controls][data-leaving] {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 1.5rem;
 }
