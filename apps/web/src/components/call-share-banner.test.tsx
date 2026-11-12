@@ -1,13 +1,17 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { callActions } from '@/lib/calls/call-actions';
+import { NO_LIVE_FRAME } from '@/lib/calls/call-live-frame-store';
+import type { ActiveCall } from '@/lib/calls/call-store';
 import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import CallScreenShareBanner from './call-share-banner';
+import { CallTopBannerStack } from './call-screen';
 
 /**
  * **LE BANDEAU « VOUS PARTAGEZ VOTRE ÉCRAN · ARRÊTER »** (P16.4 à P16.12, #17746) — un verre rouge
@@ -118,5 +122,112 @@ describe('le bandeau de partage', () => {
     const view = mount(false);
     expect(view.find('[data-call-screen-share-banner]')).toBeNull();
     view.done();
+  });
+});
+
+/**
+ * **LA PILE SE REFERME EN MOUVEMENT** (S2.6, #17774 ; `CallTopBannerStack` d'iOS anime sa VStack, `shrinkVertically`
+ * d'Android) — le bandeau de partage qui repart quitte la mise en page à l'instant (il glisse vers le haut sans plus
+ * tenir de place) et les bandeaux qui le suivaient remontent de la place qu'ils avaient, par la transformation seule,
+ * au lieu de sauter. L'arrivée du bandeau les repousse de même.
+ */
+const call = (): ActiveCall => ({
+  callId: 'call-stack',
+  conversationId: 'c-1',
+  media: 'audio',
+  direction: 'outgoing',
+  isGroup: false,
+  title: 'Amina',
+  avatar: null,
+  callerName: null,
+  phase: { kind: 'connected' },
+  connectedAt: 0,
+  endedDurationSec: null,
+  micMuted: false,
+  cameraOn: false,
+  facing: 'user',
+  screenSharing: false,
+  members: {},
+  display: 'full',
+  localStream: null,
+  remoteStreams: {},
+  captions: [],
+  captionsMode: 'off',
+  captionPeers: [],
+  preview: null,
+  previewed: false,
+  transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
+  quality: null,
+});
+
+/** Où se voit la place de l'enregistrement : sous le bandeau tant qu'il tient sa place, juste sous l'en-tête sinon. */
+function layOutStack() {
+  const real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+  Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+    configurable: true,
+    value(this: HTMLElement) {
+      const held = document.querySelector('[data-call-screen-share-banner]:not([data-leaving])') !== null;
+      const top = this.matches('[data-call-banner-slot]') ? (held ? 100 : 40) : 0;
+      return { top, left: 0, right: 0, bottom: top, width: 0, height: 0, x: 0, y: top, toJSON: () => ({}) };
+    },
+  });
+  return () => (real === undefined ? Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect') : Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', real));
+}
+
+const mountStack = async (sharing: boolean) => {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  const render = (next: boolean) =>
+    act(async () => {
+      root.render(<CallTopBannerStack call={call()} present={{ 'screen-share': next, recording: true }} language="fr" hidden={false} liveFrame={NO_LIVE_FRAME} />);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
+  await render(sharing);
+  return {
+    host,
+    render,
+    done: () => {
+      act(() => root.unmount());
+      host.remove();
+    },
+  };
+};
+
+describe('la pile des bandeaux du haut se referme en mouvement (S2.6)', () => {
+  test('le bandeau de partage qui repart cède sa place à l’instant : les suivants remontent de ses 60 px, en transformation seule', async () => {
+    const motion = recordAnimations();
+    const unlay = layOutStack();
+    const view = await mountStack(true);
+    motion.played.length = 0;
+    await view.render(false);
+    const slot = view.host.querySelector('[data-call-banner-slot="recording"]');
+    const rise = motion.played.find((move) => move.element === slot);
+    expect(rise?.frames).toEqual([{ transform: 'translateY(60px)' }, { transform: 'none' }]);
+    expect(view.host.querySelector('[data-call-screen-share-banner]')?.hasAttribute('data-leaving')).toBe(true);
+    view.done();
+    unlay();
+    motion.restore();
+  });
+
+  test('le bandeau qui arrive repousse les suivants de la même façon, sans les faire sauter', async () => {
+    const motion = recordAnimations();
+    const unlay = layOutStack();
+    const view = await mountStack(false);
+    motion.played.length = 0;
+    await view.render(true);
+    const slot = view.host.querySelector('[data-call-banner-slot="recording"]');
+    const fall = motion.played.find((move) => move.element === slot);
+    expect(fall?.frames).toEqual([{ transform: 'translateY(-60px)' }, { transform: 'none' }]);
+    view.done();
+    unlay();
+    motion.restore();
+  });
+
+  test('la feuille sort le bandeau sortant de la mise en page, pour que la pile se referme sans l’attendre', () => {
+    const sheet = readFileSync(new URL('../styles/call-motion.css', import.meta.url), 'utf8');
+    expect(sheet).toMatch(/\[data-call-banner-stack\]\s*>\s*\[data-call-screen-share-banner\]\[data-leaving\]\s*\{[^}]*position:\s*absolute/);
   });
 });
