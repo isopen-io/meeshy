@@ -256,6 +256,6 @@ final class CallTopBannerStackTests: XCTestCase {
         let live = try XCTUnwrap(stack.range(of: "case .liveFrame:"))
         let tail = String(stack[live.upperBound...])
         XCTAssertTrue(tail.contains(".padding(.horizontal, CallTopBannerStack.horizontalMargin)"))
-        XCTAssertFalse(tail.contains("MeeshySpacing.lg"), "P16.4 : la même marge que partage et enregistrement")
+        XCTAssertFalse(tail.contains("MeeshySpacing.lg"), "P16.4 : la marge de la pile, celle du bandeau de partage")
     }
 }
