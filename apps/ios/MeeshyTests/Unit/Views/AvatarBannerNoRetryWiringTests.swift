@@ -99,7 +99,7 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
 
     func test_callSelfView_suspendedTile_showsTheLocalUserPhoto() throws {
         let source = try appSource("Meeshy/Features/Call/Views/CallView+SelfView.swift")
-        let tile = try block(from: "private var videoSuspendedTileBody: some View {", upTo: "VStack(spacing: MeeshySpacing.xsPlus)", in: source)
+        let tile = try block(from: "struct CallVideoSuspendedTileBody: View {", upTo: "VStack(spacing: MeeshySpacing.xsPlus)", in: source)
         XCTAssertTrue(tile.contains("CachedAvatarImage("))
         XCTAssertTrue(tile.contains("localUser?.avatar"), "La vignette « vidéo en pause » montre la photo de l'utilisateur local.")
         XCTAssertFalse(tile.contains("Text(initial)"))

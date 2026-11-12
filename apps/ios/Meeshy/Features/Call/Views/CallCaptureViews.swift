@@ -84,18 +84,6 @@ struct CallJournalComposer {
     }
 }
 
-/// R1 — la place que la capsule prend sous l'en-tête : la vignette et ses
-/// rangées descendent d'autant pendant qu'elle est montrée (la planche pose la
-/// vignette à `top:130`, sous la puce). Pure, pour être testée seule.
-enum CallCaptureAlertClearance {
-    static let capsuleHeight: CGFloat = 44
-    static let margin: CGFloat = 8
-
-    static func top(isAlertShown: Bool) -> CGFloat {
-        isAlertShown ? capsuleHeight + margin : 0
-    }
-}
-
 /// La capsule R1 : rouge, centrée sous l'en-tête, un petit anneau blanc puis
 /// la phrase. Une capture ponctuelle passe au bout de quelques secondes ; un
 /// enregistrement d'écran reste tant qu'il dure. Paramètres primitifs.
@@ -138,6 +126,7 @@ struct CallCaptureAlertCapsule: View, Equatable {
         .padding(.horizontal, MeeshySpacing.lg)
         .frame(minHeight: 44)
         .background(MeeshyColors.error.opacity(0.9), in: Capsule())
+        .modifier(CallTopBannerHeightReporter(banner: .capture))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text)
     }

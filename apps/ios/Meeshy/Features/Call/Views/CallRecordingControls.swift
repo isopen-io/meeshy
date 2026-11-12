@@ -207,9 +207,12 @@ struct CallRecordingOverlay: View, Equatable {
         reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
     }
 
+    /// #17791 (R3.10) — la couche rend sa hauteur réelle (carte d'accord, capsule, avis à deux
+    /// lignes) : ma vignette descend sous elle, jamais à côté.
     var body: some View {
         content
             .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: stage)
+            .modifier(CallTopBannerHeightReporter(banner: .recording))
     }
 
     @ViewBuilder

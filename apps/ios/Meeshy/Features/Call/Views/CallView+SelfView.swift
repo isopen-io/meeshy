@@ -25,7 +25,7 @@ extension CallView {
         let halfW = size.width / 2
         let halfH = size.height / 2
         let margin = Self.pipMargin
-        let topInset = safeArea.top + QualityThresholds.pipTopClearance + CallCaptureAlertClearance.top(isAlertShown: transcriptionService.captureJournal.alert != nil) + CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: callManager.screenShare.isSharing)
+        let topInset = safeArea.top + QualityThresholds.pipTopClearance + selfTileTopBannerClearance
         let bottomInset = safeArea.bottom + QualityThresholds.pipBottomClearance
         let leadingX = safeArea.leading + margin + halfW
         let trailingX = container.width - safeArea.trailing - margin - halfW
@@ -39,6 +39,16 @@ extension CallView {
         }
     }
 
+    /// #17791 — la place de la pile de bannières sous l'en-tête (partage local, enregistrement, capture), à sa hauteur mesurée.
+    var selfTileTopBannerClearance: CGFloat {
+        let counted = CallTopBannerStack.countedForSelfTile(
+            isLocalScreenShareShown: callManager.screenShare.isSharing,
+            isRecordingShown: callManager.recording.phase != .idle || callManager.recording.notice != nil,
+            isCaptureAlertShown: transcriptionService.captureJournal.alert != nil
+        )
+        return CallTopBannerStack.selfTileClearance(counted: counted, heights: topBannerHeights)
+    }
+
     /// G1.11 — rangée, ma vignette garde son cadre et passe à sa petite taille par une échelle.
     var selfTileStowFactor: CGFloat { CallSelfTileScale.restingFactor(selfTileScale, isChromeVisible: isChromeVisible) }
 
@@ -48,7 +58,7 @@ extension CallView {
         let available = CGSize(
             width: container.width - safeArea.leading - safeArea.trailing - 2 * Self.pipMargin,
             height: container.height - safeArea.top - safeArea.bottom
-                - QualityThresholds.pipTopClearance - QualityThresholds.pipBottomClearance - CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: callManager.screenShare.isSharing)
+                - QualityThresholds.pipTopClearance - QualityThresholds.pipBottomClearance - selfTileTopBannerClearance
         )
         return CallSelfTileScale.fitted(CallSelfTileScale.liveSize(pinch: selfTilePinch, from: selfTileScale), in: available)
     }
@@ -81,7 +91,7 @@ extension CallView {
                     }
                     .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                     .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
-                    .modifier(CallSelfTilePlacement(position: CGPoint(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height), reservesBanner: callManager.screenShare.isSharing, reduceMotion: reduceMotion))
+                    .modifier(CallSelfTilePlacement(position: CGPoint(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height), clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))
                     .gesture(
                         DragGesture()
                             .onChanged { pipDragOffset = $0.translation }
@@ -159,19 +169,22 @@ extension CallView {
         GeometryReader { geo in
             let size = pipTileSize(in: geo.size, safeArea: geo.safeAreaInsets)
             let base = pipCenter(pipCorner, in: geo.size, size: size, safeArea: geo.safeAreaInsets)
-            videoSuspendedTileBody
+            CallVideoSuspendedTileBody()
                 .frame(width: size.width, height: size.height)
                 .modifier(CallSelfTileOutline(color: MeeshyColors.warning.opacity(MeeshyOpacity.heavy), lineWidth: 1, stowFactor: selfTileStowFactor))
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                 .modifier(CallSelfTileStow(factor: selfTileStowFactor, anchor: CallSelfTileScale.anchor(of: base, in: geo.size), isChromeVisible: isChromeVisible, reduceMotion: reduceMotion))
-                .modifier(CallSelfTilePlacement(position: base, reservesBanner: callManager.screenShare.isSharing, reduceMotion: reduceMotion))
+                .modifier(CallSelfTilePlacement(position: base, clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
                 .accessibilityHint(String(localized: "call.video.suspended.hint", defaultValue: "Connexion faible, la vidéo reprendra automatiquement", bundle: .main))
         }
     }
+}
 
-    private var videoSuspendedTileBody: some View {
+/// La tuile « vidéo en pause » : mon avatar et son bandeau discret (sortie du type `CallView`, #17791).
+struct CallVideoSuspendedTileBody: View {
+    var body: some View {
         // The suspended camera is OURS : our own face, photo else initials.
         let localUser = AuthManager.shared.currentUser
         let localName = localUser?.displayName ?? localUser?.username ?? "?"
