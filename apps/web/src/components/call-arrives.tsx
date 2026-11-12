@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
-import { LEAVING } from '@/lib/calls/use-pill-motion';
+import { LEAVING, useGlassTone } from '@/lib/calls/use-pill-motion';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
 /**
@@ -10,9 +10,11 @@ import { prefersReducedMotion } from '@/lib/view/reduced-motion';
  * Opacité seule, en Web Animations (la règle générale de « Réduire les animations » coupe les transitions et les
  * animations CSS, pas celles-ci) : plus court sous « Réduire les animations ». La première peinture du conteneur
  * ne la joue pas deux fois : elle part au montage, une fois. Sans API d'animation, elle arrive et repart d'un coup.
+ * `prominent` : le verre qu'elle porte change de ton en fondu (L5.8, #17849), sans qu'elle se remonte.
  */
-export function Arrives({ className, children, leaving = false, ...rest }: { readonly className: string; readonly children: ReactNode; readonly leaving?: boolean } & Record<`data-${string}`, string>) {
+export function Arrives({ className, children, leaving = false, prominent = false, ...rest }: { readonly className: string; readonly children: ReactNode; readonly leaving?: boolean; readonly prominent?: boolean } & Record<`data-${string}`, string>) {
   const box = useRef<HTMLDivElement>(null);
+  useGlassTone(box, prominent);
   const [gone, setGone] = useState(false);
   useLayoutEffect(() => {
     const frames = leaving ? [{ opacity: 1 }, { opacity: 0 }] : [{ opacity: 0 }, { opacity: 1 }];

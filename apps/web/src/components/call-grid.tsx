@@ -322,7 +322,7 @@ type CapsuleProps = {
 function SpotlightCapsule({ kit, language, screen, full, leaving, onGrid, onToggleImmersive, children }: CapsuleProps) {
   return (
     <div className={`absolute ${leaving ? 'end-5' : 'end-2'} top-2 flex flex-col items-end gap-2`} data-call-chrome-fade="" {...(full ? { 'data-call-chrome-keep': '' } : {})}>
-      <kit.Arrives leaving={leaving} className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
+      <kit.Arrives leaving={leaving} prominent={screen} className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
         <kit.Button label={translate(language, 'call.spotlight.back')} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />} onPress={onGrid} size={44} data={{ 'data-call-grid-back': '' }} />
         <kit.Button
           label={translate(language, full ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
