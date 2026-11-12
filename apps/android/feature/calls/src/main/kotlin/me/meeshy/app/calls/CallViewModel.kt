@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallParticipantNames
 import me.meeshy.sdk.model.call.CallIdentity
 import me.meeshy.sdk.model.call.CallPreflightDecision
 import me.meeshy.sdk.model.call.CallPreviewPhase
@@ -929,12 +930,13 @@ class CallViewModel @Inject constructor(
         val captures = peer.liveCaptures.map { it.copy(name = CallCapturerName.resolve(it.userId, roster, config.peerName)) }
         _state.value = CallPresenter.present(
             callState, config, media, elapsedSeconds, connectionQuality, waiting.state,
-            peer.qualityDegraded, peer.screenCapturing || peer.screenshotFlashing, peer.caption,
+            peer.qualityDegraded, peer.screenCapture.isShown, peer.caption,
             peer.audioEnabled, peer.videoEnabled, videoAutoPaused, mediaEstablished,
             peerScreenSharing = peer.screenSharing, videoNotice = videoNotice, liveCaptures = captures,
         ).withGroupTitle(groupTitle?.text(groupTitleWording.current())).copy(
             isOnHold = hold.isOnHold.value,
-            peerScreenCapturerName = CallCapturerName.resolve(peer.capturerId, roster, config.peerName),
+            peerScreenCapturerName = CallCapturerName.resolve(peer.screenCapture.capturerId, roster, config.peerName),
+            participantNames = CallParticipantNames.of(roster, config.peerId, config.peerName),
         )
         syncPreview()
     }

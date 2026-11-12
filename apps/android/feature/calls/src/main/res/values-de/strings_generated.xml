@@ -222,8 +222,6 @@
     <string name="call_recording_accept">Zustimmen</string>
     <string name="call_recording_active">Aufnahme läuft</string>
     <string name="call_recording_ask">%1$s möchte den Anruf aufnehmen</string>
-    <string name="call_recording_askDetail">Die Aufnahme beginnt nur, wenn alle zustimmen, und wird dann zur Unterhaltung hinzugefügt.</string>
-    <string name="call_recording_askDetail_video">Der Anrufbildschirm und sein gesamter Ton werden nur aufgenommen, wenn alle zustimmen, und dann zur Unterhaltung hinzugefügt.</string>
     <string name="call_recording_ask_video">%1$s möchte den Anruf als Video aufnehmen</string>
     <string name="call_recording_cancel">Abbrechen</string>
     <string name="call_recording_caption">Aufnehmen</string>
@@ -239,6 +237,7 @@
     <string name="call_recording_someone">Ein Teilnehmer</string>
     <string name="call_recording_start">Anruf aufnehmen</string>
     <string name="call_recording_stop">Aufnahme beenden</string>
+    <string name="call_recording_stop_word">Beenden</string>
     <string name="call_recording_stopped_joined">Jemand ist dem Anruf beigetreten: Aufnahme beendet</string>
     <string name="call_recording_stopped_other">Aufnahme beendet</string>
     <string name="call_recording_stopped_refused">Aufnahme abgelehnt</string>

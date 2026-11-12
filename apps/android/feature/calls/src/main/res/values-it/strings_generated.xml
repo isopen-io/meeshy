@@ -222,8 +222,6 @@
     <string name="call_recording_accept">Accetta</string>
     <string name="call_recording_active">Registrazione in corso</string>
     <string name="call_recording_ask">%1$s vuole registrare la chiamata</string>
-    <string name="call_recording_askDetail">La registrazione inizia solo se tutti accettano, poi viene aggiunta alla conversazione.</string>
-    <string name="call_recording_askDetail_video">Lo schermo della chiamata e tutto il suo audio vengono registrati solo se tutti accettano, poi vengono aggiunti alla conversazione.</string>
     <string name="call_recording_ask_video">%1$s vuole registrare la chiamata in video</string>
     <string name="call_recording_cancel">Annulla</string>
     <string name="call_recording_caption">Registra</string>
@@ -239,6 +237,7 @@
     <string name="call_recording_someone">Un partecipante</string>
     <string name="call_recording_start">Registra la chiamata</string>
     <string name="call_recording_stop">Interrompi la registrazione</string>
+    <string name="call_recording_stop_word">Interrompi</string>
     <string name="call_recording_stopped_joined">Qualcuno si è unito alla chiamata: registrazione interrotta</string>
     <string name="call_recording_stopped_other">Registrazione interrotta</string>
     <string name="call_recording_stopped_refused">Registrazione rifiutata</string>

@@ -1,6 +1,8 @@
 package me.meeshy.app.calls
 
 import androidx.annotation.StringRes
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -36,10 +38,10 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallButtonRole
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallRecordingKind
 import me.meeshy.sdk.model.call.CallRecordingNotice
 import me.meeshy.sdk.model.call.CallRecordingPhase
-import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.icons.MeeshyIcons
@@ -51,16 +53,19 @@ private const val NOTICE_MILLIS = 4_000L
 internal data class CallRecordingStatus(
     @StringRes val textRes: Int,
     @StringRes val stopLabelRes: Int,
+    /** R3.3 — le mot du bouton blanc de la capsule (« Arrêter », « Annuler » en attente) ; le libellé accessible garde la phrase entière. */
+    @StringRes val stopWordRes: Int,
 )
 
 internal object CallRecordingPresenter {
     /** `null` : rien à montrer (repos, ou une carte de consentement tient la place). */
     fun status(phase: CallRecordingPhase): CallRecordingStatus? = when (phase) {
         CallRecordingPhase.Idle -> null
-        is CallRecordingPhase.Asking -> CallRecordingStatus(R.string.call_recording_waiting, R.string.call_recording_cancel)
+        is CallRecordingPhase.Asking -> CallRecordingStatus(R.string.call_recording_waiting, R.string.call_recording_cancel, R.string.call_recording_cancel)
         is CallRecordingPhase.Pending ->
-            if (phase.mustAnswer) null else CallRecordingStatus(R.string.call_recording_waiting, R.string.call_recording_cancel)
-        is CallRecordingPhase.Recording -> CallRecordingStatus(R.string.call_recording_active, R.string.call_recording_stop)
+            if (phase.mustAnswer) null else CallRecordingStatus(R.string.call_recording_waiting, R.string.call_recording_cancel, R.string.call_recording_cancel)
+        is CallRecordingPhase.Recording ->
+            CallRecordingStatus(R.string.call_recording_active, R.string.call_recording_stop, R.string.call_recording_stop_word)
     }
 
     /** Le participant requis qui n'a pas répondu voit la carte, pas la pastille. */
@@ -81,42 +86,42 @@ internal object CallRecordingPresenter {
     }
 }
 
-/** « Enregistrement en cours » (chez tous, pendant toute la capture) ou « En attente de l'accord de tous… », avec son arrêt. */
+/**
+ * « Enregistrement en cours » (chez tous, pendant toute la capture) ou « En attente de l'accord de tous… », avec son arrêt :
+ * UNE capsule de verre, sous le voile du ton de l'écran (R3.12), dont seuls les mots changent de l'attente à l'enregistrement
+ * (R2.10) ; le bouton est la capsule blanche à encre rouge de la planche, qui dit le mot (R3.3).
+ */
 @Composable
 internal fun CallRecordingStatusPill(
     text: String,
+    stopWord: String,
     stopLabel: String,
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    MeeshyGlassSurface(
+    val fadeMillis = CallChromeStow.fadeMillis(rememberCallReduceMotion())
+    CallGlassPlate(
         modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
         shape = CircleShape,
     ) {
+        CallToneScrim()
         Row(
-            modifier = Modifier.padding(start = MeeshySpacing.mdPlus),
+            modifier = Modifier.padding(start = MeeshySpacing.mdPlus, end = MeeshySpacing.xs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
         ) {
             RecordingDot()
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Box(
-                modifier = Modifier
-                    .size(PILL_TARGET)
-                    .clip(CircleShape)
-                    .clickable(onClickLabel = stopLabel, role = Role.Button, onClick = onStop)
-                    .semantics { contentDescription = stopLabel },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(MeeshyIcons.Stop, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Crossfade(targetState = text, animationSpec = tween(fadeMillis), label = "callRecordingWords") { words ->
+                Text(
+                    text = words,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
+            CallShareStopButton(onStop = onStop, label = stopLabel, word = stopWord)
         }
     }
 }
@@ -134,10 +139,11 @@ internal fun CallRecordingNoticePill(
         delay(NOTICE_MILLIS)
         onDismiss()
     }
-    MeeshyGlassSurface(
+    CallGlassPlate(
         modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
         shape = CircleShape,
     ) {
+        CallToneScrim()
         Row(
             modifier = Modifier.padding(start = MeeshySpacing.mdPlus),
             verticalAlignment = Alignment.CenterVertically,
