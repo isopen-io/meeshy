@@ -57,7 +57,7 @@ object CallTopBannerStack {
      * plus l'écart de la pile.
      */
     fun selfTileClearanceDp(counted: Set<CallTopBanner>, heightsDp: Map<CallTopBanner, Float>): Float =
-        ordered(counted).sumOf { ((heightsDp[it] ?: 0f).coerceAtLeast(BANNER_HEIGHT_DP) + GAP_DP).toDouble() }.toFloat()
+        ordered(counted - CallTopBanner.LiveFrame).sumOf { ((heightsDp[it] ?: 0f).coerceAtLeast(BANNER_HEIGHT_DP) + GAP_DP).toDouble() }.toFloat()
 
     /** P16.6 — un bandeau repart vers le haut, d'où il vient ; « Réduire les animations » ne garde que le fondu court. */
     fun leavesTowardTop(reduceMotion: Boolean): Boolean = !reduceMotion
