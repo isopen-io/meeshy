@@ -58,6 +58,19 @@ class CallRecordingConsentTest {
     }
 
     @Test
+    fun `the deadline is the one the gateway serves, never a window of android's own`() {
+        val served = CallRecordingConsent.onRequested(idle, request.copy(expiresAtMillis = 45_000L))
+        assertThat(CallRecordingConsent.onTick(served, 30_000L)).isInstanceOf(CallRecordingConsentState.Pending::class.java)
+        assertThat(CallRecordingConsent.onTick(served, 45_000L)).isInstanceOf(CallRecordingConsentState.Ended::class.java)
+    }
+
+    @Test
+    fun `a request served without a deadline never expires on the device`() {
+        val served = CallRecordingConsent.onRequested(idle, request.copy(expiresAtMillis = null))
+        assertThat(CallRecordingConsent.onTick(served, Long.MAX_VALUE)).isInstanceOf(CallRecordingConsentState.Pending::class.java)
+    }
+
+    @Test
     fun `stopped ends a pending or running recording and a second request while pending is ignored`() {
         val stopped = CallRecordingStopped("c", "r1", "stopped", "me", true)
         val recording = CallRecordingConsent.onStarted(pending(), started)
