@@ -88,7 +88,7 @@ Loi 13 :
 - Budget : R3, quatorze boutons qui entrent sans image perdue, bouton touchable pendant le mouvement. Démonté : ni minuteur, ni animation, ni écouteur retenu. Web : poids mesuré par `measure-weight.mjs`.
 
 ## 6. Jetons et mesures
-Planche, rail court : disques de 44 (K02), écart 6 (`MeeshySpacing.xsPlus`), marge 5, largeur 54, capsule ; longueur `n × 44 + (n − 1) × 6 + 10` (six : 304, sept : 358) ; filet 1 pt à 28 % de blanc, retrait 8 ; à 10 du bord de la scène (26 du bord de l'écran) ; centré sur le milieu de la scène.
+Planche, rail court : disques de 44 (K02), écart 6 (`MeeshySpacing.xsPlus`), marge 5, largeur 54, capsule ; longueur `n × 44 + (n − 1) × 6 + 10` (six : 304, sept : 354) ; filet 1 pt à 28 % de blanc, retrait 8 ; à 10 du bord de la scène (26 du bord de l'écran) ; centré sur le milieu de la scène.
 
 Planche, rail libellé : marge 10 (`smPlus`), 8 en étroit (`sm`) ; rayon 26 ; écart 4 (`xs`) ; rangée de 44 (`MeeshyControlSize.tapTarget`, 48 dp sur Android), rayon 22 (`MeeshyRadius.xlPlus`), glyphe 20 (`MeeshyIconSize.xl`) dans un carré de 44, écart glyphe-mot 10 (4 en étroit), retrait de fin 12 (`md`) ; mot semi-gras 15 (`bodySize`), 14 en étroit (`labelSize`), 12 en serré (`smallSize`) ; en-tête 12 très gras, interlettrage 0,08 em, blanc à 75 %, retraits 4 / 10 / 6 ; pied : filet blanc 14 %, marge 6, retrait 8, deux doux de 44 écartés de 6 ; longueur `46 + n × 44 + (n − 1) × 4 + pied` (huit rangées : 426) ; grisé 0,42 ; à 40 de la scène en paysage, centré dans son couloir en portrait.
 
