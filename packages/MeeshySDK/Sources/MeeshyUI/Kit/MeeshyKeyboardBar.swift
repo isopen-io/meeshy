@@ -11,6 +11,8 @@ import SwiftUI
 /// - « OK » grandit sur une ligne avec Dynamic Type jusqu'à `xxxLarge`, puis passe en coche quand la rangée
 ///   ne tient plus (`MeeshyKeyboardBarFit`) : son nom reste dit.
 /// - Cinq outils au plus. Sans outil, la capsule épouse « OK ».
+/// - Sur iOS 26+, les verres des outils fondent dans un même conteneur (`MeeshyGlassGroup`), posé DANS la
+///   capsule : comme la pilule de K10, jamais un verre isolé sur le verre de la barre.
 ///
 /// `Equatable` sur ses valeurs (fermetures hors comparaison) : un hôte qui se re-rend à paramètres égaux, la
 /// frappe, le mouvement du clavier ou un réglage du panneau ne le re-rendent pas. Le `glyphKey` dit ce qui
@@ -55,9 +57,11 @@ public struct MeeshyKeyboardBar<Glyph: View>: View, Equatable {
     }
 
     public var body: some View {
-        ViewThatFits(in: .horizontal) {
-            row(display: .title)
-            row(display: .glyph)
+        MeeshyGlassGroup(spacing: MeeshyKeyboardDockRecipe.toolGlassSpacing) {
+            ViewThatFits(in: .horizontal) {
+                row(display: .title)
+                row(display: .glyph)
+            }
         }
         .padding(MeeshyKeyboardDockRecipe.barPadding)
         .frame(height: MeeshyKeyboardDockRecipe.barHeight)

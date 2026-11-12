@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import UIKit
 
 extension MeeshyKitCatalog {
     nonisolated static let entryK17 = MeeshyKitCatalogEntry(
@@ -7,7 +8,7 @@ extension MeeshyKitCatalog {
         name: "MeeshyKeyboardDock",
         states: [
             MeeshyKitCatalogState(id: "barre", boardView: "A1", backdrop: .media, isTouchable: true),
-            MeeshyKitCatalogState(id: "outil-ouvert", backdrop: .media, isTouchable: true),
+            MeeshyKitCatalogState(id: "outil-ouvert", boardView: "A3", backdrop: .media, isTouchable: true),
             MeeshyKitCatalogState(id: "panneau", boardView: "A2", backdrop: .media, isTouchable: true),
             MeeshyKitCatalogState(id: "bande", boardView: "A5", backdrop: .media, isTouchable: true),
             MeeshyKitCatalogState(id: "deux-actions", boardView: "S7", backdrop: .media, isTouchable: true),
@@ -28,11 +29,18 @@ extension MeeshyKitCatalog {
 
 /// L'échantillon d'un état : un bloc d'hôte, la bande, la barre et, dessous, un bloc neutre de la hauteur du
 /// clavier retenu (ou le panneau qui le remplace). Les outils basculent au toucher, par la loi du dock.
+///
+/// Les états qui se touchent portent aussi un VRAI champ dans le bloc d'hôte : le toucher, c'est lever le
+/// clavier réel, la barre du dock s'y colle et les outils remplacent le clavier par leur panneau. Pendant
+/// l'écriture, la composition statique s'efface ; au repos (et dans les instantanés), le champ vide ne peint rien.
 private struct MeeshyKeyboardDockSample: View {
     let stateID: String
     let isPressed: Bool
 
     @State private var input: MeeshyKeyboardDockInput
+    @State private var link = MeeshyKeyboardDockLink()
+    @State private var focus = MeeshyKeyboardDockSampleFocus()
+    @State private var isEditing = false
 
     private static let windowHeight: CGFloat = 560
 
@@ -45,18 +53,51 @@ private struct MeeshyKeyboardDockSample: View {
     var body: some View {
         VStack(spacing: 0) {
             host
-            if stateID == "bande" { band }
-            MeeshyKeyboardBar(
-                label: "Barre du texte", items: items, openItem: input.panelID, confirm: confirm,
-                tone: stateID == "clair" ? .onLight : .deep,
-                maxWidth: MeeshyKeyboardDockRecipe.maxBarWidth, onItem: tapped
-            )
-            .equatable()
-            .padding(.bottom, MeeshyKeyboardDockRecipe.keyboardGap)
-            bottom
+            if !isEditing { composition }
         }
         .frame(width: width, height: Self.windowHeight)
         .environment(\.meeshyModeFixedPress, isPressed ? true : nil)
+        .background { if hasField { dock } }
+    }
+
+    @ViewBuilder
+    private var composition: some View {
+        if stateID == "bande" { band }
+        MeeshyKeyboardBar(
+            label: "Barre du texte", items: items, openItem: input.panelID, confirm: confirm,
+            tone: stateID == "clair" ? .onLight : .deep,
+            maxWidth: MeeshyKeyboardDockRecipe.maxBarWidth, onItem: tapped
+        )
+        .equatable()
+        .padding(.bottom, MeeshyKeyboardDockRecipe.keyboardGap)
+        bottom
+    }
+
+    // MARK: Le vrai champ
+
+    private var hasField: Bool {
+        MeeshyKitCatalog.entryK17.states.first { $0.id == stateID }?.isTouchable ?? false
+    }
+
+    private var dock: some View {
+        MeeshyKeyboardDock(
+            link: link, label: "Barre du texte", items: items, input: input,
+            confirm: MeeshyKeyboardDockConfirm(
+                title: "OK", label: "Valider le texte", hint: "Termine l'écriture et rend la scène",
+                action: { [focus] in focus.end() }
+            ),
+            onInputChange: { input = $0 },
+            above: { if stateID == "bande" { band } },
+            panel: { id in panelBody(id) }
+        )
+    }
+
+    private func panelBody(_ id: String) -> some View {
+        ForEach(0..<3, id: \.self) { row in
+            Text("\(items.first { $0.id == id }?.label ?? id) \(row + 1)")
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(MeeshyColors.onMedia)
+        }
     }
 
     // MARK: Le décor
@@ -65,6 +106,12 @@ private struct MeeshyKeyboardDockSample: View {
         RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
             .fill(stateID == "clair" ? MeeshyColors.backgroundPrimary(isDark: false) : MeeshyColors.mediaFill)
             .overlay { Image(systemName: "textformat").font(.largeTitle).foregroundStyle(MeeshyColors.onMediaMuted) }
+            .overlay {
+                if hasField {
+                    MeeshyKeyboardDockSampleField(link: link, focus: focus, onEditing: { isEditing = $0 })
+                        .accessibilityLabel("Texte de démonstration")
+                }
+            }
             .padding(MeeshyKeyboardDockRecipe.edge)
     }
 
@@ -159,6 +206,86 @@ private struct MeeshyKeyboardDockSample: View {
         case "panneau": return .panel("font")
         default: return .keyboard
         }
+    }
+}
+
+/// Ce qui termine l'écriture de l'échantillon : « OK » rend le focus du champ.
+private final class MeeshyKeyboardDockSampleFocus {
+    nonisolated deinit {}
+
+    weak var field: UITextView?
+
+    func end() {
+        field?.resignFirstResponder()
+    }
+}
+
+/// Le vrai champ de l'échantillon : vide et transparent, il ne peint rien au repos. Le dock s'y attache par le
+/// lien ; chaque toucher remonte par `fieldTouched()`, sans voler aucun geste du champ.
+private struct MeeshyKeyboardDockSampleField: UIViewRepresentable {
+    let link: MeeshyKeyboardDockLink
+    let focus: MeeshyKeyboardDockSampleFocus
+    let onEditing: (Bool) -> Void
+
+    final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
+        nonisolated deinit {}
+
+        let link: MeeshyKeyboardDockLink
+        var onEditing: (Bool) -> Void
+
+        init(link: MeeshyKeyboardDockLink, onEditing: @escaping (Bool) -> Void) {
+            self.link = link
+            self.onEditing = onEditing
+        }
+
+        @objc func touched() {
+            link.fieldTouched()
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            onEditing(true)
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            onEditing(false)
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            true
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(link: link, onEditing: onEditing)
+    }
+
+    func makeUIView(context: Context) -> UITextView {
+        let field = UITextView()
+        field.backgroundColor = .clear
+        field.textAlignment = .center
+        field.font = .preferredFont(forTextStyle: .title2)
+        field.adjustsFontForContentSizeCategory = true
+        field.textColor = UIColor(MeeshyColors.onMedia)
+        field.tintColor = UIColor(MeeshyColors.onMedia)
+        field.delegate = context.coordinator
+        let touch = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.touched))
+        touch.cancelsTouchesInView = false
+        touch.delegate = context.coordinator
+        field.addGestureRecognizer(touch)
+        focus.field = field
+        link.attach(to: field)
+        return field
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        context.coordinator.onEditing = onEditing
+    }
+
+    static func dismantleUIView(_ uiView: UITextView, coordinator: Coordinator) {
+        coordinator.link.detach()
     }
 }
 #endif

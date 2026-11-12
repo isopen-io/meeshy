@@ -18,6 +18,8 @@ public nonisolated enum MeeshyKeyboardDockRecipe {
     public static let toolDiameter: CGFloat = MeeshyControlSize.tapTarget
     public static let confirmHeight: CGFloat = MeeshyModeChromeRecipe.capsuleHeight
     public static let confirmMargin: CGFloat = MeeshyModeChromeRecipe.capsuleMargin
+    /// La distance sous laquelle les verres des outils fondent l'un dans l'autre (iOS 26+).
+    public static let toolGlassSpacing: CGFloat = MeeshySpacing.sm
     public static let maxItems = 5
     public static let maxBarWidth: CGFloat = 480
 

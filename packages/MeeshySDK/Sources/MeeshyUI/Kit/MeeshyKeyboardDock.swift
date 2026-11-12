@@ -98,8 +98,7 @@ struct MeeshyKeyboardDockAccessoryRoot<Glyph: View, Above: View>: View {
     var body: some View {
         MeeshyKeyboardDockStack(gap: MeeshyKeyboardDockRecipe.aboveGap) {
             if hasAbove {
-                VStack(spacing: 0) { above }
-                    .transition(.opacity.combined(with: .offset(y: MeeshyKeyboardDockRecipe.bandTravel(reduceMotion: reduceMotion))))
+                VStack(spacing: 0) { above.transition(bandTransition) }
             }
             MeeshyKeyboardBar(
                 label: label, items: items, openItem: openItem, confirm: confirm, tone: tone, maxWidth: maxWidth,
@@ -108,7 +107,17 @@ struct MeeshyKeyboardDockAccessoryRoot<Glyph: View, Above: View>: View {
             .equatable()
         }
         .padding(.bottom, MeeshyKeyboardDockRecipe.keyboardGap)
-        .animation(.easeOut(duration: MeeshyKeyboardDockRecipe.bandEnterDuration), value: hasAbove)
+    }
+
+    /// La bande de l'hôte entre par le bas avec un fondu en 250 ms et sort en 200 ms, que l'hôte l'anime ou
+    /// non : l'animation est portée par la transition. « Réduire les animations » : le fondu seul.
+    private var bandTransition: AnyTransition {
+        let travel = MeeshyKeyboardDockRecipe.bandTravel(reduceMotion: reduceMotion)
+        let motion = AnyTransition.opacity.combined(with: .offset(y: travel))
+        return .asymmetric(
+            insertion: motion.animation(.easeOut(duration: MeeshyKeyboardDockRecipe.bandEnterDuration)),
+            removal: motion.animation(.easeIn(duration: MeeshyKeyboardDockRecipe.bandExitDuration))
+        )
     }
 }
 

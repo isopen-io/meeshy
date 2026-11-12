@@ -79,8 +79,10 @@ final class MeeshyKeyboardDockController<Accessory: View, PanelRoot: View> {
         }
     }
 
-    /// Rien ne reste : vues d'entrée retirées du champ, écoute libérée.
+    /// Rien ne reste : vues d'entrée retirées du champ, écoute libérée, et le lien ne garde plus les fermetures
+    /// de l'hôte (un lien qui survit au dock ne retient pas son écran).
     func detach() {
+        link?.onFieldTouched = nil
         subscription = nil
         gate = MeeshyKeyboardDockPlaceGate()
         retained = 0

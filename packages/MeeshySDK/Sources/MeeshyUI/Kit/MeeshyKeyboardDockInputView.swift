@@ -36,8 +36,10 @@ final class MeeshyKeyboardDockInputView: UIInputView {
 
     /// Le panneau prend la hauteur du clavier retenu, par son cadre ET par sa contrainte : le système lit l'un
     /// ou l'autre selon qu'il pose la vue. La contrainte reste à peine sous le niveau requis pour que la
-    /// hauteur du contenu, qui défile, ne la contredise jamais.
+    /// hauteur du contenu, qui défile, ne la contredise jamais. Une hauteur inchangée ne touche à rien : le
+    /// dock se met à jour à chaque rendu de l'hôte, la mise en page du clavier ne doit pas suivre.
     func setHeight(_ height: CGFloat) {
+        guard heightConstraint?.constant != height || frame.height != height else { return }
         if let heightConstraint {
             heightConstraint.constant = height
         } else {
