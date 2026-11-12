@@ -383,3 +383,33 @@ describe('CallGrid — les gestes (#8392)', () => {
     view.done();
   });
 });
+
+describe('CallGrid — droite à gauche : capsule et plaque se posent au coin de FIN et de DÉBUT (U3.5, U3.2)', () => {
+  test('la capsule de la une est ancrée au coin de fin, jamais à droite en dur', () => {
+    const html = grid({ choice: { kind: 'self' } });
+    expect(html).toMatch(/class="absolute end-2 top-2[^"]*" data-call-chrome-fade/);
+    expect(html).not.toContain('right-2 top-2');
+  });
+
+  test('la plaque de nom d’une vignette est ancrée au coin de début, jamais à gauche en dur', () => {
+    const html = grid();
+    expect(html).toMatch(/glass-call absolute bottom-2 start-2/);
+    expect(html).not.toContain('left-2');
+  });
+});
+
+describe('CallGrid — « Quitter le plein écran » reste visible en plein écran (U2.4)', () => {
+  const full = () => grid({ choice: { kind: 'self' }, immersive: true });
+
+  test('le bloc de la capsule échappe au rangement du chrome quand l’écran est plein', () => {
+    expect(full()).toMatch(/class="absolute end-2 top-2[^"]*" data-call-chrome-fade="" data-call-chrome-keep=""/);
+    expect(grid({ choice: { kind: 'self' } })).not.toContain('data-call-chrome-keep');
+  });
+
+  test('le bouton est un glyphe sur verre, comme « Plein écran » : jamais un disque blanc actif', () => {
+    const button = (html: string) => /<button[^>]*data-call-fullscreen[^>]*>/.exec(html)?.[0] ?? '';
+    expect(button(full())).not.toContain('background:var(--color-on-media)');
+    expect(button(full())).toContain('aria-pressed="true"');
+    expect(button(full())).toContain('aria-label="Quitter le plein écran"');
+  });
+});
