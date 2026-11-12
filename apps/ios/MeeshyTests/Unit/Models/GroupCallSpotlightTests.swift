@@ -320,6 +320,6 @@ final class GroupCallSpotlightTests: XCTestCase {
         let header = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Header.swift"))
         XCTAssertTrue(header.contains("CallGlassVeil(shape: Circle()"), "les boutons de l'en-tête s'assombrissent aussi")
         let root = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView.swift"))
-        XCTAssertTrue(root.contains(".environment(\\.callGlassTone, receivedScreenGlassTone)"), "le ton se pose une fois, à la racine de l'appel")
+        XCTAssertTrue(root.contains(".environment(\\.callGlassTone, CallGlassTone.resolve(showsReceivedScreen:"), "le ton se pose une fois, à la racine de l'appel")
     }
 }

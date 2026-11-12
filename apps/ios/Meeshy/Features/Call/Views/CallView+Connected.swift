@@ -410,7 +410,7 @@ extension CallView {
         if case .reconnecting = callManager.callState { reconnecting = true } else { reconnecting = false }
         let capsule = headerCapsule
         return CallVideoBadgeAccessibility.label(
-            title: capsule?.title,
+            title: capsule?.spokenTitle,
             participants: capsule?.participantCount,
             includesDuration: capsule?.showsDuration ?? true,
             signalDegraded: signalStrength.isDegraded ? signalStrength.accessibilityLabel : nil,
@@ -443,6 +443,7 @@ extension CallView {
             videoStream(local: effectiveSwapStreams, contentMode: primaryVideoContentMode)
                 .callCameraZoom(isEnabled: effectiveSwapStreams)
                 .ignoresSafeArea()
+                .modifier(CallReceivedScreenZoom(isReceivingScreen: callManager.screenShare.isRemoteSharing))
             // Le cadre en direct du duo, composé ici, au-dessus de la vidéo.
             liveFrameSurface
                 .ignoresSafeArea()
