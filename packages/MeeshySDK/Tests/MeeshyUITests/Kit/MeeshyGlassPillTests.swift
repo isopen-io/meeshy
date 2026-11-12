@@ -188,7 +188,41 @@ struct MeeshyGlassPillTests {
         #expect(MeeshyGlassPill<EmptyView, EmptyView, Text>.hasContent)
     }
 
+    @Test("loi 13 : un verre seulement pour ce qui se porte — une rangée mesurée vide ou repliée n'en demande pas")
+    func glass_onlyForWhatIsCarried() {
+        func carries(buttons: Bool = false, primary: Bool = false, above: Bool = false,
+                     showsRow: Bool = true, empty: Bool = false) -> Bool {
+            MeeshyGlassPillRecipe.carriesGlass(hasButtons: buttons, hasPrimary: primary, hasAbove: above,
+                                               showsRow: showsRow, rowMeasuresEmpty: empty)
+        }
+        #expect(!carries())
+        #expect(carries(buttons: true))
+        #expect(!carries(buttons: true, empty: true), "un ForEach sans élément : aucune bande vide")
+        #expect(!carries(buttons: true, showsRow: false), "rangée repliée, sans dessus : rien à porter")
+        #expect(carries(buttons: true, primary: true, empty: true), "l'action principale porte seule le verre")
+        #expect(carries(buttons: true, above: true, showsRow: false), "sans rangée, le dessus garde le verre")
+        #expect(!carries(primary: true, showsRow: false), "l'action principale vit dans la rangée : repliée, elle ne porte plus le verre")
+    }
+
     // MARK: - Source
+
+    @Test("la rangée se pose depuis son DÉBUT : SwiftUI la retourne en RTL, un second retournement la remettait à l'endroit")
+    func source_rowIsNotFlippedByHand() throws {
+        let code = try Self.code("MeeshyGlassPill.swift")
+        #expect(!code.contains("layoutDirection"), "la pilule ne lit pas la direction : la disposition est retournée par SwiftUI")
+        #expect(!code.contains("bounds.maxX"), "aucune position comptée depuis la droite")
+        #expect(code.contains("x: bounds.minX + offsets[index]"))
+    }
+
+    @Test("la pilule mesure sa rangée et passe la loi 13 au morphisme, qui ne pose le verre que si elle porte quelque chose")
+    func source_emptyRowCarriesNoGlass() throws {
+        let pill = try Self.code("MeeshyGlassPill.swift")
+        let morph = try Self.code("MeeshyGlassPillMorph.swift")
+        #expect(pill.contains("MeeshyGlassPillRecipe.carriesGlass("))
+        #expect(pill.contains("drawsGlass: drawsGlass"))
+        #expect(pill.contains(".accessibilityHidden(!drawsGlass)"))
+        #expect(morph.contains("if drawsGlass {"))
+    }
 
     @Test("un seul verre, demandé à K01 par le morphisme, pour la pilule et tout ce qu'elle porte")
     func source_oneGlass() throws {
