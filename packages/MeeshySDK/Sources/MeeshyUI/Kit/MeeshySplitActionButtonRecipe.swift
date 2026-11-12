@@ -368,7 +368,7 @@ enum MeeshySplitActionTrigger {
     static func pressLabel(
         isEnabled: Bool,
         haptic: MeeshyGlassButtonHaptic,
-        play: (MeeshyGlassButtonHaptic) -> Void = MeeshyGlassButtonTrigger.playSystemHaptic,
+        play: @MainActor (MeeshyGlassButtonHaptic) -> Void = MeeshyGlassButtonTrigger.playSystemHaptic,
         action: () -> Void,
         onDisabledPress: (() -> Void)?
     ) -> Bool {
@@ -383,7 +383,7 @@ enum MeeshySplitActionTrigger {
     static func pressChevron(
         choose: MeeshySplitActionChoose,
         haptic: MeeshyGlassButtonHaptic,
-        play: (MeeshyGlassButtonHaptic) -> Void = MeeshyGlassButtonTrigger.playSystemHaptic
+        play: @MainActor (MeeshyGlassButtonHaptic) -> Void = MeeshyGlassButtonTrigger.playSystemHaptic
     ) -> Bool {
         MeeshyGlassButtonTrigger.perform(isEnabled: choose.isEnabled, haptic: haptic, play: play, action: choose.action)
     }
