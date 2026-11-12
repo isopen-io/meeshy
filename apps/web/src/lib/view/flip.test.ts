@@ -67,6 +67,17 @@ describe('flipKeyframes — un changement de TAILLE se joue lui aussi en transfo
     expect(frames).toEqual([{ transform: 'translate(0px, -40px)' }, { transform: 'none' }]);
   });
 
+  test('une boîte que sa propre échelle réduit (ma vignette rangée, `scale` à 0,5) : la translation, qui joue SOUS cette échelle, se divise par elle et le bord repart d’où il était', () => {
+    const [start] = flipKeyframes({ first: from, last: to, reducedMotion: false, origin: { x: 1, y: 0 }, carried: { x: 0.5, y: 0.5 } }) ?? [];
+    const sx = 112 / 130;
+    expect(start).toEqual({ transform: `translate(${(262 - 698 - 130 * (1 - sx)) / 0.5}px, ${(128 - 60) / 0.5}px) scale(${sx}, ${160 / 96})` });
+  });
+
+  test('un simple déplacement sous une échelle portée se divise lui aussi ; une échelle nulle ou absente ne divise rien', () => {
+    expect(flipKeyframes({ first: { x: 0, y: 0 }, last: { x: 0, y: 40 }, reducedMotion: false, carried: { x: 0.8, y: 0.8 } })?.[0]).toEqual({ transform: 'translate(0px, -50px)' });
+    expect(flipKeyframes({ first: { x: 0, y: 0 }, last: { x: 0, y: 40 }, reducedMotion: false, carried: { x: 0, y: 0 } })?.[0]).toEqual({ transform: 'translate(0px, -40px)' });
+  });
+
   test('réduire les animations : la taille change, un fondu court remplace le mouvement (opacité seule)', () => {
     expect(flipKeyframes({ first: from, last: to, reducedMotion: true, origin: { x: 0, y: 0 } })).toEqual([{ opacity: 0 }, { opacity: 1 }]);
   });
