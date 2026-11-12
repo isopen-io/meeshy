@@ -80,4 +80,52 @@ final class CallTopBannerStackTests: XCTestCase {
     func test_liveFrameDisplay_isSuspended_onlyForASuspension() {
         XCTAssertFalse(CallLiveFrameDisplay.none.isSuspended)
     }
+
+    // MARK: - #17732 — bandeau « Vous partagez · Arrêter » (P16.4, P16.6, P16.8, P16.11)
+
+    func test_selfTileClearance_localShareShown_reservesTheBannerAndItsGap() {
+        XCTAssertEqual(CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: true), 52)
+        XCTAssertEqual(
+            CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: true),
+            CallTopBannerStack.headerRowClearance,
+            "le bandeau (44) et l'écart (8) valent la hauteur de rangée d'en-tête : même pas que la pile"
+        )
+    }
+
+    func test_selfTileClearance_noLocalShare_takesNoPlace() {
+        XCTAssertEqual(CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: false), 0)
+    }
+
+    func test_horizontalMargin_isTwelve_likeTheBoard() {
+        XCTAssertEqual(CallTopBannerStack.horizontalMargin, 12)
+    }
+
+    func test_selfTile_reservesThePlaceOfTheLocalShareBanner() throws {
+        let selfView = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+SelfView.swift")
+        )
+        XCTAssertTrue(selfView.contains("CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: callManager.screenShare.isSharing)"))
+    }
+
+    func test_shareBanner_spansTheWidth_withStopAtTheTrailingEnd() throws {
+        let controls = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallScreenShareControls.swift")
+        )
+        XCTAssertTrue(controls.contains("Spacer(minLength: 0)"), "Arrêter est posé à l'extrémité de fin")
+        XCTAssertTrue(controls.contains(".frame(maxWidth: .infinity"), "le bandeau tient presque toute la largeur")
+        let stack = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift")
+        )
+        XCTAssertTrue(stack.contains(".padding(.horizontal, CallTopBannerStack.horizontalMargin)"))
+    }
+
+    func test_bannerStack_entersAndLeavesByTheTopEdge_andStowsWithTheChrome() throws {
+        let stack = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTopBannerStackView.swift")
+        )
+        XCTAssertTrue(stack.contains(".move(edge: .top)"), "le bandeau arrive du haut et repart vers lui")
+        XCTAssertTrue(stack.contains(".transition(reduceMotion ? .opacity"), "Réduire les animations : fondu seul")
+        XCTAssertTrue(stack.contains("CallEdgeStow(edge: .top"), "il se range vers son bord avec le chrome, comme l'en-tête")
+        XCTAssertTrue(stack.contains("CallChromeStow.animation(reduceMotion: reduceMotion)"))
+    }
 }
