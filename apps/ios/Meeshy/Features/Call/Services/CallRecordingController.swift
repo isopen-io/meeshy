@@ -34,6 +34,12 @@ enum CallRecordingPhase: Equatable {
         return nil
     }
 
+    /// Le nom de celui qui a demandé, lu dans l'annuaire de l'appel ; inconnu, il est vide et la
+    /// carte dit « Un participant » (`CallRecordingCopy.ask`).
+    func requesterName(resolvedBy name: (String) -> String) -> String {
+        requesterId.map(name) ?? ""
+    }
+
     var isActive: Bool { self != .idle }
 
     var isRecording: Bool {

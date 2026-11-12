@@ -52,7 +52,7 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
                 .modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.screenShareBanner), reduceMotion: reduceMotion))
                 .callChromeVisibility(chrome.isVisible(.screenShareBanner))
         case .recording:
-            CallRecordingOverlay(phase: recording.phase, notice: recording.notice, kind: recording.kind, requesterName: recording.phase.requesterId.map(participantName) ?? "", onAnswer: { _ = recording.answer(accepted: $0) }, onStop: { _ = recording.stop() }, onDismiss: recording.dismissNotice, showsStatus: chrome.isVisible(.recordingStatus), topInset: topInset)
+            CallRecordingOverlay(phase: recording.phase, notice: recording.notice, kind: recording.kind, requesterName: recording.phase.requesterName(resolvedBy: participantName), onAnswer: { _ = recording.answer(accepted: $0) }, onStop: { _ = recording.stop() }, onDismiss: recording.dismissNotice, showsStatus: chrome.isVisible(.recordingStatus), topInset: topInset)
                 .equatable()
         case .capture:
             CallCaptureAlertCapsule(alert: captureJournal.alert, onDismiss: captureJournal.dismissFlash)

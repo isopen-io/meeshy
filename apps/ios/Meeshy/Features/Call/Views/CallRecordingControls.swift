@@ -30,10 +30,12 @@ enum CallRecordingCopy {
         String(localized: "call.recording.waiting", defaultValue: "En attente de l’accord de tous…", bundle: .main)
     }
 
+    static var someone: String {
+        String(localized: "call.recording.someone", defaultValue: "Un participant", bundle: .main)
+    }
+
     static func ask(name: String, kind: CallRecordingKind = .audio) -> String {
-        let who = name.isEmpty
-            ? String(localized: "call.recording.someone", defaultValue: "Un participant", bundle: .main)
-            : name
+        let who = name.isEmpty ? someone : name
         let format = kind == .video
             ? String(localized: "call.recording.ask.video", defaultValue: "%@ veut enregistrer l’appel en vidéo", bundle: .main)
             : String(localized: "call.recording.ask", defaultValue: "%@ veut enregistrer l’appel", bundle: .main)
@@ -215,11 +217,9 @@ struct CallRecordingOverlay: View, Equatable {
         switch phase {
         case .pending(_, _, _, _, true):
             consentCard.transition(presence)
-        case .asking, .pending:
-            stowable(statusPill(text: CallRecordingCopy.waiting, word: CallRecordingCopy.cancel, label: CallRecordingCopy.cancel))
-                .transition(presence)
-        case .recording:
-            stowable(statusPill(text: CallRecordingCopy.active, word: CallRecordingCopy.stopWord, label: CallRecordingCopy.label(isActive: true)))
+        case .asking, .pending, .recording:
+            stowable(statusPill(isRecording: phase.isRecording))
+                .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: phase.isRecording)
                 .transition(presence)
         case .idle:
             if let notice {
@@ -249,7 +249,7 @@ struct CallRecordingOverlay: View, Equatable {
             }
         }
         .padding(MeeshySpacing.lg)
-        .callChromeGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
+        .modifier(CallRecordingGlass(shape: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)))
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
@@ -275,19 +275,23 @@ struct CallRecordingOverlay: View, Equatable {
         .buttonStyle(.plain)
     }
 
-    private func statusPill(text: String, word: String, label: String) -> some View {
+    /// L'attente puis l'enregistrement : la même capsule, dont seuls les mots changent.
+    private func statusPill(isRecording: Bool) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {
             recordingDot
-            Text(text)
+            Text(isRecording ? CallRecordingCopy.active : CallRecordingCopy.waiting)
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            stopButton(word: word, label: label)
+            stopButton(
+                word: isRecording ? CallRecordingCopy.stopWord : CallRecordingCopy.cancel,
+                label: isRecording ? CallRecordingCopy.label(isActive: true) : CallRecordingCopy.cancel
+            )
         }
         .padding(.leading, MeeshySpacing.mdPlus)
         .padding(.trailing, MeeshySpacing.xs)
-        .callChromeGlass(in: Capsule())
+        .modifier(CallRecordingGlass(shape: Capsule()))
         .accessibilityElement(children: .contain)
     }
 
@@ -325,7 +329,7 @@ struct CallRecordingOverlay: View, Equatable {
             .accessibilityLabel(CallRecordingCopy.close)
         }
         .padding(.leading, MeeshySpacing.mdPlus)
-        .callChromeGlass(in: Capsule())
+        .modifier(CallRecordingGlass(shape: Capsule()))
         .task(id: notice) {
             guard await cancellableSleep(for: .seconds(4)), !Task.isCancelled else { return }
             onDismiss()
@@ -374,5 +378,18 @@ struct CallRecordingPlayback: View {
                 accentColor: accentHex
             )
         }
+    }
+}
+
+/// Loi 18 · R2.11 · R3.12 — le verre adaptatif d'`adaptiveLiquidGlass`, par son entrée du kit
+/// (`meeshyGlass`, ton `theme`) : Liquid Glass sur iOS 26, verre dessiné avant, plein sous
+/// « Réduire la transparence » ; sous le voile d'appel qui l'assombrit sur un contenu clair (loi 3).
+private struct CallRecordingGlass<S: Shape>: ViewModifier {
+    let shape: S
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(CallGlassVeil(shape: shape, resting: 0.22))
+            .meeshyGlass(in: shape, tone: .theme)
     }
 }

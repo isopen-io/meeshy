@@ -529,13 +529,18 @@ final class CallViewGlassGuardTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
     }
 
-    /// Loi 18 : la carte, la capsule et l'avis sont l'atome de verre adaptatif sous son voile,
-    /// jamais un matériau système dessiné dans la vue.
-    func test_recordingCardAndCapsules_areTheAdaptiveGlass_neverASystemMaterial() throws {
+    /// Loi 18 : la carte, la capsule et l'avis sont le verre d'`adaptiveLiquidGlass` (Liquid Glass
+    /// sur iOS 26, verre dessiné avant, plein sous « Réduire la transparence ») sous le voile
+    /// d'appel qui l'assombrit sur un contenu clair (loi 3) ; jamais un matériau système.
+    func test_recordingCardAndCapsules_areTheAdaptiveLiquidGlass_underTheCallVeil() throws {
         let controls = try recordingControls()
         XCTAssertFalse(controls.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
+        XCTAssertFalse(controls.contains(".callChromeGlass(in:"), "callChromeGlass retombe sur un matériau avant iOS 26")
+        let glass = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private struct CallRecordingGlass<S: Shape>: ViewModifier", in: controls))
+        XCTAssertTrue(glass.contains("CallGlassVeil(shape: shape"))
+        XCTAssertTrue(glass.contains(".meeshyGlass(in: shape, tone: .theme)"), "la recette d'adaptiveLiquidGlass, par l'entrée du kit")
         let overlay = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallRecordingOverlay: View, Equatable", in: controls))
-        XCTAssertEqual(overlay.components(separatedBy: ".callChromeGlass(in:").count - 1, 3, "carte, capsule et avis")
+        XCTAssertEqual(overlay.components(separatedBy: ".modifier(CallRecordingGlass(shape:").count - 1, 3, "carte, capsule et avis")
     }
 
     /// R2.2 — la planche dessine la question puis les deux boutons : aucune phrase d'appoint.
