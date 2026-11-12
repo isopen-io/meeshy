@@ -59,6 +59,9 @@ export function stowedGlass({ height, keptTop, keptHeight, padding }: StowInput)
   return { scale: Math.min(1, (keptHeight + 2 * padding) / height), shift: Math.max(0, height - padding - (keptTop + keptHeight)) };
 }
 
+/** Ce que porte ce qui repart : marqué sortant, ni focus ni clic, caché au lecteur d'écran. */
+export const LEAVING = { 'data-leaving': '', inert: true, 'aria-hidden': true } as const;
+
 /** Le fondu court : l'opacité seule, jamais un déplacement. */
 export const stowFadeKeyframes = (stowing: boolean): readonly Keyframe[] =>
   stowing

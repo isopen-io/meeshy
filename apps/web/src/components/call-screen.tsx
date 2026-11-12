@@ -38,7 +38,7 @@ import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { callChromeStore, usePublishChrome } from '@/lib/calls/call-chrome-store';
-import { HeldSwap, LEAVING, useBannersClose, useStageMorph, useStowFade, useViewMotion, type ViewMotion } from '@/lib/calls/use-pill-motion';
+import { HeldSwap, LEAVING, useBannersClose, useModeHold, useStageMorph, useStowFade, useViewMotion, type ViewMotion } from '@/lib/calls/use-pill-motion';
 import { useCallSwipeDown } from '@/lib/calls/use-call-swipe-down';
 import { useSpotlightChoice } from '@/lib/calls/use-spotlight-choice';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
@@ -422,6 +422,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   };
   const shown = live ? layerOffered(layer, offer) : IDLE;
   const chrome = layerChrome(shown);
+  /* Le Montage qui repart redescend par le bas avant de se démonter (C1.12) ; Effets se démonte à l'instant. */
+  const held = useModeHold(chrome.mode, ['montage']);
   const disposition = controlsDisposition({ participantCount: participantCountOf(call, layout), showsGroupGrid: layout === 'grid' });
   const rails = railRows(disposition, set, shown);
   const viewport = useCallViewport();
@@ -656,7 +658,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   };
   const exitMode = () => send({ type: 'exit-mode' });
   const mode =
-    chrome.mode === 'effects' ? (
+    held.mode === 'effects' ? (
       <CallEffectsMode
         language={language}
         colorAvailable={support.color}
@@ -667,8 +669,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         captions={call.captions}
         onExit={exitMode}
       />
-    ) : chrome.mode === 'montage' ? (
-      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} />
+    ) : held.mode === 'montage' ? (
+      <CallMontageMode language={language} quitGlyph={closeGlyph} onExit={exitMode} stage={() => root.current} call={call} loadFrames={loadFrameStudio} hold={liveFrameHold(call, liveFrame)} leaving={held.leaving} onGone={held.gone} />
     ) : null;
   /* LE CHROME SE RANGE VERS SES BORDS, ET REVIENT PAR LE MÊME CHEMIN (G1.11, G2.8, #17406) : l'en-tête par le haut, la pilule par le bas, les bandeaux en fondu (`data-call-stow`, `call-motion.css`). Il ne retire JAMAIS le doigt à un bouton encore visible (#8735) : rangés d'un toucher, ils deviennent `invisible` à la FIN du mouvement, et reviennent d'un coup. Sous « Réduire les animations » : un fondu court, sans déplacement (`useStowFade`). */
   useStowFade(root, hidden);
@@ -704,11 +706,9 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
       <CallLiveFrameSurfaceSlot shown={framed} state={liveFrame} language={language} call={call} stage={() => stageRef.current} load={loadFrameStudio} />
       <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
-        {chrome.header ? (
-          <div className="relative z-20" data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-plane="">
-            <CallScreenHeader call={call} language={language} joined={joined} prominent={sharedScreenShown} />
-          </div>
-        ) : null}
+        <HeldSwap value={chrome.header ? true : null} shape="top" className="relative z-20" data-call-stow="top" aria-hidden={hidden ? true : undefined} data-call-plane="" data-call-header-slot="">
+          {() => <CallScreenHeader call={call} language={language} joined={joined} prominent={sharedScreenShown} />}
+        </HeldSwap>
         {bannerStack}
         {layout === 'grid' ? (
           <>
@@ -742,8 +742,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         {live ? (
           <div className="relative z-20 flex flex-col gap-3 pb-6" style={reserveEnd} data-call-plane="" {...reserve}>
             {mode !== null && text === 'captionsAlone' ? standaloneCaptions() : null}
-            {mode === null ? (
-              <div className="flex flex-col gap-3" {...(stowedWithCaptions ? {} : { 'data-call-stow': 'bottom' })} aria-hidden={hidden && !stowedWithCaptions ? true : undefined} data-call-controls="">
+            <HeldSwap value={chrome.mode === null ? true : null} shape="bottom" className="flex flex-col gap-3" {...(stowedWithCaptions ? {} : { 'data-call-stow': 'bottom' })} aria-hidden={hidden && !stowedWithCaptions ? true : undefined} data-call-controls="">
+              {() => (
                 <CallControlPill
                   call={call}
                   language={language}
@@ -759,10 +759,9 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
                   panel={pillPanel === null ? null : <Suspense fallback={null}>{panelOf(pillPanel)}</Suspense>}
                   stowed={stowedWithCaptions}
                 />
-              </div>
-            ) : (
-              <Suspense fallback={<CallModePending label={t('call.close')} glyph={closeGlyph} onExit={exitMode} />}>{mode}</Suspense>
-            )}
+              )}
+            </HeldSwap>
+            {mode === null ? null : <Suspense fallback={held.leaving ? null : <CallModePending label={t('call.close')} glyph={closeGlyph} onExit={exitMode} />}>{mode}</Suspense>}
           </div>
         ) : (
           <div className="pb-6">{phase === 'incoming' ? incomingControls : endedView}</div>

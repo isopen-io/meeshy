@@ -294,6 +294,8 @@ try {
       await openActions(page);
       await page.click('[data-call-control="effects"]');
       check(await appears(page, '[data-call-mode="effects"]'), `${label} : « Effets » entre dans le mode Effets`);
+      // L'en-tête et la pilule repartent par leur bord (C1.12) : ils quittent le DOM à la FIN de leur mouvement.
+      await until(page, () => ['[data-call-header]', '[data-call-control-pill]', '[data-call-rails]'].every((selector) => document.querySelector(selector) === null));
       const left = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-rails]'].filter((selector) => document.querySelector(selector) !== null));
       check(left.length === 0, `${label} : l'en-tête, la pilule et les rails partent (${JSON.stringify(left)})`);
       check(await appears(page, '[data-call-mode-preview="effects"] video'), `${label} : ma vidéo prend tout l'écran`);
@@ -442,7 +444,7 @@ try {
       await page.click('[data-call-screen] button[aria-label="Réactiver le micro"]').catch(() => undefined);
       await page.click('[data-call-control="capture"]');
       check(await appears(page, '[data-call-mode="montage"]'), `${label} : « Capturer » entre dans le mode Montage`);
-      check((await page.$('[data-call-control-pill]')) === null, `${label} : la pilule part`);
+      check(await vanishes(page, '[data-call-control-pill]'), `${label} : la pilule part`);
       const order = await page.$$eval('[data-call-mode="montage"] [data-carousel-item]', (items) => items.map((item) => item.getAttribute('data-carousel-item')));
       check(JSON.stringify(order) === JSON.stringify(['screen', 'cover', 'gold', 'redcarpet', 'grid', 'strip', 'polaroid', 'magazine', 'film', 'neon', 'noir', 'comic', 'heart']), `${label} : treize montages, dans l'ordre (${order.join(' · ')})`);
       const paintedAll = (selector) =>

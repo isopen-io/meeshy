@@ -581,6 +581,8 @@ try {
       await page.click('[data-call-rail="mine"] [data-call-control="effects"]');
       check(await appears(page, '[data-call-mode="effects"]'), 'mode : « Effets » du rail entre dans le mode Effets');
       check((await page.getAttribute('[data-call-screen]', 'data-call-layer')) === 'mode', 'mode : l’écran passe au mode');
+      // L'en-tête et la pilule repartent par leur bord (C1.12) : ils quittent le DOM à la fin de leur mouvement.
+      await until(page, () => ['[data-call-header]', '[data-call-control-pill]', '[data-call-rails]', '[data-call-zoom]'].every((selector) => document.querySelector(selector) === null));
       const modeChrome = await page.evaluate(() => ['[data-call-header]', '[data-call-control-pill]', '[data-call-rails]', '[data-call-zoom]'].filter((selector) => document.querySelector(selector) !== null));
       check(modeChrome.length === 0, `mode : en-tête, pilule, rails et zoom partent (${JSON.stringify(modeChrome)})`);
       const carousel = await page.$eval('[data-call-mode-carousel]', (element) => {
