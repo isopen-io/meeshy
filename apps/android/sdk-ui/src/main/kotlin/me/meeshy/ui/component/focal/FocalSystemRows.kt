@@ -156,7 +156,7 @@ internal fun FocalCallNoticeRow(
     val slot = LocalCallJournal.current
     Column(modifier = modifier) {
         FocalCallNoticeCard(notice, createdAtIso, accentColor, onCallBack, onLongPress)
-        if (journal != null && slot != null) FocalCallJournalUnderBubble(journal, slot)
+        if (journal != null && slot != null) FocalCallJournalUnderBubble(journal, slot, alignEnd = notice.isOutgoing)
     }
 }
 

@@ -27,4 +27,12 @@ class CallJournalUnderBubbleGuardTest {
     fun `le detail de l'historique et la bulle dessinent la meme section`() {
         assertThat(code("CallDetailSheet.kt")).contains("CallDetailTranscriptSection(")
     }
+
+    @Test
+    fun `un appel qui n'a rien garde ne deplie pas du vide sous la bulle`() {
+        val bubble = code("CallJournalUnderBubble.kt")
+
+        assertThat(bubble).contains("FocalCallJournalOffer.saysNothingWasKept(")
+        assertThat(bubble).contains("audio_fullscreen_transcription_empty")
+    }
 }

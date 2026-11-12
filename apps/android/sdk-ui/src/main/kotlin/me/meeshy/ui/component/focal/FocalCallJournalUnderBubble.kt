@@ -31,16 +31,26 @@ import me.meeshy.ui.theme.MeeshySpacing
  * Sous la bulle d'appel : « Afficher la transcription » déplie le journal d'après l'appel et ses lignes de capture, « Masquer »
  * le replie (planche A1 ; web `CallNoticeAction`). L'état survit au défilement de la liste ; le journal lui-même est celui de
  * l'historique, déjà chargé quand il l'est, sans attente affichée. Rien ne s'ajoute sans hôte ([LocalCallJournal] absent).
+ * La bascule se range du côté de la carte, comme ce qu'iOS pose sous elle (`BubbleCallNoticeView`) : à droite pour un
+ * appel sortant, à gauche pour un entrant (côtés logiques, droite à gauche compris).
  */
 @Composable
-internal fun FocalCallJournalUnderBubble(request: CallJournalRequest, slot: CallJournalSlot, modifier: Modifier = Modifier) {
+internal fun FocalCallJournalUnderBubble(
+    request: CallJournalRequest,
+    slot: CallJournalSlot,
+    alignEnd: Boolean,
+    modifier: Modifier = Modifier,
+) {
     var open by rememberSaveable(request.callId) { mutableStateOf(false) }
     val reduceMotion = LocalReduceMotion.current
     val label = stringResource(if (open) R.string.focal_call_journal_hide else R.string.focal_call_journal_show)
     Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         TextButton(
             onClick = { open = !open },
-            modifier = Modifier.heightIn(min = 48.dp),
+            modifier = Modifier
+                .align(if (alignEnd) Alignment.End else Alignment.Start)
+                .padding(horizontal = MeeshySpacing.lg)
+                .heightIn(min = 48.dp),
         ) {
             Text(text = label, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = request.accent)
         }

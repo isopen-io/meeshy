@@ -4,6 +4,8 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.CallSummaryMetadata
 import me.meeshy.sdk.model.CallSummaryMetadata.MediaType
 import me.meeshy.sdk.model.CallSummaryMetadata.Outcome
+import me.meeshy.sdk.model.call.CallTranscriptLine
+import me.meeshy.sdk.model.call.CallTranscriptState
 import org.junit.Test
 
 /** R1.11 — quelle bulle d'appel du fil offre le journal d'après l'appel sous elle (planche A1, A2). */
@@ -38,5 +40,18 @@ class FocalCallJournalOfferTest {
     @Test fun `un appel sans duree ou sans identifiant n'offre rien`() {
         assertThat(FocalCallJournalOffer.isOffered(summary(duration = 0))).isFalse()
         assertThat(FocalCallJournalOffer.isOffered(summary(callId = " "))).isFalse()
+    }
+
+    @Test fun `un journal ouvert sur un appel qui n'a rien garde dit qu'il n'y a aucune transcription`() {
+        assertThat(FocalCallJournalOffer.saysNothingWasKept(CallTranscriptState.Absent)).isTrue()
+    }
+
+    @Test fun `un journal qui charge, echoue ou a des lignes ne se dit pas vide`() {
+        val line = CallTranscriptLine(
+            speakerName = "Awa", isLocal = false, elapsedLabel = "00:04", original = "Hi", translated = "Salut", translatedLanguage = "fr",
+        )
+        listOf(CallTranscriptState.Loading, CallTranscriptState.Failed, CallTranscriptState.Ready(listOf(line))).forEach { state ->
+            assertThat(FocalCallJournalOffer.saysNothingWasKept(state)).isFalse()
+        }
     }
 }
