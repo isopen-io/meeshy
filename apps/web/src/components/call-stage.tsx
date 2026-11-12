@@ -303,7 +303,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
     else self.onToggle();
   };
   useFlip(cornerFrame, {
-    key: cornerShown ? `${corner}:${size.width}x${size.height}:${offset === null ? 'rest' : 'held'}` : null,
+    key: cornerShown ? `${corner}:${size.width}x${size.height}:${topInset}:${offset === null ? 'rest' : 'held'}` : null,
     held: offset !== null,
     duration: SELF_TILE_FLIP_MS,
     easing: 'ease-out',

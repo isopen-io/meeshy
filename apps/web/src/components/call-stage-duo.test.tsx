@@ -74,7 +74,7 @@ afterAll(async () => {
 
 const fresh = () => selfTileStore.setState({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER });
 
-function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = true }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly onReveal?: () => void; readonly chromeVisible?: boolean }) {
+function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = true, topInset = 0 }: { readonly active: ActiveCall; readonly onSwap: () => void; readonly onReveal?: () => void; readonly chromeVisible?: boolean; readonly topInset?: number }) {
   const [full, setFull] = useState(false);
   const self = {
     full,
@@ -84,6 +84,7 @@ function Harness({ active, onSwap, onReveal = () => undefined, chromeVisible = t
     },
     zoom: 'step' as const,
     column: () => null,
+    topInset,
   };
   return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} chromeVisible={chromeVisible} onRevealChrome={onReveal} />;
 }
@@ -102,7 +103,8 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
   proto.getBoundingClientRect = function rect(this: HTMLElement) {
     const moved = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(this.style.transform);
     const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) + Number(moved?.[1] ?? 0);
-    const top = 80 + Number(moved?.[2] ?? 0);
+    const lifted = /\+ (\d+(?:\.\d+)?)px\)/.exec(this.style.top);
+    const top = 80 + Number(lifted?.[1] ?? 0) + Number(moved?.[2] ?? 0);
     return { left, top, right: left, bottom: top, width: 0, height: 0, x: left, y: top, toJSON: () => ({}) };
   };
   Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: reducedMotion }) });
@@ -126,7 +128,11 @@ const mount = (active: ActiveCall = call(), { chromeVisible = true }: { readonly
   const root = createRoot(host);
   const swaps = { count: 0 };
   const reveals = { count: 0 };
-  const render = (visible: boolean) => act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} />));
+  let inset = 0;
+  const render = (visible: boolean, nextInset = inset) => {
+    inset = nextInset;
+    act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} topInset={inset} />));
+  };
   render(chromeVisible);
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
   const tile = () => find('[data-call-corner]') as HTMLElement;
@@ -234,6 +240,20 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
       view.done();
     });
     expect(played).toEqual([[{ transform: 'translate(-40px, 60px)' }, { transform: 'none' }]]);
+  });
+
+  test('un bandeau qui arrive sous l’en-tête fait GLISSER ma vignette de sa hauteur — transformation seule, jamais un saut (R1.6)', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.render(true, 56);
+      view.render(true, 0);
+      view.done();
+    });
+    expect(played).toEqual([
+      [{ transform: 'translate(0px, -56px)' }, { transform: 'none' }],
+      [{ transform: 'translate(0px, 56px)' }, { transform: 'none' }],
+    ]);
   });
 
   test('mouvement réduit : le retour au coin est sec', () => {
