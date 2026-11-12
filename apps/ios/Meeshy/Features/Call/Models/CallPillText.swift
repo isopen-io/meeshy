@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import MeeshyUI
 
 /// #17343 — ce que la pilule porte de TEXTE au-dessus de sa rangée de base. Les
 /// sous-titres et le journal vivent DANS son verre, en duo comme en groupe ; le
@@ -58,8 +59,8 @@ enum CallPillText: Equatable, Sendable {
 /// des sous-titres rangés sont limités à 560 pt pour que l'œil ne balaie pas tout
 /// l'écran (paysage, tablette) ; la pilule au repos garde ses 440 pt.
 enum CallPillWidth {
-    static let resting: CGFloat = 440
-    static let text: CGFloat = 560
+    static let resting: CGFloat = MeeshyGlassPillRecipe.spreadMaxWidth
+    static let text: CGFloat = MeeshyGlassPillRecipe.expandedMaxWidth
 
     static func maxWidth(for content: CallPillText) -> CGFloat {
         content == .none ? resting : text
