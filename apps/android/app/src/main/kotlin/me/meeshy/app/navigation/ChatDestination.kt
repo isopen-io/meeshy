@@ -34,6 +34,7 @@ import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.ProvideConversationMoods
 import me.meeshy.app.navigation.ReportsConversationViewing
 import me.meeshy.app.navigation.Routes
+import me.meeshy.app.navigation.graph.GameRoutes
 import me.meeshy.app.settings.LocationSharingSettingsSheet
 
 /**
@@ -107,6 +108,7 @@ internal fun NavGraphBuilder.chatDestination(
                         locationSettingsSheet = { accent, onDismiss -> LocationSharingSettingsSheet(accent = accent, onDismiss = onDismiss) },
                         onOpenCitedPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                         onOpenConversation = { id -> navController.navigate(Routes.chat(id)) },
+                        onOpenProgression = { navController.navigate(GameRoutes.PROGRESSION) { launchSingleTop = true } },
                     )
                     }
                 }

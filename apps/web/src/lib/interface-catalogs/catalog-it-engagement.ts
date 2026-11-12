@@ -13,6 +13,13 @@ const itEngagement = {
   'engagement.pill.join': '{streak}, {points}',
   'engagement.post.points.one': 'Questo post ha fatto scaturire {count} scintilla per te',
   'engagement.post.points.other': 'Questo post ha fatto scaturire {count} scintille per te',
+  'engagement.card.streak.one': 'giorno di fila qui',
+  'engagement.card.streak.other': 'giorni di fila qui',
+  'engagement.card.today': 'Oggi',
+  'engagement.card.total': 'Qui dall’inizio',
+  'engagement.card.open': 'Apri il gioco',
+  'engagement.card.hide': 'Nascondi la fiamma',
+  'engagement.card.title': 'Serie della conversazione',
 } as const;
 
 export default itEngagement;

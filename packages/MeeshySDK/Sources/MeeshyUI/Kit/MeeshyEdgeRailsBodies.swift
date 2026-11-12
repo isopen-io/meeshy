@@ -29,15 +29,30 @@ struct MeeshyEdgeRailCompactBody<Custom: View>: View {
 
     private var column: some View {
         VStack(spacing: MeeshyEdgeRailsRecipe.compactSpacing) {
-            ForEach(spec.cells) { cell in
-                cellView(cell.entry)
-            }
+            ForEach(
+                spec.cells.map {
+                    AsyncRenderRow(id: $0.id, content: MeeshyEdgeRailCompactCell(
+                        entry: $0.entry, tone: tone, onAction: onAction, onLongPress: onLongPress, custom: custom
+                    ))
+                },
+                content: asyncRenderRowContent
+            )
         }
         .padding(MeeshyEdgeRailsRecipe.compactPadding)
     }
+}
 
-    @ViewBuilder
-    private func cellView(_ entry: MeeshyEdgeRailEntry) -> some View {
+/// Une case du rail court, CONSTRUITE par le `body` du rail : le `ForEach` qui
+/// vit sous `ViewThatFits` ne fait que la relire (`AsyncRenderRow`), aucune
+/// fermeture isolée n'est atteinte par le rendu asynchrone d'iOS 26.
+struct MeeshyEdgeRailCompactCell<Custom: View>: View {
+    let entry: MeeshyEdgeRailEntry
+    let tone: MeeshyGlassTone?
+    let onAction: (String) -> Void
+    let onLongPress: ((String) -> Void)?
+    let custom: (String, MeeshyEdgeRailsPresentation) -> Custom
+
+    var body: some View {
         switch entry {
         case .item(let item):
             MeeshyEdgeRailDisc(item: item, tone: tone, onAction: onAction, onLongPress: onLongPress)
@@ -173,23 +188,14 @@ struct MeeshyEdgeRailLabeledBody<Custom: View>: View {
 
     private var rows: some View {
         VStack(spacing: MeeshyEdgeRailsRecipe.rowSpacing) {
-            ForEach(spec.cells) { cell in
-                rowView(cell.entry)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func rowView(_ entry: MeeshyEdgeRailEntry) -> some View {
-        switch entry {
-        case .item(let item):
-            MeeshyEdgeRailLabeledRow(item: item, width: width, onAction: onAction, onLongPress: onLongPress)
-                .equatable()
-        case .divider:
-            hairline(MeeshyEdgeRailsRecipe.labeledDividerOpacity)
-        case .custom(let id):
-            custom(id, .labeled(width))
-                .frame(maxWidth: .infinity, minHeight: MeeshyEdgeRailsRecipe.rowHeight, alignment: .leading)
+            ForEach(
+                spec.cells.map {
+                    AsyncRenderRow(id: $0.id, content: MeeshyEdgeRailLabeledCell(
+                        entry: $0.entry, width: width, onAction: onAction, onLongPress: onLongPress, custom: custom
+                    ))
+                },
+                content: asyncRenderRowContent
+            )
         }
     }
 
@@ -197,7 +203,7 @@ struct MeeshyEdgeRailLabeledBody<Custom: View>: View {
     private var foot: some View {
         if spec.hasFoot {
             VStack(spacing: MeeshyEdgeRailsRecipe.footInset) {
-                hairline(MeeshyEdgeRailsRecipe.labeledDividerOpacity)
+                MeeshyEdgeRailHairline(opacity: MeeshyEdgeRailsRecipe.labeledDividerOpacity)
                 HStack(spacing: MeeshyEdgeRailsRecipe.footSpacing) {
                     ForEach(spec.foot) { item in
                         MeeshyEdgeRailDisc(item: item, tone: tone, isSoft: true, onAction: onAction, onLongPress: onLongPress)
@@ -208,8 +214,36 @@ struct MeeshyEdgeRailLabeledBody<Custom: View>: View {
             .padding(.top, MeeshyEdgeRailsRecipe.footMargin - MeeshyEdgeRailsRecipe.rowSpacing)
         }
     }
+}
 
-    private func hairline(_ opacity: Double) -> some View {
+/// Une case du rail libellé, construite par le `body` du rail et relue par son
+/// `ForEach` (même raison que `MeeshyEdgeRailCompactCell`).
+struct MeeshyEdgeRailLabeledCell<Custom: View>: View {
+    let entry: MeeshyEdgeRailEntry
+    let width: MeeshyEdgeRailWidth
+    let onAction: (String) -> Void
+    let onLongPress: ((String) -> Void)?
+    let custom: (String, MeeshyEdgeRailsPresentation) -> Custom
+
+    var body: some View {
+        switch entry {
+        case .item(let item):
+            MeeshyEdgeRailLabeledRow(item: item, width: width, onAction: onAction, onLongPress: onLongPress)
+                .equatable()
+        case .divider:
+            MeeshyEdgeRailHairline(opacity: MeeshyEdgeRailsRecipe.labeledDividerOpacity)
+        case .custom(let id):
+            custom(id, .labeled(width))
+                .frame(maxWidth: .infinity, minHeight: MeeshyEdgeRailsRecipe.rowHeight, alignment: .leading)
+        }
+    }
+}
+
+/// Le filet d'un rail libellé : entre deux rangées et au-dessus du pied.
+struct MeeshyEdgeRailHairline: View {
+    let opacity: Double
+
+    var body: some View {
         Rectangle()
             .fill(MeeshyColors.onMedia.opacity(opacity))
             .frame(height: MeeshyEdgeRailsRecipe.dividerHeight)

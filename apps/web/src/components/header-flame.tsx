@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { conversationEngagementForDay, type ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { compactCount } from '@/lib/view/compact-count';
-import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
+import { engagementPillModel, flameCardModel, localDayOf, type FlameCardModel } from '@/lib/view/engagement-pill';
 import { useMinute } from '@/lib/view/use-minute';
+import { Link } from '@/routes/route-table';
 
 import { Glyph } from './glyph';
 
@@ -34,7 +36,9 @@ const TONGUES = [0, 1, 2] as const;
  * l'avatar et la rejoint, la flamme S'ALLUME (elle grossit en vacillant, des
  * mèches montent d'elle), puis le compte passe à sa nouvelle valeur. En CSS,
  * sur `transform`/`opacity` seulement (`styles/header-flame.css`). Le toucher
- * la masque ; l'hôte décide quand elle revient.
+ * ouvre la carte de la série (`FlameCard`, #17770) : série, étincelles du
+ * jour, total, un lien vers le Jeu et le masquage — qui ne se fait plus au
+ * premier toucher. L'hôte décide quand une flamme masquée revient.
  *
  * Posée en `absolute` sur la boîte de l'avatar : elle ne déplace rien.
  */
@@ -57,9 +61,12 @@ export function HeaderFlame({
 }) {
   const minute = useMinute();
   const interfaceLanguage = language ?? currentInterfaceLanguage();
-  const model = engagementPillModel(snapshot, localDayOf(now === undefined ? minute * 60_000 : now()), interfaceLanguage);
-  const today =
-    snapshot === undefined ? 0 : conversationEngagementForDay(snapshot, localDayOf(now === undefined ? minute * 60_000 : now())).todayPoints;
+  const day = localDayOf(now === undefined ? minute * 60_000 : now());
+  const model = engagementPillModel(snapshot, day, interfaceLanguage);
+  const card = flameCardModel(snapshot, day, interfaceLanguage);
+  const today = snapshot === undefined ? 0 : conversationEngagementForDay(snapshot, day).todayPoints;
+  const [cardOpen, setCardOpen] = useState(false);
+  const cardId = useId();
   const latest = useRef(today);
   latest.current = today;
   const [held, setHeld] = useState<number | null>(null);
@@ -84,7 +91,14 @@ export function HeaderFlame({
     >
       <span className="header-flame-glow" aria-hidden="true" />
       <span className="header-flame-seat">
-        <button type="button" onClick={onDismiss} aria-label={label} className="header-flame-mark pointer-events-auto text-mini">
+        <button
+          type="button"
+          onClick={() => setCardOpen((open) => !open)}
+          aria-label={label}
+          aria-expanded={cardOpen}
+          aria-controls={cardOpen ? cardId : undefined}
+          className="header-flame-mark pointer-events-auto text-mini"
+        >
           <span className="header-flame-burner" aria-hidden="true">
             <span className="header-flame-glyph">
               <Glyph name="flameFill" size={13} style={{ color: 'var(--ios-warning)' }} />
@@ -102,7 +116,103 @@ export function HeaderFlame({
             {compactCount(shown, interfaceLanguage)}
           </span>
         </button>
+        {cardOpen && card !== null ? (
+          <FlameCard
+            id={cardId}
+            model={card}
+            language={interfaceLanguage}
+            onClose={() => setCardOpen(false)}
+            onHide={() => {
+              setCardOpen(false);
+              onDismiss();
+            }}
+          />
+        ) : null}
       </span>
     </span>
+  );
+}
+
+/**
+ * **LA CARTE DE LA SÉRIE** (#17770) — ce que le toucher sur la flamme ouvre :
+ * la série en grand, les étincelles du jour, le total gagné ici, puis « Voir
+ * le jeu » (`/me/progression`, la même destination que la pastille dépliée)
+ * et « Masquer la flamme ». Échap ou un toucher hors de la carte la referme.
+ * Les nombres sont lus depuis l'instantané déjà en main : aucune attente.
+ */
+function FlameCard({
+  id,
+  model,
+  language,
+  onClose,
+  onHide,
+}: {
+  readonly id: string;
+  readonly model: FlameCardModel;
+  readonly language: InterfaceLanguage;
+  readonly onClose: () => void;
+  readonly onHide: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close.current();
+    };
+    const onPointer = (event: PointerEvent) => {
+      const card = ref.current;
+      const target = event.target;
+      if (card === null || !(target instanceof Node)) return;
+      if (card.contains(target) || card.parentElement?.contains(target)) return;
+      close.current();
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      id={id}
+      role="dialog"
+      aria-label={translate(language, 'engagement.card.title')}
+      data-flame-card=""
+      className="header-flame-card pointer-events-auto"
+    >
+      <div className="flex items-baseline gap-2">
+        <span data-flame-card-streak className="text-title2 font-bold tabular-nums">
+          {model.streakDays}
+        </span>
+        <span className="text-footnote font-semibold">{model.streakText}</span>
+      </div>
+      <dl className="flex flex-col gap-1 text-footnote">
+        <div className="flex justify-between gap-4">
+          <dt>{translate(language, 'engagement.card.today')}</dt>
+          <dd data-flame-card-today className="font-bold tabular-nums" style={{ color: 'var(--ios-warning)' }}>
+            {model.todayText}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt>{translate(language, 'engagement.card.total')}</dt>
+          <dd data-flame-card-total className="font-bold tabular-nums">
+            {model.totalText}
+          </dd>
+        </div>
+      </dl>
+      <div className="flex gap-2">
+        <Link to="progression" className="header-flame-card-primary min-h-11 flex-1">
+          {translate(language, 'engagement.card.open')}
+        </Link>
+        <button type="button" data-flame-card-hide onClick={onHide} className="header-flame-card-secondary min-h-11">
+          {translate(language, 'engagement.card.hide')}
+        </button>
+      </div>
+    </div>
   );
 }
