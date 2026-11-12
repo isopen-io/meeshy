@@ -7,6 +7,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
+import { MeeshyGlass } from '@/components/kit/meeshy-glass-tone';
 import { callActions } from '@/lib/calls/call-actions';
 import {
   bubbleOrigin,
@@ -83,7 +84,7 @@ function useViewport(): Size {
   return viewport;
 }
 
-/** P18.5 — « nom · durée » sur un verre, en bas à gauche du cadre, en portrait audio comme sur la vidéo ; le nom donné (#17341), sinon le nom d'affichage. */
+/** P18.5 — « nom · durée » sur le verre du kit (l'atome adaptatif, `CallTileNameplate` sur iOS), en bas à gauche du cadre, en portrait audio comme sur la vidéo ; le nom donné (#17341), sinon le nom d'affichage. */
 function BubbleCaption({ call }: { readonly call: ActiveCall }) {
   const language = currentInterfaceLanguage();
   const [now, setNow] = useState(() => Date.now());
@@ -96,9 +97,9 @@ function BubbleCaption({ call }: { readonly call: ActiveCall }) {
   const title = reducedTitle({ givenName: names.givenName, groupName: names.groupName, displayName: call.title });
   const duration = statusKey === null ? formatCallClock(elapsedSeconds(call, now)) : translate(language, statusKey);
   return (
-    <span className="glass-call pointer-events-none absolute bottom-1 start-1 max-w-[calc(100%-0.5rem)] truncate rounded-full px-2 text-mini tabular-nums text-on-media" data-call-bubble-caption="">
+    <MeeshyGlass as="span" tone="deep" className="pointer-events-none absolute bottom-1 start-1 max-w-[calc(100%-0.5rem)] truncate rounded-full px-2 text-mini tabular-nums text-on-media" data-call-bubble-caption="">
       {reducedCaption(title, duration)}
-    </span>
+    </MeeshyGlass>
   );
 }
 
