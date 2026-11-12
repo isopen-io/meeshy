@@ -522,4 +522,57 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(connected.contains(".animation(.easeInOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2), value: showsPeerMutedBadge)"))
         XCTAssertTrue(connected.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isLiveFrameShown)"))
     }
+
+    // MARK: - #17790 R2.2 · R2.11 · R3.3 · R3.12 — la carte d'accord et la capsule d'enregistrement
+
+    private func recordingControls() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
+    }
+
+    /// Loi 18 : la carte, la capsule et l'avis sont l'atome de verre adaptatif sous son voile,
+    /// jamais un matériau système dessiné dans la vue.
+    func test_recordingCardAndCapsules_areTheAdaptiveGlass_neverASystemMaterial() throws {
+        let controls = try recordingControls()
+        XCTAssertFalse(controls.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
+        let overlay = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallRecordingOverlay: View, Equatable", in: controls))
+        XCTAssertEqual(overlay.components(separatedBy: ".callChromeGlass(in:").count - 1, 3, "carte, capsule et avis")
+    }
+
+    /// R2.2 — la planche dessine la question puis les deux boutons : aucune phrase d'appoint.
+    func test_consentCard_isTheQuestionThenTwoGlassAndWhiteButtons_withoutAnExtraLine() throws {
+        let controls = try recordingControls()
+        XCTAssertFalse(controls.contains("askDetail"), "aucun extra entre la question et les boutons")
+        let card = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var consentCard: some View", in: controls))
+        XCTAssertTrue(card.contains("answerButton(CallRecordingCopy.refuse, accepted: false)"))
+        XCTAssertTrue(card.contains("answerButton(CallRecordingCopy.accept, accepted: true)"))
+        let button = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func answerButton(", in: controls))
+        XCTAssertTrue(button.contains(".callChipGlass(isActive: false, tint: .white)"), "Refuser est un verre")
+        XCTAssertTrue(button.contains("Color.white, in: Capsule()"), "Accepter est un blanc plein")
+        XCTAssertFalse(button.contains("indigo500"))
+        XCTAssertTrue(button.contains("minHeight: 44"))
+    }
+
+    /// R3.3 — « Arrêter » est un bouton qui porte le mot : blanc plein, texte rouge.
+    func test_stopButton_carriesTheWord_whiteFill_redText() throws {
+        let controls = try recordingControls()
+        XCTAssertFalse(controls.contains("\"stop.fill\""), "Plus d'icône seule")
+        let stop = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func stopButton(", in: controls))
+        XCTAssertTrue(stop.contains("Text(word)"))
+        XCTAssertTrue(stop.contains("MeeshyColors.error"))
+        XCTAssertTrue(stop.contains("Color.white, in: Capsule()"))
+        XCTAssertTrue(stop.contains("minHeight: 44"))
+        XCTAssertTrue(stop.contains(".accessibilityLabel(label)"), "le libellé accessible garde la phrase entière")
+        XCTAssertTrue(controls.contains("call.recording.stop.word"))
+    }
+
+    func test_stopWord_isTranslatedInTheSevenLanguages() throws {
+        let catalog = try AppSourceGuard.unit("Meeshy/Localizable.xcstrings")
+        let entry = try XCTUnwrap(catalog.range(of: "\"call.recording.stop.word\": {"))
+        let tail = String(catalog[entry.upperBound...])
+        let body = String(tail[..<(tail.range(of: "\n    },")?.lowerBound ?? tail.endIndex)])
+        for language in ["ar", "de", "en", "es", "fr", "it", "pt-BR"] {
+            XCTAssertTrue(body.contains("\"\(language)\""), "\(language) manque pour « Arrêter »")
+        }
+        XCTAssertTrue(body.contains("\"value\": \"Arrêter\""))
+    }
 }
