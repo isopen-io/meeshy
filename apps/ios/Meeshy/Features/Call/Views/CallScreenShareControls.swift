@@ -136,7 +136,7 @@ struct CallScreenShareBanner: View, Equatable {
         .padding(.leading, MeeshySpacing.mdPlus)
         .padding(.trailing, showsStop ? 4 : 14)
         .frame(maxWidth: .infinity, minHeight: 44)
-        .adaptiveGlass(in: Capsule(), tint: MeeshyColors.error.opacity(MeeshyOpacity.medium), interactive: showsStop)
+        .adaptiveLiquidGlass(in: Capsule(), tint: MeeshyColors.error.opacity(MeeshyOpacity.medium), interactive: showsStop)
         .accessibilityElement(children: .contain)
     }
 }
