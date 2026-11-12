@@ -39,7 +39,7 @@ extension CallChromeVisibility {
 /// transformation et l'opacité bougent ; « Réduire les animations » les remplace par
 /// un fondu court, sans déplacement.
 enum CallChromeStow {
-    static let reducedFadeDuration: TimeInterval = MeeshyGlassPillRecipe.reducedStowDuration
+    nonisolated static let reducedFadeDuration: TimeInterval = MeeshyGlassPillRecipe.reducedStowDuration
 
     static func leavesByItsEdge(isVisible: Bool, reduceMotion: Bool) -> Bool {
         MeeshyGlassPillPresenceRule.leavesByItsEdge(presence: isVisible ? .shown : .stowed, reduceMotion: reduceMotion)

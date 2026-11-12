@@ -5,6 +5,15 @@ import MeeshyUI
 // #17341 — la capsule de droite de l'en-tête : vidéo « nom donné · durée », audio le
 // réseau dégradé seul, groupe « nom · nombre · durée » (`CallHeaderCapsuleRule`).
 // Une vue à elle, hors du type `CallView` : elle ne lit que ce qu'on lui remet.
+// P15.4 — pendant un écran reçu en duo, elle dit « [icône écran] Écran de X » seule.
+
+extension CallHeaderCapsule {
+    /// Ce que la capsule nomme, à l'œil comme à l'oreille : « Écran de X » quand l'écran
+    /// de la personne tient la scène, sinon le titre de la règle.
+    var spokenTitle: String? {
+        isReceivedScreen ? CallScreenShareCopy.screenOf(name: title ?? "") : title
+    }
+}
 
 extension CallView {
     @ViewBuilder
@@ -52,17 +61,16 @@ struct CallHeaderCapsuleChip: View {
 
     private func chipContent() -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
-            if capsule.showsDuration {
-                TransientCallSignalGlyph(strength: signalStrength)
-            } else {
-                CallSignalGlyph(strength: signalStrength)
-            }
+            leadingGlyph
             chipIdentity
             if capsule.showsDuration {
                 Text(callManager.formattedDuration)
                     .font(.caption2.weight(.medium).monospacedDigit())
                     .foregroundStyle(Color.white)
                     .fixedSize()
+            }
+            if capsule.isReceivedScreen && capsule.showsNetwork {
+                CallSignalGlyph(strength: signalStrength)
             }
             chipWarnings
         }
@@ -82,8 +90,27 @@ struct CallHeaderCapsuleChip: View {
     }
 
     @ViewBuilder
+    private var leadingGlyph: some View {
+        if capsule.isReceivedScreen {
+            Image(systemName: "rectangle.on.rectangle")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.white)
+        } else if capsule.showsDuration {
+            TransientCallSignalGlyph(strength: signalStrength)
+        } else {
+            CallSignalGlyph(strength: signalStrength)
+        }
+    }
+
+    @ViewBuilder
     private var chipIdentity: some View {
-        if let title = capsule.title {
+        if capsule.isReceivedScreen, let spoken = capsule.spokenTitle {
+            Text(spoken)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        } else if let title = capsule.title {
             Text(title)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(Color.white)

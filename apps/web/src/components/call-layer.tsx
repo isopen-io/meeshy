@@ -85,13 +85,17 @@ const LAYER_STYLE: CSSProperties = {
 
 /* HORS de `#root`, par un portail : la visionneuse de médias et le menu de
    message rendent `#root` INERTE le temps de leur ouverture — un appel monté
-   dedans s'y peignait par-dessus, et aucun de ses boutons ne répondait. */
+   dedans s'y peignait par-dessus, et aucun de ses boutons ne répondait.
+   L'HÔTE DU PLEIN ÉCRAN (U2.9) est le `div` posé dans le `<dialog>` : un `<dialog>` ne peut pas être
+   l'élément plein écran (Fullscreen API), et la scène seule laisserait hors de lui la pilule, ses
+   sous-titres et la carte d'accord. Il n'a pas de boîte à lui — ses enfants sont `fixed` — et ne prend
+   le viewport qu'une fois plein écran. */
 function CallStage({ children }: { readonly children: ReactNode }) {
   const layer = useRef<HTMLDialogElement | null>(null);
   useCallPresentation(layer);
   const stage = (
     <dialog ref={layer} open data-call-stage="" className="backdrop:bg-transparent" style={LAYER_STYLE}>
-      {children}
+      <div data-call-fullscreen-host="">{children}</div>
     </dialog>
   );
   return typeof document === 'undefined' ? stage : createPortal(stage, document.body);

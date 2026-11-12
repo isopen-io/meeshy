@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveSpotlight, type SpotlightChoice } from './call-spotlight';
-import { chooseGrid, chooseMember, chooseSelf, SCREEN_MAX_ZOOM, screenZoomAfterPinch, screenZoomAfterWheel } from './call-spotlight-gestures';
+import { choiceAfterSharerChange, resolveSpotlight, type SpotlightChoice } from './call-spotlight';
+import { chooseGrid, chooseMember, chooseSelf } from './call-spotlight-gestures';
+import { SCREEN_MAX_ZOOM, screenZoomAfterPinch, screenZoomAfterWheel } from './screen-zoom';
 import type { CallMember } from './call-store';
 
 /**
@@ -94,5 +95,29 @@ describe('le zoom d’un écran partagé (#9098, `GroupCallSpotlight.clampedZoom
     expect(screenZoomAfterWheel(2, 100)).toBeLessThan(2);
     expect(screenZoomAfterWheel(1, 100)).toBe(1);
     expect(screenZoomAfterWheel(SCREEN_MAX_ZOOM, -100)).toBe(SCREEN_MAX_ZOOM);
+  });
+});
+
+describe('« Grille » ne vaut que pour CE partage (U2.1, `GroupCallSpotlight.choice(afterSharerChangedFrom:)` d’iOS)', () => {
+  test('la fin du partage, un autre partage ou un nouveau partage rendent la main à la règle', () => {
+    expect(choiceAfterSharerChange(chooseGrid('kofi'), 'kofi', null)).toBeNull();
+    expect(choiceAfterSharerChange(chooseGrid('kofi'), 'kofi', 'bintou')).toBeNull();
+    expect(choiceAfterSharerChange(chooseGrid(null), null, 'kofi')).toBeNull();
+  });
+
+  test('le même partageur ne change rien : la grille congédiée le reste', () => {
+    expect(choiceAfterSharerChange(chooseGrid('kofi'), 'kofi', 'kofi')).toEqual(chooseGrid('kofi'));
+  });
+
+  test('une vignette épinglée, ma tuile ou l’absence de choix restent', () => {
+    expect(choiceAfterSharerChange(chooseMember('awa'), 'kofi', null)).toEqual(chooseMember('awa'));
+    expect(choiceAfterSharerChange(chooseSelf(), 'kofi', null)).toEqual(chooseSelf());
+    expect(choiceAfterSharerChange(null, 'kofi', null)).toBeNull();
+  });
+
+  test('X congédie son partage, l’arrête, puis repartage : son écran remonte seul', () => {
+    const dismissed = chooseGrid('kofi');
+    const afterStop = choiceAfterSharerChange(dismissed, 'kofi', null);
+    expect(view([awa, sharing], afterStop)?.featured).toEqual(sharing);
   });
 });

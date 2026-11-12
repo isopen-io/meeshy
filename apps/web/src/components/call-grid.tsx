@@ -6,6 +6,8 @@ import { PeerAvatar } from '@/components/peer-avatar';
 import type { Portrait } from '@/components/call-portrait';
 import type { CallButton } from '@/components/call-glass-button';
 import type { Arrives } from '@/components/call-arrives';
+import type { useScreenZoom } from '@/components/use-screen-zoom';
+import type { HeldSwap } from '@/lib/calls/use-pill-motion';
 import type { PeerSpeechRing } from '@/components/call-camera-off';
 import type { CallModerationSlot } from '@/components/call-control-slots';
 import { StreamVideo, useSrcObject } from '@/components/call-media-elements';
@@ -16,7 +18,8 @@ import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { autoSharer, resolveSpotlight, SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { chooseGrid, chooseMember, chooseSelf } from '@/lib/calls/call-spotlight-gestures';
 import type { CallMember } from '@/lib/calls/call-store';
-import { filmstripOf, STRIP_COLUMN_WIDTH, STRIP_HALO_PAD, STRIP_TILE_HEIGHT, STRIP_TILE_WIDTH } from '@/lib/calls/call-group-stage';
+import { zoomLabel } from '@/lib/calls/camera-zoom';
+import { filmstripOf, type Filmstrip, STRIP_COLUMN_WIDTH, STRIP_HALO_PAD, STRIP_TILE_HEIGHT, STRIP_TILE_WIDTH } from '@/lib/calls/call-group-stage';
 import { gridColumns, hasVideo } from '@/lib/calls/call-view';
 import type { useStageFlip } from '@/lib/calls/use-stage-flip';
 import type { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
@@ -26,7 +29,6 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { LocalZoom } from '@/lib/calls/self-zoom';
 import { initialsOf } from '@/lib/view/conversation';
 
-import { useScreenZoom } from './use-screen-zoom';
 
 const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallSelfCamera })));
 
@@ -83,8 +85,12 @@ export type CallGridKit = {
   readonly usePressedChrome: typeof usePressedChrome;
   /** Chaque vignette passe de sa case à la suivante (P14.10) : le crochet et son moteur chargé à part vivent dans l'écran. */
   readonly useStageFlip: typeof useStageFlip;
-  /** Ce qui arrive avec la une (la capsule) y entre en fondu, plus court sous « Réduire les animations » : rien n'apparaît d'un coup. */
+  /** Ce qui arrive avec la une (la capsule) y entre en fondu, et repart de même (`leaving`), plus court sous « Réduire les animations » : rien n'apparaît ni ne disparaît d'un coup. */
   readonly Arrives: typeof Arrives;
+  /** Le zoom de l'écran partagé à la une (pincer, Ctrl + molette, double toucher) : son crochet et ses lois vivent dans l'écran, qui le remet. */
+  readonly useScreenZoom: typeof useScreenZoom;
+  /** Le bandeau des autres sort par son bord quand l'écran devient plein, et revient par lui (U2.10). */
+  readonly HeldSwap: typeof HeldSwap;
 };
 
 export type CallGridProps = {
@@ -153,7 +159,7 @@ function selfSubject(kit: CallGridKit, self: CallGridProps['self'], language: In
 
 function NameLabel({ name, muted, suffix }: { readonly name: string; readonly muted: boolean; readonly suffix: string | null }) {
   return (
-    <span className="glass-call absolute bottom-2 left-2 flex max-w-[85%] items-center gap-1 truncate rounded-full px-2 py-0.5 text-mini">
+    <span className="glass-call absolute bottom-2 start-2 flex max-w-[85%] items-center gap-1 truncate rounded-full px-2 py-0.5 text-mini">
       {muted ? (
         <span className="contents" data-call-tile-muted="">
           <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={12} />
@@ -238,7 +244,7 @@ function Slot({ menu = null, ...tile }: TileProps & { readonly menu?: ReactNode 
 
 function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGridKit; readonly member: CallMember; readonly stream: MediaStream | undefined; readonly language: InterfaceLanguage }) {
   const title = translate(language, 'call.screen.of', { name: member.name });
-  const { zoom, pinching, handlers } = useScreenZoom();
+  const { zoom, pinching, handlers } = kit.useScreenZoom();
   const hint = useId();
   return (
     <div className="relative min-h-0 min-w-0 flex-1 origin-top-left overflow-hidden rounded-card" style={{ touchAction: 'none' }} data-call-slot={member.userId} aria-describedby={hint} data-call-shared-screen="" data-call-screen-zoom={String(zoom)} {...handlers}>
@@ -251,8 +257,10 @@ function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGri
       <div className="absolute bottom-2 right-2 overflow-hidden rounded-full border-2" style={{ borderColor: kit.colorOf(member.userId) }} data-call-screen-medallion="">
         <PeerAvatar presenceKey={member.userId} initials={initialsOf(member.name)} color={colorForName(member.name)} size={44} {...(member.avatar === null ? {} : { src: member.avatar })} />
       </div>
-      <span className="glass-call-prominent absolute bottom-2 left-2 max-w-[70%] truncate rounded-full px-3 py-1 text-mini font-semibold" role="status" data-call-screen-banner="">
-        {title}
+      <span className="glass-call-prominent absolute start-2 top-2 flex max-w-[70%] items-center gap-1 rounded-full px-3 py-1 text-mini font-semibold" role="status" data-call-screen-banner="">
+        <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={14} />
+        <span className="truncate">{title}</span>
+        {zoom > 1 ? <span aria-hidden="true">{` · ${zoomLabel(zoom, language)}`}</span> : null}
       </span>
     </div>
   );
@@ -263,24 +271,17 @@ function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGri
  * paysage (P14.1, P14.2) ; ce qui défile s'efface en fondu à ses deux bords, sur les 8 de son liseré (la recette
  * de `RAIL_FADE`, dans l'axe du bandeau) : au repos, aucune vignette n'est estompée.
  */
-const stripBox = (strip: 'bottom' | 'trailing'): CSSProperties => {
-  const bottom = strip === 'bottom';
+const stripBox = (strip: Filmstrip): CSSProperties => {
+  const bottom = strip !== 'trailing';
   const fade = `linear-gradient(to ${bottom ? 'right' : 'bottom'}, transparent, #000 8px, #000 calc(100% - 8px), transparent)`;
   return bottom ? { maskImage: fade, gridAutoColumns: STRIP_TILE_WIDTH, gridTemplateRows: STRIP_TILE_HEIGHT, height: STRIP_TILE_HEIGHT + 2 * STRIP_HALO_PAD } : { maskImage: fade, gridAutoRows: STRIP_TILE_HEIGHT, gridTemplateColumns: STRIP_TILE_WIDTH, width: STRIP_COLUMN_WIDTH };
 };
 
 const SCROLL_HIDDEN = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
-export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false }: CallGridProps) {
-  const press = kit.usePressedChrome(chromeVisible);
-  /** #9183 — chrome masqué, toucher une vignette le RENDS au lieu de changer la une (`GroupStageTapRule` sur iOS) ; décidé à la descente du pointeur (#17548). */
-  const decide = (next: SpotlightChoice) => () => (press.release() ? onRevealChrome() : onChoose(next));
-  const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
-  const view = kit.resolveSpotlight({ members, choice, remoteStreams });
+/** Les `<video>` tenus par identité : celui d'un membre parti se retire, tous partent avec la grille. */
+function useHeldVideos(members: readonly CallMember[]) {
   const held = useRef<Held>(new Map());
-  const root = useRef<HTMLDivElement>(null);
-  const fullscreen = immersive;
-  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}`);
   const present = members.map((member) => member.userId).join();
   useEffect(() => {
     for (const [id, video] of held.current) if (id !== SELF && !members.some((member) => member.userId === id)) video.remove(), held.current.delete(id);
@@ -292,13 +293,70 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
     },
     [],
   );
+  return held;
+}
+
+/** Le zoom de ma caméra quand MA tuile est à la une (#9182) : son chunk à la demande. */
+function SelfZoom({ zoom, stream, language }: { readonly zoom: NonNullable<CallGridProps['selfZoom']>; readonly stream: MediaStream | null; readonly language: InterfaceLanguage }) {
+  return (
+    <Suspense fallback={null}>
+      <CallSelfCamera stream={stream} local={zoom.local} language={language} glyphs={{ plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> }} column={zoom.column} />
+    </Suspense>
+  );
+}
+
+type CapsuleProps = {
+  readonly kit: CallGridKit;
+  readonly language: InterfaceLanguage;
+  readonly screen: boolean;
+  readonly full: boolean;
+  readonly leaving: boolean;
+  readonly onGrid: () => void;
+  readonly onToggleImmersive: () => void;
+  readonly children: ReactNode;
+};
+
+/**
+ * La capsule « Revenir à la grille · Plein écran » : en place avec la une, ou — `leaving` — retenue au retour à la
+ * grille le temps de son fondu (U1.12). Plein écran, elle échappe au rangement du chrome (U2.4).
+ */
+function SpotlightCapsule({ kit, language, screen, full, leaving, onGrid, onToggleImmersive, children }: CapsuleProps) {
+  return (
+    <div className={`absolute ${leaving ? 'end-5' : 'end-2'} top-2 flex flex-col items-end gap-2`} data-call-chrome-fade="" {...(full ? { 'data-call-chrome-keep': '' } : {})}>
+      <kit.Arrives leaving={leaving} className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
+        <kit.Button label={translate(language, 'call.spotlight.back')} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />} onPress={onGrid} size={44} data={{ 'data-call-grid-back': '' }} />
+        <kit.Button
+          label={translate(language, full ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
+          glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[full ? 'cornersIn' : 'cornersOut']} size={20} />}
+          onPress={onToggleImmersive}
+          pressed={full}
+          size={44}
+          data={{ 'data-call-fullscreen': '' }}
+        />
+      </kit.Arrives>
+      {children}
+    </div>
+  );
+}
+
+export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false }: CallGridProps) {
+  const press = kit.usePressedChrome(chromeVisible);
+  /** #9183 — chrome masqué, toucher une vignette le RENDS au lieu de changer la une (`GroupStageTapRule` sur iOS) ; décidé à la descente du pointeur (#17548). */
+  const decide = (next: SpotlightChoice) => () => (press.release() ? onRevealChrome() : onChoose(next));
+  const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
+  const view = kit.resolveSpotlight({ members, choice, remoteStreams });
+  const held = useHeldVideos(members);
+  const shown = useRef<{ readonly screen: boolean; readonly full: boolean } | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const fullscreen = immersive;
+  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}`);
   const mine = selfSubject(kit, self, language);
   const peer = (member: CallMember) => peerSubject(kit, member, remoteStreams[member.userId], language);
   const tile = (subject: Subject, onPress: (() => void) | null, label: string, portrait: number) => ({ kit, subject, held: held.current, onPress, label, portrait, press });
   const selfLabel = translateCallControls(language, 'callControls.spotlight.self');
 
-  const gridScene = (
-    <div className="grid min-h-[140px] flex-1 gap-2 px-3" style={{ gridTemplateColumns: `repeat(${gridColumns(members.length + 1, landscape)}, minmax(0, 1fr))`, gridAutoRows: '1fr' }}>
+  const gridScene = (ghost: ReactNode) => (
+    <div className="relative grid min-h-[140px] flex-1 gap-2 px-3" style={{ gridTemplateColumns: `repeat(${gridColumns(members.length + 1, landscape)}, minmax(0, 1fr))`, gridAutoRows: '1fr' }}>
       {members.map((member) => {
         const moderated = moderation !== null && moderation.canModerate(member.userId);
         const menu = moderated ? (
@@ -309,21 +367,27 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
         return <Slot key={member.userId} {...tile(peer(member), decide(chooseMember(member.userId)), featureLabel(member), 64)} menu={menu} />;
       })}
       <Slot {...tile(mine, decide(chooseSelf()), selfLabel, 64)} />
+      {ghost}
     </div>
   );
 
-  if (view === null) return <div ref={root} className="contents">{gridScene}</div>;
+  const sharer = kit.autoSharer(members, remoteStreams);
+  const capsuleOf = (screen: boolean, full: boolean, leaving: boolean, below: ReactNode = null) => (
+    <SpotlightCapsule kit={kit} language={language} screen={screen} full={full} leaving={leaving} onGrid={() => onChoose(chooseGrid(sharer?.userId ?? null))} onToggleImmersive={onToggleImmersive}>
+      {below}
+    </SpotlightCapsule>
+  );
+  if (view !== null) shown.current = { screen: view.screen, full: fullscreen };
+
+  if (view === null) return <div ref={root} className="contents">{gridScene(shown.current === null ? null : capsuleOf(shown.current.screen, shown.current.full, true))}</div>;
 
   const { featured, others, screen } = view;
   const moderated = featured !== null && moderation !== null && moderation.canModerate(featured.userId);
-  const sharer = kit.autoSharer(members, remoteStreams);
-  const strip = filmstripOf({ fullscreen, landscape });
-  const back = translate(language, 'call.spotlight.back');
-  const full = translate(language, fullscreen ? 'call.fullscreen.exit' : 'call.fullscreen.enter');
+  const side = filmstripOf({ fullscreen: false, landscape });
   const peerTiles = others.map((member) => <Slot key={member.userId} {...tile(peer(member), decide(chooseMember(member.userId)), featureLabel(member), 40)} />);
   return (
     <div ref={root} className="contents">
-      <div className={`flex min-h-[140px] min-w-0 flex-1 gap-2 px-3 ${strip === 'trailing' ? 'flex-row' : 'flex-col'}`} data-call-spotlight={featured?.userId ?? 'self'}>
+      <div className={`relative flex min-h-[140px] min-w-0 flex-1 gap-2 px-3 ${side === 'trailing' ? 'flex-row' : 'flex-col'}`} data-call-spotlight={featured?.userId ?? 'self'}>
         <div className="relative flex min-h-0 min-w-0 flex-1">
           {featured === null ? (
             <div className="grid min-h-0 min-w-0 flex-1">
@@ -336,39 +400,17 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
               <Slot {...tile(peer(featured), null, featured.name, 96)} />
             </div>
           )}
-          {featured === null && selfZoom !== null ? (
-            <Suspense fallback={null}>
-              <CallSelfCamera
-                stream={self.cameraOn ? self.stream : null}
-                local={selfZoom.local}
-                language={language}
-                glyphs={{ plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> }}
-                column={selfZoom.column}
-              />
-            </Suspense>
-          ) : null}
-          <div className="absolute right-2 top-2 flex flex-col items-end gap-2" data-call-chrome-fade="">
-            <kit.Arrives className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
-              <kit.Button label={back} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />} onPress={() => onChoose(chooseGrid(sharer?.userId ?? null))} size={44} data={{ 'data-call-grid-back': '' }} />
-              <kit.Button
-                label={full}
-                glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[fullscreen ? 'cornersIn' : 'cornersOut']} size={20} />}
-                onPress={onToggleImmersive}
-                tone={fullscreen ? 'active' : 'disc'}
-                pressed={fullscreen}
-                size={44}
-                data={{ 'data-call-fullscreen': '' }}
-              />
-            </kit.Arrives>
-            {moderated && featured !== null && !fullscreen ? <kit.ModerationSlot member={featured} language={language} moderation={moderation} prominent={screen} /> : null}
-          </div>
+          {featured === null && selfZoom !== null ? <SelfZoom zoom={selfZoom} stream={self.cameraOn ? self.stream : null} language={language} /> : null}
+          {capsuleOf(screen, fullscreen, false, moderated && featured !== null && !fullscreen ? <kit.ModerationSlot member={featured} language={language} moderation={moderation} prominent={screen} /> : null)}
         </div>
-        {strip === 'none' ? null : (
-          <div className={`grid shrink-0 gap-2 ${SCROLL_HIDDEN} ${strip === 'bottom' ? '-mx-2 grid-flow-col content-center overflow-x-auto overscroll-x-none px-2' : '-my-2 content-start justify-center overflow-y-auto overscroll-y-none py-2'}`} style={stripBox(strip)} data-call-strip="">
-            {peerTiles}
-            {featured === null ? null : <Slot {...tile(mine, decide(chooseSelf()), selfLabel, 40)} />}
-          </div>
-        )}
+        <kit.HeldSwap value={fullscreen ? null : side} shape={side === 'bottom' ? 'bottom' : 'end'} className={`grid shrink-0 gap-2 ${SCROLL_HIDDEN} ${side === 'bottom' ? '-mx-2 grid-flow-col content-center overflow-x-auto overscroll-x-none px-2' : '-my-2 content-start justify-center overflow-y-auto overscroll-y-none py-2'}`} style={stripBox(side)} data-call-strip="" data-call-strip-edge={side}>
+          {() => (
+            <>
+              {peerTiles}
+              {featured === null ? null : <Slot {...tile(mine, decide(chooseSelf()), selfLabel, 40)} />}
+            </>
+          )}
+        </kit.HeldSwap>
       </div>
     </div>
   );

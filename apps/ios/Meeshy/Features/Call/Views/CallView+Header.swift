@@ -112,6 +112,7 @@ extension CallView {
                 .font(MeeshyFont.fixedGlyph(glyphSize, weight: .semibold))
                 .foregroundStyle(Color.white)
                 .callControlGlass(diameter: 40, isActive: isActive, tint: .white)
+                .modifier(CallGlassVeil(shape: Circle(), resting: 0))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -149,7 +150,8 @@ extension CallView {
             givenName: headerNames.givenName,
             displayName: callManager.remoteUsername,
             groupName: headerNames.groupName ?? mesh.groupTitle(for: callManager.conversationId),
-            participantCount: callParticipantCount
+            participantCount: callParticipantCount,
+            receivesScreen: callManager.screenShare.isRemoteSharing
         ))
     }
 

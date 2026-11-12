@@ -22,6 +22,8 @@ data class CallHeaderCapsuleInput(
     val displayName: String?,
     val groupName: String?,
     val participantCount: Int,
+    /** P15.4 — l'écran du correspondant tient la scène du duo. */
+    val receivesScreen: Boolean = false,
 )
 
 /** Ce que la capsule de droite écrit : un titre, un nombre, la durée, le réseau (jamais que dégradé). */
@@ -30,6 +32,8 @@ data class CallHeaderCapsule(
     val participantCount: Int?,
     val showsDuration: Boolean,
     val showsNetwork: Boolean,
+    /** P15.4 — [title] est alors le NOM de qui partage : la capsule dit « Écran de X ». */
+    val isReceivedScreen: Boolean = false,
 )
 
 /**
@@ -73,6 +77,7 @@ object CallHeaderLaw {
     /**
      * #17341 — vidéo : le nom donné (sinon le nom d'affichage) et la durée ; audio : le nom et la durée sont déjà sous
      * l'avatar, la capsule n'existe que pour le réseau dégradé ; groupe : le nom du groupe, le nombre et la durée.
+     * P15.4 — en duo vidéo, un écran reçu prend la place du nom et de la durée : « Écran de X ».
      */
     fun capsule(input: CallHeaderCapsuleInput): CallHeaderCapsule? {
         if (!input.isEstablished) return null
@@ -82,8 +87,9 @@ object CallHeaderLaw {
             CallHeaderCapsuleLayout.Video -> CallHeaderCapsule(
                 title = CallFrameTextsRule.meaningful(input.givenName) ?: CallFrameTextsRule.meaningful(input.displayName),
                 participantCount = null,
-                showsDuration = true,
+                showsDuration = !input.receivesScreen,
                 showsNetwork = input.isNetworkDegraded,
+                isReceivedScreen = input.receivesScreen,
             )
             CallHeaderCapsuleLayout.Group -> CallHeaderCapsule(
                 title = CallFrameTextsRule.meaningful(input.groupName),

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
@@ -25,7 +25,7 @@ import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLa
 import { selfZoomPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
 import { selfTileCornerFor, selfTileFootprint, selfTileScaleFor, selfTileStore } from '@/lib/calls/call-self-tile';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
-import { resolveSpotlight, type SpotlightChoice } from '@/lib/calls/call-spotlight';
+import { autoSharer, resolveSpotlight } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callLayout, callStatusKey, type PlainCallKey, canShareScreen, hasVideo, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
@@ -36,6 +36,7 @@ import { useCallChrome } from '@/lib/calls/use-call-chrome';
 import { usePublishChrome } from '@/lib/calls/call-chrome-store';
 import { useStageMorph, useStowFade } from '@/lib/calls/use-pill-motion';
 import { useCallSwipeDown } from '@/lib/calls/use-call-swipe-down';
+import { useSpotlightChoice } from '@/lib/calls/use-spotlight-choice';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -275,9 +276,13 @@ const CallDeclineSheet = lazy(() =>
 
 const browserCanShare = (): boolean => typeof navigator !== 'undefined' && canShareScreen(navigator.mediaDevices);
 
-/** Le plein écran de l'écran partagé : l'API Fullscreen sur la scène, et, sans elle, tout le reste s'efface. */
-function useImmersive(stage: React.RefObject<HTMLElement | null>, available: boolean): readonly [boolean, () => void] {
+/** Ce que le navigateur montre en plein écran : la couche d'appel entière (`call-layer.tsx` y pose son hôte, carte d'accord comprise) — sinon l'écran d'appel, sa pilule et ses sous-titres avec lui. */
+const fullscreenTarget = (screen: HTMLElement | null): HTMLElement | null => screen?.closest<HTMLElement>('[data-call-fullscreen-host]') ?? screen;
+
+/** Le plein écran de la tuile à la une : l'API Fullscreen sur la couche d'appel, et, sans elle, tout le reste s'efface. Changer de scène (un groupe retombé en duo, `isStageFullScreen = false` d'iOS) en sort. */
+function useImmersive(screen: React.RefObject<HTMLElement | null>, available: boolean, group: boolean): readonly [boolean, () => void] {
   const [immersive, setImmersive] = useState(false);
+  const scene = useRef(group);
   useEffect(() => {
     const onChange = () => {
       if (document.fullscreenElement === null) setImmersive(false);
@@ -286,12 +291,14 @@ function useImmersive(stage: React.RefObject<HTMLElement | null>, available: boo
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
   useEffect(() => {
-    if (available || !immersive) return;
+    const changed = scene.current !== group;
+    scene.current = group;
+    if ((available && !changed) || !immersive) return;
     setImmersive(false);
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-  }, [available, immersive]);
+  }, [available, immersive, group]);
   const toggle = () => {
-    const element = stage.current;
+    const element = fullscreenTarget(screen.current);
     if (immersive) {
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
       setImmersive(false);
@@ -319,7 +326,6 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const language = currentInterfaceLanguage();
   const t = (key: PlainCallKey): string => translate(language, key);
   const [layer, setLayer] = useState<CallScreenLayer>(initiallyExpanded ? { kind: 'menu' } : IDLE);
-  const [choice, setChoice] = useState<SpotlightChoice>(null);
   const [selfFull, setSelfFull] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
   const focusNext = useRef<string | null>(null);
@@ -335,16 +341,11 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const layout = joined ? callLayout(call) : 'portrait';
   const live = phase !== 'ended' && phase !== 'incoming';
   const endedClock = phase === 'ended' && call.endedDurationSec !== null && call.endedDurationSec > 0 ? formatCallClock(call.endedDurationSec) : null;
-  const spotlight =
-    layout === 'grid'
-      ? resolveSpotlight({
-          members: membersInArrival(call.members),
-          choice,
-          remoteStreams: call.remoteStreams,
-        })
-      : null;
+  const arrived = layout === 'grid' ? membersInArrival(call.members) : [];
+  const [choice, setChoice] = useSpotlightChoice(autoSharer(arrived, call.remoteStreams)?.userId ?? null);
+  const spotlight = layout === 'grid' ? resolveSpotlight({ members: arrived, choice, remoteStreams: call.remoteStreams }) : null;
   const sharedScreenShown = layout === 'screen' || spotlight?.screen === true;
-  const [immersive, toggleImmersive] = useImmersive(stageRef, layout === 'screen' || spotlight !== null);
+  const [immersive, toggleImmersive] = useImmersive(root, layout === 'screen' || spotlight !== null, layout === 'grid');
   const videoScene = live && isVideoScene(call);
   /* P9.5, P9.6 : le duo audio dessine l'autre à SA couleur (l'identifiant primant) et l'allume à sa parole — mesurée sur son flux, jamais lue dans les sous-titres. Le portrait n'est monté que dans la disposition `portrait` : la mesure ne court que là. */
   const peerTint = call.peerKey == null ? undefined : speakerColor(call.peerKey, call.title);
@@ -642,8 +643,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         {live ? <CallLiveFrameStatusSlot language={language} state={liveFrame} load={loadFrameStudio} /> : null}
         {layout === 'grid' ? (
           <>
-            {immersive || chrome.mode !== null ? null : (
-              <div data-call-stow="" aria-hidden={hidden ? true : undefined}>
+            {chrome.mode !== null ? null : (
+              <div data-call-stow="top" style={{ '--stow-clearance': '3.75rem' } as CSSProperties} aria-hidden={hidden ? true : undefined}>
                 {pillRow}
               </div>
             )}

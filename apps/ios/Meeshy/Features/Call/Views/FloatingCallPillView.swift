@@ -165,8 +165,7 @@ struct FloatingCallPillView: View {
 
     private var pillContent: some View {
         HStack(spacing: MeeshySpacing.md) {
-            CallParticipantVisual(diameter: 44, callManager: callManager)
-            userInfoSection
+            identitySection
             Spacer(minLength: 8)
             controlButtons
         }
@@ -229,6 +228,18 @@ struct FloatingCallPillView: View {
 
     // MARK: - User Info
 
+    /// P18.10 — pendant mon partage, la bannière dit l'écran et « nom · durée » sur sa
+    /// seule ligne d'état (signal dégradé et feuille « Qualité » compris) ; hors
+    /// partage, l'avatar, le nom et la ligne d'état.
+    @ViewBuilder private var identitySection: some View {
+        if callManager.screenShare.isSharing {
+            statusEntry
+        } else {
+            CallParticipantVisual(diameter: 44, callManager: callManager)
+            userInfoSection
+        }
+    }
+
     private var userInfoSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Inconnu", bundle: .main))
@@ -264,9 +275,7 @@ struct FloatingCallPillView: View {
                     // l'arrêt haut de l'aplat indigo — sous le seuil 4.5:1 du
                     // texte courant (CallBannerContrastTests). L'état « établi »
                     // reste porté par le glyphe signal.
-                    Text(formattedDuration)
-                        .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundStyle(Color.white)
+                    durationLabel
                 } else if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
                     Image(systemName: glyph)
                         .font(.caption.weight(.semibold))
@@ -283,6 +292,16 @@ struct FloatingCallPillView: View {
                 : pillStatus.label)
             .accessibilityValue(pillStatus.isConnected ? spokenDuration : "")
             .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
+
+    @ViewBuilder private var durationLabel: some View {
+        if callManager.screenShare.isSharing {
+            CallReducedCaption(callManager: callManager, style: .screenShare)
+        } else {
+            Text(formattedDuration)
+                .font(.caption.weight(.medium).monospacedDigit())
+                .foregroundStyle(Color.white)
         }
     }
 

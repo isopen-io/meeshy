@@ -131,6 +131,8 @@ internal fun CallChromeFade(
     modifier: Modifier = Modifier,
     stowsToward: CallVerticalEdge? = null,
     edgeMargin: Dp = 0.dp,
+    /** U2.10 : stowed, it also gives back the room it took, in step with its exit (the group full screen). */
+    releasesRoom: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val reduceMotion = rememberCallReduceMotion()
@@ -149,6 +151,7 @@ internal fun CallChromeFade(
     val travelsAway = stowsToward != null && CallChromeStow.leavesByItsEdge(isVisible, reduceMotion)
     val travel = if (travelsAway && stowsToward != null) CallChromeStow.travel(stowsToward, heightPx.toFloat(), marginPx) else 0f
     val stowOffset = animateFloatAsState(travel, tween(fade), label = "callChromeStow")
+    val room = animateFloatAsState(if (releasesRoom && !isVisible) 0f else 1f, tween(fade), label = "callChromeRoom")
     LaunchedEffect(isVisible, fade) {
         if (isVisible) {
             settledHidden = false
@@ -158,11 +161,12 @@ internal fun CallChromeFade(
         }
     }
     if (!isVisible && settledHidden) {
-        Spacer(modifier.height(with(LocalDensity.current) { heightPx.toDp() }))
+        Spacer(modifier.callRoom(room).height(with(LocalDensity.current) { heightPx.toDp() }))
         return
     }
     Box(
         modifier
+            .callRoom(room)
             .onSizeChanged { if (it.height > 0) heightPx = it.height }
             .graphicsLayer {
                 alpha = fadeAlpha.value
@@ -251,13 +255,15 @@ internal fun CallConnectedColumn(
             state.captionText?.let { caption -> CallCaption(caption) }
             CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
 
-            // La vignette à la une en plein écran (#13750) rend toute la place : la pilule sort de la mise en page.
-            if (!chromeState.isStageFullScreen) CallControlsBlock(
+            // U2.9 · U2.10 : la une en plein écran (#13750) rend toute la place — la pilule sort par le bas et la rend —, sauf
+            // son verre de sous-titres, qui reste (CallPillText.isOnStage).
+            CallControlsBlock(
                 pillText = pillText,
                 controlsVisible = controlsVisible,
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                 onInteraction = chrome::onInteraction,
-                modifier = Modifier.padding(bottom = MeeshySpacing.xl),
+                releasesRoom = !pillText.isOnStage(chromeState.isStageFullScreen),
+                bottomPadding = MeeshySpacing.xl,
             ) {
                 CallControlsPill(
                     state = state,

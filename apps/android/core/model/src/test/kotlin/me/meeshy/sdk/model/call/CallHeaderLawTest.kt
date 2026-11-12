@@ -57,7 +57,8 @@ class CallHeaderLawTest {
         displayName: String? = null,
         groupName: String? = null,
         participantCount: Int = 0,
-    ) = CallHeaderCapsuleInput(layout, isEstablished, isNetworkDegraded, givenName, displayName, groupName, participantCount)
+        receivesScreen: Boolean = false,
+    ) = CallHeaderCapsuleInput(layout, isEstablished, isNetworkDegraded, givenName, displayName, groupName, participantCount, receivesScreen)
 
     @Test
     fun `en video la capsule dit le nom donne puis la duree, sinon le nom d'affichage`() {
@@ -65,6 +66,26 @@ class CallHeaderLawTest {
             .isEqualTo(CallHeaderCapsule(title = "Awa", participantCount = null, showsDuration = true, showsNetwork = false))
         assertThat(CallHeaderLaw.capsule(input(CallHeaderCapsuleLayout.Video, givenName = "  ", displayName = "Awa Diallo"))?.title)
             .isEqualTo("Awa Diallo")
+    }
+
+    @Test
+    fun `en video un ecran recu prend la place du nom et de la duree, la capsule dit Ecran de la personne`() {
+        assertThat(CallHeaderLaw.capsule(input(CallHeaderCapsuleLayout.Video, givenName = "Awa", displayName = "Awa Diallo", receivesScreen = true)))
+            .isEqualTo(CallHeaderCapsule(title = "Awa", participantCount = null, showsDuration = false, showsNetwork = false, isReceivedScreen = true))
+    }
+
+    @Test
+    fun `un ecran recu garde le reseau degrade seulement`() {
+        assertThat(CallHeaderLaw.capsule(input(CallHeaderCapsuleLayout.Video, displayName = "Awa", receivesScreen = true))?.showsNetwork).isFalse()
+        assertThat(CallHeaderLaw.capsule(input(CallHeaderCapsuleLayout.Video, displayName = "Awa", isNetworkDegraded = true, receivesScreen = true))?.showsNetwork).isTrue()
+    }
+
+    @Test
+    fun `l'ecran recu ne change ni la capsule audio ni celle du groupe`() {
+        assertThat(CallHeaderLaw.capsule(input(CallHeaderCapsuleLayout.Audio, receivesScreen = true))).isNull()
+        val group = CallHeaderLaw.capsule(input(CallHeaderCapsuleLayout.Group, groupName = "G", participantCount = 3, receivesScreen = true))
+        assertThat(group?.isReceivedScreen).isFalse()
+        assertThat(group?.showsDuration).isTrue()
     }
 
     @Test
