@@ -1,6 +1,6 @@
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-import { bannerCloseKeyframes, followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
+import { bannerCloseKeyframes, GLASS_REGULAR_DENSITY, glassToneKeyframes, glassToneMs, glassVeil, followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
 
 /**
  * **LE MOTEUR DOM DU MOUVEMENT DU VERRE** (#17536, lois dans `call-pill-motion.ts`) — il mesure
@@ -203,4 +203,33 @@ export function playBannersClose(stack: HTMLElement, from: ReadonlyMap<Element, 
     const was = from.get(banner);
     if (banner.hasAttribute('data-leaving') && was !== undefined) banner.style.top = `${was - base}px`;
   }
+}
+
+/** Le verre n'est plus en train de changer de ton : son état de repos (classe) fait foi. */
+function settleGlassTone(element: HTMLElement): void {
+  if (element.getAttribute('data-glass-fading') === 'static') element.style.removeProperty('position');
+  element.removeAttribute('data-glass-fading');
+  element.style.removeProperty('--glass-density');
+}
+
+/**
+ * Le TON d'un verre d'appel change en fondu (L5.8, #17849) : la classe a déjà posé le ton visé, le verre
+ * est tenu à sa densité régulière le temps du fondu et le voile (`::after`, `glass.css`) passe de l'opacité
+ * AFFICHÉE à celle de la cible ; à la fin la classe reprend, sans saut (régulière + voile = proéminente).
+ * Interruptible : un changement en route part de l'opacité vue à cet instant. Sous « Réduire la
+ * transparence » le verre est plein dans les deux tons : rien à fondre. `null` : posé d'un coup.
+ */
+export function playGlassTone(element: HTMLElement, prominent: boolean, previous: Animation | null): Animation | null {
+  if (typeof element.animate !== 'function' || window.matchMedia?.('(prefers-reduced-transparency: reduce)').matches) return null;
+  const seen = previous?.playState === 'running' ? Number(getComputedStyle(element, '::after').opacity) : Number.NaN;
+  const shown = Number.isNaN(seen) ? glassVeil(!prominent) : seen;
+  previous?.cancel();
+  const fading = element.getAttribute('data-glass-fading');
+  const lifted = fading === 'static' || (fading === null && getComputedStyle(element).position === 'static');
+  element.setAttribute('data-glass-fading', lifted ? 'static' : 'placed');
+  element.style.setProperty('--glass-density', `${GLASS_REGULAR_DENSITY}%`);
+  if (lifted) element.style.position = 'relative';
+  const played = element.animate([...glassToneKeyframes(shown, glassVeil(prominent))], { duration: glassToneMs(prefersReducedMotion()), easing: 'ease-in-out', fill: 'forwards', pseudoElement: '::after' });
+  played.finished.then(() => settleGlassTone(element), () => undefined);
+  return played;
 }

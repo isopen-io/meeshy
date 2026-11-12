@@ -124,6 +124,25 @@
   --glass-density: 86%;
 }
 
+/* LE TON DU VERRE CHANGE EN FONDU (L5.8, #17849 ; `CallGlassVeil` d'iOS, loi 17) — le temps du
+   passage, le moteur de mouvement (`pill-motion-engine.ts`, `playGlassTone`) tient le verre à sa
+   densité régulière et pose ce voile : un calque de la couleur du verre dont l'OPACITÉ seule monte
+   ou redescend (le compositeur la porte, aucun fond n'est recalculé à chaque image), en Web
+   Animations — la règle générale de « Réduire les animations » coupe les transitions, pas elles.
+   Au repos le calque n'existe pas : le ton est celui des classes ci-dessus. Régulière + voile à la
+   mesure de `glassVeil` = exactement la densité proéminente : la fin du fondu ne saute pas. */
+.glass-call[data-glass-fading]::after,
+.glass-call-prominent[data-glass-fading]::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  background-color: var(--ios-indigo-950);
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* LE VERRE D'APPEL TEINTÉ DE ROUGE (P16.12, #17746) — le bandeau « Vous partagez votre écran » :
    la matière du verre régulier, sous un voile d'erreur à 35 % (la planche : rgba(217,45,32,.35)).
    Le voile est un DÉGRADÉ plein posé sur la couleur du verre, jamais une seconde couche

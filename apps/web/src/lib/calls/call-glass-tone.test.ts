@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -19,8 +21,8 @@ describe('la loi du voile', () => {
     expect(glassVeil(false)).toBe(0);
   });
 
-  test('les densités de la loi sont celles de glass.css (une seule matière)', async () => {
-    const css = await Bun.file(new URL('../../styles/glass.css', import.meta.url)).text();
+  test('les densités de la loi sont celles de glass.css (une seule matière)', () => {
+    const css = readFileSync(new URL('../../styles/glass.css', import.meta.url), 'utf8');
     expect(/\.glass-call\s*\{\s*--glass-density:\s*(\d+)%/.exec(css)?.[1]).toBe(String(GLASS_REGULAR_DENSITY));
     expect(/\.glass-call-prominent\s*\{\s*--glass-density:\s*(\d+)%/.exec(css)?.[1]).toBe(String(GLASS_PROMINENT_DENSITY));
   });
@@ -81,11 +83,8 @@ describe('le moteur joue le voile en Web Animations', () => {
 
   test('sans moteur d’animation, rien n’est joué et le ton se pose d’un coup', () => {
     const element = document.createElement('div');
-    Reflect.deleteProperty(element, 'animate');
-    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
-    Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+    Object.defineProperty(element, 'animate', { value: undefined });
     expect(playGlassTone(element, true, null)).toBeNull();
     expect(element.hasAttribute('data-glass-fading')).toBe(false);
-    if (original !== undefined) Object.defineProperty(HTMLElement.prototype, 'animate', original);
   });
 });

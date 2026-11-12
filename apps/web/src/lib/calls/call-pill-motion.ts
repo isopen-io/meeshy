@@ -174,3 +174,23 @@ export function bannerCloseKeyframes(delta: number, reducedMotion: boolean): rea
   if (Math.abs(delta) < EPSILON_PX) return null;
   return reducedMotion ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: `translateY(${delta}px)` }, { transform: 'none' }];
 }
+
+/**
+ * LE TON DU VERRE CHANGE EN FONDU (L5.8, #17849 ; `CallGlassVeil` d'iOS, loi 17) — sur un écran reçu
+ * le verre d'appel s'assombrit (`glass-call` → `glass-call-prominent`, `glass.css`), puis revient. Le
+ * passage n'est pas un fond recalculé à chaque image : le verre garde sa densité régulière et un VOILE
+ * (le calque `::after`, de la couleur du verre) monte de zéro à la mesure qui, posée dessus, rend
+ * EXACTEMENT la densité proéminente. Seule son opacité bouge. Sous « Réduire les animations », le
+ * même fondu, plus court.
+ */
+export const GLASS_REGULAR_DENSITY = 72;
+
+/** Les densités de `glass.css` (`.glass-call`, `.glass-call-prominent`) ; un témoin les relit dans la feuille. */
+export const GLASS_PROMINENT_DENSITY = 86;
+
+/** L'opacité du voile : ce qui manque à la densité régulière pour atteindre la proéminente. */
+export const glassVeil = (prominent: boolean): number => (prominent ? (GLASS_PROMINENT_DENSITY - GLASS_REGULAR_DENSITY) / (100 - GLASS_REGULAR_DENSITY) : 0);
+
+export const glassToneKeyframes = (from: number, to: number): readonly Keyframe[] => [{ opacity: from }, { opacity: to }];
+
+export const glassToneMs = swapMs;

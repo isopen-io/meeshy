@@ -98,7 +98,7 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
 
   test('la capsule montre ses « · » entre le nom, le nombre et la durée — lus une seule fois, par le nom accessible (L1.2, L4.5)', () => {
     const duo = chip({ level: 'good' }, { ...video, network: false });
-    expect(duo).toMatch(/Awa<\/span><span[^>]*data-call-chip-sep=""[^>]*aria-hidden="true"[^>]*>·<\/span>/);
+    expect(duo).toMatch(/Awa<\/span><span[^>]*aria-hidden="true"[^>]*data-call-chip-sep=""[^>]*>·<\/span><span class="shrink-0">1:23<\/span>/);
     expect((duo.match(/data-call-chip-sep/g) ?? []).length).toBe(1);
     const group = chip({ level: 'good' }, { title: 'Équipe', participantCount: 4, duration: true, network: false });
     expect((group.match(/data-call-chip-sep/g) ?? []).length).toBe(2);
