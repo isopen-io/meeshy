@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
@@ -6,6 +7,8 @@ import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { CallBubble } from './call-bubble';
 import { ActiveCallView } from './call-overlay';
 import { CallScreen, loadColdCallViews } from './call-screen';
+import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
+import { appQueryClient } from '@/lib/api/query-client';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 /**
@@ -162,5 +165,108 @@ describe('la bulle ne déplace que son `translate` (#11314)', () => {
     expect(html).toContain('translate:');
     expect(html).toContain('transition:translate 180ms ease-out');
     expect(html).not.toMatch(/transition:[^;"]*(left|top|width|height)/);
+  });
+});
+
+const tagOf = (html: string, marker: string): string => html.match(new RegExp(`<[^>]*${marker}[^>]*>`))?.[0] ?? '';
+
+const knowConversation = (customName?: string) =>
+  appQueryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
+    pageParams: [],
+    pages: [{ conversations: [{ id: 'c-1', type: 'direct', title: 'Amina Diallo', userPreferences: customName === undefined ? [] : [{ customName }] }] }],
+  });
+
+describe('la bulle montre l’autre, pas moi (P18.3)', () => {
+  const mineOnly = call({ display: 'bubble', peerKey: 'u-peer', cameraOn: true, localStream: liveVideo, members: { 'u-peer': peer({ userId: 'u-peer', cameraOn: false }) } });
+
+  test('sa caméra coupée et la mienne allumée : son avatar, aucune vidéo — la bulle n’affiche jamais ma caméra', () => {
+    const html = renderToStaticMarkup(<CallBubble call={mineOnly} />);
+    expect(html).not.toContain('data-call-stream');
+    expect(html).toContain('data-call-bubble-caption');
+  });
+
+  test('sa caméra allumée : sa vidéo', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', peerKey: 'u-peer', members: { 'u-peer': peer({ userId: 'u-peer', cameraOn: true }) }, remoteStreams: { 'u-peer': liveVideo } })} />);
+    expect(html).toContain('data-call-stream="cover"');
+  });
+});
+
+describe('le liseré de la bulle (P18.4)', () => {
+  test('il porte la couleur partagée de l’autre — celle de son id et de son nom, jamais celle du titre seul', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', peerKey: 'u-peer', title: 'Amina Diallo' })} />);
+    const ring = tagOf(html, 'data-call-bubble-ring');
+    expect(ring).not.toBe('');
+    expect(ring.toLowerCase()).toContain(authorAccentColor('u-peer', 'Amina Diallo').toLowerCase());
+  });
+
+  test('la teinte de l’avatar est la même', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', peerKey: 'u-peer', title: 'Amina Diallo' })} />).toLowerCase();
+    expect(html.split(authorAccentColor('u-peer', 'Amina Diallo').toLowerCase()).length - 1).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('l’étiquette « nom · durée » de la bulle (P18.5)', () => {
+  test('sur un verre, avec le nom d’affichage et la durée', () => {
+    appQueryClient.removeQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', connectedAt: Date.now() - 252_000 })} />);
+    const tag = tagOf(html, 'data-call-bubble-caption');
+    expect(tag).toContain('glass-call');
+    expect(html).toMatch(/data-call-bubble-caption[^>]*>Amina Diallo · \d+:\d{2}</);
+  });
+
+  test('le nom que j’ai donné à la personne passe avant son nom d’affichage (#17341)', () => {
+    knowConversation('Awa');
+    try {
+      expect(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />)).toMatch(/data-call-bubble-caption[^>]*>Awa · /);
+    } finally {
+      appQueryClient.removeQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    }
+  });
+
+  test('en vidéo aussi, l’étiquette est en bas à gauche de l’image', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', members: { 'u-a': peer({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } })} />);
+    expect(html).toMatch(/data-call-bubble-caption[^>]*>Amina Diallo · /);
+  });
+});
+
+describe('la bulle et la capsule s’effacent pendant l’image dans l’image (P18.9)', () => {
+  test('la bulle s’efface en fondu, retirée du toucher et du lecteur d’écran ; elle revient avec la fenêtre fermée', () => {
+    const away = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} away />), 'data-call-bubble="');
+    expect(away).toContain('aria-hidden="true"');
+    expect(away).toContain('inert');
+    expect(away).toContain('opacity:0');
+    const here = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />), 'data-call-bubble="');
+    expect(here).not.toContain('aria-hidden');
+    expect(here).not.toContain('opacity:0');
+  });
+
+  test('la capsule de même', async () => {
+    const { CallPillBar } = await import('./call-floating-pill');
+    const away = tagOf(renderToStaticMarkup(<CallPillBar call={call({ display: 'pill' })} away />), 'data-call-pill-bar');
+    expect(away).toContain('aria-hidden="true"');
+    expect(away).toContain('opacity:0');
+    expect(tagOf(renderToStaticMarkup(<CallPillBar call={call({ display: 'pill' })} away={false} />), 'data-call-pill-bar')).not.toContain('aria-hidden');
+  });
+});
+
+describe('pendant MON partage, la capsule dit le nom donné et ne se replie pas (P18.10)', () => {
+  test('« nom donné · durée » au lieu du titre de l’appel ; Arrêter reste', async () => {
+    knowConversation('Awa');
+    try {
+      const { CallPillBar } = await import('./call-floating-pill');
+      const html = renderToStaticMarkup(<CallPillBar call={call({ display: 'pill', screenSharing: true })} away={false} />);
+      expect(html).toMatch(/Awa · \d+:\d{2}/);
+      expect(html).not.toContain('Amina Diallo');
+      expect(html).toContain('data-call-pill-stop-share');
+    } finally {
+      appQueryClient.removeQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    }
+  });
+
+  test('hors partage, la capsule garde le titre de l’appel puis la durée', async () => {
+    const { CallPillBar } = await import('./call-floating-pill');
+    const html = renderToStaticMarkup(<CallPillBar call={call({ display: 'pill' })} away={false} />);
+    expect(html).toContain('Amina Diallo');
+    expect(html).not.toContain('Amina Diallo ·');
   });
 });

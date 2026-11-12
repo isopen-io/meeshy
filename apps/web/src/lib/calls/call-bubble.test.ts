@@ -15,6 +15,7 @@ import {
   nudgeBubble,
   offersOutputChoice,
   PILL_COLLAPSE_DISTANCE,
+  pillSwipeCollapses,
   pinchTier,
   readBubblePlacement,
   snapBubble,
@@ -198,5 +199,14 @@ describe('bubbleTranslate — la bulle se déplace en `translate`, jamais en lef
 
   test('l’aimantation au bord ne joue QUE `translate`, au tempo de l’ancienne transition', () => {
     expect(BUBBLE_SETTLE_TRANSITION).toBe('translate 180ms ease-out');
+  });
+});
+
+describe('le glissé de la capsule (P18.10)', () => {
+  test('un glissé assez long replie la capsule en bulle, jamais pendant mon partage d’écran', () => {
+    expect(pillSwipeCollapses({ travelled: PILL_COLLAPSE_DISTANCE, sharing: false })).toBe(true);
+    expect(pillSwipeCollapses({ travelled: -PILL_COLLAPSE_DISTANCE - 10, sharing: false })).toBe(true);
+    expect(pillSwipeCollapses({ travelled: PILL_COLLAPSE_DISTANCE - 1, sharing: false })).toBe(false);
+    expect(pillSwipeCollapses({ travelled: PILL_COLLAPSE_DISTANCE * 3, sharing: true })).toBe(false);
   });
 });

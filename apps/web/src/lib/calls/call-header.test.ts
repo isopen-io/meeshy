@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, test } from 'bun:test';
 
-import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegraded } from './call-header';
+import { callHeaderActions, callHeaderCapsule, callHeaderNames, isNetworkDegraded, reducedCaption, reducedTitle } from './call-header';
 
 /**
  * L'EN-TÊTE DE L'APPEL (#17329, #17341) — Réduire · Image dans l'image ·
@@ -121,5 +121,20 @@ describe('ce qui paraît dans l’en-tête arrive, jamais d’un coup (#17406, c
     expect(motion).toContain('transform:');
     expect(reduced).toContain('opacity: 0');
     expect(reduced).not.toContain('transform');
+  });
+});
+
+describe('l’appel réduit dit « nom · durée » (P18.5, miroir de CallReducedRule)', () => {
+  test('le nom du groupe en groupe, sinon le nom que j’ai donné, sinon le nom d’affichage', () => {
+    expect(reducedTitle({ givenName: 'Awa', groupName: null, displayName: 'Amina Diallo' })).toBe('Awa');
+    expect(reducedTitle({ givenName: null, groupName: null, displayName: 'Amina Diallo' })).toBe('Amina Diallo');
+    expect(reducedTitle({ givenName: ' ', groupName: 'Famille', displayName: 'Amina Diallo' })).toBe('Famille');
+    expect(reducedTitle({ givenName: 'Awa', groupName: 'Famille', displayName: null })).toBe('Famille');
+  });
+
+  test('aucun nom connu : la durée seule', () => {
+    expect(reducedTitle({ givenName: null, groupName: null, displayName: '  ' })).toBeNull();
+    expect(reducedCaption(null, '4:12')).toBe('4:12');
+    expect(reducedCaption('Awa', '4:12')).toBe('Awa · 4:12');
   });
 });
