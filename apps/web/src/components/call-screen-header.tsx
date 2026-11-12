@@ -98,6 +98,7 @@ export function CallScreenHeader({ call, language, joined, prominent }: HeaderPr
     displayName: call.title,
     groupName: names.groupName,
     participantCount: participantCountOf(call, layout),
+    receivesScreen: layout === 'screen',
   });
   return (
     <div className="flex min-h-11 items-center justify-between gap-2 px-4" data-call-header="">

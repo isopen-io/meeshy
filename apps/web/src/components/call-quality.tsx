@@ -1,7 +1,8 @@
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 import { lazy, Suspense, useState } from 'react';
 
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import type { CallHeaderCapsule } from '@/lib/calls/call-header';
 import type { CallMember, CallQuality } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
@@ -62,11 +63,17 @@ type CallQualityChipProps = {
 export function CallQualityChip({ capsule, clock, quality, language, prominent }: CallQualityChipProps) {
   const [open, setOpen] = useState(false);
   const count = capsule.participantCount === null ? null : translate(language, 'call.members', { count: String(capsule.participantCount) });
-  const spoken = [capsule.title, count, capsule.duration ? clock : null].filter((part): part is string => part !== null && part !== '').join(' · ');
+  const title = capsule.receivedScreen === true && capsule.title !== null ? translate(language, 'call.screen.of', { name: capsule.title }) : capsule.title;
+  const spoken = [title, count, capsule.duration ? clock : null].filter((part): part is string => part !== null && part !== '').join(' · ');
   const glass = `${prominent ? 'glass-call-prominent' : 'glass-call'} flex min-h-11 min-w-0 max-w-[60vw] items-center gap-2 rounded-full px-3 text-body font-semibold tabular-nums`;
   const content = (
     <>
-      {capsule.title === null ? null : <span className="truncate">{capsule.title}</span>}
+      {capsule.receivedScreen === true ? (
+        <span className="inline-flex shrink-0 items-center" aria-hidden="true" data-call-chip-screen="">
+          <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={16} />
+        </span>
+      ) : null}
+      {title === null ? null : <span className="truncate">{title}</span>}
       {capsule.participantCount === null ? null : (
         <span className="inline-flex shrink-0 items-center gap-1" aria-hidden="true" data-call-chip-count="">
           <Glyph name="users" size={16} />

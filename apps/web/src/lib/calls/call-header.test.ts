@@ -55,6 +55,24 @@ describe('la capsule de droite (#17341)', () => {
     expect(callHeaderCapsule({ ...input, layout: 'audio', degraded: true })).toEqual({ title: null, participantCount: null, duration: false, network: true });
   });
 
+  test('vidéo, écran reçu (P15.4) : la capsule annonce l’écran de la personne — son nom, sans durée, l’icône d’écran', () => {
+    const screen = { ...input, receivesScreen: true };
+    expect(callHeaderCapsule({ ...screen, givenName: 'Awa' })).toEqual({ title: 'Awa', participantCount: null, duration: false, network: false, receivedScreen: true });
+    expect(callHeaderCapsule(screen)?.title).toBe('Amina Diallo');
+    expect(callHeaderCapsule({ ...screen, givenName: '  ' })?.title).toBe('Amina Diallo');
+  });
+
+  test('vidéo, écran reçu : le réseau ne paraît que dégradé, et la capsule n’existe qu’une fois l’appel établi', () => {
+    expect(callHeaderCapsule({ ...input, receivesScreen: true, degraded: true })?.network).toBe(true);
+    expect(callHeaderCapsule({ ...input, receivesScreen: true, established: false })).toBeNull();
+  });
+
+  test('sans écran reçu la capsule n’est jamais marquée écran ; audio et groupe ignorent l’écran reçu', () => {
+    expect(callHeaderCapsule(input)?.receivedScreen).toBeUndefined();
+    expect(callHeaderCapsule({ ...input, layout: 'audio', receivesScreen: true })).toBeNull();
+    expect(callHeaderCapsule({ ...input, layout: 'group', groupName: 'Famille', participantCount: 4, receivesScreen: true })).toEqual({ title: 'Famille', participantCount: 4, duration: true, network: false });
+  });
+
   test('groupe : le nom du groupe, le nombre et la durée', () => {
     expect(callHeaderCapsule({ ...input, layout: 'group', groupName: 'Famille', participantCount: 4 })).toEqual({ title: 'Famille', participantCount: 4, duration: true, network: false });
     expect(callHeaderCapsule({ ...input, layout: 'group', groupName: 'Famille', participantCount: 4, degraded: true })?.network).toBe(true);

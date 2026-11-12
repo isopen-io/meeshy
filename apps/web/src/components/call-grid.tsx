@@ -6,7 +6,7 @@ import { PeerAvatar } from '@/components/peer-avatar';
 import type { Portrait } from '@/components/call-portrait';
 import type { CallButton } from '@/components/call-glass-button';
 import type { Arrives } from '@/components/call-arrives';
-import type { useScreenZoom } from '@/components/use-screen-zoom';
+import { useScreenZoom } from '@/components/use-screen-zoom';
 import type { HeldSwap } from '@/lib/calls/use-pill-motion';
 import type { PeerSpeechRing } from '@/components/call-camera-off';
 import type { CallModerationSlot } from '@/components/call-control-slots';
@@ -88,8 +88,6 @@ export type CallGridKit = {
   readonly useStageFlip: typeof useStageFlip;
   /** Ce qui arrive avec la une (la capsule) y entre en fondu, et repart de même (`leaving`), plus court sous « Réduire les animations » : rien n'apparaît ni ne disparaît d'un coup. */
   readonly Arrives: typeof Arrives;
-  /** Le zoom de l'écran partagé à la une (pincer, Ctrl + molette, double toucher) : son crochet et ses lois vivent dans l'écran, qui le remet. */
-  readonly useScreenZoom: typeof useScreenZoom;
   /** Le bandeau des autres sort par son bord quand l'écran devient plein, et revient par lui (U2.10). */
   readonly HeldSwap: typeof HeldSwap;
 };
@@ -245,7 +243,7 @@ function Slot({ menu = null, ...tile }: TileProps & { readonly menu?: ReactNode 
 
 function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGridKit; readonly member: CallMember; readonly stream: MediaStream | undefined; readonly language: InterfaceLanguage }) {
   const title = translate(language, 'call.screen.of', { name: member.name });
-  const { zoom, pinching, handlers } = kit.useScreenZoom();
+  const { zoom, pinching, handlers } = useScreenZoom();
   const hint = useId();
   return (
     <div className="relative min-h-0 min-w-0 flex-1 origin-top-left overflow-hidden rounded-card" style={{ touchAction: 'none' }} data-call-slot={member.userId} aria-describedby={hint} data-call-shared-screen="" data-call-screen-zoom={String(zoom)} {...handlers}>
