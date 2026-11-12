@@ -194,6 +194,7 @@ fun MeeshyApp(
 
     UpgradeGateHost(requirement = upgradeRequirement) {
     ShareLaunchHost(navController) {
+    ProvideViewerCallPill(callViewModel, navController, shown = CallPillPresenter.shouldShow(callStatus, onCallScreen)) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -342,19 +343,20 @@ fun MeeshyApp(
     }
     }
     }
+    }
 }
 
 
 /** La pastille d'appel reduit : seule a lire l'etat VIVANT (chrono compris), elle seule se recompose chaque seconde. */
 @Composable
-private fun MinimizedCallPill(
+internal fun MinimizedCallPill(
     callViewModel: CallViewModel,
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    screenShare: CallScreenShareViewModel = hiltViewModel(),
 ) {
     val callState by callViewModel.state.collectAsStateWithLifecycle()
     val callPeerVisual by callViewModel.peerVisual.collectAsStateWithLifecycle()
-    val screenShare: CallScreenShareViewModel = hiltViewModel()
     val share by screenShare.state.collectAsStateWithLifecycle()
     CallPill(
         state = callState,

@@ -1,6 +1,10 @@
 package me.meeshy.app.calls
 
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
@@ -96,5 +100,20 @@ class CallPillControlsTest {
         assertThat(taps.reopen).isEqualTo(0)
         rule.onNodeWithContentDescription("Hang up").assertDoesNotExist()
         rule.onNodeWithContentDescription("Earpiece").assertDoesNotExist()
+    }
+
+    @Test
+    fun `while I share my screen the banner says name and duration, not a generic sentence`() {
+        show(connected(), sharing = true)
+
+        rule.onNodeWithText("Alice · 01:05").assertExists()
+        rule.onNodeWithText("You're sharing your screen").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the Stop button of the sharing banner is a 48 dp target`() {
+        show(connected(), sharing = true)
+
+        rule.onNodeWithContentDescription("Stop sharing screen").assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
     }
 }
