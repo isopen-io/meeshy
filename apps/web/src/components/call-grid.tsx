@@ -18,6 +18,7 @@ import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { autoSharer, resolveSpotlight, SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { chooseGrid, chooseMember, chooseSelf } from '@/lib/calls/call-spotlight-gestures';
 import type { CallMember } from '@/lib/calls/call-store';
+import { zoomLabel } from '@/lib/calls/camera-zoom';
 import { filmstripOf, type Filmstrip, STRIP_COLUMN_WIDTH, STRIP_HALO_PAD, STRIP_TILE_HEIGHT, STRIP_TILE_WIDTH } from '@/lib/calls/call-group-stage';
 import { gridColumns, hasVideo } from '@/lib/calls/call-view';
 import type { useStageFlip } from '@/lib/calls/use-stage-flip';
@@ -259,7 +260,7 @@ function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGri
       <span className="glass-call-prominent absolute start-2 top-2 flex max-w-[70%] items-center gap-1 rounded-full px-3 py-1 text-mini font-semibold" role="status" data-call-screen-banner="">
         <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={14} />
         <span className="truncate">{title}</span>
-        {zoom > 1 ? <span aria-hidden="true">{` · ${Math.round(zoom * 10) / 10}×`}</span> : null}
+        {zoom > 1 ? <span aria-hidden="true">{` · ${zoomLabel(zoom, language)}`}</span> : null}
       </span>
     </div>
   );
@@ -278,17 +279,9 @@ const stripBox = (strip: Filmstrip): CSSProperties => {
 
 const SCROLL_HIDDEN = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
-export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false }: CallGridProps) {
-  const press = kit.usePressedChrome(chromeVisible);
-  /** #9183 — chrome masqué, toucher une vignette le RENDS au lieu de changer la une (`GroupStageTapRule` sur iOS) ; décidé à la descente du pointeur (#17548). */
-  const decide = (next: SpotlightChoice) => () => (press.release() ? onRevealChrome() : onChoose(next));
-  const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
-  const view = kit.resolveSpotlight({ members, choice, remoteStreams });
+/** Les `<video>` tenus par identité : celui d'un membre parti se retire, tous partent avec la grille. */
+function useHeldVideos(members: readonly CallMember[]) {
   const held = useRef<Held>(new Map());
-  const shown = useRef<{ readonly screen: boolean; readonly full: boolean } | null>(null);
-  const root = useRef<HTMLDivElement>(null);
-  const fullscreen = immersive;
-  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}`);
   const present = members.map((member) => member.userId).join();
   useEffect(() => {
     for (const [id, video] of held.current) if (id !== SELF && !members.some((member) => member.userId === id)) video.remove(), held.current.delete(id);
@@ -300,6 +293,63 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
     },
     [],
   );
+  return held;
+}
+
+/** Le zoom de ma caméra quand MA tuile est à la une (#9182) : son chunk à la demande. */
+function SelfZoom({ zoom, stream, language }: { readonly zoom: NonNullable<CallGridProps['selfZoom']>; readonly stream: MediaStream | null; readonly language: InterfaceLanguage }) {
+  return (
+    <Suspense fallback={null}>
+      <CallSelfCamera stream={stream} local={zoom.local} language={language} glyphs={{ plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> }} column={zoom.column} />
+    </Suspense>
+  );
+}
+
+type CapsuleProps = {
+  readonly kit: CallGridKit;
+  readonly language: InterfaceLanguage;
+  readonly screen: boolean;
+  readonly full: boolean;
+  readonly leaving: boolean;
+  readonly onGrid: () => void;
+  readonly onToggleImmersive: () => void;
+  readonly children: ReactNode;
+};
+
+/**
+ * La capsule « Revenir à la grille · Plein écran » : en place avec la une, ou — `leaving` — retenue au retour à la
+ * grille le temps de son fondu (U1.12). Plein écran, elle échappe au rangement du chrome (U2.4).
+ */
+function SpotlightCapsule({ kit, language, screen, full, leaving, onGrid, onToggleImmersive, children }: CapsuleProps) {
+  return (
+    <div className={`absolute ${leaving ? 'end-5' : 'end-2'} top-2 flex flex-col items-end gap-2`} data-call-chrome-fade="" {...(full ? { 'data-call-chrome-keep': '' } : {})}>
+      <kit.Arrives leaving={leaving} className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
+        <kit.Button label={translate(language, 'call.spotlight.back')} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />} onPress={onGrid} size={44} data={{ 'data-call-grid-back': '' }} />
+        <kit.Button
+          label={translate(language, full ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
+          glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[full ? 'cornersIn' : 'cornersOut']} size={20} />}
+          onPress={onToggleImmersive}
+          pressed={full}
+          size={44}
+          data={{ 'data-call-fullscreen': '' }}
+        />
+      </kit.Arrives>
+      {children}
+    </div>
+  );
+}
+
+export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false }: CallGridProps) {
+  const press = kit.usePressedChrome(chromeVisible);
+  /** #9183 — chrome masqué, toucher une vignette le RENDS au lieu de changer la une (`GroupStageTapRule` sur iOS) ; décidé à la descente du pointeur (#17548). */
+  const decide = (next: SpotlightChoice) => () => (press.release() ? onRevealChrome() : onChoose(next));
+  const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
+  const view = kit.resolveSpotlight({ members, choice, remoteStreams });
+  const held = useHeldVideos(members);
+  const shown = useRef<{ readonly screen: boolean; readonly full: boolean } | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const fullscreen = immersive;
+  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}`);
   const mine = selfSubject(kit, self, language);
   const peer = (member: CallMember) => peerSubject(kit, member, remoteStreams[member.userId], language);
   const tile = (subject: Subject, onPress: (() => void) | null, label: string, portrait: number) => ({ kit, subject, held: held.current, onPress, label, portrait, press });
@@ -322,22 +372,10 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
   );
 
   const sharer = kit.autoSharer(members, remoteStreams);
-  /** La capsule « Revenir à la grille · Plein écran » : en place avec la une, ou — `leaving` — retenue au retour à la grille le temps de son fondu (U1.12). */
   const capsuleOf = (screen: boolean, full: boolean, leaving: boolean, below: ReactNode = null) => (
-    <div className={`absolute ${leaving ? 'end-5' : 'end-2'} top-2 flex flex-col items-end gap-2`} data-call-chrome-fade="" {...(full ? { 'data-call-chrome-keep': '' } : {})}>
-      <kit.Arrives leaving={leaving} className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
-        <kit.Button label={translate(language, 'call.spotlight.back')} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />} onPress={() => onChoose(chooseGrid(sharer?.userId ?? null))} size={44} data={{ 'data-call-grid-back': '' }} />
-        <kit.Button
-          label={translate(language, full ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
-          glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[full ? 'cornersIn' : 'cornersOut']} size={20} />}
-          onPress={onToggleImmersive}
-          pressed={full}
-          size={44}
-          data={{ 'data-call-fullscreen': '' }}
-        />
-      </kit.Arrives>
+    <SpotlightCapsule kit={kit} language={language} screen={screen} full={full} leaving={leaving} onGrid={() => onChoose(chooseGrid(sharer?.userId ?? null))} onToggleImmersive={onToggleImmersive}>
       {below}
-    </div>
+    </SpotlightCapsule>
   );
   if (view !== null) shown.current = { screen: view.screen, full: fullscreen };
 
@@ -362,17 +400,7 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
               <Slot {...tile(peer(featured), null, featured.name, 96)} />
             </div>
           )}
-          {featured === null && selfZoom !== null ? (
-            <Suspense fallback={null}>
-              <CallSelfCamera
-                stream={self.cameraOn ? self.stream : null}
-                local={selfZoom.local}
-                language={language}
-                glyphs={{ plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> }}
-                column={selfZoom.column}
-              />
-            </Suspense>
-          ) : null}
+          {featured === null && selfZoom !== null ? <SelfZoom zoom={selfZoom} stream={self.cameraOn ? self.stream : null} language={language} /> : null}
           {capsuleOf(screen, fullscreen, false, moderated && featured !== null && !fullscreen ? <kit.ModerationSlot member={featured} language={language} moderation={moderation} prominent={screen} /> : null)}
         </div>
         <kit.HeldSwap value={fullscreen ? null : side} shape={side === 'bottom' ? 'bottom' : 'end'} className={`grid shrink-0 gap-2 ${SCROLL_HIDDEN} ${side === 'bottom' ? '-mx-2 grid-flow-col content-center overflow-x-auto overscroll-x-none px-2' : '-my-2 content-start justify-center overflow-y-auto overscroll-y-none py-2'}`} style={stripBox(side)} data-call-strip="" data-call-strip-edge={side}>

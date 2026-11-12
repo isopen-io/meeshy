@@ -210,4 +210,13 @@ describe('CallGrid — la puce « Écran de X · 2× » (U2.5)', () => {
     expect(view.host.querySelector('[data-call-screen-banner]')?.textContent).toMatch(/^Écran de Kofi · 2×$/);
     view.done();
   });
+
+  test('le facteur s’écrit dans la langue d’interface, comme le cran de ma caméra : « 1,5× » en français', () => {
+    const view = mount({ ...sharing, remoteStreams: { 'u-k': Object.defineProperty(new MediaStream(), 'getVideoTracks', { value: () => [{ readyState: 'live' }] }) } });
+    const screen = () => view.host.querySelector('[data-call-shared-screen]') as HTMLElement;
+    const wheel = Object.defineProperty(new WheelEvent('wheel', { deltaY: -121.6, bubbles: true, cancelable: true }), 'ctrlKey', { value: true });
+    act(() => void screen().dispatchEvent(wheel));
+    expect(view.host.querySelector('[data-call-screen-banner]')?.textContent).toBe('Écran de Kofi · 1,5×');
+    view.done();
+  });
 });
