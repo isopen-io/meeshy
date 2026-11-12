@@ -393,10 +393,11 @@ struct MeeshyKeyboardDockTests {
         let container = MeeshyKeyboardDockInputView(frame: CGRect(x: 0, y: 0, width: 390, height: 291), style: .keyboard)
         container.setHeight(336)
         #expect(container.frame.height == 336)
-        let constraint = container.constraints.first { $0.firstAttribute == .height }
-        #expect(constraint?.constant == 336)
+        let own = { container.constraints.first { $0.firstAttribute == .height && $0.priority == .required - 1 } }
+        #expect(own()?.constant == 336)
         container.setHeight(291)
-        #expect(container.constraints.first { $0.firstAttribute == .height }?.constant == 291)
+        #expect(own()?.constant == 291)
+        #expect(container.frame.height == 291)
     }
 
     // MARK: - Accessibilité
@@ -415,7 +416,7 @@ struct MeeshyKeyboardDockTests {
         let mention = MeeshyKeyboardDockItem(id: "mention", label: "Mention", systemImage: "at", opensPanel: false)
         #expect(MeeshyKeyboardDockRule.activation(for: font, openItem: "font") == .expanded(true))
         #expect(MeeshyKeyboardDockRule.activation(for: font, openItem: nil) == .expanded(false))
-        #expect(MeeshyKeyboardDockRule.activation(for: mention, openItem: "mention") == .none)
+        #expect(MeeshyKeyboardDockRule.activation(for: mention, openItem: "mention") == MeeshyGlassButtonActivation.none)
     }
 
     @Test("le contenu de la barre se lit du début à la fin : les outils puis « OK », le panneau après")

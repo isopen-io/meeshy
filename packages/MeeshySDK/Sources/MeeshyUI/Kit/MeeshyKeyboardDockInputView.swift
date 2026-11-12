@@ -5,6 +5,8 @@ import UIKit
 /// glisser, pincer ou tourner le texte sous la barre continue d'atteindre l'hôte (loi 9).
 final class MeeshyKeyboardDockInputView: UIInputView {
 
+    nonisolated deinit {}
+
     private weak var hosted: UIView?
     private var heightConstraint: NSLayoutConstraint?
 

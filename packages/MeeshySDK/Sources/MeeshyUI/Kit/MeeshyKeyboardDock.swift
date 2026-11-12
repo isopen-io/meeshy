@@ -16,6 +16,8 @@ public struct MeeshyKeyboardDockNoSlot: View, Equatable {
 /// changent jamais, donc la racine d'une vue hébergée n'est réécrite que si ses VALEURS changent.
 @MainActor
 final class MeeshyKeyboardDockHandlers {
+    nonisolated deinit {}
+
     var input: MeeshyKeyboardDockInput = .keyboard
     var items: [MeeshyKeyboardDockItem] = []
     var confirm: MeeshyKeyboardDockConfirm?
@@ -177,6 +179,8 @@ private struct MeeshyKeyboardDockHost<Glyph: View, Above: View, PanelContent: Vi
 
     @MainActor
     final class Coordinator {
+        nonisolated deinit {}
+
         let handlers = MeeshyKeyboardDockHandlers()
         var controller: MeeshyKeyboardDockController<Accessory, PanelRoot>?
     }
