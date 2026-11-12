@@ -131,3 +131,89 @@ export function useStageMorph(stage: RefObject<HTMLElement | null>, compact: boo
     running.current = engine.playStageMorph(stage.current, from, running.current);
   }, [compact]);
 }
+
+/** Ce que montre la couche d'appel : l'écran plein, ou la capsule de l'appel réduit. */
+export type CallView = 'screen' | 'pill';
+
+/**
+ * Le rôle d'une vue dans l'échange : `leaving` — elle repart, montée le temps de son mouvement ; `arrives` —
+ * elle se monte en prenant la place de l'autre ; `gone` — à appeler quand son départ est fini.
+ */
+export type ViewMotion = { readonly leaving: boolean; readonly arrives: boolean; readonly gone: () => void };
+
+/**
+ * **L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT** (S1.7, S2.1, #17774) — la vue qui repart reste montée,
+ * marquée {@link LEAVING}, jusqu'à la fin de son mouvement (`useViewMotion`) pendant que l'autre arrive. Seul
+ * l'échange de l'une à l'autre se joue : un appel qui s'ouvre, ou une bulle qui rend l'écran, ne jouent rien
+ * (aucune vue d'où ils viennent), et la vue qui s'en va vers la bulle se démonte à l'instant. Revenir à la vue
+ * qui repart la rend à l'arrivée, sans la remonter.
+ */
+export function useViewHold(view: CallView | null): { readonly screen: ViewMotion | null; readonly pill: ViewMotion | null } {
+  const last = useRef<CallView | null>(view);
+  const held = useRef<CallView | null>(null);
+  const [, redraw] = useState(0);
+  if (view !== last.current) {
+    held.current = view !== null && last.current !== null ? last.current : null;
+    last.current = view;
+  }
+  const gone = (which: CallView) => () => {
+    if (held.current !== which) return;
+    held.current = null;
+    redraw((count) => count + 1);
+  };
+  const motionOf = (which: CallView): ViewMotion | null => (view === which ? { leaving: false, arrives: held.current !== null, gone: gone(which) } : held.current === which ? { leaving: true, arrives: false, gone: gone(which) } : null);
+  return { screen: motionOf('screen'), pill: motionOf('pill') };
+}
+
+/**
+ * Le mouvement d'une vue sur son propre élément (`root`) : à l'arrivée du fondu et de l'échelle, au départ
+ * l'inverse, puis `gone`. Sans moteur ou sans animation, le départ est immédiat. Interruptible.
+ */
+export function useViewMotion(root: RefObject<HTMLElement | null>, motion: ViewMotion | undefined): void {
+  const engine = usePillEngine();
+  const running = useRef<Animation | null>(null);
+  const was = useRef<boolean | null>(null);
+  const leaving = motion?.leaving;
+  useLayoutEffect(() => {
+    const element = root.current;
+    if (motion === undefined || element === null) return;
+    const before = was.current;
+    was.current = motion.leaving;
+    if (before === null ? !motion.arrives && !motion.leaving : before === motion.leaving) return;
+    const played = engine?.playViewSwap(element, !motion.leaving, running.current) ?? null;
+    running.current = played;
+    if (!motion.leaving) return;
+    if (played === null) motion.gone();
+    else played.finished.then(motion.gone, () => undefined);
+  }, [leaving, engine]);
+}
+
+/** La capsule qui devient pastille ordinaire, ou l'inverse, quand le partage finit ou commence : le même mouvement d'arrivée. */
+export function useFormSwap(root: RefObject<HTMLElement | null>, form: boolean): void {
+  const engine = usePillEngine();
+  const running = useRef<Animation | null>(null);
+  const before = useRef(form);
+  useLayoutEffect(() => {
+    if (before.current === form) return;
+    before.current = form;
+    if (root.current !== null) running.current = engine?.playViewSwap(root.current, true, running.current) ?? null;
+  }, [form]);
+}
+
+/**
+ * **LA PILE DES BANDEAUX SE REFERME EN MOUVEMENT** (S2.6, #17774) — quand `key` (les bandeaux présents) change, la
+ * place de chacun est relevée AU RENDU qui le change (le DOM montre encore l'ancienne pile), puis chacun rejoint la
+ * sienne par la transformation seule. Rien n'est mesuré tant que `key` ne change pas, ni tant que le moteur n'est pas là.
+ */
+export function useBannersClose(stack: RefObject<HTMLElement | null>, key: string): void {
+  const engine = usePillEngine();
+  const committed = useRef(key);
+  const first = useRef<ReadonlyMap<Element, number> | null>(null);
+  if (key !== committed.current && first.current === null && loaded !== null) first.current = loaded.measureBanners(stack.current);
+  useLayoutEffect(() => {
+    const from = first.current;
+    first.current = null;
+    committed.current = key;
+    if (from !== null && stack.current !== null) engine?.playBannersClose(stack.current, from);
+  }, [key]);
+}

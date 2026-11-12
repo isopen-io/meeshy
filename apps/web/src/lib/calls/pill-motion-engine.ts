@@ -1,6 +1,6 @@
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-import { followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape } from './call-pill-motion';
+import { bannerCloseKeyframes, followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
 
 /**
  * **LE MOTEUR DOM DU MOUVEMENT DU VERRE** (#17536, lois dans `call-pill-motion.ts`) — il mesure
@@ -147,4 +147,40 @@ export function playStageMorph(stage: HTMLElement, first: MorphRect | null, prev
   const moved = frames === null || portrait === null ? [] : [quiet(portrait.animate([...frames], { duration, easing: EASING }))];
   const labels = [...stage.querySelectorAll<HTMLElement>(STAGE_LABEL)].map((label) => quiet(label.animate([...FADE_IN], { duration, easing: 'ease-out' })));
   return [...moved, ...labels];
+}
+
+/**
+ * L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT (S1.7, S2.1, #17774) : ce qui arrive grandit de 0,92 à 1 en
+ * fondu, ce qui repart fait le chemin inverse — l'ancre est `transform-origin`, posée par la feuille. Ce
+ * qui repart reste invisible jusqu'à son démontage (`fill`). Interruptible : un mouvement repris en route
+ * annule le précédent et part de l'opacité affichée à cet instant.
+ */
+export function playViewSwap(element: HTMLElement, entering: boolean, previous: Animation | null): Animation | null {
+  if (typeof element.animate !== 'function') return null;
+  const reduced = prefersReducedMotion();
+  const [from = {}, to = {}] = viewSwapKeyframes(entering, reduced);
+  const resumed = (previous?.effect as KeyframeEffect | null | undefined)?.target === element;
+  const shown = resumed ? { ...from, opacity: getComputedStyle(element).opacity } : from;
+  previous?.cancel();
+  return quiet(element.animate([shown, to], { duration: viewSwapMs(entering, reduced), easing: EASING, fill: entering ? 'none' : 'forwards' }));
+}
+
+const BANNER_CLOSING = new WeakMap<Element, Animation>();
+
+/** Où se voit chaque bandeau de la pile à cet instant — un mouvement en cours compris. */
+export const measureBanners = (stack: HTMLElement | null): ReadonlyMap<Element, number> => new Map([...(stack?.children ?? [])].map((banner) => [banner, banner.getBoundingClientRect().top] as const));
+
+/**
+ * LA PILE SE REFERME (S2.6, #17774) : chaque bandeau resté repart de sa place d'avant (`from`, relevée avant que
+ * la mise en page ne change) et rejoint la sienne ; celui qui repart, quitté la mise en page, glisse de son côté.
+ */
+export function playBannersClose(stack: HTMLElement, from: ReadonlyMap<Element, number>): void {
+  const banners = [...stack.children].filter((banner): banner is HTMLElement => banner instanceof HTMLElement && !banner.hasAttribute('data-leaving'));
+  for (const banner of banners) BANNER_CLOSING.get(banner)?.cancel();
+  const reduced = prefersReducedMotion();
+  for (const banner of banners) {
+    const before = from.get(banner);
+    const frames = before === undefined || typeof banner.animate !== 'function' ? null : bannerCloseKeyframes(before - banner.getBoundingClientRect().top, reduced);
+    if (frames !== null) BANNER_CLOSING.set(banner, quiet(banner.animate([...frames], { duration: reduced ? STOW_REDUCED_MS : MORPH_MS, easing: EASING })));
+  }
 }

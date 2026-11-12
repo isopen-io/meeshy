@@ -138,3 +138,34 @@ export function portraitMorphKeyframes(first: MorphRect, last: MorphRect, reduce
   if (Math.abs(dx) < EPSILON_PX && Math.abs(dy) < EPSILON_PX && Math.abs(first.width - last.width) < EPSILON_PX) return null;
   return [{ transform: `translate(${dx}px, ${dy}px) scale(${scale})` }, { transform: 'none' }];
 }
+
+/**
+ * **L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT EN MOUVEMENT** (S1.7, S2.1, #17774 ; `CallShareCapsuleMotion`
+ * d'iOS #17765, `CallCapsuleTransitions` d'Android #17772) — lancer le partage contracte l'écran vers la capsule, la
+ * toucher le redéploie : l'un repart (180 ms) pendant que l'autre arrive (220 ms), par un fondu et une échelle de
+ * 0,92 à 1, la transformation et l'opacité seules. « Réduire les animations » ne garde que le fondu, 120 ms. La
+ * capsule qui devient pastille ordinaire (ou l'inverse) quand le partage finit ou commence prend le même mouvement.
+ */
+export const VIEW_IN_MS = 220;
+export const VIEW_OUT_MS = 180;
+export const VIEW_REDUCED_MS = 120;
+const VIEW_SCALE_FROM = 0.92;
+
+export const viewSwapMs = (entering: boolean, reducedMotion: boolean): number => (reducedMotion ? VIEW_REDUCED_MS : entering ? VIEW_IN_MS : VIEW_OUT_MS);
+
+export function viewSwapKeyframes(entering: boolean, reducedMotion: boolean): readonly Keyframe[] {
+  const shown: Keyframe = reducedMotion ? { opacity: 1 } : { opacity: 1, transform: 'none' };
+  const gone: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: `scale(${VIEW_SCALE_FROM})` };
+  return entering ? [gone, shown] : [shown, gone];
+}
+
+/**
+ * **LA PILE DES BANDEAUX SE REFERME EN MOUVEMENT** (S2.6, #17774) — un bandeau qui change de place parce qu'un
+ * autre arrive ou repart repart de sa place d'avant, vue comme une translation (FLIP), et rejoint la sienne : la
+ * mise en page passe d'un coup à son état final, seule la transformation bouge. Sous « Réduire les animations »,
+ * un fondu court au lieu du déplacement.
+ */
+export function bannerCloseKeyframes(delta: number, reducedMotion: boolean): readonly Keyframe[] | null {
+  if (Math.abs(delta) < EPSILON_PX) return null;
+  return reducedMotion ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: `translateY(${delta}px)` }, { transform: 'none' }];
+}

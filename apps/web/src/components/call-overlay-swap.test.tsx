@@ -82,7 +82,7 @@ function recordAnimations() {
 
 const reduceMotion = (on: boolean) => {
   const real = window.matchMedia;
-  window.matchMedia = ((query: string) => ({ matches: on && query.includes('reduce'), media: query, addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined })) as typeof window.matchMedia;
+  window.matchMedia = ((query: string) => ({ matches: on && query.includes('reduce'), media: query, addEventListener() {}, removeEventListener() {} }) as unknown as MediaQueryList) as typeof window.matchMedia;
   return () => (window.matchMedia = real);
 };
 
