@@ -9,7 +9,7 @@ import { setLocalZoom, useLocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
-import { CallStage } from './call-stage';
+import { CallStage, callGridView } from './call-stage';
 
 /**
  * MON IMAGE PENDANT UN APPEL (#8441, #8576, #8577) — en coin, ma vignette se
@@ -76,7 +76,7 @@ const call = (camera: ZoomCamera, overrides: Partial<ActiveCall> = {}): ActiveCa
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(async () => {
-  await loadCallControlsCatalog('fr');
+  await Promise.all([loadCallControlsCatalog('fr'), callGridView.load()]);
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
