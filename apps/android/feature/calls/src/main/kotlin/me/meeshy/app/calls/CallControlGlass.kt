@@ -266,8 +266,12 @@ internal fun CallControlsGlass(
 ) {
     CallGlassPlate(modifier = modifier, shape = shape) {
         val tone = LocalCallGlassTone.current
-        CompositionLocalProvider(LocalCallGlassTone provides tone.withinVeiledBlock) {
-            Column(Modifier.fillMaxWidth().background(tone.veil(tone.veilAlpha), shape).clip(shape), content = content)
+        val veiled = Modifier.fillMaxWidth().callToneVeil(CallGlassTone::veilAlpha, shape)
+        CompositionLocalProvider(
+            LocalCallGlassTone provides tone.withinVeiledBlock,
+            LocalCallGlassToneProgress provides CallRestingToneFade,
+        ) {
+            Column(veiled.clip(shape), content = content)
         }
     }
 }
