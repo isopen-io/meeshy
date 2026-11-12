@@ -178,8 +178,8 @@ final class CallTopBannerStackTests: XCTestCase {
         let share = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallScreenShareControls.swift"))
         let capture = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptureViews.swift"))
         let screen = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView.swift"))
-        XCTAssertTrue(share.contains(".reportsTopBannerHeight(.screenShare)"))
-        XCTAssertTrue(capture.contains(".reportsTopBannerHeight(.capture)"), "une puce à deux lignes ne recouvre pas la vignette")
+        XCTAssertTrue(share.contains(".modifier(CallTopBannerHeightReporter(banner: .screenShare))"))
+        XCTAssertTrue(capture.contains(".modifier(CallTopBannerHeightReporter(banner: .capture))"), "une puce à deux lignes ne recouvre pas la vignette")
         XCTAssertTrue(screen.contains(".onPreferenceChange(CallTopBannerHeightsKey.self)"))
     }
 
