@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   TRANSLATION_WAIT_MS,
   captionLanguageLabel,
+  captionReveal,
   captionOrigin,
   isAwaitingTranslation,
   captionText,
@@ -240,5 +241,29 @@ describe('les formes du fil (#8048)', () => {
     expect(event.segment).toMatchObject({ id: 'w-1', speakerId: 'u-me', language: 'fr', isFinal: true, confidence: 1, startMs: 900, endMs: 900 });
     expect(event.segment.text).toHaveLength(5000);
     expect(segmentEvent(utterance({ confidence: Number.NaN })).segment.confidence).toBe(0);
+  });
+});
+
+describe('une phrase se révèle d’un toucher, dans les deux réglages (iOS CallCaptionLine.make, L3.9)', () => {
+  const spoken = caption({ translated: 'Bonjour', pair: { from: 'en', to: 'fr' } });
+
+  test('traduit : la traduction se lit, l’original se déplie SOUS elle', () => {
+    expect(captionReveal(spoken, 'translated', false)).toEqual({ canReveal: true, mode: 'translated', originalBelow: false });
+    expect(captionReveal(spoken, 'translated', true)).toEqual({ canReveal: true, mode: 'translated', originalBelow: true });
+  });
+
+  test('original : la phrase qui a une traduction reste touchable, et la toucher montre sa traduction à la place de l’original', () => {
+    expect(captionReveal(spoken, 'original', false)).toEqual({ canReveal: true, mode: 'original', originalBelow: false });
+    const revealed = captionReveal(spoken, 'original', true);
+    expect(revealed).toEqual({ canReveal: true, mode: 'translated', originalBelow: false });
+    expect(captionText(spoken, revealed.mode)).toBe('Bonjour');
+    expect(captionLanguageLabel(spoken, revealed.mode)).toBe('EN → FR');
+  });
+
+  test('ma parole, une phrase sans traduction, une traduction identique, le réglage éteint : rien à révéler', () => {
+    expect(captionReveal(caption({ ...spoken, mine: true }), 'original', true).canReveal).toBe(false);
+    expect(captionReveal(caption(), 'original', true)).toEqual({ canReveal: false, mode: 'original', originalBelow: false });
+    expect(captionReveal(caption({ translated: 'Hello' }), 'translated', true).canReveal).toBe(false);
+    expect(captionReveal(spoken, 'off', true).canReveal).toBe(false);
   });
 });

@@ -238,10 +238,41 @@ describe('les gestes', () => {
     host.remove();
   });
 
-  test('une ligne qui EST l’original ne promet rien à déplier', () => {
-    const view = mount({ captionsMode: 'original' });
-    expect(view.host.querySelector('[data-call-caption-line="w-1"]')?.hasAttribute('aria-expanded')).toBe(false);
+  test('en réglage « Original », une phrase qui a une traduction reste touchable : la toucher montre sa traduction, un second toucher rend l’original (L3.9)', () => {
+    const view = mount({ callId: 'call-original', captionsMode: 'original' });
+    const line = () => view.host.querySelector('[data-call-caption-line="w-1"]');
+    expect(line()?.getAttribute('aria-expanded')).toBe('false');
+    expect(line()?.textContent).toContain('Hello everyone');
+    view.press('[data-call-caption-line="w-1"]');
+    expect(line()?.getAttribute('aria-expanded')).toBe('true');
+    expect(line()?.textContent).toContain('Bonjour à tous');
+    expect(line()?.textContent).toContain('EN → FR');
+    expect(view.host.querySelector('[data-call-caption-original]')).toBeNull();
+    view.press('[data-call-caption-line="w-1"]');
+    expect(line()?.getAttribute('aria-expanded')).toBe('false');
+    expect(line()?.textContent).toContain('Hello everyone');
     view.done();
+  });
+
+  test('en réglage « Original », ma parole et une phrase sans traduction ne promettent rien à révéler', () => {
+    const view = mount({ callId: 'call-original-bare', captionsMode: 'original', captions: [caption({ id: 'bare', translated: null, pair: null }), caption({ id: 'me', mine: true })] });
+    expect(view.host.querySelector('[data-call-caption-line="bare"]')?.hasAttribute('aria-expanded')).toBe(false);
+    expect(view.host.querySelector('[data-call-caption-line="me"]')?.hasAttribute('aria-expanded')).toBe(false);
+    view.done();
+  });
+
+  test('l’original déplié survit au rangement : le panneau se démonte, revient, et la phrase est restée dépliée (L3.9)', () => {
+    const first = mount({ callId: 'call-stowed' });
+    first.press('[data-call-caption-line="w-1"]');
+    expect(first.host.querySelector('[data-call-caption-original]')).not.toBeNull();
+    first.done();
+    const back = mount({ callId: 'call-stowed' });
+    expect(back.host.querySelector('[data-call-caption-line="w-1"]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(back.host.querySelector('[data-call-caption-original]')?.textContent).toBe('Original · Hello everyone');
+    back.done();
+    const other = mount({ callId: 'call-next' });
+    expect(other.host.querySelector('[data-call-caption-line="w-1"]')?.getAttribute('aria-expanded')).toBe('false');
+    other.done();
   });
 
   test('le bandeau ne montre que le direct : le Journal vit dans son panneau (#8579)', () => {
