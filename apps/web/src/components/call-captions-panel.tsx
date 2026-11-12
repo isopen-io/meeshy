@@ -3,7 +3,7 @@ import { memo, useEffect, useState } from 'react';
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { TypingDots } from '@/components/typing-dots';
-import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, revealState, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
 import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
@@ -146,7 +146,7 @@ const CaptionLine = memo(function CaptionLine({
   const content = (
     <>
       <strong style={{ color }}>{speaker} · </strong>
-      <span dir="auto" style={{ color: shown !== caption.original ? color : INK }}>
+      <span key={reveal.mode} dir="auto" style={{ color: shown !== caption.original ? color : INK }}>
         {shown}
       </span>
       {languages === null ? null : (
@@ -160,7 +160,7 @@ const CaptionLine = memo(function CaptionLine({
   return (
     <div aria-hidden={caption.isFinal ? undefined : true} style={caption.isFinal ? undefined : { opacity: 0.7 }} data-call-caption={caption.mine ? 'mine' : 'peer'}>
       {unfoldable ? (
-        <button type="button" aria-expanded={open} onClick={() => onToggle(caption.id)} className="block min-h-11 w-full text-start" data-call-caption-line={caption.id}>
+        <button type="button" {...revealState(mode, open)} onClick={() => onToggle(caption.id)} className="block min-h-11 w-full text-start" data-call-caption-line={caption.id}>
           {content}
         </button>
       ) : (
@@ -209,7 +209,7 @@ export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'su
 }
 
 export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal }: PanelProps) {
-  const { revealed, toggle } = useCaptionReveals(call.callId ?? '');
+  const { revealed, toggle } = useCaptionReveals(call.callId ?? '', 'band');
   const mode = call.captionsMode;
   const lines = overlayEntries(call.captions, call.journalNotes ?? [], CAPTIONS_OVERLAY_LINES);
   const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));

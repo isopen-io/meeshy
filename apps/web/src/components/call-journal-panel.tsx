@@ -1,4 +1,4 @@
-import { memo, useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { CallJournalColumn, type JournalColumnGeometry } from '@/components/call-journal-column';
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
@@ -6,7 +6,8 @@ import { CallJournalViewSwitch, type JournalView } from '@/components/call-journ
 import type { CallButton } from '@/components/call-glass-button';
 import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
-import { captionLanguageLabel, captionText, type CallCaption } from '@/lib/calls/call-captions';
+import { captionLanguageLabel, captionReveal, captionText, revealState, type CallCaption } from '@/lib/calls/call-captions';
+import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
 import { journalEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { journalClock } from '@/lib/calls/call-journal-clock';
 import { callJournalHeight } from '@/lib/calls/call-journal-height';
@@ -47,6 +48,8 @@ const NEAR_BOTTOM = 24;
 
 type JournalProps = {
   readonly id: string;
+  /** L'appel dont c'est le journal : ses phrases dépliées lui survivent fermé, et rien n'en passe à un autre appel (L3.9). */
+  readonly callId: string;
   readonly closeGlyph: ReactNode;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
@@ -100,9 +103,9 @@ type CaptionLineProps = {
 };
 
 const JournalCaptionLine = memo(function JournalCaptionLine({ caption, view, language, startedAt, speaker, color, open, onToggle }: CaptionLineProps) {
-  const served = captionText(caption, view);
-  const languages = captionLanguageLabel(caption, view);
-  const unfoldable = served !== caption.original;
+  const reveal = captionReveal(caption, view, open);
+  const served = captionText(caption, reveal.mode);
+  const languages = captionLanguageLabel(caption, reveal.mode);
   const content = (
     <>
       <span className="flex items-baseline justify-between gap-3 text-mini" style={{ color: INK_2 }}>
@@ -112,21 +115,21 @@ const JournalCaptionLine = memo(function JournalCaptionLine({ caption, view, lan
         </span>
         <CallClock at={caption.at} startedAt={startedAt} />
       </span>
-      <span className="text-body" style={{ color: unfoldable ? color : INK }} dir="auto" data-call-journal-text="">
+      <span className="text-body" style={{ color: served !== caption.original ? color : INK }} dir="auto" data-call-journal-text="">
         {served}
       </span>
     </>
   );
   return (
     <li className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px', opacity: caption.isFinal ? 1 : 0.7 }} data-call-journal-entry={caption.mine ? 'mine' : 'peer'}>
-      {unfoldable ? (
-        <button type="button" aria-expanded={open} onClick={() => onToggle(caption.id)} className="flex min-h-11 w-full flex-col gap-0.5 text-start" data-call-journal-line={caption.id}>
+      {reveal.canReveal ? (
+        <button type="button" {...revealState(view, open)} onClick={() => onToggle(caption.id)} className="flex min-h-11 w-full flex-col gap-0.5 text-start" data-call-journal-line={caption.id}>
           {content}
         </button>
       ) : (
         content
       )}
-      <UnfoldedOriginal open={unfoldable && open} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-journal-original" />
+      <UnfoldedOriginal open={reveal.originalBelow} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-journal-original" />
     </li>
   );
 });
@@ -136,13 +139,12 @@ const listSize = (windowHeight: number | undefined): CSSProperties => (windowHei
 
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
-export function CallJournalPanel({ id, closeGlyph, language, onClose, Button, back, captions, notes, colorOf, listening, onListen, startedAt, fill = false, windowHeight }: JournalProps) {
+export function CallJournalPanel({ id, callId, closeGlyph, language, onClose, Button, back, captions, notes, colorOf, listening, onListen, startedAt, fill = false, windowHeight }: JournalProps) {
   const list = useRef<HTMLOListElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
   const [view, setView] = useState<JournalView>('translated');
-  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
-  const toggle = useCallback((id: string) => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id]))), []);
+  const { revealed, toggle } = useCaptionReveals(callId, 'journal');
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
   const last = captions.at(-1);
   const entries = journalEntries(captions, notes);
@@ -150,7 +152,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, Button, ba
   useLayoutEffect(() => {
     const element = list.current;
     if (element !== null && stuck.current) element.scrollTop = element.scrollHeight;
-  }, [entries.length, last?.original, last?.translated, unfolded]);
+  }, [entries.length, last?.original, last?.translated, revealed]);
 
   const onScroll = (): void => {
     const element = list.current;
@@ -208,7 +210,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, Button, ba
               entry.type === 'note' ? (
                 <JournalNoteLine key={entry.note.id} note={entry.note} language={language} startedAt={startedAt} colorOf={colorOf} />
               ) : (
-                <JournalCaptionLine key={entry.caption.id} caption={entry.caption} view={view} language={language} startedAt={startedAt} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={unfolded.has(entry.caption.id)} onToggle={toggle} />
+                <JournalCaptionLine key={entry.caption.id} caption={entry.caption} view={view} language={language} startedAt={startedAt} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={revealed.has(entry.caption.id)} onToggle={toggle} />
               ),
             )}
           </ol>

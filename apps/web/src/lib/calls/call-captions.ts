@@ -77,6 +77,13 @@ export function captionReveal(caption: CallCaption, mode: CaptionsMode, revealed
   return { canReveal, mode, originalBelow: revealed };
 }
 
+/**
+ * Ce que le lecteur d'écran dit d'une phrase touchable : en réglage traduit, l'original se DÉPLIE
+ * dessous (`aria-expanded`) ; en réglage « Original », la phrase CHANGE de langue sur place, rien
+ * ne se déplie — c'est un bouton pressé (`aria-pressed`).
+ */
+export const revealState = (mode: CaptionsMode, revealed: boolean): { readonly 'aria-expanded': boolean } | { readonly 'aria-pressed': boolean } => (mode === 'original' ? { 'aria-pressed': revealed } : { 'aria-expanded': revealed });
+
 const languageCode = (tag: string): string => (tag.split('-')[0] ?? tag).toUpperCase();
 
 const sameLanguage = (a: string, b: string): boolean => languageCode(a) === languageCode(b);
