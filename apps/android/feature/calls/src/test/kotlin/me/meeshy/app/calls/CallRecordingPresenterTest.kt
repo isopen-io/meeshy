@@ -19,6 +19,7 @@ class CallRecordingPresenterTest {
         val asking = CallRecordingPresenter.status(CallRecordingPhase.Asking("c"))!!
         assertThat(asking.textRes).isEqualTo(R.string.call_recording_waiting)
         assertThat(asking.stopLabelRes).isEqualTo(R.string.call_recording_cancel)
+        assertThat(asking.stopWordRes).isEqualTo(R.string.call_recording_cancel)
         assertThat(CallRecordingPresenter.status(pending(mustAnswer = false))).isEqualTo(asking)
     }
 
@@ -34,6 +35,7 @@ class CallRecordingPresenterTest {
             val status = CallRecordingPresenter.status(CallRecordingPhase.Recording("c", "r", "x", mine))!!
             assertThat(status.textRes).isEqualTo(R.string.call_recording_active)
             assertThat(status.stopLabelRes).isEqualTo(R.string.call_recording_stop)
+            assertThat(status.stopWordRes).isEqualTo(R.string.call_recording_stop_word)
         }
     }
 
