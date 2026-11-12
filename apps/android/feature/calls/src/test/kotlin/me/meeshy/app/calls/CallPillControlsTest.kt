@@ -1,5 +1,8 @@
 package me.meeshy.app.calls
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -129,5 +132,41 @@ class CallPillControlsTest {
 
         rule.onNodeWithText("Mamie · 01:05").assertExists()
         rule.onNodeWithText("Alice · 01:05").assertDoesNotExist()
+    }
+
+    @Test
+    fun `starting then stopping the share swaps the pill and the capsule, both ways`() = swapsBothWays(reduce = false)
+
+    @Test
+    fun `the same swap holds under reduced motion`() = swapsBothWays(reduce = true)
+
+    private fun swapsBothWays(reduce: Boolean) {
+        var sharing by mutableStateOf(false)
+        rule.setContent {
+            MeeshyTheme {
+                CallPill(
+                    state = connected(),
+                    onClick = {},
+                    onToggleMute = {},
+                    onToggleSpeaker = {},
+                    onHangUp = {},
+                    isScreenSharing = sharing,
+                    reduceMotion = reduce,
+                )
+            }
+        }
+        rule.onNodeWithContentDescription("Hang up").assertExists()
+
+        sharing = true
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithContentDescription("Stop sharing screen").assertExists()
+        rule.onNodeWithContentDescription("Hang up").assertDoesNotExist()
+
+        sharing = false
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(500)
+        rule.onNodeWithContentDescription("Hang up").assertExists()
+        rule.onNodeWithContentDescription("Stop sharing screen").assertDoesNotExist()
     }
 }

@@ -82,17 +82,22 @@ internal fun CallPillControls(
     }
 }
 
-/** The one control of the sharing capsule (#16664): stop the share, without reopening the call. */
+/**
+ * « Arrêter » du partage d'écran (#16664) : UNE capsule blanche à encre rouge (planche S1 et S2, iOS `CallShareStopButton`),
+ * posée sur le verre rouge de la capsule de partage comme sur celui du bandeau. Elle arrête le partage sans rouvrir l'appel ;
+ * la cible fait 48 dp et la capsule blanche s'y inscrit avec un léger retrait.
+ */
 @Composable
-internal fun CallPillStopShare(onStop: () -> Unit) {
+internal fun CallShareStopButton(onStop: () -> Unit) {
     val label = stringResource(R.string.call_screen_share_stop)
     Box(
         modifier = Modifier
             .defaultMinSize(minWidth = STOP_SHARE_TARGET, minHeight = STOP_SHARE_TARGET)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.22f), CircleShape)
             .clickable(onClickLabel = label, role = Role.Button, onClick = onStop)
             .semantics { contentDescription = label }
+            .padding(vertical = MeeshySpacing.xs)
+            .background(Color.White, CircleShape)
             .padding(horizontal = MeeshySpacing.md),
         contentAlignment = Alignment.Center,
     ) {
@@ -100,7 +105,8 @@ internal fun CallPillStopShare(onStop: () -> Unit) {
             text = stringResource(R.string.call_screen_share_stop_caption),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White,
+            color = MeeshyPalette.ErrorInk,
+            maxLines = 1,
         )
     }
 }

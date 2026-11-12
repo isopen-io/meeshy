@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -59,7 +58,6 @@ import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.screenshare.CallScreenSharePhase
 import me.meeshy.sdk.model.rootnav.RootRoute
-import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
@@ -213,18 +211,8 @@ fun MeeshyApp(
                 // window (its controls untappable) and cover the destination's top bar. The
                 // pill takes the status-bar inset, so the destination below consumes it.
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    // A live, non-incoming call while off the CALL screen. A tap rebuilds the
-                    // CALL route from the live config; the Activity-scoped [callViewModel] is
-                    // reused, so `start()` is inert.
-                    if (showsCallPill) {
-                        MinimizedCallPill(
-                            callViewModel = callViewModel,
-                            navController = navController,
-                            modifier = Modifier
-                                .statusBarsPadding()
-                                .padding(vertical = MeeshySpacing.xs),
-                        )
-                    }
+                    // A live, non-incoming call while off the CALL screen (#17767 : elle arrive et repart en mouvement).
+                    AnimatedMinimizedCallPill(visible = showsCallPill, callViewModel = callViewModel, navController = navController)
                     // Le mini-lecteur audio (iOS `MiniAudioPlayerBar`) se range SOUS la pastille d'appel et pousse la destination.
                     MediaTopBarSlot(navController, navigator, callPillShown = showsCallPill, screenCoversChrome = onCallScreen)
                     // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
@@ -378,5 +366,6 @@ internal fun MinimizedCallPill(
         modifier = modifier,
         isScreenSharing = share.phase == CallScreenSharePhase.Sharing,
         onStopScreenShare = screenShare::stop,
+        reduceMotion = FeedOverlayTransition.reduceMotion,
     )
 }

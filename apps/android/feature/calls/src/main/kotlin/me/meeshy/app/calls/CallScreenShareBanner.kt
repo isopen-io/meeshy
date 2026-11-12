@@ -12,9 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -35,12 +33,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -197,31 +192,10 @@ private fun ScreenShareBanner(text: String, onStop: (() -> Unit)?, modifier: Mod
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (onStop != null) ScreenShareStopButton(onStop)
+            if (onStop != null) CallShareStopButton(onStop)
         }
     }
 }
 
-@Composable
-private fun ScreenShareStopButton(onStop: () -> Unit) {
-    val label = stringResource(R.string.call_screen_share_stop)
-    Box(
-        modifier = Modifier
-            .defaultMinSize(minWidth = BANNER_MIN_HEIGHT, minHeight = BANNER_MIN_HEIGHT)
-            .clip(CircleShape)
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onStop)
-            .padding(horizontal = MeeshySpacing.md),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.call_screen_share_stop_caption),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-            modifier = Modifier.semantics { this.contentDescription = label },
-        )
-    }
-}
-
-private const val BANNER_TINT_ALPHA = 0.35f
+internal const val BANNER_TINT_ALPHA = 0.35f
 private val BANNER_MIN_HEIGHT = CallTopBannerStack.BANNER_HEIGHT_DP.dp
