@@ -177,10 +177,17 @@ final class CallTopBannerStackTests: XCTestCase {
     func test_stackHeight_isMeasuredByTheBanners_andReadByTheCallScreen() throws {
         let share = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallScreenShareControls.swift"))
         let capture = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptureViews.swift"))
+        let recording = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallRecordingControls.swift"))
         let screen = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView.swift"))
         XCTAssertTrue(share.contains(".modifier(CallTopBannerHeightReporter(banner: .screenShare))"))
         XCTAssertTrue(capture.contains(".modifier(CallTopBannerHeightReporter(banner: .capture))"), "une puce à deux lignes ne recouvre pas la vignette")
+        XCTAssertTrue(
+            recording.contains(".modifier(CallTopBannerHeightReporter(banner: .recording))"),
+            "la carte d'accord, la capsule (attente puis enregistrement) et l'avis à deux lignes rendent leur hauteur : la vignette descend sous la vraie capsule"
+        )
         XCTAssertTrue(screen.contains(".onPreferenceChange(CallTopBannerHeightsKey.self)"))
+        let key = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTopBannerHeights.swift"))
+        XCTAssertTrue(key.contains("nonisolated struct CallTopBannerHeightsKey: PreferenceKey"), "la cible isole sur le MainActor par défaut ; la clé reste hors acteur, comme les autres clés de l'appel")
     }
 
     func test_shareBanner_spansTheWidth_withStopAtTheTrailingEnd() throws {
