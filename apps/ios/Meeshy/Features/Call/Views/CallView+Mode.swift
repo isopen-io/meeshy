@@ -24,6 +24,7 @@ extension CallView {
                     modeControls(mode)
                 }
                 .padding(.bottom, Self.chromeBottomInset)
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 CallModeRecordingOverlay(capture: capture)
             }
             .transition(.opacity)
