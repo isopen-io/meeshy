@@ -233,7 +233,7 @@ struct CallBubbleView: View {
             CallShareStopButton { callManager.screenShare.stopSharing() }
         }
         .padding(.leading, MeeshySpacing.sm)
-        .adaptiveLiquidGlass(in: Capsule(), tint: MeeshyColors.error)
+        .meeshyGlass(in: Capsule(), tint: MeeshyColors.error)
         .fixedSize()
         .environment(\.colorScheme, .dark)
     }

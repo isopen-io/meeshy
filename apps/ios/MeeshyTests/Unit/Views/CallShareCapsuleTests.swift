@@ -58,7 +58,7 @@ final class CallShareCapsuleTests: XCTestCase {
 
     func test_pill_whileSharing_isRedAdaptiveGlass() throws {
         let pill = try source("Meeshy/Features/Call/Views/FloatingCallPillView.swift")
-        XCTAssertTrue(pill.contains("adaptiveLiquidGlass(in: Rectangle(), tint: MeeshyColors.error)"))
+        XCTAssertTrue(pill.contains("meeshyGlass(in: Rectangle(), tint: MeeshyColors.error)"))
         XCTAssertTrue(pill.contains("callManager.screenShare.isSharing ? Color.clear : TopChromeTint.call.bandColor"))
     }
 

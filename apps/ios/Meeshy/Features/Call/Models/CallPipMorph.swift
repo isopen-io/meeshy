@@ -15,11 +15,20 @@ enum CallPipMorph {
     static let collapseRequests = PassthroughSubject<Void, Never>()
     private static var isCollapsePending = false
 
+    /// Ce que fait le lancement d'un partage : plein écran ⇒ se contracter vers
+    /// la capsule ; déjà réduit, capsule ou bulle ⇒ être la capsule (P18.10).
+    static func shareStartStep(from mode: CallDisplayMode) -> CallShareStartStep {
+        switch mode {
+        case .fullScreen: return .contract
+        case .pip, .bubble: return .capsule
+        }
+    }
+
     /// Le partage vient de commencer : plein écran ⇒ l'appel se contracte vers
-    /// la capsule, avec un repli si aucune vue ne prend la demande ; déjà
-    /// réduit ⇒ rien à contracter.
+    /// la capsule, avec un repli si aucune vue ne prend la demande ; en bulle ⇒
+    /// il revient à la capsule, seule à porter « Arrêter ».
     static func begin(on manager: CallManager) {
-        guard manager.displayMode == .fullScreen else {
+        guard shareStartStep(from: manager.displayMode) == .contract else {
             manager.displayMode = .pip
             return
         }
@@ -57,11 +66,17 @@ enum CallPipMorph {
 
     /// Mouvement inverse de `contract` : le contenu démarre contracté vers le
     /// haut (là où vivait la capsule) puis s'étire en plein écran.
-    static func playPendingExpansion(of manager: CallManager, reduceMotion: Bool, progress: Binding<CGFloat>) {
-        guard manager.consumePendingPipExpansion(), !reduceMotion else { return }
+    static func playExpansion(reduceMotion: Bool, progress: Binding<CGFloat>) {
+        guard !reduceMotion else { return }
         progress.wrappedValue = 1
         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
             progress.wrappedValue = 0
         }
     }
+}
+
+/// Le premier pas d'un partage qui commence (#17763).
+nonisolated enum CallShareStartStep: Equatable, Sendable {
+    case contract
+    case capsule
 }

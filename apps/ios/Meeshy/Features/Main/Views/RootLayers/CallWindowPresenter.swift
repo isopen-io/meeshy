@@ -238,8 +238,16 @@ enum CallReturnPoint {
         }
     }
 
-    /// #17763 — « Arrêter » accompagne la bulle tant que je partage mon écran ;
-    /// le mini-menu rapide, qui porte déjà ses propres actions, la remplace.
+    /// #17763, P18.10 — pendant MON partage, l'appel réduit est la capsule qui
+    /// porte « Arrêter » : ni le glissé ni VoiceOver ne la replient en bulle
+    /// (même voie que le web, #17760). Hors partage, rien ne change (#17731).
+    static func mayCollapseToBubble(isSharing: Bool) -> Bool {
+        !isSharing
+    }
+
+    /// #17763 — la bulle ne se montre plus pendant mon partage que si un plein
+    /// écran de l'app recouvre la capsule : « Arrêter » l'y accompagne. Le
+    /// mini-menu rapide, qui porte déjà ses propres actions, la remplace.
     static func showsShareStop(isSharing: Bool, isMenuRevealed: Bool) -> Bool {
         isSharing && !isMenuRevealed
     }

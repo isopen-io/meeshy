@@ -246,7 +246,7 @@ struct CallView: View {
         .onReceive(transcriptionService.$isShowingOverlay) { showTranscript = $0 }
         .onAppear {
             startPulseAnimation()
-            CallPipMorph.playPendingExpansion(of: callManager, reduceMotion: reduceMotion, progress: $pipMorphProgress)
+            if callManager.consumePendingPipExpansion() { CallPipMorph.playExpansion(reduceMotion: reduceMotion, progress: $pipMorphProgress) }
         }
         .onDisappear {
             stopPulseAnimation()

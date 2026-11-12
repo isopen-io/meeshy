@@ -209,12 +209,12 @@ struct FloatingCallPillView: View {
         .background(callManager.screenShare.isSharing ? Color.clear : TopChromeTint.call.bandColor, ignoresSafeAreaEdges: [])
         .background {
             if callManager.screenShare.isSharing {
-                Color.clear.adaptiveLiquidGlass(in: Rectangle(), tint: MeeshyColors.error)
+                Color.clear.meeshyGlass(in: Rectangle(), tint: MeeshyColors.error)
             }
         }
         .offset(x: pillDragOffset)
         .opacity(pillDragOpacity)
-        .simultaneousGesture(collapseDragGesture)
+        .simultaneousGesture(collapseDragGesture, including: mayCollapseToBubble ? .all : .subviews)
         .contentShape(Rectangle())
         .onTapGesture {
             expandToFullScreen()
@@ -226,8 +226,12 @@ struct FloatingCallPillView: View {
         )
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
-            collapseToBubble(exitTranslation: 1)
+        .accessibilityActions {
+            if mayCollapseToBubble {
+                Button(String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
+                    collapseToBubble(exitTranslation: 1)
+                }
+            }
         }
         .callQualityDetailSheet(isPresented: $showQualityDetail)
     }
@@ -238,15 +242,13 @@ struct FloatingCallPillView: View {
     /// seule ligne d'état (signal dégradé et feuille « Qualité » compris) ; hors
     /// partage, l'avatar, le nom et la ligne d'état.
     @ViewBuilder private var identitySection: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            if callManager.screenShare.isSharing {
-                statusEntry.transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
-            } else {
-                CallParticipantVisual(diameter: 44, callManager: callManager)
-                    .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
-                userInfoSection
-                    .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
-            }
+        if callManager.screenShare.isSharing {
+            statusEntry.transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+        } else {
+            CallParticipantVisual(diameter: 44, callManager: callManager)
+                .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+            userInfoSection
+                .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         }
     }
 
@@ -425,6 +427,11 @@ struct FloatingCallPillView: View {
 
     // MARK: - Collapse Gesture
 
+    /// P18.10 — pendant mon partage, la capsule ne se replie pas en bulle.
+    private var mayCollapseToBubble: Bool {
+        CallReturnPoint.mayCollapseToBubble(isSharing: callManager.screenShare.isSharing)
+    }
+
     private var pillDragOpacity: Double {
         let progress = min(abs(pillDragOffset) / 300, 1.0)
         return 1.0 - Double(progress) * 0.6
@@ -483,6 +490,10 @@ struct FloatingCallPillView: View {
             // against flipping displayMode to .bubble for a call that's no
             // longer active, matching CallBubbleView's own display guard.
             guard callManager.callState.isActive else { return }
+            guard mayCollapseToBubble else {
+                withAnimation(CallShareCapsuleMotion.swapAnimation(reduceMotion: reduceMotion)) { pillDragOffset = 0 }
+                return
+            }
             callManager.displayMode = .bubble
             callManager.bubbleSizeTier = .circle
             pillDragOffset = 0
