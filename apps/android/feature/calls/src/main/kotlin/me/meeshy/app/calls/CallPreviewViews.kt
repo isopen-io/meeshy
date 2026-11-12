@@ -62,52 +62,51 @@ internal fun CallPreviewBackdrop(track: VideoTrack, eglContext: EglBase.Context,
 }
 
 /**
- * Chez l'appelé : entendre l'appelant avant de décrocher (iOS `CallPreviewSoundButton`). Plein et
- * blanc tant que le son est coupé — on ne peut pas le manquer —, de verre une fois activé ; le
- * libellé dit le geste suivant, TalkBack lit l'état « sélectionné » et l'indication.
+ * Chez l'appelé : entendre l'appelant avant de décrocher (iOS `CallPreviewSoundButton`). Une PUCE DE VERRE, comme celle
+ * du type d'appel au-dessus du nom (P17.2) : le glyphe dit l'état, le libellé dit le geste suivant, TalkBack lit l'état
+ * « sélectionné » et l'indication. L'activer coupe aussi la sonnerie (P17.3, #13816).
  */
 @Composable
 internal fun CallPreviewSoundButton(isAudible: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val label = stringResource(if (isAudible) R.string.call_preview_sound_off else R.string.call_preview_sound_on)
     val hint = stringResource(R.string.call_preview_sound_hint)
-    val ink = if (isAudible) Color.White else Color.Black
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     CallGlassButtonSurface(
-        role = if (isAudible) CallButtonRole.Neutral else CallButtonRole.Active,
+        role = CallButtonRole.Neutral,
         shape = CircleShape,
         isPressed = pressed,
         modifier = modifier
             .pressable()
-            .defaultMinSize(minHeight = 50.dp)
+            .defaultMinSize(minHeight = 48.dp)
             .clickable(interactionSource = source, indication = null, onClickLabel = hint, role = Role.Button, onClick = onToggle)
             .semantics {
                 contentDescription = label
                 selected = isAudible
             },
     ) {
-        CallPreviewSoundLabel(isAudible = isAudible, label = label, ink = ink)
+        CallPreviewSoundLabel(isAudible = isAudible, label = label)
     }
 }
 
 @Composable
-private fun CallPreviewSoundLabel(isAudible: Boolean, label: String, ink: Color) {
+private fun CallPreviewSoundLabel(isAudible: Boolean, label: String) {
     Row(
-        modifier = Modifier.padding(horizontal = MeeshySpacing.xxl),
+        modifier = Modifier.padding(horizontal = MeeshySpacing.xl),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Icon(
             imageVector = if (isAudible) MeeshyIcons.VolumeUp else MeeshyIcons.VolumeOff,
             contentDescription = null,
-            tint = ink,
-            modifier = Modifier.size(20.dp),
+            tint = Color.White,
+            modifier = Modifier.size(18.dp),
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            color = ink,
+            color = Color.White,
             modifier = Modifier.clearAndSetSemantics { },
         )
     }

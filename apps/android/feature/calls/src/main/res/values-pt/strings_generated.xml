@@ -46,7 +46,6 @@
     <string name="call_control_camera_rail">Opções da minha câmera</string>
     <string name="call_control_capture">Capturar a chamada</string>
     <string name="call_control_capture_caption">Captura</string>
-    <string name="call_control_capture_hint">Libera a tela para escolher uma montagem e capturar a chamada</string>
     <string name="call_control_end_hint">Encerra a chamada atual</string>
     <string name="call_control_flip_camera">Alternar câmera frontal/traseira</string>
     <string name="call_control_flip_camera_caption">Virar</string>
@@ -141,6 +140,13 @@
     <string name="call_incoming_answer_no_video">Sem vídeo</string>
     <string name="call_incoming_answer_no_video_hint">Atende com a câmera desligada: quem liga vê seu avatar</string>
     <string name="call_incoming_answer_no_video_label">Atender sem vídeo</string>
+    <string name="call_incoming_pre_answer_camera_hint">Decide se %1$s vê você ao atender</string>
+    <string name="call_incoming_pre_answer_heard_only">%1$s vai ouvir você sem ver</string>
+    <string name="call_incoming_pre_answer_mic_hint">Decide se %1$s ouve você ao atender</string>
+    <string name="call_incoming_pre_answer_neither">%1$s não vai ver nem ouvir você</string>
+    <string name="call_incoming_pre_answer_seen_and_heard">%1$s verá você ao atender</string>
+    <string name="call_incoming_pre_answer_seen_muted">%1$s verá você, microfone desligado</string>
+    <string name="call_incoming_self_preview_label">Sua câmera, não enviada antes de atender</string>
     <string name="call_invite_declined">%1$s recusou</string>
     <string name="call_invite_failed">Não foi possível convidar esta pessoa</string>
     <string name="call_invite_ringing">Chamando…</string>
@@ -268,7 +274,6 @@
     <string name="call_waiting_banner_a11y">Chamada recebida de %1$s</string>
     <string name="call_waiting_subtitle">Chamada recebida…</string>
     <string name="call_zoom_cycle_hint">Toque para passar ao próximo nível de zoom</string>
-    <string name="call_zoom_hint">Deslize para cima ou para baixo para dar zoom. Na tela, faça o gesto de pinça na sua imagem; toque duas vezes para voltar a 1×</string>
     <string name="call_zoom_label">Zoom da minha câmera</string>
     <string name="permission_microphone_denied">Microfone negado — toque para abrir os Ajustes</string>
     <string name="video_filter_preset_bright">Claro</string>

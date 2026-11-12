@@ -99,6 +99,18 @@ class WebRtcEngine internal constructor(
     /** La piste d'aperçu caméra, présente seulement pendant une capture vidéo. */
     val localVideoTrack: VideoTrack? get() = media.localVideoTrack
 
+    /**
+     * Avant le décroché (vue P17) : ma caméra tourne pour MON aperçu seulement — sa piste n'est posée sur aucun pair, rien
+     * n'en part. `null` : elle tourne ; sinon la raison pour laquelle il n'y a pas d'aperçu (accès refusé, aucune caméra).
+     * [createConnection] referme cet aperçu et le rouvre si la réponse garde la vidéo ; sans effet une fois le pair ouvert.
+     */
+    fun startSelfPreview(): CallVideoFallback? = if (peerConnection != null) null else media.prepareVideo()
+
+    /** Ma caméra d'aperçu s'éteint (Caméra coupée dans la barre, écran quitté) : sans effet une fois le pair ouvert. */
+    fun stopSelfPreview() {
+        if (peerConnection == null) media.releaseVideo()
+    }
+
     val localIceCandidates: SharedFlow<IceCandidate> = engineEvents.localIceCandidates
     val iceConnectionState: StateFlow<PeerConnection.IceConnectionState> = engineEvents.iceConnectionState
     val remoteAudioTracks: SharedFlow<AudioTrack> = engineEvents.remoteTracks.audio

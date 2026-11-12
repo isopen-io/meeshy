@@ -43,6 +43,7 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
+import org.webrtc.VideoTrack
 
 /**
  * UDF ViewModel driving the pure [CallStateMachine], folded onto the live
@@ -85,6 +86,7 @@ class CallViewModel @Inject constructor(
     private val preflightAnnouncer: CallPreflightAnnouncer = CallPreflightAnnouncer.None,
     private val ringGuard: CallRingGuarding = CallRingGuarding.Inert,
     private val hold: CallHolding = CallHolding.Inert,
+    private val ringSilencer: CallRingSilencing = CallRingSilencing.Inert,
 ) : ViewModel() {
 
     /** Appel établi, socket de signalisation tombée : la bannière « Signalisation interrompue » (le média tient). */
@@ -92,6 +94,12 @@ class CallViewModel @Inject constructor(
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
     private val selfId: String get() = sessionRepository.currentUser.value?.id.orEmpty()
+
+    /** Ma caméra d'avant le décroché, pour la vignette de l'écran entrant (P17.4). */
+    private val selfPreview = CallSelfPreview(coordinator)
+
+    /** Le micro coupé choisi avant de décrocher (P17.8) : posé après la réponse, remis à zéro à chaque appel. */
+    private var answerMuted: Boolean = false
 
     /** Set on accept; the callee starts its media once fresh ICE servers land. */
     private var awaitingIncomingIce: Boolean = false
@@ -169,6 +177,7 @@ class CallViewModel @Inject constructor(
     private var mediaReleased = false
 
     private fun releaseMedia() {
+        selfPreview.handedOff()
         if (mediaReleased) return
         mediaReleased = true
         coordinator.end()
@@ -450,6 +459,8 @@ class CallViewModel @Inject constructor(
         this.elapsedSeconds = 0L
         this.mediaReleased = false
         this.mediaEstablished = false
+        this.answerMuted = false
+        selfPreview.handedOff()
         this.connectionQuality = null
         this.groupTitle = null
         turnCredentials.cancelAll()
@@ -521,12 +532,14 @@ class CallViewModel @Inject constructor(
     /**
      * « Sans vidéo » (vue P17, iOS `CallAnswerWithoutVideo`) : décrocher un appel vidéo sans jamais ouvrir ma caméra. La
      * réponse n'annonce la vidéo qu'en réception : je vois l'autre, il voit mon avatar, et rien ne part de ma caméra.
-     * Allumer ma caméra ensuite passe par l'escalade ([localCameraPending]). Sur un appel audio, c'est [accept].
+     * Allumer ma caméra ensuite passe par l'escalade ([localCameraPending]). Sur un appel audio, c'est [accept]. La caméra
+     * de mon aperçu (P17.4) s'éteint dès le geste, sans attendre l'ouverture du lien.
      */
     fun acceptWithoutVideo() {
         if (config.isVideo && callState == CallState.Ringing(isOutgoing = false)) {
             localCameraPending = true
             media = media.copy(isCameraOn = false)
+            selfPreview.stop()
         }
         accept()
     }
@@ -534,6 +547,7 @@ class CallViewModel @Inject constructor(
     /** Local user accepts an incoming call — answer the FSM, join the room, open the media. */
     fun accept() {
         dispatch(CallEvent.LocalAnswer)
+        selfPreview.handedOff()
         if (callId.isBlank()) return
         val opensCamera = config.isVideo && !localCameraPending
         coordinator.holdIncomingSignals(viewModelScope, callId)
@@ -549,6 +563,7 @@ class CallViewModel @Inject constructor(
                         conversationId = config.conversationId,
                     )
                     if (config.isVideo && !opensCamera) emitIfIdentified { signalManager.emitToggleVideo(it, enabled = false) }
+                    applyAnswerMuted()
                     if (callState.isActive) turnCredentials.afterConfigure(callId, result.iceServers)
                 }
                 is CallJoinResult.Failure -> {
@@ -559,8 +574,16 @@ class CallViewModel @Inject constructor(
         }
     }
 
+    /** P17.9 : le micro coupé de la barre d'avant le décroché, posé juste après la réponse (jamais avant). */
+    private fun applyAnswerMuted() {
+        val muted = answerMuted
+        answerMuted = false
+        if (muted && !media.isMuted) toggleMute()
+    }
+
     /** Local user declines an incoming call — reject the FSM and end it on the wire. */
     fun decline() {
+        selfPreview.handedOff()
         dispatch(CallEvent.Reject)
         // reason=rejected: else the server resolves this pre-answer end as missed.
         emitIfIdentified { endReconciler.end(it, reason = END_REASON_REJECTED) }
@@ -699,6 +722,20 @@ class CallViewModel @Inject constructor(
     /** « Activer l'audio » de l'écran entrant : entendre l'appelant avant de décrocher. */
     fun togglePreviewSound() = preview.toggleSound()
 
+    /** Ma caméra d'avant le décroché : sa piste pour MA vignette de l'écran entrant, jamais posée sur un pair. */
+    val selfPreviewTrack: StateFlow<VideoTrack?> get() = selfPreview.track
+
+    /** Caméra choisie dans la barre d'avant le décroché : ma caméra démarre pour ma vignette, ou s'éteint. */
+    fun setSelfPreviewOn(on: Boolean) {
+        if (callState != CallState.Ringing(isOutgoing = false)) return
+        if (on) selfPreview.start() else selfPreview.stop()
+    }
+
+    /** Le micro coupé choisi dans la barre se pose juste après la réponse (P17.9) : rien n'en part avant. */
+    fun answerWithMicrophoneMuted(muted: Boolean) {
+        answerMuted = muted
+    }
+
     /** Appelant : le micro que l'appelé entend avant de décrocher, retenu pour ce correspondant. */
     fun togglePreviewAudio() = preview.togglePreviewAudio()
 
@@ -715,6 +752,8 @@ class CallViewModel @Inject constructor(
             activeLoop = CallSound.None
             toneController.setLoop(CallSound.None)
         }
+        // P17.3, #13816 : la sonnerie d'un appel arrivé par push est celle de la notification, que le contrôleur ne tient pas.
+        if (audible) ringSilencer.silence(callId)
         coordinator.routePreviewAudio(audible, isVideo = config.isVideo)
     }
 

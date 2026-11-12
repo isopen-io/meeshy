@@ -46,7 +46,6 @@
     <string name="call_control_camera_rail">My camera options</string>
     <string name="call_control_capture">Capture the call</string>
     <string name="call_control_capture_caption">Capture</string>
-    <string name="call_control_capture_hint">Clears the screen to pick a montage and capture the call</string>
     <string name="call_control_end_hint">Ends the current call</string>
     <string name="call_control_flip_camera">Switch front/back camera</string>
     <string name="call_control_flip_camera_caption">Flip</string>
@@ -141,6 +140,13 @@
     <string name="call_incoming_answer_no_video">No video</string>
     <string name="call_incoming_answer_no_video_hint">Answers with your camera off: the caller sees your avatar</string>
     <string name="call_incoming_answer_no_video_label">Answer without video</string>
+    <string name="call_incoming_pre_answer_camera_hint">Decides whether %1$s sees you when you answer</string>
+    <string name="call_incoming_pre_answer_heard_only">%1$s will hear you without seeing you</string>
+    <string name="call_incoming_pre_answer_mic_hint">Decides whether %1$s hears you when you answer</string>
+    <string name="call_incoming_pre_answer_neither">%1$s will neither see nor hear you</string>
+    <string name="call_incoming_pre_answer_seen_and_heard">%1$s will see you when you answer</string>
+    <string name="call_incoming_pre_answer_seen_muted">%1$s will see you, microphone off</string>
+    <string name="call_incoming_self_preview_label">Your camera, not sent until you answer</string>
     <string name="call_invite_declined">%1$s declined</string>
     <string name="call_invite_failed">Couldn’t invite this person</string>
     <string name="call_invite_ringing">Ringing…</string>
@@ -268,7 +274,6 @@
     <string name="call_waiting_banner_a11y">Incoming call from %1$s</string>
     <string name="call_waiting_subtitle">Incoming call…</string>
     <string name="call_zoom_cycle_hint">Tap to switch to the next zoom factor</string>
-    <string name="call_zoom_hint">Swipe up or down to zoom. On screen, pinch your image; double-tap to return to 1×</string>
     <string name="call_zoom_label">My camera zoom</string>
     <string name="permission_microphone_denied">Microphone denied — tap to open Settings</string>
     <string name="video_filter_preset_bright">Bright</string>
