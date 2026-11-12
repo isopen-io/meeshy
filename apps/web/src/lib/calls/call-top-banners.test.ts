@@ -38,12 +38,12 @@ describe('la place réservée', () => {
 });
 
 describe('l’enregistrement dans la pile', () => {
-  test('l’indicateur et son avis occupent leur place ; la carte d’accord flotte par-dessus', () => {
+  test('l’indicateur, son avis ET la carte d’accord occupent leur place dans la pile (R2.1 ; `CallRecordingBannerStage` d’iOS)', () => {
     expect(recordingBannerPresent({ view: { kind: 'recording' }, notice: null })).toBe(true);
     expect(recordingBannerPresent({ view: { kind: 'asking' }, notice: null })).toBe(true);
     expect(recordingBannerPresent({ view: { kind: 'pending', mustAnswer: false }, notice: null })).toBe(true);
     expect(recordingBannerPresent({ view: { kind: 'idle' }, notice: { kind: 'stopped' } })).toBe(true);
-    expect(recordingBannerPresent({ view: { kind: 'pending', mustAnswer: true }, notice: null })).toBe(false);
+    expect(recordingBannerPresent({ view: { kind: 'pending', mustAnswer: true }, notice: null })).toBe(true);
     expect(recordingBannerPresent({ view: { kind: 'idle' }, notice: null })).toBe(false);
   });
 });
