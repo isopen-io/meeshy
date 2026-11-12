@@ -97,24 +97,22 @@ export function canShareScreen(mediaDevices: unknown): boolean {
   return typeof mediaDevices === 'object' && mediaDevices !== null && typeof (mediaDevices as { readonly getDisplayMedia?: unknown }).getDisplayMedia === 'function';
 }
 
-export type StatusPill = 'mic-muted' | 'screen-sharing' | 'peer-muted' | 'poor-network' | 'video-frozen' | 'video-suspended';
+export type StatusPill = 'mic-muted' | 'peer-muted' | 'poor-network' | 'video-frozen' | 'video-suspended';
 
 export const STATUS_PILL_KEY: Readonly<Record<StatusPill, PlainCallKey>> = {
   'mic-muted': 'call.mic.muted',
-  'screen-sharing': 'call.screen.sharing',
   'peer-muted': 'call.peer.muted',
   'poor-network': 'call.quality.poor',
   'video-frozen': 'call.video.frozen',
   'video-suspended': 'call.video.suspended',
 };
 
-/** Les pastilles de `CallView.swift` que le web sait dire. */
+/** Les pastilles de `CallView.swift` que le web sait dire — le partage d'écran n'en est plus une : c'est un bandeau sous l'en-tête (P16.4, `call-top-banners.ts`). */
 export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' | 'members' | 'quality' | 'isGroup'>): readonly StatusPill[] {
   const members = Object.values(call.members);
   const peerMuted = !call.isGroup && members.length === 1 && members[0]?.micMuted === true;
   return [
     ...(call.micMuted ? (['mic-muted'] as const) : []),
-    ...(call.screenSharing ? (['screen-sharing'] as const) : []),
     ...(peerMuted ? (['peer-muted'] as const) : []),
     ...(call.quality?.level === 'poor' ? (['poor-network'] as const) : []),
     ...(call.quality?.survival === 'frozen' ? (['video-frozen'] as const) : []),

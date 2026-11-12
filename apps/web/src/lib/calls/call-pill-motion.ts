@@ -86,9 +86,9 @@ export const swapMs = (reducedMotion: boolean): number => (reducedMotion ? STOW_
  * capsule de l'en-tête grandit depuis son bord de fin (P9.8, `.scale(scale: 0.8, anchor: .trailing)`
  * d'iOS ; l'ancre est `transform-origin`, dans `call-motion.css`) ; `fade` : la capsule de la une
  * repart sur place, en fondu (U1.12) ; `bottom` et `end` : le bandeau des autres repart par le bord
- * du bas, ou — en colonne — par le bord de FIN de l'écran (U2.10), et revient par le même chemin.
+ * du bas, ou — en colonne — par le bord de FIN de l'écran (U2.10), et revient par le même chemin ; `top` : le bandeau « Vous partagez » repart par le bord du haut, comme l'en-tête (P16.6).
  */
-export type SwapShape = 'rise' | 'scale' | 'fade' | 'bottom' | 'end';
+export type SwapShape = 'rise' | 'scale' | 'fade' | 'bottom' | 'end' | 'top';
 
 const SCALE_FROM = 0.8;
 
@@ -98,6 +98,7 @@ const SWAP_SHAPES: Readonly<Record<SwapShape, { readonly shown: string; readonly
   fade: { shown: 'none', hidden: 'none' },
   bottom: { shown: 'translateY(0)', hidden: 'translateY(100%)' },
   end: { shown: 'translateX(0)', hidden: 'translateX(100%)' },
+  top: { shown: 'translateY(0)', hidden: 'translateY(-100%)' },
 };
 
 /** `rtl` : le bord de FIN est à gauche. */

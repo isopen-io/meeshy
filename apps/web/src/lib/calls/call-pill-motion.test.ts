@@ -117,6 +117,14 @@ describe('ce qui sort par un bord y retourne par le même chemin : le bandeau de
     expect(swapKeyframes(true, false, 'end', true)[0]).toEqual({ opacity: 0, transform: 'translateX(-100%)' });
   });
 
+  test('le bandeau « Vous partagez » repart vers le haut, par où l’en-tête se range, et en revient (P16.6)', () => {
+    expect(swapKeyframes(false, false, 'top')).toEqual([
+      { opacity: 1, transform: 'translateY(0)' },
+      { opacity: 0, transform: 'translateY(-100%)' },
+    ]);
+    expect(swapKeyframes(true, false, 'top')[0]).toEqual({ opacity: 0, transform: 'translateY(-100%)' });
+  });
+
   test('la capsule repart en fondu, sans déplacement ni échelle', () => {
     expect(swapKeyframes(false, false, 'fade')).toEqual([
       { opacity: 1, transform: 'none' },
@@ -125,7 +133,7 @@ describe('ce qui sort par un bord y retourne par le même chemin : le bandeau de
   });
 
   test('« Réduire les animations » : un fondu court, sans déplacement, pour chacune', () => {
-    for (const shape of ['bottom', 'end', 'fade'] as const) expect(swapKeyframes(false, true, shape, true)).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+    for (const shape of ['bottom', 'end', 'fade', 'top'] as const) expect(swapKeyframes(false, true, shape, true)).toEqual([{ opacity: 1 }, { opacity: 0 }]);
   });
 });
 

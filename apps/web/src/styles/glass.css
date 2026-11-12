@@ -105,7 +105,8 @@
    reflet interne du haut et l'ombre douce sont la forme du verre iOS ; le
    `saturate` rend sa couleur à la vidéo floutée. */
 .glass-call,
-.glass-call-prominent {
+.glass-call-prominent,
+.glass-call-danger {
   background-color: color-mix(in srgb, var(--ios-indigo-950) var(--glass-density), transparent);
   backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid rgb(255 255 255 / 0.22);
@@ -121,6 +122,15 @@
 
 .glass-call-prominent {
   --glass-density: 86%;
+}
+
+/* LE VERRE D'APPEL TEINTÉ DE ROUGE (P16.12, #17746) — le bandeau « Vous partagez votre écran » :
+   la matière du verre régulier, sous un voile d'erreur à 35 % (la planche : rgba(217,45,32,.35)).
+   Le voile est un DÉGRADÉ plein posé sur la couleur du verre, jamais une seconde couche
+   d'arrière-plan : un seul flou. Contre le blanc pur, l'encre blanche tient 5,79:1 (AA texte). */
+.glass-call-danger {
+  --glass-density: 72%;
+  background-image: linear-gradient(color-mix(in srgb, var(--ios-error-strong) 35%, transparent), color-mix(in srgb, var(--ios-error-strong) 35%, transparent));
 }
 
 /* LE DISQUE DE VERRE D'UN BOUTON DE L'APPEL (#17345, #17418) — le web reproduit
@@ -154,7 +164,8 @@
    (le glyphe blanc y tient bien au-delà de AA) et garde son liseré. */
 @media (prefers-reduced-transparency: reduce) {
   .glass-call,
-  .glass-call-prominent {
+  .glass-call-prominent,
+  .glass-call-danger {
     backdrop-filter: none;
     --glass-density: 100%;
   }

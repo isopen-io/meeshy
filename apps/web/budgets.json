@@ -416,6 +416,15 @@
         "source": "Mesure du 2026-11-11 (#17536, `bun run build` puis `node scripts/measure-weight.mjs`) : 1,50 Ko -- ce que la pilule qui a grandi porte au-dessus de sa rangee de base (`components/call-deck-motion.tsx` › `Deck` : les rangees d un groupe, chargees par `import()` depuis `call_action_rows`, OU le panneau ouvert, puis le separateur) et le double qui s efface depuis sa place quand le verre se resserre (G3.4 / #17490). Sorti de `call_overlay` : seul un verre qui grandit le paie, et l ecran d appel le PRECHARGE avec les rangees (`call-screen.tsx`, `PREFETCH`). Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
       }
     },
+    "call_top_banners": {
+      "pattern": "^assets/call-share-banner-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #17746, NON ARBITREE",
+        "source": "Mesure du 2026-11-12 (`bun run build` puis `node scripts/measure-weight.mjs`) : 0,61 Ko -- le bandeau « Vous partagez votre ecran · Arreter » (`components/call-share-banner.tsx`, P16.4 a P16.12, miroir de `CallScreenShareBanner` d iOS), un verre rouge pale (`glass-call-danger`) qui entre et repart par le haut (`HeldSwap`, forme `top`). Chunk NEUF, a la demande : l ecran d appel le precharge des que l appel vit (`PREFETCH`) et un appel qui ne partage pas ne le monte jamais ; il n entre pas dans `call_overlay`."
+      }
+    },
     "call_floating_pill": {
       "pattern": "^assets/call-floating-pill-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,

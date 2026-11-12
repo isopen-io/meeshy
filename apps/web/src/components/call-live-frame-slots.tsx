@@ -51,9 +51,12 @@ const Surface = lazy(() =>
 
 export const useLiveFrameState = (): CallLiveFrameState => useStore(callLiveFrameStore, (state) => state);
 
+/** Un avis du cadre en direct (proposition, réponse, notice) attend-il sa place dans la pile des bandeaux ? */
+export const liveFrameStatusPresent = (state: CallLiveFrameState): boolean => state.proposal !== null || state.answer !== null || state.notice !== null;
+
 /** La proposition, la réponse, ou le cadre resté chez moi — sous l'en-tête, jamais rangé avec les commandes (loi 11). */
 export function CallLiveFrameStatusSlot({ language, state, load }: { readonly language: InterfaceLanguage; readonly state: CallLiveFrameState; readonly load: FrameStudioLoader }) {
-  if (state.proposal === null && state.answer === null && state.notice === null) return null;
+  if (!liveFrameStatusPresent(state)) return null;
   return (
     <div className="relative z-30 flex justify-center" data-call-live-frame-slot="">
       <Suspense fallback={null}>
