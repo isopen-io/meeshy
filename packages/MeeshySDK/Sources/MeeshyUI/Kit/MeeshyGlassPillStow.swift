@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// **Le retrait de la pilule** : rangée, elle sort par son bord et fond ; elle
 /// répond jusqu'au terme du fondu (`MeeshyGlassPillPresenceRule`), et un toucher
@@ -54,8 +55,7 @@ struct MeeshyGlassPillStowModifier: ViewModifier {
         }
         .task(id: stowedAt) {
             guard stowedAt != nil else { return }
-            let nanoseconds = UInt64(duration * 1_000_000_000)
-            guard (try? await Task.sleep(nanoseconds: nanoseconds)) != nil, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(duration)), !Task.isCancelled else { return }
             clock = Date()
         }
     }
