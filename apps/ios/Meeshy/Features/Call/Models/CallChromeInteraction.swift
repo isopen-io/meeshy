@@ -37,7 +37,7 @@ extension CallChromeVisibility {
 /// transformation et l'opacité bougent ; « Réduire les animations » les remplace par
 /// un fondu court, sans déplacement.
 enum CallChromeStow {
-    static let reducedFadeDuration: TimeInterval = 0.15
+    nonisolated static let reducedFadeDuration: TimeInterval = 0.15
 
     static func leavesByItsEdge(isVisible: Bool, reduceMotion: Bool) -> Bool {
         !isVisible && !reduceMotion

@@ -22,13 +22,13 @@ nonisolated enum IncomingCallChoices {
     /// noire.
     /// Caméra coupée dans la barre d'avant le décroché ⇒ la vignette s'efface
     /// avec elle : je vois ce que l'autre verra.
+    static func showsSelfPreview(isVideoCall: Bool, hasLocalVideoTrack: Bool, cameraChosen: Bool = true) -> Bool {
+        isVideoCall && hasLocalVideoTrack && cameraChosen
+    }
+
     /// P17.5 — ma vignette apparaît et disparaît en fondu ; « Réduire les animations » le raccourcit sans le couper.
     static func selfPreviewFadeDuration(reduceMotion: Bool) -> TimeInterval {
         reduceMotion ? CallChromeStow.reducedFadeDuration : 0.25
-    }
-
-    static func showsSelfPreview(isVideoCall: Bool, hasLocalVideoTrack: Bool, cameraChosen: Bool = true) -> Bool {
-        isVideoCall && hasLocalVideoTrack && cameraChosen
     }
 
     /// La barre « Awa vous verra en décrochant » et ses bascules Micro et

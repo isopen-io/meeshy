@@ -200,3 +200,18 @@ struct CallSelfTileStow: ViewModifier {
             .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isChromeVisible)
     }
 }
+
+/// P16.8 — ma vignette descend sous le bandeau « Vous partagez · Arrêter » quand il arrive et
+/// remonte quand il part, dans le même mouvement que lui. Réduire les animations : elle se pose
+/// sans mouvement. Seul le bandeau anime la place : un glisser ou un coin choisi garde son ressort.
+struct CallSelfTilePlacement: ViewModifier {
+    let position: CGPoint
+    let reservesBanner: Bool
+    let reduceMotion: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .position(position)
+            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: reservesBanner)
+    }
+}
