@@ -14,6 +14,17 @@ enum class CallSelfTileScale(val widthDp: Float) {
 
     val heightDp: Float get() = widthDp * ASPECT_RATIO
 
+    /** L1.5 — la largeur du palier dans une fenêtre couchée (130 dp au palier standard). */
+    fun widthDp(isLandscape: Boolean): Float = if (isLandscape) widthDp * LANDSCAPE_WIDTH_FACTOR else widthDp
+
+    /** L1.5 — dans une fenêtre plus large que haute, ma vignette se couche : 130 × 96 au palier standard. */
+    fun size(isLandscape: Boolean): CallTileSize =
+        if (isLandscape) {
+            CallTileSize(widthDp(isLandscape = true), widthDp(isLandscape = true) * LANDSCAPE_ASPECT_RATIO)
+        } else {
+            CallTileSize(widthDp, heightDp)
+        }
+
     val larger: CallSelfTileScale get() = entries.getOrElse(ordinal + 1) { this }
 
     val smaller: CallSelfTileScale get() = entries.getOrElse(ordinal - 1) { this }
@@ -21,6 +32,8 @@ enum class CallSelfTileScale(val widthDp: Float) {
     companion object {
         val Standard: CallSelfTileScale = X2
         const val ASPECT_RATIO: Float = 1.4f
+        const val LANDSCAPE_WIDTH_FACTOR: Float = 1.3f
+        const val LANDSCAPE_ASPECT_RATIO: Float = 96f / 130f
         const val STEP_UP_THRESHOLD: Float = 1.12f
         const val STEP_DOWN_THRESHOLD: Float = 0.89f
 
@@ -68,12 +81,37 @@ object CallSelfTileLaw {
     const val TOP_CLEARANCE_DP: Float = 60f
     const val BOTTOM_CLEARANCE_DP: Float = 130f
 
+    /** La forme de la fenêtre décide, jamais l'appareil : plus large que haute = paysage (tablettes, fenêtres libres). */
+    fun isLandscape(window: CallTileSize): Boolean = window.widthDp > window.heightDp
+
     /** La taille suivie des doigts pendant le pincement, entre le plus petit et le plus grand palier. */
-    fun liveSize(pinch: Float, from: CallSelfTileScale): CallTileSize {
-        if (!pinch.isFinite() || pinch <= 0f) return CallTileSize(from.widthDp, from.heightDp)
-        val width = (from.widthDp * pinch).coerceIn(CallSelfTileScale.X1.widthDp, CallSelfTileScale.X3.widthDp)
-        return CallTileSize(width, width * CallSelfTileScale.ASPECT_RATIO)
+    fun liveSize(pinch: Float, from: CallSelfTileScale, isLandscape: Boolean = false): CallTileSize {
+        if (!pinch.isFinite() || pinch <= 0f) return from.size(isLandscape)
+        val width = (from.widthDp(isLandscape) * pinch)
+            .coerceIn(CallSelfTileScale.X1.widthDp(isLandscape), CallSelfTileScale.X3.widthDp(isLandscape))
+        val ratio = if (isLandscape) CallSelfTileScale.LANDSCAPE_ASPECT_RATIO else CallSelfTileScale.ASPECT_RATIO
+        return CallTileSize(width, width * ratio)
     }
+
+    /**
+     * L1.5 — le point de départ d'une rotation : la taille d'avant, en rapport de la nouvelle (x = largeur, y = hauteur).
+     * Mise à l'échelle depuis ce rapport vers 1, la vignette se couche ou se relève sans saut.
+     */
+    fun rotationStart(previous: CallTileSize, target: CallTileSize): CallTilePoint =
+        if (target.widthDp <= 0f || target.heightDp <= 0f) {
+            CallTilePoint(1f, 1f)
+        } else {
+            CallTilePoint(previous.widthDp / target.widthDp, previous.heightDp / target.heightDp)
+        }
+
+    /** L1.5 — l'échelle d'un axe pendant la rotation : de [start] vers 1 à mesure que [fraction] va de 0 à 1. */
+    fun rotationScale(start: Float, fraction: Float): Float = start + (1f - start) * fraction
+
+    /** L1.5 — la taille que la vignette MONTRE à [fraction] d'une rotation : c'est d'elle que repart la rotation suivante. */
+    fun shownDuringRotation(layout: CallTileSize, start: CallTilePoint, fraction: Float): CallTileSize = CallTileSize(
+        layout.widthDp * rotationScale(start.xDp, fraction),
+        layout.heightDp * rotationScale(start.yDp, fraction),
+    )
 
     /** Réduit [size] (jamais ne l'agrandit) pour tenir dans [available], à rapport constant. */
     fun fitted(size: CallTileSize, available: CallTileSize): CallTileSize {
@@ -113,7 +151,7 @@ object CallSelfTileLaw {
             widthDp = container.widthDp - insets.startDp - insets.endDp - 2 * MARGIN_DP,
             heightDp = container.heightDp - insets.topDp - insets.bottomDp - insets.bannerDp - TOP_CLEARANCE_DP - BOTTOM_CLEARANCE_DP,
         )
-        return fitted(liveSize(pinch, scale), available)
+        return fitted(liveSize(pinch, scale, isLandscape(container)), available)
     }
 
     /** Le centre de repos de la vignette dans [corner], marges de zone sûre et dégagements du chrome compris. */
