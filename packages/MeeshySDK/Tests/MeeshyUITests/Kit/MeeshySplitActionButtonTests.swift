@@ -216,6 +216,7 @@ struct MeeshySplitActionButtonTests {
         #expect(MeeshySplitActionLabelFit.wrappedWidth(widths: roomy, maxLines: 2) == 58)
     }
 
+    @MainActor
     @Test("le nom dit reste le libellé entier même quand le glyphe reste seul")
     func words_spokenName() {
         #expect(MeeshySplitActionWords.spokenName(label: nil, title: "Publier la story") == "Publier la story")
@@ -283,7 +284,8 @@ struct MeeshySplitActionButtonTests {
         #expect(calls == ["refus"])
         #expect(plays.isEmpty)
         let choose = MeeshySplitActionChoose(label: "Choisir", action: { calls.append("choose") })
-        #expect(MeeshySplitActionTrigger.pressChevron(choose: choose, haptic: .light, play: { plays.append($0) }))
+        let chevronFired = MeeshySplitActionTrigger.pressChevron(choose: choose, haptic: .light, play: { plays.append($0) })
+        #expect(chevronFired)
         #expect(calls == ["refus", "choose"])
         #expect(plays == [.light])
     }
