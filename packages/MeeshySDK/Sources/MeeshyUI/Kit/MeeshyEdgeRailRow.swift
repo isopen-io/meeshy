@@ -121,7 +121,7 @@ struct MeeshyEdgeRailLabeledRow: View, Equatable {
 
     private var selectedTraits: AccessibilityTraits {
         var traits: AccessibilityTraits = []
-        if item.isLit { traits.insert(.isSelected) }
+        if item.isLit { traits.formUnion(.isSelected) }
         return traits
     }
 
