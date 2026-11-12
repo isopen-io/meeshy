@@ -70,6 +70,47 @@ final class CallShareCapsuleTests: XCTestCase {
         XCTAssertTrue(try source("Meeshy/Features/Call/Views/CallBubbleView.swift").contains("CallShareStopButton("))
     }
 
+    // MARK: - S1.8 / P18.10 — pendant MON partage, l'appel réduit reste la capsule (comme le web, #17760)
+
+    func test_pill_foldsIntoABubble_onlyWhenIAmNotSharing() {
+        XCTAssertTrue(CallReturnPoint.mayCollapseToBubble(isSharing: false))
+        XCTAssertFalse(
+            CallReturnPoint.mayCollapseToBubble(isSharing: true),
+            "P18.10 : si je partage, l'appel réduit est la capsule de S1, celle qui porte « Arrêter »."
+        )
+    }
+
+    func test_shareStart_contractsFromFullScreen_andBringsABubbleBackToTheCapsule() {
+        XCTAssertEqual(CallPipMorph.shareStartStep(from: .fullScreen), .contract)
+        XCTAssertEqual(CallPipMorph.shareStartStep(from: .pip), .capsule)
+        XCTAssertEqual(
+            CallPipMorph.shareStartStep(from: .bubble),
+            .capsule,
+            "Un appel déjà en bulle quand le partage commence revient à la capsule."
+        )
+    }
+
+    func test_pill_swipeAndVoiceOverFold_areBothGatedByTheShare() throws {
+        let pill = try source("Meeshy/Features/Call/Views/FloatingCallPillView.swift")
+        XCTAssertTrue(pill.contains("CallReturnPoint.mayCollapseToBubble(isSharing: callManager.screenShare.isSharing)"))
+        XCTAssertTrue(
+            pill.contains(".simultaneousGesture(collapseDragGesture, including: mayCollapseToBubble ? .all : .subviews)"),
+            "Pendant le partage, le glissé ne replie pas la capsule ; ses boutons restent touchables."
+        )
+        XCTAssertFalse(
+            pill.contains(".accessibilityAction(named: String(localized: \"a11y.call.pill.collapse\""),
+            "L'action « Réduire en bulle » n'est offerte que quand elle a un effet."
+        )
+        let actions = try XCTUnwrap(DeclarationBodyScanner.body(containing: ".accessibilityActions {", in: pill))
+        XCTAssertTrue(actions.contains("if mayCollapseToBubble {"))
+        XCTAssertTrue(actions.contains("collapseToBubble(exitTranslation: 1)"))
+        let collapse = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func collapseToBubble(", in: pill))
+        XCTAssertTrue(
+            collapse.contains("guard mayCollapseToBubble else"),
+            "Un partage lancé pendant la sortie du glissé ne laisse pas l'appel en bulle."
+        )
+    }
+
     // MARK: - S1.8 — « Arrêter » atteignable au-dessus d'un plein écran
 
     func test_returnPoint_showsTheStopOnlyWhileSharing_andNotUnderTheQuickMenu() {
