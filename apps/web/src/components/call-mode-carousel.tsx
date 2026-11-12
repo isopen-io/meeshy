@@ -86,7 +86,7 @@ type CarouselProps = {
 const DISC: ItemSize = { width: 64, height: 64 };
 
 /** Le disque est rond ; un portrait prend le rayon des tuiles du design system. */
-const shapeOf = ({ width, height }: ItemSize): string => (width === height ? 'rounded-full' : 'rounded-[var(--radius-tile)]');
+const shapeOf = ({ width, height }: ItemSize): string => (width === height ? 'rounded-full' : 'rounded-tile');
 
 /** La piste s'efface à ses deux bords (#17409) : la même largeur des deux côtés, rien à inverser en arabe. */
 const EDGE_FADE_PX = 34;

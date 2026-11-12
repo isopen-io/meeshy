@@ -2,6 +2,8 @@ import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type ReactNo
 
 import { declinationOffset, declinationTarget, latchAxis, type Axis } from '@/lib/calls/call-declination-swipe';
 
+import '@/styles/call-declinations.css';
+
 /**
  * **LES DÉCLINAISONS D'UN CADRE, DANS SA VIGNETTE** (#12685, #17821 C1.6) — sur le cadre choisi, un
  * glissement vertical passe d'une déclinaison à l'autre (sa version de base, sa version « Relief »…),
@@ -9,9 +11,10 @@ import { declinationOffset, declinationTarget, latchAxis, type Axis } from '@/li
  * bougent que par `transform` (puis `opacity` sous « Réduire les animations ») : pendant le geste,
  * la page suit le doigt par une écriture directe, une par image (`requestAnimationFrame`), sans une
  * seule mise en page ni un rendu React. Des points sur le bord disent combien de déclinaisons, et
- * laquelle est posée.
+ * laquelle est posée. Sa feuille (`call-declinations.css`) voyage avec ce chunk : rien n'en pèse
+ * sur la première peinture.
  *
- * L'horizontal reste au carrousel : la vignette ne réclame au navigateur que le vertical
+ * L'horizontal reste au carrousel : la vignette ne laisse au navigateur que l'horizontal
  * (`touch-action: pan-x`), l'axe se lit au premier mouvement (8 px) et se garde jusqu'au lever du
  * doigt ; un défilement que le navigateur reprend (`pointercancel`) ne fige rien. Le geste qui a
  * balayé n'est pas un toucher : son clic ne choisit et ne photographie rien.
@@ -134,7 +137,7 @@ export function DeclinationPages({ declinations, height }: PagesProps) {
 
   return (
     <div
-      className="absolute inset-0 touch-pan-x overflow-hidden"
+      className="absolute inset-0 overflow-hidden"
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}
@@ -142,23 +145,24 @@ export function DeclinationPages({ declinations, height }: PagesProps) {
       onClickCapture={swallow}
       data-call-declination-pages=""
     >
-      <div ref={track} className="flex size-full flex-col will-change-transform transition-transform duration-200 motion-reduce:transition-none" style={{ transform: shift(-index * height) }}>
+      <div ref={track} className="flex size-full flex-col" style={{ transform: shift(-index * height) }} data-call-declination-track="">
         {pages.map((page, position) => (
           <div
             // eslint-disable-next-line react/no-array-index-key
             key={position}
-            className="grid size-full shrink-0 place-items-center motion-reduce:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-150 motion-reduce:data-[current]:opacity-100"
+            className="grid size-full shrink-0 place-items-center"
             style={{ height }}
+            data-call-declination-page=""
             {...(position === index ? { 'data-current': '' } : {})}
           >
             {page}
           </div>
         ))}
       </div>
-      <div aria-hidden className="pointer-events-none absolute inset-y-0 end-0.5 flex flex-col items-center justify-center gap-1 [filter:drop-shadow(0_1px_1px_var(--color-scrim))]" data-call-declination-dots="">
+      <div aria-hidden className="pointer-events-none absolute inset-y-0 flex flex-col items-center justify-center gap-1" data-call-declination-dots="">
         {pages.map((_, position) => (
           // eslint-disable-next-line react/no-array-index-key
-          <span key={position} className="size-1 rounded-full bg-on-media opacity-50 data-[current]:opacity-100" {...(position === index ? { 'data-current': '' } : {})} data-call-declination-dot="" />
+          <span key={position} className="rounded-full bg-on-media" {...(position === index ? { 'data-current': '' } : {})} data-call-declination-dot="" />
         ))}
       </div>
     </div>

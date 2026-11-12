@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
@@ -541,9 +543,12 @@ describe('ModeCarousel', () => {
     view.done();
   });
 
-  test('l’axe vertical se laisse au carrousel horizontal : la vignette ne réclame que le vertical au navigateur', () => {
+  test('l’axe vertical se laisse au carrousel horizontal : la vignette ne laisse au navigateur que l’horizontal, depuis la feuille de son chunk', () => {
     const view = mountDeclined();
-    expect(view.pages?.className).toContain('touch-pan-x');
+    expect(view.pages?.hasAttribute('data-call-declination-pages')).toBe(true);
+    const css = readFileSync(new URL('../styles/call-declinations.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+    expect(css).toMatch(/\[data-call-declination-pages\]\s*\{\s*touch-action:\s*pan-x;\s*\}/);
+    expect(css).toMatch(/\[data-call-declination-track\]\s*\{[^}]*transition:\s*transform\b/);
     view.done();
   });
 

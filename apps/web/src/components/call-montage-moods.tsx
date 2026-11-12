@@ -97,11 +97,13 @@ export function MoodChips({ label, chips, selected, onPick, onWheel, scopeToggle
           tabIndex={-1}
           aria-label={scopeToggle.label}
           onClick={scopeToggle.onToggle}
-          className={`grid-flow-col gap-1.5 ${chipClass(false)}`}
+          className={chipClass(false)}
           data-call-frame-scope={scopeToggle.showsAll ? 'less' : 'more'}
         >
-          {scopeToggle.showsAll ? LESS_GLYPH : MORE_GLYPH}
-          <span>{scopeToggle.label}</span>
+          <span className="flex items-center gap-1.5">
+            {scopeToggle.showsAll ? LESS_GLYPH : MORE_GLYPH}
+            <span>{scopeToggle.label}</span>
+          </span>
         </button>
       )}
     </div>
