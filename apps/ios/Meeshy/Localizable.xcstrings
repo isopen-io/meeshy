@@ -51928,53 +51928,6 @@
         }
       }
     },
-    "about.section.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الوصف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beschreibung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Description"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Descripción"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Description"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Descrizione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Descrição"
-          }
-        }
-      }
-    },
     "about.section.features": {
       "extractionState": "manual",
       "localizations": {
@@ -173601,53 +173554,6 @@
         }
       }
     },
-    "sessions_empty_subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ستظهر هنا أجهزتك المتصلة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine angemeldeten Geräte erscheinen hier."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your signed-in devices will appear here."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aquí aparecerán tus dispositivos con sesión iniciada."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos appareils connectés apparaîtront ici."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Qui appariranno i tuoi dispositivi connessi."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus dispositivos conectados aparecerão aqui."
-          }
-        }
-      }
-    },
     "sessions_error_ok": {
       "extractionState": "manual",
       "localizations": {
@@ -174913,53 +174819,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Os locais são aproximados: são deduzidos do endereço IP."
-          }
-        }
-      }
-    },
-    "sessions.place.approximate": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (تقريبي)"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (ungefähr)"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (approximate)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (aproximado)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (approximatif)"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (approssimativo)"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ (aproximado)"
           }
         }
       }
@@ -176750,53 +176609,6 @@
         }
       }
     },
-    "settings.data.export.info.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بياناتك، تحت سيطرتك"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Daten, deine Kontrolle"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your data, your control"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus datos, tu control"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos données, votre contrôle"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi dati, il tuo controllo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus dados, seu controle"
-          }
-        }
-      }
-    },
     "settings.data.export.section.content": {
       "extractionState": "manual",
       "localizations": {
@@ -176981,100 +176793,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Carrega mais rápido, limpo após 7 dias."
-          }
-        }
-      }
-    },
-    "settings.data.storage.cache.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الصور والصوت والفيديو المخزّنة مؤقتًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zwischengespeicherte Bilder, Audios und Videos"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cached images, audio and videos"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Imágenes, audio y vídeos en caché"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Images, audio et vidéos mis en cache"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Immagini, audio e video nella cache"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Imagens, áudios e vídeos em cache"
-          }
-        }
-      }
-    },
-    "settings.data.storage.cache.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ذاكرة الوسائط المؤقتة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Medien-Cache"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Media cache"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Caché multimedia"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cache média"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cache media"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cache de mídia"
           }
         }
       }
@@ -179378,53 +179096,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Traduções de áudio"
-          }
-        }
-      }
-    },
-    "settings.media.download.auto_subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اختر متى يتم تنزيل كل نوع من الوسائط تلقائيًا حسب اتصالك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lege fest, wann welcher Medientyp je nach Verbindung automatisch geladen wird."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose when each media type downloads automatically, based on your connection."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elige cuándo se descarga automáticamente cada tipo de archivo según tu conexión."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisissez quand télécharger automatiquement chaque type de média selon votre connexion."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scegli quando scaricare automaticamente ogni tipo di contenuto in base alla tua connessione."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Escolha quando cada tipo de mídia é baixado automaticamente, conforme a sua conexão."
           }
         }
       }
@@ -182860,53 +182531,6 @@
         }
       }
     },
-    "settings.privacy.encryption.coming_soon": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "قريبًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Demnächst verfügbar"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Coming soon"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Próximamente"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bientôt disponible"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Presto disponibile"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Em breve"
-          }
-        }
-      }
-    },
     "settings.privacy.encryption.coming_soon.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -183185,53 +182809,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Status online"
-          }
-        }
-      }
-    },
-    "settings.privacy.online_status.info": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "النقطة الخضراء على صورتك تعني أنك نشط. عند إيقافها لا يراها أحد، لكن الكتابة في محادثة تظل دليلاً على نشاطك."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der grüne Punkt auf deinem Avatar zeigt, dass du aktiv bist. Deaktiviert sieht ihn niemand — wer aber in einer Unterhaltung schreibt, verrät seine Aktivität trotzdem."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The green dot on your avatar means you're active. Turned off, nobody sees it — but typing in a conversation still proves you're around."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El punto verde en tu avatar indica que estás activo. Desactivado, nadie lo ve, pero escribir en una conversación sigue delatando tu actividad."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La pastille verte sur votre avatar indique que vous êtes actif. Désactivée, personne ne voit ce point — mais écrire dans une conversation reste une preuve d'activité pour vos interlocuteurs."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il punto verde sul tuo avatar indica che sei attivo. Disattivato, nessuno lo vede, ma scrivere in una conversazione rivela comunque la tua presenza."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O ponto verde no seu avatar indica que você está ativo. Desativado, ninguém o vê — mas escrever em uma conversa continua revelando sua atividade."
           }
         }
       }
@@ -236175,53 +235752,6 @@
         }
       }
     },
-    "settings.privacy.notify_contacts_on_return.info": {
-      "extractionState": "manual",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos amis et ceux qui ont votre numéro ou votre e-mail voient « était sur Meeshy récemment », au plus une fois toutes les 3 heures. Jamais si votre statut en ligne est masqué."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your friends and people who have your number or email see “was on Meeshy recently”, at most once every 3 hours. Never if your online status is hidden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus amigos y quienes tienen tu número o tu correo ven «estuvo en Meeshy hace poco», como máximo una vez cada 3 horas. Nunca si tu estado en línea está oculto."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Freunde und alle, die deine Nummer oder E-Mail haben, sehen „war vor Kurzem auf Meeshy“ – höchstens einmal alle 3 Stunden. Nie, wenn dein Online-Status verborgen ist."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "I tuoi amici e chi ha il tuo numero o la tua e-mail vedono «è stato su Meeshy di recente», al massimo una volta ogni 3 ore. Mai se il tuo stato online è nascosto."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seus amigos e quem tem seu número ou e-mail veem “esteve no Meeshy recentemente”, no máximo uma vez a cada 3 horas. Nunca se seu status online estiver oculto."
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يرى أصدقاؤك ومن لديهم رقمك أو بريدك الإلكتروني «كان على Meeshy مؤخرًا»، مرة واحدة على الأكثر كل 3 ساعات. لا يحدث ذلك أبدًا إذا كانت حالتك على الإنترنت مخفية."
-          }
-        }
-      }
-    },
     "settings.privacy.notify_contacts_on_return.note": {
       "extractionState": "manual",
       "localizations": {
@@ -256475,53 +256005,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "As vinte medalhas, por família"
-          }
-        }
-      }
-    },
-    "game.rules.badges.sheet": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المس وسامًا: بطاقته تقول ما يتبعه، ومادته ولماذا، وما ينقص للنجمة التالية."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tippe auf eine Medaille: Ihr Blatt sagt, was sie verfolgt, ihr Material und warum, und was bis zum nächsten Stern fehlt."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap a medal: its card says what it follows, its material and why, and what’s missing for the next star."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toca una medalla: su ficha dice lo que sigue, su material y por qué, y lo que falta para la próxima estrella."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touche une médaille : sa fiche dit ce qu’elle suit, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tocca una medaglia: la sua scheda dice che cosa segue, la sua materia e perché, e che cosa manca per la prossima stella."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toque numa medalha: a ficha dela diz o que ela acompanha, o seu material e por quê, e o que falta para a próxima estrela."
           }
         }
       }
@@ -278766,53 +278249,6 @@
         }
       }
     },
-    "game.atlas.medals.line": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "سبع مواد، من النحاس إلى المنشور: كلما كرّرت حركة أكثر، لمعت الميدالية أكثر."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sieben Materialien, von Kupfer bis Prisma: Je öfter Du eine Geste wiederholst, desto heller glänzt die Medaille."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seven materials, from copper to prism: the more you repeat a gesture, the brighter the medal."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Siete materiales, del cobre al prisma: cuanto más repites un gesto, más brilla la medalla."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sept matières, du cuivre au prisme : plus tu répètes un geste, plus la médaille brille."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sette materiali, dal rame al prisma: più ripeti un gesto, più la medaglia brilla."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sete materiais, do cobre ao prisma: quanto mais você repete um gesto, mais a medalha brilha."
-          }
-        }
-      }
-    },
     "game.atlas.medals.accumulation": {
       "extractionState": "manual",
       "localizations": {
@@ -279890,53 +279326,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aceite primeiro entrar no torneio público."
-          }
-        }
-      }
-    },
-    "game.error.league_pseudonym_invalid": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اسم غير صالح: حروف وأرقام ونقطة وشرطة وشرطة سفلية."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ungültiger Name: Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invalid name: letters, digits, dot, dash, underscore."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nombre no válido: letras, números, punto, guion, guion bajo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nom non valable : lettres, chiffres, point, tiret, tiret bas."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nome non valido: lettere, cifre, punto, trattino, trattino basso."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nome inválido: letras, números, ponto, hífen, sublinhado."
           }
         }
       }
@@ -315210,43 +314599,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لماذا الخطوة ⁦%@⁩؟"
+            "value": "لماذا البطاقة ⁦%@⁩؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Warum Schritt %@?"
+            "value": "Warum Karte %@?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Why step %@?"
+            "value": "Why card %@?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Por qué el paso %@?"
+            "value": "¿Por qué la tarjeta %@?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pourquoi l’étape %@ ?"
+            "value": "Pourquoi la carte %@ ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Perché il passo %@?"
+            "value": "Perché la carta %@?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Por que a etapa %@?"
+            "value": "Por que o cartão %@?"
           }
         }
       }
