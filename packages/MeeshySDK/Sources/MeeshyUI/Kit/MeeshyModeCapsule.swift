@@ -158,7 +158,7 @@ private struct MeeshyModeCapsuleFace: View {
             spinner(size: size)
         } else if let name = values.systemImage {
             Image(systemName: name)
-                .font(.system(size: size, weight: display == .glyph ? .bold : .semibold))
+                .font(MeeshyModeChromeRecipe.font(size: size, weight: display == .glyph ? .bold : .semibold))
                 .accessibilityHidden(true)
         }
     }

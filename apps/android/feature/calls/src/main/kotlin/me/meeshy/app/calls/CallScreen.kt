@@ -158,6 +158,7 @@ fun CallScreen(
         activeMode = chromeState.layer.activeMode,
         chrome = chromeVisibility,
         onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
+        inPip = inPip,
     )
     BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
     LaunchedEffect(captionsViewModel, chrome) { captionsViewModel.journalRequests.collect { chrome.open(CallScreenPanel.Journal) } }
@@ -174,6 +175,9 @@ fun CallScreen(
     var groupFocus by remember { mutableStateOf<GroupCallStageFocus>(GroupCallStageFocus.Grid) }
     // Loi 3 : sur un écran partagé reçu (contenu clair), le verre de l'en-tête, de la pilule et des rails s'assombrit.
     val glassTone = callGlassTone(groupShown, state.isPeerScreenSharing, duo, chromeState.layer.activeMode, groupFocus)
+    // R1.5 : ma vignette descend sous la pile entière des bandeaux (partage, enregistrement, capture), à leur hauteur mesurée.
+    val bannerHeights = remember { CallTopBannerHeights() }
+    val selfTileClearance = rememberSelfTileBannerClearance(bannerHeights, state.isPeerScreenCapturing && !inPip, reduceMotion)
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
@@ -181,7 +185,8 @@ fun CallScreen(
         CompositionLocalProvider(
             LocalCallLiveSeconds provides liveSeconds,
             LocalCallGlassTone provides glassTone,
-            LocalCallSelfTileBannerClearance provides rememberSelfTileBannerClearance(reduceMotion),
+            LocalCallSelfTileBannerClearance provides selfTileClearance,
+            LocalCallTopBannerHeights provides bannerHeights,
         ) {
         Box(
             modifier = Modifier
@@ -346,7 +351,6 @@ fun CallScreen(
                 extensions.overlays, CallOverlaySlot.Panel, overlayContext,
                 Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
             )
-            CallTopBannerStackHost(extensions.overlays, overlayContext, Modifier.align(Alignment.TopCenter))
 
             state.waitingBanner?.let { banner ->
                 CallWaitingBanner(
@@ -417,6 +421,10 @@ fun CallScreen(
                     peerAvatarUrl = avatarUrl,
                 )
             }
+
+            // La pile des bandeaux du haut (partage, enregistrement, capture, cadre) se compose APRÈS les modes Effets et Montage, comme
+            // iOS : la carte d'accord ne se perd pas sous une scène noire (R2.5).
+            CallTopBannerStackHost(extensions.overlays, overlayContext, Modifier.align(Alignment.TopCenter))
 
             // « Ajouter à l'appel » : une feuille, comme iOS ; la fermer rend le menu de la pilule.
             if (chromeState.layer.openPanel == CallScreenPanel.People) {

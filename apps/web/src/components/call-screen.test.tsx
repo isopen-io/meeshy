@@ -8,6 +8,8 @@ import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { callActions } from '@/lib/calls/call-actions';
+import { callChromeStore } from '@/lib/calls/call-chrome-store';
+import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
@@ -505,7 +507,10 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail]')).toBeNull();
     expect(view.find('[data-call-rails]')).toBeNull();
     expect(view.host.querySelectorAll('[data-call-mode-carousel]')).toHaveLength(1);
+    /* R3.6, #17551 : l'en-tête est masqué, la capsule d'enregistrement part avec lui ; la carte d'accord, jamais. */
+    expect(callChromeStore.getState().stowed).toBe(true);
     view.press('[data-call-mode-quit]');
+    expect(callChromeStore.getState().stowed).toBe(false);
     expect(view.find('[data-call-mode="effects"]')).toBeNull();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
     expect(view.find('[data-call-control-pill]')).not.toBeNull();
@@ -710,6 +715,25 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     });
     expect(chrome()).toBe('shown');
     expect(view.find('[data-call-corner]')?.hasAttribute('data-call-self-tile')).toBe(true);
+    view.done();
+  });
+
+  test('duo vidéo : ma vignette descend sous la capsule d’enregistrement, puis sous la carte d’accord à sa hauteur mesurée, et remonte quand tout est dit (R3.10)', () => {
+    const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } });
+    const top = () => Number(/\+ (\d+(?:\.\d+)?)px\)$/.exec((view.find('[data-call-corner-frame]') as HTMLElement).style.top)?.[1]);
+    const rest = top();
+    act(() => callRecordingStore.setState({ view: { kind: 'recording', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-1', recorderId: 'u-peer', mine: false }, notice: null }));
+    expect(top() - rest).toBe(60);
+    act(() => {
+      callRecordingStore.setState({ view: { kind: 'pending', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-2', requesterId: 'u-peer', mine: false, mustAnswer: true }, notice: null });
+      callChromeStore.setState({ recordingCard: 132 });
+    });
+    expect(top() - rest).toBe(140);
+    act(() => {
+      callRecordingStore.setState({ view: { kind: 'idle' }, notice: null });
+      callChromeStore.setState({ recordingCard: 0 });
+    });
+    expect(top()).toBe(rest);
     view.done();
   });
 

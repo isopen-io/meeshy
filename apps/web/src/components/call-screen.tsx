@@ -29,7 +29,7 @@ import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color
 import { autoSharer, resolveSpotlight } from '@/lib/calls/call-spotlight';
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
-import { orderedTopBanners, recordingBannerPresent, selfTileClearance, type PresentBanners, type TopBanner } from '@/lib/calls/call-top-banners';
+import { orderedTopBanners, recordingBannerPresent, recordingSlotHeight, selfTileClearance, type PresentBanners, type TopBanner } from '@/lib/calls/call-top-banners';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import type { CallLiveFrameState } from '@/lib/calls/call-live-frame-store';
 import { callLayout, callStatusKey, selfCameraShown, type PlainCallKey, canShareScreen, hasVideo, membersInArrival, orderedMembers, screenSharer, STATUS_PILL_KEY, visibleStatusPills } from '@/lib/calls/call-view';
@@ -37,8 +37,8 @@ import { useLocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
-import { usePublishChrome } from '@/lib/calls/call-chrome-store';
-import { LEAVING, useBannersClose, useStageMorph, useStowFade, useViewMotion, type ViewMotion } from '@/lib/calls/use-pill-motion';
+import { callChromeStore, usePublishChrome } from '@/lib/calls/call-chrome-store';
+import { HeldSwap, LEAVING, useBannersClose, useStageMorph, useStowFade, useViewMotion, type ViewMotion } from '@/lib/calls/use-pill-motion';
 import { useCallSwipeDown } from '@/lib/calls/use-call-swipe-down';
 import { useSpotlightChoice } from '@/lib/calls/use-spotlight-choice';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
@@ -343,21 +343,24 @@ function usePresentBanners(call: ActiveCall, live: boolean, liveFrame: CallLiveF
 }
 
 /**
- * P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage se retient lui-même le temps de repartir par le haut ; l'indicateur d'enregistrement flotte (`call-recording-layer.tsx`) et ne laisse ici que sa place.
+ * P16.7 : UNE pile sous l'en-tête, dans l'ordre fixe d'iOS (`CallTopBannerStack.ordered`) — partage, enregistrement, capture, cadre —, jamais rangée par un mode ou un panneau pour la capture (R1 : une capture ne se cache pas). Le bandeau de partage et la capsule de capture se retiennent eux-mêmes le temps de repartir par le haut (`HeldSwap`) ; la carte d'accord, la capsule et l'avis d'enregistrement flottent (`call-recording-layer.tsx`) et ne laissent ici que leur case, dont la hauteur est celle de la carte quand elle y est (R2.1).
  */
 export function CallTopBannerStack({ call, present, language, hidden, liveFrame }: { readonly call: ActiveCall; readonly present: PresentBanners; readonly language: InterfaceLanguage; readonly hidden: boolean; readonly liveFrame: CallLiveFrameState }) {
   const sharedOnce = useRef(false);
   if (present['screen-share'] === true) sharedOnce.current = true;
-  /* La pile se referme (ou s'ouvre) en mouvement (S2.6, #17774) : le bandeau qui repart quitte la mise en page (`call-motion.css`), les suivants rejoignent leur place par une translation. */
+  /* La pile se referme (ou s'ouvre) en mouvement (S2.6, #17774) : le bandeau qui repart quitte la mise en page (`call-motion.css`), les suivants rejoignent leur place par une translation. La hauteur de la case de l'enregistrement en fait partie : la carte d'accord qui arrive ou repart repousse la capture et le cadre en glissant. */
   const stack = useRef<HTMLDivElement>(null);
-  useBannersClose(stack, orderedTopBanners(present).join());
+  const card = useStore(callChromeStore, (chrome) => chrome.recordingCard);
+  useBannersClose(stack, `${orderedTopBanners(present).join()}:${card}`);
+  const capturing = present.capture === true;
   const item: Readonly<Record<TopBanner, ReactNode>> = {
     'screen-share': null,
-    recording: <div key="recording" aria-hidden className="h-[3.25rem]" data-call-banner-slot="recording" />,
+    recording: <div key="recording" aria-hidden style={{ height: recordingSlotHeight(card) }} data-call-banner-slot="recording" />,
+    /* La capsule de capture entre par le haut et repart vers le haut, comme le bandeau de partage (R1.6) : toujours montée à sa place d'ordre, elle se retient le temps de repartir. */
     capture: (
-      <div key="capture" className="flex justify-center" data-call-capture-slot="">
-        <CallCaptureAlerts members={call.members} language={language} />
-      </div>
+      <HeldSwap key="capture" value={capturing ? call.members : null} shape="top" className="flex w-full justify-center" data-call-capture-slot="">
+        {(held) => <CallCaptureAlerts members={held} language={language} />}
+      </HeldSwap>
     ),
     'live-frame': <CallLiveFrameStatusSlot key="live-frame" language={language} state={liveFrame} load={loadFrameStudio} />,
   };
@@ -368,7 +371,7 @@ export function CallTopBannerStack({ call, present, language, hidden, liveFrame 
           <CallScreenShareBanner sharing={present['screen-share'] === true} language={language} hidden={hidden} />
         </Suspense>
       ) : null}
-      {orderedTopBanners(present).map((banner) => item[banner])}
+      {orderedTopBanners({ ...present, capture: true }).map((banner) => item[banner])}
     </div>
   );
 }
@@ -572,7 +575,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const present = usePresentBanners(call, live, liveFrame);
   const bannerStack = live ? <CallTopBannerStack call={call} present={present} language={language} hidden={hidden} liveFrame={liveFrame} /> : null;
 
-  const selfTopInset = selfTileClearance(present);
+  const recordingCard = useStore(callChromeStore, (chrome) => chrome.recordingCard);
+  const selfTopInset = selfTileClearance(present, recordingCard);
   const self: SelfView = {
     topInset: selfTopInset,
     full: selfFull,
@@ -670,7 +674,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   useStowFade(root, hidden);
   useViewMotion(root, motion);
   useStageMorph(audioStage, compactStage);
-  usePublishChrome(hidden);
+  usePublishChrome(hidden || chrome.mode !== null);
 
   return (
     <div

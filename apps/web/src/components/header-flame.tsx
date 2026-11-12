@@ -1,13 +1,11 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 
 import { conversationEngagementForDay, type ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 
-import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { compactCount } from '@/lib/view/compact-count';
-import { engagementPillModel, flameCardModel, localDayOf, type FlameCardModel } from '@/lib/view/engagement-pill';
+import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
 import { useMinute } from '@/lib/view/use-minute';
-import { Link } from '@/routes/route-table';
 
 import { Glyph } from './glyph';
 
@@ -21,6 +19,14 @@ import '@/styles/header-flame.css';
 export const FLAME_VALUE_RELEASE_MS = 1640;
 
 const TONGUES = [0, 1, 2] as const;
+
+/**
+ * La carte n'existe qu'après un toucher : elle vit dans son propre chunk
+ * (`header-flame-card.tsx`), hors du chunk « thread » que chaque ouverture de
+ * conversation paie (`budgets.json`).
+ */
+export const loadFlameCard = () => import('./header-flame-card');
+const FlameCard = lazy(() => loadFlameCard().then((m) => ({ default: m.FlameCard })));
 
 /**
  * **LA FLAMME DU JOUR SOUS L'AVATAR DE L'EN-TÊTE** (#9031, #9044) — miroir de
@@ -63,7 +69,6 @@ export function HeaderFlame({
   const interfaceLanguage = language ?? currentInterfaceLanguage();
   const day = localDayOf(now === undefined ? minute * 60_000 : now());
   const model = engagementPillModel(snapshot, day, interfaceLanguage);
-  const card = flameCardModel(snapshot, day, interfaceLanguage);
   const today = snapshot === undefined ? 0 : conversationEngagementForDay(snapshot, day).todayPoints;
   const [cardOpen, setCardOpen] = useState(false);
   const cardId = useId();
@@ -116,103 +121,22 @@ export function HeaderFlame({
             {compactCount(shown, interfaceLanguage)}
           </span>
         </button>
-        {cardOpen && card !== null ? (
-          <FlameCard
-            id={cardId}
-            model={card}
-            language={interfaceLanguage}
-            onClose={() => setCardOpen(false)}
-            onHide={() => {
-              setCardOpen(false);
-              onDismiss();
-            }}
-          />
+        {cardOpen ? (
+          <Suspense fallback={null}>
+            <FlameCard
+              id={cardId}
+              snapshot={snapshot}
+              day={day}
+              language={interfaceLanguage}
+              onClose={() => setCardOpen(false)}
+              onHide={() => {
+                setCardOpen(false);
+                onDismiss();
+              }}
+            />
+          </Suspense>
         ) : null}
       </span>
     </span>
-  );
-}
-
-/**
- * **LA CARTE DE LA SÉRIE** (#17770) — ce que le toucher sur la flamme ouvre :
- * la série en grand, les étincelles du jour, le total gagné ici, puis « Voir
- * le jeu » (`/me/progression`, la même destination que la pastille dépliée)
- * et « Masquer la flamme ». Échap ou un toucher hors de la carte la referme.
- * Les nombres sont lus depuis l'instantané déjà en main : aucune attente.
- */
-function FlameCard({
-  id,
-  model,
-  language,
-  onClose,
-  onHide,
-}: {
-  readonly id: string;
-  readonly model: FlameCardModel;
-  readonly language: InterfaceLanguage;
-  readonly onClose: () => void;
-  readonly onHide: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const close = useRef(onClose);
-  close.current = onClose;
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close.current();
-    };
-    const onPointer = (event: PointerEvent) => {
-      const card = ref.current;
-      const target = event.target;
-      if (card === null || !(target instanceof Node)) return;
-      if (card.contains(target) || card.parentElement?.contains(target)) return;
-      close.current();
-    };
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('pointerdown', onPointer);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('pointerdown', onPointer);
-    };
-  }, []);
-
-  return (
-    <div
-      ref={ref}
-      id={id}
-      role="dialog"
-      aria-label={translate(language, 'engagement.card.title')}
-      data-flame-card=""
-      className="header-flame-card pointer-events-auto"
-    >
-      <div className="flex items-baseline gap-2">
-        <span data-flame-card-streak className="text-title font-bold tabular-nums">
-          {model.streakDays}
-        </span>
-        <span className="text-mini font-semibold">{model.streakText}</span>
-      </div>
-      <dl className="flex flex-col gap-1 text-mini">
-        <div className="flex justify-between gap-4">
-          <dt>{translate(language, 'engagement.card.today')}</dt>
-          <dd data-flame-card-today className="font-bold tabular-nums" style={{ color: 'var(--ios-warning)' }}>
-            {model.todayText}
-          </dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt>{translate(language, 'engagement.card.total')}</dt>
-          <dd data-flame-card-total className="font-bold tabular-nums">
-            {model.totalText}
-          </dd>
-        </div>
-      </dl>
-      <div className="flex gap-2">
-        <Link to="progression" className="header-flame-card-primary min-h-11 flex-1">
-          {translate(language, 'engagement.card.open')}
-        </Link>
-        <button type="button" data-flame-card-hide onClick={onHide} className="header-flame-card-secondary min-h-11">
-          {translate(language, 'engagement.card.hide')}
-        </button>
-      </div>
-    </div>
   );
 }

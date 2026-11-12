@@ -243,6 +243,8 @@
     <string name="focal_call_join_a11y_hint_double_tap">انقر مرتين للانضمام إلى المكالمة</string>
     <string name="focal_call_join_action">الانضمام إلى المكالمة</string>
     <string name="focal_call_join_hint">اضغط للانضمام</string>
+    <string name="focal_call_journal_hide">إخفاء النص المكتوب</string>
+    <string name="focal_call_journal_show">إظهار النص المكتوب</string>
     <string name="focal_call_outgoing">صادرة</string>
     <string name="focal_call_outgoing_suffix">صادرة</string>
     <string name="focal_call_rejected_received">مكالمة مرفوضة</string>

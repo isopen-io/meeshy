@@ -92,6 +92,8 @@ struct CallView: View {
     @State var isSelfFeatured = false
     @State var selfTileScale: CallSelfTileScale = .standard
     @State var selfTilePinch: CGFloat = 1
+    /// #17791 — la hauteur réelle de chaque bandeau du haut, rendue par les bandeaux eux-mêmes.
+    @State var topBannerHeights: [CallTopBanner: CGFloat] = [:]
     /// #8626 — le bouton caméra d'une petite vignette a déployé sa grille.
     @State var isCameraMenuUnfolded = false
     let selfTileMemory: any CallSelfTileRemembering
@@ -164,6 +166,7 @@ struct CallView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .ignoresSafeArea()
+        .onPreferenceChange(CallTopBannerHeightsKey.self) { topBannerHeights = $0 }
         .callQualityDetailSheet(isPresented: $showQualityDetail)
     }
 

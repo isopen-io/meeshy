@@ -69,6 +69,14 @@ const capture = async (page, name) => {
 const appears = (page, selector, timeout = 8000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
 /** L'écran d'appel et la capsule s'échangent en mouvement (S1.7, S2.1, #17774) : on ne mesure qu'une fois la vue qui repart démontée et plus aucune animation Web finie en cours (une pulsation sans fin ne se termine jamais : elle n'est pas attendue). */
+/* Le départ de l'écran relâché se lit une fois qu'il EXISTE — l'écran porte `data-leaving` et ses animations — jamais après un délai parié sur la vitesse de la machine (#7176). */
+const departureFrames = (page) =>
+  page
+    .waitForFunction(() => (document.querySelector('[data-call-screen][data-leaving]')?.getAnimations().length ?? 0) > 0, undefined, { timeout: 2000 })
+    .then(
+      () => page.evaluate(() => document.querySelector('[data-call-screen][data-leaving]')?.getAnimations().filter((animation) => !(animation instanceof CSSTransition)).map((animation) => String(animation.effect?.getKeyframes()[0]?.transform ?? '')) ?? null),
+      () => null,
+    );
 const swapped = (page) => page.waitForFunction(() => document.querySelector('[data-leaving][data-call-screen], [data-leaving][data-call-pill-bar]') === null && document.getAnimations().every((animation) => animation instanceof CSSTransition || animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity), undefined, { timeout: 5000 }).then(() => true, () => false);
 
 /* Le pair est armé, et getDisplayMedia rend un canevas animé : ce qu'un écran enverrait. */
@@ -174,7 +182,7 @@ try {
           await page.waitForTimeout(150);
           await page.mouse.up();
           /* Relâché assez loin, l'écran repart en se contractant LÀ OÙ le doigt l'a laissé (#17774) : son départ part de la translation du glissé, jamais d'un retour en haut. */
-          const released = await page.evaluate(() => document.querySelector('[data-call-screen][data-leaving]')?.getAnimations().filter((animation) => !(animation instanceof CSSTransition)).map((animation) => String(animation.effect?.getKeyframes()[0]?.transform ?? '')) ?? null);
+          const released = await departureFrames(page);
           return { from: [x, y], distance, held, released };
         };
         await drag(30);

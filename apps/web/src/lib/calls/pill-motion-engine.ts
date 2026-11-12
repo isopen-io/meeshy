@@ -188,9 +188,19 @@ export function slideFrom(element: HTMLElement, before: number | undefined, redu
 
 /**
  * LA PILE SE REFERME (S2.6, #17774) : chaque bandeau resté repart de sa place d'avant (`from`, relevée avant que
- * la mise en page ne change) et rejoint la sienne ; celui qui repart, quitté la mise en page, glisse de son côté.
+ * la mise en page ne change) et rejoint la sienne ; celui qui repart a quitté la mise en page (`call-motion.css`)
+ * et reste ÉPINGLÉ à sa place d'avant, d'où il glisse vers le haut (R1.6) au lieu de sauter en tête de pile.
+ * Toutes les places sont relevées AVANT la première écriture : aucune mise en page forcée entre deux lectures.
  */
 export function playBannersClose(stack: HTMLElement, from: ReadonlyMap<Element, number>): void {
   const reduced = prefersReducedMotion();
-  for (const banner of stack.children) if (banner instanceof HTMLElement && !banner.hasAttribute('data-leaving')) slideFrom(banner, from.get(banner), reduced);
+  const base = stack.getBoundingClientRect().top;
+  const banners = [...stack.children].filter((banner): banner is HTMLElement => banner instanceof HTMLElement);
+  const staying = banners.filter((banner) => !banner.hasAttribute('data-leaving'));
+  for (const banner of staying) slideFrom(banner, from.get(banner), reduced);
+  for (const banner of staying) banner.style.removeProperty('top');
+  for (const banner of banners) {
+    const was = from.get(banner);
+    if (banner.hasAttribute('data-leaving') && was !== undefined) banner.style.top = `${was - base}px`;
+  }
 }

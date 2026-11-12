@@ -222,8 +222,6 @@
     <string name="call_recording_accept">Accept</string>
     <string name="call_recording_active">Recording in progress</string>
     <string name="call_recording_ask">%1$s wants to record the call</string>
-    <string name="call_recording_askDetail">Recording only starts if everyone agrees, and it is then added to the conversation.</string>
-    <string name="call_recording_askDetail_video">The call screen and all its sound are recorded only if everyone agrees, then added to the conversation.</string>
     <string name="call_recording_ask_video">%1$s wants to record the call on video</string>
     <string name="call_recording_cancel">Cancel</string>
     <string name="call_recording_caption">Record</string>
@@ -239,6 +237,7 @@
     <string name="call_recording_someone">A participant</string>
     <string name="call_recording_start">Record the call</string>
     <string name="call_recording_stop">Stop recording</string>
+    <string name="call_recording_stop_word">Stop</string>
     <string name="call_recording_stopped_joined">Someone joined the call: recording stopped</string>
     <string name="call_recording_stopped_other">Recording stopped</string>
     <string name="call_recording_stopped_refused">Recording declined</string>

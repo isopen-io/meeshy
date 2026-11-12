@@ -30,20 +30,16 @@ enum CallRecordingCopy {
         String(localized: "call.recording.waiting", defaultValue: "En attente de l’accord de tous…", bundle: .main)
     }
 
+    static var someone: String {
+        String(localized: "call.recording.someone", defaultValue: "Un participant", bundle: .main)
+    }
+
     static func ask(name: String, kind: CallRecordingKind = .audio) -> String {
-        let who = name.isEmpty
-            ? String(localized: "call.recording.someone", defaultValue: "Un participant", bundle: .main)
-            : name
+        let who = name.isEmpty ? someone : name
         let format = kind == .video
             ? String(localized: "call.recording.ask.video", defaultValue: "%@ veut enregistrer l’appel en vidéo", bundle: .main)
             : String(localized: "call.recording.ask", defaultValue: "%@ veut enregistrer l’appel", bundle: .main)
         return String(format: format, who)
-    }
-
-    static func askDetail(kind: CallRecordingKind = .audio) -> String {
-        kind == .video
-            ? String(localized: "call.recording.askDetail.video", defaultValue: "L’écran de l’appel et tout son son ne sont enregistrés que si tout le monde accepte, puis ils sont ajoutés à la conversation.", bundle: .main)
-            : String(localized: "call.recording.askDetail", defaultValue: "L’enregistrement ne commence que si tout le monde accepte, puis il est ajouté à la conversation.", bundle: .main)
     }
 
     /// #8437 — les deux choix du bouton Enregistrer.
@@ -68,6 +64,11 @@ enum CallRecordingCopy {
 
     static var refuse: String {
         String(localized: "call.recording.refuse", defaultValue: "Refuser", bundle: .main)
+    }
+
+    /// R3.3 — le mot du bouton blanc de la capsule (le libellé accessible garde la phrase entière).
+    static var stopWord: String {
+        String(localized: "call.recording.stop.word", defaultValue: "Arrêter", bundle: .main)
     }
 
     static var cancel: String {
@@ -162,6 +163,24 @@ struct CallRecordingPanel: View {
     }
 }
 
+/// #17790 — ce que le bandeau d'enregistrement montre : une carte d'accord, une capsule
+/// (attente ou enregistrement en cours), l'avis de fin, ou rien. Un changement d'étape est
+/// un départ vers le haut puis une arrivée par le haut, jamais un remplacement sur place.
+enum CallRecordingBannerStage: Equatable, Sendable {
+    case none
+    case consent
+    case status
+    case notice
+
+    static func of(phase: CallRecordingPhase, notice: CallRecordingNotice?) -> CallRecordingBannerStage {
+        switch phase {
+        case .pending(_, _, _, _, true): return .consent
+        case .asking, .pending, .recording: return .status
+        case .idle: return notice == nil ? .none : .notice
+        }
+    }
+}
+
 /// La couche d'enregistrement de l'écran d'appel. Paramètres primitifs : elle
 /// ne se réévalue que si l'un d'eux change.
 struct CallRecordingOverlay: View, Equatable {
@@ -173,28 +192,50 @@ struct CallRecordingOverlay: View, Equatable {
     let onStop: () -> Void
     let onDismiss: () -> Void
     var showsStatus = true
+    var topInset: CGFloat = 0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.phase == rhs.phase && lhs.notice == rhs.notice && lhs.kind == rhs.kind && lhs.requesterName == rhs.requesterName
-            && lhs.showsStatus == rhs.showsStatus
+            && lhs.showsStatus == rhs.showsStatus && lhs.topInset == rhs.topInset
     }
 
+    private var stage: CallRecordingBannerStage { .of(phase: phase, notice: notice) }
+
+    private var presence: AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity)
+    }
+
+    /// #17791 (R3.10) — la couche rend sa hauteur réelle (carte d'accord, capsule, avis à deux
+    /// lignes) : ma vignette descend sous elle, jamais à côté.
     var body: some View {
+        content
+            .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: stage)
+            .modifier(CallTopBannerHeightReporter(banner: .recording))
+    }
+
+    @ViewBuilder
+    private var content: some View {
         switch phase {
         case .pending(_, _, _, _, true):
-            consentCard
-        case .asking, .pending:
-            statusPill(text: CallRecordingCopy.waiting, stopLabel: CallRecordingCopy.cancel)
-                .callChromeVisibility(showsStatus)
-        case .recording:
-            statusPill(text: CallRecordingCopy.active, stopLabel: CallRecordingCopy.label(isActive: true))
-                .callChromeVisibility(showsStatus)
+            consentCard.transition(presence)
+        case .asking, .pending, .recording:
+            stowable(statusPill(isRecording: phase.isRecording))
+                .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: phase.isRecording)
+                .transition(presence)
         case .idle:
             if let notice {
-                noticePill(notice)
-                    .callChromeVisibility(showsStatus)
+                stowable(noticePill(notice)).transition(presence)
             }
         }
+    }
+
+    /// R3.6 — la capsule monte avec l'en-tête et revient avec lui, comme le bandeau de partage.
+    private func stowable<V: View>(_ capsule: V) -> some View {
+        capsule
+            .modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: showsStatus, reduceMotion: reduceMotion))
+            .callChromeVisibility(showsStatus)
     }
 
     private var consentCard: some View {
@@ -205,57 +246,73 @@ struct CallRecordingOverlay: View, Equatable {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.white)
             }
-            Text(CallRecordingCopy.askDetail(kind: kind))
-                .font(.footnote)
-                .foregroundStyle(MeeshyColors.mediaChromeSecondary)
-                .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: MeeshySpacing.smPlus) {
-                answerButton(CallRecordingCopy.refuse, accepted: false, tint: .white.opacity(MeeshyOpacity.light))
-                answerButton(CallRecordingCopy.accept, accepted: true, tint: MeeshyColors.indigo500)
+                answerButton(CallRecordingCopy.refuse, accepted: false)
+                answerButton(CallRecordingCopy.accept, accepted: true)
             }
         }
         .padding(MeeshySpacing.lg)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
+        .modifier(CallRecordingGlass(shape: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)))
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
     }
 
-    private func answerButton(_ title: String, accepted: Bool, tint: Color) -> some View {
+    /// Refuser est un verre, Accepter un blanc plein au texte sombre : deux boutons de même largeur.
+    @ViewBuilder
+    private func answerButton(_ title: String, accepted: Bool) -> some View {
+        let label = Text(title)
+            .font(.subheadline.weight(.semibold))
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Capsule())
         Button {
             HapticFeedback.light()
             onAnswer(accepted)
         } label: {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.white)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .background(tint, in: Capsule())
+            if accepted {
+                label.foregroundStyle(Color.black).background(Color.white, in: Capsule())
+            } else {
+                label.foregroundStyle(Color.white).callChipGlass(isActive: false, tint: .white)
+            }
         }
         .buttonStyle(.plain)
     }
 
-    private func statusPill(text: String, stopLabel: String) -> some View {
+    /// L'attente puis l'enregistrement : la même capsule, dont seuls les mots changent.
+    private func statusPill(isRecording: Bool) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {
             recordingDot
-            Text(text)
+            Text(isRecording ? CallRecordingCopy.active : CallRecordingCopy.waiting)
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-            Button(action: onStop) {
-                Image(systemName: "stop.fill")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(Color.white)
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(stopLabel)
+            stopButton(
+                word: isRecording ? CallRecordingCopy.stopWord : CallRecordingCopy.cancel,
+                label: isRecording ? CallRecordingCopy.label(isActive: true) : CallRecordingCopy.cancel
+            )
         }
         .padding(.leading, MeeshySpacing.mdPlus)
-        .background(.ultraThinMaterial, in: Capsule())
+        .padding(.trailing, MeeshySpacing.xs)
+        .modifier(CallRecordingGlass(shape: Capsule()))
         .accessibilityElement(children: .contain)
+    }
+
+    /// R3.3 — « Arrêter » : un bouton qui dit le mot, blanc plein, texte rouge ; 44 pt de cible.
+    private func stopButton(word: String, label: String) -> some View {
+        Button(action: onStop) {
+            Text(word)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(MeeshyColors.error)
+                .lineLimit(1)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .frame(minHeight: 32)
+                .background(Color.white, in: Capsule())
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     private func noticePill(_ notice: CallRecordingNotice) -> some View {
@@ -275,7 +332,7 @@ struct CallRecordingOverlay: View, Equatable {
             .accessibilityLabel(CallRecordingCopy.close)
         }
         .padding(.leading, MeeshySpacing.mdPlus)
-        .background(.ultraThinMaterial, in: Capsule())
+        .modifier(CallRecordingGlass(shape: Capsule()))
         .task(id: notice) {
             guard await cancellableSleep(for: .seconds(4)), !Task.isCancelled else { return }
             onDismiss()
@@ -324,5 +381,18 @@ struct CallRecordingPlayback: View {
                 accentColor: accentHex
             )
         }
+    }
+}
+
+/// Loi 18 · R2.11 · R3.12 — le verre adaptatif d'`adaptiveLiquidGlass`, par son entrée du kit
+/// (`meeshyGlass`, ton `theme`) : Liquid Glass sur iOS 26, verre dessiné avant, plein sous
+/// « Réduire la transparence » ; sous le voile d'appel qui l'assombrit sur un contenu clair (loi 3).
+private struct CallRecordingGlass<S: Shape>: ViewModifier {
+    let shape: S
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(CallGlassVeil(shape: shape, resting: 0.22))
+            .meeshyGlass(in: shape, tone: .theme)
     }
 }

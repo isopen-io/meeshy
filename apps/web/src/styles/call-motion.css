@@ -319,10 +319,12 @@
   pointer-events: none;
 }
 
-/* LA PILE DES BANDEAUX SE REFERME SANS ATTENDRE (S2.6, #17774) — le bandeau de partage qui repart
-   quitte la mise en page à l'instant et glisse vers le haut (`HeldSwap`), si bien que les bandeaux
-   qui le suivaient remontent aussitôt, en translation (`useBannersClose`), au lieu de sauter quand
-   il se démonte. */
+/* LA PILE DES BANDEAUX SE REFERME SANS ATTENDRE (S2.6, #17774) — le bandeau de partage et la capsule de
+   capture (R1.6) qui repartent quittent la mise en page à l'instant et glissent vers le haut (`HeldSwap`),
+   si bien que les bandeaux qui les suivaient remontent aussitôt, en translation (`useBannersClose`), au
+   lieu de sauter quand ils se démontent. Le haut (`top`) de chacun est épinglé à sa place d'avant par
+   le moteur ; 0 tient pour le premier. */
+[data-call-banner-stack] > [data-call-capture-slot][data-leaving],
 [data-call-banner-stack] > [data-call-screen-share-banner][data-leaving] {
   position: absolute;
   inset-inline: 0;

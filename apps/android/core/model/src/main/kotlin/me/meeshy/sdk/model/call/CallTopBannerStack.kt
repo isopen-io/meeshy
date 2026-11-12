@@ -41,11 +41,23 @@ object CallTopBannerStack {
     fun priority(banner: CallTopBanner): Int = (CallTopBanner.entries.size - banner.ordinal) * PRIORITY_STEP
 
     /**
-     * P16.8 — la place que le bandeau « Vous partagez · Arrêter » prend sous l'en-tête : ma vignette descend d'autant. Un
-     * partage REÇU ne touche pas la place de la vignette (#17730).
+     * R1.6 · R3.10 — les bandeaux dont la place revient à ma vignette : mon partage, l'enregistrement (carte, capsule ou avis) et
+     * la capsule de capture. Un partage REÇU n'y est pas : sa place est en décision porteur (#17730).
      */
-    fun selfTileClearanceDp(isLocalScreenShareShown: Boolean): Float =
-        if (isLocalScreenShareShown) BANNER_HEIGHT_DP + GAP_DP else 0f
+    fun countedForSelfTile(isLocalScreenShareShown: Boolean, isRecordingShown: Boolean, isCaptureAlertShown: Boolean): Set<CallTopBanner> =
+        buildSet {
+            if (isLocalScreenShareShown) add(CallTopBanner.ScreenShare)
+            if (isRecordingShown) add(CallTopBanner.Recording)
+            if (isCaptureAlertShown) add(CallTopBanner.Capture)
+        }
+
+    /**
+     * P16.8 · R1.5 — la place que la pile prend sous l'en-tête : ma vignette descend d'autant. Chaque bandeau compte sa hauteur
+     * MESURÉE (la carte d'accord est plus haute qu'une capsule), jamais moins que le plancher tant qu'il n'a pas rendu sa mesure,
+     * plus l'écart de la pile.
+     */
+    fun selfTileClearanceDp(counted: Set<CallTopBanner>, heightsDp: Map<CallTopBanner, Float>): Float =
+        ordered(counted - CallTopBanner.LiveFrame).sumOf { ((heightsDp[it] ?: 0f).coerceAtLeast(BANNER_HEIGHT_DP) + GAP_DP).toDouble() }.toFloat()
 
     /** P16.6 — un bandeau repart vers le haut, d'où il vient ; « Réduire les animations » ne garde que le fondu court. */
     fun leavesTowardTop(reduceMotion: Boolean): Boolean = !reduceMotion

@@ -683,7 +683,8 @@ final class ComposerCaptureTakesTests: XCTestCase {
 
     /// CAM-16 : le cadre écrit le jour du déclenchement, pas celui de l'ouverture du viseur.
     func test_lookClock_followsTheDay_butNeverDuringATake() {
-        let calendrier = Calendar(identifier: .gregorian)
+        var calendrier = Calendar(identifier: .gregorian)
+        calendrier.timeZone = TimeZone(identifier: "UTC")!
         let hier = Date(timeIntervalSince1970: 1_700_000_000)
         let plusTard = hier.addingTimeInterval(3600)
         let demain = hier.addingTimeInterval(86_400)
