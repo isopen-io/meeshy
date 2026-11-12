@@ -5,7 +5,7 @@ import { orderedTopBanners, RECORDING_SLOT_MIN, recordingBannerPresent, recordin
 /**
  * LA PILE DES BANDEAUX DU HAUT (P16.7, `CallTopBannerStack.ordered` d'iOS) — ordre fixe, quel que
  * soit l'ordre d'arrivée : partage → enregistrement → capture → cadre en direct. Un bandeau absent
- * ne laisse pas de trou, et ma vignette ne descend que sous MON partage et la capture, comme sur iOS et Android.
+ * ne laisse pas de trou, et ma vignette descend sous MON partage, l'enregistrement et la capture, comme sur iOS et Android.
  */
 describe('l’ordre de la pile', () => {
   test('partage, enregistrement, capture, cadre : toujours dans cet ordre', () => {
@@ -25,10 +25,16 @@ describe('la place réservée', () => {
     expect(selfTileClearance({})).toBe(0);
   });
 
-  test('l’enregistrement et le cadre ne déplacent pas ma vignette (`CallTopBannerStack.selfTileClearance` d’iOS, `selfTileClearanceDp` d’Android)', () => {
-    expect(selfTileClearance({ recording: true })).toBe(0);
+  test('ma vignette descend aussi sous l’enregistrement — capsule, avis ou carte d’accord à sa hauteur mesurée (R3.10 ; `CallTopBannerStack.selfTileClearance` d’iOS, `selfTileClearanceDp` d’Android)', () => {
+    expect(selfTileClearance({ recording: true })).toBe(TOP_BANNER_CLEARANCE.recording);
+    expect(selfTileClearance({ recording: true }, 132)).toBe(132 + TOP_BANNER_CLEARANCE.recording - RECORDING_SLOT_MIN);
+    expect(selfTileClearance({ recording: true }, 20)).toBe(TOP_BANNER_CLEARANCE.recording);
+    expect(selfTileClearance({}, 132)).toBe(0);
+  });
+
+  test('le cadre en direct ne déplace pas ma vignette', () => {
     expect(selfTileClearance({ 'live-frame': true })).toBe(0);
-    expect(selfTileClearance({ 'screen-share': true, recording: true, capture: true, 'live-frame': true })).toBe(TOP_BANNER_CLEARANCE['screen-share'] + TOP_BANNER_CLEARANCE.capture);
+    expect(selfTileClearance({ 'screen-share': true, recording: true, capture: true, 'live-frame': true })).toBe(TOP_BANNER_CLEARANCE['screen-share'] + TOP_BANNER_CLEARANCE.recording + TOP_BANNER_CLEARANCE.capture);
   });
 
   test('l’indicateur d’enregistrement se pose sous le partage, et lui seul', () => {

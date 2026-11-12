@@ -575,7 +575,8 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const present = usePresentBanners(call, live, liveFrame);
   const bannerStack = live ? <CallTopBannerStack call={call} present={present} language={language} hidden={hidden} liveFrame={liveFrame} /> : null;
 
-  const selfTopInset = selfTileClearance(present);
+  const recordingCard = useStore(callChromeStore, (chrome) => chrome.recordingCard);
+  const selfTopInset = selfTileClearance(present, recordingCard);
   const self: SelfView = {
     topInset: selfTopInset,
     full: selfFull,
