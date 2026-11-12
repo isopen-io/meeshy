@@ -11,10 +11,28 @@ import { hearing, isSpeaking, QUIET } from './call-speaking';
 const POLL_MS = 200;
 const FFT = 1024;
 
+/**
+ * UN SEUL `AudioContext` POUR TOUTES LES MESURES (P11.5) — en groupe, chaque vignette mesure son flux : un contexte
+ * par vignette ouvrirait autant de fils de rendu audio. Il s'ouvre avec la première mesure et se ferme avec la dernière.
+ */
+let shared: { readonly context: AudioContext; users: number } | null = null;
+
+const acquire = (): AudioContext => {
+  shared ??= { context: new AudioContext(), users: 0 };
+  shared.users += 1;
+  return shared.context;
+};
+
+const release = (): void => {
+  if (shared === null || (shared.users -= 1) > 0) return;
+  void shared.context.close().catch(() => undefined);
+  shared = null;
+};
+
 /** Ouvre la mesure du flux jusqu'à `done` : minuterie, nœuds et `AudioContext` rendus, parole remise à « se tait ». Rien ne s'ouvre sans piste audio ni `AudioContext`, ni pour une mesure déjà close. */
 export function meterPeer(stream: MediaStream, onChange: (speaking: boolean) => void, done: AbortSignal): void {
   if (done.aborted || typeof AudioContext !== 'function' || stream.getAudioTracks().length === 0) return;
-  const context = new AudioContext();
+  const context = acquire();
   const source = context.createMediaStreamSource(stream);
   const analyser = context.createAnalyser();
   analyser.fftSize = FFT;
@@ -34,7 +52,7 @@ export function meterPeer(stream: MediaStream, onChange: (speaking: boolean) => 
   done.addEventListener('abort', () => {
     clearInterval(timer);
     source.disconnect();
-    void context.close().catch(() => undefined);
+    release();
     if (speaking) onChange(false);
   });
 }

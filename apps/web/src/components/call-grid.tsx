@@ -1,12 +1,14 @@
-import { lazy, Suspense, useId, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
 import { PeerAvatar } from '@/components/peer-avatar';
 import type { Portrait } from '@/components/call-portrait';
 import type { CallButton } from '@/components/call-glass-button';
+import type { Arrives } from '@/components/call-arrives';
+import type { PeerSpeechRing } from '@/components/call-camera-off';
 import type { CallModerationSlot } from '@/components/call-control-slots';
-import { StreamVideo } from '@/components/call-media-elements';
+import { StreamVideo, useSrcObject } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
@@ -14,7 +16,10 @@ import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { autoSharer, resolveSpotlight, SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { chooseGrid, chooseMember, chooseSelf } from '@/lib/calls/call-spotlight-gestures';
 import type { CallMember } from '@/lib/calls/call-store';
+import { filmstripOf, STRIP_COLUMN_WIDTH, STRIP_HALO_PAD, STRIP_TILE_HEIGHT, STRIP_TILE_WIDTH } from '@/lib/calls/call-group-stage';
 import { gridColumns, hasVideo } from '@/lib/calls/call-view';
+import type { useStageFlip } from '@/lib/calls/use-stage-flip';
+import type { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -45,6 +50,14 @@ const CallSelfCamera = lazy(() => import('./call-self-camera').then((module) => 
  * Qui MODÈRE l'appel trouve sur chaque tuile d'un pair
  * (et sur la une) le menu « Couper le micro » · « Retirer de l'appel » (#8438) ;
  * une personne invitée sonne dans sa tuile, portrait pulsé (#8433).
+ *
+ * La grille suit l'ORDRE D'ARRIVÉE, moi en dernier, et l'orientation de l'écran (2 × 3 en portrait,
+ * 3 × 2 en paysage) ; une vignette ne se réagence jamais à la parole, elle s'illumine (liseré renforcé
+ * et halo à la couleur de la personne, la mienne comprise). Le bandeau des autres porte des vignettes de
+ * 84 × 112, en colonne de 128 à droite en paysage, effacées en fondu à leurs bords. Grille ↔ à la une est
+ * un MOUVEMENT : chaque vignette garde son identité (`data-call-slot`) et son `<video>` (déplacé, non
+ * recréé). Les commandes rangées, toucher une vignette ne fait que les rendre — décidé à la DESCENTE du
+ * pointeur (#17548).
  */
 
 const TILE = 'var(--color-media-fill)';
@@ -64,6 +77,14 @@ export type CallGridKit = {
   readonly colorOf: (userId: string | null) => string;
   readonly resolveSpotlight: typeof resolveSpotlight;
   readonly autoSharer: typeof autoSharer;
+  /** Le calque UNIQUE de la parole (`SpeechRing`), allumé au niveau reçu du flux : une bascule ne rend que lui, jamais la grille. */
+  readonly SpeechRing: typeof PeerSpeechRing;
+  /** Décider à la descente du pointeur, comme le duo : le crochet vit dans l'écran, qui le remet. */
+  readonly usePressedChrome: typeof usePressedChrome;
+  /** Chaque vignette passe de sa case à la suivante (P14.10) : le crochet et son moteur chargé à part vivent dans l'écran. */
+  readonly useStageFlip: typeof useStageFlip;
+  /** Ce qui arrive avec la une (la capsule) y entre en fondu, plus court sous « Réduire les animations » : rien n'apparaît d'un coup. */
+  readonly Arrives: typeof Arrives;
 };
 
 export type CallGridProps = {
@@ -93,7 +114,42 @@ export type CallGridProps = {
   /** Le chrome est-il affiché (#9183, `GroupStageTapRule.outcome(isChromeVisible:)` sur iOS). Par défaut visible : une scène sans chrome à gérer (témoins qui n'en parlent pas) garde l'ancien comportement. */
   readonly chromeVisible?: boolean;
   readonly onRevealChrome?: () => void;
+  /** L'écran est-il plus large que haut : 2 × 3 devient 3 × 2, le bandeau passe en colonne à droite (`GroupCallGridLayout`, P11.1, P14.2). */
+  readonly landscape?: boolean;
 };
+
+/** Les `<video>` de la grille, tenus par identité : une vignette qui change d'arbre (grille, à la une, bandeau) y retrouve le sien (P14.10). */
+type Held = Map<string, HTMLVideoElement>;
+
+/** Ce qu'une vignette montre d'une personne — la mienne ou celle d'un pair : la couleur de SA personne colore le liseré, l'avatar et le halo (P11.6). */
+type Subject = {
+  readonly id: string;
+  readonly name: string;
+  readonly shown: string;
+  readonly avatar: string | null;
+  readonly color: string;
+  readonly stream: MediaStream | null;
+  readonly video: boolean;
+  readonly mirrored: boolean;
+  readonly muted: boolean;
+  readonly suffix: string | null;
+  readonly ringing: boolean;
+  readonly presenceKey: string | undefined;
+  readonly self: boolean;
+};
+
+const SELF = 'self';
+
+function peerSubject(kit: CallGridKit, member: CallMember, stream: MediaStream | undefined, language: InterfaceLanguage): Subject {
+  const ringing = member.link === 'ringing';
+  const suffix = member.link === 'connected' ? null : ringing ? translateCallControls(language, 'callControls.ringing') : translate(language, member.link === 'reconnecting' ? 'call.reconnecting' : 'call.connecting');
+  return { id: member.userId, name: member.name, shown: member.name, avatar: member.avatar, color: kit.colorOf(member.userId), stream: stream ?? null, video: member.cameraOn && hasVideo(stream), mirrored: false, muted: member.micMuted, suffix, ringing, presenceKey: member.userId, self: false };
+}
+
+function selfSubject(kit: CallGridKit, self: CallGridProps['self'], language: InterfaceLanguage): Subject {
+  const you = translate(language, 'call.you');
+  return { id: SELF, name: self.name || you, shown: you, avatar: self.avatar ?? null, color: kit.colorOf(self.id || null), stream: self.stream, video: self.cameraOn, mirrored: self.mirrored, muted: self.micMuted, suffix: null, ringing: false, presenceKey: undefined, self: true };
+}
 
 function NameLabel({ name, muted, suffix }: { readonly name: string; readonly muted: boolean; readonly suffix: string | null }) {
   return (
@@ -109,80 +165,74 @@ function NameLabel({ name, muted, suffix }: { readonly name: string; readonly mu
   );
 }
 
-function Tile({
-  kit,
-  member,
-  stream,
-  language,
-  onPress,
-  label,
-  portrait,
-}: {
+/**
+ * LA VIDÉO D'UNE VIGNETTE, DÉPLACÉE ET NON RECRÉÉE (P14.10) — son `<video>` est tenu par la grille, sous
+ * l'identité de la personne ; la vignette qui se monte dans un autre arbre le pose dans SON cadre, et
+ * l'image ne coupe pas. Le flux se pose comme partout (`useSrcObject`).
+ */
+function HeldVideo({ held, subject }: { readonly held: Held; readonly subject: Subject }) {
+  const host = useRef<HTMLDivElement>(null);
+  const video = useRef<HTMLVideoElement | null>(null);
+  useLayoutEffect(() => {
+    const element = held.get(subject.id) ?? document.createElement('video');
+    held.set(subject.id, element);
+    element.autoplay = true;
+    element.playsInline = true;
+    element.defaultMuted = element.muted = true;
+    element.className = 'absolute inset-0 size-full';
+    Object.assign(element.style, { objectFit: 'cover', transform: subject.mirrored ? 'scaleX(-1)' : '', backgroundColor: 'var(--color-media-backdrop)' });
+    element.setAttribute('aria-label', subject.shown);
+    element.setAttribute('data-call-stream', 'cover');
+    element.toggleAttribute('data-call-mirrored', subject.mirrored);
+    element.setAttribute(subject.self ? 'data-call-self' : 'data-call-member', subject.self ? '' : subject.id);
+    if (element.parentNode !== host.current) host.current?.appendChild(element);
+    video.current = element;
+  });
+  useSrcObject<HTMLVideoElement>(subject.stream, video);
+  return <div ref={host} className="absolute inset-0" />;
+}
+
+type TileProps = {
   readonly kit: CallGridKit;
-  readonly member: CallMember;
-  readonly stream: MediaStream | undefined;
-  readonly language: InterfaceLanguage;
+  readonly subject: Subject;
+  readonly held: Held;
+  /** `null` : la vignette n'agit pas (la une, un invité qui sonne). */
   readonly onPress: (() => void) | null;
   readonly label: string;
   readonly portrait: number;
-}) {
-  const showVideo = member.cameraOn && hasVideo(stream);
-  const ringing = member.link === 'ringing';
-  const link = member.link === 'connected' ? null : ringing ? translateCallControls(language, 'callControls.ringing') : translate(language, member.link === 'reconnecting' ? 'call.reconnecting' : 'call.connecting');
+  readonly press: ReturnType<typeof usePressedChrome>;
+};
+
+function Tile({ kit, subject, held, onPress, label, portrait, press }: TileProps) {
   const body = (
     <>
-      {showVideo ? <StreamVideo stream={stream ?? null} mirrored={false} className="absolute inset-0 size-full" label={member.name} member={member.userId} /> : <kit.Portrait name={member.name} avatar={member.avatar} size={portrait} pulse={ringing} presenceKey={member.userId} />}
-      <NameLabel name={member.name} muted={member.micMuted} suffix={link} />
+      {subject.video ? <HeldVideo held={held} subject={subject} /> : <kit.Portrait name={subject.name} avatar={subject.avatar} size={portrait} pulse={subject.ringing} presenceKey={subject.presenceKey} tint={subject.color} />}
+      <NameLabel name={subject.shown} muted={subject.muted} suffix={subject.suffix} />
     </>
   );
-  const frame = { background: TILE, borderColor: kit.colorOf(member.userId) };
-  const className = 'relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2';
-  const ring = ringing ? { 'data-call-ringing': '' } : {};
-  return onPress === null || ringing ? (
-    <div className={className} style={frame} data-call-tile={member.userId} {...ring}>
-      {body}
-    </div>
-  ) : (
-    <button type="button" aria-label={label} onClick={onPress} className={className} style={frame} data-call-tile={member.userId}>
-      {body}
-    </button>
-  );
-}
-
-/** Une tuile de pair, et, pour qui modère, son menu posé à côté — jamais DANS le bouton de la tuile. */
-function PeerTile(props: Parameters<typeof Tile>[0] & { readonly moderation: CallModeration | null; readonly menu: boolean }) {
-  const { moderation, menu, ...tile } = props;
-  const moderated = menu && moderation !== null && moderation.canModerate(tile.member.userId);
+  const Tag = onPress === null || subject.ringing ? 'div' : 'button';
+  const act = Tag === 'div' ? {} : { type: 'button' as const, 'aria-label': label, onClick: onPress ?? undefined, onPointerDownCapture: press.press, onKeyDown: press.clear };
+  const marks = { ...(subject.self ? { 'data-call-tile-self': '' } : { 'data-call-tile': subject.id }), ...(subject.ringing ? { 'data-call-ringing': '' } : {}) };
   return (
-    <div className="relative grid min-h-0">
-      <Tile {...tile} />
-      {moderated ? (
-        <div className="absolute right-1.5 top-1.5 z-10" data-call-chrome-fade="">
-          <tile.kit.ModerationSlot member={tile.member} language={tile.language} moderation={moderation} />
-        </div>
-      ) : null}
-    </div>
+    <Tag className="relative grid min-h-0 min-w-0 place-items-center overflow-hidden rounded-card border-2" style={{ background: TILE, borderColor: subject.color }} {...act} {...marks}>
+      {body}
+    </Tag>
   );
 }
 
-function SelfTile({ kit, self, language, portrait, onPress }: { readonly kit: CallGridKit; readonly self: CallGridProps['self']; readonly language: InterfaceLanguage; readonly portrait: number; readonly onPress: (() => void) | null }) {
-  const you = translate(language, 'call.you');
-  const className = 'relative grid min-h-0 place-items-center overflow-hidden rounded-card border-2';
-  const frame = { background: TILE, borderColor: kit.colorOf(self.id || null) };
-  const body = (
-    <>
-      {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} self /> : <kit.Portrait name={self.name || you} avatar={self.avatar ?? null} size={portrait} pulse={false} presenceKey={undefined} />}
-      <NameLabel name={you} muted={self.micMuted} suffix={null} />
-    </>
-  );
-  return onPress === null ? (
-    <div className={className} style={frame} data-call-tile-self="">
-      {body}
+/**
+ * La case d'une personne : sa vignette, le halo de sa parole (le calque unique de `SpeechRing`, au niveau
+ * reçu de SON flux — le mien compris —, jamais dans le bouton de la vignette) et, pour qui modère, son
+ * menu posé à côté. `data-call-slot` est son identité d'un arbre à l'autre (`useStageFlip`).
+ */
+function Slot({ menu = null, ...tile }: TileProps & { readonly menu?: ReactNode }) {
+  const { kit, subject } = tile;
+  return (
+    <div className="relative grid min-h-0 min-w-0 origin-top-left" data-call-slot={subject.id}>
+      <Tile {...tile} />
+      {subject.stream === null || subject.ringing ? null : <kit.SpeechRing color={subject.color} stream={subject.stream} shape="tile" />}
+      {menu}
     </div>
-  ) : (
-    <button type="button" aria-label={translateCallControls(language, 'callControls.spotlight.self')} onClick={onPress} className={className} style={frame} data-call-tile-self="">
-      {body}
-    </button>
   );
 }
 
@@ -191,7 +241,7 @@ function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGri
   const { zoom, pinching, handlers } = useScreenZoom();
   const hint = useId();
   return (
-    <div className="relative min-h-0 flex-1 overflow-hidden rounded-card" style={{ touchAction: 'none' }} aria-describedby={hint} data-call-shared-screen="" data-call-screen-zoom={String(zoom)} {...handlers}>
+    <div className="relative min-h-0 min-w-0 flex-1 origin-top-left overflow-hidden rounded-card" style={{ touchAction: 'none' }} data-call-slot={member.userId} aria-describedby={hint} data-call-shared-screen="" data-call-screen-zoom={String(zoom)} {...handlers}>
       <div className={`absolute inset-0 ${pinching ? '' : 'transition-transform duration-200 motion-reduce:transition-none'}`} style={zoom === 1 ? undefined : { transform: `scale(${zoom})` }}>
         <StreamVideo stream={stream ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={title} member={member.userId} />
       </div>
@@ -208,89 +258,118 @@ function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGri
   );
 }
 
-export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined }: CallGridProps) {
-  /** #9183 — chrome masqué, toucher une tuile le RANGE/rend au lieu de changer la une (`GroupStageTapRule` sur iOS). */
-  const featureSelf = () => (chromeVisible ? onChoose(chooseSelf()) : onRevealChrome());
-  const feature = (member: CallMember) => () => (chromeVisible ? onChoose(chooseMember(member.userId)) : onRevealChrome());
+/**
+ * Le bandeau des autres : des vignettes de 84 × 112 en rangée sous la une, en colonne de 128 à sa droite en
+ * paysage (P14.1, P14.2) ; ce qui défile s'efface en fondu à ses deux bords, sur les 8 de son liseré (la recette
+ * de `RAIL_FADE`, dans l'axe du bandeau) : au repos, aucune vignette n'est estompée.
+ */
+const stripBox = (strip: 'bottom' | 'trailing'): CSSProperties => {
+  const bottom = strip === 'bottom';
+  const fade = `linear-gradient(to ${bottom ? 'right' : 'bottom'}, transparent, #000 8px, #000 calc(100% - 8px), transparent)`;
+  return bottom ? { maskImage: fade, gridAutoColumns: STRIP_TILE_WIDTH, gridTemplateRows: STRIP_TILE_HEIGHT, height: STRIP_TILE_HEIGHT + 2 * STRIP_HALO_PAD } : { maskImage: fade, gridAutoRows: STRIP_TILE_HEIGHT, gridTemplateColumns: STRIP_TILE_WIDTH, width: STRIP_COLUMN_WIDTH };
+};
+
+const SCROLL_HIDDEN = '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+
+export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false }: CallGridProps) {
+  const press = kit.usePressedChrome(chromeVisible);
+  /** #9183 — chrome masqué, toucher une vignette le RENDS au lieu de changer la une (`GroupStageTapRule` sur iOS) ; décidé à la descente du pointeur (#17548). */
+  const decide = (next: SpotlightChoice) => () => (press.release() ? onRevealChrome() : onChoose(next));
   const featureLabel = (member: CallMember) => translate(language, 'call.spotlight.show', { name: member.name });
   const view = kit.resolveSpotlight({ members, choice, remoteStreams });
+  const held = useRef<Held>(new Map());
+  const root = useRef<HTMLDivElement>(null);
+  const fullscreen = immersive;
+  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}`);
+  const present = members.map((member) => member.userId).join();
+  useEffect(() => {
+    for (const [id, video] of held.current) if (id !== SELF && !members.some((member) => member.userId === id)) video.remove(), held.current.delete(id);
+  }, [present]);
+  useEffect(
+    () => () => {
+      for (const video of held.current.values()) video.srcObject = null, video.remove();
+      held.current.clear();
+    },
+    [],
+  );
+  const mine = selfSubject(kit, self, language);
+  const peer = (member: CallMember) => peerSubject(kit, member, remoteStreams[member.userId], language);
+  const tile = (subject: Subject, onPress: (() => void) | null, label: string, portrait: number) => ({ kit, subject, held: held.current, onPress, label, portrait, press });
+  const selfLabel = translateCallControls(language, 'callControls.spotlight.self');
 
-  if (view === null) {
-    const columns = gridColumns(members.length + 1);
-    return (
-      <div className="grid min-h-0 flex-1 gap-2 px-3" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridAutoRows: '1fr' }}>
-        {members.map((member) => (
-          <PeerTile key={member.userId} kit={kit} member={member} stream={remoteStreams[member.userId]} language={language} onPress={feature(member)} label={featureLabel(member)} portrait={64} moderation={moderation} menu />
-        ))}
-        <SelfTile kit={kit} self={self} language={language} portrait={64} onPress={featureSelf} />
-      </div>
-    );
-  }
+  const gridScene = (
+    <div className="grid min-h-[140px] flex-1 gap-2 px-3" style={{ gridTemplateColumns: `repeat(${gridColumns(members.length + 1, landscape)}, minmax(0, 1fr))`, gridAutoRows: '1fr' }}>
+      {members.map((member) => {
+        const moderated = moderation !== null && moderation.canModerate(member.userId);
+        const menu = moderated ? (
+          <div className="absolute right-1.5 top-1.5 z-10" data-call-chrome-fade="">
+            <kit.ModerationSlot member={member} language={language} moderation={moderation} />
+          </div>
+        ) : null;
+        return <Slot key={member.userId} {...tile(peer(member), decide(chooseMember(member.userId)), featureLabel(member), 64)} menu={menu} />;
+      })}
+      <Slot {...tile(mine, decide(chooseSelf()), selfLabel, 64)} />
+    </div>
+  );
+
+  if (view === null) return <div ref={root} className="contents">{gridScene}</div>;
 
   const { featured, others, screen } = view;
   const moderated = featured !== null && moderation !== null && moderation.canModerate(featured.userId);
   const sharer = kit.autoSharer(members, remoteStreams);
-  const fullscreen = immersive;
+  const strip = filmstripOf({ fullscreen, landscape });
+  const back = translate(language, 'call.spotlight.back');
+  const full = translate(language, fullscreen ? 'call.fullscreen.exit' : 'call.fullscreen.enter');
+  const peerTiles = others.map((member) => <Slot key={member.userId} {...tile(peer(member), decide(chooseMember(member.userId)), featureLabel(member), 40)} />);
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2 px-3" data-call-spotlight={featured?.userId ?? 'self'}>
-      <div className="relative flex min-h-0 flex-1">
-        {featured === null ? (
-          <div className="grid min-h-0 flex-1">
-            <SelfTile kit={kit} self={self} language={language} portrait={96} onPress={null} />
+    <div ref={root} className="contents">
+      <div className={`flex min-h-[140px] min-w-0 flex-1 gap-2 px-3 ${strip === 'trailing' ? 'flex-row' : 'flex-col'}`} data-call-spotlight={featured?.userId ?? 'self'}>
+        <div className="relative flex min-h-0 min-w-0 flex-1">
+          {featured === null ? (
+            <div className="grid min-h-0 min-w-0 flex-1">
+              <Slot {...tile(mine, null, selfLabel, 96)} />
+            </div>
+          ) : screen ? (
+            <SharedScreen key={featured.userId} kit={kit} member={featured} stream={remoteStreams[featured.userId]} language={language} />
+          ) : (
+            <div className="grid min-h-0 min-w-0 flex-1">
+              <Slot {...tile(peer(featured), null, featured.name, 96)} />
+            </div>
+          )}
+          {featured === null && selfZoom !== null ? (
+            <Suspense fallback={null}>
+              <CallSelfCamera
+                stream={self.cameraOn ? self.stream : null}
+                local={selfZoom.local}
+                language={language}
+                glyphs={{ plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> }}
+                column={selfZoom.column}
+              />
+            </Suspense>
+          ) : null}
+          <div className="absolute right-2 top-2 flex flex-col items-end gap-2" data-call-chrome-fade="">
+            <kit.Arrives className={`${screen ? 'glass-call-prominent' : 'glass-call'} flex gap-1 rounded-full p-1`} data-call-spotlight-capsule="">
+              <kit.Button label={back} glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />} onPress={() => onChoose(chooseGrid(sharer?.userId ?? null))} size={44} data={{ 'data-call-grid-back': '' }} />
+              <kit.Button
+                label={full}
+                glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[fullscreen ? 'cornersIn' : 'cornersOut']} size={20} />}
+                onPress={onToggleImmersive}
+                tone={fullscreen ? 'active' : 'disc'}
+                pressed={fullscreen}
+                size={44}
+                data={{ 'data-call-fullscreen': '' }}
+              />
+            </kit.Arrives>
+            {moderated && featured !== null && !fullscreen ? <kit.ModerationSlot member={featured} language={language} moderation={moderation} prominent={screen} /> : null}
           </div>
-        ) : screen ? (
-          <SharedScreen key={featured.userId} kit={kit} member={featured} stream={remoteStreams[featured.userId]} language={language} />
-        ) : (
-          <div className="grid min-h-0 flex-1">
-            <Tile kit={kit} member={featured} stream={remoteStreams[featured.userId]} language={language} onPress={null} label={featured.name} portrait={96} />
+        </div>
+        {strip === 'none' ? null : (
+          <div className={`grid shrink-0 gap-2 ${SCROLL_HIDDEN} ${strip === 'bottom' ? '-mx-2 grid-flow-col content-center overflow-x-auto overscroll-x-none px-2' : '-my-2 content-start justify-center overflow-y-auto overscroll-y-none py-2'}`} style={stripBox(strip)} data-call-strip="">
+            {peerTiles}
+            {featured === null ? null : <Slot {...tile(mine, decide(chooseSelf()), selfLabel, 40)} />}
           </div>
         )}
-        {featured === null && selfZoom !== null ? (
-          <Suspense fallback={null}>
-            <CallSelfCamera
-              stream={self.cameraOn ? self.stream : null}
-              local={selfZoom.local}
-              language={language}
-              glyphs={{ plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> }}
-              column={selfZoom.column}
-            />
-          </Suspense>
-        ) : null}
-        <div className="absolute right-2 top-2 flex flex-col items-end gap-2" data-call-chrome-fade="">
-          <div className="flex gap-2">
-            <kit.Button
-              label={translate(language, fullscreen ? 'call.fullscreen.exit' : 'call.fullscreen.enter')}
-              glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS[fullscreen ? 'cornersIn' : 'cornersOut']} size={20} />}
-              onPress={onToggleImmersive}
-              tone="glass"
-              prominent={screen}
-              pressed={fullscreen}
-              size={44}
-              data={{ 'data-call-fullscreen': '' }}
-            />
-            {fullscreen ? null : (
-              <kit.Button
-                label={translate(language, 'call.spotlight.back')}
-                glyph={<GlyphSvg glyph={CALL_VIEW_GLYPHS.squaresFour} size={20} />}
-                onPress={() => onChoose(chooseGrid(sharer?.userId ?? null))}
-                tone="glass"
-                prominent={screen}
-                size={44}
-                data={{ 'data-call-grid-back': '' }}
-              />
-            )}
-          </div>
-          {moderated && featured !== null && !fullscreen ? <kit.ModerationSlot member={featured} language={language} moderation={moderation} prominent={screen} /> : null}
-        </div>
       </div>
-      {fullscreen ? null : (
-        <div className="grid h-28 shrink-0 auto-cols-[7rem] grid-flow-col gap-2 overflow-x-auto" data-call-strip="">
-          {others.map((member) => (
-            <Tile key={member.userId} kit={kit} member={member} stream={remoteStreams[member.userId]} language={language} onPress={feature(member)} label={featureLabel(member)} portrait={40} />
-          ))}
-          {featured === null ? null : <SelfTile kit={kit} self={self} language={language} portrait={40} onPress={featureSelf} />}
-        </div>
-      )}
     </div>
   );
 }

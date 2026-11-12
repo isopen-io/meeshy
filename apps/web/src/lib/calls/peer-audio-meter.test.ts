@@ -76,6 +76,20 @@ describe('meterPeer — la fin de la mesure ne laisse rien derrière elle', () =
     expect(heard).toEqual([true, false]);
   });
 
+  test('en groupe, les mesures de toutes les vignettes partagent UN AudioContext, fermé quand la dernière se clôt (P11.5)', () => {
+    const tiles = [0, 1, 2, 3, 4, 5].map(() => new AbortController());
+    tiles.forEach((tile) => meterPeer(audible, () => undefined, tile.signal));
+    expect(ledger.opened).toBe(1);
+    tiles.slice(1).forEach((tile) => tile.abort());
+    expect(ledger).toEqual({ opened: 1, closed: 0, disconnected: 5 });
+    tiles[0]?.abort();
+    expect(ledger).toEqual({ opened: 1, closed: 1, disconnected: 6 });
+    const again = new AbortController();
+    meterPeer(audible, () => undefined, again.signal);
+    expect(ledger.opened).toBe(2);
+    again.abort();
+  });
+
   test('une mesure close avant d’avoir commencé n’ouvre aucun AudioContext', () => {
     const stop = new AbortController();
     stop.abort();

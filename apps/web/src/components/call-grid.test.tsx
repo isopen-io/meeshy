@@ -38,6 +38,9 @@ const member = (userId: string, name: string, overrides: Partial<CallMember> = {
   ...overrides,
 });
 
+/** Un vrai `MediaStream` du DOM : `srcObject` refuse tout autre objet. */
+const domVideo = (): MediaStream => Object.defineProperty(new MediaStream(), 'getVideoTracks', { value: () => [{ readyState: 'live' }] });
+
 const liveVideo = { getVideoTracks: () => [{ readyState: 'live' }], getTracks: () => [] } as unknown as MediaStream;
 
 const props = (overrides: Partial<CallGridProps> = {}): CallGridProps => ({
@@ -79,14 +82,6 @@ describe('CallGrid', () => {
     expect(html).toContain('data-call-tile-self=""');
     expect(html).toContain('aria-label="Mettre Awa en avant"');
     expect(html).not.toContain('data-call-spotlight');
-  });
-
-  test('chaque vidéo dit À QUI elle est — le membre, ou moi : la capture pose chaque visage dans SA case (#8743)', () => {
-    const html = grid({ members: [member('u-a', 'Awa', { cameraOn: true })], remoteStreams: { 'u-a': liveVideo }, self: { stream: liveVideo, cameraOn: true, mirrored: true, micMuted: false } });
-    expect(html).toMatch(/<video[^>]*data-call-member="u-a"/);
-    expect(html).toMatch(/<video[^>]*data-call-self=""/);
-    const shared = grid(sharing);
-    expect(shared).toMatch(/<video[^>]*data-call-stream="contain"[^>]*data-call-member="u-k"/);
   });
 
   test('chaque vignette porte le liseré de la couleur de sa personne — celle de son nom dans les sous-titres', () => {
@@ -178,11 +173,86 @@ describe('CallGrid — un partage d’écran en groupe laisse les caméras en ra
     });
     expect(html).toContain('data-call-shared-screen=""');
     const strip = html.slice(html.indexOf('data-call-strip'));
-    expect(strip).toMatch(/<video[^>]*data-call-member="u-a"/);
-    expect(strip).toMatch(/<video[^>]*data-call-member="u-b"/);
-    expect(strip).toMatch(/<video[^>]*data-call-self=""/);
+    expect(strip).toContain('data-call-tile="u-a"');
+    expect(strip).toContain('data-call-tile="u-b"');
+    expect(strip).toContain('data-call-tile-self=""');
     expect(strip).toContain('aria-label="Mettre Awa en avant"');
     expect(strip).toContain('aria-label="Mettre mon image à la une"');
+  });
+});
+
+const columnsOf = (html: string) => Number(/grid-template-columns:repeat\((\d),/.exec(html)?.[1]);
+const peers = (count: number) => Array.from({ length: count }, (_, index) => member(`u-${index}`, `Pair ${index}`));
+
+describe('CallGrid — la grille suit l’orientation (P11.1, GroupCallGridLayout)', () => {
+  test('portrait : deux tuiles s’empilent, trois et quatre font 2 × 2, cinq et six font 2 colonnes × 3 rangées', () => {
+    expect([1, 2, 3, 4, 5].map((count) => columnsOf(grid({ members: peers(count) })))).toEqual([1, 2, 2, 2, 2]);
+  });
+
+  test('paysage : deux tuiles se côtoient, cinq et six font 3 colonnes × 2 rangées', () => {
+    expect([1, 2, 3, 4, 5].map((count) => columnsOf(grid({ members: peers(count), landscape: true })))).toEqual([2, 2, 2, 3, 3]);
+  });
+
+  test('la grille garde 140 de haut au moins, et chaque case se partage la hauteur à parts égales (P12.7)', () => {
+    const html = grid();
+    expect(html).toMatch(/class="grid min-h-\[140px\][^"]*"[^>]*grid-auto-rows:1fr/);
+    expect(grid({ choice: { kind: 'self' } })).toMatch(/class="flex min-h-\[140px\][^"]*"[^>]*data-call-spotlight/);
+  });
+});
+
+describe('CallGrid — l’avatar prend la couleur de SA personne, comme le liseré (P11.6)', () => {
+  test('caméra coupée : l’avatar d’un pair vient de son identifiant, pas de son nom', () => {
+    const html = grid({ members: [member('u-a', 'Awa')] });
+    expect(html).toContain(`linear-gradient(135deg, ${speakerColor('u-a')}`);
+    expect(grid({ members: [member('u-a', 'Un autre nom')] })).toContain(`linear-gradient(135deg, ${speakerColor('u-a')}`);
+  });
+
+  test('et le mien, de mon identifiant', () => {
+    expect(grid({ self: { id: 'u-me', stream: null, cameraOn: false, mirrored: true, micMuted: false, name: 'Kofi Mensah' } })).toContain(`linear-gradient(135deg, ${speakerColor('u-me')}`);
+  });
+});
+
+describe('CallGrid — le bandeau des autres (P14.1, P14.2, P14.9)', () => {
+  const spotlight = (overrides: Partial<CallGridProps> = {}) => grid({ members: peers(3), choice: { kind: 'member', userId: 'u-0' }, ...overrides });
+  const strip = (html: string) => html.slice(html.indexOf('<div class="', html.lastIndexOf('>', html.indexOf('data-call-strip'))), html.indexOf('data-call-strip') + 40);
+
+  test('portrait : une rangée sous la une, des vignettes de 84 × 112, effacée en fondu à ses deux bords', () => {
+    const html = strip(spotlight());
+    expect(html).toContain('grid-auto-columns:84px');
+    expect(html).toContain('grid-template-rows:112px');
+    expect(html).toContain('mask-image:linear-gradient(to right, transparent, #000 8px, #000 calc(100% - 8px), transparent)');
+    expect(spotlight()).toMatch(/class="flex min-h-\[140px\][^"]*flex-col/);
+  });
+
+  test('paysage : une colonne de 128 à droite de la une, effacée en fondu en haut et en bas', () => {
+    const html = strip(spotlight({ landscape: true }));
+    expect(html).toContain('width:128px');
+    expect(html).toContain('grid-auto-rows:112px');
+    expect(html).toContain('grid-template-columns:84px');
+    expect(html).toContain('mask-image:linear-gradient(to bottom, transparent, #000 8px, #000 calc(100% - 8px), transparent)');
+    expect(spotlight({ landscape: true })).toMatch(/class="flex min-h-\[140px\][^"]*flex-row/);
+  });
+
+  test('plein écran : aucun bandeau, en paysage comme en portrait', () => {
+    expect(spotlight({ immersive: true, landscape: true })).not.toContain('data-call-strip');
+  });
+});
+
+describe('CallGrid — une seule capsule de verre : « Revenir à la grille » puis « Plein écran », toujours là (P14.3)', () => {
+  const capsule = (html: string) => html.slice(html.indexOf('data-call-spotlight-capsule'));
+
+  test('un seul verre porte les deux boutons, « Revenir à la grille » d’abord', () => {
+    const html = grid({ choice: { kind: 'self' } });
+    expect(html.match(/data-call-spotlight-capsule/g)).toHaveLength(1);
+    expect(html).toMatch(/class="glass-call flex[^"]*rounded-full[^"]*" data-call-spotlight-capsule/);
+    const inside = capsule(html);
+    expect(inside.indexOf('aria-label="Revenir à la grille"')).toBeGreaterThan(-1);
+    expect(inside.indexOf('aria-label="Revenir à la grille"')).toBeLessThan(inside.indexOf('aria-label="Plein écran"'));
+  });
+
+  test('en plein écran, « Revenir à la grille » reste, et « Quitter le plein écran » prend la place de l’autre', () => {
+    const inside = capsule(grid({ choice: { kind: 'self' }, immersive: true }));
+    expect(inside.indexOf('aria-label="Revenir à la grille"')).toBeLessThan(inside.indexOf('aria-label="Quitter le plein écran"'));
   });
 });
 
@@ -211,8 +281,63 @@ describe('CallGrid — les gestes (#8392)', () => {
       act(() => root.unmount());
       host.remove();
     };
-    return { chosen, press, done };
+    const render = (next: Partial<CallGridProps>) => act(() => root.render(<CallGrid {...props({ ...next, onChoose: (choice) => chosen.push(choice) })} />));
+    return { chosen, press, done, host, render };
   };
+
+  test('chaque vidéo dit À QUI elle est — le membre, ou moi : la capture pose chaque visage dans SA case (#8743)', () => {
+    const view = mount({ members: [member('u-a', 'Awa', { cameraOn: true })], remoteStreams: { 'u-a': domVideo() }, self: { stream: domVideo(), cameraOn: true, mirrored: true, micMuted: false } });
+    expect(view.host.querySelector('video[data-call-member="u-a"]')).not.toBeNull();
+    expect(view.host.querySelector('video[data-call-self]')).not.toBeNull();
+    view.done();
+    const shared = mount({ ...sharing, remoteStreams: { 'u-k': domVideo() } });
+    expect(shared.host.querySelector('video[data-call-stream="contain"][data-call-member="u-k"]')).not.toBeNull();
+    shared.done();
+  });
+
+  test('une vignette qui change d’arbre — de la grille au bandeau, à la une — garde SON <video> : déplacé, jamais recréé (P14.10)', () => {
+    const cameras = { members: [member('u-a', 'Awa', { cameraOn: true }), member('u-b', 'Bintou', { cameraOn: true })], remoteStreams: { 'u-a': domVideo(), 'u-b': domVideo() } };
+    const view = mount(cameras);
+    const awa = view.host.querySelector('video[data-call-member="u-a"]');
+    const bintou = view.host.querySelector('video[data-call-member="u-b"]');
+    expect(awa).not.toBeNull();
+    view.render({ ...cameras, choice: { kind: 'member', userId: 'u-b' } });
+    expect(view.host.querySelector('[data-call-strip] video[data-call-member="u-a"]')).toBe(awa);
+    expect(view.host.querySelector('[data-call-spotlight] video[data-call-member="u-b"]')).toBe(bintou);
+    view.render({ ...cameras, choice: { kind: 'grid', dismissedSharer: null } });
+    expect(view.host.querySelector('video[data-call-member="u-a"]')).toBe(awa);
+    expect(view.host.querySelectorAll('video')).toHaveLength(2);
+    view.done();
+  });
+
+  test('un pair qui part emporte son <video> : plus rien ne le retient', () => {
+    const view = mount({ members: [member('u-a', 'Awa', { cameraOn: true })], remoteStreams: { 'u-a': domVideo() } });
+    const awa = view.host.querySelector('video[data-call-member="u-a"]') as HTMLVideoElement;
+    view.render({ members: [], remoteStreams: {} });
+    expect(awa.isConnected).toBe(false);
+    view.done();
+  });
+
+  test('commandes rangées, toucher une vignette décide à la DESCENTE du pointeur : le focus que le doigt lui donne (Chromium) rend les commandes avant le clic, et le clic ne la met pas à la une (#17548, P11.10, P14.6)', () => {
+    const revealed: number[] = [];
+    const reveal = () => void revealed.push(1);
+    const view = mount({ chromeVisible: false, onRevealChrome: reveal });
+    const touch = (selector: string) => act(() => void (view.host.querySelector(selector) as HTMLElement).dispatchEvent(new PointerEvent('pointerdown', { pointerId: 4, bubbles: true, button: 0 })));
+    touch('[data-call-tile="u-b"]');
+    view.render({ chromeVisible: true, onRevealChrome: reveal });
+    view.press('[data-call-tile="u-b"]');
+    expect(view.chosen).toEqual([]);
+    expect(revealed).toHaveLength(1);
+    view.press('[data-call-tile="u-b"]');
+    expect(view.chosen).toEqual([{ kind: 'member', userId: 'u-b' }]);
+    view.render({ chromeVisible: false, onRevealChrome: reveal, choice: { kind: 'member', userId: 'u-a' } });
+    touch('[data-call-strip] [data-call-tile="u-b"]');
+    view.render({ chromeVisible: true, onRevealChrome: reveal, choice: { kind: 'member', userId: 'u-a' } });
+    view.press('[data-call-strip] [data-call-tile="u-b"]');
+    expect(view.chosen).toHaveLength(1);
+    expect(revealed).toHaveLength(2);
+    view.done();
+  });
 
   test('toucher une vignette la choisit', () => {
     const view = mount({});

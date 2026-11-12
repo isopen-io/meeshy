@@ -144,9 +144,31 @@ export function spotlight(members: readonly CallMember[], featuredId: string | n
   return featured === undefined ? null : { featured, others: members.filter((member) => member !== featured) };
 }
 
-/** Colonnes d'une grille de `count` tuiles (soi compris). */
-export function gridColumns(count: number): number {
+/**
+ * Les membres d'une grille dans l'ORDRE D'ARRIVÉE (P11.3, `GroupCallStageLaw.tiles` d'Android) : celui
+ * de `call.members`, que l'état d'un lien ne remue pas — un pair qui se reconnecte garde sa case.
+ * Ma vignette, elle, est posée après eux par la grille. `orderedMembers` sert la feuille des
+ * personnes, l'enregistrement et le premier pair du duo, qui veulent les connectés d'abord.
+ */
+export const membersInArrival = (members: Readonly<Record<string, CallMember>>): readonly CallMember[] => Object.values(members);
+
+/**
+ * Colonnes d'une grille de `count` tuiles (soi compris) — `GroupCallGridLayout.layout` d'iOS et
+ * d'Android : deux tuiles s'empilent en portrait et se côtoient en paysage, trois et quatre font
+ * 2 × 2, cinq et six font 2 × 3 en portrait et 3 × 2 en paysage.
+ */
+export function gridColumns(count: number, landscape: boolean): number {
   if (count <= 1) return 1;
+  if (count === 2) return landscape ? 2 : 1;
   if (count <= 4) return 2;
-  return 3;
+  return landscape ? 3 : 2;
 }
+
+/**
+ * La grille d'un groupe garde 140 de haut au moins (P12.7, `CallGroupStageSizing` d'iOS) ; en hauteur compacte, les
+ * rangées de la pilule se replient en une ligne. Ici et non avec le bandeau : la pilule (l'écran) et la grille (son chunk) la lisent.
+ */
+export const GRID_MIN_HEIGHT = 140;
+export const COMPACT_HEIGHT = 500;
+
+export const isCompactHeight = (height: number): boolean => height > 0 && height < COMPACT_HEIGHT;

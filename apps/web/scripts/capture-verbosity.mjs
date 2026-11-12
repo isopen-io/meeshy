@@ -7,7 +7,9 @@
  * soit peint et que le compte se soit STABILISÉ (deux relevés égaux à
  * 250 ms d'écart, `lib/settle-value.mjs` — jamais un délai fixe suivi d'une
  * lecture) ; reprise tant qu'il rend 0 mot ; compte les mots des nœuds texte
- * VISIBLES — au total et dans le premier écran — et capture la vue dans
+ * VISIBLES — au total et dans le premier écran, où chaque MOT est situé
+ * (un paragraphe qui affleure au bas de l'écran ne compte que ses mots
+ * à l'écran, jamais son texte entier) — et capture la vue dans
  * `render/verbosity/`. Le relevé part dans `render/verbosity-measure.json`, que
  * `check-verbosity.mjs` confronte aux budgets.
  *
@@ -37,6 +39,7 @@ mkdirSync(OUTPUT, { recursive: true });
 
 const countVisibleWords = (screenHeight) => {
   const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
   let total = 0;
   let firstScreen = 0;
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
@@ -47,9 +50,14 @@ const countVisibleWords = (screenHeight) => {
     const box = element.getBoundingClientRect();
     const style = getComputedStyle(element);
     if (box.width < 2 || box.height < 2 || style.visibility === 'hidden' || style.opacity === '0') continue;
-    const words = text.split(/\s+/).length;
-    total += words;
-    if (box.top < screenHeight && box.bottom > 0) firstScreen += words;
+    total += text.split(/\s+/).length;
+    if (box.top >= screenHeight || box.bottom <= 0) continue;
+    for (const word of node.textContent.matchAll(/\S+/g)) {
+      range.setStart(node, word.index);
+      range.setEnd(node, word.index + word[0].length);
+      const rect = range.getBoundingClientRect();
+      if (rect.top < screenHeight && rect.bottom > 0) firstScreen += 1;
+    }
   }
   return { total, firstScreen };
 };
