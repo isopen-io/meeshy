@@ -57,6 +57,29 @@ public nonisolated struct MeeshyEdgeRailItem: Sendable, Equatable, Identifiable 
         self.longPressLabel = longPressLabel
     }
 
+    /// Le même, nommé comme sur les deux autres plateformes : un symbole système.
+    public init(
+        id: String,
+        label: String,
+        title: String? = nil,
+        systemImage: String,
+        isOn: Bool = false,
+        role: MeeshyEdgeRailRole = .normal,
+        activation: MeeshyGlassButtonActivation = .none,
+        value: String? = nil,
+        hint: String? = nil,
+        showsCarriedDot: Bool = false,
+        isEnabled: Bool = true,
+        isDimmed: Bool = false,
+        longPressLabel: String? = nil
+    ) {
+        self.init(
+            id: id, label: label, title: title, glyph: .system(systemImage), isOn: isOn, role: role,
+            activation: activation, value: value, hint: hint, showsCarriedDot: showsCarriedDot,
+            isEnabled: isEnabled, isDimmed: isDimmed, longPressLabel: longPressLabel
+        )
+    }
+
     public var displayTitle: String { title ?? label }
 
     public var labelCoversTitle: Bool {
@@ -145,6 +168,12 @@ public nonisolated struct MeeshyEdgeRailSpec: Sendable, Equatable {
     public var normalized: MeeshyEdgeRailSpec? {
         guard isRenderable else { return nil }
         return MeeshyEdgeRailSpec(name: name, header: header, entries: cleanedEntries, foot: foot)
+    }
+
+    /// Ce que l'hôte veut VU d'un rail court : rien quand il le range (`hidden`)
+    /// ou quand le rail n'a aucun bouton ; sinon le rail nettoyé.
+    public static func wanted(_ spec: MeeshyEdgeRailSpec?, visibility: MeeshyEdgeRailsVisibility) -> MeeshyEdgeRailSpec? {
+        visibility == .hidden ? nil : spec?.normalized
     }
 
     var cells: [MeeshyEdgeRailCell] {

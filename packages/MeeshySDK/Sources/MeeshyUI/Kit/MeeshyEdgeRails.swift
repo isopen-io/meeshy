@@ -153,7 +153,7 @@ public struct MeeshyEdgeRail<Custom: View>: View, Equatable {
         self.onLongPress = onLongPress
         self.custom = custom
         var initial = MeeshyEdgeRailsPresence<MeeshyEdgeRailSpec>()
-        initial.wants(visibility == .hidden ? nil : spec?.normalized)
+        initial.wants(MeeshyEdgeRailSpec.wanted(spec, visibility: visibility))
         initial.settled()
         _presence = State(initialValue: initial)
     }
@@ -164,13 +164,20 @@ public struct MeeshyEdgeRail<Custom: View>: View, Equatable {
             && lhs.safeInset == rhs.safeInset && lhs.clearance == rhs.clearance
     }
 
+    /// La présence vit au-dessus des deux présentations : un rail rangé ou changé
+    /// pendant qu'il est libellé ne revient jamais, en court, avec une liste périmée.
     public var body: some View {
-        switch presentation {
-        case .compact:
-            compactBody
-        case .labeled(let width):
-            labeledBody(width)
+        ZStack {
+            switch presentation {
+            case .compact:
+                compactBody
+            case .labeled(let width):
+                labeledBody(width)
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .adaptiveOnChange(of: wantedCompact) { _, wanted in presence.wants(wanted) }
+        .task(id: presence.phase) { await drivePresence() }
     }
 
     // MARK: Court : il sort, il se range
@@ -181,7 +188,7 @@ public struct MeeshyEdgeRail<Custom: View>: View, Equatable {
 
     /// Ce que l'hôte veut vu : rien quand le rail est rangé (`hidden`) ou vide.
     private var wantedCompact: MeeshyEdgeRailSpec? {
-        visibility == .hidden ? nil : spec?.normalized
+        MeeshyEdgeRailSpec.wanted(spec, visibility: visibility)
     }
 
     @ViewBuilder
@@ -201,13 +208,14 @@ public struct MeeshyEdgeRail<Custom: View>: View, Equatable {
                     .easeInOut(duration: MeeshyEdgeRailsRecipe.slideDuration(reduceMotion: reduceMotion)),
                     value: isAway
                 )
+                .animation(
+                    .easeInOut(duration: MeeshyEdgeRailsRecipe.dimDuration(reduceMotion: reduceMotion)),
+                    value: visibility
+                )
                 .allowsHitTesting(presence.acceptsTouch && visibility != .dimmed)
                 .accessibilityHidden(!MeeshyEdgeRailsRecipe.isReadByScreenReader(visibility))
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .adaptiveOnChange(of: wantedCompact) { _, wanted in presence.wants(wanted) }
-        .task(id: presence.phase) { await drivePresence() }
     }
 
     /// Entrant : à sa place une image plus tard. Sortant : démonté une fois la

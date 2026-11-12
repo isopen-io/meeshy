@@ -209,6 +209,25 @@ struct MeeshyEdgeRailsTests {
         #expect(spec.dividerCount == 1)
     }
 
+    @Test("ce que l'hôte veut vu d'un rail court : rien s'il le range ou s'il est vide, sinon le rail nettoyé")
+    func spec_wanted_followsVisibility() {
+        let a = MeeshyEdgeRailEntry.item(Self.item("a"))
+        let spec = Self.spec(entries: [.divider, a])
+        #expect(MeeshyEdgeRailSpec.wanted(spec, visibility: .hidden) == nil)
+        #expect(MeeshyEdgeRailSpec.wanted(nil, visibility: .shown) == nil)
+        #expect(MeeshyEdgeRailSpec.wanted(Self.spec(entries: [.divider]), visibility: .shown) == nil)
+        #expect(MeeshyEdgeRailSpec.wanted(spec, visibility: .shown)?.entries == [a])
+        #expect(MeeshyEdgeRailSpec.wanted(spec, visibility: .dimmed)?.entries == [a])
+    }
+
+    @Test("une rangée se nomme par `systemImage`, comme sur Android et le web")
+    func item_systemImage_isASystemGlyph() {
+        let item = MeeshyEdgeRailItem(id: "text", label: "Ajouter un texte", title: "Texte", systemImage: "textformat", isEnabled: false)
+        #expect(item.glyph == .system("textformat"))
+        #expect(item.displayTitle == "Texte")
+        #expect(!item.isEnabled)
+    }
+
     @Test("pas de pied sans bouton : un pied vide ne laisse ni filet ni marge")
     func spec_footWithoutButtons_hasNoFoot() {
         #expect(!Self.spec(entries: [.item(Self.item("a"))]).hasFoot)
@@ -378,17 +397,21 @@ struct MeeshyEdgeRailsTests {
 
     // MARK: - Contraste
 
-    @Test("le contraste du mot, de l'en-tête et de la rangée allumée tient 4,5:1 sur le plateau")
+    @Test("le contraste du mot, de l'en-tête, de Retirer et de la rangée allumée tient 4,5:1 sur le plateau")
     func contrast_followsTheRecipe() {
         let plateau = Self.rgb("1E1B4B")
         let white = (r: 255.0, g: 255.0, b: 255.0)
+        let litInk = Self.rgb("1E1B4B")
+        let removeInk = Self.rgb("FCA5A5")
         let word = Self.contrast(white, plateau)
-        let opacity = MeeshyEdgeRailsRecipe.headerOpacity
-        let header = Self.contrast(Self.blend(white, over: plateau, alpha: opacity), plateau)
-        let lit = Self.contrast(white, Self.rgb("1E1B4B"))
+        let header = Self.contrast(Self.blend(white, over: plateau, alpha: MeeshyEdgeRailsRecipe.headerOpacity), plateau)
+        let remove = Self.contrast(removeInk, plateau)
+        let litFill = Self.blend(white, over: plateau, alpha: MeeshyGlassButtonRecipe.restFillOpacity)
+        let lit = Self.contrast(litInk, litFill)
         #expect(word >= 4.5)
         #expect(header >= 4.5)
-        #expect(lit >= 15.9)
+        #expect(remove >= 4.5)
+        #expect(lit >= 4.5)
     }
 
     // MARK: - Garde de source

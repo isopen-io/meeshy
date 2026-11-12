@@ -39,8 +39,8 @@ public struct MeeshyEdgeRailRowFace: View, Equatable {
         .foregroundStyle(ink)
         .background {
             shape.fill(MeeshyColors.onMedia.opacity(fillOpacity(pressed: pressed)))
-                .meeshyAnimation(.easeInOut(duration: MeeshyEdgeRailsRecipe.rowTintSeconds), value: item.isLit)
         }
+        .meeshyAnimation(.easeInOut(duration: MeeshyEdgeRailsRecipe.rowTintSeconds), value: item.isLit)
         .contentShape(shape)
         .onHover { isHovered = $0 }
         .opacity(opacity)
@@ -111,6 +111,7 @@ struct MeeshyEdgeRailLabeledRow: View, Equatable {
         Button(action: { activate() }, label: { MeeshyEdgeRailRowFace(item: item, width: width) })
             .buttonStyle(MeeshyEdgeRailRowStyle(longPressFired: $longPressFired))
             .modifier(MeeshyEdgeRailLongPress(isOn: hasLongPress, perform: { fireLongPress() }))
+            .disabled(!item.isEnabled)
             .accessibilityLabel(item.accessibilityName)
             .accessibilityValue(item.accessibilityValue ?? "")
             .accessibilityHint(item.hint ?? "")
