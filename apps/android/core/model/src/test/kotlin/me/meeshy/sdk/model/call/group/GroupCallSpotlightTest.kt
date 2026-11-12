@@ -2,6 +2,7 @@ package me.meeshy.sdk.model.call.group
 
 import com.google.common.truth.Truth.assertThat
 import java.util.Locale
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
 import org.junit.Test
 
@@ -105,6 +106,12 @@ class GroupCallSpotlightTest {
         assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 2f, pinch = 1.5f, isReceivingScreen = true)).isEqualTo(3f)
         assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 2f, pinch = 9f, isReceivingScreen = true)).isEqualTo(GroupCallSpotlight.MAX_ZOOM)
         assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 3f, pinch = 0.1f, isReceivingScreen = true)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `the return to 1x of a received screen takes 0,2 s, the short fade of the chrome under reduce motion`() {
+        assertThat(GroupCallSpotlight.receivedScreenResetMillis(reduceMotion = false)).isEqualTo(200)
+        assertThat(GroupCallSpotlight.receivedScreenResetMillis(reduceMotion = true)).isEqualTo(CallChromeStow.REDUCED_FADE_MILLIS)
     }
 
     @Test

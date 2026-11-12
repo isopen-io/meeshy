@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
@@ -24,15 +25,12 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.group.GroupCallSpotlight
-
-private const val RESET_MILLIS = 200
 
 /**
  * P15.11 — le zoom de l'écran que l'autre partage en duo (miroir de iOS `CallReceivedScreenZoom`) : 1× à 4× par la loi
  * de la une du groupe ([GroupCallSpotlight.receivedScreenZoom]). Le facteur n'est lu que par la COUCHE graphique
- * ([zoomLayer]) : un pincement ne recompose rien, le GPU seul transforme l'image.
+ * ([callReceivedScreenZoomLayer]) : un pincement ne recompose rien, le GPU seul transforme l'image.
  */
 @Stable
 internal class CallReceivedScreenZoom {
@@ -90,7 +88,13 @@ internal fun Modifier.callReceivedScreenZoomGestures(
     val scope = rememberCoroutineScope()
     var reset by remember { mutableStateOf<Job?>(null) }
     val zoomed by remember(zoom) { derivedStateOf { zoom.isZoomed } }
-    val millis = if (reduceMotion) CallChromeVisibility.FADE_DURATION_MILLIS.toInt() else RESET_MILLIS
+    val millis = GroupCallSpotlight.receivedScreenResetMillis(reduceMotion)
+    val resetToOne: (Offset) -> Unit = {
+        reset?.cancel()
+        reset = scope.launch {
+            animate(zoom.committed, 1f, animationSpec = tween(millis, easing = FastOutSlowInEasing)) { value, _ -> zoom.set(value) }
+        }
+    }
     return this
         .pointerInput(zoom) {
             awaitEachGesture {
@@ -115,17 +119,7 @@ internal fun Modifier.callReceivedScreenZoomGestures(
         }
         .pointerInput(zoom, zoomed, onTap, millis) {
             detectTapGestures(
-                onDoubleTap = if (zoomed) {
-                    {
-                        reset?.cancel()
-                        reset = scope.launch {
-                            val from = zoom.committed
-                            animate(from, 1f, animationSpec = tween(millis, easing = FastOutSlowInEasing)) { value, _ -> zoom.set(value) }
-                        }
-                    }
-                } else {
-                    null
-                },
+                onDoubleTap = if (zoomed) resetToOne else null,
                 onTap = { onTap?.invoke() },
             )
         }
