@@ -246,18 +246,13 @@ struct CallView: View {
         .onReceive(transcriptionService.$isShowingOverlay) { showTranscript = $0 }
         .onAppear {
             startPulseAnimation()
-            // Expansion depuis la bannière PiP : le contenu démarre contracté
-            // vers le haut (là où vivait la bannière) puis s'étire en plein
-            // écran — mouvement inverse de collapseIntoPip(), même ressort.
-            if callManager.consumePendingPipExpansion(), !reduceMotion {
-                pipMorphProgress = 1
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    pipMorphProgress = 0
-                }
-            }
+            CallPipMorph.playPendingExpansion(of: callManager, reduceMotion: reduceMotion, progress: $pipMorphProgress)
         }
         .onDisappear {
             stopPulseAnimation()
+        }
+        .onReceive(CallPipMorph.collapseRequests) {
+            if CallPipMorph.consumePendingCollapse() { collapseIntoPip() }
         }
         .task(id: callManager.remoteUserId) {
             await resolveRemoteProfile(userId: callManager.remoteUserId)

@@ -37,13 +37,15 @@ final class CallShareCapsuleTests: XCTestCase {
 
     // MARK: - S1.7 — le lancement du partage CONTRACTE l'appel vers la capsule
 
-    func test_screenShareDidStart_fullScreen_asksTheCallViewToContract_insteadOfSwitchingDirectly() throws {
+    func test_screenShareDidStart_asksTheCallViewToContract_insteadOfSwitchingDirectly() throws {
         let share = try source("Meeshy/Features/Call/Services/CallManager+ScreenShare.swift")
-        XCTAssertFalse(share.contains("func screenShareDidStart() { displayMode = .pip }"))
-        XCTAssertTrue(share.contains("requestPipCollapseMorph()"))
+        XCTAssertFalse(share.contains("displayMode = .pip }"))
+        XCTAssertTrue(share.contains("CallPipMorph.begin(on: self)"))
         let view = try source("Meeshy/Features/Call/Views/CallView.swift")
-        XCTAssertTrue(view.contains("callManager.pipCollapseRequest"))
-        XCTAssertTrue(view.contains("consumePendingPipCollapse()"))
+        XCTAssertTrue(view.contains("CallPipMorph.collapseRequests"))
+        XCTAssertTrue(view.contains("CallPipMorph.consumePendingCollapse()"))
+        let header = try source("Meeshy/Features/Call/Views/CallView+Header.swift")
+        XCTAssertTrue(header.contains("CallPipMorph.contract("), "Le glissé et le partage jouent LA MÊME contraction.")
     }
 
     func test_capsuleSwap_usesTheGlassMorphAnimation_andAFadeOnlyTransitionUnderReduceMotion() throws {

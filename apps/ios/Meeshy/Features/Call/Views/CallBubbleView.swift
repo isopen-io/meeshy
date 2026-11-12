@@ -87,6 +87,8 @@ struct CallBubbleView: View {
                 hangupButton.offset(y: sideButtonOffset)
             }
 
+            shareStopSlot(size: size)
+
             CallParticipantVisual(width: size.width, height: size.height, cornerRadius: cornerRadius, ringsInPeerColor: true, callManager: callManager)
                 .shadow(color: Color.black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                 .overlay(alignment: .topTrailing) { signalBadge }
@@ -104,7 +106,7 @@ struct CallBubbleView: View {
             GeometryReader { proxy in
                 Color.clear.preference(
                     key: CallReturnPointFrameKey.self,
-                    value: proxy.frame(in: .global).insetBy(dx: -touchReach, dy: -touchReach)
+                    value: proxy.frame(in: .global).insetBy(dx: -(touchReach + shareStopReachX), dy: -touchReach)
                 )
             }
         }
@@ -190,8 +192,50 @@ struct CallBubbleView: View {
     private let nameplateBelowOffset: CGFloat = 32
 
     private var touchReach: CGFloat {
-        guard isCircleRegion && isMenuRevealed else { return 16 }
+        guard isCircleRegion && isMenuRevealed else { return max(16, shareStopReach) }
         return menuButtonGap + menuButtonDiameter + MeeshySpacing.sm
+    }
+
+    // MARK: - « Arrêter » au-dessus d'un plein écran (#17763)
+
+    private let shareStopHeight: CGFloat = 44
+
+    /// Le cadre touchable de la fenêtre passe-plat s'étend jusqu'à la capsule.
+    private var shareStopReach: CGFloat {
+        guard CallReturnPoint.showsShareStop(isSharing: callManager.screenShare.isSharing, isMenuRevealed: isMenuRevealed) else { return 0 }
+        return menuButtonGap + shareStopHeight + MeeshySpacing.sm
+    }
+
+    /// La capsule déborde la bulle du côté de l'écran : le cadre touchable s'y étend aussi.
+    private var shareStopReachX: CGFloat {
+        shareStopReach > 0 ? 100 : 0
+    }
+
+    @ViewBuilder
+    private func shareStopSlot(size: CGSize) -> some View {
+        Group {
+            if CallReturnPoint.showsShareStop(isSharing: callManager.screenShare.isSharing, isMenuRevealed: isMenuRevealed) {
+                shareStopCapsule
+                    .frame(width: size.width, alignment: callManager.bubbleEdge == .trailing ? .trailing : .leading)
+                    .offset(y: size.height / 2 + menuButtonGap + shareStopHeight / 2)
+                    .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+            }
+        }
+        .animation(CallShareCapsuleMotion.swapAnimation(reduceMotion: reduceMotion), value: callManager.screenShare.isSharing)
+    }
+
+    private var shareStopCapsule: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "rectangle.on.rectangle")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.white)
+                .accessibilityHidden(true)
+            CallShareStopButton { callManager.screenShare.stopSharing() }
+        }
+        .padding(.leading, MeeshySpacing.sm)
+        .adaptiveLiquidGlass(in: Capsule(), tint: MeeshyColors.error)
+        .fixedSize()
+        .environment(\.colorScheme, .dark)
     }
 
     private var tierControlBar: some View {

@@ -169,6 +169,7 @@ struct FloatingCallPillView: View {
             Spacer(minLength: 8)
             controlButtons
         }
+        .animation(CallShareCapsuleMotion.swapAnimation(reduceMotion: reduceMotion), value: callManager.screenShare.isSharing)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         // minHeight (not an exact height): userInfoSection stacks two
         // Dynamic-Type-scalable Text lines that can exceed pillHeight at
@@ -205,7 +206,12 @@ struct FloatingCallPillView: View {
         // système y étend son fond sans que rien ne le déclare — une seconde
         // propriété de la bande, muette, chez chaque barre. C'est le défaut que
         // ce lot ferme ; le laisser implicite le rouvrirait par omission.
-        .background(TopChromeTint.call.bandColor, ignoresSafeAreaEdges: [])
+        .background(callManager.screenShare.isSharing ? Color.clear : TopChromeTint.call.bandColor, ignoresSafeAreaEdges: [])
+        .background {
+            if callManager.screenShare.isSharing {
+                Color.clear.adaptiveLiquidGlass(in: Rectangle(), tint: MeeshyColors.error)
+            }
+        }
         .offset(x: pillDragOffset)
         .opacity(pillDragOpacity)
         .simultaneousGesture(collapseDragGesture)
@@ -232,11 +238,15 @@ struct FloatingCallPillView: View {
     /// seule ligne d'état (signal dégradé et feuille « Qualité » compris) ; hors
     /// partage, l'avatar, le nom et la ligne d'état.
     @ViewBuilder private var identitySection: some View {
-        if callManager.screenShare.isSharing {
-            statusEntry
-        } else {
-            CallParticipantVisual(diameter: 44, callManager: callManager)
-            userInfoSection
+        HStack(spacing: MeeshySpacing.md) {
+            if callManager.screenShare.isSharing {
+                statusEntry.transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+            } else {
+                CallParticipantVisual(diameter: 44, callManager: callManager)
+                    .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+                userInfoSection
+                    .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+            }
         }
     }
 
@@ -324,32 +334,20 @@ struct FloatingCallPillView: View {
 
     @ViewBuilder private var controlButtons: some View {
         if callManager.screenShare.isSharing {
-            stopShareButton
+            stopShareButton.transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         } else {
             HStack(spacing: MeeshySpacing.sm) {
                 muteButton
                 speakerButton
                 hangupButton
             }
+            .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         }
     }
 
     /// #16664 — je partage mon écran : la capsule offre l'écran et « Arrêter ».
     private var stopShareButton: some View {
-        Button {
-            callManager.screenShare.stopSharing()
-            HapticFeedback.light()
-        } label: {
-            Label(CallScreenShareCopy.stopCaption, systemImage: "rectangle.on.rectangle.slash")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
-                .padding(.horizontal, MeeshySpacing.md)
-                .frame(minHeight: 44)
-                .background(Capsule().fill(MeeshyColors.error))
-        }
-        .pressable()
-        .accessibilityLabel(CallScreenShareCopy.label(isSharing: true))
+        CallShareStopButton { callManager.screenShare.stopSharing() }
     }
 
     private var muteButton: some View {

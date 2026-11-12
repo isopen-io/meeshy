@@ -157,37 +157,10 @@ extension CallView {
 
     // MARK: - Open Conversation During Call
 
-    /// Minimise l'appel en pilule flottante (PiP, exactement comme le chevron)
-    /// PUIS ouvre la conversation (DM) de l'interlocuteur — l'utilisateur peut
-    /// consulter/écrire dans le chat pendant l'appel, puis revenir au plein écran
-    /// via la pilule. Réutilise le canal de navigation `.navigateToConversation`
-    /// déjà observé par RootView (iPhone) et iPadRootView (iPad) — même point
-    /// d'entrée que la création de conversation et les deep links — plutôt que de
-    /// dépendre d'un Router injecté qui ne traverse pas la frontière du
-    /// `.fullScreenCover`.
-    /// Réduction vers le cadre PiP (retour user 2026-08-12) : le flux plein
-    /// écran se CONTRACTE vers le haut — là où la bannière PiP va apparaître —
-    /// puis le fullScreenCover est retiré sans animation système : la
-    /// contraction est LA transition, la bannière glisse ensuite depuis le
-    /// haut (sa propre transition .move). Reduce Motion : bascule directe.
+    /// Réduction vers la capsule : voir `CallPipMorph.contract`.
     func collapseIntoPip() {
         HapticFeedback.medium()
-        guard !reduceMotion else {
-            callManager.displayMode = .pip
-            return
-        }
-        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
-            pipMorphProgress = 1
-        }
-        Task { @MainActor in
-            _ = await cancellableSleep(for: .milliseconds(300))
-            var swap = Transaction()
-            swap.disablesAnimations = true
-            withTransaction(swap) {
-                callManager.displayMode = .pip
-            }
-            pipMorphProgress = 0
-        }
+        CallPipMorph.contract(into: callManager, reduceMotion: reduceMotion, progress: $pipMorphProgress)
     }
 
     /// #8435 — le bouton PiP et le glissé : la fenêtre système démarre, et
@@ -216,6 +189,14 @@ extension CallView {
         }
     }
 
+    /// Minimise l'appel en pilule flottante (PiP, exactement comme le chevron)
+    /// PUIS ouvre la conversation (DM) de l'interlocuteur — l'utilisateur peut
+    /// consulter/écrire dans le chat pendant l'appel, puis revenir au plein écran
+    /// via la pilule. Réutilise le canal de navigation `.navigateToConversation`
+    /// déjà observé par RootView (iPhone) et iPadRootView (iPad) — même point
+    /// d'entrée que la création de conversation et les deep links — plutôt que de
+    /// dépendre d'un Router injecté qui ne traverse pas la frontière du
+    /// `.fullScreenCover`.
     func openConversationDuringCall() {
         guard let conversationId = callManager.conversationId else { return }
         collapseIntoPip()
