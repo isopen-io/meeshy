@@ -387,7 +387,7 @@ struct CallRecordingPlayback: View {
 /// Loi 18 · R2.11 · R3.12 — le verre adaptatif d'`adaptiveLiquidGlass`, par son entrée du kit
 /// (`meeshyGlass`, ton `theme`) : Liquid Glass sur iOS 26, verre dessiné avant, plein sous
 /// « Réduire la transparence » ; sous le voile d'appel qui l'assombrit sur un contenu clair (loi 3).
-private struct CallRecordingGlass<S: Shape>: ViewModifier {
+struct CallRecordingGlass<S: Shape>: ViewModifier {
     let shape: S
 
     func body(content: Content) -> some View {

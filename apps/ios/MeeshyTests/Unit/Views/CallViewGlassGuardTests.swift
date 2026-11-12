@@ -536,7 +536,7 @@ final class CallViewGlassGuardTests: XCTestCase {
         let controls = try recordingControls()
         XCTAssertFalse(controls.contains("ultraThinMaterial"), "aucun matériau système posé à côté du verre")
         XCTAssertFalse(controls.contains(".callChromeGlass(in:"), "callChromeGlass retombe sur un matériau avant iOS 26")
-        let glass = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private struct CallRecordingGlass<S: Shape>: ViewModifier", in: controls))
+        let glass = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallRecordingGlass<S: Shape>: ViewModifier", in: controls))
         XCTAssertTrue(glass.contains("CallGlassVeil(shape: shape"))
         XCTAssertTrue(glass.contains(".meeshyGlass(in: shape, tone: .theme)"), "la recette d'adaptiveLiquidGlass, par l'entrée du kit")
         let overlay = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallRecordingOverlay: View, Equatable", in: controls))

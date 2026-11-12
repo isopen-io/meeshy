@@ -108,7 +108,7 @@ struct CallLiveFrameProposalCard: View {
             }
         }
         .padding(MeeshySpacing.md)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+        .modifier(CallRecordingGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)))
         .accessibilityElement(children: .contain)
     }
 }
@@ -128,7 +128,7 @@ struct CallLiveFrameNotice: View {
         .foregroundStyle(Color.white)
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
-        .background(Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+        .modifier(CallRecordingGlass(shape: Capsule()))
         .accessibilityElement(children: .combine)
     }
 }

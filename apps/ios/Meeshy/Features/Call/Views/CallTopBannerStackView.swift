@@ -60,7 +60,7 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
                 .padding(.horizontal, MeeshySpacing.lg)
         case .liveFrame:
             liveFrameStatus()
-                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.horizontal, CallTopBannerStack.horizontalMargin)
         }
     }
 }
