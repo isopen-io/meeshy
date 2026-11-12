@@ -78,7 +78,7 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
             replay: { _ in replayed = true; return nil },
             willWaitOnNetwork: { waited = true }
         )
-        XCTAssertEqual(result, cached)
+        XCTAssertEqual(result, .served(cached))
         XCTAssertFalse(waited, "Un journal en cache ne montre aucun spinner.")
         XCTAssertFalse(replayed)
     }
@@ -92,15 +92,77 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
             replay: { _ in replayed },
             willWaitOnNetwork: { waits += 1 }
         )
-        XCTAssertEqual(result, replayed)
+        XCTAssertEqual(result, .served(replayed))
         XCTAssertEqual(waits, 1)
     }
 
-    func test_load_nothingKept_returnsNil() async {
+    func test_load_nothingKept_saysSo() async {
         let result = await BubbleCallJournalLoading.load(
             callId: "call-1", readCache: { _ in nil }, replay: { _ in nil }, willWaitOnNetwork: {}
         )
-        XCTAssertNil(result)
+        XCTAssertEqual(result, .nothingKept)
+    }
+
+    /// Replier la bascule pendant le replay annule la tâche : le `try?` du replay rend alors `nil`. Ce `nil` ne dit
+    /// PAS « rien n'a été gardé » — le lire ainsi figeait « Aucune transcription » sur un appel qui en a une.
+    func test_load_cancelledDuringReplay_isAbandoned_neverNothingKept() async {
+        let result = await Task { @MainActor in
+            await BubbleCallJournalLoading.load(
+                callId: "call-1",
+                readCache: { _ in nil },
+                replay: { _ in
+                    withUnsafeCurrentTask { $0?.cancel() }
+                    return nil
+                },
+                willWaitOnNetwork: {}
+            )
+        }.value
+        XCTAssertEqual(result, .abandoned)
+    }
+
+    // MARK: - L'état ouvert survit au recyclage de la cellule
+
+    func test_memory_aCallIsClosedUntilOpened() {
+        let memory = BubbleCallJournalMemory()
+        XCTAssertFalse(memory.isOpen("call-1"))
+        memory.remember("call-1", isOpen: true)
+        XCTAssertTrue(memory.isOpen("call-1"))
+        XCTAssertFalse(memory.isOpen("call-2"))
+        memory.remember("call-1", isOpen: false)
+        XCTAssertFalse(memory.isOpen("call-1"))
+    }
+
+    func test_memory_isBounded_theOldestOpeningIsForgotten() {
+        let memory = BubbleCallJournalMemory(capacity: 2)
+        memory.remember("a", isOpen: true)
+        memory.remember("b", isOpen: true)
+        memory.remember("a", isOpen: true)
+        memory.remember("c", isOpen: true)
+        XCTAssertTrue(memory.isOpen("a"), "Rouvrir rafraîchit l'ancienneté.")
+        XCTAssertFalse(memory.isOpen("b"))
+        XCTAssertTrue(memory.isOpen("c"))
+    }
+
+    func test_card_startsFromTheMemory_andWritesEveryToggleToIt() throws {
+        let view = try card()
+        XCTAssertTrue(view.contains("State(initialValue: memory.isOpen(callId))"),
+                      "Une cellule recyclée reprend le journal tel que l'utilisateur l'a laissé.")
+        XCTAssertTrue(view.contains("memory.remember(callId, isOpen: isOpen)"))
+        XCTAssertTrue(view.contains("memory: BubbleCallJournalMemory = .shared"))
+    }
+
+    func test_card_abandonedLoad_leavesThePhaseUntouched() throws {
+        let view = try card()
+        XCTAssertTrue(view.contains("case .abandoned:"))
+    }
+
+    // MARK: - La feuille garde sa mise en page
+
+    func test_transcriptSection_translationToggle_is44pt_withoutGrowingTheHeader() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertTrue(section.contains(".meeshyTapTarget()"))
+        XCTAssertTrue(section.contains(".padding(-MeeshyTapTarget.inset(forVisualSide:"),
+                      "La cible de 44 pt déborde sans pousser l'en-tête de la feuille ni décaler le glyphe.")
     }
 
     // MARK: - Câblage : la bulle, la carte, la feuille
