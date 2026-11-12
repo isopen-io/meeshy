@@ -281,8 +281,10 @@ final class GroupCallSpotlightTests: XCTestCase {
         XCTAssertTrue(zoom.contains("MagnificationGesture()"))
         XCTAssertTrue(zoom.contains("GroupCallSpotlight.receivedScreenZoom("), "la loi du groupe, jamais une copie")
         XCTAssertTrue(zoom.contains("TapGesture(count: 2)"))
-        XCTAssertEqual(zoom.components(separatedBy: "simultaneousGesture(").count - 1, 2, "ni le pincement ni le double toucher ne retardent le toucher simple qui range le chrome")
-        XCTAssertEqual(zoom.components(separatedBy: "including: isReceivingScreen ? .all : .subviews").count - 1, 2, "hors partage reçu, aucun geste")
+        XCTAssertTrue(zoom.contains(".simultaneousGesture(zoomGesture, including: isReceivingScreen ? .all : .subviews)"), "le pincement ne retarde pas le toucher simple, et hors partage reçu il n'est pas posé")
+        XCTAssertTrue(zoom.contains(".highPriorityGesture(resetTap, including: isZoomed ? .all : .subviews)"), "zoomé, le double toucher l'emporte sur le toucher du chrome : il ne le range ni ne le rend")
+        XCTAssertFalse(zoom.contains("simultaneousGesture(resetTap"), "un double toucher simultané faisait basculer le chrome deux fois")
+        XCTAssertTrue(zoom.contains("private var isZoomed: Bool { zoom > 1 }"), "à 1×, aucun double toucher : le toucher simple n'attend rien")
         XCTAssertTrue(zoom.contains("reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2"), "Réduire les animations : un fondu court")
         XCTAssertTrue(zoom.contains(".clipped()"), "l'image zoomée ne déborde pas sur l'en-tête")
     }
