@@ -16,7 +16,8 @@ import SwiftUI
 /// et ne lit pas le ton de l'hôte : seule la surface de K01 le lit. Le verre est
 /// demandé UNE fois (`MeeshyGlassPillMorph`) ; sur iOS 26, les verres voisins de
 /// la rangée se fondent dans un seul groupe. Sans bouton, sans action principale
-/// ni dessus, elle ne rend rien : jamais une bande vide.
+/// ni dessus, elle ne rend rien : jamais une bande vide. Une rangée qui se
+/// mesure vide (un `ForEach` sans élément) ne demande pas de verre non plus.
 public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
     private let label: String
     private let presence: MeeshyGlassPillPresence
@@ -29,7 +30,7 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
     private let primary: Primary
     private let above: Above
 
-    @Environment(\.layoutDirection) private var layoutDirection
+    @State private var rowIsEmpty = false
 
     public init(
         label: String,
@@ -70,13 +71,24 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
                 .modifier(MeeshyGlassPillMorph(
                     tone: tone,
                     density: Self.hasAbove ? .dense : .regular,
-                    showsRow: presence.showsRow
+                    showsRow: presence.showsRow,
+                    drawsGlass: drawsGlass
                 ))
                 .frame(maxWidth: .infinity)
                 .modifier(MeeshyGlassPillStowModifier(presence: presence, onRevive: onRevive))
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(label)
+                .accessibilityHidden(!drawsGlass)
         }
+    }
+
+    /// Loi 13 : un contenu de largeur nulle ne porte aucun verre. La rangée
+    /// est mesurée, car un `ForEach` vide n'est pas un `EmptyView`.
+    private var drawsGlass: Bool {
+        MeeshyGlassPillRecipe.carriesGlass(
+            hasButtons: Self.hasButtons, hasPrimary: Self.hasPrimary, hasAbove: Self.hasAbove,
+            showsRow: presence.showsRow, rowMeasuresEmpty: rowIsEmpty
+        )
     }
 
     private var content: some View {
@@ -170,13 +182,10 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
     }
 
     private func buttonRow(_ size: MeeshyGlassButtonSize) -> some View {
-        MeeshyGlassPillRowLayout(
-            gap: MeeshyGlassPillRecipe.gap,
-            spreads: isSpread,
-            isRightToLeft: layoutDirection == .rightToLeft
-        ) {
+        MeeshyGlassPillRowLayout(gap: MeeshyGlassPillRecipe.gap, spreads: isSpread) {
             buttons(size)
         }
+        .onGeometryChange(for: Bool.self) { $0.size.width <= 0 } action: { rowIsEmpty = $0 }
     }
 
     private var primarySlot: some View {
@@ -279,11 +288,12 @@ public extension MeeshyGlassPill where Buttons == EmptyView {
 
 /// La rangée des boutons : serrée (chacun à sa taille, séparés de `gap`) ou
 /// répartie (chacun centré dans une case de largeur égale). Les positions
-/// viennent de `MeeshyGlassPillRecipe.rowOffsets`, miroitées en RTL.
+/// viennent de `MeeshyGlassPillRecipe.rowOffsets`, comptées depuis le DÉBUT :
+/// SwiftUI retourne lui-même une disposition en RTL, et un second retournement
+/// à la main la remettait à l'endroit (capture `planche.rtl` du 2026-11-12).
 struct MeeshyGlassPillRowLayout: Layout {
     let gap: CGFloat
     let spreads: Bool
-    let isRightToLeft: Bool
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
@@ -301,9 +311,11 @@ struct MeeshyGlassPillRowLayout: Layout {
             widths: sizes.map(\.width), gap: gap, available: bounds.width, spreads: spreads
         )
         for (index, subview) in subviews.enumerated() {
-            let size = sizes[index]
-            let x = isRightToLeft ? bounds.maxX - offsets[index] - size.width : bounds.minX + offsets[index]
-            subview.place(at: CGPoint(x: x, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(size))
+            subview.place(
+                at: CGPoint(x: bounds.minX + offsets[index], y: bounds.midY),
+                anchor: .leading,
+                proposal: ProposedViewSize(sizes[index])
+            )
         }
     }
 }
