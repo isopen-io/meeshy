@@ -28,6 +28,25 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
         CGSize(width: width, height: width * Self.aspectRatio)
     }
 
+    /// L1.5 — dans une fenêtre plus large que haute, ma vignette se couche : 130 × 96 au palier
+    /// standard. La loi lit la forme de la fenêtre, jamais le device (iPad, fenêtres redimensionnées).
+    static let landscapeWidthFactor: CGFloat = 1.3
+    static let landscapeAspectRatio: CGFloat = 96.0 / 130.0
+
+    static func isLandscape(_ window: CGSize) -> Bool {
+        window.width > window.height
+    }
+
+    func width(isLandscape: Bool) -> CGFloat {
+        isLandscape ? width * Self.landscapeWidthFactor : width
+    }
+
+    func size(isLandscape: Bool) -> CGSize {
+        isLandscape
+            ? CGSize(width: width(isLandscape: true), height: width(isLandscape: true) * Self.landscapeAspectRatio)
+            : size
+    }
+
     var larger: CallSelfTileScale {
         Self(rawValue: rawValue + 1) ?? self
     }
@@ -46,10 +65,13 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
         return current
     }
 
-    static func liveSize(pinch magnification: CGFloat, from current: CallSelfTileScale) -> CGSize {
-        guard magnification.isFinite, magnification > 0 else { return current.size }
-        let width = min(max(current.width * magnification, CallSelfTileScale.x1.width), CallSelfTileScale.x3.width)
-        return CGSize(width: width, height: width * aspectRatio)
+    static func liveSize(pinch magnification: CGFloat, from current: CallSelfTileScale, isLandscape: Bool = false) -> CGSize {
+        guard magnification.isFinite, magnification > 0 else { return current.size(isLandscape: isLandscape) }
+        let width = min(
+            max(current.width(isLandscape: isLandscape) * magnification, CallSelfTileScale.x1.width(isLandscape: isLandscape)),
+            CallSelfTileScale.x3.width(isLandscape: isLandscape)
+        )
+        return CGSize(width: width, height: width * (isLandscape ? landscapeAspectRatio : aspectRatio))
     }
 
     /// #16663 — un toucher range le chrome : ma vignette passe à sa petite
