@@ -108,14 +108,25 @@ struct MeeshyEdgeRailLabeledRow: View, Equatable {
     }
 
     var body: some View {
-        Button(action: activate) { MeeshyEdgeRailRowFace(item: item, width: width) }
+        Button(action: { activate() }, label: { MeeshyEdgeRailRowFace(item: item, width: width) })
             .buttonStyle(MeeshyEdgeRailRowStyle(longPressFired: $longPressFired))
-            .modifier(MeeshyEdgeRailLongPress(isOn: hasLongPress, perform: fireLongPress))
+            .modifier(MeeshyEdgeRailLongPress(isOn: hasLongPress, perform: { fireLongPress() }))
             .accessibilityLabel(item.accessibilityName)
             .accessibilityValue(item.accessibilityValue ?? "")
             .accessibilityHint(item.hint ?? "")
-            .accessibilityAddTraits(item.isLit ? .isSelected : [])
-            .modifier(MeeshyEdgeRailNamedLongPress(name: item.longPressLabel, perform: hasLongPress ? namedLongPress : nil))
+            .accessibilityAddTraits(selectedTraits)
+            .modifier(MeeshyEdgeRailNamedLongPress(name: item.longPressLabel, perform: namedAction))
+    }
+
+    private var selectedTraits: AccessibilityTraits {
+        var traits: AccessibilityTraits = []
+        if item.isLit { traits.insert(.isSelected) }
+        return traits
+    }
+
+    private var namedAction: (() -> Void)? {
+        guard hasLongPress else { return nil }
+        return { namedLongPress() }
     }
 
     private var hasLongPress: Bool {
