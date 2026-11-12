@@ -211,6 +211,53 @@ describe('la proposition de l’autre (C2)', () => {
   });
 });
 
+describe('la proposition n’est montrée qu’en duo vidéo (C2.10)', () => {
+  const audio = () => activeCall({ media: 'audio', cameraOn: false, members: { 'u-awa': { ...member('u-awa', 'Awa'), cameraOn: false } } });
+
+  test('en duo audio, une proposition reçue ne se montre pas', () => {
+    const h = harness({ call: audio() });
+    h.frame.start();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    expect(h.state().proposal).toBeNull();
+  });
+
+  test('« Appliquer » ne pose rien en duo audio', async () => {
+    const h = harness({ call: audio() });
+    h.frame.start();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    await h.frame.accept();
+    expect(h.state().frameId).toBeNull();
+    expect(h.sent).toHaveLength(0);
+  });
+
+  test('la proposition masquée en audio réapparaît au retour en duo vidéo', () => {
+    const h = harness({ call: audio() });
+    h.frame.start();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    h.calls.setState({ call: activeCall() });
+    expect(h.state().proposal).toEqual({ frameId: 'jovial.confettis', from: 'Awa' });
+  });
+
+  test('une proposition montrée se range quand l’appel passe en audio', () => {
+    const h = harness();
+    h.frame.start();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    h.calls.setState({ call: audio() });
+    expect(h.state().proposal).toBeNull();
+    h.calls.setState({ call: activeCall() });
+    expect(h.state().proposal?.frameId).toBe('jovial.confettis');
+  });
+
+  test('retirée par l’autre pendant qu’elle est masquée, elle ne revient pas', () => {
+    const h = harness({ call: audio() });
+    h.frame.start();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected({ frameId: null }));
+    h.calls.setState({ call: activeCall() });
+    expect(h.state().proposal).toBeNull();
+  });
+});
+
 describe('la réponse à ma proposition (C3)', () => {
   test('« appliqué » chez l’autre : une capsule le dit, puis s’efface', async () => {
     const h = harness();
