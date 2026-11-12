@@ -232,7 +232,7 @@ struct MeeshyGlassPillTests {
         #expect(morph.components(separatedBy: ".meeshyGlass(").count == 2)
         #expect(morph.contains(".environment(\\.meeshyGlassIsNested, true)"))
         #expect(pill.contains("MeeshyGlassGroup("))
-        #expect(pill.contains("density: Self.hasAbove ? .dense : .regular"))
+        #expect(pill.contains("density: hasAbove ? .dense : .regular"))
     }
 
     @Test("la loi d'ajustement : quatre candidats dans l'ordre des tailles de la recette, le dernier défile")
