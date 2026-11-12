@@ -66,6 +66,25 @@ object GroupCallSpotlight {
     /** Le zoom d'un écran partagé : jamais sous 1, jamais au-delà de [MAX_ZOOM]. */
     fun clampedZoom(scale: Float): Float = scale.coerceIn(1f, MAX_ZOOM)
 
+    /**
+     * U2.5 — le facteur que la puce de l'écran à la une annonce : arrondi au dixième, jamais au-delà du plafond ;
+     * `null` à 1× (la puce ne porte alors que « Écran de X »).
+     */
+    fun displayedZoom(zoom: Float): Float? {
+        val tenths = Math.round(clampedZoom(zoom) * 10f) / 10f
+        return tenths.takeIf { it > 1f }
+    }
+
+    /** « Écran de Karim · 2,5× » : le titre déjà localisé, puis le facteur de zoom quand il y en a un. */
+    fun featuredChipText(title: String, zoom: Float, decimalSeparator: Char): String {
+        val factor = displayedZoom(zoom) ?: return title
+        val tenths = Math.round(factor * 10f)
+        val whole = tenths / 10
+        val fraction = tenths % 10
+        val label = if (fraction == 0) "$whole×" else "$whole$decimalSeparator$fraction×"
+        return "$title · $label"
+    }
+
     /** La pellicule des autres : aucune en plein écran, en colonne à droite en paysage, en rangée dessous sinon. */
     fun filmstrip(isFullScreen: Boolean, isLandscape: Boolean): GroupCallFilmstrip = when {
         isFullScreen -> GroupCallFilmstrip.None
