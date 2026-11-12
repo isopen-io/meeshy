@@ -1,5 +1,8 @@
 package me.meeshy.sdk.model.call.group
 
+import java.util.Locale
+import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
+
 /** Ce que la scène d'un appel de groupe montre : la grille, ou une vignette « à la une » — iOS `GroupCallStageFocus`. */
 sealed interface GroupCallStageFocus {
     data object Grid : GroupCallStageFocus
@@ -65,6 +68,24 @@ object GroupCallSpotlight {
 
     /** Le zoom d'un écran partagé : jamais sous 1, jamais au-delà de [MAX_ZOOM]. */
     fun clampedZoom(scale: Float): Float = scale.coerceIn(1f, MAX_ZOOM)
+
+    /**
+     * U2.5 — le facteur que la puce de l'écran à la une annonce : arrondi au dixième, jamais au-delà du plafond ;
+     * `null` à 1× (la puce ne porte alors que « Écran de X »).
+     */
+    fun displayedZoom(zoom: Float): Float? {
+        val tenths = Math.round(clampedZoom(zoom) * 10f) / 10f
+        return tenths.takeIf { it > 1f }
+    }
+
+    /**
+     * « Écran de Karim · 2,5× » : le titre déjà localisé, puis le facteur de zoom quand il y en a un, écrit par l'unique
+     * libellé de zoom de l'appel ([CameraZoomPolicy.label]) — iOS `CameraZoomPolicy.label(forDisplay:locale:)`.
+     */
+    fun featuredChipText(title: String, zoom: Float, locale: Locale): String {
+        val factor = displayedZoom(zoom) ?: return title
+        return "$title · ${CameraZoomPolicy.label(factor, locale)}"
+    }
 
     /** La pellicule des autres : aucune en plein écran, en colonne à droite en paysage, en rangée dessous sinon. */
     fun filmstrip(isFullScreen: Boolean, isLandscape: Boolean): GroupCallFilmstrip = when {

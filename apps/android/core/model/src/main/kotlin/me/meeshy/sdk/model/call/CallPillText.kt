@@ -36,6 +36,12 @@ enum class CallPillText {
     val staysWhenChromeStowed: Boolean get() = this == CaptionsAlone
 
     /**
+     * U2.9 — in group full screen the pill is stowed with the controls: only its captions glass, deprived of its base
+     * row, stays on the stage. Out of the full screen it is always there. Mirrors iOS `isOnStage(isStageFullScreen:)`.
+     */
+    fun isOnStage(isStageFullScreen: Boolean): Boolean = !isStageFullScreen || staysWhenChromeStowed
+
+    /**
      * #17529 — the journal takes a share of the window ([CallJournalSizing]): on an audio call the avatar then shrinks
      * into a compact header to leave it the room ([CallAudioStageLayout]). Mirrors iOS `compactsAudioLayout`.
      */

@@ -60,10 +60,6 @@ internal fun Modifier.callTileMotion(motion: CallTileMotion?): Modifier {
     }
 }
 
-/** Ce qui n'est pas une vignette (les commandes de la une) arrive en fondu, au rythme du mouvement. */
-internal fun Modifier.callTileMotionFade(motion: CallTileMotion?): Modifier =
-    if (motion == null) this else graphicsLayer { alpha = motion.progress.value }
-
 private class StageMotionMemory(var layout: Pair<GroupCallStageFocus, Boolean>, var rects: Map<String, CallStageRect>) {
     var from: Map<String, CallStageRect> = emptyMap()
     var generation: Int = 0
@@ -121,7 +117,6 @@ internal data class CallGroupTileRender(
     val eglContext: EglBase.Context,
     val mirror: Boolean,
     val fit: Boolean = false,
-    val title: String? = null,
     val zoom: Float = 1f,
 )
 
@@ -146,7 +141,6 @@ internal fun rememberCallGroupTileContents(tileIds: List<String>): (String) -> C
                     mirror = render.mirror,
                     modifier = tileModifier,
                     fit = render.fit,
-                    title = render.title,
                     zoom = render.zoom,
                 )
             }
@@ -154,4 +148,5 @@ internal fun rememberCallGroupTileContents(tileIds: List<String>): (String) -> C
     }
 }
 
-private const val STAGE_MOTION_MILLIS = 350
+/** La durée du mouvement de la scène ; le bandeau et la capsule de la une la partagent. */
+internal const val STAGE_MOTION_MILLIS = 350

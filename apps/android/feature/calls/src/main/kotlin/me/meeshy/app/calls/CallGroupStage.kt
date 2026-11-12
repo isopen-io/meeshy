@@ -85,6 +85,10 @@ internal fun CallGroupStage(
     onStageTap: (() -> Unit)?,
     modifier: Modifier = Modifier,
     onFocusChange: (GroupCallStageFocus) -> Unit = {},
+    /** U1.10 · #8550 : la capsule de la une se range avec les contrôles (`CallChromeElement.FeaturedCapsule`). */
+    isCapsuleVisible: Boolean = true,
+    /** Un toucher reçu sur la capsule rangée rallume le chrome. */
+    onChromeRevive: () -> Unit = {},
 ) {
     val tiles = GroupCallStageLaw.tiles(
         roster = mesh.roster,
@@ -144,13 +148,23 @@ internal fun CallGroupStage(
                 zoom = zoom,
                 onPinch = { factor -> zoom = GroupCallSpotlight.clampedZoom(zoom * factor) },
                 onResetZoom = { zoom = 1f },
-                onGrid = { choose(GroupCallSpotlightChoice.Grid) },
-                onToggleFullScreen = { onFullScreenChange(!isFullScreen) },
                 onStageTap = onStageTap,
                 scope = staged,
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        CallGroupFeaturedCapsule(
+            tileIds = tiles.map { it.id },
+            featuredId = featured?.id,
+            focus = focus,
+            isFullScreen = isFullScreen,
+            width = maxWidth,
+            height = maxHeight,
+            isChromeVisible = isCapsuleVisible,
+            onRevive = onChromeRevive,
+            onGrid = { choose(GroupCallSpotlightChoice.Grid) },
+            onToggleFullScreen = { onFullScreenChange(!isFullScreen) },
+        )
     }
 }
 

@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model.call.group
 
 import com.google.common.truth.Truth.assertThat
+import java.util.Locale
+import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
 import org.junit.Test
 
 /** La mise à la une d'une vignette, miroir de iOS `GroupCallSpotlightTests`. */
@@ -103,5 +105,29 @@ class GroupCallSpotlightTest {
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = false, isLandscape = false)).isEqualTo(GroupCallFilmstrip.Bottom)
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = false, isLandscape = true)).isEqualTo(GroupCallFilmstrip.Trailing)
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = true, isLandscape = true)).isEqualTo(GroupCallFilmstrip.None)
+    }
+
+    /** U2.5 — the factor announced by the « Screen of X · 2× » chip. */
+    @Test
+    fun `the displayed zoom is null at one, and otherwise rounded to tenths under the ceiling`() {
+        assertThat(GroupCallSpotlight.displayedZoom(1f)).isNull()
+        assertThat(GroupCallSpotlight.displayedZoom(1.04f)).isNull()
+        assertThat(GroupCallSpotlight.displayedZoom(2f)).isEqualTo(2f)
+        assertThat(GroupCallSpotlight.displayedZoom(2.46f)).isEqualTo(2.5f)
+        assertThat(GroupCallSpotlight.displayedZoom(9f)).isEqualTo(GroupCallSpotlight.MAX_ZOOM)
+    }
+
+    @Test
+    fun `the chip carries the zoom factor after the title, written by the camera's one zoom label in the reader's language`() {
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2f, locale = Locale.FRANCE)).isEqualTo("Écran de Karim · 2×")
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2.5f, locale = Locale.FRANCE)).isEqualTo("Écran de Karim · 2,5×")
+        assertThat(GroupCallSpotlight.featuredChipText("Karim's screen", zoom = 2.5f, locale = Locale.US)).isEqualTo("Karim's screen · 2.5×")
+        assertThat(GroupCallSpotlight.featuredChipText("Karim's screen", zoom = 2.46f, locale = Locale.US))
+            .isEqualTo("Karim's screen · " + CameraZoomPolicy.label(2.5f, Locale.US))
+    }
+
+    @Test
+    fun `at one times the chip is the title alone`() {
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 1f, locale = Locale.FRANCE)).isEqualTo("Écran de Karim")
     }
 }

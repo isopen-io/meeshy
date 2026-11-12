@@ -260,6 +260,8 @@ fun CallScreen(
                                 primaryTrack = remoteVideo,
                                 eglContext = viewModel.eglBaseContext,
                                 isChromeVisible = chromeVisibility.isVisible(CallChromeElement.Controls),
+                                isCapsuleVisible = chromeVisibility.isVisible(CallChromeElement.FeaturedCapsule),
+                                onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                                 isFullScreen = chromeState.isStageFullScreen,
                                 onFullScreenChange = chrome::setStageFullScreen,
                                 onStageTap = sceneTap,
