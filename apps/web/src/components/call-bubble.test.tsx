@@ -219,11 +219,13 @@ describe('le liseré de la bulle (P18.4)', () => {
 });
 
 describe('l’étiquette « nom · durée » de la bulle (P18.5)', () => {
-  test('sur un verre, avec le nom d’affichage et la durée', () => {
+  test('sur le verre du kit (l’atome adaptatif, jamais un verre posé à la main), avec le nom d’affichage et la durée', () => {
     appQueryClient.removeQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
     const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', connectedAt: Date.now() - 252_000 })} />);
     const tag = tagOf(html, 'data-call-bubble-caption');
-    expect(tag).toContain('glass-call');
+    expect(tag).toContain('glass-tone');
+    expect(tag).toContain('data-glass-tone="deep"');
+    expect(tag).not.toMatch(/\bglass-call\b/);
     expect(html).toMatch(/data-call-bubble-caption[^>]*>Amina Diallo · \d+:\d{2}</);
   });
 
