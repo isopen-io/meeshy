@@ -23,7 +23,7 @@ const frEngagement = {
   'engagement.card.total': 'Ici depuis le début',
   'engagement.card.open': 'Voir le jeu',
   'engagement.card.hide': 'Masquer la flamme',
-  'engagement.card.title': 'Série de la conversation',
+  'engagement.card.title': 'Dans cette conversation',
 } as const;
 
 export default frEngagement;

@@ -186,12 +186,12 @@ function FlameCard({
       className="header-flame-card pointer-events-auto"
     >
       <div className="flex items-baseline gap-2">
-        <span data-flame-card-streak className="text-title2 font-bold tabular-nums">
+        <span data-flame-card-streak className="text-title font-bold tabular-nums">
           {model.streakDays}
         </span>
-        <span className="text-footnote font-semibold">{model.streakText}</span>
+        <span className="text-mini font-semibold">{model.streakText}</span>
       </div>
-      <dl className="flex flex-col gap-1 text-footnote">
+      <dl className="flex flex-col gap-1 text-mini">
         <div className="flex justify-between gap-4">
           <dt>{translate(language, 'engagement.card.today')}</dt>
           <dd data-flame-card-today className="font-bold tabular-nums" style={{ color: 'var(--ios-warning)' }}>

@@ -18,8 +18,8 @@ const arEngagement = {
   'engagement.card.today': 'اليوم',
   'engagement.card.total': 'هنا منذ البداية',
   'engagement.card.open': 'افتح اللعبة',
-  'engagement.card.hide': 'إخفاء الشعلة',
-  'engagement.card.title': 'سلسلة المحادثة',
+  'engagement.card.hide': 'إخفاء اللهب',
+  'engagement.card.title': 'في هذه المحادثة',
 } as const;
 
 export default arEngagement;
