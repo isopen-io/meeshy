@@ -14,9 +14,7 @@ extension CallView {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
                 VStack(spacing: MeeshySpacing.mdPlus) {
-                    if mode == .effects, CallPreConnectEffectsRule.showsCompanions(showsConnectedLayout: showsConnectedLayout) {
-                        effectsCompanions
-                    }
+                    if mode == .effects, CallPreConnectEffectsRule.showsCompanions(showsConnectedLayout: showsConnectedLayout) { effectsCompanions }
                     if showTranscript {
                         captionsBand(hasOwnGlass: true, opensJournal: false)
                             .padding(.horizontal, MeeshySpacing.lg)
@@ -24,6 +22,7 @@ extension CallView {
                     modeControls(mode)
                 }
                 .padding(.bottom, Self.chromeBottomInset)
+                .transition(CallModeChromeMotion.risesFromBottom(mode, reduceMotion: reduceMotion) ? .move(edge: .bottom).combined(with: .opacity) : .identity)
                 CallModeRecordingOverlay(capture: capture)
             }
             .transition(.opacity)
