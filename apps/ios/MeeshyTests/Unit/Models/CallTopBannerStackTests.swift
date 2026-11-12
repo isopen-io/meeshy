@@ -118,6 +118,38 @@ final class CallTopBannerStackTests: XCTestCase {
         )
     }
 
+    // MARK: - #17833 — en groupe, la grille cède sa place à la pile (L4.11)
+
+    func test_groupGridClearance_noBanner_takesNoPlace() {
+        XCTAssertEqual(CallTopBannerStack.groupGridClearance(present: [], heights: [:]), 0)
+    }
+
+    func test_groupGridClearance_isTheSamePlaceAsMySelfTile_forTheSameBanners() {
+        let heights: [CallTopBanner: CGFloat] = [.capture: 62]
+        XCTAssertEqual(
+            CallTopBannerStack.groupGridClearance(present: [.screenShare, .recording, .capture], heights: heights),
+            CallTopBannerStack.selfTileClearance(counted: [.screenShare, .recording, .capture], heights: heights),
+            "UNE loi pour la pile : la grille et ma vignette de duo lui cèdent la même place"
+        )
+    }
+
+    func test_groupGridClearance_countsAReceivedShareAndTheLiveFrame() {
+        XCTAssertEqual(CallTopBannerStack.groupGridClearance(present: [.screenShare, .liveFrame], heights: [:]), 52 + 52)
+    }
+
+    func test_groupGrid_yieldsToTheStack_inMotion() throws {
+        let connected = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift")
+        )
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
+        XCTAssertTrue(layout.contains("+ groupGridTopBannerClearance"), "la réserve haute de la grille compte la pile mesurée")
+        XCTAssertTrue(
+            layout.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: groupGridTopBannerClearance)"),
+            "la grille glisse avec la pile ; Réduire les animations : un fondu court"
+        )
+        XCTAssertTrue(connected.contains("CallTopBannerStack.groupGridClearance(present: present, heights: topBannerHeights)"))
+    }
+
     func test_bannerGap_isTheStackSpacing() {
         XCTAssertEqual(CallTopBannerStack.bannerGap, MeeshySpacing.sm)
     }
