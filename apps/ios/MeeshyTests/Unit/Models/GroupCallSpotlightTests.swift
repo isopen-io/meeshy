@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 import MeeshySDK
 @testable import Meeshy
@@ -167,6 +168,45 @@ final class GroupCallSpotlightTests: XCTestCase {
     func test_motion_movesTheTiles_unlessReduceMotion() {
         XCTAssertTrue(GroupCallStageMotion.movesTiles(reduceMotion: false))
         XCTAssertFalse(GroupCallStageMotion.movesTiles(reduceMotion: true), "Réduire les animations ne déplace rien : un fondu court")
+    }
+
+    // MARK: - U2.10 — le bandeau des autres sort jusqu'au bord de l'écran (#17726)
+
+    func test_stripTravel_portrait_landsTheStripTopOnTheBottomEdge() {
+        let stage = CGRect(x: 12, y: 120, width: 366, height: 500)
+        let window = CGSize(width: 390, height: 844)
+        let travel = GroupCallStageMotion.stripTravel(toward: .bottom, stage: stage, window: window, stripExtent: 112, isRightToLeft: false)
+        XCTAssertEqual(travel.width, 0)
+        XCTAssertEqual(stage.maxY - 112 + travel.height, window.height, "le haut du bandeau franchit le bord bas : il ne s'arrête pas à la place de la pilule")
+    }
+
+    func test_stripTravel_landscape_leavesByTheRightEdge() {
+        let stage = CGRect(x: 59, y: 20, width: 700, height: 340)
+        let window = CGSize(width: 844, height: 390)
+        let travel = GroupCallStageMotion.stripTravel(toward: .trailing, stage: stage, window: window, stripExtent: 128, isRightToLeft: false)
+        XCTAssertEqual(travel.height, 0)
+        XCTAssertEqual(stage.maxX - 128 + travel.width, window.width, "le bord gauche de la colonne franchit le bord droit de l'écran")
+    }
+
+    func test_stripTravel_landscapeRightToLeft_leavesByTheLeftEdge() {
+        let stage = CGRect(x: 59, y: 20, width: 700, height: 340)
+        let window = CGSize(width: 844, height: 390)
+        let travel = GroupCallStageMotion.stripTravel(toward: .trailing, stage: stage, window: window, stripExtent: 128, isRightToLeft: true)
+        XCTAssertEqual(travel.height, 0)
+        XCTAssertEqual(stage.minX + 128 + travel.width, 0, "en droite à gauche, la colonne est à gauche et sort par le bord gauche")
+    }
+
+    func test_stripTravel_stageAtTheEdge_movesByTheStripOwnSize() {
+        let stage = CGRect(x: 0, y: 0, width: 390, height: 844)
+        let travel = GroupCallStageMotion.stripTravel(toward: .bottom, stage: stage, window: CGSize(width: 390, height: 844), stripExtent: 112, isRightToLeft: false)
+        XCTAssertEqual(travel.height, 112)
+    }
+
+    func test_stripTravel_unmeasuredStage_stillLeavesTheScreen() {
+        let window = CGSize(width: 390, height: 844)
+        let travel = GroupCallStageMotion.stripTravel(toward: .bottom, stage: .null, window: window, stripExtent: 112, isRightToLeft: false)
+        XCTAssertTrue(travel.height.isFinite)
+        XCTAssertGreaterThanOrEqual(travel.height, window.height, "une scène pas encore mesurée ne retient pas le bandeau à l'écran")
     }
 
     func test_motion_followsTheSharedFade_underReduceMotion() {

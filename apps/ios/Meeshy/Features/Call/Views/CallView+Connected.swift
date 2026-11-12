@@ -147,7 +147,7 @@ extension CallView {
                     // posent AU-DESSUS du bloc, jamais sur ses rangées.
                     .overlay(alignment: .top) { callControlsNoticesAbove }
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showTranscript)
+            .animation(.easeInOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2), value: showTranscript)
         }
     }
 
@@ -456,8 +456,8 @@ extension CallView {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showsPeerMutedBadge)
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isLiveFrameShown)
+        .animation(.easeInOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2), value: showsPeerMutedBadge)
+        .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isLiveFrameShown)
     }
 
     /// En duo vidéo, le micro coupé du correspondant se voit sur son
