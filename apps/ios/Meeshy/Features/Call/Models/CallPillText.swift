@@ -41,6 +41,12 @@ enum CallPillText: Equatable, Sendable {
         self == .captionsAlone
     }
 
+    /// U2.9 — en plein écran de groupe, la pilule est rangée avec les contrôles : seul son verre de
+    /// sous-titres, privé de sa rangée de base, reste sur la scène. Hors plein écran, elle y est toujours.
+    func isOnStage(isStageFullScreen: Bool) -> Bool {
+        !isStageFullScreen || staysWhenChromeStowed
+    }
+
     /// Le journal prend une part de la fenêtre (`CallJournalSizing`) : en audio,
     /// l'avatar se resserre alors en en-tête compact pour lui laisser la place.
     var compactsAudioLayout: Bool {

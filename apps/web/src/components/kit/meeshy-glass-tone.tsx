@@ -21,7 +21,7 @@ export {
   type MeeshyGlassTone,
 } from './meeshy-glass-recipe';
 
-type MeeshyGlassHost = {
+export type MeeshyGlassHost = {
   readonly tone: MeeshyGlassTone;
   readonly nested: boolean;
   readonly opaque: boolean;
@@ -40,6 +40,8 @@ const hostOf = (host: MeeshyGlassHost): MeeshyGlassHost => {
 const OPEN_HOST = hostOf({ tone: 'deep', nested: false, opaque: false });
 
 const MeeshyGlassHostContext = createContext<MeeshyGlassHost>(OPEN_HOST);
+
+export const useMeeshyGlassHost = (): MeeshyGlassHost => useContext(MeeshyGlassHostContext);
 
 export type MeeshyGlassProps = Omit<HTMLAttributes<HTMLElement>, 'className' | 'children'> & {
   readonly as?: ElementType;

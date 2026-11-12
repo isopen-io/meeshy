@@ -127,6 +127,41 @@ final class GroupCallSpotlightTests: XCTestCase {
         XCTAssertTrue(GroupCallSpotlight.featuresLocal(focus))
     }
 
+    // MARK: - U2.5 — la puce « Écran de X · 2× »
+
+    func test_displayedZoom_isNilAtOne_andOtherwiseRoundedToTenths() {
+        XCTAssertNil(GroupCallSpotlight.displayedZoom(1))
+        XCTAssertNil(GroupCallSpotlight.displayedZoom(1.04), "1,04× s'affiche 1× : pas de suffixe")
+        XCTAssertEqual(GroupCallSpotlight.displayedZoom(2), 2)
+        XCTAssertEqual(GroupCallSpotlight.displayedZoom(2.46), 2.5)
+        XCTAssertEqual(GroupCallSpotlight.displayedZoom(9), GroupCallSpotlight.maxZoom, "jamais au-delà du plafond")
+    }
+
+    func test_featuredChipText_carriesTheZoomFactor_afterTheTitle() {
+        let fr = Locale(identifier: "fr_FR")
+        XCTAssertEqual(GroupCallSpotlight.featuredChipText(title: "Écran de Karim", zoom: 2, locale: fr), "Écran de Karim · 2×")
+        XCTAssertEqual(GroupCallSpotlight.featuredChipText(title: "Écran de Karim", zoom: 2.5, locale: fr), "Écran de Karim · 2,5×")
+    }
+
+    func test_featuredChipText_atOneTimes_isTheTitleAlone() {
+        XCTAssertEqual(GroupCallSpotlight.featuredChipText(title: "Écran de Karim", zoom: 1, locale: Locale(identifier: "fr_FR")), "Écran de Karim")
+    }
+
+    func test_stage_putsTheScreenChipTopLeading_inGlass_andKeepsTheNameplateForThePerson() throws {
+        let stage = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/GroupCallStageView.swift"))
+        let featured = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func featuredTile(", in: stage))
+        XCTAssertTrue(featured.contains(".overlay(alignment: .topLeading)"), "la puce est en haut à gauche")
+        XCTAssertTrue(featured.contains("CallScreenShareChip("))
+        XCTAssertTrue(featured.contains("GroupCallSpotlight.featuredChipText(title:"), "le facteur de zoom vient de la loi pure")
+        XCTAssertTrue(featured.contains("zoom * pinch"), "la puce suit le pincement en direct")
+        let tile = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct GroupCallTileView: View", in: stage))
+        XCTAssertFalse(tile.contains("title ?? tile.displayName"), "« Écran de X » ne remplace plus le nom sur la plaque : il est sur la puce")
+        let chrome = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallTileChrome.swift"))
+        let chip = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallScreenShareChip: View", in: chrome))
+        XCTAssertTrue(chip.contains(".callChromeGlass(in: Capsule())"), "le verre adaptatif, jamais un matériau posé à côté")
+        XCTAssertTrue(chip.contains(".allowsHitTesting(false)"), "la puce ne prend aucun toucher : le pincement la traverse")
+    }
+
     // MARK: - P14.10 — le mouvement grille ↔ à la une
 
     func test_motion_movesTheTiles_unlessReduceMotion() {

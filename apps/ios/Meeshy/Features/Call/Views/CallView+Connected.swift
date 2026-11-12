@@ -223,20 +223,20 @@ extension CallView {
         VStack(spacing: MeeshySpacing.sm) {
             Color.clear
                 .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
-            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
+            GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, chrome: chromeVisibility, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
                 .padding(.horizontal, MeeshySpacing.md)
                 // La pilule qui grandit rétrécit ses rangées (qui
                 // défilent alors), jamais la grille sous ce minimum.
                 .frame(minHeight: CallGroupStageSizing.minimumGridHeight)
-            if !isStageFullScreen {
+            if pillText.isOnStage(isStageFullScreen: isStageFullScreen) {
                 callControlsBlock
                     .overlay(alignment: .top) { callControlsNoticesAbove }
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.bottom, Self.chromeBottomInset)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .padding(.bottom, isStageFullScreen ? DeviceLayout.safeAreaBottom : 0)
+        .padding(.bottom, isStageFullScreen && !pillText.isOnStage(isStageFullScreen: isStageFullScreen) ? DeviceLayout.safeAreaBottom : 0)
         // Chrome masqué, TOUTE la scène le rallume : l'en-tête et la
         // pilule effacés ne laisseraient que les 8 pt entre les vignettes.
         .background(stageRevealTarget)
@@ -246,7 +246,7 @@ extension CallView {
             }
         )
         .onPreferenceChange(CallGroupStageHeightKey.self) { noteGroupStageHeight($0) }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isStageFullScreen)
+        .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isStageFullScreen)
     }
 
     /// Seul le franchissement du seuil écrit l'état : une rotation

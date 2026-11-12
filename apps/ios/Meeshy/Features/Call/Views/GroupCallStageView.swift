@@ -98,6 +98,9 @@ struct GroupCallStageView: View {
     /// #8735 — chrome masqué, toucher une vignette le RALLUME (comme partout
     /// sur la scène) ; chrome visible, elle se met à la une.
     var isChromeVisible = true
+    /// U1.10 · #8550 — la capsule de la une se range AVEC les contrôles, mais survit au plein
+    /// écran : c'est par elle qu'on en sort (`CallChromeElement.featuredCapsule`).
+    var chrome = CallChromeVisibility()
     var onStageTap: () -> Void = {}
     var onSelfFeaturedChange: (Bool) -> Void = { _ in }
 
@@ -109,9 +112,14 @@ struct GroupCallStageView: View {
     @State private var zoom: CGFloat = 1
     @GestureState private var pinch: CGFloat = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.locale) private var locale
     @Namespace private var tileSpace
 
     static let spacing: CGFloat = 8
+    /// La distance du haut de la scène au haut de l'écran, par excès : rangée, la capsule la franchit toute.
+    private static let capsuleStowReach: CGFloat = 60
+
+    private var isCapsuleVisible: Bool { chrome.isVisible(.featuredCapsule) }
 
     var body: some View {
         let current = tiles
@@ -224,23 +232,36 @@ struct GroupCallStageView: View {
     private func spotlight(_ current: [GroupCallStageTile], tileId: String, isScreenShare: Bool, in size: CGSize) -> some View {
         let others = current.filter { $0.id != tileId }
         let isLandscape = size.width > size.height
+        let spacing = isFullScreen ? 0 : Self.spacing
         if let featured = current.first(where: { $0.id == tileId }) {
-            if isFullScreen {
-                featuredTile(featured, isScreenShare: isScreenShare)
-            } else if isLandscape {
-                HStack(spacing: Self.spacing) {
+            if isLandscape {
+                HStack(spacing: spacing) {
                     featuredTile(featured, isScreenShare: isScreenShare)
-                    filmstrip(others, axis: .vertical)
-                        .frame(width: 128)
+                    if !isFullScreen {
+                        filmstrip(others, axis: .vertical)
+                            .frame(width: 128)
+                            .transition(stripExit(toward: .trailing))
+                    }
                 }
             } else {
-                VStack(spacing: Self.spacing) {
+                VStack(spacing: spacing) {
                     featuredTile(featured, isScreenShare: isScreenShare)
-                    filmstrip(others, axis: .horizontal)
-                        .frame(height: 112)
+                    if !isFullScreen {
+                        filmstrip(others, axis: .horizontal)
+                            .frame(height: 112)
+                            .transition(stripExit(toward: .bottom))
+                    }
                 }
             }
         }
+    }
+
+    /// U2.10 — le bandeau des autres entre par son bord de l'écran et en sort par lui (bas en
+    /// portrait, côté en paysage) ; « Réduire les animations » le remplace par un fondu.
+    private func stripExit(toward edge: Edge) -> AnyTransition {
+        GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion)
+            ? .move(edge: edge).combined(with: .opacity)
+            : .opacity
     }
 
     private func featuredTile(_ tile: GroupCallStageTile, isScreenShare: Bool) -> some View {
@@ -250,7 +271,7 @@ struct GroupCallStageView: View {
                 track: track(for: tile),
                 intendedFront: callManager.isUsingFrontCamera,
                 contentMode: isScreenShare ? .scaleAspectFit : .scaleAspectFill,
-                title: isScreenShare ? CallScreenShareCopy.screenOf(name: tile.displayName) : nil,
+                screenTitle: isScreenShare ? CallScreenShareCopy.screenOf(name: tile.displayName) : nil,
                 zoom: isScreenShare ? GroupCallSpotlight.clampedZoom(zoom * pinch) : 1
             )
             .gesture(zoomGesture, including: isScreenShare ? .all : .subviews)
@@ -261,13 +282,24 @@ struct GroupCallStageView: View {
             .gesture(zoomResetTap, including: isScreenShare ? .all : .subviews)
             .onTapGesture { onStageTap() }
             .accessibilityAction(named: Text(String(localized: "call.stage.controls.toggle.a11y", defaultValue: "Afficher ou masquer les contrôles", bundle: .main))) { onStageTap() }
-            .overlay(alignment: .topTrailing) { spotlightControls.padding(MeeshySpacing.sm) }
+            .overlay(alignment: .topLeading) {
+                if isScreenShare {
+                    CallScreenShareChip(text: GroupCallSpotlight.featuredChipText(title: CallScreenShareCopy.screenOf(name: tile.displayName), zoom: zoom * pinch, locale: locale))
+                        .padding(MeeshySpacing.sm)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                spotlightControls
+                    .padding(MeeshySpacing.sm)
+                    .modifier(CallEdgeStow(edge: .top, margin: CallView.chromeTopInset + Self.capsuleStowReach, isVisible: isCapsuleVisible, reduceMotion: reduceMotion))
+                    .callChromeVisibility(isCapsuleVisible)
+            }
         }
     }
 
     private var zoomResetTap: some Gesture {
         TapGesture(count: 2).onEnded {
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { zoom = 1 }
+            withAnimation(.easeOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2)) { zoom = 1 }
         }
     }
 
@@ -290,7 +322,7 @@ struct GroupCallStageView: View {
             }
             .accessibilityLabel(String(localized: "call.group.grid", defaultValue: "Revenir à la grille", bundle: .main))
             Button {
-                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { isFullScreen.toggle() }
+                withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { isFullScreen.toggle() }
             } label: {
                 Image(systemName: isFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
@@ -336,8 +368,9 @@ struct GroupCallTileView: View {
     /// Ma caméra voulue avant/arrière ; ignorée pour la vignette d'un autre.
     let intendedFront: Bool
     var contentMode: UIView.ContentMode = .scaleAspectFill
-    /// Remplace le nom sur la plaque (« Écran de X » à la une).
-    var title: String? = nil
+    /// « Écran de X » d'un écran partagé mis à la une : ce que VoiceOver lit. Il se VOIT sur la puce
+    /// de la scène (`CallScreenShareChip`), la plaque gardant le nom de la personne.
+    var screenTitle: String? = nil
     var zoom: CGFloat = 1
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -391,7 +424,7 @@ struct GroupCallTileView: View {
     }
 
     private var accessibilityName: String {
-        if let title { return title }
+        if let screenTitle { return screenTitle }
         return tile.displayName.isEmpty
             ? String(localized: "call.group.tile.unknown", defaultValue: "Participant", bundle: .main)
             : tile.displayName
@@ -408,7 +441,7 @@ struct GroupCallTileView: View {
 
     private var nameplate: some View {
         CallTileNameplate(
-            title: title ?? tile.displayName,
+            title: tile.displayName,
             isMicMuted: tile.isMicMuted,
             isScreenSharing: tile.isScreenSharing,
             isReconnecting: tile.isReconnecting
