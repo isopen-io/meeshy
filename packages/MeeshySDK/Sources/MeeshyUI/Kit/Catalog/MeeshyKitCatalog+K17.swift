@@ -93,8 +93,9 @@ private struct MeeshyKeyboardDockSample: View {
     }
 
     private func panelBody(_ id: String) -> some View {
-        ForEach(0..<3, id: \.self) { row in
-            Text("\(items.first { $0.id == id }?.label ?? id) \(row + 1)")
+        let name = items.first(where: { $0.id == id })?.label ?? id
+        return ForEach(0..<3, id: \.self) { row in
+            Text("\(name) \(row + 1)")
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundStyle(MeeshyColors.onMedia)
         }
