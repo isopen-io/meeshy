@@ -256,11 +256,12 @@ private struct MeeshyExpandingPillSample: View {
         maxBodyHeight: CGFloat? = nil,
         @ViewBuilder body: @escaping (MeeshyExpandingPillOption) -> Body
     ) -> some View {
-        MeeshyExpandingPill(
+        let noop: () -> Void = {}
+        return MeeshyExpandingPill(
             label: "Pilule du composer",
             option: option,
-            onBack: option == nil ? nil : {},
-            onClose: option == nil ? nil : {},
+            onBack: option == nil ? nil : noop,
+            onClose: option == nil ? nil : noop,
             maxBodyHeight: maxBodyHeight,
             buttons: { size in Self.row(tools, size: size) },
             primary: { if let primary { Self.primaryAction(primary) } },

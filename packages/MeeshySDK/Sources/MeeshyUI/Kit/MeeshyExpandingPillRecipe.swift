@@ -138,12 +138,12 @@ public nonisolated enum MeeshyExpandingPillRule {
     ) -> CGFloat {
         if let override, override.isFinite { return max(override, 0) }
         let host = hostHeight.isFinite ? max(hostHeight, 0) : 0
-        let insets = insets(for: option)
+        let edge = insets(for: option)
         let header = option.showsHeader
             ? CGFloat(MeeshyExpandingPillRecipe.headerButtonSize.diameter) + MeeshyExpandingPillRecipe.sectionGap
             : 0
         let row = option.keepsRow ? MeeshyGlassPillRecipe.restingHeight : 0
-        let chrome = header + row + insets.top + insets.bottom
+        let chrome = header + row + edge.top + edge.bottom
         return max(host * MeeshyExpandingPillRecipe.hostShare - chrome, MeeshyExpandingPillRecipe.bodyFloor)
     }
 
