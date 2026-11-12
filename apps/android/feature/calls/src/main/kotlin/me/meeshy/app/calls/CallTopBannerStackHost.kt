@@ -83,6 +83,21 @@ internal fun <T : Any> CallBannerPresence(face: T?, content: @Composable (T) -> 
 }
 
 /**
+ * #17820 C3.6 — la présence d'un habit qui ne se déplace pas (le cadre en direct autour des deux vidéos) : il entre et sort en
+ * fondu, court sous « Réduire les animations » ([CallChromeStow.fadeMillis]), et garde son dernier visage le temps de la sortie.
+ */
+@Composable
+internal fun <T : Any> CallFadePresence(face: T?, content: @Composable (T) -> Unit) {
+    val held = remember { HeldFace<T>() }
+    if (face != null) held.value = face
+    val reduceMotion = rememberCallReduceMotion()
+    val millis = CallChromeStow.fadeMillis(reduceMotion)
+    AnimatedVisibility(visible = face != null, enter = fadeIn(tween(millis)), exit = fadeOut(tween(millis))) {
+        (face ?: held.value)?.let { content(it) }
+    }
+}
+
+/**
  * R1.5 — la hauteur RÉELLE de chaque bandeau de la pile, rendue par les bandeaux eux-mêmes ([reportsTopBannerHeight]) à
  * l'écran d'appel, qui en déduit la place de ma vignette : la carte d'accord est plus haute qu'une capsule.
  */
