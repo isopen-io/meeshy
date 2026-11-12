@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -34,6 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
@@ -72,6 +71,18 @@ internal fun rememberIncomingPreAnswerHost(viewModel: CallViewModel, isVideoCall
         onCameraChosen = viewModel::setSelfPreviewOn,
         onAnswerMuted = viewModel::answerWithMicrophoneMuted,
     )
+}
+
+/**
+ * Ma caméra d'aperçu ne tourne que pendant que l'écran entrant est VU et que Caméra est choisie : elle s'éteint quand
+ * l'écran part, quand on coupe Caméra ou quand l'app passe en arrière-plan pendant la sonnerie, et se rallume au retour.
+ */
+@Composable
+internal fun IncomingSelfCameraWhileSeen(cameraOn: Boolean, host: IncomingPreAnswerHost?) {
+    LifecycleStartEffect(cameraOn) {
+        if (cameraOn) host?.onCameraChosen?.invoke(true)
+        onStopOrDispose { host?.onCameraChosen?.invoke(false) }
+    }
 }
 
 /** P17.2 — la puce de verre « Appel vidéo entrant » et son icône caméra, AU-DESSUS du nom. */
@@ -134,18 +145,12 @@ internal fun IncomingSelfPreview(
                     .semantics { contentDescription = label },
             ) {
                 VideoRenderer(track = track, eglContext = host.eglContext, modifier = Modifier.fillMaxSize(), mirror = true, overlay = true)
-                Text(
+                // La plaque « Vous » de ma tuile de groupe (iOS `CallTileNameplate`) : la même capsule de verre.
+                CallTileNameplate(
                     text = stringResource(R.string.call_group_tile_you),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = CallPalette.Ink,
-                    maxLines = 1,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = MeeshySpacing.xs)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = NAMEPLATE_ALPHA))
-                        .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xxs)
                         .clearAndSetSemantics { },
                 )
             }
@@ -222,6 +227,5 @@ private fun incomingExposureText(exposure: IncomingPreAnswer.Exposure, peerName:
     peerName,
 )
 
-private const val NAMEPLATE_ALPHA = 0.45f
 private val PRE_ANSWER_BAR_MIN_HEIGHT = 56.dp
 private val PRE_ANSWER_GLYPH = 40.dp

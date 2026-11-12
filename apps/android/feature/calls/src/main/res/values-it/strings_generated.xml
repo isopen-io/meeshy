@@ -46,7 +46,6 @@
     <string name="call_control_camera_rail">Opzioni della mia fotocamera</string>
     <string name="call_control_capture">Cattura la chiamata</string>
     <string name="call_control_capture_caption">Cattura</string>
-    <string name="call_control_capture_hint">Libera lo schermo per scegliere un montaggio e catturare la chiamata</string>
     <string name="call_control_end_hint">Termina la chiamata in corso</string>
     <string name="call_control_flip_camera">Passa dalla fotocamera anteriore a quella posteriore</string>
     <string name="call_control_flip_camera_caption">Gira</string>
@@ -275,7 +274,6 @@
     <string name="call_waiting_banner_a11y">Chiamata in arrivo da %1$s</string>
     <string name="call_waiting_subtitle">Chiamata in arrivo…</string>
     <string name="call_zoom_cycle_hint">Tocca per passare al fattore di zoom successivo</string>
-    <string name="call_zoom_hint">Scorri in alto o in basso per lo zoom. Sullo schermo, pizzica la tua immagine; tocca due volte per tornare a 1×</string>
     <string name="call_zoom_label">Zoom della mia fotocamera</string>
     <string name="permission_microphone_denied">Microfono negato — tocca per aprire Impostazioni</string>
     <string name="video_filter_preset_bright">Chiaro</string>

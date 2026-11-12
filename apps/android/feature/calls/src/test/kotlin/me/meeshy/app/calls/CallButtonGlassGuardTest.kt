@@ -156,6 +156,19 @@ class CallButtonGlassGuardTest {
     }
 
     @Test
+    fun `P17_4 - la plaque Vous de ma vignette est celle des tuiles, une capsule de verre et jamais un voile noir`() {
+        val parts = code("IncomingVideoParts.kt")
+        assertThat(parts).contains("CallTileNameplate(")
+        assertThat(parts).doesNotContain("Color.Black")
+
+        val tile = code("CallGroupTile.kt")
+        val nameplate = block(tile, "internal fun CallTileNameplate(", "\n}")
+        assertThat(nameplate).contains("CallGlassPlate(")
+        assertThat(nameplate).contains("CallToneScrim()")
+        assertThat(block(tile, "private fun CallGroupTilePlate(", "\n}")).contains("CallTileNameplate(")
+    }
+
+    @Test
     fun `P16_12 - le bandeau de partage reste le verre teinte de la surface partagee, a 48 dp`() {
         val banner = code("CallScreenShareBanner.kt")
 

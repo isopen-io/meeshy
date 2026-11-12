@@ -307,4 +307,18 @@ class CallViewModelPreviewTest {
 
         verify(exactly = 0) { coordinator.setMuted(any()) }
     }
+
+    @Test
+    fun `P17_9 - Sans video eteint ma camera d'apercu des le geste, sans attendre l'ouverture du lien`() {
+        every { coordinator.startSelfPreview() } returns true
+        every { coordinator.localVideoTrack } returns mockk<VideoTrack>(relaxed = true)
+        val vm = vm()
+        vm.start(incomingVideo)
+        vm.setSelfPreviewOn(true)
+
+        vm.acceptWithoutVideo()
+
+        verify(exactly = 1) { coordinator.stopSelfPreview() }
+        assertThat(vm.selfPreviewTrack.value).isNull()
+    }
 }

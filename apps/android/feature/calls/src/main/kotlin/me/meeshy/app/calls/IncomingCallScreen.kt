@@ -38,7 +38,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,13 +107,7 @@ internal fun IncomingCallScreen(
     LaunchedEffect(Unit) {
         announce(context.getString(R.string.call_incoming_a11y, typeLabel, title))
     }
-    if (layout == IncomingCallLayout.VideoPreview) {
-        // Ma caméra tourne pour MA vignette tant que Caméra est choisie ; elle s'éteint avec l'écran ou son bouton.
-        DisposableEffect(cameraOn) {
-            if (cameraOn) preAnswer?.onCameraChosen?.invoke(true)
-            onDispose { preAnswer?.onCameraChosen?.invoke(false) }
-        }
-    }
+    if (layout == IncomingCallLayout.VideoPreview) IncomingSelfCameraWhileSeen(cameraOn = cameraOn, host = preAnswer)
 
     val perform: (IncomingCallAction) -> Unit = { action ->
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)

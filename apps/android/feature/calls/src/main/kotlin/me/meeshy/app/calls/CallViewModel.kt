@@ -532,12 +532,14 @@ class CallViewModel @Inject constructor(
     /**
      * « Sans vidéo » (vue P17, iOS `CallAnswerWithoutVideo`) : décrocher un appel vidéo sans jamais ouvrir ma caméra. La
      * réponse n'annonce la vidéo qu'en réception : je vois l'autre, il voit mon avatar, et rien ne part de ma caméra.
-     * Allumer ma caméra ensuite passe par l'escalade ([localCameraPending]). Sur un appel audio, c'est [accept].
+     * Allumer ma caméra ensuite passe par l'escalade ([localCameraPending]). Sur un appel audio, c'est [accept]. La caméra
+     * de mon aperçu (P17.4) s'éteint dès le geste, sans attendre l'ouverture du lien.
      */
     fun acceptWithoutVideo() {
         if (config.isVideo && callState == CallState.Ringing(isOutgoing = false)) {
             localCameraPending = true
             media = media.copy(isCameraOn = false)
+            selfPreview.stop()
         }
         accept()
     }
