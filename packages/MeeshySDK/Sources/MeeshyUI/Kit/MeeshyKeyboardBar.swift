@@ -81,7 +81,9 @@ public struct MeeshyKeyboardBar<Glyph: View>: View, Equatable {
 
     /// Les entrées sont construites ICI, par le `body`, sur le fil principal : la rangée est un candidat de
     /// `ViewThatFits`, que le rendu asynchrone d'iOS 26 mesure hors du fil principal — le `ForEach` n'y relit
-    /// que des vues déjà faites (`AsyncRenderRow`, #9456).
+    /// que des vues déjà faites (`AsyncRenderRow`, #9456). Chaque entrée est un type NOMMÉ
+    /// (`MeeshyKeyboardBarToolSlot`) : un type opaque d'une méthode du type générique, passé en argument
+    /// générique d'`AsyncRenderRow`, fait planter l'IRGen de Swift 6.2.
     private func row(display: MeeshyModeCapsuleDisplay) -> some View {
         HStack(spacing: 0) {
             ForEach(tools.map { AsyncRenderRow(id: $0.id, content: toolSlot($0)) },
@@ -100,25 +102,36 @@ public struct MeeshyKeyboardBar<Glyph: View>: View, Equatable {
         }
     }
 
-    /// Un outil suivi de son espace : le `Group` est transparent à la mise en page, la rangée répartit donc
-    /// l'espace libre entre les outils comme si chacun y était posé à plat.
-    private func toolSlot(_ item: MeeshyKeyboardDockItem) -> some View {
-        Group {
-            tool(item)
-            Spacer(minLength: 0)
-        }
+    private func toolSlot(_ item: MeeshyKeyboardDockItem) -> MeeshyKeyboardBarToolSlot<Glyph> {
+        MeeshyKeyboardBarToolSlot(
+            item: item,
+            activation: MeeshyKeyboardDockRule.activation(for: item, openItem: openItem),
+            onItem: onItem,
+            glyph: glyph
+        )
     }
+}
 
-    private func tool(_ item: MeeshyKeyboardDockItem) -> some View {
+/// Un outil de la barre suivi de son espace, CONSTRUIT par le `body` de la barre : le `ForEach` qui vit sous
+/// `ViewThatFits` ne fait que le relire (`AsyncRenderRow`). Son `body` rend deux vues à plat — la rangée
+/// répartit donc l'espace libre entre les outils comme si chacun y était posé directement.
+struct MeeshyKeyboardBarToolSlot<Glyph: View>: View {
+    let item: MeeshyKeyboardDockItem
+    let activation: MeeshyGlassButtonActivation
+    let onItem: (String) -> Void
+    let glyph: (String) -> Glyph
+
+    var body: some View {
         MeeshyGlassButton(
             label: item.label,
             hint: item.hint,
             value: item.value,
-            activation: MeeshyKeyboardDockRule.activation(for: item, openItem: openItem),
+            activation: activation,
             action: { onItem(item.id) },
             glyph: { glyph(item.id) }
         )
         .disabled(!item.isEnabled)
+        Spacer(minLength: 0)
     }
 }
 
