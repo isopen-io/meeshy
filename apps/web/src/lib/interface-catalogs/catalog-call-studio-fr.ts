@@ -91,8 +91,6 @@ const fr = {
   'callStudio.frames.mood.feerique': 'Féerique',
   'callStudio.frames.more': 'Plus d’ambiances',
   'callStudio.frames.less': 'Moins d’ambiances',
-  'callStudio.frames.more.hint': 'Montre toutes les ambiances et tous les cadres',
-  'callStudio.frames.less.hint': 'Revient aux ambiances mises en avant',
   'callStudio.frames.style.next': 'Déclinaison suivante',
   'callStudio.frames.style.previous': 'Déclinaison précédente',
   'callStudio.mode.pickFrame': 'Choisir un cadre',

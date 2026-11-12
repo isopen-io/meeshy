@@ -116,7 +116,7 @@ describe('MoodChips', () => {
     view.done();
   });
 
-  const toggle = (showsAll: boolean, calls: boolean[]): ScopeToggle => ({ showsAll, label: showsAll ? 'Moins d’ambiances' : 'Plus d’ambiances', hint: showsAll ? 'Revient aux ambiances mises en avant' : 'Montre toutes les ambiances et tous les cadres', onToggle: () => void calls.push(!showsAll) });
+  const toggle = (showsAll: boolean, calls: boolean[]): ScopeToggle => ({ showsAll, label: showsAll ? 'Moins d’ambiances' : 'Plus d’ambiances', onToggle: () => void calls.push(!showsAll) });
 
   test('sans interrupteur de portée, rien n’est caché : aucune puce « Plus d’ambiances » (C1.3)', () => {
     const view = mount();
@@ -124,7 +124,7 @@ describe('MoodChips', () => {
     view.done();
   });
 
-  test('« Plus d’ambiances » ferme la rangée : une puce de verre, nommée, avec sa description, qui déplie au toucher (C1.3)', () => {
+  test('« Plus d’ambiances » ferme la rangée : une puce de verre, nommée, qui déplie au toucher (C1.3)', () => {
     const calls: boolean[] = [];
     const view = mount({ scopeToggle: toggle(false, calls) });
     const chips = [...view.host.querySelectorAll('[data-call-frame-moods] button')];
@@ -132,7 +132,6 @@ describe('MoodChips', () => {
     expect(chips.at(-1)).toBe(more as Element);
     expect(more?.textContent).toBe('Plus d’ambiances');
     expect(more?.getAttribute('aria-label')).toBe('Plus d’ambiances');
-    expect(more?.getAttribute('aria-description')).toBe('Montre toutes les ambiances et tous les cadres');
     expect(more?.getAttribute('aria-pressed')).toBeNull();
     expect(more?.className).toContain('glass-call');
     expect(more?.className).toContain('min-h-11');

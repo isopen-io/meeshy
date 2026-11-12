@@ -86,8 +86,6 @@ const it = {
   'callStudio.frames.mood.feerique': 'Fiabesco',
   'callStudio.frames.more': 'Più atmosfere',
   'callStudio.frames.less': 'Meno atmosfere',
-  'callStudio.frames.more.hint': 'Mostra tutte le atmosfere e tutte le cornici',
-  'callStudio.frames.less.hint': 'Torna alle atmosfere in evidenza',
   'callStudio.frames.style.next': 'Variante successiva',
   'callStudio.frames.style.previous': 'Variante precedente',
   'callStudio.mode.pickFrame': 'Scegli una cornice',

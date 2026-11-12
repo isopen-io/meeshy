@@ -86,8 +86,6 @@ const de = {
   'callStudio.frames.mood.feerique': 'Märchenhaft',
   'callStudio.frames.more': 'Mehr Stimmungen',
   'callStudio.frames.less': 'Weniger Stimmungen',
-  'callStudio.frames.more.hint': 'Zeigt alle Stimmungen und alle Rahmen',
-  'callStudio.frames.less.hint': 'Zurück zu den hervorgehobenen Stimmungen',
   'callStudio.frames.style.next': 'Nächste Variante',
   'callStudio.frames.style.previous': 'Vorherige Variante',
   'callStudio.mode.pickFrame': 'Rahmen wählen',

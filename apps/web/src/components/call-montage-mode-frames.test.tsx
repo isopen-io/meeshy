@@ -145,7 +145,6 @@ describe('CallMontageMode — les cadres', () => {
     const studio = loaded.module?.createFrameStudio({ fonts: undefined });
     const scope = () => view.find('[data-call-frame-scope]');
     expect(scope()?.textContent).toBe('Plus d’ambiances');
-    expect(scope()?.getAttribute('aria-description')).toBe('Montre toutes les ambiances et tous les cadres');
     await view.press('[data-call-frame-scope]');
     expect(view.chips().slice(1).map(([id]) => id)).toEqual([...(studio?.moods(2) ?? [])]);
     expect(scope()?.textContent).toBe('Moins d’ambiances');
@@ -440,7 +439,7 @@ describe('CallMontageMode — les cadres', () => {
     const moods = loaded.module?.createFrameStudio({ fonts: undefined }).moods(2) ?? [];
     const kept = moods.filter((mood) => mood !== 'jovial');
     const view = await mount(duo, { shelf: kept });
-    expect(view.chips().map(([id]) => id)).toEqual(['classics', ...(loaded.module?.createFrameStudio({ fonts: undefined }).moods(2, 'spotlight') ?? []).filter((mood) => kept.includes(mood))]);
+    expect(view.chips().map(([id]) => id)).toEqual(['classics', ...(loaded.module?.createFrameStudio({ fonts: undefined }).moods(2, 'spotlight') ?? []).filter((mood) => (kept as readonly string[]).includes(mood))]);
     expect(view.find('[data-call-frame-mood="jovial"]')).toBeNull();
     view.done();
   });

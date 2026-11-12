@@ -313,7 +313,6 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel = 
       : {
           showsAll: scope === 'all',
           label: t(language, scope === 'all' ? 'callStudio.frames.less' : 'callStudio.frames.more'),
-          hint: t(language, scope === 'all' ? 'callStudio.frames.less.hint' : 'callStudio.frames.more.hint'),
           onToggle: () => setRequestedScope(scope === 'all' ? 'spotlight' : 'all'),
         };
   const chips = [{ id: CLASSICS, label: t(language, 'callStudio.frames.mood.classics') }, ...moods.map((mood) => ({ id: mood, label: t(language, `callStudio.frames.mood.${mood}`) }))];

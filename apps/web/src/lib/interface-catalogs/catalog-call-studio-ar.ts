@@ -86,8 +86,6 @@ const ar = {
   'callStudio.frames.mood.feerique': 'ساحر',
   'callStudio.frames.more': 'المزيد من الأجواء',
   'callStudio.frames.less': 'أجواء أقل',
-  'callStudio.frames.more.hint': 'يعرض كل الأجواء وكل الإطارات',
-  'callStudio.frames.less.hint': 'يعود إلى الأجواء المميزة',
   'callStudio.frames.style.next': 'التنويع التالي',
   'callStudio.frames.style.previous': 'التنويع السابق',
   'callStudio.mode.pickFrame': 'اختر إطارًا',

@@ -86,8 +86,6 @@ const pt = {
   'callStudio.frames.mood.feerique': 'Encantado',
   'callStudio.frames.more': 'Mais ambientes',
   'callStudio.frames.less': 'Menos ambientes',
-  'callStudio.frames.more.hint': 'Mostra todos os ambientes e todas as molduras',
-  'callStudio.frames.less.hint': 'Volta aos ambientes em destaque',
   'callStudio.frames.style.next': 'Próxima variante',
   'callStudio.frames.style.previous': 'Variante anterior',
   'callStudio.mode.pickFrame': 'Escolher uma moldura',

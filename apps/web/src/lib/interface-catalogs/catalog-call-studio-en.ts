@@ -86,8 +86,6 @@ const en = {
   'callStudio.frames.mood.feerique': 'Enchanted',
   'callStudio.frames.more': 'More moods',
   'callStudio.frames.less': 'Fewer moods',
-  'callStudio.frames.more.hint': 'Shows every mood and every frame',
-  'callStudio.frames.less.hint': 'Back to the featured moods',
   'callStudio.frames.style.next': 'Next variant',
   'callStudio.frames.style.previous': 'Previous variant',
   'callStudio.mode.pickFrame': 'Choose a frame',

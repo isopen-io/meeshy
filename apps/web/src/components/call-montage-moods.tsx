@@ -23,8 +23,8 @@ import { ROW_EDGE_FADE } from '@/lib/calls/call-row-keys';
 
 export type MoodChip = { readonly id: string; readonly label: string };
 
-/** L'interrupteur de portée : ce qu'il dit, ce qu'il décrit, et son geste. `showsAll` vrai, il replie. */
-export type ScopeToggle = { readonly showsAll: boolean; readonly label: string; readonly hint: string; readonly onToggle: () => void };
+/** L'interrupteur de portée : ce qu'il dit, et son geste. `showsAll` vrai, il replie. */
+export type ScopeToggle = { readonly showsAll: boolean; readonly label: string; readonly onToggle: () => void };
 
 type Props = {
   readonly label: string;
@@ -37,6 +37,9 @@ type Props = {
 };
 
 const CHIP = 'grid min-h-11 min-w-11 shrink-0 touch-manipulation select-none place-items-center rounded-full px-4 text-mini font-semibold transition-transform duration-100 active:scale-95 motion-reduce:transition-none';
+
+/** Une puce de la rangée : disque blanc quand elle est choisie, verre sinon. */
+const chipClass = (pressed: boolean): string => (pressed ? `bg-on-media text-[var(--ios-indigo-950)] ${CHIP}` : `glass-call text-on-media ${CHIP}`);
 
 const glyph = (path: string) => (
   <svg aria-hidden viewBox="0 0 24 24" className="size-4 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -81,7 +84,7 @@ export function MoodChips({ label, chips, selected, onPick, onWheel, scopeToggle
             aria-pressed={pressed}
             tabIndex={pressed ? 0 : -1}
             onClick={() => onPick(chip.id)}
-            className={pressed ? `bg-on-media text-[var(--ios-indigo-950)] ${CHIP}` : `glass-call text-on-media ${CHIP}`}
+            className={chipClass(pressed)}
             data-call-frame-mood={chip.id}
           >
             {chip.label}
@@ -93,9 +96,8 @@ export function MoodChips({ label, chips, selected, onPick, onWheel, scopeToggle
           type="button"
           tabIndex={-1}
           aria-label={scopeToggle.label}
-          aria-description={scopeToggle.hint}
           onClick={scopeToggle.onToggle}
-          className={`glass-call grid-flow-col gap-1.5 text-on-media ${CHIP}`}
+          className={`grid-flow-col gap-1.5 ${chipClass(false)}`}
           data-call-frame-scope={scopeToggle.showsAll ? 'less' : 'more'}
         >
           {scopeToggle.showsAll ? LESS_GLYPH : MORE_GLYPH}

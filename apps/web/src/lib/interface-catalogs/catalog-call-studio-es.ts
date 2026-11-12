@@ -86,8 +86,6 @@ const es = {
   'callStudio.frames.mood.feerique': 'Mágico',
   'callStudio.frames.more': 'Más ambientes',
   'callStudio.frames.less': 'Menos ambientes',
-  'callStudio.frames.more.hint': 'Muestra todos los ambientes y todos los marcos',
-  'callStudio.frames.less.hint': 'Vuelve a los ambientes destacados',
   'callStudio.frames.style.next': 'Variante siguiente',
   'callStudio.frames.style.previous': 'Variante anterior',
   'callStudio.mode.pickFrame': 'Elegir un marco',
