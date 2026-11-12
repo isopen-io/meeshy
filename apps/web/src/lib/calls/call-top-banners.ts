@@ -32,8 +32,16 @@ export const topBannersAbove = (banner: TopBanner, present: PresentBanners): num
 
 type RecordingBannerState = { readonly view: { readonly kind: 'idle' | 'pending' | 'recording' | 'asking'; readonly mustAnswer?: boolean }; readonly notice: unknown };
 
-/** L'indicateur d'enregistrement (ou son avis) occupe-t-il sa place dans la pile ? La carte d'accord, elle, flotte par-dessus : elle n'en est pas un bandeau. */
-export const recordingBannerPresent = ({ view, notice }: RecordingBannerState): boolean => {
-  if (view.kind === 'idle') return notice !== null;
-  return view.kind !== 'pending' || view.mustAnswer !== true;
-};
+/**
+ * La case de l'enregistrement est tenue dès qu'il y a QUELQUE CHOSE à dire : la carte d'accord, la capsule
+ * (attente ou enregistrement) ou son avis (`CallRecordingBannerStage` d'iOS : consentement, statut et avis
+ * sont le MÊME bandeau `.recording` de la pile). La carte n'y flotte plus : la capture et le cadre en direct
+ * sont repoussés sous elle (R2.1).
+ */
+export const recordingBannerPresent = ({ view, notice }: RecordingBannerState): boolean => view.kind !== 'idle' || notice !== null;
+
+/** Le plancher de la case (px) : une capsule et l'écart qui la sépare du bandeau suivant. */
+export const RECORDING_SLOT_MIN = TOP_BANNER_CLEARANCE.recording - 8;
+
+/** La hauteur de la case : celle de la carte d'accord MESURÉE quand elle y est (`CallTopBannerStack.selfTileClearance` d'iOS compte la hauteur mesurée de chaque bandeau, jamais moins que le plancher). */
+export const recordingSlotHeight = (card: number): number => Math.max(RECORDING_SLOT_MIN, card);

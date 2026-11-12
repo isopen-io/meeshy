@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { orderedTopBanners, recordingBannerPresent, selfTileClearance, topBannersAbove, TOP_BANNER_CLEARANCE } from './call-top-banners';
+import { orderedTopBanners, RECORDING_SLOT_MIN, recordingBannerPresent, recordingSlotHeight, selfTileClearance, topBannersAbove, TOP_BANNER_CLEARANCE } from './call-top-banners';
 
 /**
  * LA PILE DES BANDEAUX DU HAUT (P16.7, `CallTopBannerStack.ordered` d'iOS) — ordre fixe, quel que
@@ -45,5 +45,14 @@ describe('l’enregistrement dans la pile', () => {
     expect(recordingBannerPresent({ view: { kind: 'idle' }, notice: { kind: 'stopped' } })).toBe(true);
     expect(recordingBannerPresent({ view: { kind: 'pending', mustAnswer: true }, notice: null })).toBe(true);
     expect(recordingBannerPresent({ view: { kind: 'idle' }, notice: null })).toBe(false);
+  });
+});
+
+describe('la hauteur de la case de l’enregistrement', () => {
+  test('une capsule tient le plancher de 52 px ; la carte d’accord, sa hauteur mesurée, jamais moins', () => {
+    expect(RECORDING_SLOT_MIN).toBe(52);
+    expect(recordingSlotHeight(0)).toBe(52);
+    expect(recordingSlotHeight(40)).toBe(52);
+    expect(recordingSlotHeight(132)).toBe(132);
   });
 });
