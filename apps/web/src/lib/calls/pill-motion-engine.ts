@@ -105,7 +105,7 @@ export function fadeStow(element: HTMLElement, stowed: boolean): void {
 export function playSwap(element: HTMLElement, entering: boolean, previous: Animation | null, shape: SwapShape = 'rise'): Animation | null {
   if (typeof element.animate !== 'function') return null;
   const reduced = prefersReducedMotion();
-  const [from = {}, to = {}] = swapKeyframes(entering, reduced, shape);
+  const [from = {}, to = {}] = swapKeyframes(entering, reduced, shape, getComputedStyle(element).direction === 'rtl');
   const resumed = (previous?.effect as KeyframeEffect | null | undefined)?.target === element;
   const shown = resumed ? { ...from, opacity: getComputedStyle(element).opacity } : from;
   previous?.cancel();

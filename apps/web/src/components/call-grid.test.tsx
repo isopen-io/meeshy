@@ -195,8 +195,8 @@ describe('CallGrid — la grille suit l’orientation (P11.1, GroupCallGridLayou
 
   test('la grille garde 140 de haut au moins, et chaque case se partage la hauteur à parts égales (P12.7)', () => {
     const html = grid();
-    expect(html).toMatch(/class="grid min-h-\[140px\][^"]*"[^>]*grid-auto-rows:1fr/);
-    expect(grid({ choice: { kind: 'self' } })).toMatch(/class="flex min-h-\[140px\][^"]*"[^>]*data-call-spotlight/);
+    expect(html).toMatch(/class="relative grid min-h-\[140px\][^"]*"[^>]*grid-auto-rows:1fr/);
+    expect(grid({ choice: { kind: 'self' } })).toMatch(/class="relative flex min-h-\[140px\][^"]*"[^>]*data-call-spotlight/);
   });
 });
 
@@ -221,7 +221,7 @@ describe('CallGrid — le bandeau des autres (P14.1, P14.2, P14.9)', () => {
     expect(html).toContain('grid-auto-columns:84px');
     expect(html).toContain('grid-template-rows:112px');
     expect(html).toContain('mask-image:linear-gradient(to right, transparent, #000 8px, #000 calc(100% - 8px), transparent)');
-    expect(spotlight()).toMatch(/class="flex min-h-\[140px\][^"]*flex-col/);
+    expect(spotlight()).toMatch(/class="relative flex min-h-\[140px\][^"]*flex-col/);
   });
 
   test('paysage : une colonne de 128 à droite de la une, effacée en fondu en haut et en bas', () => {
@@ -230,7 +230,7 @@ describe('CallGrid — le bandeau des autres (P14.1, P14.2, P14.9)', () => {
     expect(html).toContain('grid-auto-rows:112px');
     expect(html).toContain('grid-template-columns:84px');
     expect(html).toContain('mask-image:linear-gradient(to bottom, transparent, #000 8px, #000 calc(100% - 8px), transparent)');
-    expect(spotlight({ landscape: true })).toMatch(/class="flex min-h-\[140px\][^"]*flex-row/);
+    expect(spotlight({ landscape: true })).toMatch(/class="relative flex min-h-\[140px\][^"]*flex-row/);
   });
 
   test('plein écran : aucun bandeau, en paysage comme en portrait', () => {

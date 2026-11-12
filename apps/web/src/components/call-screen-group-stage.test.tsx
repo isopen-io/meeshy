@@ -219,3 +219,71 @@ describe('CallScreen — une personne qui repartage remonte à la une (U2.1)', (
     view.done();
   });
 });
+
+describe('CallScreen — le plein écran d’un groupe (U2.8, U2.9)', () => {
+  const sharing = { ...peers, 'u-peer': member({ screenSharing: true }) };
+
+  test('sans API Fullscreen (Safari iPhone), un groupe qui retombe en duo pendant un partage sort de l’immersion (`isStageFullScreen = false` d’iOS)', () => {
+    const stream = liveScreen();
+    const view = mount({ members: sharing, remoteStreams: { 'u-peer': stream } });
+    view.press('[data-call-fullscreen]');
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
+    act(() => view.rerender({ members: { 'u-peer': member({ screenSharing: true }) }, remoteStreams: { 'u-peer': stream } }));
+    expect(view.find('[data-call-grid-frame]')).toBeNull();
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
+    view.done();
+  });
+
+  test('avec l’API Fullscreen, ce que le navigateur montre porte aussi la pilule et ses sous-titres : l’écran d’appel entier, jamais la seule scène', () => {
+    const shown: Element[] = [];
+    const real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'requestFullscreen');
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value(this: Element) { shown.push(this); return Promise.resolve(); } });
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+    const view = mount({ members: sharing, remoteStreams: { 'u-peer': liveScreen() }, captionsMode: 'translated' });
+    view.press('[data-call-fullscreen]');
+    const target = shown[0];
+    expect(target?.contains(view.find('[data-call-controls]'))).toBe(true);
+    expect(target?.contains(view.find('[data-call-stage-surface]'))).toBe(true);
+    view.done();
+    Reflect.deleteProperty(document, 'fullscreenEnabled');
+    if (real === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'requestFullscreen');
+    else Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', real);
+  });
+
+  test('dans la couche d’appel, la scène plein écran est l’hôte qui porte aussi la carte d’accord (le <dialog> ne peut pas l’être)', () => {
+    const shown: Element[] = [];
+    const real = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'requestFullscreen');
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', { configurable: true, value(this: Element) { shown.push(this); return Promise.resolve(); } });
+    Object.defineProperty(document, 'fullscreenEnabled', { configurable: true, value: true });
+    const layer = document.createElement('div');
+    layer.setAttribute('data-call-fullscreen-host', '');
+    document.body.appendChild(layer);
+    const root = createRoot(layer);
+    act(() => root.render(<CallScreen call={call({ members: sharing, remoteStreams: { 'u-peer': liveScreen() } })} canShare effectsSupport={{ color: false, blur: false }} />));
+    const sibling = document.createElement('div');
+    layer.appendChild(sibling);
+    act(() => (layer.querySelector('[data-call-fullscreen]') as HTMLElement | null)?.click());
+    expect(shown[0]).toBe(layer);
+    expect(shown[0]?.contains(sibling)).toBe(true);
+    act(() => root.unmount());
+    layer.remove();
+    Reflect.deleteProperty(document, 'fullscreenEnabled');
+    if (real === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'requestFullscreen');
+    else Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', real);
+  });
+});
+
+describe('CallScreen — la rangée de pastilles sort par le haut en plein écran, sans être démontée (U2.10)', () => {
+  test('en plein écran la rangée reste montée, rangée vers le bord haut avec l’en-tête (le fondu court sous Réduire les animations est celui de tout le chrome) ; quitter la rend', () => {
+    const view = mount({ members: { ...peers, 'u-peer': member({ screenSharing: true }) }, remoteStreams: { 'u-peer': liveScreen() } });
+    const host = () => view.find('[data-call-stage-surface]')?.previousElementSibling;
+    expect(host()?.getAttribute('data-call-stow')).toBe('top');
+    expect(host()?.getAttribute('aria-hidden')).toBeNull();
+    view.press('[data-call-fullscreen]');
+    expect(host()?.getAttribute('aria-hidden')).toBe('true');
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
+    view.press('[data-call-fullscreen]');
+    expect(host()?.getAttribute('aria-hidden')).toBeNull();
+    view.done();
+  });
+});

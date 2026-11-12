@@ -84,22 +84,29 @@ export const swapMs = (reducedMotion: boolean): number => (reducedMotion ? STOW_
 /**
  * LA FORME DU DÉPART ET DE L'ARRIVÉE — `rise` : le panneau monte depuis la barre ; `scale` : la
  * capsule de l'en-tête grandit depuis son bord de fin (P9.8, `.scale(scale: 0.8, anchor: .trailing)`
- * d'iOS ; l'ancre est `transform-origin`, dans `call-motion.css`).
+ * d'iOS ; l'ancre est `transform-origin`, dans `call-motion.css`) ; `fade` : la capsule de la une
+ * repart sur place, en fondu (U1.12) ; `bottom` et `end` : le bandeau des autres repart par le bord
+ * du bas, ou — en colonne — par le bord de FIN de l'écran (U2.10), et revient par le même chemin.
  */
-export type SwapShape = 'rise' | 'scale';
+export type SwapShape = 'rise' | 'scale' | 'fade' | 'bottom' | 'end';
 
 const SCALE_FROM = 0.8;
 
 const SWAP_SHAPES: Readonly<Record<SwapShape, { readonly shown: string; readonly hidden: string }>> = {
   rise: { shown: 'translateY(0)', hidden: `translateY(${SWAP_RISE_PX}px)` },
   scale: { shown: 'scale(1)', hidden: `scale(${SCALE_FROM})` },
+  fade: { shown: 'none', hidden: 'none' },
+  bottom: { shown: 'translateY(0)', hidden: 'translateY(100%)' },
+  end: { shown: 'translateX(0)', hidden: 'translateX(100%)' },
 };
 
-export function swapKeyframes(entering: boolean, reducedMotion: boolean, shape: SwapShape = 'rise'): readonly Keyframe[] {
-  const { shown: at, hidden: away } = SWAP_SHAPES[shape];
+/** `rtl` : le bord de FIN est à gauche. */
+export function swapKeyframes(entering: boolean, reducedMotion: boolean, shape: SwapShape = 'rise', rtl = false): readonly Keyframe[] {
+  const { shown: at, hidden } = SWAP_SHAPES[shape];
+  const away = rtl && shape === 'end' ? 'translateX(-100%)' : hidden;
   const shown: Keyframe = reducedMotion ? { opacity: 1 } : { opacity: 1, transform: at };
-  const hidden: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: away };
-  return entering ? [hidden, shown] : [shown, hidden];
+  const gone: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: away };
+  return entering ? [gone, shown] : [shown, gone];
 }
 
 /**

@@ -83,6 +83,10 @@ const LAYER_STYLE: CSSProperties = {
   zIndex: CALL_LAYER_Z,
 };
 
+/* L'hôte du plein écran : un `<dialog>` ne peut pas l'être (Fullscreen API), et la scène seule
+   laisserait hors du plein écran la pilule, ses sous-titres et la carte d'accord. L'hôte n'a pas de
+   boîte à lui — ses enfants sont `fixed` —, il ne prend le viewport qu'une fois plein écran. */
+
 /* HORS de `#root`, par un portail : la visionneuse de médias et le menu de
    message rendent `#root` INERTE le temps de leur ouverture — un appel monté
    dedans s'y peignait par-dessus, et aucun de ses boutons ne répondait. */
@@ -91,7 +95,7 @@ function CallStage({ children }: { readonly children: ReactNode }) {
   useCallPresentation(layer);
   const stage = (
     <dialog ref={layer} open data-call-stage="" className="backdrop:bg-transparent" style={LAYER_STYLE}>
-      {children}
+      <div data-call-fullscreen-host="">{children}</div>
     </dialog>
   );
   return typeof document === 'undefined' ? stage : createPortal(stage, document.body);

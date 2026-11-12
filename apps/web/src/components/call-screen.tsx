@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
@@ -276,9 +276,13 @@ const CallDeclineSheet = lazy(() =>
 
 const browserCanShare = (): boolean => typeof navigator !== 'undefined' && canShareScreen(navigator.mediaDevices);
 
-/** Le plein écran de l'écran partagé : l'API Fullscreen sur la scène, et, sans elle, tout le reste s'efface. */
-function useImmersive(stage: React.RefObject<HTMLElement | null>, available: boolean): readonly [boolean, () => void] {
+/** Ce que le navigateur montre en plein écran : la couche d'appel entière (`call-layer.tsx` y pose son hôte, carte d'accord comprise) — sinon l'écran d'appel, sa pilule et ses sous-titres avec lui. */
+const fullscreenTarget = (screen: HTMLElement | null): HTMLElement | null => screen?.closest<HTMLElement>('[data-call-fullscreen-host]') ?? screen;
+
+/** Le plein écran de la tuile à la une : l'API Fullscreen sur la couche d'appel, et, sans elle, tout le reste s'efface. Changer de scène (un groupe retombé en duo, `isStageFullScreen = false` d'iOS) en sort. */
+function useImmersive(screen: React.RefObject<HTMLElement | null>, available: boolean, group: boolean): readonly [boolean, () => void] {
   const [immersive, setImmersive] = useState(false);
+  const scene = useRef(group);
   useEffect(() => {
     const onChange = () => {
       if (document.fullscreenElement === null) setImmersive(false);
@@ -287,12 +291,14 @@ function useImmersive(stage: React.RefObject<HTMLElement | null>, available: boo
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
   useEffect(() => {
-    if (available || !immersive) return;
+    const changed = scene.current !== group;
+    scene.current = group;
+    if ((available && !changed) || !immersive) return;
     setImmersive(false);
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
-  }, [available, immersive]);
+  }, [available, immersive, group]);
   const toggle = () => {
-    const element = stage.current;
+    const element = fullscreenTarget(screen.current);
     if (immersive) {
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
       setImmersive(false);
@@ -339,7 +345,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const [choice, setChoice] = useSpotlightChoice(autoSharer(arrived, call.remoteStreams)?.userId ?? null);
   const spotlight = layout === 'grid' ? resolveSpotlight({ members: arrived, choice, remoteStreams: call.remoteStreams }) : null;
   const sharedScreenShown = layout === 'screen' || spotlight?.screen === true;
-  const [immersive, toggleImmersive] = useImmersive(stageRef, layout === 'screen' || spotlight !== null);
+  const [immersive, toggleImmersive] = useImmersive(root, layout === 'screen' || spotlight !== null, layout === 'grid');
   const videoScene = live && isVideoScene(call);
   /* P9.5, P9.6 : le duo audio dessine l'autre à SA couleur (l'identifiant primant) et l'allume à sa parole — mesurée sur son flux, jamais lue dans les sous-titres. Le portrait n'est monté que dans la disposition `portrait` : la mesure ne court que là. */
   const peerTint = call.peerKey == null ? undefined : speakerColor(call.peerKey, call.title);
@@ -637,8 +643,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         {live ? <CallLiveFrameStatusSlot language={language} state={liveFrame} load={loadFrameStudio} /> : null}
         {layout === 'grid' ? (
           <>
-            {immersive || chrome.mode !== null ? null : (
-              <div data-call-stow="" aria-hidden={hidden ? true : undefined}>
+            {chrome.mode !== null ? null : (
+              <div data-call-stow="top" style={{ '--stow-clearance': '3.75rem' } as CSSProperties} aria-hidden={hidden ? true : undefined}>
                 {pillRow}
               </div>
             )}
