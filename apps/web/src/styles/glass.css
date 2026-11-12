@@ -164,7 +164,8 @@
    (le glyphe blanc y tient bien au-delà de AA) et garde son liseré. */
 @media (prefers-reduced-transparency: reduce) {
   .glass-call,
-  .glass-call-prominent {
+  .glass-call-prominent,
+  .glass-call-danger {
     backdrop-filter: none;
     --glass-density: 100%;
   }
