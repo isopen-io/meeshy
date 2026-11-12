@@ -78,8 +78,9 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
                       "avatarView must use CachedAvatarImage — a 44-56pt call circle has no room for the retry icon+label.")
         XCTAssertTrue(avatar.contains("name: callManager.remoteUsername"),
                       "CachedAvatarImage needs a name for its initials fallback.")
-        XCTAssertTrue(avatar.contains("accentColor: MeeshyColors.brandPrimaryHex"),
-                      "CachedAvatarImage must reuse the documented brand hex constant (never a raw literal).")
+        XCTAssertTrue(avatar.contains("accentColor: ringsInPeerColor ? peerColorHex : MeeshyColors.brandPrimaryHex"),
+                      "CachedAvatarImage must reuse the documented brand hex constant for the banner and the shared peer color for the bubble (P18.4) — never a raw literal.")
+        XCTAssertFalse(avatar.contains("accentColor: \"#"), "never a raw hex literal")
         XCTAssertFalse(avatar.contains("CachedAsyncImage("),
                         "avatarView must no longer construct a bare CachedAsyncImage for the remote avatar.")
     }

@@ -755,7 +755,7 @@ final class CallParticipantVisualTests: XCTestCase {
     func test_circularInit_derivesSquareFrameAndHalfRadius() throws {
         let src = try source()
         XCTAssertTrue(
-            src.contains("init(diameter: CGFloat, callManager: CallManager)"),
+            src.contains("init(diameter: CGFloat, ringsInPeerColor: Bool = false, callManager: CallManager)"),
             "The circular convenience initializer must stay so existing call sites " +
             "(pill 44pt, bubble circle tier) keep compiling unchanged."
         )
