@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure du jeu (#17688) : libellés propres à Android, écrits à la main. -->
+<resources>
+    <string name="game_concept_use_question">كيف أستعمله؟</string>
+    <string name="game2_showcase_empty">لا كؤوس بعد: المبارزة والرحلة والانبعاث واللهب تُصفّ هنا.</string>
+    <string name="game2_showcase_visibility_hint">يرى الزائر شهر الحصول فقط، لا التاريخ الدقيق أبدًا.</string>
+    <string name="game2_atlas_empty">لا أختام بعد: اكتب بلغة أخرى.</string>
+    <string name="game2_atlas_privacy">خاص افتراضيًا: تحتفظ اللعبة باللغة والتاريخ فقط — لا بالطرف الآخر ولا بالمحادثة.</string>
+    <string name="game2_settings_visibility_body">خارج الأصدقاء المقبولين لا أحد يرى إن كنت متصلًا ولا متى تلعب.</string>
+    <string name="game2_league_pseudonym_invalid">غير صالح.</string>
+    <string name="game_rules_2_body">شراراتك معًا تصنع نورك، ومنه يُقرأ مستواك. مليون شرارة للمستوى 100، واختبار كل عشرة مستويات: ما لم تجتزه، ينتظر نورك. عشرون حالة. ترتفع المستويات حتى 499؛ وتفتحها رتبة سفير حتى 1000، ورتبة عرّاف بلا حدّ. يتطلّب كل مستوى أكثر قليلًا من الذي قبله.</string>
+    <string name="game_state_elans_idle">%1$s هذه الأيام: لا زخم بعد.</string>
+    <string name="game2_prestige_meo">يعود مستواك إلى 1 وشراراتك إلى 0؛ وتبقى رتبتك ومجدك وعملات Meesh. ويهديك أجدادك كأسًا مرقّمة و⁦%1$s⁩ من المجد.</string>
+    <string name="game2_season_seal_body">للزينة فقط: قطعة للجمع كل ⁦%1$s⁩ محطات.</string>
+    <string name="game2_settings_notifications_body">إشعار واحد في اليوم على الأكثر، على جميع أجهزتك.</string>
+    <string name="game2_settings_notifications_switch">الإشعارات</string>
+    <string name="game2_settings_friends_league_body">أنت وأصدقاؤك المقبولون ترون بعضكم في الترتيب الأسبوعي؛ والمفتاح يزيل الاتجاهين.</string>
+    <string name="game_rules_section_rules">القواعد</string>
+    <string name="game_rules_section_concepts">المفاهيم</string>
+    <string name="game_rules_4_body">ينخفض مستواك بقدره؛ أما رتبتك وأوسمتك فلا تنخفض.</string>
+    <string name="game_rules_5_body">السكّ والمستويات الجديدة والمآثر تُنمّي مجدك، والمجد يمنحك رتبتك.</string>
+    <string name="game_rules_6_body">الاحتفاظ بعملات Meesh يُنمّي الإرث، وإنفاقها يسهر على اللهب.</string>
+    <string name="game_rules_7_body">حلم كل ليلة، وعطيّة، ولهب يكبر ما دمت تعود.</string>
+    <string name="game_detail_coin_what">‏Meesh هي نورك مصوغًا في قطعة مرقّمة.</string>
+    <string name="game_detail_fact_mint_next">واحدة من كل مئة ذهبية، وواحدة من كل ألف من المنشور.</string>
+    <string name="game_flame_panel_freeze_full">كل قناديلك هنا.</string>
+    <string name="game_notebook_empty">كل علامة من أجدادك يمكن أن تصبح هنا صورة.</string>
+    <string name="game_error_league_pseudonym_invalid">غير صالح.</string>
+    <string name="game2_league_pseudonym_hint_change">من 3 إلى 20 حرفًا (حروف وأرقام . - _). لا اسمك ولا معرّفك.</string>
+    <string name="game_concept_level_what">مستواك هو الرقم في وسط حلقتك: ويُقرأ من نورك.</string>
+    <string name="game_concept_flame_use">القنديل يحرسه يوم غيابك.</string>
+    <string name="game_concept_missions_use">افتح فصلًا لترى أين وصلت. يمكنك تبديل فصل واحد في اليوم بعملة Meesh.</string>
+    <string name="game2_prestige_confirm_access">مبارزتك وتحالفك يبقيان مفتوحين.</string>
+    <string name="game2_league_pseudonym_drawn">اسمك في المبارزة يُسحب بالقرعة ويتغيّر مع كل رحلة.</string>
+    <string name="game2_league_snapshot">يُجمَّد الترتيب كل يوم عند الساعة 4 صباحًا: لا أحد يرى من يلعب الآن. سطرك وحده مباشر.</string>
+    <string name="game2_season_how">الفصول والتحالفات تُقدّمك بضع خطوات. الرحلة كلها مجانية.</string>
+    <string name="game2_settings_celebrations_switch">علامات الأسلاف</string>
+    <string name="game_guide_step_welcome_what">اللعبة في سبع بطاقات</string>
+    <string name="game_guide_more">ماذا تعني هذه اللحظة؟</string>
+    <string name="game_progression_empty">يضيء وسامك الأول مع أول إجراء.</string>
+    <string name="game_photo_camera_denied">تم رفض الكاميرا: اسمح بها من الإعدادات.</string>
+    <string name="game_photo_camera_unsupported">لا يسمح هذا الجهاز بالكاميرا هنا.</string>
+    <string name="game_photo_camera_unavailable">الكاميرا غير متاحة.</string>
+    <string name="game_mint_blocked_debt_plain">ظلّ يحجب نورك: شراراتك القادمة ستبدّده، ثم يمكنك السكّ.</string>
+    <string name="game_sparks_cumul_record">⁦%1$s⁩ في هذا العصر · ⁦%2$s⁩ في المجموع</string>
+</resources>

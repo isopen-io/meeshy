@@ -1,6 +1,7 @@
 import type { CallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 const it = {
+  'callControls.duration.a11y.label': 'Durata della chiamata',
   'callControls.invite': 'Aggiungi',
   'callControls.invite.label': 'Aggiungi persone alla chiamata',
   'callControls.react': 'Reagisci',
@@ -50,15 +51,14 @@ const it = {
   'callControls.error.denied': 'Non hai questo diritto in questa chiamata',
   'callControls.error.notActive': 'La chiamata non è più attiva',
   'callControls.error.gone': '{name} non è più nella chiamata',
-  'callControls.record.title': 'Cosa vuoi registrare?',
-  'callControls.record.audio': 'Solo audio',
-  'callControls.record.audioDetail': 'Le voci di tutti',
-  'callControls.record.video': 'Audio e video',
-  'callControls.record.videoDetail': 'Le immagini visibili e le voci',
+  'callControls.record.title': 'Registra la chiamata',
+  'callControls.record.consent': 'Tutti devono accettare. La registrazione si interrompe se qualcuno si unisce.',
+  'callControls.record.audio': 'Audio',
+  'callControls.record.video': 'Video',
   'callControls.capture': 'Cattura',
   'callControls.capture.label': 'Cattura la chiamata',
   'callControls.back': 'Indietro',
-  'callControls.journal': 'Diario',
+  'callControls.journal': 'Registro',
   'callControls.journal.label': 'Apri il diario della chiamata',
   'callControls.journal.live': 'Torna alla diretta',
   'callControls.journal.empty': 'Ancora nulla di trascritto. Attiva i sottotitoli: ogni frase detta compare qui con la sua traduzione, per tutta la chiamata.',

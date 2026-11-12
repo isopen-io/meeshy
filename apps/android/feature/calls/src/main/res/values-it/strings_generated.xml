@@ -12,6 +12,7 @@
     <string name="call_actions_label">Azioni della chiamata</string>
     <string name="call_actions_my_image">La mia immagine</string>
     <string name="call_actions_the_call">La chiamata</string>
+    <string name="call_captions_journal">Registro</string>
     <string name="call_capture_faces">Ogni volto</string>
     <string name="call_capture_faces_saved">%1$d volti salvati</string>
     <string name="call_capture_failed">Impossibile salvare la cattura</string>
@@ -45,7 +46,6 @@
     <string name="call_control_camera_rail">Opzioni della mia fotocamera</string>
     <string name="call_control_capture">Cattura la chiamata</string>
     <string name="call_control_capture_caption">Cattura</string>
-    <string name="call_control_capture_hint">Libera lo schermo per scegliere un montaggio e catturare la chiamata</string>
     <string name="call_control_end_hint">Termina la chiamata in corso</string>
     <string name="call_control_flip_camera">Passa dalla fotocamera anteriore a quella posteriore</string>
     <string name="call_control_flip_camera_caption">Gira</string>
@@ -140,6 +140,13 @@
     <string name="call_incoming_answer_no_video">Senza video</string>
     <string name="call_incoming_answer_no_video_hint">Risponde con la fotocamera spenta: chi chiama vede il tuo avatar</string>
     <string name="call_incoming_answer_no_video_label">Rispondi senza video</string>
+    <string name="call_incoming_pre_answer_camera_hint">Decide se %1$s ti vede quando rispondi</string>
+    <string name="call_incoming_pre_answer_heard_only">%1$s ti sentirà senza vederti</string>
+    <string name="call_incoming_pre_answer_mic_hint">Decide se %1$s ti sente quando rispondi</string>
+    <string name="call_incoming_pre_answer_neither">%1$s non ti vedrà né ti sentirà</string>
+    <string name="call_incoming_pre_answer_seen_and_heard">%1$s ti vedrà quando rispondi</string>
+    <string name="call_incoming_pre_answer_seen_muted">%1$s ti vedrà, microfono disattivato</string>
+    <string name="call_incoming_self_preview_label">La tua fotocamera, non inviata prima di rispondere</string>
     <string name="call_invite_declined">%1$s ha rifiutato</string>
     <string name="call_invite_failed">Impossibile invitare questa persona</string>
     <string name="call_invite_ringing">Squilla…</string>
@@ -221,10 +228,11 @@
     <string name="call_recording_cancel">Annulla</string>
     <string name="call_recording_caption">Registra</string>
     <string name="call_recording_close">Chiudi</string>
+    <string name="call_recording_consent">Tutti devono accettare. La registrazione si interrompe se qualcuno si unisce.</string>
     <string name="call_recording_hint">Chiede il consenso di ogni partecipante prima di registrare</string>
-    <string name="call_recording_kind_audio">Solo audio</string>
+    <string name="call_recording_kind_audio">Audio</string>
     <string name="call_recording_kind_hint">Scegli cosa registrare; poi ogni partecipante deve accettare</string>
-    <string name="call_recording_kind_video">Audio e video</string>
+    <string name="call_recording_kind_video">Video</string>
     <string name="call_recording_refuse">Rifiuta</string>
     <string name="call_recording_saveFailed">Impossibile aggiungere la registrazione</string>
     <string name="call_recording_saved">La registrazione è stata aggiunta alla conversazione</string>
@@ -237,6 +245,7 @@
     <string name="call_recording_stopped_timeout">Non tutti hanno risposto: nessuna registrazione</string>
     <string name="call_recording_unavailable">Registrazione non disponibile al momento</string>
     <string name="call_recording_waiting">In attesa del consenso di tutti…</string>
+    <string name="call_screen_share_caption">Schermo</string>
     <string name="call_screen_share_error">Impossibile condividere lo schermo</string>
     <string name="call_screen_share_hint">Mostra il tuo schermo all\'interlocutore durante la chiamata</string>
     <string name="call_screen_share_local_banner">Stai condividendo il tuo schermo</string>
@@ -265,12 +274,18 @@
     <string name="call_waiting_banner_a11y">Chiamata in arrivo da %1$s</string>
     <string name="call_waiting_subtitle">Chiamata in arrivo…</string>
     <string name="call_zoom_cycle_hint">Tocca per passare al fattore di zoom successivo</string>
-    <string name="call_zoom_hint">Scorri in alto o in basso per lo zoom. Sullo schermo, pizzica la tua immagine; tocca due volte per tornare a 1×</string>
     <string name="call_zoom_label">Zoom della mia fotocamera</string>
     <string name="permission_microphone_denied">Microfono negato — tocca per aprire Impostazioni</string>
+    <string name="video_filter_preset_bright">Chiaro</string>
     <string name="video_filter_preset_cool">Freddo</string>
+    <string name="video_filter_preset_film">Pellicola</string>
+    <string name="video_filter_preset_golden">Dorato</string>
+    <string name="video_filter_preset_monochrome">Bianco e nero</string>
     <string name="video_filter_preset_muted">Morbido</string>
     <string name="video_filter_preset_natural">Naturale</string>
+    <string name="video_filter_preset_sky">Cielo</string>
+    <string name="video_filter_preset_softNight">Notte dolce</string>
+    <string name="video_filter_preset_velvet">Velluto</string>
     <string name="video_filter_preset_vivid">Vivido</string>
     <string name="video_filter_preset_warm">Caldo</string>
 </resources>

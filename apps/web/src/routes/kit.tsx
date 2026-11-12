@@ -58,7 +58,7 @@ function KitCatalogList({ entries }: { readonly entries: readonly MeeshyKitCatal
               <li key={entry.key}>
                 <KitLink href={kitPath(entry.key)} aria-label={accessibilityName(entry)} data-kit-row="" data-kit-key={entry.key}>
                   <span aria-hidden="true">{entry.key}</span>
-                  <span aria-hidden="true" className="text-ink-muted">
+                  <span aria-hidden="true" className="min-w-0 text-ink-muted" style={{ overflowWrap: 'anywhere' }}>
                     {entry.name}
                   </span>
                 </KitLink>

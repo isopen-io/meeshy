@@ -79,7 +79,7 @@ const gatewayDeps = (answer: Answer): { deps: ConversationsDeps; calls: HttpRequ
 const mountShop = (deps: ConversationsDeps) =>
   mounter.mount(
     <QueryClientProvider client={appQueryClient}>
-      <PackShop adapter={stickerShopAdapter('fr', deps)} language="fr" hint="" />
+      <PackShop adapter={stickerShopAdapter('fr', deps)} language="fr" />
     </QueryClientProvider>,
   );
 

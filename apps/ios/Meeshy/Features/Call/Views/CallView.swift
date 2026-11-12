@@ -39,8 +39,7 @@ struct CallView: View {
     /// et aucun masquage ne tombe sous un doigt posé.
     @State var showTranscript = false
     @State var showOriginalText = false
-    /// OPUS-4 — mes réglages à l'ouverture d'Effets, gardés à travers le décroché.
-    @State var effectsEntryConfig: VideoFilterConfig?
+    @State var journalShowsOriginal = false
     /// Progression du morph PiP (0 = plein écran, 1 = contracté vers la
     /// bannière). Piloté par `collapseIntoPip()` (réduction) et par
     /// `onAppear` (expansion depuis la bannière) — voir le trio
@@ -82,6 +81,7 @@ struct CallView: View {
     // l'avatar des cercles d'appel et le fond pleine page.
     @State var remoteProfile: MeeshyUser?
     @State var showQualityDetail = false
+    @State var headerNames = CallHeaderNames(givenName: nil, groupName: nil)
     /// #8276 — le maillage d'un appel de groupe, injecté comme `callManager`
     /// (jamais un `= .shared` par défaut, même hazard P1-16) : sa grille vit
     /// DANS l'écran d'appel, entre l'en-tête et la pilule.
@@ -96,8 +96,9 @@ struct CallView: View {
     @State var isCameraMenuUnfolded = false
     let selfTileMemory: any CallSelfTileRemembering
     /// #8396 — les phrases touchées, qui montrent l'AUTRE version (original
-    /// sous une traduction, traduction sous un original dans le journal).
-    @State var revealedCaptionIds: Set<UUID> = []
+    /// sous une traduction, traduction sous un original dans le journal), une
+    /// surface à la fois (#17678, loi 7).
+    @State var revealedCaptions = CallCaptionsReveals()
     /// #8625 — l'écran d'appel TIENT la capture sans l'observer : ses états
     /// (aperçu, chrono, résultat) se lisent dans des vues feuilles, sinon un
     /// film redessinerait tout l'écran d'appel à chaque trame.
@@ -192,25 +193,10 @@ struct CallView: View {
             surfaceBackdrop
             surfaceContent
 
-            // Bandeau top — les bannières émergent de la Dynamic Island
-            // (IslandEmergingBanner) et se posent SOUS elle, dans la safe area.
-            // `.padding(.horizontal, 56)` garde la capsule à droite du chevron
-            // minimize (leading, 40 pt + marges) — le texte long wrappe sur 2
-            // lignes au lieu de passer dessous.
-            //
-            // §4.3 — l'ancien bandeau plein-écran "Reconnexion…" (IslandEmergingBanner
-            // + ProgressView) a été retiré. L'état `.reconnecting` est maintenant
-            // porté UNIQUEMENT par une pill compacte dans la même "queue" que les
-            // autres indicateurs de statut (statusPill dans audioCallLayout, glyphe
-            // inline dans le badge durée de videoCallLayout) — jamais par un overlay
-            // plein-écran. VoiceOver reste notifié via l'annonce a11y ci-dessous.
-
-            // §4.4 — la dégradation réseau du pair (`call:quality-alert`) et la
-            // perte du signaling (`isSignalingDegraded`) ne sont plus surfacées
-            // par une bannière pop-up : l'état persiste dans les indicateurs
-            // discrets de la vue (glyphe signal + status pills « Réseau faible
-            // (contact) » / « Serveur déconnecté »). Annonces VoiceOver dans les
-            // onChange plus bas.
+            // §4.3 / §4.4 — la reconnexion et la dégradation réseau (`call:quality-alert`,
+            // `isSignalingDegraded`) ne sont portées par aucun bandeau plein écran : les
+            // pills de statut (audioCallLayout) et le glyphe du badge durée (videoCallLayout)
+            // les montrent, et VoiceOver est notifié par les annonces des onChange plus bas.
 
             // OPUS-4 — le mode « Effets de ma caméra » avant la connexion ;
             // l'appel établi le monte dans `connectedView`.
@@ -256,6 +242,7 @@ struct CallView: View {
         // #8735 — chaque contrôle de l'écran d'appel dit qu'il est touché par
         // CETTE porte (`CallPressLabel`, « Sortie », les rangées du (…)).
         .environment(\.callChromeInteraction, { noteChromeInteraction($0) })
+        .environment(\.callGlassTone, CallGlassTone.resolve(showsReceivedScreen: !isGroupStage && callManager.screenShare.isRemoteSharing))
         .onReceive(transcriptionService.$isShowingOverlay) { showTranscript = $0 }
         .onAppear {
             startPulseAnimation()

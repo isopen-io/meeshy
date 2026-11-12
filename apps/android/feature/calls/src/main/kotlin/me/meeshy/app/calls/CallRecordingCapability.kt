@@ -17,6 +17,8 @@ import me.meeshy.sdk.call.CallRecordingController
 import me.meeshy.sdk.call.CallRecordingHost
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallChromeElement
+import me.meeshy.sdk.model.call.CallTopBanner
+import me.meeshy.sdk.model.call.CallTopBannerStack
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.ui.theme.MeeshySpacing
 import javax.inject.Inject
@@ -92,6 +94,8 @@ class CallRecordingActionHandler @Inject constructor(
             icon = if (active) MeeshyIcons.StopCircle else MeeshyIcons.Record,
             labelRes = if (active) R.string.call_recording_stop else R.string.call_recording_start,
             isActive = active,
+            captionRes = R.string.call_recording_caption,
+            isDestructive = true,
         )
     }
 
@@ -133,7 +137,7 @@ class CallRecordingStatusOverlay @Inject constructor(
 ) : CallOverlay {
     override val id: String = "call-recording-status"
     override val slot: CallOverlaySlot = CallOverlaySlot.TopBanner
-    override val priority: Int = 100
+    override val priority: Int = CallTopBannerStack.priority(CallTopBanner.Recording)
 
     @Composable
     override fun Content(context: CallOverlayContext) {

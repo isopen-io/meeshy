@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { InfoAlone } from '@/components/info-hint';
 import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
 import { SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import { translate } from '@/lib/i18n-catalog';
@@ -77,15 +78,17 @@ function LicenceSection({
   children,
 }: {
   readonly id: string;
-  readonly title: string;
+  readonly title: string | null;
   readonly language: InterfaceLanguage;
   readonly children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="grid gap-2">
-      <h2 id={id} className={`ps-1 text-check font-bold tracking-wide ${SECTION_BRAND_INK}`}>
-        {title.toLocaleUpperCase(language)}
-      </h2>
+    <section aria-labelledby={title === null ? undefined : id} className="grid gap-2">
+      {title === null ? null : (
+        <h2 id={id} className={`ps-1 text-check font-bold tracking-wide ${SECTION_BRAND_INK}`}>
+          {title.toLocaleUpperCase(language)}
+        </h2>
+      )}
       <div className="grid overflow-hidden rounded-card" style={SECTION_CARD_STYLE}>
         {children}
       </div>
@@ -129,7 +132,7 @@ function AgplSections({ language, engine }: { readonly language: InterfaceLangua
   const t = (key: LicencesCatalogKey) => translateLicences(language, key);
   return (
     <>
-      <LicenceSection id="licences-agpl" title={t('licences.agpl.title')} language={language}>
+      <LicenceSection id="licences-agpl" title={null} language={language}>
         <details data-licences-agpl>
           <summary className="cursor-pointer px-3.5 py-3 text-body font-medium focus-visible:outline-2" style={{ minHeight: 44, color: SECTION_INK, outlineColor: 'var(--color-ios-brand)' }}>
             {t('licences.agpl.title')}
@@ -140,9 +143,9 @@ function AgplSections({ language, engine }: { readonly language: InterfaceLangua
         </details>
       </LicenceSection>
       <LicenceSection id="licences-libsignal" title={t('licences.libsignal.title')} language={language}>
-        <p className="px-3.5 pt-3 text-caption" style={{ color: SECTION_INK_2 }}>
-          {t('licences.libsignal.body')}
-        </p>
+        <InfoAlone
+          hint={{ label: t('licences.libsignal.question'), text: t('licences.libsignal.body'), glyph: SETTINGS_GLYPHS.info }}
+        />
         <a
           href={engine.acknowledgmentsUrl}
           target="_blank"

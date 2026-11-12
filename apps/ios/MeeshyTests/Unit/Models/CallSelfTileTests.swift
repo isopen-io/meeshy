@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import Meeshy
 
@@ -131,6 +132,41 @@ final class CallSelfTileTests: XCTestCase {
         XCTAssertEqual(CallSelfTileScale.resting(.x3, isChromeVisible: true), .x3)
         XCTAssertEqual(CallSelfTileScale.resting(.x1, isChromeVisible: true), .x1)
     }
+    /// G1.11 — ma vignette se range par une TRANSFORMATION (un facteur d'échelle), pas
+    /// par un nouveau cadre : son cadre reste celui du palier choisi.
+    func test_restingFactor_chromeVisible_isOne() {
+        for scale in CallSelfTileScale.allCases {
+            XCTAssertEqual(CallSelfTileScale.restingFactor(scale, isChromeVisible: true), 1, accuracy: 0.0001)
+        }
+    }
+
+    func test_restingFactor_chromeHidden_scalesTheChosenFrameDownToTheSmallest() {
+        XCTAssertEqual(CallSelfTileScale.restingFactor(.x3, isChromeVisible: false), CallSelfTileScale.x1.width / CallSelfTileScale.x3.width, accuracy: 0.0001)
+        XCTAssertEqual(CallSelfTileScale.restingFactor(.x2, isChromeVisible: false), CallSelfTileScale.x1.width / CallSelfTileScale.x2.width, accuracy: 0.0001)
+        XCTAssertEqual(CallSelfTileScale.restingFactor(.x1, isChromeVisible: false), 1, accuracy: 0.0001)
+    }
+
+    func test_anchor_isTheScreenCornerNearestTheTile() {
+        let screen = CGSize(width: 400, height: 800)
+        XCTAssertEqual(CallSelfTileScale.anchor(of: CGPoint(x: 340, y: 90), in: screen), .topTrailing)
+        XCTAssertEqual(CallSelfTileScale.anchor(of: CGPoint(x: 60, y: 90), in: screen), .topLeading)
+        XCTAssertEqual(CallSelfTileScale.anchor(of: CGPoint(x: 340, y: 700), in: screen), .bottomTrailing)
+        XCTAssertEqual(CallSelfTileScale.anchor(of: CGPoint(x: 60, y: 700), in: screen), .bottomLeading)
+    }
+
+    /// Loi 4 · 11 — rangée par une échelle, ma vignette garde le liseré, les coins et le badge
+    /// d'une petite vignette : ce qui ne doit pas rapetisser est contre-mis à l'échelle.
+    func test_counterScaled_keepsTheDrawnLength_onceTheTileIsScaled() {
+        let factor = CallSelfTileScale.restingFactor(.x3, isChromeVisible: false)
+        XCTAssertEqual(CallSelfTileScale.counterScaled(CallSelfTileStroke.lineWidth, by: factor) * factor, CallSelfTileStroke.lineWidth, accuracy: 0.0001)
+        XCTAssertEqual(CallSelfTileScale.counterScaled(12, by: 1), 12, accuracy: 0.0001)
+    }
+
+    func test_counterScaled_degenerateFactor_leavesTheLengthUntouched() {
+        XCTAssertEqual(CallSelfTileScale.counterScaled(2, by: 0), 2)
+        XCTAssertEqual(CallSelfTileScale.counterScaled(2, by: .nan), 2)
+    }
+
     // MARK: - Loi 4 — le liseré porte la couleur de qui est DANS la vignette
 
     func test_strokeKey_myImageInTheTile_isMyId() {

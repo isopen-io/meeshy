@@ -82,8 +82,9 @@ const frShellLabels = {
   'media.policy.wifiAndGoodCellular': 'Wi-Fi + bon cellulaire',
   'media.policy.wifiOnly': 'Wi-Fi uniquement',
   'media.policy.never': 'Jamais',
-  'settings.media_download': 'Téléchargement automatique des médias',
+  'settings.media_download': 'Téléchargement auto',
   'settings.media_download.info': 'Sinon, un toucher le télécharge. Sous 100 Ko, un média se télécharge toujours seul.',
+  'settings.media_download.question': 'Et si le téléchargement n’est pas automatique ?',
   'settings.media_download.images': 'Images',
   'settings.media_download.videos': 'Vidéos',
 

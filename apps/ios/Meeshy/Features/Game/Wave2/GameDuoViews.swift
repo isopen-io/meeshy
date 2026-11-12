@@ -127,9 +127,7 @@ struct GameDuoCard: View {
     private var idle: some View {
         GameNote(text: idleSentence)
         if duo.status == .none {
-            if model.friends.isEmpty {
-                GameNote(text: GameText.duoNoFriends)
-            } else {
+            if !model.friends.isEmpty {
                 VStack(spacing: MeeshySpacing.sm) {
                     ForEach(Array(model.friends.prefix(Self.friendLimit)), id: \.id) { friend in
                         GameActionButton(

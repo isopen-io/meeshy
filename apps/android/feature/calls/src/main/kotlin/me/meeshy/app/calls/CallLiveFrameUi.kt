@@ -45,6 +45,8 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.WebRtcEngine
 import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallLiveFrameReply
+import me.meeshy.sdk.model.call.CallTopBanner
+import me.meeshy.sdk.model.call.CallTopBannerStack
 import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallLiveFrameDisplay
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
@@ -58,7 +60,6 @@ private const val ANSWER_LINGER_MILLIS = 4_000L
 
 /** Les textes du cadre (nom du groupe, date) se revérifient chaque minute ; la surface ne repeint que s'ils ont changé. */
 private const val TEXTS_RECHECK_MILLIS = 60_000L
-private val STATUS_TOP = 68.dp
 
 /**
  * Le cadre en direct autour des deux vidéos ET ce qui se dit à son sujet : la proposition de l'autre
@@ -149,6 +150,7 @@ class CallLiveFrameStatusOverlay @Inject constructor(
 ) : CallOverlay {
     override val id: String = "call-live-frame-status"
     override val slot: CallOverlaySlot = CallOverlaySlot.TopBanner
+    override val priority: Int = CallTopBannerStack.priority(CallTopBanner.LiveFrame)
 
     @Composable
     override fun Content(context: CallOverlayContext) = CallLiveFrameStatus(frame)
@@ -170,7 +172,9 @@ internal fun CallLiveFrameStatus(controller: CallLiveFrameController, modifier: 
     val suspended = CallLiveFrameRule.display(
         state.frameId, CallLiveFrameRule.PEOPLE, rememberCallDeviceConstrained(), rememberCallReduceMotion(),
     ) as? CallLiveFrameDisplay.Suspended
-    Column(modifier.padding(top = STATUS_TOP, start = MeeshySpacing.lg, end = MeeshySpacing.lg)) {
+    val hasStatus = proposed != null || answer != null || notice != null || suspended != null
+    // La pile du haut pose elle-même ce bandeau sous l'en-tête (P16.4) : il ne porte que son écart, et rien quand il est muet.
+    Column(modifier.padding(top = if (hasStatus) MeeshySpacing.sm else 0.dp, start = MeeshySpacing.lg, end = MeeshySpacing.lg)) {
         when {
             proposed != null -> CallLiveFrameProposalCard(
                 text = proposalText(proposed.first.from, proposed.second.displayName(LocalConfiguration.current.locales[0]?.language)),

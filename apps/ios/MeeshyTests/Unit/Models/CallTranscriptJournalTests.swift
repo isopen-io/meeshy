@@ -44,13 +44,53 @@ final class CallTranscriptJournalTests: XCTestCase {
         XCTAssertEqual(CallTranscriptJournal.inserting(segment("a", at: 1), into: []).map(\.text), ["a"])
     }
 
-    func test_bounded_underTheCeiling_keepsEverything() {
-        let journal = (0 ..< 500).map { segment("\($0)", at: TimeInterval($0)) }
-        XCTAssertEqual(CallTranscriptJournal.bounded(journal).count, 500)
+    /// #17342, P6.8 — le journal garde TOUT l'appel : aucune phrase ne tombe, si
+    /// longue que soit la conversation (plus de plafond de 10 000 phrases).
+    func test_inserting_beyondTenThousandSentences_dropsNone() {
+        let journal = (0 ..< 10_000).map { segment("\($0)", at: TimeInterval($0)) }
+        let grown = CallTranscriptJournal.inserting(segment("dernière", at: 10_000), into: journal)
+        XCTAssertEqual(grown.count, 10_001)
+        XCTAssertEqual(grown.first?.text, "0", "la plus ancienne phrase reste")
+        XCTAssertEqual(grown.last?.text, "dernière")
     }
 
-    func test_ceiling_holdsHoursOfConversation() {
-        XCTAssertGreaterThanOrEqual(CallTranscriptJournal.ceiling, 10_000)
+    func test_journal_hasNoCeiling() throws {
+        let law = try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTranscriptJournal.swift")
+        XCTAssertFalse(law.contains("ceiling"), "Aucun plafond ne fait tomber les plus anciennes phrases (#17342)")
+        XCTAssertFalse(law.contains("bounded"))
+        let service = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
+        XCTAssertFalse(service.contains("CallTranscriptJournal.bounded"))
+        XCTAssertFalse(service.contains("persistedSegmentCeiling"), "Le journal d'après l'appel n'hérite d'aucun trou")
+    }
+
+    // MARK: - L'heure dans l'appel (P6.4)
+
+    private let english = Locale(identifier: "en_US")
+
+    func test_clock_isTheTimeSinceTheCallStarted() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(CallJournalClock.label(at: start.addingTimeInterval(75), since: start, locale: english), "01:15")
+        XCTAssertEqual(CallJournalClock.label(at: start, since: start, locale: english), "00:00")
+    }
+
+    func test_clock_aSentenceStampedBeforeTheCallStart_readsZero() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(CallJournalClock.label(at: start.addingTimeInterval(-3), since: start, locale: english), "00:00")
+    }
+
+    func test_clock_withoutACallStart_saysNothingRatherThanTheWallClock() {
+        XCTAssertNil(CallJournalClock.label(at: Date(timeIntervalSince1970: 1_000), since: nil, locale: english))
+    }
+
+    func test_composer_datesEverySpokenLineByItsTimeInTheCall() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        let said = segment("Salut", at: 1_075)
+        let composer = CallJournalComposer(
+            segments: [said], captures: [], callStartedAt: start,
+            speechLine: { [self] in captionLine($0.text) }
+        )
+        XCTAssertEqual(composer.line(for: .speech(said)).timeLabel, CallJournalClock.label(at: said.capturedAt, since: start))
+        XCTAssertEqual(composer.line(for: .speech(said)).timeLabel, "01:15")
     }
 
     // MARK: - Relire sans être ramené en bas
@@ -103,7 +143,7 @@ final class CallTranscriptJournalTests: XCTestCase {
         XCTAssertTrue(code.contains("CallJournalList(items: items"), "Le panneau du journal, dans la pilule, monte la liste commune")
         XCTAssertFalse(code.contains("CallCaptionsJournalSheet"), "Le journal n'est plus une feuille modale (#17343)")
         XCTAssertFalse(code.contains("transcriptPanel"), "Plus de panneau audio hors de la pilule (#17343)")
-        XCTAssertTrue(code.contains("journal.items.suffix(2).map(journal.line)"), "#16665 — le bandeau lit les mêmes lignes, captures comprises")
+        XCTAssertTrue(code.contains("band.items.suffix(2).map(band.line)"), "#16665 — le bandeau lit les mêmes lignes, captures comprises ; sa surface est la sienne (#17678)")
         let service = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallTranscriptionService.swift")
         XCTAssertFalse(service.contains("segmentRetentionLimit"), "Plus de plafond de 50 phrases sur le journal")
     }
@@ -132,6 +172,38 @@ final class CallTranscriptJournalTests: XCTestCase {
         XCTAssertTrue(String(code[list.upperBound...].prefix(2500)).contains(".equatable()"), "Le journal")
         let band = try XCTUnwrap(code.range(of: "struct CallCaptionsBand: View {"))
         XCTAssertTrue(String(code[band.upperBound...].prefix(2000)).contains(".equatable()"), "Les sous-titres")
+    }
+
+    /// P6.3 — la tête du journal dit « Journal » à gauche et porte la bascule Traduit /
+    /// Original à droite ; la planche n'y dessine ni titre de feuille ni « Fermer ».
+    /// On range le journal par le (…) ou le bouton Journal, et Échap (VoiceOver,
+    /// clavier) le ferme sans rien afficher de plus.
+    func test_journalPanelHeader_isJournalThenTheToggle_withoutACloseButton() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let panel = try XCTUnwrap(code.range(of: "struct CallJournalPanel: View {"))
+        let header = String(code[panel.upperBound...].prefix(2500))
+        let title = try XCTUnwrap(header.range(of: "Text(CallCaptionsCopy.journal)"))
+        let picker = try XCTUnwrap(header.range(of: "Picker(CallCaptionsCopy.journalTitle"))
+        XCTAssertLessThan(title.lowerBound, picker.lowerBound, "« Journal » à gauche, la bascule à sa droite")
+        XCTAssertFalse(header.contains("closePanel"), "Pas de « Fermer » dans la tête du journal (P6.3)")
+        XCTAssertFalse(header.contains("CallPanelHeaderButton"))
+        XCTAssertTrue(header.contains(".dismissOnEscape(onClose)"), "Échap ferme le journal, sans bouton de plus")
+    }
+
+    /// P6.4 — la ligne méta d'une phrase du journal : pseudo (et étiquette) à gauche, heure DANS
+    /// l'appel à droite ; plus d'heure murale entre parenthèses collée au pseudo.
+    func test_captionRow_timeOfTheCall_endsTheMetaLine() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        let row = try XCTUnwrap(code.range(of: "struct CallCaptionRow: View {"))
+        let end = try XCTUnwrap(code.range(of: "struct CallCaptionsBand: View {", range: row.upperBound ..< code.endIndex))
+        let body = String(code[row.upperBound ..< end.lowerBound])
+        let name = try XCTUnwrap(body.range(of: "Text(line.speakerName)"))
+        let spacer = try XCTUnwrap(body.range(of: "Spacer(minLength: 0)"))
+        let time = try XCTUnwrap(body.range(of: "Text(time)"))
+        XCTAssertLessThan(name.lowerBound, spacer.lowerBound)
+        XCTAssertLessThan(spacer.lowerBound, time.lowerBound, "L'heure va à droite du pseudo")
+        XCTAssertFalse(body.contains("speakerHeading"))
+        XCTAssertFalse(body.contains("time: .shortened"), "Plus d'heure murale")
     }
 
     /// La feuille d'avant prenait le focus d'elle-même ; le journal posé DANS la pilule y

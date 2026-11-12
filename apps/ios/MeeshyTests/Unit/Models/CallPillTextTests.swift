@@ -43,6 +43,27 @@ final class CallPillTextTests: XCTestCase {
         XCTAssertEqual(text(.panel(.record)), .none)
     }
 
+    // MARK: - U2.9 — le plein écran de groupe garde les sous-titres
+
+    func test_fullScreenStage_keepsThePillOnlyWhenItCarriesTheCaptionsAlone() {
+        XCTAssertTrue(CallPillText.captionsAlone.isOnStage(isStageFullScreen: true), "les sous-titres allumés survivent au plein écran, dans leur verre sans rangée")
+        XCTAssertFalse(CallPillText.none.isOnStage(isStageFullScreen: true), "sans sous-titres, le plein écran ne garde aucun verre")
+        XCTAssertFalse(CallPillText.captions.isOnStage(isStageFullScreen: true), "la pilule avec sa rangée de base est rangée")
+        XCTAssertFalse(CallPillText.journal.isOnStage(isStageFullScreen: true))
+    }
+
+    func test_stageNotFullScreen_alwaysKeepsThePill() {
+        for content in [CallPillText.none, .captions, .journal, .captionsAlone] {
+            XCTAssertTrue(content.isOnStage(isStageFullScreen: false))
+        }
+    }
+
+    func test_fullScreen_withCaptionsOn_resolvesToTheCaptionsAlone() {
+        XCTAssertEqual(text(captions: true, .idle, revealed: false), .captionsAlone)
+        XCTAssertTrue(text(captions: true, .idle, revealed: false).isOnStage(isStageFullScreen: true))
+        XCTAssertFalse(text(captions: false, .idle, revealed: false).isOnStage(isStageFullScreen: true))
+    }
+
     // MARK: - Le journal, à la place des sous-titres
 
     func test_openJournal_takesThePlaceOfTheCaptions() {
@@ -87,6 +108,28 @@ final class CallPillTextTests: XCTestCase {
         XCTAssertTrue([CallPillText.none, .captions, .journal].allSatisfy(\.hasBaseRow))
     }
 
+    /// G1.3 · G1.11 — UN seul verre : la pilule rangée reste à l'écran avec ses sous-titres
+    /// (elle ne s'efface pas), sa rangée de base se retire par morphisme et le verre se resserre.
+    func test_onlyTheCaptionsAlone_staysOnScreenWhenTheChromeIsStowed() {
+        XCTAssertTrue(CallPillText.captionsAlone.staysWhenChromeStowed)
+        XCTAssertTrue([CallPillText.none, .captions, .journal].allSatisfy { !$0.staysWhenChromeStowed })
+    }
+
+    func test_captionsBand_isInTheGlass_forCaptionsAndForTheStowedCaptions() {
+        XCTAssertTrue(CallPillText.captions.showsCaptionsBand)
+        XCTAssertTrue(CallPillText.captionsAlone.showsCaptionsBand)
+        XCTAssertFalse(CallPillText.none.showsCaptionsBand)
+        XCTAssertFalse(CallPillText.journal.showsCaptionsBand)
+    }
+
+    func test_stowedPill_withCaptions_isTheSameGlassWithoutItsRows_atEveryLayer() {
+        for layer in [CallScreenLayer.idle, .menu, .panel(.journal), .menuOverJournal] {
+            let stowed = text(layer, revealed: false)
+            XCTAssertTrue(stowed.staysWhenChromeStowed, "\(layer) : un seul verre, jamais un second")
+            XCTAssertFalse(stowed.hasBaseRow, "\(layer) : la rangée de base se retire")
+        }
+    }
+
     /// En audio, seul le journal ouvert resserre l'avatar en en-tête compact : deux
     /// phrases de sous-titres laissent la personne au centre.
     func test_onlyTheOpenJournal_compactsTheAudioLayout() {
@@ -129,25 +172,49 @@ final class CallPillTextTests: XCTestCase {
 @MainActor
 final class CallCaptionsFooterTests: XCTestCase {
 
-    private func line(tag: String? = nil, isEvent: Bool = false) -> CallCaptionLine {
-        CallCaptionLine(
+    private func line(
+        origin: String? = nil,
+        served: String? = nil,
+        awaiting: Bool = false,
+        isEvent: Bool = false
+    ) -> CallCaptionLine {
+        var sut = CallCaptionLine(
             id: UUID(), speakerId: "u", speakerName: "Awa", text: "Salut",
-            languageTag: tag, isFinal: true, capturedAt: Date(timeIntervalSince1970: 0),
-            isShowingOriginal: tag == nil, canRevealOriginal: tag != nil, isEvent: isEvent
+            languageTag: origin.map { o in served.map { "\(o) → \($0)" } ?? o },
+            isFinal: true, capturedAt: Date(timeIntervalSince1970: 0),
+            isShowingOriginal: served == nil, canRevealOriginal: served != nil, isEvent: isEvent
         )
+        sut.originLanguage = origin
+        sut.servedLanguage = served
+        sut.awaitingUntil = awaiting ? Date(timeIntervalSince1970: 8) : nil
+        return sut
     }
 
     func test_aTranslatedLine_tellsHowToSeeTheOriginal() {
-        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(tag: "EN → FR")]), .touchForOriginal(pair: "EN → FR"))
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", served: "FR")]), .touchForOriginal(pair: "EN → FR"))
     }
 
-    func test_theNewestTranslatedLine_decidesThePair() {
-        let lines = [line(tag: "ES → FR"), line(tag: "EN → FR"), line()]
+    func test_aLineAwaitingItsTranslation_saysSo() {
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", awaiting: true)]), .translating(language: "EN"))
+    }
+
+    func test_waitingComesBeforeThePair_theNewestWaitingLineNamesItsLanguage() {
+        let lines = [line(origin: "ES", served: "FR"), line(origin: "EN", awaiting: true), line(origin: "EN")]
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: lines), .translating(language: "EN"))
+    }
+
+    func test_severalPairs_sayHowManyLanguagesAreTranslated() {
+        let lines = [line(origin: "EN", served: "FR"), line(origin: "ES", served: "FR"), line()]
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: lines), .translatedLanguages(count: 3))
+    }
+
+    func test_theSamePairTwice_isStillOnePair() {
+        let lines = [line(origin: "EN", served: "FR"), line(origin: "EN", served: "FR")]
         XCTAssertEqual(CallCaptionsFooter.resolve(lines: lines), .touchForOriginal(pair: "EN → FR"))
     }
 
     func test_originalsOnly_sayNothing() {
-        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(), line()]), .none)
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(), line(origin: "EN")]), .none)
     }
 
     func test_noLine_saysNothing() {
@@ -155,6 +222,6 @@ final class CallCaptionsFooterTests: XCTestCase {
     }
 
     func test_aCaptureEvent_isNotASpeech_itNeverSpeaksForTheFooter() {
-        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(tag: "EN → FR", isEvent: true)]), .none)
+        XCTAssertEqual(CallCaptionsFooter.resolve(lines: [line(origin: "EN", served: "FR", isEvent: true)]), .none)
     }
 }

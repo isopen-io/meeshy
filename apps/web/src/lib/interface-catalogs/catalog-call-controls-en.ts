@@ -1,6 +1,7 @@
 import type { CallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 const en = {
+  'callControls.duration.a11y.label': 'Call duration',
   'callControls.invite': 'Add',
   'callControls.invite.label': 'Add people to the call',
   'callControls.react': 'React',
@@ -50,11 +51,10 @@ const en = {
   'callControls.error.denied': 'You don’t have this right in this call',
   'callControls.error.notActive': 'The call is no longer active',
   'callControls.error.gone': '{name} is no longer in the call',
-  'callControls.record.title': 'What do you want to record?',
-  'callControls.record.audio': 'Audio only',
-  'callControls.record.audioDetail': 'Everyone’s voices',
-  'callControls.record.video': 'Audio and video',
-  'callControls.record.videoDetail': 'Visible video and voices',
+  'callControls.record.title': 'Record the call',
+  'callControls.record.consent': 'Everyone must accept. Recording stops if someone joins.',
+  'callControls.record.audio': 'Audio',
+  'callControls.record.video': 'Video',
   'callControls.capture': 'Capture',
   'callControls.capture.label': 'Capture the call',
   'callControls.back': 'Back',

@@ -14,7 +14,7 @@
           "catalog": "app",
           "iosKey": "call.zoom.hint",
           "androidName": "call_zoom_hint",
-          "status": "adopted"
+          "status": "candidate"
         },
         {
           "androidName": "call_camera_state_on",

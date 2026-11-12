@@ -1,6 +1,7 @@
 import type { CallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 const ar = {
+  'callControls.duration.a11y.label': 'مدة المكالمة',
   'callControls.invite': 'إضافة',
   'callControls.invite.label': 'إضافة أشخاص إلى المكالمة',
   'callControls.react': 'تفاعل',
@@ -50,11 +51,10 @@ const ar = {
   'callControls.error.denied': 'ليس لديك هذا الحق في هذه المكالمة',
   'callControls.error.notActive': 'لم تعد المكالمة نشطة',
   'callControls.error.gone': 'لم يعد {name} في المكالمة',
-  'callControls.record.title': 'ماذا تريد أن تسجّل؟',
-  'callControls.record.audio': 'الصوت فقط',
-  'callControls.record.audioDetail': 'أصوات الجميع',
-  'callControls.record.video': 'الصوت والفيديو',
-  'callControls.record.videoDetail': 'الصور الظاهرة والأصوات',
+  'callControls.record.title': 'تسجيل المكالمة',
+  'callControls.record.consent': 'يجب أن يوافق الجميع. يتوقف التسجيل إذا انضم أحد.',
+  'callControls.record.audio': 'الصوت',
+  'callControls.record.video': 'الفيديو',
   'callControls.capture': 'التقاط',
   'callControls.capture.label': 'التقاط صورة من المكالمة',
   'callControls.back': 'رجوع',

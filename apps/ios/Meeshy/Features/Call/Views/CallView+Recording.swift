@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 // #8437 — le bouton Enregistrer : au repos, il ouvre DANS la pilule le choix
-// de CE QU'ON enregistre (« Audio seulement » ou « Audio et vidéo ») avant de
+// de CE QU'ON enregistre (Audio ou Vidéo) avant de
 // solliciter l'accord de tous (#8550) ; pendant une demande ou un
 // enregistrement, il l'arrête d'un toucher.
 
@@ -37,27 +37,12 @@ extension CallView {
         }
     }
 
-    /// Rangée du (…) déployé, donc candidate du `ViewThatFits` de la pilule :
-    /// ses puces sont construites ici, le `ForEach` ne fait que les relire
-    /// (#9456, `AsyncRenderRow`).
+    /// G3.2 — l'option Enregistrer, candidate du `ViewThatFits` de la pilule.
     var recordingPanelRows: some View {
-        let chips = [CallRecordingKind.audio, .video].map { kind in
-            AsyncRenderRow(id: kind, content: CallPillChip(
-                art: .symbol(kind == .video ? "video.circle" : "waveform.circle"),
-                caption: CallRecordingCopy.kindLabel(kind),
-                label: CallRecordingCopy.kindLabel(kind),
-                hint: CallRecordingCopy.kindHint
-            ) {
-                HapticFeedback.light()
-                _ = callManager.recording.request(kind: kind)
-                closePanel()
-            })
-        }
-        return VStack(spacing: 0) {
-            CallPanelHeader(title: CallRecordingCopy.label(isActive: false), onBack: backToMenu, onClose: closePanel)
-            CallPillRow {
-                ForEach(chips, content: asyncRenderRowContent)
-            }
+        CallRecordingPanel(onBack: backToMenu, onClose: closePanel) { kind in
+            HapticFeedback.light()
+            _ = callManager.recording.request(kind: kind)
+            closePanel()
         }
     }
 }

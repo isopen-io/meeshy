@@ -8,6 +8,5 @@
     <string name="call_control_video_paused">Vidéo en pause (connexion faible)</string>
     <string name="call_control_video_paused_caption">En pause</string>
     <string name="call_control_video_paused_hint">Touchez pour éteindre la caméra. La vidéo reprend automatiquement si la connexion s\'améliore.</string>
-    <string name="call_control_video_caption">Vidéo</string>
     <string name="call_panel_close">Fermer</string>
 </resources>

@@ -362,6 +362,7 @@ final class AppTapTargetSweepSourceGuardTests: XCTestCase {
         XCTAssertEqual(mute("Button(role: .destructive) { go() } label: { Image(systemName: \"x\") }"), 1)
         XCTAssertEqual(mute("Button { go() } label: { Image(systemName: \"x\") }.accessibilityLabel(\"a\")"), 0)
         XCTAssertEqual(mute("Menu { Text(\"a\") } label: { Image(systemName: \"x\") }", token: "Menu"), 1)
+        XCTAssertEqual(mute("Button { go() } label: { SettingsRow(icon: \"i\", title: name) { Image(systemName: \"chevron.forward\") } }"), 0)
         XCTAssertEqual(
             mute("Button { go() } label: { Image(systemName: \"x\") }.accessibilityHidden(true)"), 0)
     }

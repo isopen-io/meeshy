@@ -17,10 +17,15 @@ class CallHeaderNamesViewModel @Inject constructor(
     suspend fun names(conversationId: String?): CallHeaderNames = resolver.headerNames(conversationId, knownGroupTitle = null)
 }
 
-/** Le nom donné (duo) ou le nom du groupe, CACHE-FIRST : vide tant que le cache n'a pas répondu, jamais de requête. */
+/**
+ * Le nom donné (duo) ou le nom du groupe, CACHE-FIRST : vide tant que le cache n'a pas répondu, jamais de requête. L'appel
+ * réduit (P18.10) les lit aussi ; composé dans la fenêtre d'une visionneuse, il reçoit le [viewModel] pris à la racine.
+ */
 @Composable
-internal fun rememberCallHeaderNames(conversationId: String?): State<CallHeaderNames> {
-    val viewModel: CallHeaderNamesViewModel = hiltViewModel()
+fun rememberCallHeaderNames(
+    conversationId: String?,
+    viewModel: CallHeaderNamesViewModel = hiltViewModel(),
+): State<CallHeaderNames> {
     return produceState(CallHeaderNames(givenName = null, groupName = null), conversationId) {
         value = viewModel.names(conversationId)
     }

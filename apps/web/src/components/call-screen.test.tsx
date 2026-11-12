@@ -1,20 +1,24 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, jest, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { callActions } from '@/lib/calls/call-actions';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
-import { CallModePending, CallScreen } from './call-screen';
+import { CallModePending, CallScreen, loadColdCallViews } from './call-screen';
 import { ThreadCallButton } from './thread-call-button';
 
 /* Les rangées d'actions et les rails du duo vivent dans leurs chunks (`call-control-actions.tsx`, `call-rails.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
 beforeAll(async () => {
+  await loadPillMotion();
   await loadCallControlsCatalog('fr');
+  await loadColdCallViews();
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming', preview: { getVideoTracks: () => [], getTracks: () => [] } as unknown as MediaStream })} />);
   await import('./call-control-actions');
@@ -146,7 +150,7 @@ describe('CallScreen — la pilule de verre (#8391)', () => {
       const order = ['Afficher les actions', 'Couper le micro', 'Sortie audio', 'Raccrocher'].map((label) => pill.indexOf(`aria-label="${label}"`));
       expect(order.every((index) => index >= 0)).toBe(true);
       expect([...order].sort((a, b) => a - b)).toEqual(order);
-      expect(html).toMatch(/class="glass-call[^"]*"[^>]*data-call-control-pill/);
+      expect(html).toMatch(/class="glass-call[^"]*"[^>]*data-call-pill-skin/);
     }
   });
 
@@ -256,7 +260,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     document.body.appendChild(host);
     const root = createRoot(host);
     act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={effectsSupport} />));
-    const find = (selector: string) => host.querySelector(selector);
+    const find = (selector: string) => [...host.querySelectorAll(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
     const rerender = (next: Partial<ActiveCall>) => root.render(<CallScreen call={call(next)} canShare effectsSupport={effectsSupport} />);
     const done = () => {
@@ -315,8 +319,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail-side="leading"]')?.className).toContain('-translate-x-[calc(100%+1.5rem)]');
     expect(view.find('[data-call-rail-side="trailing"]')?.className).toContain('translate-x-[calc(100%+1.5rem)]');
     expect(view.find('[data-call-rail-side="leading"]')?.className).toContain('opacity-0');
-    expect(view.find('[data-call-rail-side="leading"]')?.getAttribute('aria-hidden')).toBe('true');
-    expect(view.find('[data-call-rail-side="leading"]')?.hasAttribute('inert')).toBe(true);
+    expect(view.find('[data-call-rail-side="leading"]')?.hasAttribute('inert')).toBe(false);
     await leaving();
     expect(railsState(view.host)).toBeNull();
     expect(view.find('[data-call-rail]')).toBeNull();
@@ -330,7 +333,6 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     const classes = view.find('[data-call-rail-side="leading"]')?.className ?? '';
     expect(classes).toContain('transition-[translate,opacity]');
     expect(classes).toContain('motion-reduce:translate-x-0');
-    expect(classes).toContain('motion-reduce:duration-150');
     expect(classes).not.toContain('transition-all');
     view.done();
   });
@@ -403,7 +405,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-corner-frame] [data-call-control]')).toBeNull();
     view.press('[data-call-more]');
     await frame();
-    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma caméra', 'Partager l’écran']);
     expect(view.host.querySelectorAll('[data-call-control="camera"]')).toHaveLength(1);
     expect(view.host.querySelectorAll('[data-call-screen-share]')).toHaveLength(1);
     expect(view.find('[data-call-rail="mine"] [data-call-control="camera"]')?.getAttribute('aria-pressed')).toBe('true');
@@ -439,8 +441,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(railsState(view.host)).toBe('shown');
     tapStage(view);
     expect(railsState(view.host)).toBe('away');
-    expect(view.find('[data-call-rail-side="leading"]')?.getAttribute('aria-hidden')).toBe('true');
-    expect(view.find('[data-call-rail-side="trailing"]')?.hasAttribute('inert')).toBe(true);
+    expect(view.find('[data-call-rail-side="trailing"]')?.hasAttribute('inert')).toBe(false);
     tapStage(view);
     await frame();
     expect(railsState(view.host)).toBe('shown');
@@ -590,7 +591,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-corner-frame] [data-call-control]')).toBeNull();
     view.press('[data-call-more]');
     await frame();
-    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma vidéo', 'Partager l’écran']);
+    expect(railLabels(view.host, 'mine')).toEqual(['Couper la caméra', 'Retourner la caméra', 'Effets de ma caméra', 'Partager l’écran']);
     view.press('[data-call-rail="mine"] [data-call-control="effects"]');
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('mode');
     await settle(() => import('./call-effects-mode'));
@@ -614,7 +615,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-row]')).toBeNull();
     expect(railsState(view.host)).not.toBe('shown');
     expect(view.host.querySelectorAll('[data-call-journal-entry]')).toHaveLength(250);
-    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
     view.press('[data-panel-back]');
     expect(document.activeElement?.getAttribute('data-call-control')).toBe('journal');
     view.done();
@@ -693,6 +694,25 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
+  test('duo vidéo, chrome rangé : le doigt posé sur ma vignette la focalise (Chromium), et le toucher rend les contrôles SANS les ranger aussitôt ni permuter (G1.9, loi 15)', () => {
+    const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } });
+    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
+    tapStage(view);
+    expect(chrome()).toBe('hidden');
+    const tile = view.find('[data-call-corner]') as HTMLElement;
+    act(() => {
+      tile.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 5, clientX: 4, clientY: 4, button: 0, bubbles: true }));
+      tile.focus();
+    });
+    act(() => {
+      tile.dispatchEvent(new PointerEvent('pointerup', { pointerId: 5, clientX: 4, clientY: 4, button: 0, bubbles: true }));
+      tile.click();
+    });
+    expect(chrome()).toBe('shown');
+    expect(view.find('[data-call-corner]')?.hasAttribute('data-call-self-tile')).toBe(true);
+    view.done();
+  });
+
   test('Échap, un panneau ouvert, le ferme SANS réduire l’appel — même quand le focus a quitté le panneau (#8618)', async () => {
     const original = callActions.minimize;
     const minimized: number[] = [];
@@ -751,7 +771,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   const tapStage = (view: ReturnType<typeof mount>) => act(() => (view.find('[data-call-stage-surface]') as HTMLElement | null)?.click());
 
-  test('les sous-titres vivent DANS la pilule, (…) les range, et ils ne s’effacent pas avec les commandes : la pilule rangée les laisse dans un verre à eux (#17343, loi 11)', async () => {
+  test('les sous-titres vivent DANS la pilule, (…) les range, et ils ne s’effacent pas avec les commandes : la pilule rangée les garde dans son verre, qui se resserre (#17343, loi 11, G1.3)', async () => {
     const view = mount({ isGroup: true, cameraOn: true, members: peers, captionsMode: 'translated' });
     await act(async () => {
       await import('./call-captions-panel');
@@ -767,11 +787,12 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     tapStage(view);
     await act(async () => {});
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
-    const alone = view.find('[data-call-captions-band] [data-call-captions-panel]');
-    expect(alone).not.toBeNull();
-    expect(alone?.closest('[aria-hidden="true"]')).toBeNull();
-    expect(alone?.closest('[data-call-control-pill]')).toBeNull();
-    expect(alone?.getAttribute('data-call-captions-surface')).toBe('glass');
+    const kept = view.find('[data-call-control-pill] [data-call-captions-panel]');
+    expect(kept).not.toBeNull();
+    expect(kept?.closest('[aria-hidden="true"]')).toBeNull();
+    expect(kept?.closest('[data-call-control-pill]')?.hasAttribute('data-call-pill-stowed')).toBe(true);
+    expect(kept?.getAttribute('data-call-captions-surface')).toBe('inset');
+    expect(view.find('[data-call-captions-band]')).toBeNull();
     view.done();
   });
 
@@ -816,7 +837,11 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   const chromeOf = (view: ReturnType<typeof mount>) => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
 
-  const controlsClasses = (view: ReturnType<typeof mount>) => (view.find('[data-call-controls]') as HTMLElement | null)?.className.split(' ') ?? [];
+  const CALL_MOTION = readFileSync(new URL('../styles/call-motion.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const stowRule = (selector: string): string => {
+    const start = CALL_MOTION.indexOf(selector);
+    return start < 0 ? '' : CALL_MOTION.slice(start, CALL_MOTION.indexOf('}', start));
+  };
 
   /* AUCUNE MINUTERIE (#8988, directive porteur du 2026-10-01) : les commandes
      d'une vidéo ne disparaissent plus d'elles-mêmes — un toucher sur la scène
@@ -829,7 +854,7 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       view.press('[data-call-more]');
       act(() => jest.advanceTimersByTime(60_000));
       expect(chromeOf(view)).toBe('shown');
-      expect(controlsClasses(view)).toContain('opacity-100');
+      expect(view.find('[data-call-controls]')?.getAttribute('data-call-stow')).toBe('bottom');
       view.done();
     }));
 
@@ -849,17 +874,27 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
      `pointer-events-none` à l'instant où l'opacité COMMENÇAIT à baisser : un
      bouton encore bien visible laissait passer le doigt à la vidéo, qui ne
      faisait que rendre les commandes — il fallait toucher deux fois. */
-  test('rangées d’un toucher sur la scène, elles laissent passer le doigt — une fois leur fondu fini, jamais pendant (#8735)', () => {
+  test('rangées d’un toucher sur la scène, elles repartent vers leur bord et laissent passer le doigt — une fois le mouvement fini, jamais pendant (#8735, G1.11)', () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-    expect(controlsClasses(view)).toContain('transition-opacity');
+    expect(view.find('[data-call-controls]')?.getAttribute('data-call-stow')).toBe('bottom');
+    expect(view.find('[data-call-plane][data-call-stow]')?.getAttribute('data-call-stow')).toBe('top');
     tapStage(view);
     expect(chromeOf(view)).toBe('hidden');
-    expect(controlsClasses(view)).toContain('invisible');
-    expect(controlsClasses(view)).toContain('transition-[opacity,visibility]');
-    expect(controlsClasses(view)).not.toContain('pointer-events-none');
+    const rule = stowRule("[data-call-chrome='hidden'] [data-call-stow],");
+    expect(rule).toContain('visibility: hidden');
+    expect(rule).toContain('visibility 0s linear 0.3s');
+    expect(rule).not.toContain('pointer-events');
     tapStage(view);
-    expect(controlsClasses(view)).not.toContain('invisible');
+    expect(chromeOf(view)).toBe('shown');
     view.done();
+  });
+
+  test('G1.11 / G2.8 — l’en-tête sort par le haut, la pilule par le bas, mesurés sur leur propre hauteur ; aucun déplacement sous « Réduire les animations »', () => {
+    expect(stowRule("[data-call-chrome='hidden'] [data-call-stow='top'],")).toMatch(/translate: 0 calc\(-100% - env\(safe-area-inset-top\)/);
+    expect(stowRule("[data-call-chrome='hidden'] [data-call-stow='bottom'],")).toMatch(/translate: 0 calc\(100% \+ env\(safe-area-inset-bottom\)/);
+    const reduced = CALL_MOTION.slice(CALL_MOTION.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(reduced).toContain('translate: none');
+    expect(reduced).not.toContain('transition: none');
   });
 
   /* LE GLISSÉ NE REBONDIT PAS (#8736) : `overscroll-x-contain` laisse
@@ -1055,8 +1090,9 @@ describe('CallScreen — le verre : un seul flou par pilule, un disque de verre 
   test('(#17345) un seul flou : la pilule, repliée comme déployée, et aucun de ses disques', async () => {
     for (const expand of [false, true]) {
       const view = await mountPill({ cameraOn: true, members: { 'u-peer': member() } }, expand);
-      expect(view.pill.matches(BLUR)).toBe(true);
-      expect(view.pill.querySelectorAll(BLUR)).toHaveLength(0);
+      expect(view.pill.matches(BLUR)).toBe(false);
+      expect(view.pill.querySelector('[data-call-pill-skin]')?.matches(BLUR)).toBe(true);
+      expect(view.pill.querySelectorAll(BLUR)).toHaveLength(1);
       for (const disc of view.pill.querySelectorAll(`.${DISC}`)) expect(disc.matches(BLUR)).toBe(false);
       view.done();
     }
@@ -1108,7 +1144,7 @@ describe('CallScreen — voir et entendre l’appelant avant de décrocher (#848
     document.body.appendChild(host);
     const root = createRoot(host);
     act(() => root.render(<CallScreen call={call(overrides)} />));
-    const find = (selector: string) => host.querySelector(selector);
+    const find = (selector: string) => [...host.querySelectorAll(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
     const press = (selector: string) => act(() => (find(selector) as HTMLElement | null)?.click());
     const done = () => {
       act(() => root.unmount());

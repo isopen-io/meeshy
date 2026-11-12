@@ -35,6 +35,7 @@ import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallScreenPanel
+import me.meeshy.sdk.model.call.CallVerticalEdge
 import me.meeshy.sdk.model.call.CallStatusLabelLaw
 import me.meeshy.sdk.model.call.IncomingCallAnswer
 import me.meeshy.sdk.model.call.group.GroupCallStageFocus
@@ -125,9 +126,11 @@ fun CallScreen(
     permissionGate.flow?.let { PermissionFlowHost(it, accent = accent) }
     val extensions = viewModel.extensions
     val chrome = remember { CallChromeController() }
-    val chromeVisibility = rememberCallChromeVisibility(chrome, state)
     val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
     val groupShown = groupStageShown(state, groupMesh)
+    // G1.13 : en groupe, la scène est vidéo dès qu'UNE caméra est allumée, la mienne ou celle d'un autre.
+    val groupVideo = if (groupShown) CallGroupVideoStage.of(groupMesh, isPrimaryVideoActive = remoteVideo != null && !state.isPeerCameraOff) else null
+    val chromeVisibility = rememberCallChromeVisibility(chrome, state, groupVideo)
     val reduceMotion = rememberCallReduceMotion()
     val peer by viewModel.peerVisual.collectAsStateWithLifecycle()
     val preview by viewModel.previewUi.collectAsStateWithLifecycle()
@@ -175,7 +178,11 @@ fun CallScreen(
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
     MeeshyTheme(darkTheme = true) {
-        CompositionLocalProvider(LocalCallLiveSeconds provides liveSeconds, LocalCallGlassTone provides glassTone) {
+        CompositionLocalProvider(
+            LocalCallLiveSeconds provides liveSeconds,
+            LocalCallGlassTone provides glassTone,
+            LocalCallSelfTileBannerClearance provides rememberSelfTileBannerClearance(reduceMotion),
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -188,7 +195,7 @@ fun CallScreen(
             CallBackdrop(imageUrl = backdropUrl)
 
             val touchExploration = rememberCallTouchExploration()
-            val videoScene = callIsVideoStage(state)
+            val videoScene = callIsVideoStage(state, groupVideo)
             val sceneTap = remember(chrome, videoScene, touchExploration) {
                 if (CallChromeVisibility.mayToggleByTap(videoScene, touchExploration)) {
                     { chrome.onSceneTap(videoScene, touchExploration) }
@@ -200,6 +207,7 @@ fun CallScreen(
                 CallSelfCameraActions(viewModel.cameraZoom)
             }
             val pill = rememberCallPillActions(state, viewModel, chrome)
+            val peerSpeech = rememberCallPeerSpeechSource(viewModel, config.peerId.ifBlank { viewModel.activeConfig.peerId }, groupMesh)
             if (duo.shown) {
                 CallDuoVideoStage(
                     state = state,
@@ -212,12 +220,14 @@ fun CallScreen(
                     reduceMotion = reduceMotion,
                     layout = duo.layout,
                     onSwap = duo.onSwap,
+                    onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                     onSceneTap = sceneTap,
                     selfCamera = selfCamera,
                     controlsVisible = chromeVisibility.isVisible(CallChromeElement.Controls) && !inPip,
                     framed = duo.framed,
                     selfUserId = viewModel.selfUserId,
                     peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
+                    peerSpeech = peerSpeech,
                 )
             }
 
@@ -243,6 +253,8 @@ fun CallScreen(
                     pill = pill,
                     modifier = content,
                     inPip = inPip,
+                    groupVideo = groupVideo,
+                    peerSpeech = peerSpeech,
                     groupStage = if (groupShown) {
                         { stageModifier ->
                             CallGroupStage(
@@ -252,6 +264,8 @@ fun CallScreen(
                                 primaryTrack = remoteVideo,
                                 eglContext = viewModel.eglBaseContext,
                                 isChromeVisible = chromeVisibility.isVisible(CallChromeElement.Controls),
+                                isCapsuleVisible = chromeVisibility.isVisible(CallChromeElement.FeaturedCapsule),
+                                onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                                 isFullScreen = chromeState.isStageFullScreen,
                                 onFullScreenChange = chrome::setStageFullScreen,
                                 onStageTap = sceneTap,
@@ -280,6 +294,7 @@ fun CallScreen(
                     },
                     preview = preview,
                     onTogglePreviewSound = viewModel::togglePreviewSound,
+                    preAnswer = rememberIncomingPreAnswerHost(viewModel, state.isVideoCall),
                     // « Sans vidéo » (P17) : seul le micro est demandé, et ma caméra ne s'ouvre jamais.
                     onAcceptWithoutVideo = {
                         permissionGate.answerIncoming(isVideo = false) { answer -> answerWithoutVideo(viewModel, answer) }
@@ -331,10 +346,7 @@ fun CallScreen(
                 extensions.overlays, CallOverlaySlot.Panel, overlayContext,
                 Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
             )
-            CallOverlaySlotHost(
-                extensions.overlays, CallOverlaySlot.TopBanner, overlayContext,
-                Modifier.align(Alignment.TopCenter).systemBarsPadding(),
-            )
+            CallTopBannerStackHost(extensions.overlays, overlayContext, Modifier.align(Alignment.TopCenter))
 
             state.waitingBanner?.let { banner ->
                 CallWaitingBanner(
@@ -354,6 +366,8 @@ fun CallScreen(
                     isVisible = chromeVisibility.isVisible(CallChromeElement.Header) && !inPip,
                     onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
                     modifier = Modifier.align(Alignment.TopStart).systemBarsPadding().padding(horizontal = MeeshySpacing.lg),
+                    stowsToward = CallVerticalEdge.Top,
+                    edgeMargin = MeeshySpacing.xl,
                 ) {
                     CallHeaderBar(
                         state = state,
@@ -399,6 +413,8 @@ fun CallScreen(
                     eglContext = viewModel.eglBaseContext,
                     reduceMotion = reduceMotion,
                     onClose = chrome::exitMode,
+                    peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
+                    peerAvatarUrl = avatarUrl,
                 )
             }
 

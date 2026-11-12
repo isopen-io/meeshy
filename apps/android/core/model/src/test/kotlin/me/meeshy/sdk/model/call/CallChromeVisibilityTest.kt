@@ -72,4 +72,19 @@ class CallChromeVisibilityTest {
         assertThat(CallChromeScrollRule.interaction(true, true)).isNull()
         assertThat(CallChromeScrollRule.interaction(false, false)).isNull()
     }
+
+    /** U1.10 · #8550 : the « Back to grid · Full screen » capsule stows WITH the controls, but full screen does not stow it. */
+    @Test
+    fun `the featured capsule follows the controls and survives the full screen`() {
+        assertThat(CallChromeVisibility(isRevealed = true).isVisible(CallChromeElement.FeaturedCapsule)).isTrue()
+        assertThat(CallChromeVisibility(isRevealed = true, isStageFullScreen = true).isVisible(CallChromeElement.FeaturedCapsule)).isTrue()
+        assertThat(CallChromeVisibility(isRevealed = false).isVisible(CallChromeElement.FeaturedCapsule)).isFalse()
+        assertThat(CallChromeVisibility(isRevealed = false, isStageFullScreen = true).isVisible(CallChromeElement.FeaturedCapsule)).isFalse()
+        assertThat(CallChromeVisibility(isRevealed = false).toggled().isVisible(CallChromeElement.FeaturedCapsule)).isTrue()
+    }
+
+    @Test
+    fun `a mode stows the featured capsule with the rest of the chrome`() {
+        assertThat(CallChromeVisibility(isModeActive = true).isVisible(CallChromeElement.FeaturedCapsule)).isFalse()
+    }
 }

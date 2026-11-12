@@ -5,7 +5,7 @@ import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { CallScreen } from './call-screen';
+import { CallScreen, loadColdCallViews } from './call-screen';
 
 /**
  * UN APPEL COUPÉ FAUTE DE MICRO MÈNE AUX RÉGLAGES DE L'APP (#9033) — comme le
@@ -20,6 +20,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadCallControlsCatalog('fr');
+  await loadColdCallViews();
 });
 
 afterAll(async () => {

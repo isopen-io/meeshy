@@ -87,6 +87,19 @@ class CallPillTextTest {
     }
 
     @Test
+    fun `the captions are in the glass at rest and alone when the pill is stowed, never with the journal (G1_3, law 17)`() {
+        assertThat(CallPillText.Captions.showsCaptionsBand).isTrue()
+        assertThat(CallPillText.CaptionsAlone.showsCaptionsBand).isTrue()
+        assertThat(listOf(CallPillText.None, CallPillText.Journal).none { it.showsCaptionsBand }).isTrue()
+    }
+
+    @Test
+    fun `only the captions alone keep the glass on screen when the chrome is stowed, one glass that tightens`() {
+        assertThat(CallPillText.CaptionsAlone.staysWhenChromeStowed).isTrue()
+        assertThat(listOf(CallPillText.None, CallPillText.Captions, CallPillText.Journal).none { it.staysWhenChromeStowed }).isTrue()
+    }
+
+    @Test
     fun `a pill that carries text and the stowed glass share one cap, the resting pill keeps its own`() {
         assertThat(CallPillWidth.maxWidthDp(CallPillText.Captions)).isEqualTo(560f)
         assertThat(CallPillWidth.maxWidthDp(CallPillText.Journal)).isEqualTo(560f)
@@ -152,5 +165,25 @@ class CallCaptionsFooterTest {
     @Test
     fun `no line says nothing`() {
         assertThat(CallCaptionsFooter.resolve(emptyList())).isEqualTo(CallCaptionsFooter.None)
+    }
+
+    /** U2.9 — in group full screen the pill is stowed with the controls: only the captions glass, without its base row, stays. */
+    @Test
+    fun `the full screen keeps the pill only when it carries the captions alone`() {
+        assertThat(CallPillText.CaptionsAlone.isOnStage(isStageFullScreen = true)).isTrue()
+        assertThat(CallPillText.None.isOnStage(isStageFullScreen = true)).isFalse()
+        assertThat(CallPillText.Captions.isOnStage(isStageFullScreen = true)).isFalse()
+        assertThat(CallPillText.Journal.isOnStage(isStageFullScreen = true)).isFalse()
+    }
+
+    @Test
+    fun `a stage that is not full screen always keeps the pill`() {
+        CallPillText.entries.forEach { assertThat(it.isOnStage(isStageFullScreen = false)).isTrue() }
+    }
+
+    @Test
+    fun `in full screen with the captions on the pill resolves to the captions alone, and without them to nothing`() {
+        assertThat(CallPillText.resolve(isCaptionsEnabled = true, layer = CallScreenLayer.Idle, isChromeRevealed = false).isOnStage(isStageFullScreen = true)).isTrue()
+        assertThat(CallPillText.resolve(isCaptionsEnabled = false, layer = CallScreenLayer.Idle, isChromeRevealed = false).isOnStage(isStageFullScreen = true)).isFalse()
     }
 }

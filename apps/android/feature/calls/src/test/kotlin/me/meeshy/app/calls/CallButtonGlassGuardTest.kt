@@ -13,13 +13,14 @@ class CallButtonGlassGuardTest {
 
     private val commentLine = Regex("""^\s*(//|\*|/\*)""")
 
-    /** Non merci (cadre proposé), Refuser (enregistrement), puce d'ambiance, son et bascules de l'aperçu, Message (appel entrant). */
+    /** Non merci (cadre proposé), Refuser (enregistrement), puce d'ambiance, son et bascules de l'aperçu, Message (appel entrant), puces Audio | Vidéo (G3.2). */
     private val neighbourButtons = mapOf(
         "CallLiveFrameUi.kt" to 1,
         "CallRecordingConsentCard.kt" to 1,
         "CallFrameMoodChips.kt" to 1,
         "CallPreviewViews.kt" to 2,
         "IncomingCallScreen.kt" to 1,
+        "CallRecordingControls.kt" to 1,
     )
 
     private fun calls(): File = generateSequence(File("").absoluteFile) { it.parentFile }
@@ -113,6 +114,15 @@ class CallButtonGlassGuardTest {
     }
 
     @Test
+    fun `Retour et Fermer d'une option de la pilule portent le verre du bouton d'appel, pas un IconButton nu (G3_6)`() {
+        val panel = code("CallPillPanel.kt")
+        val header = block(panel, "private fun PanelHeaderButton(", "}")
+
+        assertThat(header).contains("CallPillButton(")
+        assertThat(panel).doesNotContain("IconButton(")
+    }
+
+    @Test
     fun `la puce des autres participants est un verre, pas un disque`() {
         val chip = block(code("CallEffectsCompanionStrip.kt"), "private fun OverflowChip(", "Text(")
 
@@ -129,5 +139,41 @@ class CallButtonGlassGuardTest {
         assertThat(fill).contains("MeeshyPalette.Error")
         assertThat(fill).contains("PRESSED_SCALE: Float = 0.88f")
         assertThat(block(glass, "internal fun CallPillButton(", "Column(")).contains("HapticFeedbackType.TextHandleMove")
+    }
+
+    @Test
+    fun `P17_2 - la puce du type, la barre d'avant le decroche et la puce du son sont du verre, pas un disque plein`() {
+        val parts = code("IncomingVideoParts.kt")
+
+        assertThat(Regex("""CallGlassPlate\(""").findAll(parts).count()).isEqualTo(2)
+        assertThat(parts).doesNotContain("MeeshyGlassSurface(")
+        assertThat(parts).doesNotContain("Color.White.copy(alpha = 0.16f)")
+        assertThat(block(parts, "internal fun IncomingPreAnswerBar(", "private fun incomingExposureText")).contains("CallPillButton(")
+
+        val sound = block(code("CallPreviewViews.kt"), "internal fun CallPreviewSoundButton(", "private fun CallPreviewSoundLabel(")
+        assertThat(sound).contains("role = CallButtonRole.Neutral")
+        assertThat(sound).doesNotContain("CallButtonRole.Active")
+    }
+
+    @Test
+    fun `P17_4 - la plaque Vous de ma vignette est celle des tuiles, une capsule de verre et jamais un voile noir`() {
+        val parts = code("IncomingVideoParts.kt")
+        assertThat(parts).contains("CallTileNameplate(")
+        assertThat(parts).doesNotContain("Color.Black")
+
+        val tile = code("CallGroupTile.kt")
+        val nameplate = block(tile, "internal fun CallTileNameplate(", "\n}")
+        assertThat(nameplate).contains("CallGlassPlate(")
+        assertThat(nameplate).contains("CallToneScrim()")
+        assertThat(block(tile, "private fun CallGroupTilePlate(", "\n}")).contains("CallTileNameplate(")
+    }
+
+    @Test
+    fun `P16_12 - le bandeau de partage reste le verre teinte de la surface partagee, a 48 dp`() {
+        val banner = code("CallScreenShareBanner.kt")
+
+        assertThat(banner).contains("MeeshyGlassSurface(")
+        assertThat(banner).contains("CallTopBannerStack.BANNER_HEIGHT_DP")
+        assertThat(banner).doesNotContain("44.dp")
     }
 }

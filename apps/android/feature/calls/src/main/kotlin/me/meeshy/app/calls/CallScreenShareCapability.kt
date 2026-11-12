@@ -237,6 +237,7 @@ class CallScreenShareActionHandler @Inject constructor(
             labelRes = if (active) R.string.call_screen_share_stop else R.string.call_screen_share_start,
             isActive = active,
             hintRes = R.string.call_screen_share_hint,
+            captionRes = R.string.call_screen_share_caption,
         )
     }
 

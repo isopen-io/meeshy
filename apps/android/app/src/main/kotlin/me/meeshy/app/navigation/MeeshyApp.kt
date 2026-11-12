@@ -28,12 +28,14 @@ import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoggingOutVeil
 import me.meeshy.app.auth.guest.GuestSessionEndViewModel
 import me.meeshy.app.auth.guest.GuestSessionEndedScreen
+import me.meeshy.app.calls.CallHeaderNamesViewModel
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallScreenShareViewModel
 import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
+import me.meeshy.app.calls.rememberCallHeaderNames
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.onboarding.OnboardingViewModel
@@ -194,6 +196,7 @@ fun MeeshyApp(
 
     UpgradeGateHost(requirement = upgradeRequirement) {
     ShareLaunchHost(navController) {
+    ProvideViewerCallPill(callViewModel, navController, shown = CallPillPresenter.shouldShow(callStatus, onCallScreen)) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -342,24 +345,28 @@ fun MeeshyApp(
     }
     }
     }
+    }
 }
 
 
 /** La pastille d'appel reduit : seule a lire l'etat VIVANT (chrono compris), elle seule se recompose chaque seconde. */
 @Composable
-private fun MinimizedCallPill(
+internal fun MinimizedCallPill(
     callViewModel: CallViewModel,
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    screenShare: CallScreenShareViewModel = hiltViewModel(),
+    namesSource: CallHeaderNamesViewModel = hiltViewModel(),
 ) {
+    val headerNames by rememberCallHeaderNames(callViewModel.activeConfig.conversationId, namesSource)
     val callState by callViewModel.state.collectAsStateWithLifecycle()
     val callPeerVisual by callViewModel.peerVisual.collectAsStateWithLifecycle()
-    val screenShare: CallScreenShareViewModel = hiltViewModel()
     val share by screenShare.state.collectAsStateWithLifecycle()
     CallPill(
         state = callState,
         peerAvatarUrl = callPeerVisual.avatarUrl,
         peerUserId = callViewModel.activeConfig.peerId,
+        names = headerNames,
         onClick = {
             navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
                 launchSingleTop = true

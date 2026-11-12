@@ -11,7 +11,7 @@ import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { useEmailLinkSearch } from '@/lib/links/email-link-search';
 import { useOnline } from '@/lib/net/online';
 
-import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, REACH_FAILURE_BODY } from './link-page-parts';
+import { ActionButton, ActionLink, LinkAlert, LinkPage, LinkText, REACH_FAILURE_LINE } from './link-page-parts';
 
 /**
  * **`/auth/revoke-sessions` — « CE N'ÉTAIT PAS MOI »** (#10859). L'alerte de
@@ -115,8 +115,8 @@ export function RevokeSessionsPage({
       body={
         <>
           <LinkText>{translateRevokeSessions(language, 'revokeSessions.body')}</LinkText>
-          {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.body')}</LinkAlert>}
-          {failure === null ? null : <LinkAlert>{translate(language, REACH_FAILURE_BODY[failure])}</LinkAlert>}
+          {online ? null : <LinkAlert>{translate(language, 'linkPage.offline.title')}</LinkAlert>}
+          {failure === null ? null : <LinkAlert>{translate(language, REACH_FAILURE_LINE[failure])}</LinkAlert>}
         </>
       }
     >

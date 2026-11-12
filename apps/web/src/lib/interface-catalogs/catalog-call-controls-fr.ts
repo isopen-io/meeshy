@@ -5,6 +5,7 @@
  * (`satisfies CallControlsCatalog`, `i18n-call-controls-catalog.test.ts`).
  */
 const fr = {
+  'callControls.duration.a11y.label': 'Durée de l’appel',
   'callControls.invite': 'Ajouter',
   'callControls.invite.label': 'Ajouter des personnes à l’appel',
   'callControls.react': 'Réagir',
@@ -54,12 +55,11 @@ const fr = {
   'callControls.error.denied': 'Vous n’avez pas ce droit dans cet appel',
   'callControls.error.notActive': 'L’appel n’est plus actif',
   'callControls.error.gone': '{name} n’est plus dans l’appel',
-  'callControls.record.title': 'Que voulez-vous enregistrer ?',
-  'callControls.record.audio': 'Audio seul',
-  'callControls.record.audioDetail': 'Les voix de tous',
-  'callControls.record.video': 'Audio et vidéo',
-  'callControls.record.videoDetail': 'Les images visibles et les voix',
-  'callControls.capture': 'Capturer',
+  'callControls.record.title': 'Enregistrer l’appel',
+  'callControls.record.consent': 'Tout le monde doit accepter. L’enregistrement s’arrête si quelqu’un rejoint.',
+  'callControls.record.audio': 'Audio',
+  'callControls.record.video': 'Vidéo',
+  'callControls.capture': 'Capture',
   'callControls.capture.label': 'Capturer l’appel',
   'callControls.back': 'Retour',
   'callControls.journal': 'Journal',

@@ -50,7 +50,7 @@ class SettingsInviteFocusComposeTest {
         var opened = 0
         val rows = SettingsHubCatalog.sections().first { it.id == SettingsHubSectionId.VOICE }.rows
         compose.setContent { MeeshyTheme { SettingsVoiceSection(rows) { opened++ } } }
-        compose.onNodeWithText("Create a voice profile").performClick()
+        compose.onNodeWithText("Create").performClick()
         assertThat(opened).isEqualTo(1)
     }
 }

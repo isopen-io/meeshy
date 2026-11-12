@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="onboarding_profile_title">Mostra-te</string>
-    <string name="onboarding_profile_body">Um rosto e um banner tornam o teu perfil mais visível: reconhecem-te nas sugestões, nas conversas e nas stories, e recebes mais pedidos de contacto.</string>
-    <string name="onboarding_profile_benefit_visibility">Mais visibilidade</string>
-    <string name="onboarding_profile_benefit_contacts">Mais contactos</string>
     <string name="onboarding_profile_banner_add">Adicionar um banner</string>
     <string name="onboarding_profile_banner_a11y">Escolher um banner</string>
     <string name="onboarding_profile_avatar_a11y">Escolher uma foto de perfil</string>

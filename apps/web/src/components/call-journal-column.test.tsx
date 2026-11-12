@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { journalDocks, JOURNAL_COLUMN_MIN_VIEWPORT, JOURNAL_COLUMN_RESERVE } from '@/lib/calls/call-journal-dock';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CallScreen } from './call-screen';
@@ -59,6 +60,7 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 const group: Partial<ActiveCall> = { isGroup: true, title: 'Équipe', members: { 'u-awa': member('u-awa', 'Awa'), 'u-karim': member('u-karim', 'Karim'), 'u-lina': member('u-lina', 'Lina') } };
 
 beforeAll(async () => {
+  await loadPillMotion();
   await loadCallControlsCatalog('fr');
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await import('./call-control-actions');
@@ -81,7 +83,8 @@ const mount = (overrides: Partial<ActiveCall>, wide: boolean) => {
   const root = createRoot(host);
   const render = (isWide: boolean) => act(() => root.render(<CallScreen call={call(overrides)} canShare effectsSupport={{ color: false, blur: false }} wide={isWide} />));
   render(wide);
-  const find = (selector: string) => host.querySelector<HTMLElement>(selector);
+  /* Le double d'une sortie (`data-call-pill-ghost`) s'efface et part : il n'est pas le contenu. */
+  const find = (selector: string) => [...host.querySelectorAll<HTMLElement>(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
   const press = (selector: string) => act(() => find(selector)?.click());
   const settle = () => act(async () => {});
   const done = () => {
@@ -248,7 +251,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('panel');
     expect(view.find('[data-call-journal-column]')).toBeNull();
     expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
-    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
     view.done();
   });
 
@@ -267,7 +270,7 @@ describe('le journal en colonne de verre (W1, W2)', () => {
     await openJournal(view);
     expect(view.find('[data-call-journal-column]')).toBeNull();
     expect(view.find('[data-call-control-pill] [data-call-journal-panel]')).not.toBeNull();
-    expect(view.find('[data-call-captions-panel]')).toBeNull();
+    expect([...view.host.querySelectorAll('[data-call-captions-panel]')].filter((panel) => panel.closest('[data-leaving][inert]') === null)).toEqual([]);
     view.done();
   });
 });

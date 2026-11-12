@@ -52,6 +52,8 @@ data class CallSafeInsets(
     val bottomDp: Float = 0f,
     val startDp: Float = 0f,
     val endDp: Float = 0f,
+    /** P16.8 — la place que prend, sous l'en-tête, le bandeau « Vous partagez » : ma vignette se range dessous. */
+    val bannerDp: Float = 0f,
 )
 
 enum class CallSelfTileCorner { TopStart, TopEnd, BottomStart, BottomEnd }
@@ -84,11 +86,32 @@ object CallSelfTileLaw {
     fun resting(chosen: CallSelfTileScale, controlsVisible: Boolean): CallSelfTileScale =
         if (controlsVisible) chosen else CallSelfTileScale.X1
 
+    /**
+     * G1.11 — le rangement est une TRANSFORMATION : le cadre reste celui du palier choisi et la vignette est mise à
+     * l'échelle de sa petite taille, jamais relayoutée.
+     */
+    fun restingFactor(chosen: CallSelfTileScale, controlsVisible: Boolean): Float =
+        resting(chosen, controlsVisible).widthDp / chosen.widthDp
+
+    /**
+     * Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins) : divisé par le facteur d'échelle, il est
+     * dessiné à sa taille de petite vignette (lois 4 et 11).
+     */
+    fun counterScaled(length: Float, by: Float): Float = if (by.isFinite() && by > 0f) length / by else length
+
+    /** L'ancre du rangement : le coin de la vignette tourné vers son coin d'écran, qui garde ainsi sa marge. */
+    fun anchor(corner: CallSelfTileCorner): CallTilePoint = when (corner) {
+        CallSelfTileCorner.TopStart -> CallTilePoint(0f, 0f)
+        CallSelfTileCorner.TopEnd -> CallTilePoint(1f, 0f)
+        CallSelfTileCorner.BottomStart -> CallTilePoint(0f, 1f)
+        CallSelfTileCorner.BottomEnd -> CallTilePoint(1f, 1f)
+    }
+
     /** La taille affichée : le palier, suivi du pincement, borné à la zone sûre de l'écran. */
     fun tileSize(container: CallTileSize, insets: CallSafeInsets, scale: CallSelfTileScale, pinch: Float): CallTileSize {
         val available = CallTileSize(
             widthDp = container.widthDp - insets.startDp - insets.endDp - 2 * MARGIN_DP,
-            heightDp = container.heightDp - insets.topDp - insets.bottomDp - TOP_CLEARANCE_DP - BOTTOM_CLEARANCE_DP,
+            heightDp = container.heightDp - insets.topDp - insets.bottomDp - insets.bannerDp - TOP_CLEARANCE_DP - BOTTOM_CLEARANCE_DP,
         )
         return fitted(liveSize(pinch, scale), available)
     }
@@ -104,7 +127,7 @@ object CallSelfTileLaw {
         val halfH = size.heightDp / 2
         val startX = insets.startDp + MARGIN_DP + halfW
         val endX = container.widthDp - insets.endDp - MARGIN_DP - halfW
-        val topY = insets.topDp + TOP_CLEARANCE_DP + halfH
+        val topY = insets.topDp + insets.bannerDp + TOP_CLEARANCE_DP + halfH
         val bottomY = container.heightDp - insets.bottomDp - BOTTOM_CLEARANCE_DP - halfH
         return when (corner) {
             CallSelfTileCorner.TopStart -> CallTilePoint(startX, topY)

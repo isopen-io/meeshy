@@ -33,6 +33,7 @@ const deStickerPacks = {
   'stickerPacks.submit.instant': 'Instant',
   'stickerPacks.submit.removeItem': 'Diesen Sticker entfernen',
   'stickerPacks.submit.zoneHint': 'Zeichne auf dem Bild den Bereich, in dem der Text erscheint. Die Vorschau zeigt den längsten erlaubten Text.',
+  'stickerPacks.submit.zoneHint.question': 'Wie platziere ich den Text?',
   'stickerPacks.submit.zoneDefault': 'Standardtext',
   'stickerPacks.submit.zoneLength': 'Maximale Länge',
   'stickerPacks.submit.send': 'Zur Prüfung senden',

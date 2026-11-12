@@ -33,7 +33,6 @@ struct OnboardingProfileCard: View {
             illustration: { EmptyView() },
             content: {
                 VStack(spacing: MeeshySpacing.lg) {
-                    OnboardingProfileBenefits(isDark: isDark)
                     preview
                     if !profile.failedSlots.isEmpty { failureNotice }
                 }
@@ -136,35 +135,6 @@ struct OnboardingProfileCard: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("onboarding.profile.retry")
         }
-    }
-}
-
-// MARK: - Les deux bénéfices
-
-private struct OnboardingProfileBenefits: View {
-    let isDark: Bool
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: MeeshySpacing.sm) { chips }
-            VStack(alignment: .leading, spacing: MeeshySpacing.sm) { chips }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    @ViewBuilder
-    private var chips: some View {
-        chip(String(localized: "onboarding.profile.benefit.visibility", bundle: .main), symbol: "eye.fill")
-        chip(String(localized: "onboarding.profile.benefit.contacts", bundle: .main), symbol: "person.2.fill")
-    }
-
-    private func chip(_ title: String, symbol: String) -> some View {
-        Label(title, systemImage: symbol)
-            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundStyle(MeeshyColors.indigo500)
-            .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule().fill(MeeshyColors.indigo500.opacity(isDark ? 0.18 : 0.1)))
     }
 }
 

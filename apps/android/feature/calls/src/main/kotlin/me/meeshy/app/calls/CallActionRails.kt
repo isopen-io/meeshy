@@ -6,7 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -50,14 +50,14 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallActionFamily
 import me.meeshy.sdk.model.call.CallActionFamilyRow
-import me.meeshy.sdk.model.call.CallChromeVisibility
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallRailSide
 import me.meeshy.sdk.model.call.CallRailsLayout
+import me.meeshy.sdk.model.call.CallScrollEdgeFade
 import me.meeshy.sdk.model.call.railSide
 import kotlin.math.max
 
 private val RAIL_TOP = 56.dp
-private val RAIL_SCROLL_FADE = 28.dp
 private const val RAIL_SLIDE_MILLIS = 250
 
 /**
@@ -77,6 +77,8 @@ internal fun CallActionRails(
     onAction: (CallAction) -> Unit,
     bottomClearance: Dp,
     modifier: Modifier = Modifier,
+    /** A rail button touched while its rail is leaving relights the controls first (G2.7). */
+    onRevive: () -> Unit = {},
 ) {
     val safeHorizontal = rememberCallSafeHorizontalDp()
     Box(
@@ -94,6 +96,7 @@ internal fun CallActionRails(
                     dimmed = dimmed,
                     onAction = onAction,
                     safeHorizontalDp = safeHorizontal,
+                    onRevive = onRevive,
                 )
             }
         }
@@ -121,6 +124,7 @@ private fun BoxScope.CallActionRailSlot(
     dimmed: Set<CallAction>,
     onAction: (CallAction) -> Unit,
     safeHorizontalDp: Float,
+    onRevive: () -> Unit,
 ) {
     var lastRow by remember { mutableStateOf(row) }
     SideEffect { if (row != null) lastRow = row }
@@ -128,14 +132,18 @@ private fun BoxScope.CallActionRailSlot(
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val side = family.railSide
     val travelPx = with(LocalDensity.current) { CallRailsLayout.slideOffset(side, rtl, safeHorizontalDp).dp.roundToPx() }
-    val fade = CallChromeVisibility.FADE_DURATION_MILLIS.toInt()
+    val fade = CallChromeStow.fadeMillis(reduceMotion)
     AnimatedVisibility(
         visible = row != null,
         modifier = Modifier.align(if (side == CallRailSide.Leading) Alignment.CenterStart else Alignment.CenterEnd),
         enter = if (reduceMotion) fadeIn(tween(fade)) else slideInHorizontally(tween(RAIL_SLIDE_MILLIS)) { travelPx } + fadeIn(tween(RAIL_SLIDE_MILLIS)),
         exit = if (reduceMotion) fadeOut(tween(fade)) else slideOutHorizontally(tween(RAIL_SLIDE_MILLIS)) { travelPx } + fadeOut(tween(RAIL_SLIDE_MILLIS)),
     ) {
-        (row ?: lastRow)?.let { CallActionRail(it, items, dimmed, onAction) }
+        (row ?: lastRow)?.let { shown ->
+            Box(Modifier.callReviveOnTouch(isHidden = row == null, onRevive = onRevive)) {
+                CallActionRail(shown, items, dimmed, onAction)
+            }
+        }
     }
 }
 
@@ -160,7 +168,7 @@ private fun CallActionRail(
     ) {
         Column(
             modifier = Modifier
-                .callRailScrollFade(scroll)
+                .callScrollEdgeFade(scroll, horizontal = false, symmetric = false)
                 .verticalScroll(scroll)
                 .padding(CallRailsLayout.PADDING_DP.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -185,25 +193,43 @@ private fun CallActionRail(
 }
 
 /**
- * Un rail qui défile n'est jamais coupé net : le bord derrière lequel des boutons attendent s'efface en fondu, et le
- * fondu se retire dès que ce bord est atteint. Un masque posé sur le dessin : il ne prend aucun toucher.
+ * Une rangée qui défile n'est jamais coupée net (P12.8, P14.9) : ses bords s'effacent en fondu, selon [CallScrollEdgeFade].
+ * Les rangées horizontales de la pilule et le bandeau des autres s'effacent aux DEUX bords ([symmetric]) ; un rail
+ * vertical n'efface que le bord derrière lequel des boutons attendent. Un masque posé sur le dessin : il ne prend aucun
+ * toucher, et les bords suivent l'écran (jamais l'ordre de lecture), donc restent justes en droite-à-gauche.
  */
-private fun Modifier.callRailScrollFade(state: ScrollState): Modifier = drawWithContent {
-    val behind = state.canScrollBackward
-    val ahead = state.canScrollForward
-    if (!behind && !ahead) {
+internal fun Modifier.callScrollEdgeFade(
+    state: ScrollableState,
+    horizontal: Boolean,
+    symmetric: Boolean = true,
+): Modifier = drawWithContent {
+    val edges = CallScrollEdgeFade.edges(
+        canScrollBackward = state.canScrollBackward,
+        canScrollForward = state.canScrollForward,
+        horizontal = horizontal,
+        isRtl = layoutDirection == LayoutDirection.Rtl,
+        symmetric = symmetric,
+    )
+    val length = if (horizontal) size.width else size.height
+    if (!edges.any || length <= 0f) {
         drawContent()
         return@drawWithContent
     }
-    val fade = (RAIL_SCROLL_FADE.toPx() / size.height).coerceAtMost(0.5f)
+    val fade = (CALL_SCROLL_EDGE_FADE.toPx() / length).coerceAtMost(0.5f)
     val stops = buildList {
-        add(0f to if (behind) Color.Transparent else Color.Black)
-        if (behind) add(fade to Color.Black)
-        if (ahead) add(1f - fade to Color.Black)
-        add(1f to if (ahead) Color.Transparent else Color.Black)
-    }
+        add(0f to if (edges.first) Color.Transparent else Color.Black)
+        if (edges.first) add(fade to Color.Black)
+        if (edges.last) add(1f - fade to Color.Black)
+        add(1f to if (edges.last) Color.Transparent else Color.Black)
+    }.toTypedArray()
     drawIntoCanvas { it.saveLayer(Rect(0f, 0f, size.width, size.height), Paint()) }
     drawContent()
-    drawRect(brush = Brush.verticalGradient(*stops.toTypedArray()), blendMode = BlendMode.DstIn)
+    drawRect(
+        brush = if (horizontal) Brush.horizontalGradient(*stops) else Brush.verticalGradient(*stops),
+        blendMode = BlendMode.DstIn,
+    )
     drawIntoCanvas { it.restore() }
 }
+
+/** La longueur du fondu d'un bord (P12.8) : la même pour les rangées de la pilule, le bandeau et les rails. */
+internal val CALL_SCROLL_EDGE_FADE = 24.dp

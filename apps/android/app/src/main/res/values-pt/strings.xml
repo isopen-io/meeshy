@@ -5,7 +5,6 @@
     <!-- Navigation tabs -->
 
     <!-- Login screen -->
-    <string name="login_welcome_back">Bem-vindo de volta</string>
 
     <!-- Chat screen -->
     <string name="chat_no_messages">Ainda não há mensagens</string>

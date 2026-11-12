@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { callNoticeStore, callReactionStore } from '@/lib/calls/call-control-state';
 import type { CallModeration } from '@/lib/calls/call-moderation';
@@ -10,8 +11,9 @@ import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 import { CallModerationMenu } from './call-moderation-menu';
+import { CallButton } from './call-glass-button';
 import { CallRecordChoice, CallReactionPalette } from './call-control-panels';
-import { CallScreen } from './call-screen';
+import { CallScreen, loadColdCallViews } from './call-screen';
 
 /**
  * LES CONTRÔLES D'UN APPEL EN COURS, À L'ÉCRAN (#8433, #8438, #8439, #8437) —
@@ -27,7 +29,9 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 /* Les rangées d'actions vivent dans leur chunk (`call-control-actions.tsx`) : un premier rendu en amorce le chargement, et les témoins lisent ensuite l'écran comme l'utilisateur, le chunk arrivé. */
 beforeAll(async () => {
+  await loadPillMotion();
   await loadCallControlsCatalog('fr');
+  await loadColdCallViews();
   renderToStaticMarkup(<CallScreen call={call()} canShare initiallyExpanded />);
   await import('./call-control-actions');
   await import('./call-rails');
@@ -100,7 +104,8 @@ const mount = (node: React.ReactElement) => {
   document.body.appendChild(host);
   const root = createRoot(host);
   act(() => root.render(node));
-  const find = (selector: string) => document.body.querySelector<HTMLElement>(selector);
+  /* Le double d'une sortie (`data-call-pill-ghost`) s'efface et part : il n'est pas le contenu. */
+  const find = (selector: string) => [...document.body.querySelectorAll<HTMLElement>(selector)].find((node) => node.closest('[data-call-pill-ghost]') === null) ?? null;
   const press = (selector: string) => act(() => find(selector)?.click());
   const done = () => {
     act(() => root.unmount());
@@ -155,6 +160,9 @@ describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
     await settle(() => import('./call-people-sheet'));
     const sheet = view.find('[data-call-people-sheet]');
     expect(sheet).not.toBeNull();
+    expect(sheet?.closest('[data-call-control-pill]')).toBeNull();
+    expect(sheet?.closest('[role="dialog"][data-call-people-host]')).not.toBeNull();
+    expect(view.find('[data-call-rail], [data-call-row]')).not.toBeNull();
     expect(sheet?.querySelector('[data-call-person="u-nadia"]')?.textContent).toContain('Nadia');
     expect(sheet?.querySelector('[data-call-person-ringing]')?.textContent).toContain('Sonne…');
     expect(sheet?.querySelector('[data-call-people-search]')).not.toBeNull();
@@ -170,7 +178,7 @@ describe('« Ajouter » et « Réagir » dans les actions de l’appel', () => {
 describe('les panneaux « Réagir » et « Enregistrer »', () => {
   test('chaque réaction part aussitôt, et la palette reste ouverte pour enchaîner', () => {
     const sent: string[] = [];
-    const view = mount(<CallReactionPalette id="p" closeGlyph="x" language="fr" onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
+    const view = mount(<CallReactionPalette Button={CallButton} id="p" closeGlyph="x" language="fr" onClose={() => undefined} react={(emoji) => sent.push(emoji)} />);
     view.press('[data-call-react="🎉"]');
     view.press('[data-call-react="👍"]');
     expect(sent).toEqual(['🎉', '👍']);
@@ -178,16 +186,41 @@ describe('les panneaux « Réagir » et « Enregistrer »', () => {
     view.done();
   });
 
-  test('« Audio et vidéo » demande un enregistrement vidéo et ferme le choix ; sans canevas filmable, il n’est pas offert', () => {
+  test('G3.2 — « Enregistrer l’appel » : titre centré, phrase d’accord, deux puces larges Audio | Vidéo, sans légende de rangée ni détail', () => {
+    const view = mount(<CallRecordChoice Button={CallButton} id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={() => undefined} videoAvailable />);
+    const group = view.find('[data-call-record-choice]');
+    const title = group?.querySelector('h2');
+    expect(title?.textContent).toBe('Enregistrer l’appel');
+    expect(title?.className).toContain('text-center');
+    expect(group?.textContent).toContain('Tout le monde doit accepter. L’enregistrement s’arrête si quelqu’un rejoint.');
+    expect(group?.textContent).not.toContain('Que voulez-vous enregistrer');
+    expect(view.find('[data-call-record-kind="audio"]')?.textContent).toBe('Audio');
+    expect(view.find('[data-call-record-kind="video"]')?.textContent).toBe('Vidéo');
+    expect(group?.querySelectorAll('[data-call-record-kind]')).toHaveLength(2);
+    expect(group?.querySelector('[role="toolbar"] > span, [data-call-record-detail]')).toBeNull();
+    view.done();
+  });
+
+  test('G3.6 — ‹ Retour et Fermer sont des disques de verre de 44 px, comme les boutons de la pilule', () => {
+    const view = mount(<CallRecordChoice Button={CallButton} id="r" closeGlyph="x" language="fr" onClose={() => undefined} back={{ label: 'Retour', onPress: () => undefined }} request={() => undefined} videoAvailable />);
+    for (const selector of ['[data-panel-back]', '[data-panel-close]']) {
+      const button = view.find(selector);
+      expect(button?.className).toContain('glass-call-disc');
+      expect((button as HTMLElement | null)?.style.width).toBe('44px');
+    }
+    view.done();
+  });
+
+  test('« Vidéo » lance aussitôt la demande d’accord puis referme l’option ; sans canevas filmable, elle n’est pas offerte', () => {
     const asked: string[] = [];
     const closed: string[] = [];
-    const view = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
-    expect(view.find('[data-call-record-kind="audio"]')?.textContent).toContain('Audio seul');
+    const view = mount(<CallRecordChoice Button={CallButton} id="r" closeGlyph="x" language="fr" onClose={() => closed.push('x')} request={(kind) => asked.push(kind)} videoAvailable />);
     view.press('[data-call-record-kind="video"]');
-    expect(asked).toEqual(['video']);
-    expect(closed).toHaveLength(1);
+    view.press('[data-call-record-kind="audio"]');
+    expect(asked).toEqual(['video', 'audio']);
+    expect(closed).toHaveLength(2);
     view.done();
-    const bare = mount(<CallRecordChoice id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
+    const bare = mount(<CallRecordChoice Button={CallButton} id="r" closeGlyph="x" language="fr" onClose={() => undefined} request={(kind) => asked.push(kind)} videoAvailable={false} />);
     expect(bare.find('[data-call-record-kind="video"]')?.hasAttribute('disabled')).toBe(true);
     bare.done();
   });
@@ -216,18 +249,19 @@ describe('le menu de modération', () => {
   test('le menu n’est posé que chez qui modère, et pour les seuls pairs qu’il peut modérer', async () => {
     const peers = { 'u-nadia': member('u-nadia', 'Nadia'), 'u-bruno': member('u-bruno', 'Bruno') };
     const { CallGrid } = await import('./call-grid');
+    const { CALL_GRID_KIT } = await import('./call-stage');
     const only = (id: string): CallModeration => ({ canModerate: (userId) => userId === id, mute: () => undefined, remove: () => undefined });
-    const view = mount(<CallGrid members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
+    const view = mount(<CallGrid kit={CALL_GRID_KIT} members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
     await settle(() => import('./call-moderation-menu'));
     expect(view.find('[data-call-moderate="u-bruno"]')).not.toBeNull();
     expect(view.find('[data-call-moderate="u-nadia"]')).toBeNull();
     expect(view.find('[data-call-moderate="u-bruno"]')?.getAttribute('aria-label')).toBe('Options pour Bruno');
     view.done();
-    const spotlight = mount(<CallGrid members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={{ kind: 'member', userId: 'u-bruno' }} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
+    const spotlight = mount(<CallGrid kit={CALL_GRID_KIT} members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={{ kind: 'member', userId: 'u-bruno' }} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={only('u-bruno')} language="fr" />);
     await settle(() => import('./call-moderation-menu'));
     expect(spotlight.find('[data-call-spotlight] [data-call-moderate="u-bruno"]')).not.toBeNull();
     spotlight.done();
-    const plain = mount(<CallGrid members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} language="fr" />);
+    const plain = mount(<CallGrid kit={CALL_GRID_KIT} members={Object.values(peers)} remoteStreams={{}} self={{ stream: null, cameraOn: false, mirrored: true, micMuted: false }} choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} language="fr" />);
     expect(plain.find('[data-call-moderate]')).toBeNull();
     plain.done();
   });

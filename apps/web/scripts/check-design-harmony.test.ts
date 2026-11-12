@@ -195,6 +195,84 @@ describe("le fini arc-en-ciel d'un aperçu — le spectre de la maison, pas une 
   });
 });
 
+describe("la barre de talkie élargie — un chrome immersif qui se LIT dans la charte", () => {
+  // La bande de talkie (`components/talkie-header-band.tsx`, transposition de
+  // `TalkieHeaderLiveBar.swift`) est un chrome posé SUR le dégradé de la
+  // conversation : encre blanche (pastille, dot, chrono), voiles noirs (repli
+  // hors-ligne), filets et halos. Chaque couleur a un RÔLE que la charte nomme
+  // (`on-media`, `scrim-soft`, `media-fill`/`-hairline`) — aucune ne doit rester
+  // un littéral brut. Le rouge d'enregistrement est un APLAT sur surface sombre :
+  // il se LIT `var(--ios-error-strong)` (miroir iOS `errorStrong`), jamais
+  // `var(--color-error)` qui tombe à un rouge foncé illisible en thème clair.
+  // Seuls restent exemptés, déclarés à la ligne : l'onde peinte en CANVAS (hors
+  // du DOM) et le masque de luminance (`#000` = opaque, pas une couleur).
+  const source = readFileSync(fileURLToPath(new URL('../src/components/talkie-header-band.tsx', import.meta.url)), 'utf8');
+
+  test('talkie-header-band.tsx ne porte aucune couleur de chrome en dur', () => {
+    expect(scanSource(source)).toEqual([]);
+  });
+
+  test("le chrome immersif passe par les jetons de la charte, pas par l'exemption de chemin", () => {
+    expect(exemptionOf('components/talkie-header-band.tsx')).toBe(null);
+    expect(source).toContain('var(--color-on-media)');
+    expect(source).toContain('var(--color-scrim-soft)');
+    expect(source).toContain('var(--color-media-fill)');
+  });
+
+  test("le rouge d'enregistrement se lit `ios-error-strong` (aplat sur surface sombre), jamais `color-error`", () => {
+    expect(source).toContain('var(--ios-error-strong)');
+    expect(source).not.toContain('var(--color-error)');
+  });
+
+  test("les deux seules exemptions sont déclarées à la ligne : canvas hors du DOM et masque de luminance", () => {
+    expect(source).toContain('harmony-exempt:');
+  });
+});
+
+describe("la famille appel — un masque de fondu UNIQUE, un verre qui se LIT dans la charte", () => {
+  // Trois sites de la famille appel écrivaient le MÊME fondu de bord
+  // (`linear-gradient(…, #000 8px, #000 calc(100% - 8px), transparent)`) en
+  // JUMELLES divergentes : `RAIL_FADE` (call-control-actions, to bottom),
+  // `ROW_EDGE_FADE` (call-row-keys, to right) et le `fade` de `stripBox`
+  // (call-grid, paramétré). C'est un masque de LUMINANCE (#000 = opaque, pas
+  // une couleur) — mais répété trois fois, il dérive en silence et compte six
+  // fois au gate. Source unique désormais : `edgeFadeMask(axis)` dans
+  // `call-row-keys.ts`, exemptée UNE fois à la ligne ; les trois sites la
+  // consomment. Et le verre de la pastille d'appel (`call-floating-pill`)
+  // était `color-mix(in srgb, white 22%, transparent)` — un filet blanc 22 %
+  // que la charte nomme `media-hairline` (parité avec la pastille du talkie, 84w).
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), 'utf8');
+  const keys = read('lib/calls/call-row-keys.ts');
+  const actions = read('components/call-control-actions.tsx');
+  const grid = read('components/call-grid.tsx');
+  const pill = read('components/call-floating-pill.tsx');
+
+  test('les trois consommateurs du fondu ne portent plus aucun littéral de masque', () => {
+    expect(scanSource(actions)).toEqual([]);
+    expect(scanSource(grid)).toEqual([]);
+  });
+
+  test("le fondu de bord a UNE source `edgeFadeMask`, exemptée à la ligne dans call-row-keys", () => {
+    expect(keys).toContain('edgeFadeMask');
+    expect(keys).toContain('harmony-exempt:');
+    expect(scanSource(keys)).toEqual([]);
+    expect(exemptionOf('lib/calls/call-row-keys.ts')).toBe(null);
+  });
+
+  test('les jumelles RAIL_FADE / stripBox dérivent du masque unique, plus d’un littéral local', () => {
+    expect(actions).toContain('edgeFadeMask');
+    expect(actions).not.toContain('linear-gradient(to bottom, transparent, #000');
+    expect(grid).toContain('edgeFadeMask');
+    expect(grid).not.toContain("'linear-gradient(to ");
+  });
+
+  test("le verre de la pastille d'appel se lit `media-hairline`, jamais un blanc 22 % en dur", () => {
+    expect(scanSource(pill)).toEqual([]);
+    expect(pill).toContain('var(--color-media-hairline)');
+    expect(pill).not.toContain('white 22%');
+  });
+});
+
 describe('auditSources — le rapport', () => {
   test('compte par fichier, ignore les exemptés et le hors-périmètre', () => {
     const [first] = EXEMPT_PATHS as readonly { prefix: string }[];

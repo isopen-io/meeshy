@@ -63,8 +63,9 @@ nonisolated enum ComposerRestTool: String, CaseIterable, Equatable, Sendable {
 /// dans leur colonne.
 nonisolated enum ComposerRestChrome {
 
-    /// La marge entre la colonne d'outils et le bord droit de la scène.
-    static let toolColumnInnerMargin: CGFloat = 12
+    /// L'écart de la colonne d'outils EN PLUS de celui de la couche : aucun,
+    /// elle s'aligne sur la rangée du haut (#17469, porteur).
+    static let toolColumnInnerMargin: CGFloat = 0
 
     struct State: Equatable, Sendable {
         var toolIsOpen: Bool

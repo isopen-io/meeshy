@@ -365,7 +365,6 @@ missing-key :feature:calls ar call_control_end_caption
 missing-key :feature:calls ar call_control_expanded
 missing-key :feature:calls ar call_control_more_caption
 missing-key :feature:calls ar call_control_output_hint
-missing-key :feature:calls ar call_control_video_caption
 missing-key :feature:calls ar call_control_video_paused
 missing-key :feature:calls ar call_control_video_paused_caption
 missing-key :feature:calls ar call_control_video_paused_hint
@@ -465,7 +464,6 @@ missing-key :feature:calls de call_control_end_caption
 missing-key :feature:calls de call_control_expanded
 missing-key :feature:calls de call_control_more_caption
 missing-key :feature:calls de call_control_output_hint
-missing-key :feature:calls de call_control_video_caption
 missing-key :feature:calls de call_control_video_paused
 missing-key :feature:calls de call_control_video_paused_caption
 missing-key :feature:calls de call_control_video_paused_hint
@@ -565,7 +563,6 @@ missing-key :feature:calls it call_control_end_caption
 missing-key :feature:calls it call_control_expanded
 missing-key :feature:calls it call_control_more_caption
 missing-key :feature:calls it call_control_output_hint
-missing-key :feature:calls it call_control_video_caption
 missing-key :feature:calls it call_control_video_paused
 missing-key :feature:calls it call_control_video_paused_caption
 missing-key :feature:calls it call_control_video_paused_hint

@@ -26,7 +26,7 @@ data class GroupCallStageTile(
     val showsVideo: Boolean,
     val isScreenSharing: Boolean,
     val isReconnecting: Boolean,
-    /** Le membre parle ([ActiveSpeakerDetector]) : son liseré s'épaissit. Jamais ma vignette, comme iOS. */
+    /** Le membre parle ([ActiveSpeakerDetector]) : sa vignette s'illumine de SA couleur, la mienne comprise. */
     val isSpeaking: Boolean = false,
 )
 
@@ -42,7 +42,17 @@ object GroupCallStageLaw {
     fun isShown(isMeshActive: Boolean, roster: GroupCallRoster): Boolean =
         isMeshActive && (roster.members.size >= 2 || roster.members.any { !it.isPrimary })
 
-    /** Moi d'abord, puis les membres dans l'ordre d'arrivée : la grille ne se réagence jamais. */
+    /**
+     * Les caméras distantes allumées (iOS `tiles(...).filter { !$0.isLocal && $0.showsVideo }.count`) : la règle de scène
+     * vidéo d'un groupe (`CallChromeVisibility.isVideoStage`) en a besoin, sans composer les tuiles.
+     */
+    fun remoteCamerasOn(roster: GroupCallRoster, isPrimaryVideoActive: Boolean): Int =
+        roster.members.count { isRemoteShowingVideo(it, isPrimaryVideoActive) }
+
+    private fun isRemoteShowingVideo(member: GroupCallMember, isPrimaryVideoActive: Boolean): Boolean =
+        if (member.isPrimary) isPrimaryVideoActive else member.isCameraOn || member.isScreenSharing
+
+    /** Les membres dans l'ordre d'arrivée, puis MOI en dernier (P11.3) : la grille ne se réagence jamais à la parole. */
     fun tiles(
         roster: GroupCallRoster,
         localName: String,
@@ -61,6 +71,7 @@ object GroupCallStageLaw {
             showsVideo = isLocalVideoEnabled,
             isScreenSharing = false,
             isReconnecting = false,
+            isSpeaking = roster.localUserId.isNotBlank() && roster.localUserId in speakingUserIds,
         )
         val remote = roster.members.map { member ->
             GroupCallStageTile(
@@ -70,13 +81,13 @@ object GroupCallStageLaw {
                 avatarUrl = member.avatarUrl,
                 isLocal = false,
                 isMicMuted = member.isMicMuted,
-                showsVideo = if (member.isPrimary) isPrimaryVideoActive else member.isCameraOn || member.isScreenSharing,
+                showsVideo = isRemoteShowingVideo(member, isPrimaryVideoActive),
                 isScreenSharing = member.isScreenSharing,
                 isReconnecting = member.link == GroupCallLinkState.Reconnecting,
                 isSpeaking = member.userId in speakingUserIds,
             )
         }
-        return listOf(local) + remote
+        return remote + local
     }
 }
 

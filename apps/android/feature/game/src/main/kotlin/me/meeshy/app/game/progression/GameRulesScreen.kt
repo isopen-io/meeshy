@@ -142,7 +142,6 @@ internal fun RulesBadgesSection() {
             fontWeight = FontWeight.Bold,
             color = tokens.textPrimary,
         )
-        Paragraph(stringResource(R.string.game_rules_badges_intro), muted = false)
         Paragraph(stringResource(R.string.game_rules_badges_ladder), muted = false)
         RulesMaterials()
         Paragraph(stringResource(R.string.game_rules_badges_ribbon), muted = true)
@@ -155,7 +154,6 @@ internal fun RulesBadgesSection() {
             color = tokens.textPrimary,
         )
         BadgeGuideResolver.catalog.forEach { group -> RulesFamily(group) }
-        Paragraph(stringResource(R.string.game_rules_badges_sheet), muted = true)
     }
 }
 

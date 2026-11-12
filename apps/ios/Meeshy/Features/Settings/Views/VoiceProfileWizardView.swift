@@ -269,7 +269,7 @@ struct VoiceProfileWizardView: View {
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
 
-                Text(String(localized: "voice.profile.wizard.recording.description", defaultValue: "Lisez à voix haute les deux ou trois phrases affichées, sans forcer le ton. Minimum 3 échantillons de 10 secondes.", bundle: .main))
+                Text(String(localized: "voice.profile.wizard.recording.description", defaultValue: "Lisez à voix haute les phrases affichées, sans forcer le ton.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(theme.textSecondary)
@@ -322,7 +322,7 @@ struct VoiceProfileWizardView: View {
                     .padding(.horizontal, 60)
             }
 
-            Text(String(localized: "voice.profile.wizard.creating", defaultValue: "Votre profil vocal est en cours de création. Cela peut prendre quelques instants.", bundle: .main))
+            Text(String(localized: "voice.profile.wizard.creating", defaultValue: "Création de votre profil vocal…", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(theme.textMuted)

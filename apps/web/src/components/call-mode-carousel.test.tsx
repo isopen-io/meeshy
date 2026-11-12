@@ -189,6 +189,17 @@ describe('ModeCarousel', () => {
     view.done();
   });
 
+  test('une piste qui quitte la page ne choisit rien : son dernier défilement, remis à zéro par le démontage, ne rend pas « Naturel » sous Échap', async () => {
+    const view = mount();
+    view.track.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    view.host.remove();
+    await view.scrollTo(3 * PITCH);
+    view.track.dispatchEvent(new Event('scrollend'));
+    await act(frame);
+    expect(view.chosen).toEqual([]);
+    view.done();
+  });
+
   const mountCapture = (options: { readonly recording?: boolean } = {}) => {
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -376,6 +387,22 @@ describe('ModeCarousel', () => {
     const view = mountRecorded();
     expect(view.track.className).toContain('overscroll-x-none');
     expect(view.track.className).not.toContain('overscroll-x-contain');
+    view.done();
+  });
+
+  /* UNE RANGÉE QUI DÉFILE N'EST JAMAIS COUPÉE NET (#17409, facture #17406) :
+     la piste s'efface en fondu à ses DEUX bords, de la même largeur à gauche
+     et à droite — l'arabe n'a donc rien à inverser. Le masque est posé sur la
+     piste elle-même : les éléments défilent dessous, le fondu ne bouge pas. */
+  test('la piste s’efface en fondu à ses deux bords, la même largeur à gauche et à droite (#17409)', () => {
+    const view = mountRecorded();
+    const style = view.track.getAttribute('style') ?? '';
+    const mask = /(?:^|;)\s*mask-image:\s*([^;]+)/.exec(style)?.[1]?.trim() ?? '';
+    expect(mask).toMatch(/^linear-gradient\(/);
+    const stops = /linear-gradient\(\s*(?:90deg|to right)\s*,\s*transparent(?:\s+0(?:px)?)?\s*,\s*(?:#000|black)\s+(\d+)px\s*,\s*(?:#000|black)\s+calc\(100% - (\d+)px\)\s*,\s*transparent(?:\s+100%)?\s*\)/.exec(mask);
+    expect(stops).not.toBeNull();
+    expect(Number(stops?.[1])).toBeGreaterThanOrEqual(16);
+    expect(stops?.[1]).toBe(stops?.[2]);
     view.done();
   });
 

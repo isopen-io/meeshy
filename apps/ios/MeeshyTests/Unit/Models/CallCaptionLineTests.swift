@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import MeeshySDK
 @testable import Meeshy
 
@@ -35,9 +36,13 @@ final class CallCaptionLineTests: XCTestCase {
         _ segment: Meeshy.CallTranscriptionSegment,
         isLocal: Bool = false,
         prefersOriginal: Bool = false,
-        isRevealed: Bool = false
+        isRevealed: Bool = false,
+        prism: [String] = ["fr"]
     ) -> CallCaptionLine {
-        CallCaptionLine.make(segment: segment, isLocal: isLocal, speakerName: "Ana", prefersOriginal: prefersOriginal, isRevealed: isRevealed)
+        CallCaptionLine.make(
+            segment: segment, isLocal: isLocal, speakerName: "Ana",
+            prefersOriginal: prefersOriginal, isRevealed: isRevealed, readerPrism: prism
+        )
     }
 
     // MARK: - Traduit / original
@@ -52,16 +57,28 @@ final class CallCaptionLineTests: XCTestCase {
 
     func test_textColor_onlyATranslatedLineTakesTheSpeakerColor() {
         XCTAssertEqual(line(segment()).textColorHex, CallSpeakerColor.hex(for: "peer"))
-        XCTAssertNil(line(segment(), isRevealed: true).textColorHex)
+        XCTAssertNil(line(segment(), prefersOriginal: true).textColorHex)
         XCTAssertNil(line(segment(translatedText: nil, translatedLanguage: nil)).textColorHex)
         XCTAssertNil(line(segment(speakerId: "me", text: "Salut", language: "fr"), isLocal: true).textColorHex)
     }
 
-    func test_make_tappedTranslatedLine_showsOriginalWithoutTag() {
+    func test_make_tappedTranslatedLine_keepsTheTranslationAndUnfoldsTheOriginalBelow() {
         let sut = line(segment(), isRevealed: true)
-        XCTAssertEqual(sut.text, "Hello")
-        XCTAssertNil(sut.languageTag)
-        XCTAssertTrue(sut.isShowingOriginal)
+        XCTAssertEqual(sut.text, "Bonjour")
+        XCTAssertEqual(sut.originalBelow, "Hello")
+        XCTAssertEqual(sut.languageTag, "EN → FR")
+        XCTAssertFalse(sut.isShowingOriginal)
+        XCTAssertEqual(sut.textColorHex, CallSpeakerColor.hex(for: "peer"))
+    }
+
+    func test_make_untappedTranslatedLine_unfoldsNothing() {
+        XCTAssertNil(line(segment()).originalBelow)
+    }
+
+    func test_make_journalOnOriginal_tapShowsTranslationWithoutUnfolding() {
+        let sut = line(segment(), prefersOriginal: true, isRevealed: true)
+        XCTAssertEqual(sut.text, "Bonjour")
+        XCTAssertNil(sut.originalBelow)
     }
 
     func test_make_journalOnOriginal_tapShowsTranslation() {
@@ -76,17 +93,84 @@ final class CallCaptionLineTests: XCTestCase {
         XCTAssertFalse(sut.canRevealOriginal)
     }
 
-    func test_make_noTranslation_showsOriginalWithoutTag() {
+    func test_make_noTranslation_showsTheOriginalLabelledWithItsLanguage() {
         let sut = line(segment(translatedText: nil, translatedLanguage: nil))
         XCTAssertEqual(sut.text, "Hello")
-        XCTAssertNil(sut.languageTag)
+        XCTAssertEqual(sut.languageTag, "EN")
+        XCTAssertEqual(sut.originLanguage, "EN")
+        XCTAssertNil(sut.servedLanguage)
         XCTAssertFalse(sut.canRevealOriginal)
+    }
+
+    // MARK: - L'attente de la traduction
+
+    private func awaiting(_ overrides: (isFinal: Bool, language: String)? = nil, prism: [String] = ["fr"], isLocal: Bool = false) -> CallCaptionLine {
+        line(
+            segment(language: overrides?.language ?? "en", translatedText: nil, translatedLanguage: nil, isFinal: overrides?.isFinal ?? true),
+            isLocal: isLocal,
+            prism: prism
+        )
+    }
+
+    func test_make_finalRemoteOriginalOutsideThePrism_awaitsItsTranslationUntilTheDeadline() {
+        let sut = awaiting()
+        XCTAssertTrue(sut.isAwaitingTranslation)
+        XCTAssertEqual(sut.awaitingUntil, Date(timeIntervalSince1970: 0).addingTimeInterval(CallCaptionTranslationWait.timeout))
+    }
+
+    func test_make_partialRemoteOriginal_isLabelledButNeverAwaits() {
+        let sut = awaiting((isFinal: false, language: "en"))
+        XCTAssertEqual(sut.languageTag, "EN")
+        XCTAssertFalse(sut.isAwaitingTranslation)
+    }
+
+    func test_make_originalAlreadyInThePrism_hasNoLabelAndNoWait() {
+        let sut = awaiting((isFinal: true, language: "FR"))
+        XCTAssertNil(sut.languageTag)
+        XCTAssertFalse(sut.isAwaitingTranslation)
+    }
+
+    func test_make_prismDescendsInOrder_asecondaryLanguageIsAlsoServed() {
+        let sut = awaiting((isFinal: true, language: "en"), prism: ["fr", "en"])
+        XCTAssertNil(sut.languageTag)
+        XCTAssertFalse(sut.isAwaitingTranslation)
+    }
+
+    func test_make_withoutAPrism_nothingIsAwaitedButTheOriginalIsLabelled() {
+        let sut = awaiting(prism: [])
+        XCTAssertEqual(sut.languageTag, "EN")
+        XCTAssertFalse(sut.isAwaitingTranslation)
+    }
+
+    func test_make_myOwnSpeech_isNeverLabelledNorAwaited() {
+        let sut = awaiting(isLocal: true)
+        XCTAssertNil(sut.languageTag)
+        XCTAssertFalse(sut.isAwaitingTranslation)
+    }
+
+    func test_make_translationArrives_theWaitEndsAndThePairReplacesTheLabel() {
+        let sut = line(segment())
+        XCTAssertFalse(sut.isAwaitingTranslation)
+        XCTAssertEqual(sut.languageTag, "EN → FR")
+        XCTAssertEqual(sut.originLanguage, "EN")
+        XCTAssertEqual(sut.servedLanguage, "FR")
+    }
+
+    func test_settled_beforeTheDeadline_stillAwaits_andAfterIt_givesUpButKeepsTheLabel() throws {
+        let sut = awaiting()
+        let deadline = try XCTUnwrap(sut.awaitingUntil)
+        XCTAssertTrue(sut.settled(at: deadline.addingTimeInterval(-0.1)).isAwaitingTranslation)
+        let given = sut.settled(at: deadline)
+        XCTAssertFalse(given.isAwaitingTranslation)
+        XCTAssertEqual(given.languageTag, "EN")
+        XCTAssertEqual(given.text, "Hello")
     }
 
     func test_make_emptyTranslation_isTreatedAsAbsent() {
         let sut = line(segment(translatedText: "  "))
         XCTAssertEqual(sut.text, "Hello")
-        XCTAssertNil(sut.languageTag)
+        XCTAssertEqual(sut.languageTag, "EN")
+        XCTAssertTrue(sut.isAwaitingTranslation)
     }
 
     // MARK: - Couleur stable par personne
@@ -123,7 +207,7 @@ final class CallCaptionLineTests: XCTestCase {
             isLocalVideoEnabled: false,
             isPrimaryVideoActive: false
         )
-        XCTAssertEqual(tiles.map(\.accentHex), ["me", "b", "c"].map(CallSpeakerColor.hex(for:)))
+        XCTAssertEqual(tiles.map(\.accentHex), ["b", "c", "me"].map(CallSpeakerColor.hex(for:)))
     }
 
     // MARK: - VoiceOver
@@ -134,5 +218,15 @@ final class CallCaptionLineTests: XCTestCase {
 
     func test_announcement_partialLine_isSilent() {
         XCTAssertNil(line(segment(isFinal: false)).announcement)
+    }
+
+    func test_queuedAnnouncement_waitsItsTurnInsteadOfCuttingTheOneInProgress() throws {
+        let queued = try XCTUnwrap(line(segment()).queuedAnnouncement)
+        XCTAssertEqual(queued.string, "Ana : Bonjour")
+        XCTAssertEqual(queued.attribute(.accessibilitySpeechQueueAnnouncement, at: 0, effectiveRange: nil) as? Bool, true)
+    }
+
+    func test_queuedAnnouncement_partialLine_isSilent() {
+        XCTAssertNil(line(segment(isFinal: false)).queuedAnnouncement)
     }
 }

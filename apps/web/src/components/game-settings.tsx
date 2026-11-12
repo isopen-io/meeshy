@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import type { GameLeagueBlock, GameVisibility } from '@meeshy/shared/types/game';
 import { PHOTO_INVITATIONS, type PhotoInvitations } from '@meeshy/shared/types/game-photo-settings';
 import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
@@ -7,6 +9,7 @@ import type { GameDevicePrefs } from '@/lib/game/preferences';
 import { gameText } from '@/lib/view/game-copy';
 
 import { atmosphereName } from './game-atmosphere-choice';
+import { InfoNoted, type InfoHint } from './info-hint';
 import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 import { GameVisibilityPicker } from './game-visibility-picker';
 
@@ -65,7 +68,21 @@ export type GameSettingsProps = {
   readonly onHidden: (on: boolean) => void;
   readonly onVisibility: (patch: Partial<GameVisibility>) => void;
   readonly onLeaveLeague: () => void;
+  /** Le (i) de chaque titre de bloc (#17587, épure #17584) — absent : le titre seul. */
+  readonly notes?: Partial<Record<GameSettingsBlock, InfoHint>> | undefined;
 };
+
+export type GameSettingsBlock = 'celebrations' | 'hidden' | 'atmosphere' | 'invitations' | 'notifications' | 'visibility' | 'league';
+
+function BlockTitle({ block, note, children }: { readonly block: GameSettingsBlock; readonly note: InfoHint | undefined; readonly children: ReactNode }) {
+  return (
+    <InfoNoted note={note}>
+      <h2 id={`game-settings-${block}-title`} className="text-body font-bold" style={{ color: GAME_INK }}>
+        {children}
+      </h2>
+    </InfoNoted>
+  );
+}
 
 const FIELDS = ['rank', 'treasury', 'showcase', 'atlas'] as const;
 
@@ -119,9 +136,9 @@ export function GameSettings(props: GameSettingsProps) {
   return (
     <>
       <GameCard id="game-settings-celebrations" labelledBy="game-settings-celebrations-title">
-        <h2 id="game-settings-celebrations-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+        <BlockTitle block="celebrations" note={props.notes?.celebrations}>
           {gameText('game.settings.celebrations.title')}
-        </h2>
+        </BlockTitle>
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.settings.celebrations.body')}
         </p>
@@ -129,9 +146,9 @@ export function GameSettings(props: GameSettingsProps) {
       </GameCard>
 
       <GameCard id="game-settings-hidden" labelledBy="game-settings-hidden-title">
-        <h2 id="game-settings-hidden-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+        <BlockTitle block="hidden" note={props.notes?.hidden}>
           {gameText('game.settings.hidden.title')}
-        </h2>
+        </BlockTitle>
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.settings.hidden.body')}
         </p>
@@ -150,9 +167,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {props.atmosphere === undefined ? null : (
         <GameCard id="game-settings-atmosphere" labelledBy="game-settings-atmosphere-title">
-          <h2 id="game-settings-atmosphere-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="atmosphere" note={props.notes?.atmosphere}>
             {gameText('game.settings.atmosphere.title')}
-          </h2>
+          </BlockTitle>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.settings.atmosphere.body')}
           </p>
@@ -178,9 +195,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {props.invitations === undefined ? null : (
         <GameCard id="game-settings-invitations" labelledBy="game-settings-invitations-title">
-          <h2 id="game-settings-invitations-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="invitations" note={props.notes?.invitations}>
             {gameText('game.settings.invitations.title')}
-          </h2>
+          </BlockTitle>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.settings.invitations.body')}
           </p>
@@ -212,9 +229,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {props.onGameNotifications === undefined ? null : (
         <GameCard id="game-settings-notifications" labelledBy="game-settings-notifications-title">
-          <h2 id="game-settings-notifications-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="notifications" note={props.notes?.notifications}>
             {gameText('game.settings.notifications.title')}
-          </h2>
+          </BlockTitle>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.settings.notifications.body')}
           </p>
@@ -238,9 +255,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {visibility === undefined ? null : (
         <GameCard id="game-settings-visibility" labelledBy="game-settings-visibility-title">
-          <h2 id="game-settings-visibility-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="visibility" note={props.notes?.visibility}>
             {gameText('game.settings.visibility.title')}
-          </h2>
+          </BlockTitle>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {gameText('game.settings.visibility.body')}
           </p>
@@ -264,9 +281,9 @@ export function GameSettings(props: GameSettingsProps) {
 
       {league === undefined ? null : (
         <GameCard id="game-settings-league" labelledBy="game-settings-league-title">
-          <h2 id="game-settings-league-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          <BlockTitle block="league" note={props.notes?.league}>
             {gameText('game.settings.league.title')}
-          </h2>
+          </BlockTitle>
           <p className="text-caption" style={{ color: GAME_INK_2 }}>
             {inLeague
               ? league.pseudonym === null

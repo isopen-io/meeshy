@@ -168,7 +168,7 @@ struct SecurityView: View {
                 HStack(spacing: MeeshySpacing.md) {
                     SecurityFieldIcon("key.fill", color: MeeshyColors.brandPrimaryHex)
 
-                    Text(String(localized: "settings.security.change_password", defaultValue: "Changer le mot de passe", bundle: .main))
+                    Text(String(localized: "settings.security.change_password", defaultValue: "Changer", bundle: .main))
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(theme.textPrimary)
 
@@ -190,6 +190,7 @@ struct SecurityView: View {
     private var activeSessionsSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             SecuritySectionHeader(title: String(localized: "security_sessions_header", defaultValue: "Sessions"), icon: "laptopcomputer.and.iphone", color: MeeshyColors.indigo400Hex)
+            SettingsSentence(text: String(localized: "security_sessions_summary", defaultValue: "Les appareils connectés à votre compte."))
 
             Button {
                 HapticFeedback.light()
@@ -198,7 +199,7 @@ struct SecurityView: View {
                 HStack(spacing: MeeshySpacing.md) {
                     SecurityFieldIcon("laptopcomputer.and.iphone", color: MeeshyColors.indigo400Hex)
 
-                    Text(String(localized: "security_sessions_manage", defaultValue: "Gérer les sessions actives"))
+                    Text(String(localized: "security_sessions_manage", defaultValue: "Voir les sessions"))
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(theme.textPrimary)
 

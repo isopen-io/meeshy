@@ -92,7 +92,7 @@ const textOf = (page, selector) => page.$eval(selector, (el) => (el.textContent 
  */
 const REACH = {
   controls: 'header a, #contenu a, #contenu button, #contenu select',
-  texts: '#contenu h2, #contenu .text-body, #contenu .text-caption',
+  texts: '#contenu h2, #contenu .text-body, #contenu .text-caption:not(.sr-only)',
 };
 
 /** Chaque contrôle du contenu, amené au milieu de l'écran puis mesuré. */

@@ -82,11 +82,35 @@ class CallRecordingConsentCardSemanticsTest {
     }
 
     @Test
-    fun `the kind panel offers audio only and audio and video`() {
+    fun `the kind panel offers audio and video`() {
         val picked = mutableListOf<CallRecordingKind>()
         rule.setContent { MeeshyTheme { CallRecordingKindPanel(onPick = { picked += it }) } }
-        rule.onNodeWithContentDescription("Audio and video").performClick()
-        rule.onNodeWithContentDescription("Audio only").performClick()
+        rule.onNodeWithContentDescription("Video").performClick()
+        rule.onNodeWithContentDescription("Audio").performClick()
         assertThat(picked).containsExactly(CallRecordingKind.VIDEO, CallRecordingKind.AUDIO).inOrder()
+    }
+
+    @Test
+    fun `the kind panel says everyone must accept, and each wide chip starts the request at once`() {
+        val picked = mutableListOf<CallRecordingKind>()
+        rule.setContent { MeeshyTheme { CallRecordingKindPanel(onPick = { picked += it }) } }
+        rule.onNodeWithText("Everyone must accept. Recording stops if someone joins.").assertIsDisplayed()
+        rule.onNodeWithText("Audio").assertIsDisplayed().assertHeightIsAtLeast(48.dp)
+        rule.onNodeWithText("Video").assertIsDisplayed().performClick()
+        assertThat(picked).containsExactly(CallRecordingKind.VIDEO)
+    }
+
+    @Test
+    fun `the pill panel header closes and goes back from two labelled glass buttons`() {
+        var back = 0
+        var closed = 0
+        rule.setContent {
+            MeeshyTheme { CallPillPanel(title = "Record the call", onBack = { back++ }, onClose = { closed++ }) { } }
+        }
+        rule.onNodeWithText("Record the call").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Close").assertHeightIsAtLeast(48.dp).performClick()
+        rule.onNodeWithContentDescription("Back to actions").assertHeightIsAtLeast(48.dp).performClick()
+        assertThat(closed).isEqualTo(1)
+        assertThat(back).isEqualTo(1)
     }
 }

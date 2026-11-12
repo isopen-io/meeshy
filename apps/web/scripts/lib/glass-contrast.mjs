@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const IOS_TOKENS_PATH = join(HERE, '..', '..', '..', '..', 'packages', 'design-tokens', 'ios.css');
 export const GLASS_CSS_PATH = join(HERE, '..', '..', 'src', 'styles', 'glass.css');
+export const GLASS_KIT_CSS_PATH = join(HERE, '..', '..', 'src', 'styles', 'glass-kit.css');
 export const IOS_ALIAS_PATH = join(HERE, '..', '..', 'src', 'styles', 'ios.css');
 
 const NAMED_COLORS = {
@@ -560,4 +561,129 @@ export function glassContrastAudit(inventory = GLASS_CONTRAST_INVENTORY) {
       return { ...entry, scheme, densityPercent, ratio, minRatio, passes: ratio >= minRatio };
     }),
   );
+}
+
+const KIT_DENSITIES = ['regular', 'dense'];
+const KIT_TONE_SELECTORS = {
+  base: /\.glass-tone\s*\{/,
+  plain: /\.glass-tone\[data-glass-tone='plain'\]\s*\{/,
+  onLight: /\.glass-tone\[data-glass-tone='onLight'\]\s*\{/,
+  theme: /\.glass-tone\[data-glass-tone='theme'\]\s*\{/,
+  deepDense: /\.glass-tone\[data-glass-tone='deep'\]\[data-glass-density='dense'\]\s*\{/,
+};
+
+const percentOf = (value) => Number(/^(\d+(?:\.\d+)?)%$/.exec(value.trim())?.[1] ?? Number.NaN);
+const numberOf = (value) => Number(/^(\d+(?:\.\d+)?)/.exec(value.trim())?.[1] ?? Number.NaN);
+
+const fillNameOf = (value) => {
+  if (value.includes('--ios-on-media')) return 'light';
+  if (value.includes('--ios-media-backdrop')) return 'dark';
+  return 'system';
+};
+
+/**
+ * LA MATIÈRE DU VERRE DU KIT (K01), lue dans `styles/glass-kit.css` — jamais
+ * recopiée. Rend, par ton et par densité, le remplissage, son opacité et le
+ * liseré (en pourcentage), puis les mesures communes. Le ton `theme` n'a pas de
+ * matière dans le kit : il porte `.glass` / `.glass-prominent`, dont l'opacité
+ * se lit dans `styles/glass.css`. `meeshy-glass-tone.test.tsx` les compare aux
+ * vecteurs de parité de la fiche.
+ */
+export function loadKitGlassTones() {
+  const css = readFileSync(GLASS_KIT_CSS_PATH, 'utf8');
+  const blocks = Object.fromEntries(Object.entries(KIT_TONE_SELECTORS).map(([name, pattern]) => [name, parseDeclarations(extractBlock(css, pattern))]));
+  const entry = (own, dense = {}) => {
+    const merged = { ...blocks.base, ...own };
+    const denseMerged = { ...merged, ...dense };
+    const read = (declarations) => ({ fill: fillNameOf(declarations['--glass-fill']), alpha: percentOf(declarations['--glass-alpha']), rim: percentOf(declarations['--glass-rim']) });
+    return { regular: read(merged), dense: read(denseMerged) };
+  };
+  const densities = loadGlassDensities();
+  const themeEntry = (own) => {
+    const rim = percentOf({ ...blocks.base, ...own }['--glass-rim']);
+    return { regular: { fill: 'system', alpha: densities.glass, rim }, dense: { fill: 'system', alpha: densities['glass-prominent'], rim } };
+  };
+  const base = blocks.base;
+  return {
+    blur: numberOf(base['--glass-blur']),
+    saturate: percentOf(base['--glass-saturate']),
+    topLight: percentOf(base['--glass-top-light']),
+    shadowAlpha: percentOf(base['--glass-shadow-alpha']),
+    shadowOffsetY: numberOf(base['--glass-shadow-y']),
+    pressScale: numberOf(base['--glass-press-scale']),
+    toneFadeMs: numberOf(base['--glass-tone-fade']),
+    hoverGlow: numberOf(base['--glass-glow-hover']),
+    pressGlow: numberOf(base['--glass-glow-press']),
+    plain: entry(blocks.plain),
+    deep: entry({}, blocks.deepDense),
+    onLight: entry(blocks.onLight),
+    theme: themeEntry(blocks.theme),
+  };
+}
+
+const grayWithLuminance = (target) => {
+  const channel = target <= 0.0031308 * 12.92 ? target / 12.92 : 1.055 * target ** (1 / 2.4) - 0.055;
+  const value = Math.round(channel * 255);
+  return { r: value, g: value, b: value, a: 1 };
+};
+
+/** La luminance sous laquelle un verre `plain` tient l'encre blanche à 4,5:1 (fiche K01 § 5). */
+export const PLAIN_WORST_LUMINANCE = 0.118;
+
+const KIT_TONE_MIN_RATIO = { text: 4.5, 'non-text': 3 };
+
+/**
+ * LE CONTRASTE DU VERRE DU KIT, FLOU COUPÉ, CONTRE LE PIRE FOND DE CHAQUE TON :
+ * l'encre est `--ios-on-media`, le remplissage lu dans la feuille. `plain` flotte
+ * sur du contenu sombre, son pire fond est celui de la luminance du seuil du ton ;
+ * `deep` et `onLight` flottent sur du blanc pur. Seul `deep` régulier ne porte
+ * qu'un glyphe (seuil 3:1), tout le reste porte du texte (4,5:1).
+ */
+export function kitGlassToneContrast() {
+  const tones = loadKitGlassTones();
+  const vars = loadIosSchemes().dark;
+  const ink = resolveColor('var(--ios-on-media)', vars);
+  const fills = { light: resolveColor('var(--ios-on-media)', vars), dark: resolveColor('var(--ios-media-backdrop)', vars) };
+  return ['plain', 'deep', 'onLight'].flatMap((tone) =>
+    KIT_DENSITIES.map((density) => {
+      const found = tones[tone][density];
+      const canvas = tone === 'plain' ? grayWithLuminance(PLAIN_WORST_LUMINANCE) : NAMED_COLORS.white;
+      const glass = over({ ...fills[found.fill], a: found.alpha / 100 }, canvas);
+      const kind = tone === 'deep' && density === 'regular' ? 'non-text' : 'text';
+      const ratio = wcagContrastRatio(over(ink, glass), glass);
+      return { tone, density, kind, ratio, minRatio: KIT_TONE_MIN_RATIO[kind], passes: ratio >= KIT_TONE_MIN_RATIO[kind] };
+    }),
+  );
+}
+
+/** La luminance au-delà de laquelle le contenu est clair et le verre passe `onLight` (fiche K01 § 6). */
+export const DEEP_WORST_LUMINANCE = 0.613;
+
+const KIT_FOCUS_BANDS = {
+  plain: [0, PLAIN_WORST_LUMINANCE],
+  deep: [PLAIN_WORST_LUMINANCE, DEEP_WORST_LUMINANCE],
+  onLight: [DEEP_WORST_LUMINANCE, 1],
+};
+
+/**
+ * LE CONTOUR DU FOCUS DU VERRE DU KIT : décalé de 2 px, il se pose sur le
+ * CONTENU, pas sur le verre. Sa couleur, lue dans `styles/glass-kit.css`
+ * (`--glass-focus-ring`), est comparée aux deux bords de la bande de luminance
+ * qui élit le ton ; le pire des deux est rendu. Le ton `theme` suit l'encre du
+ * thème (`currentColor`), sur le fond de l'app.
+ */
+export function kitGlassFocusRingContrast() {
+  const css = readFileSync(GLASS_KIT_CSS_PATH, 'utf8');
+  const vars = loadIosSchemes().dark;
+  const base = parseDeclarations(extractBlock(css, KIT_TONE_SELECTORS.base));
+  const own = {
+    plain: parseDeclarations(extractBlock(css, KIT_TONE_SELECTORS.plain)),
+    deep: {},
+    onLight: parseDeclarations(extractBlock(css, KIT_TONE_SELECTORS.onLight)),
+  };
+  return Object.entries(KIT_FOCUS_BANDS).map(([tone, edges]) => {
+    const ring = resolveColor({ ...base, ...own[tone] }['--glass-focus-ring'], vars);
+    const ratio = Math.min(...edges.map((luminance) => wcagContrastRatio(ring, grayWithLuminance(luminance))));
+    return { tone, ring, ratio, minRatio: KIT_TONE_MIN_RATIO['non-text'], passes: ratio >= KIT_TONE_MIN_RATIO['non-text'] };
+  });
 }

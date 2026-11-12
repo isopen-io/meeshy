@@ -12,6 +12,9 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.onNodeWithTag
@@ -187,31 +190,51 @@ class CallCaptionsBandSemanticsTest {
             MeeshyTheme { CallCaptionsBand(lines = listOf(line("a", "Bonjour")), onToggleOriginal = {}, onOpenJournal = { opened++ }) }
         }
 
-        rule.onNodeWithText("Journal").assertHeightIsAtLeast(48.dp).performClick()
+        rule.onNodeWithText("Transcript").assertHeightIsAtLeast(48.dp).performClick()
 
         assertThat(opened).isEqualTo(1)
     }
 
     @Test
     @Config(sdk = [34], qualifiers = "w1000dp-h800dp")
-    fun `the stowed captions take a glass of their own, limited to 560 dp (#17343)`() {
+    fun `the captions of a mode, which has no pill, take a glass of their own limited to 560 dp (#17343, G1_3)`() {
         rule.setContent {
             MeeshyTheme {
                 CallCaptionsBand(
                     lines = listOf(line("a", "Bonjour")),
                     onToggleOriginal = {},
                     onOpenJournal = {},
-                    modifier = Modifier.testTag("stowed"),
+                    modifier = Modifier.testTag("mode"),
                     hasOwnGlass = true,
                 )
             }
         }
 
-        rule.onNodeWithTag("stowed").assertWidthIsEqualTo(560.dp)
+        rule.onNodeWithTag("mode").assertWidthIsEqualTo(560.dp)
         rule.onNodeWithText("Ada · Bonjour", substring = true).assertIsDisplayed()
     }
 
     private fun collectLabels(node: androidx.compose.ui.semantics.SemanticsNode): List<String> =
         listOfNotNull(node.config.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull()) +
             node.children.flatMap(::collectLabels)
+
+    @Test
+    fun `in a mode the band shows its sentences without the Journal button, with it everywhere else`() {
+        var opens by mutableStateOf(false)
+        rule.setContent {
+            MeeshyTheme {
+                CallCaptionsBand(
+                    lines = listOf(line("a", "Bonjour")),
+                    onToggleOriginal = {},
+                    onOpenJournal = {},
+                    opensJournal = opens,
+                )
+            }
+        }
+
+        rule.onNodeWithText("Ada · Bonjour", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Transcript").assertDoesNotExist()
+        rule.runOnIdle { opens = true }
+        rule.onNodeWithText("Transcript").assertIsDisplayed()
+    }
 }

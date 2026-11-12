@@ -84,7 +84,7 @@ internal fun GameHiddenCard(onSettings: () -> Unit, viewModel: GameHiddenViewMod
         is SwitchRefusal.Code -> GameErrorMessages.message(resources, refused.wire)
     }
     GameCard(title = stringResource(R.string.game2_settings_hidden_title)) {
-        GameNote(stringResource(R.string.game2_settings_hidden_card) + " " + stringResource(R.string.game2_settings_hidden_reopen_note))
+        GameNote(stringResource(R.string.game2_settings_hidden_reopen_note))
         GameErrorLine(error)
         GameActionButton(title = stringResource(R.string.game2_settings_hidden_show), onClick = viewModel::show, busy = state.busy)
         GameQuietButton(title = stringResource(R.string.game2_door_settings), onClick = onSettings)

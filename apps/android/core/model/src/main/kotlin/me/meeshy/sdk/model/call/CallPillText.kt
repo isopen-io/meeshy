@@ -6,7 +6,7 @@ import kotlin.math.min
 /**
  * #17343 — what the pill carries as TEXT above its base row. The captions and the journal live INSIDE its glass, on a
  * duo as on a group; the journal opens in place of the captions; (…) stows them both and closing the actions gives them
- * back; a touch that stows the pill leaves the captions in a glass without a base row (law 11 of
+ * back; a touch that stows the pill tightens the same glass around the captions (law 11 of
  * `docs/product/appels-vue-finale.md`). Mirrors iOS `CallPillText`.
  */
 enum class CallPillText {
@@ -26,6 +26,27 @@ enum class CallPillText {
     /** Only the stowed pill leaves the captions without their base row. */
     val hasBaseRow: Boolean get() = this != CaptionsAlone
 
+    /** The captions are in the glass: at rest, or alone when the pill is stowed. */
+    val showsCaptionsBand: Boolean get() = this == Captions || this == CaptionsAlone
+
+    /**
+     * Law 11 · 17 — stowed, the pill does not leave: its glass stays on screen, loses its base row and tightens around the
+     * captions. No second glass.
+     */
+    val staysWhenChromeStowed: Boolean get() = this == CaptionsAlone
+
+    /**
+     * U2.9 — in group full screen the pill is stowed with the controls: only its captions glass, deprived of its base
+     * row, stays on the stage. Out of the full screen it is always there. Mirrors iOS `isOnStage(isStageFullScreen:)`.
+     */
+    fun isOnStage(isStageFullScreen: Boolean): Boolean = !isStageFullScreen || staysWhenChromeStowed
+
+    /**
+     * #17529 — the journal takes a share of the window ([CallJournalSizing]): on an audio call the avatar then shrinks
+     * into a compact header to leave it the room ([CallAudioStageLayout]). Mirrors iOS `compactsAudioLayout`.
+     */
+    val compactsAudioLayout: Boolean get() = this == Journal
+
     companion object {
         /**
          * [isCaptionsEnabled]: the « Captions » setting of the user. The journal keeps the whole call, captions on or
@@ -42,7 +63,7 @@ enum class CallPillText {
 }
 
 /**
- * #17343 — ONE width for the glass: the pill that carries text and the glass of the stowed captions are limited to
+ * #17343 — ONE width for the glass: the pill that carries text, stowed or not, is limited to
  * [TEXT_DP] so the eye does not sweep the whole screen (landscape, tablet); the resting pill keeps its [RESTING_DP].
  */
 object CallPillWidth {

@@ -1,12 +1,14 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
+import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { TypingDots } from '@/components/typing-dots';
 import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
-import { PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
+import { CAPTIONS_EXIT, PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
 import { formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
+import { useRailFade } from '@/lib/calls/use-mode-motion';
 import { useRailPresence } from '@/lib/calls/use-rail-presence';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -71,20 +73,6 @@ function WaitingDots({ waiting, label }: { readonly waiting: boolean; readonly l
       </span>
       {waiting ? <span className="sr-only">{`, ${label}`}</span> : null}
     </>
-  );
-}
-
-/** « Original · … » déplié sous la phrase : il en descend, et y remonte en fondu, inerte, avant de ne rien laisser. */
-function UnfoldedOriginal({ open, caption, language }: { readonly open: boolean; readonly caption: CallCaption; readonly language: InterfaceLanguage }) {
-  const present = useRailPresence(open, PILL_TEXT_EXIT).mounted;
-  if (!present) return null;
-  return (
-    <span className="block ps-3 text-mini" style={{ color: INK_2 }} dir={noteDirection(language)} data-call-caption-original="" {...(open ? {} : PILL_TEXT_LEAVING)}>
-      {`${translateCallControls(language, 'callControls.journal.original')} · `}
-      <span dir="auto" lang={caption.pair?.from} data-call-caption-original-text="">
-        {caption.original}
-      </span>
-    </span>
   );
 }
 
@@ -178,7 +166,7 @@ const CaptionLine = memo(function CaptionLine({
           {content}
         </p>
       )}
-      <UnfoldedOriginal open={unfoldable && open} caption={caption} language={language} />
+      <UnfoldedOriginal open={unfoldable && open} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-caption-original" />
     </div>
   );
 });
@@ -197,20 +185,22 @@ export type CaptionsSlot = 'captions' | 'captionsAlone';
 
 /**
  * Les sous-titres à leur place, et leur sortie : `shown` faux, ils restent le temps
- * du fondu (`PILL_TEXT_EXIT`), puis ne laissent rien. Revenus pendant le fondu,
- * ce sont les mêmes, aussitôt.
+ * du fondu (`CAPTIONS_EXIT`), puis ne laissent rien. Revenus pendant le fondu,
+ * ce sont les mêmes, aussitôt. Sous « Réduire les animations », le moteur joue
+ * l'arrivée et le départ en fondu court (`useRailFade`), là où la feuille ne peut plus.
  */
 export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'surface'> & { readonly slot: CaptionsSlot; readonly shown: boolean }) {
-  const present = useRailPresence(shown, PILL_TEXT_EXIT).mounted;
+  const present = useRailPresence(shown, CAPTIONS_EXIT).mounted;
+  const fade = useRailFade<HTMLDivElement>(shown);
   if (!present) return null;
   const leaving = shown ? {} : PILL_TEXT_LEAVING;
   return slot === 'captions' ? (
-    <div className="pt-1" data-call-pill-text="captions" {...leaving}>
+    <div ref={fade} className="pt-1" data-call-pill-text="captions" {...leaving}>
       <CallCaptionsPanel {...panel} surface="inset" />
       <hr className="mx-2 my-1 border-0 border-t border-media-hairline" />
     </div>
   ) : (
-    <div data-call-pill-text="captionsAlone" {...leaving}>
+    <div ref={fade} data-call-pill-text="captionsAlone" {...leaving}>
       <CallCaptionsPanel {...panel} surface="glass" />
     </div>
   );

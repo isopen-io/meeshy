@@ -22,6 +22,7 @@ import {
   ACCESS_RULES,
   ConversationChoice,
   ConversationPicker,
+  FormIntro,
   CreateLinkButton,
   FormSection,
   LimitsFields,
@@ -116,10 +117,11 @@ export default function ShareLinkNewScreen() {
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
         <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
           {online ? null : <LinksOfflineNotice language={language} />}
+          <FormIntro text={translateLinkFamilies(language, 'links.create.intro')} />
           <FormSection id="link-section-conversation" title={translateLinkFamilies(language, 'links.create.section.conversation')} subtitle={null} icon={<LinksGlyph name="chatsCircle" size={12} />}>
             <ConversationChoice language={language} conversation={chosen} invalid={feedback === 'links.create.error.conversation'} onOpen={() => setPicking(true)} />
           </FormSection>
-          <FormSection id="link-section-identity" title={translateLinkFamilies(language, 'links.create.section.identity')} subtitle={null} icon={<LinksGlyph name="tag" size={12} />}>
+          <FormSection id="link-section-identity" title={null} subtitle={null} icon={<LinksGlyph name="tag" size={12} />}>
             <TextRow
               id="link-name"
               label={translateLinkFamilies(language, 'links.create.name')}
@@ -139,7 +141,7 @@ export default function ShareLinkNewScreen() {
             language={language}
             id="link-section-access"
             title={translateLinkFamilies(language, 'links.create.section.access')}
-            subtitle={translateLinkFamilies(language, 'links.create.section.access.subtitle')}
+            subtitle={null}
             icon={<Glyph name="key" size={12} />}
             rules={ACCESS_RULES}
             draft={draft}

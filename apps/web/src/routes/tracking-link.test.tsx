@@ -138,7 +138,7 @@ describe('/l/:token — une passerelle en échec a son propre état', () => {
     const script = scripted(refused(0), refused(0));
     const host = await mount(<TrackingLinkRedirect token="abc123" language="fr" deps={script.deps} />);
     expect(host.querySelector('h1')?.textContent).toBe('Hors ligne');
-    expect(host.textContent).toContain('Reconnectez-vous à Internet, puis réessayez.');
+    expect(host.textContent).toContain('Hors ligne');
     expect(script.went).toEqual([]);
   });
 });

@@ -1,5 +1,10 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -7,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -54,6 +58,7 @@ import me.meeshy.sdk.model.call.CallButtonGlassSurface
 import me.meeshy.sdk.model.call.CallButtonGlassTreatment
 import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallChromeInteraction
+import me.meeshy.sdk.model.call.CallPillMotion
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
 import me.meeshy.ui.theme.MeeshyPalette
@@ -148,10 +153,13 @@ internal fun CallPillButton(
     toggleState: Boolean? = null,
     diameter: Dp = 48.dp,
     enabled: Boolean = true,
+    /** The caption fades and folds in or out with the rows around it, never snaps (G3.4), reduced motion included. */
+    captionShown: Boolean = true,
 ) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val reduceMotion = rememberCallReduceMotion()
+    val captionMillis = CallPillMotion.millis(reduceMotion)
     val scale by animateFloatAsState(
         targetValue = CallButtonFill.pressScale(pressed, reduceMotion),
         animationSpec = if (pressed) tween(0) else spring(dampingRatio = 0.7f, stiffness = 400f),
@@ -165,7 +173,6 @@ internal fun CallPillButton(
     }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         modifier = modifier
             .defaultMinSize(minWidth = CallButtonFill.MIN_TARGET_DP.dp, minHeight = CallButtonFill.MIN_TARGET_DP.dp)
             .alpha(if (enabled) 1f else DISABLED_ALPHA)
@@ -179,15 +186,21 @@ internal fun CallPillButton(
             CallPillGlyph(icon, kind, diameter, pressed)
         }
         if (caption != null) {
-            Text(
-                text = caption,
-                color = MeeshyMediaChromeColors.OnMediaSecondary,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.clearAndSetSemantics { },
-            )
+            AnimatedVisibility(
+                visible = captionShown,
+                enter = fadeIn(tween(captionMillis)) + expandVertically(tween(captionMillis)),
+                exit = fadeOut(tween(captionMillis)) + shrinkVertically(tween(captionMillis)),
+            ) {
+                Text(
+                    text = caption,
+                    color = MeeshyMediaChromeColors.OnMediaSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = MeeshySpacing.xs).clearAndSetSemantics { },
+                )
+            }
         }
     }
 }

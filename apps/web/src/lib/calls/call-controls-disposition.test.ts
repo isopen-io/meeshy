@@ -71,7 +71,14 @@ describe('railRows — les rails du duo', () => {
   });
 
   test('un panneau dessiné dans la pilule remplace les rails, comme il remplace les rangées (#8578)', () => {
-    for (const open of ['react', 'record', 'people', 'journal'] as const) expect(railRows('rails', set(), panel(open))).toEqual([]);
+    for (const open of ['react', 'record', 'journal'] as const) expect(railRows('rails', set(), panel(open))).toEqual([]);
+  });
+
+  test('G3.5 — la feuille des personnes laisse les rails en place : elle ne les remplace pas', () => {
+    expect(families(railRows('rails', set(), panel('people')))).toEqual(['mine', 'call']);
+    expect(unfoldsPill('rails', panel('people'))).toBe(false);
+    expect(unfoldsPill('rows', panel('people'))).toBe(true);
+    expect(families(pillRows('rows', set(), panel('people')))).toEqual(['mine', 'call']);
   });
 
   test('« mon image », caméra allumée : Caméra · Retourner · Effets · Écran', () => {

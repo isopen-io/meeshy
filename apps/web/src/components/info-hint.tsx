@@ -1,4 +1,4 @@
-import { useId, useState, type CSSProperties } from 'react';
+import { createContext, useContext, useEffect, useId, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { GlyphSvg, type GlyphShape } from './glyph';
 
@@ -41,12 +41,46 @@ export type InfoHintState = {
   readonly toggle: () => void;
 };
 
+/**
+ * UN SEUL (i) OUVERT PAR ÉCRAN (#17587, épure #17584). Un écran qui pose des
+ * notes sur ses rangées et ses titres monte `InfoHintScope` : ouvrir une note
+ * referme la précédente. Sans portée, chaque (i) garde son propre état — les
+ * écrans d'entrée, qui n'en ont qu'un ou deux, n'ont rien à changer.
+ */
+type InfoHintScopeValue = {
+  readonly openId: string | null;
+  readonly setOpenId: (next: (current: string | null) => string | null) => void;
+};
+
+const InfoHintScopeContext = createContext<InfoHintScopeValue | null>(null);
+
+export function InfoHintScope({ children }: { readonly children: ReactNode }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  return <InfoHintScopeContext.Provider value={{ openId, setOpenId }}>{children}</InfoHintScopeContext.Provider>;
+}
+
 /** `fixedId` sert l'hôte dont un champ cite la note par un identifiant ÉCRIT
- * (`aria-describedby="signup-phone-hint"`) ; sinon `useId`. */
+ * (`aria-describedby="signup-phone-hint"`) ; sinon `useId`. Une note ouverte se
+ * referme à Échap. */
 export function useInfoHint(fixedId?: string): InfoHintState {
   const generatedId = useId();
-  const [isOpen, setOpen] = useState(false);
-  return { id: fixedId ?? generatedId, isOpen, toggle: () => setOpen((open) => !open) };
+  const id = fixedId ?? generatedId;
+  const scope = useContext(InfoHintScopeContext);
+  const [localOpen, setLocalOpen] = useState(false);
+  const isOpen = scope === null ? localOpen : scope.openId === id;
+  const setOpen = (open: boolean): void => {
+    if (scope === null) setLocalOpen(open);
+    else scope.setOpenId((current) => (open ? id : current === id ? null : current));
+  };
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  });
+  return { id, isOpen, toggle: () => setOpen(!isOpen) };
 }
 
 export function InfoHintButton({
@@ -82,15 +116,90 @@ export function InfoHintText({
   hint,
   state,
   className,
+  inline = false,
 }: {
   readonly hint: InfoHint;
   readonly state: InfoHintState;
   readonly className?: string;
+  /** Rendue en `span` bloc — pour une note posée dans une rangée dont le texte est déjà un `span`. */
+  readonly inline?: boolean;
 }) {
-  const classes = ['text-caption', state.isOpen ? undefined : 'sr-only', className].filter((part) => part !== undefined);
+  const classes = ['text-caption', inline ? 'block' : undefined, state.isOpen ? undefined : 'sr-only', className].filter((part) => part !== undefined);
+  const Tag = inline ? 'span' : 'p';
   return (
-    <p id={state.id} className={classes.join(' ')} style={{ color: 'var(--color-ios-ink-2)' }}>
+    <Tag id={state.id} className={classes.join(' ')} style={{ color: 'var(--color-ios-ink-2)' }}>
       {hint.text}
-    </p>
+    </Tag>
+  );
+}
+
+/**
+ * UNE NOTE FACULTATIVE À CÔTÉ D'UN NOM (#17587, épure #17584) — un titre de
+ * bloc ou le nom d'une rangée de réglage. Sans note, l'enfant est rendu tel
+ * quel ; avec une note, le (i) se pose à sa fin et la note sous lui, repliée
+ * mais lue. Le (i) est un BOUTON : il ne se pose jamais dans un lien ni dans un
+ * `label`, et l'hôte le place à côté de ces contrôles, pas dedans.
+ */
+export function InfoNoted({
+  note,
+  noteId,
+  inline = false,
+  className,
+  children,
+}: {
+  readonly note: InfoHint | undefined;
+  /** L'identifiant de la note quand un contrôle voisin la cite (`aria-describedby`). */
+  readonly noteId?: string;
+  readonly inline?: boolean;
+  readonly className?: string;
+  readonly children: ReactNode;
+}) {
+  if (note === undefined) return <>{children}</>;
+  return (
+    <WithNote note={note} inline={inline} {...(noteId === undefined ? {} : { noteId })} {...(className === undefined ? {} : { className })}>
+      {children}
+    </WithNote>
+  );
+}
+
+function WithNote({
+  note,
+  noteId,
+  inline,
+  className,
+  children,
+}: {
+  readonly note: InfoHint;
+  readonly noteId?: string;
+  readonly inline: boolean;
+  readonly className?: string;
+  readonly children: ReactNode;
+}) {
+  const state = useInfoHint(noteId);
+  const Row = inline ? 'span' : 'div';
+  return (
+    <>
+      <Row className={['flex min-w-0 items-center gap-1', className].filter((part) => part !== undefined).join(' ')}>
+        <span className="min-w-0">{children}</span>
+        <InfoHintButton hint={note} state={state} />
+      </Row>
+      <InfoHintText hint={note} state={state} inline={inline} />
+    </>
+  );
+}
+
+/**
+ * UN (i) POSÉ SEUL, SANS TEXTE À CÔTÉ (épure #17584, règle 1) — la page ou la
+ * fiche dont le titre dit déjà l'objet et dont l'explication ne tient pas à un
+ * libellé : l'icône seule porte la QUESTION comme nom accessible, la note reste
+ * lue repliée.
+ */
+export function InfoAlone({ hint, className }: { readonly hint: InfoHint; readonly className?: string }) {
+  const state = useInfoHint();
+  return (
+    <div className={['grid justify-items-center', className].filter((part) => part !== undefined).join(' ')}>
+      <InfoHintButton hint={hint} state={state} />
+      <InfoHintText hint={hint} state={state} />
+    </div>
   );
 }

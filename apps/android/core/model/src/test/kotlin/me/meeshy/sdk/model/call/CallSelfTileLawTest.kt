@@ -90,4 +90,46 @@ class CallSelfTileLawTest {
         assertThat(CallSelfTileLaw.resting(CallSelfTileScale.X3, controlsVisible = false)).isEqualTo(CallSelfTileScale.X1)
         assertThat(CallSelfTileLaw.resting(CallSelfTileScale.X3, controlsVisible = true)).isEqualTo(CallSelfTileScale.X3)
     }
+
+    @Test
+    fun `stowing is a scale of the chosen frame, never a new frame (G1_11)`() {
+        assertThat(CallSelfTileLaw.restingFactor(CallSelfTileScale.X3, controlsVisible = true)).isEqualTo(1f)
+        assertThat(CallSelfTileLaw.restingFactor(CallSelfTileScale.X3, controlsVisible = false)).isWithin(0.0001f).of(72f / 150f)
+        assertThat(CallSelfTileLaw.restingFactor(CallSelfTileScale.X1, controlsVisible = false)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `what must not shrink with the stowed tile is drawn at the size of a small tile`() {
+        assertThat(CallSelfTileLaw.counterScaled(2f, by = 0.5f)).isEqualTo(4f)
+        assertThat(CallSelfTileLaw.counterScaled(2f, by = 1f)).isEqualTo(2f)
+        assertThat(CallSelfTileLaw.counterScaled(2f, by = 0f)).isEqualTo(2f)
+        assertThat(CallSelfTileLaw.counterScaled(2f, by = Float.NaN)).isEqualTo(2f)
+    }
+
+    @Test
+    fun `the tile shrinks toward its own screen corner, so it keeps its margin`() {
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.TopStart)).isEqualTo(CallTilePoint(0f, 0f))
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.TopEnd)).isEqualTo(CallTilePoint(1f, 0f))
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.BottomStart)).isEqualTo(CallTilePoint(0f, 1f))
+        assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.BottomEnd)).isEqualTo(CallTilePoint(1f, 1f))
+    }
+
+    @Test
+    fun `P16_8 - a banner under the header pushes the tile down and shrinks what it may fill`() {
+        val size = CallTileSize(100f, 140f)
+        val banner = CallSafeInsets(bannerDp = 56f)
+
+        val plain = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, phone, size, noInsets)
+        val lowered = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, phone, size, banner)
+        assertThat(lowered.yDp).isWithin(0.001f).of(plain.yDp + 56f)
+        assertThat(lowered.xDp).isEqualTo(plain.xDp)
+
+        val bottom = CallSelfTileLaw.center(CallSelfTileCorner.BottomEnd, phone, size, banner)
+        assertThat(bottom.yDp).isEqualTo(CallSelfTileLaw.center(CallSelfTileCorner.BottomEnd, phone, size, noInsets).yDp)
+
+        val tall = CallSelfTileLaw.tileSize(CallTileSize(200f, 400f), noInsets, CallSelfTileScale.X3, 1f)
+        val shorter = CallSelfTileLaw.tileSize(CallTileSize(200f, 400f), banner, CallSelfTileScale.X3, 1f)
+        assertThat(shorter.heightDp).isLessThan(tall.heightDp)
+        assertThat(shorter.heightDp).isAtMost(400f - 60f - 130f - 56f)
+    }
 }

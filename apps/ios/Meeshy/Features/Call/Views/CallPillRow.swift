@@ -14,8 +14,9 @@ struct CallPanelHeader: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.white)
                 .lineLimit(1)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
                 .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 0)
             CallPanelHeaderButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
         }
         .padding(.horizontal, MeeshySpacing.xsPlus)
@@ -78,6 +79,8 @@ struct CallPillRow<Content: View>: View {
             }
             .callRowScrollTargetBehavior()
             .modifier(CallRowScrollInteraction())
+            // P12.8 — une rangée qui défile s'efface en fondu à ses deux bords.
+            .mask { ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true) }
         }
         .padding(.vertical, MeeshySpacing.sm)
         .accessibilityElement(children: .contain)

@@ -301,4 +301,16 @@ class CallLiveCaptionLineTest {
         assertThat(listeners.leaving("peer").isAnyPeerListening).isFalse()
         assertThat(listeners.applying("peer", active = false, selfId = "me").isAnyPeerListening).isFalse()
     }
+
+    @Test
+    fun `the journal's switch and touched sentences never enter the band's state (P13_5)`() {
+        val band = CallCaptionsState(gate = CallCaptionsGate.Open).advanced()
+        val journal = CallJournalView().showing(true).togglingReveal("w1")
+
+        assertThat(journal.showsOriginal).isTrue()
+        assertThat(journal.revealed).containsExactly("w1")
+        assertThat(band.showsOriginal).isFalse()
+        assertThat(band.revealed).isEmpty()
+        assertThat(journal.togglingReveal("w1").revealed).isEmpty()
+    }
 }

@@ -46,7 +46,7 @@ describe('NotificationsSection — la permission de l’appareil', () => {
     const { element, gestures } = section('denied');
     const host = await mount(element);
     const row = host.querySelector('[data-device-push="denied"]');
-    expect(row?.textContent).toContain('Les notifications sont bloquées sur cet appareil');
+    expect(row?.textContent).toContain('Bloquées sur cet appareil');
     const action = row?.querySelector<HTMLButtonElement>('[data-device-push-action]') ?? null;
     expect(action?.textContent).toBe('Ouvrir les réglages');
     if (action !== null) await click(action);

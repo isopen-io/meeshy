@@ -50,11 +50,11 @@ class CallCaptionsViewModelTest {
         controller.onCleared()
     }
 
-    private fun relay(id: String, text: String, translated: String) = CallTranslatedSegmentPayload(
+    private fun relay(id: String, text: String, translated: String, capturedAtMs: Long = 1_000) = CallTranslatedSegmentPayload(
         callId = "call-1",
         segment = CallTranslatedSegmentRef(
             id = id, text = text, translatedText = translated, speakerId = "peer", isFinal = true,
-            sourceLanguage = "en", targetLanguage = "fr", capturedAtMs = 1_000,
+            sourceLanguage = "en", targetLanguage = "fr", capturedAtMs = capturedAtMs,
         ),
     )
 
@@ -76,19 +76,67 @@ class CallCaptionsViewModelTest {
         viewModel.advance()
         relayed.tryEmit(relay("w1", "How are you?", "Comment vas-tu ?"))
 
-        val translated = viewModel.journalLines(viewModel.state.value, labels).single()
+        val translated = viewModel.journalLines(viewModel.state.value, viewModel.journalView.value, labels).single()
         assertThat(translated.text).isEqualTo("Comment vas-tu ?")
         assertThat(translated.languageTag).isEqualTo("EN → FR")
         assertThat(translated.originalBelow).isNull()
 
-        viewModel.toggleReveal(translated.key)
-        val unfolded = viewModel.journalLines(viewModel.state.value, labels).single()
+        viewModel.toggleJournalReveal(translated.key)
+        val unfolded = viewModel.journalLines(viewModel.state.value, viewModel.journalView.value, labels).single()
         assertThat(unfolded.text).isEqualTo("Comment vas-tu ?")
         assertThat(unfolded.languageTag).isEqualTo("EN → FR")
         assertThat(unfolded.originalBelow).isEqualTo("How are you?")
 
-        viewModel.toggleReveal(translated.key)
-        assertThat(viewModel.journalLines(viewModel.state.value, labels).single().originalBelow).isNull()
+        viewModel.toggleJournalReveal(translated.key)
+        assertThat(viewModel.journalLines(viewModel.state.value, viewModel.journalView.value, labels).single().originalBelow).isNull()
+    }
+
+    @Test
+    fun `Original chosen in the journal leaves the band translated (P13_5, law 7)`() = runViewModel { viewModel ->
+        viewModel.advance()
+        relayed.tryEmit(relay("w1", "How are you?", "Comment vas-tu ?"))
+
+        viewModel.setJournalShowsOriginal(true)
+
+        val state = viewModel.state.value
+        assertThat(viewModel.journalLines(state, viewModel.journalView.value, labels).single().text).isEqualTo("How are you?")
+        assertThat(viewModel.bandLines(state, labels).single().text).isEqualTo("Comment vas-tu ?")
+        assertThat(state.mode).isEqualTo(CaptionsMode.Translated)
+    }
+
+    @Test
+    fun `the Sous-titres button's Original does not turn the journal's switch`() = runViewModel { viewModel ->
+        viewModel.advance()
+        viewModel.advance()
+        relayed.tryEmit(relay("w1", "How are you?", "Comment vas-tu ?"))
+
+        val state = viewModel.state.value
+        assertThat(viewModel.bandLines(state, labels).single().text).isEqualTo("How are you?")
+        assertThat(viewModel.journalLines(state, viewModel.journalView.value, labels).single().text).isEqualTo("Comment vas-tu ?")
+    }
+
+    @Test
+    fun `a sentence touched in the band unfolds there only, and one touched in the journal unfolds there only`() = runViewModel { viewModel ->
+        viewModel.advance()
+        relayed.tryEmit(relay("w1", "How are you?", "Comment vas-tu ?"))
+        val key = viewModel.bandLines(viewModel.state.value, labels).single().key
+
+        viewModel.toggleReveal(key)
+        assertThat(viewModel.bandLines(viewModel.state.value, labels).single().originalBelow).isEqualTo("How are you?")
+        assertThat(viewModel.journalLines(viewModel.state.value, viewModel.journalView.value, labels).single().originalBelow).isNull()
+
+        viewModel.toggleReveal(key)
+        viewModel.toggleJournalReveal(key)
+        assertThat(viewModel.bandLines(viewModel.state.value, labels).single().originalBelow).isNull()
+        assertThat(viewModel.journalLines(viewModel.state.value, viewModel.journalView.value, labels).single().originalBelow).isEqualTo("How are you?")
+    }
+
+    @Test
+    fun `each sentence of the journal reads the hour IN the call, since the media first flowed, never a wall clock (P6_4)`() = runViewModel { viewModel ->
+        relayed.tryEmit(relay("w1", "Hello", "Bonjour", capturedAtMs = 5_000L + 75_000L))
+        relayed.tryEmit(relay("w2", "Bye", "Salut", capturedAtMs = 5_000L + 3_725_000L))
+
+        assertThat(viewModel.journalLines(viewModel.state.value, viewModel.journalView.value, labels).map { it.timeLabel }).containsExactly("01:15", "1:02:05").inOrder()
     }
 
     @Test
@@ -100,7 +148,7 @@ class CallCaptionsViewModelTest {
         relayed.tryEmit(relay("w3", "Thanks", "Merci"))
 
         val state = viewModel.state.value
-        assertThat(viewModel.journalLines(state, labels)).hasSize(3)
+        assertThat(viewModel.journalLines(state, viewModel.journalView.value, labels)).hasSize(3)
         assertThat(viewModel.bandLines(state, labels).map { it.text }).containsExactly("Bien", "Merci").inOrder()
     }
 

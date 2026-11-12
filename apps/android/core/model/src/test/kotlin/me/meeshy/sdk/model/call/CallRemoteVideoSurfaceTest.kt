@@ -47,3 +47,58 @@ class CallRemoteVideoSurfaceTest {
             .isEqualTo(CallRemoteVideoSurface.Live)
     }
 }
+
+/** G4.6 : l'image cède la place à l'avatar (et revient) en fondu, plus court sous « Réduire les animations ». */
+class CallRemoteVideoFadeTest {
+
+    @Test
+    fun `le fondu dure 250 ms, 120 ms sous reduction de mouvement`() {
+        assertThat(CallRemoteVideoFade.durationMillis(reduceMotion = false)).isEqualTo(250)
+        assertThat(CallRemoteVideoFade.durationMillis(reduceMotion = true)).isEqualTo(120)
+    }
+
+    @Test
+    fun `le voile de l'avatar n'est transparent que pour une image en direct`() {
+        assertThat(CallRemoteVideoFade.veilOpacity(CallRemoteVideoSurface.Live, hasTrack = true)).isEqualTo(0f)
+        assertThat(CallRemoteVideoFade.veilOpacity(CallRemoteVideoSurface.CameraOff, hasTrack = true)).isEqualTo(1f)
+        assertThat(CallRemoteVideoFade.veilOpacity(CallRemoteVideoSurface.Connecting, hasTrack = false)).isEqualTo(1f)
+        assertThat(CallRemoteVideoFade.veilOpacity(CallRemoteVideoSurface.Live, hasTrack = false)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `l'image reste montee tant que le voile ne l'a pas couverte, puis elle est retiree`() {
+        assertThat(CallRemoteVideoFade.keepsLiveImage(hasTrack = true, veil = 0f)).isTrue()
+        assertThat(CallRemoteVideoFade.keepsLiveImage(hasTrack = true, veil = 0.6f)).isTrue()
+        assertThat(CallRemoteVideoFade.keepsLiveImage(hasTrack = true, veil = 1f)).isFalse()
+        assertThat(CallRemoteVideoFade.keepsLiveImage(hasTrack = false, veil = 0f)).isFalse()
+    }
+
+    @Test
+    fun `l'avatar reste monte tant que le voile n'est pas retombe`() {
+        assertThat(CallRemoteVideoFade.showsVeil(veil = 0f)).isFalse()
+        assertThat(CallRemoteVideoFade.showsVeil(veil = 0.3f)).isTrue()
+    }
+
+    @Test
+    fun `camera coupee sur fond noir opaque, l'attente seulement voilee`() {
+        assertThat(CallRemoteVideoFade.backdropOpacity(CallRemoteVideoSurface.CameraOff)).isEqualTo(1f)
+        assertThat(CallRemoteVideoFade.backdropOpacity(CallRemoteVideoSurface.Connecting)).isEqualTo(0.4f)
+    }
+
+    @Test
+    fun `le fondu croise mene l'image gelee a zero avant qu'elle soit retiree, sans residu`() {
+        assertThat(CallRemoteVideoFade.imageShare(veil = 1f, veiled = CallRemoteVideoSurface.CameraOff)).isEqualTo(0f)
+        assertThat(CallRemoteVideoFade.imageShare(veil = 0.5f, veiled = CallRemoteVideoSurface.CameraOff)).isEqualTo(0.5f)
+        assertThat(CallRemoteVideoFade.imageShare(veil = 0f, veiled = CallRemoteVideoSurface.CameraOff)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `le voile garde ce qu'il montrait pendant que l'image revient, et suit l'etat sinon`() {
+        assertThat(CallRemoteVideoFade.veiled(CallRemoteVideoSurface.Live, previous = CallRemoteVideoSurface.Connecting))
+            .isEqualTo(CallRemoteVideoSurface.Connecting)
+        assertThat(CallRemoteVideoFade.veiled(CallRemoteVideoSurface.CameraOff, previous = CallRemoteVideoSurface.Connecting))
+            .isEqualTo(CallRemoteVideoSurface.CameraOff)
+        assertThat(CallRemoteVideoFade.veiled(CallRemoteVideoSurface.Connecting, previous = CallRemoteVideoSurface.CameraOff))
+            .isEqualTo(CallRemoteVideoSurface.Connecting)
+    }
+}

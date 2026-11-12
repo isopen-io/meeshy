@@ -388,7 +388,7 @@ struct IncomingCallView: View {
                 .transition(.opacity)
             }
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: shows)
+        .animation(.easeInOut(duration: IncomingCallChoices.selfPreviewFadeDuration(reduceMotion: reduceMotion)), value: shows)
     }
 
     private var selfTileStroke: Color {

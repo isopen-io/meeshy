@@ -1,12 +1,19 @@
 import { useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type WheelEvent } from 'react';
 
+import type { CallButton } from '@/components/call-glass-button';
+import { ROW_EDGE_FADE } from '@/lib/calls/call-row-keys';
+
 /**
  * **UN SOUS-MENU DE L'APPEL, DANS LE CADRE DE LA PILULE** (#8550, #8578) — la
  * forme commune des panneaux que le `(…)` ouvre : Réagir, Enregistrer,
  * Ajouter, Journal. Chacun s'ouvre DANS le cadre de la pilule et REMPLACE les
  * rangées d'actions (une chose à la fois), sous un petit en-tête (‹ Retour ·
- * titre · Fermer) : ‹ revient aux rangées, ✕ referme tout. Un fond à peine
- * plus clair le distingue ; jamais de verre dans le verre.
+ * titre centré · Fermer) : ‹ revient aux rangées, ✕ referme tout. Un fond à peine
+ * plus clair le distingue ; ‹ et ✕ sont des disques de verre de 44, comme chaque
+ * bouton de la pilule : c'est le MÊME bouton, `CallButton` ton `disc` (#17345, G3.6),
+ * un voile et un liseré (`.glass-call-disc`) sans flou à eux, donc sans verre dans le
+ * verre. L'écran le REMET (`Button`), comme il remet le glyphe de Fermer : il vit dans
+ * `call_overlay` (`dynamic_only`), et ce module, chargé à part, n'en importe rien.
  *
  * Échap le ferme sans réduire l'appel ; à l'ouverture, le focus va au choix
  * coché ou au premier bouton ; en fermant, l'écran le rend au bouton qui l'a
@@ -20,7 +27,7 @@ export type RowKeyDown = (event: KeyboardEvent<HTMLElement>) => void;
 export type RowWheel = (event: WheelEvent<HTMLElement>) => void;
 
 /** La rangée d'un panneau : comme celles du `(…)`, libre et sans élasticité (#8736). */
-export const PANEL_ROW_SCROLL = 'flex gap-1.5 overflow-x-auto overscroll-x-none px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
+export const PANEL_ROW_SCROLL = 'flex gap-1.5 overflow-x-auto overscroll-x-none px-2 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 export const PANEL_ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-on-media-3 [font-variant-caps:all-small-caps]';
 
@@ -38,6 +45,8 @@ type FrameProps = {
   readonly closeLabel: string;
   readonly closeGlyph: ReactNode;
   readonly onClose: () => void;
+  /** Le bouton rond de l'appel (`CallButton`), remis par l'écran : ‹ et ✕ en sont deux disques. */
+  readonly Button: typeof CallButton;
   readonly children: ReactNode;
   readonly data: Readonly<Record<`data-${string}`, string>>;
   readonly closeData?: Readonly<Record<`data-${string}`, string>>;
@@ -57,7 +66,7 @@ const chevron = (
   </svg>
 );
 
-export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, children, data, closeData = {}, back, fill = false, trailing = null }: FrameProps) {
+export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, Button, children, data, closeData = {}, back, fill = false, trailing = null }: FrameProps) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = `${id}-title`;
   useLayoutEffect(() => {
@@ -81,27 +90,17 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, chi
       style={fill ? undefined : { background: 'var(--color-media-fill)' }}
       {...data}
     >
-      <div className={`flex items-center gap-1 ${back === undefined ? 'ps-3' : ''}`}>
-        {back === undefined ? null : (
-          <button type="button" aria-label={back.label} title={back.label} onClick={back.onPress} className="grid size-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none" data-panel-back="">
-            {chevron}
-          </button>
+      <div className="flex items-center gap-1">
+        {back === undefined ? (
+          <span aria-hidden className="size-11 shrink-0" />
+        ) : (
+          <Button label={back.label} glyph={chevron} onPress={back.onPress} size={44} data={{ 'data-panel-back': '' }} />
         )}
-        <h2 id={titleId} className="min-w-0 flex-1 truncate text-body font-semibold">
+        <h2 id={titleId} className="min-w-0 flex-1 truncate text-center text-body font-semibold">
           {title}
         </h2>
         {trailing}
-        <button
-          type="button"
-          aria-label={closeLabel}
-          title={closeLabel}
-          onClick={onClose}
-          className="grid size-11 shrink-0 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none"
-          data-panel-close=""
-          {...closeData}
-        >
-          {closeGlyph}
-        </button>
+        <Button label={closeLabel} glyph={closeGlyph} onPress={onClose} size={44} data={{ 'data-panel-close': '', ...closeData }} />
       </div>
       {children}
     </div>
@@ -124,7 +123,7 @@ export function PanelRow({ title, role, onRowKeyDown, onRowWheel, children, data
       <span aria-hidden className={PANEL_ROW_TITLE}>
         {title}
       </span>
-      <div role={role} aria-label={title} {...(role === 'toolbar' ? { 'aria-orientation': 'horizontal' as const } : {})} onKeyDown={onRowKeyDown} {...(onRowWheel === undefined ? {} : { onWheel: onRowWheel })} className={PANEL_ROW_SCROLL} data-call-row-scroll="">
+      <div role={role} aria-label={title} {...(role === 'toolbar' ? { 'aria-orientation': 'horizontal' as const } : {})} onKeyDown={onRowKeyDown} {...(onRowWheel === undefined ? {} : { onWheel: onRowWheel })} className={PANEL_ROW_SCROLL} style={ROW_EDGE_FADE} data-call-row-scroll="">
         {children}
       </div>
     </div>

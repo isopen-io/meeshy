@@ -124,16 +124,14 @@ private fun LazyListScope.sessionsContent(
         Mode.OFFLINE -> item(key = "offline", contentType = "unavailable") {
             Unavailable(
                 icon = Icons.Filled.WifiOff,
-                title = stringResource(R.string.sessions_offline_title),
-                subtitle = stringResource(R.string.sessions_offline_subtitle),
+                line = stringResource(R.string.sessions_state_offline),
                 onRetry = { onEvent(ActiveSessionsUiEvent.Retry) },
             )
         }
         Mode.ERROR -> item(key = "error", contentType = "unavailable") {
             Unavailable(
                 icon = Icons.Filled.Warning,
-                title = stringResource(R.string.sessions_load_error),
-                subtitle = stringResource(R.string.sessions_error_subtitle),
+                line = stringResource(R.string.sessions_state_error),
                 onRetry = { onEvent(ActiveSessionsUiEvent.Retry) },
             )
         }
@@ -147,6 +145,9 @@ private fun LazyListScope.loadedContent(
     mapper: ActiveSessionsUiMapper,
     onEvent: (ActiveSessionsUiEvent) -> Unit,
 ) {
+    item(key = "orientation", contentType = "orientation") {
+        SettingsOrientation(stringResource(R.string.sessions_orientation))
+    }
     state.banner?.let { banner -> item(key = "banner", contentType = "banner") { StatusBanner(banner) } }
     state.current?.let { current ->
         item(key = "header-current", contentType = "section") { SectionTitle(stringResource(R.string.sessions_current)) }
@@ -235,21 +236,16 @@ private fun RevokeOthersButton(enabled: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun EmptyHint() {
-    Placeholder(
-        icon = Icons.Filled.Devices,
-        title = stringResource(R.string.sessions_empty),
-        subtitle = stringResource(R.string.sessions_empty_subtitle),
-        onRetry = null,
-    )
+    Placeholder(icon = Icons.Filled.Devices, line = stringResource(R.string.sessions_empty), onRetry = null)
 }
 
 @Composable
-private fun Unavailable(icon: ImageVector, title: String, subtitle: String, onRetry: () -> Unit) {
-    Placeholder(icon = icon, title = title, subtitle = subtitle, onRetry = onRetry)
+private fun Unavailable(icon: ImageVector, line: String, onRetry: () -> Unit) {
+    Placeholder(icon = icon, line = line, onRetry = onRetry)
 }
 
 @Composable
-private fun Placeholder(icon: ImageVector, title: String, subtitle: String, onRetry: (() -> Unit)?) {
+private fun Placeholder(icon: ImageVector, line: String, onRetry: (() -> Unit)?) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(vertical = MeeshySpacing.xxxl),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -266,14 +262,7 @@ private fun Placeholder(icon: ImageVector, title: String, subtitle: String, onRe
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyTheme.tokens.textPrimary,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                subtitle,
+                line,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MeeshyTheme.tokens.textSecondary,
                 textAlign = TextAlign.Center,
@@ -315,11 +304,11 @@ private fun ActiveSessionsDialogs(
     if (state.confirmingRevokeOthers) {
         AlertDialog(
             onDismissRequest = cancel,
-            title = { Text(stringResource(R.string.sessions_revoke_others)) },
+            title = { Text(stringResource(R.string.sessions_revoke_all_action)) },
             text = { Text(stringResource(R.string.sessions_revoke_all_confirm_message)) },
             confirmButton = {
                 TextButton(onClick = { onEvent(ActiveSessionsUiEvent.ConfirmRevokeOthers) }) {
-                    Text(stringResource(R.string.sessions_revoke_all_action), color = MeeshyPalette.Error)
+                    Text(stringResource(R.string.sessions_revoke_confirm_action), color = MeeshyPalette.Error)
                 }
             },
             dismissButton = { TextButton(onClick = cancel) { Text(stringResource(R.string.sessions_cancel)) } },

@@ -59,7 +59,7 @@ struct NotificationSettingsView: View {
 
     private var generalSection: some View {
         settingsSection(title: String(localized: "settings.notifications.general", defaultValue: "Général", bundle: .main), icon: "bell.fill", color: MeeshyColors.errorHex) {
-            notifToggle(icon: "bell.badge.fill", title: String(localized: "settings.notifications.push", defaultValue: "Notifications push", bundle: .main), color: MeeshyColors.errorHex,
+            notifToggle(icon: "bell.badge.fill", title: String(localized: "settings.notifications.push", defaultValue: "Push", bundle: .main), color: MeeshyColors.errorHex,
                         keyPath: \.pushEnabled)
 
             notifToggle(icon: "envelope.fill", title: String(localized: "settings.notifications.email", defaultValue: "Email", bundle: .main), color: MeeshyColors.infoHex,
@@ -122,8 +122,13 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "person.badge.plus", title: String(localized: "settings.notifications.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: MeeshyColors.brandPrimaryHex,
                         keyPath: \.contactRequestEnabled)
 
-            notifToggle(icon: "person.crop.circle.badge.clock", title: String(localized: "settings.notifications.contact_activity", defaultValue: "Quand un contact revient sur Meeshy", bundle: .main), color: MeeshyColors.successHex,
-                        keyPath: \.contactActivityEnabled)
+            VStack(alignment: .leading, spacing: 0) {
+                notifToggle(icon: "person.crop.circle.badge.clock", title: String(localized: "settings.notifications.contact_activity", defaultValue: "Retour d’un contact", bundle: .main), color: MeeshyColors.successHex,
+                            keyPath: \.contactActivityEnabled)
+                SettingsSentence(text: String(localized: "settings.notifications.contact_activity.summary", defaultValue: "« X était sur Meeshy récemment », au plus toutes les 3 heures.", bundle: .main))
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.bottom, MeeshySpacing.sm + 2)
+            }
 
             notifToggle(icon: "person.3.fill", title: String(localized: "settings.notifications.group_invites", defaultValue: "Invitations de groupe", bundle: .main), color: MeeshyColors.infoHex,
                         keyPath: \.groupInviteEnabled)
@@ -194,24 +199,24 @@ struct NotificationSettingsView: View {
 
     private var dndSection: some View {
         settingsSection(title: String(localized: "settings.notifications.dnd", defaultValue: "Ne pas déranger", bundle: .main), icon: "moon.fill", color: MeeshyColors.trackingAccentHex) {
-            notifToggle(icon: "moon.zzz.fill", title: String(localized: "settings.notifications.dnd_enable", defaultValue: "Activer Ne pas déranger", bundle: .main), color: MeeshyColors.trackingAccentHex,
+            notifToggle(icon: "moon.zzz.fill", title: String(localized: "settings.notifications.dnd_enable", defaultValue: "Activer", bundle: .main), color: MeeshyColors.trackingAccentHex,
                         keyPath: \.dndEnabled)
 
-            settingsRow(icon: "clock.fill", title: String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main), color: MeeshyColors.infoHex) {
+            settingsRow(icon: "clock.fill", title: String(localized: "settings.notifications.dnd_start", defaultValue: "Début", bundle: .main), color: MeeshyColors.infoHex) {
                 DatePicker("", selection: dndTimeBinding(\.dndStartTime), displayedComponents: .hourAndMinute)
                     .labelsHidden()
                     .tint(Color(hex: accentColor))
                     // The visible row title is a sibling element (row is not `.combine`d, so the
                     // Toggle rows stay tappable) → VoiceOver would announce only the field value
                     // ("22:00") with no context. Label mirrors the sibling toggles' pattern.
-                    .accessibilityLabel(String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main))
+                    .accessibilityLabel(String(localized: "settings.notifications.dnd_start", defaultValue: "Début", bundle: .main))
             }
 
-            settingsRow(icon: "clock.badge.checkmark", title: String(localized: "settings.notifications.dnd_end", defaultValue: "Heure de fin", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
+            settingsRow(icon: "clock.badge.checkmark", title: String(localized: "settings.notifications.dnd_end", defaultValue: "Fin", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
                 DatePicker("", selection: dndTimeBinding(\.dndEndTime), displayedComponents: .hourAndMinute)
                     .labelsHidden()
                     .tint(Color(hex: accentColor))
-                    .accessibilityLabel(String(localized: "settings.notifications.dnd_end", defaultValue: "Heure de fin", bundle: .main))
+                    .accessibilityLabel(String(localized: "settings.notifications.dnd_end", defaultValue: "Fin", bundle: .main))
             }
 
             settingsRow(icon: "calendar", title: String(localized: "settings.notifications.dnd_days", defaultValue: "Jours", bundle: .main), color: MeeshyColors.warningHex) {
