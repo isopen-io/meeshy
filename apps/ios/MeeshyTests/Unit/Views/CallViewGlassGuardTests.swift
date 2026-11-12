@@ -492,12 +492,17 @@ final class CallViewGlassGuardTests: XCTestCase {
         let controls = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var spotlightControls: some View", in: stage))
         XCTAssertTrue(controls.contains("withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { isFullScreen.toggle() }"))
         let spotlight = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func spotlight(", in: stage))
-        XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .bottom))"))
-        XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .trailing))"))
+        XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .bottom, extent: Self.rowStripHeight, stage: stageFrame))"))
+        XCTAssertTrue(spotlight.contains(".transition(stripExit(toward: .trailing, extent: Self.columnStripWidth, stage: stageFrame))"))
         XCTAssertFalse(spotlight.contains("if isFullScreen {"), "le bandeau quitte la scène par une transition, pas par un changement de branche")
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var body: some View", in: stage))
+        XCTAssertTrue(body.contains("stageFrame: proxy.frame(in: .global)"), "le bord se MESURE : le cadre de la scène dans la fenêtre")
         let exit = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func stripExit(", in: stage))
         XCTAssertTrue(exit.contains("GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion)"))
-        XCTAssertTrue(exit.contains(".move(edge: edge)"))
+        XCTAssertTrue(exit.contains("GroupCallStageMotion.stripTravel(toward: edge, stage: stage, window: DeviceLayout.windowSize"), "#17726 — jusqu'au bord de l'écran, pas de sa propre taille")
+        XCTAssertTrue(exit.contains("isRightToLeft: layoutDirection == .rightToLeft"))
+        XCTAssertTrue(exit.contains(".modifier(active: GroupCallStripSlide(travel: travel), identity: GroupCallStripSlide(travel: .zero))"))
+        XCTAssertFalse(exit.contains(".move(edge:"), "`.move(edge:)` ne déplace que de la taille du bandeau : il s'arrêtait à la place de la pilule")
         XCTAssertTrue(exit.contains(".opacity"), "Réduire les animations : un fondu")
 
         let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
@@ -505,5 +510,16 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertTrue(layout.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isStageFullScreen)"))
         XCTAssertTrue(layout.contains(".transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))"))
         XCTAssertFalse(layout.contains("reduceMotion ? nil"))
+    }
+
+    /// #17726 — l'appel connecté n'a plus de bascule sèche sous « Réduire les animations » : les
+    /// sous-titres du duo, le micro coupé du correspondant et le cadre en direct passent par un
+    /// fondu court.
+    func test_connectedCall_underReduceMotion_neverSnaps() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        XCTAssertFalse(connected.contains("reduceMotion ? nil"), "une bascule sèche n'est pas un fondu court")
+        XCTAssertTrue(connected.contains(".animation(.easeInOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2), value: showTranscript)"))
+        XCTAssertTrue(connected.contains(".animation(.easeInOut(duration: reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2), value: showsPeerMutedBadge)"))
+        XCTAssertTrue(connected.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: isLiveFrameShown)"))
     }
 }
