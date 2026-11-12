@@ -75,7 +75,7 @@ const barreaux = () => [...container.querySelectorAll('[role="menuitem"]')] as H
  * témoin ne pourrait pas tomber.
  */
 describe('dans une autre langue d’interface', () => {
-  test('de : les deux boutons, le menu et les six barreaux se disent en allemand', async () => {
+  test('de : les deux boutons, le menu et les sept barreaux se disent en allemand', async () => {
     await loadInterfaceCatalog('de');
     document.documentElement.lang = 'de';
     try {
@@ -89,6 +89,7 @@ describe('dans une autre langue d’interface', () => {
 
       expect(container.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe('Meeshy-Navigation');
       expect(barreaux().map((a) => a.getAttribute('aria-label'))).toEqual([
+        'Fortschritt',
         'Meine Links',
         'Mitteilungen',
         'Anrufe',
@@ -397,7 +398,7 @@ describe('l’échelle ouverte', () => {
    * la table le dit. Un barreau sans `href` serait un disque coloré qui ne fait
    * rien, ce que ni l'œil ni une capture ne distinguent d'un barreau qui marche.
    */
-  test('rend les six barreaux, dans l’ordre, chacun vers son adresse', () => {
+  test('rend les sept barreaux, dans l’ordre, chacun vers son adresse', () => {
     monter();
     act(() => {
       boutonMenu().click();
@@ -408,7 +409,7 @@ describe('l’échelle ouverte', () => {
     expect(rendus.map((a) => a.getAttribute('aria-label'))).toEqual(MENU_LADDER.map((d) => translate('fr', d.labelKey)));
     for (const lien of rendus) {
       expect(lien.tagName).toBe('A');
-      expect(lien.getAttribute('href')).toMatch(/^\/[a-z]+$/);
+      expect(lien.getAttribute('href')).toMatch(/^(\/[a-z]+)+$/);
     }
   });
 

@@ -36,6 +36,7 @@ import { useFloatingDrag } from '@/lib/view/use-floating-drag';
 import { useMyRing } from '@/lib/profile-decor/my-ring';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { useGamePrefs } from '@/lib/game/preferences';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /**
@@ -171,7 +172,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
 
   /* L'ÉCHELLE DE CE LECTEUR (#6458) : le barreau d'administration n'existe que
      sur une matrice SERVIE portant le droit — jamais monté puis masqué. */
-  const ladder = menuLadderFor({ canAccessAdmin: useAdminAccess(), calls: callsAvailable() });
+  const gameHidden = useGamePrefs().hidden;
+  const ladder = menuLadderFor({ canAccessAdmin: useAdminAccess(), calls: callsAvailable(), gameHidden });
   const [rooms, setRooms] = useState<LadderRooms | null>(null);
 
   const roving = useRovingMenu({

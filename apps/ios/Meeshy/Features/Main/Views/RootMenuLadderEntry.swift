@@ -14,10 +14,16 @@ enum RootMenuBadge: Hashable {
 /// sur le bouton avatar. Le DERNIER barreau est la roue dentée (→ préférences
 /// générales). L'ordre de `allCases` EST l'ordre de l'échelle.
 ///
-/// Le 3e barreau ouvre le **journal d'appels** (`ContactsHubView` sur l'onglet
+/// Le PREMIER barreau, au plus près du bouton, ouvre le **jeu** (la Progression, #17769) : même icône
+/// et même mot que depuis le Profil et les Réglages. Il disparaît quand le joueur a masqué le jeu
+/// (`ladder(gameHidden:)`). La Progression reste un écran profond, pas un hub : le bandeau du jeu ne
+/// se pose pas au-dessus du jeu lui-même.
+///
+/// Le barreau qui suit les notifications ouvre le **journal d'appels** (`ContactsHubView` sur l'onglet
 /// Appels). L'annuaire de contacts n'a plus de barreau dédié : il reste à un
 /// swipe de là, sur l'onglet Contacts du même hub.
 enum RootMenuLadderEntry: CaseIterable, Hashable {
+    case game
     case links
     case notifications
     case calls
@@ -27,6 +33,7 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
 
     var icon: String {
         switch self {
+        case .game: return "trophy.fill"
         case .links: return "link.badge.plus"
         case .notifications: return "bell.fill"
         case .calls: return "phone.fill"
@@ -38,6 +45,7 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
 
     var colorHex: String {
         switch self {
+        case .game: return "F97316"
         case .links: return "F8B500"
         case .notifications: return "FF6B6B"
         case .calls: return "6366F1"
@@ -49,6 +57,8 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
 
     var label: String {
         switch self {
+        case .game:
+            return String(localized: "root.menu.game", defaultValue: "Progression")
         case .links:
             return String(localized: "root.menu.links", defaultValue: "Mes liens")
         case .notifications:
@@ -66,6 +76,7 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
 
     var route: Route {
         switch self {
+        case .game: return .progression
         case .links: return .links
         case .notifications: return .notifications
         case .calls: return .contacts(.calls)
@@ -79,7 +90,12 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
         switch self {
         case .notifications: return .unreadNotifications
         case .discover: return .pendingFriendRequests
-        case .links, .calls, .communities, .settings: return nil
+        case .game, .links, .calls, .communities, .settings: return nil
         }
+    }
+
+    /// L'échelle dessinée : toute l'échelle, moins le jeu quand le joueur l'a masqué.
+    static func ladder(gameHidden: Bool) -> [RootMenuLadderEntry] {
+        gameHidden ? allCases.filter { $0 != .game } : allCases
     }
 }

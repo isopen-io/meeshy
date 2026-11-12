@@ -258,6 +258,7 @@ const de = {
   'feed.share.copied': 'Link kopiert — einfach einfügen.',
 
   'root.menu.feed': 'Feed',
+  'root.menu.game': 'Fortschritt',
   'root.menu.links': 'Meine Links',
   'root.menu.notifications': 'Mitteilungen',
   'root.menu.calls': 'Anrufe',

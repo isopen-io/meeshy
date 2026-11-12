@@ -258,6 +258,7 @@ const en = {
   'feed.share.copied': 'Link copied — just paste it.',
 
   'root.menu.feed': 'Feed',
+  'root.menu.game': 'Progress',
   'root.menu.links': 'My links',
   'root.menu.notifications': 'Notifications',
   'root.menu.calls': 'Calls',

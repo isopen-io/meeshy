@@ -126,8 +126,25 @@ export const SETTINGS_DESTINATION: FloatingDestination = {
   glyph: { set: 'flottant', name: 'gear' },
 };
 
-/** Les SIX barreaux, dans l'ordre d'iOS. */
+/**
+ * **LE JEU** (#17769) — en tête de l'échelle, au plus près du bouton : le jeu
+ * s'ouvre en deux touchers depuis tout écran racine. Même mot et même trophée
+ * que la rangée « Progression » des Réglages ; teinte orange de la Flamme,
+ * distincte de l'ambre de « Mes liens » au coin de l'œil. Retiré quand le
+ * joueur a masqué le jeu (`menuLadderFor`).
+ */
+export const GAME_DESTINATION: FloatingDestination = {
+  key: 'game',
+  route: 'progression',
+  labelKey: 'root.menu.game',
+  // harmony-exempt: miroir de RootMenuLadderEntry.swift (.game), à remonter dans le SDK (#8879)
+  tint: '#F97316',
+  glyph: { set: 'socle', name: 'trophy' },
+};
+
+/** Les SEPT barreaux, dans l'ordre d'iOS. */
 export const MENU_LADDER: readonly FloatingDestination[] = [
+  GAME_DESTINATION,
   LINKS_DESTINATION,
   NOTIFICATIONS_DESTINATION,
   CALLS_DESTINATION,
@@ -168,12 +185,18 @@ export const ADMIN_DESTINATION: FloatingDestination = {
 export function menuLadderFor({
   canAccessAdmin,
   calls = true,
+  gameHidden = false,
 }: {
   readonly canAccessAdmin: boolean;
   /** Faux dans la coque Android tant que ses appels sont coupés (`calls-availability.ts`). */
   readonly calls?: boolean;
+  /** « Jeu masqué » (`useGamePrefs().hidden`) : le barreau du jeu n'est pas monté. */
+  readonly gameHidden?: boolean;
 }): readonly FloatingDestination[] {
-  const ladder = calls ? MENU_LADDER : MENU_LADDER.filter((entry) => entry !== CALLS_DESTINATION);
+  const ladder =
+    calls && !gameHidden
+      ? MENU_LADDER
+      : MENU_LADDER.filter((entry) => (calls || entry !== CALLS_DESTINATION) && (!gameHidden || entry !== GAME_DESTINATION));
   return canAccessAdmin ? [...ladder, ADMIN_DESTINATION] : ladder;
 }
 
