@@ -195,8 +195,8 @@ describe('CallGrid — la grille suit l’orientation (P11.1, GroupCallGridLayou
 
   test('la grille garde 140 de haut au moins, et chaque case se partage la hauteur à parts égales (P12.7)', () => {
     const html = grid();
-    expect(html).toMatch(/class="grid min-h-\[140px\][^"]*"[^>]*grid-auto-rows:1fr/);
-    expect(grid({ choice: { kind: 'self' } })).toMatch(/class="flex min-h-\[140px\][^"]*"[^>]*data-call-spotlight/);
+    expect(html).toMatch(/class="relative grid min-h-\[140px\][^"]*"[^>]*grid-auto-rows:1fr/);
+    expect(grid({ choice: { kind: 'self' } })).toMatch(/class="relative flex min-h-\[140px\][^"]*"[^>]*data-call-spotlight/);
   });
 });
 
@@ -221,7 +221,7 @@ describe('CallGrid — le bandeau des autres (P14.1, P14.2, P14.9)', () => {
     expect(html).toContain('grid-auto-columns:84px');
     expect(html).toContain('grid-template-rows:112px');
     expect(html).toContain('mask-image:linear-gradient(to right, transparent, #000 8px, #000 calc(100% - 8px), transparent)');
-    expect(spotlight()).toMatch(/class="flex min-h-\[140px\][^"]*flex-col/);
+    expect(spotlight()).toMatch(/class="relative flex min-h-\[140px\][^"]*flex-col/);
   });
 
   test('paysage : une colonne de 128 à droite de la une, effacée en fondu en haut et en bas', () => {
@@ -230,7 +230,7 @@ describe('CallGrid — le bandeau des autres (P14.1, P14.2, P14.9)', () => {
     expect(html).toContain('grid-auto-rows:112px');
     expect(html).toContain('grid-template-columns:84px');
     expect(html).toContain('mask-image:linear-gradient(to bottom, transparent, #000 8px, #000 calc(100% - 8px), transparent)');
-    expect(spotlight({ landscape: true })).toMatch(/class="flex min-h-\[140px\][^"]*flex-row/);
+    expect(spotlight({ landscape: true })).toMatch(/class="relative flex min-h-\[140px\][^"]*flex-row/);
   });
 
   test('plein écran : aucun bandeau, en paysage comme en portrait', () => {
@@ -381,5 +381,35 @@ describe('CallGrid — les gestes (#8392)', () => {
     view.press('button[aria-label="Revenir à la grille"]');
     expect(view.chosen).toEqual([{ kind: 'grid', dismissedSharer: 'u-k' }]);
     view.done();
+  });
+});
+
+describe('CallGrid — droite à gauche : capsule et plaque se posent au coin de FIN et de DÉBUT (U3.5, U3.2)', () => {
+  test('la capsule de la une est ancrée au coin de fin, jamais à droite en dur', () => {
+    const html = grid({ choice: { kind: 'self' } });
+    expect(html).toMatch(/class="absolute end-2 top-2[^"]*" data-call-chrome-fade/);
+    expect(html).not.toContain('right-2 top-2');
+  });
+
+  test('la plaque de nom d’une vignette est ancrée au coin de début, jamais à gauche en dur', () => {
+    const html = grid();
+    expect(html).toMatch(/glass-call absolute bottom-2 start-2/);
+    expect(html).not.toContain('left-2');
+  });
+});
+
+describe('CallGrid — « Quitter le plein écran » reste visible en plein écran (U2.4)', () => {
+  const full = () => grid({ choice: { kind: 'self' }, immersive: true });
+
+  test('le bloc de la capsule échappe au rangement du chrome quand l’écran est plein', () => {
+    expect(full()).toMatch(/class="absolute end-2 top-2[^"]*" data-call-chrome-fade="" data-call-chrome-keep=""/);
+    expect(grid({ choice: { kind: 'self' } })).not.toContain('data-call-chrome-keep');
+  });
+
+  test('le bouton est un glyphe sur verre, comme « Plein écran » : jamais un disque blanc actif', () => {
+    const button = (html: string) => /<button[^>]*data-call-fullscreen[^>]*>/.exec(html)?.[0] ?? '';
+    expect(button(full())).not.toContain('background:var(--color-on-media)');
+    expect(button(full())).toContain('aria-pressed="true"');
+    expect(button(full())).toContain('aria-label="Quitter le plein écran"');
   });
 });
