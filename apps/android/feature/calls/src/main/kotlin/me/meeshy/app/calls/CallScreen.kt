@@ -159,6 +159,7 @@ fun CallScreen(
         chrome = chromeVisibility,
         onChromeRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
         inPip = inPip,
+        isGroupStage = groupShown,
     )
     BackHandler(enabled = chromeState.layer.activeMode != null) { chrome.exitMode() }
     LaunchedEffect(captionsViewModel, chrome) { captionsViewModel.journalRequests.collect { chrome.open(CallScreenPanel.Journal) } }
