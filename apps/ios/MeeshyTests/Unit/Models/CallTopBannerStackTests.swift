@@ -107,6 +107,30 @@ final class CallTopBannerStackTests: XCTestCase {
         XCTAssertTrue(selfView.contains("CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: callManager.screenShare.isSharing)"))
     }
 
+    func test_selfTile_followsTheLocalShareBannerInMotion_andFitsUnderIt() throws {
+        let selfView = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+SelfView.swift")
+        )
+        XCTAssertEqual(
+            selfView.components(separatedBy: "reservesBanner: callManager.screenShare.isSharing, reduceMotion: reduceMotion))").count - 1,
+            2,
+            "la vignette vivante ET la tuile « vidéo en pause » suivent le bandeau, en mouvement"
+        )
+        XCTAssertTrue(
+            selfView.contains("- QualityThresholds.pipTopClearance - QualityThresholds.pipBottomClearance - CallTopBannerStack.selfTileClearance(isLocalScreenShareShown: callManager.screenShare.isSharing)"),
+            "la place réservée au bandeau se déduit de la hauteur où la vignette se borne : elle ne passe pas sous la pilule"
+        )
+        let glass = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift")
+        )
+        XCTAssertTrue(glass.contains("struct CallSelfTilePlacement: ViewModifier {"))
+        XCTAssertTrue(glass.contains(".position(position)"))
+        XCTAssertTrue(
+            glass.contains(".animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: reservesBanner)"),
+            "elle glisse avec le bandeau ; Réduire les animations : elle se pose sans mouvement"
+        )
+    }
+
     func test_shareBanner_spansTheWidth_withStopAtTheTrailingEnd() throws {
         let controls = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallScreenShareControls.swift")
