@@ -68,6 +68,8 @@ const capture = async (page, name) => {
 
 const appears = (page, selector, timeout = 8000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
+/** L'écran d'appel et la capsule s'échangent en mouvement (S1.7, S2.1, #17774) : on ne mesure qu'une fois la vue qui repart démontée et plus aucune animation Web en cours. */
+const swapped = (page) => page.waitForFunction(() => document.querySelector('[data-leaving][data-call-screen], [data-leaving][data-call-pill-bar]') === null && document.getAnimations().every((animation) => animation instanceof CSSTransition || animation.playState !== 'running'), undefined, { timeout: 5000 }).then(() => true, () => false);
 
 /* Le pair est armé, et getDisplayMedia rend un canevas animé : ce qu'un écran enverrait. */
 const ARM_PEER_AND_DISPLAY = () => {
@@ -180,6 +182,7 @@ try {
         check(swiped.held?.swipe === 'dragging' && swiped.held.transform !== '', `${label} : pendant le glissé, l'écran suit le pointeur — aucun glisser-déposer du navigateur ne l'annule (${JSON.stringify(swiped.held)})`);
         const reduced = await appears(page, '[data-call-pill-bar]', 3000);
         check(reduced, `${label} : glissé aux trois quarts et relâché, l'appel se réduit — ${JSON.stringify(swiped)}`);
+        await swapped(page);
         check((await page.$('[data-call-screen]')) === null, `${label} : réduit, l'écran d'appel a quitté le plein écran`);
         await capture(page, `glisse-reduit-${slug}`);
         if (reduced) {
@@ -200,6 +203,7 @@ try {
         await capture(page, `partage-capsule-${slug}`);
         await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
         check(await appears(page, '[data-call-screen-share-banner] [data-call-screen-share-stop]'), `${label} : le bandeau « Vous partagez votre écran · Arrêter » s'affiche sous l'en-tête (P16.4)`);
+        await swapped(page);
         const shareStop = await page.locator('[data-call-screen-share-stop]').boundingBox();
         check(shareStop !== null && shareStop.height >= TAP_FLOOR, `${label} : « Arrêter » fait au moins ${TAP_FLOOR} de haut (${JSON.stringify(shareStop && Math.round(shareStop.height))})`);
         await openActions(page);

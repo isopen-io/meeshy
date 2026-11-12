@@ -25,7 +25,9 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * le paie pas.
  */
 
-const PILL_BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
+/* La matière de la pastille ordinaire ; mon partage la remplace par le verre rouge du kit (S1.9) — jamais les deux sur le même élément. */
+const PILL_SURFACE = 'shadow-lg bg-[color-mix(in_srgb,var(--color-media-backdrop)_92%,transparent)]';
+const SHARING_SURFACE = 'glass-call-danger';
 const HANGUP = 'var(--ios-error-strong)';
 
 const ANSWER = 'var(--ios-success)';
@@ -75,8 +77,8 @@ export function CallPillBar({ call, away, motion }: { readonly call: ActiveCall;
   return (
     <div
       ref={bar}
-      className={`fixed left-1/2 z-[190] flex -translate-x-1/2 items-center gap-1 rounded-full py-1 ps-1 pe-1 shadow-lg${sharing ? ' glass-call-danger' : ''}`}
-      style={{ background: sharing ? undefined : PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 0.5rem)', touchAction: 'pan-y', opacity: away ? 0 : 1, transition: 'opacity 200ms ease-out' }}
+      className={`fixed left-1/2 z-[190] flex -translate-x-1/2 items-center gap-1 rounded-full py-1 ps-1 pe-1 ${sharing ? SHARING_SURFACE : PILL_SURFACE}`}
+      style={{ color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 0.5rem)', touchAction: 'pan-y', opacity: away ? 0 : 1, transition: 'opacity 200ms ease-out' }}
       aria-hidden={away ? true : undefined}
       inert={away}
       onPointerDown={onPointerDown}
