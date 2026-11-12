@@ -1,9 +1,10 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { TypingDots } from '@/components/typing-dots';
-import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
+import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
 import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { CAPTIONS_EXIT, PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
@@ -138,13 +139,14 @@ const CaptionLine = memo(function CaptionLine({
   readonly language: InterfaceLanguage;
   readonly onToggle: (id: string) => void;
 }) {
-  const shown = captionText(caption, mode);
-  const languages = captionLanguageLabel(caption, mode);
-  const unfoldable = shown !== caption.original;
+  const reveal = captionReveal(caption, mode, open);
+  const shown = captionText(caption, reveal.mode);
+  const languages = captionLanguageLabel(caption, reveal.mode);
+  const unfoldable = reveal.canReveal;
   const content = (
     <>
       <strong style={{ color }}>{speaker} · </strong>
-      <span dir="auto" style={{ color: unfoldable ? color : INK }}>
+      <span dir="auto" style={{ color: shown !== caption.original ? color : INK }}>
         {shown}
       </span>
       {languages === null ? null : (
@@ -166,7 +168,7 @@ const CaptionLine = memo(function CaptionLine({
           {content}
         </p>
       )}
-      <UnfoldedOriginal open={unfoldable && open} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-caption-original" />
+      <UnfoldedOriginal open={reveal.originalBelow} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-caption-original" />
     </div>
   );
 });
@@ -207,15 +209,14 @@ export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'su
 }
 
 export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal }: PanelProps) {
-  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(() => new Set());
+  const { revealed, toggle } = useCaptionReveals(call.callId ?? '');
   const mode = call.captionsMode;
   const lines = overlayEntries(call.captions, call.journalNotes ?? [], CAPTIONS_OVERLAY_LINES);
   const clockOf = (at: number): string | null => (call.connectedAt === null ? null : formatCallClock((at - call.connectedAt) / 1000));
   const note = call.transcription === 'idle' ? null : NOTE_KEY[call.transcription];
   const speaker = (caption: CallCaption): string => (caption.mine ? translate(language, 'callCaptions.self') : caption.speakerName !== '' ? caption.speakerName : translate(language, 'callCaptions.participant'));
-  const toggle = useCallback((id: string) => setUnfolded((current) => (current.has(id) ? new Set([...current].filter((entry) => entry !== id)) : new Set([...current, id]))), []);
   const now = useWaitingClock(lines.map((entry) => (entry.type === 'note' ? null : (entry.caption.origin?.awaitingUntil ?? null))));
-  const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, mode, now))));
+  const footer = callCaptionsFooter(lines.map((entry) => (entry.type === 'note' ? EVENT_FOOTER_LINE : captionFooterLine(entry.caption, captionReveal(entry.caption, mode, revealed.has(entry.caption.id)).mode, now))));
   const footerText = footer === null ? null : callCaptionsFooterLabel(language, footer);
 
   return (
@@ -234,7 +235,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
             entry.type === 'note' ? (
               <NoteLine key={entry.note.id} note={entry.note} language={language} color={colorOf({ speakerId: entry.note.userId ?? '', speakerName: entry.note.name ?? '' })} clock={clockOf(entry.at)} />
             ) : (
-              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={unfolded.has(entry.caption.id)} waiting={isAwaitingTranslation(entry.caption, now)} language={language} onToggle={toggle} />
+              <CaptionLine key={entry.caption.id} caption={entry.caption} mode={mode} speaker={speaker(entry.caption)} color={colorOf(entry.caption)} open={revealed.has(entry.caption.id)} waiting={isAwaitingTranslation(entry.caption, now)} language={language} onToggle={toggle} />
             ),
           )
         )}
