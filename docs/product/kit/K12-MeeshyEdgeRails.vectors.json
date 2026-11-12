@@ -1,0 +1,89 @@
+{
+  "recipe": {
+    "discSide": 44,
+    "compactSpacing": 6,
+    "compactPadding": 5,
+    "compactWidth": 54,
+    "dividerHeight": 1,
+    "dividerInset": 8,
+    "compactDividerOpacity": 0.28,
+    "labeledDividerOpacity": 0.14,
+    "labeledRadius": 26,
+    "rowHeight": 44,
+    "rowRadius": 22,
+    "rowSpacing": 4,
+    "glyphSide": 44,
+    "glyphSize": 20,
+    "trailingInset": 12,
+    "headerSize": 12,
+    "headerTrackingEm": 0.08,
+    "headerOpacity": 0.75,
+    "headerBlock": 26,
+    "footMargin": 6,
+    "footInset": 8,
+    "footSpacing": 6,
+    "defaultEdgeInset": 10,
+    "dimmedOpacity": 0.42,
+    "disabledOpacity": 0.4,
+    "itemDimmedOpacity": 0.6,
+    "slideMs": 300,
+    "dimMs": 180,
+    "reducedFadeMs": 150,
+    "rowTintMs": 200,
+    "longPressMs": 500,
+    "widths": { "regular": 210, "narrow": 150, "tight": 112 },
+    "laneForRegular": 250,
+    "laneForNarrow": 166,
+    "padding": { "regular": 10, "narrow": 8, "tight": 10 },
+    "glyphGap": { "regular": 10, "narrow": 4, "tight": 10 },
+    "wordSize": { "regular": 15, "narrow": 14, "tight": 12 },
+    "wordLines": { "regular": 1, "narrow": 1, "tight": 2 },
+    "tapTarget": { "ios": 44, "android": 48, "web": 44 }
+  },
+  "compactLength": [
+    { "count": 0, "dividers": 0, "length": 0 },
+    { "count": 1, "dividers": 0, "length": 54 },
+    { "count": 6, "dividers": 0, "length": 304 },
+    { "count": 7, "dividers": 0, "length": 354 },
+    { "count": 14, "dividers": 0, "length": 704 },
+    { "count": 6, "dividers": 1, "length": 311 }
+  ],
+  "labeledLength": [
+    { "count": 0, "foot": 0, "header": true, "length": 0 },
+    { "count": 8, "foot": 0, "header": true, "length": 426 },
+    { "count": 8, "foot": 2, "header": true, "length": 535 },
+    { "count": 3, "foot": 0, "header": false, "length": 160 }
+  ],
+  "labeledWidth": [
+    { "lane": 400, "width": 210 },
+    { "lane": 250, "width": 210 },
+    { "lane": 249, "width": 150 },
+    { "lane": 166, "width": 150 },
+    { "lane": 165, "width": 112 },
+    { "lane": 0, "width": 112 }
+  ],
+  "slideOffset": [
+    { "side": "leading", "rtl": false, "edge": 10, "safe": 0, "offset": -64 },
+    { "side": "trailing", "rtl": false, "edge": 10, "safe": 0, "offset": 64 },
+    { "side": "leading", "rtl": true, "edge": 10, "safe": 0, "offset": 64 },
+    { "side": "trailing", "rtl": true, "edge": 10, "safe": 0, "offset": -64 },
+    { "side": "leading", "rtl": false, "edge": 10, "safe": 47, "offset": -111 },
+    { "side": "trailing", "rtl": false, "edge": 10, "safe": 47, "offset": 111 }
+  ],
+  "capacity": [
+    { "height": 304, "labeled": false, "fits": 6 },
+    { "height": 303, "labeled": false, "fits": 5 },
+    { "height": 0, "labeled": false, "fits": 0 },
+    { "height": 426, "labeled": true, "fits": 8 }
+  ],
+  "scrolls": [
+    { "length": 304, "band": 304, "scrolls": false },
+    { "length": 304.4, "band": 304, "scrolls": false },
+    { "length": 305, "band": 304, "scrolls": true }
+  ],
+  "visibility": [
+    { "visibility": "shown", "opacity": 1, "readByScreenReader": true, "servesTouch": true },
+    { "visibility": "dimmed", "opacity": 0.42, "readByScreenReader": false, "servesTouch": false },
+    { "visibility": "hidden", "opacity": 0, "readByScreenReader": false, "servesTouch": false }
+  ]
+}
