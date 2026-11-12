@@ -44,7 +44,7 @@ import { useLocalZoom, type LocalZoom } from '@/lib/calls/self-zoom';
 import { useCallViewport } from '@/lib/calls/use-call-viewport';
 import { useElementSize } from '@/lib/view/use-element-size';
 import type { ActiveCall } from '@/lib/calls/call-store';
-import { hasVideo, membersInArrival, orderedMembers, screenSharer, type CallLayout } from '@/lib/calls/call-view';
+import { hasVideo, membersInArrival, orderedMembers, screenSharer, selfCameraShown, selfCameraStream, type CallLayout } from '@/lib/calls/call-view';
 import { usePressedChrome } from '@/lib/calls/use-pressed-chrome';
 import { useStageFlip } from '@/lib/calls/use-stage-flip';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
@@ -138,7 +138,7 @@ const TILE_SAID: Readonly<Record<SelfTileScale, 'callControls.selfTile.small' | 
 };
 
 /** Mon image dans son aperçu (#8696) : la loi du miroir, jamais une condition locale. */
-export const selfPreviewMirrored = (call: Pick<ActiveCall, 'facing' | 'screenSharing'>): boolean => cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing });
+export const selfPreviewMirrored = (call: Pick<ActiveCall, 'facing' | 'screenSharing' | 'cameraPreview'>): boolean => cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing && (call.cameraPreview ?? null) === null });
 
 
 type StageProps = {
@@ -262,13 +262,15 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   const selfMirrored = selfPreviewMirrored(call);
   const local = useLocalZoom(call.callId, call.facing);
   const you = translate(language, 'call.you');
-  const main = swapped ? call.localStream : remoteStream;
-  const cornerStream = swapped ? remoteStream : call.localStream;
-  const mainOn = swapped ? call.cameraOn : remoteVideoOn;
-  const cornerShown = swapped || call.cameraOn;
+  const selfStream = selfCameraStream(call);
+  const selfOn = selfCameraShown(call);
+  const main = swapped ? selfStream : remoteStream;
+  const cornerStream = swapped ? remoteStream : selfStream;
+  const mainOn = swapped ? selfOn : remoteVideoOn;
+  const cornerShown = swapped || selfOn;
   /* Ma vignette composée dans un cadre en direct (#16943) reste montée, invisible et intouchable : sa vidéo est la source de ma case. */
   const composed = self.tileHidden === true && !swapped;
-  const cornerVideo = swapped ? remoteVideoOn : call.cameraOn;
+  const cornerVideo = swapped ? remoteVideoOn : selfOn;
   const screen = useCallViewport();
   const compact = !chromeVisible;
   /* G1.11 : le cadre garde la taille du palier choisi ; rangée, la vignette s'y met à l'échelle de sa petite taille depuis son coin — une transformation, jamais une mise en page. */

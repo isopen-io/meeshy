@@ -376,4 +376,23 @@ describe('toucher ma vignette contrôles cachés rend d’abord les contrôles (
     expect(view.swaps.count).toBe(1);
     view.done();
   });
+
+  test('pendant MON partage, ma caméra reste en vignette « moi » au liseré de ma couleur, sans le flux d’écran (S2.8)', () => {
+    fresh();
+    const screen = stream();
+    const mine = stream();
+    const view = mount(call({ cameraOn: false, screenSharing: true, localStream: screen, cameraPreview: mine, remoteStreams: {}, members: { 'u-peer': member({ cameraOn: false }) } }));
+    const video = view.tile().querySelector('video') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    expect(video?.srcObject).toBe(mine);
+    expect(view.tile().style.borderColor).not.toBe('');
+    view.done();
+  });
+
+  test('pendant mon partage sans caméra avant, aucune vignette « moi »', () => {
+    fresh();
+    const view = mount(call({ cameraOn: false, screenSharing: true, remoteStreams: {}, members: { 'u-peer': member({ cameraOn: false }) } }));
+    expect(view.frame()).toBeNull();
+    view.done();
+  });
 });
