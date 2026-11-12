@@ -183,7 +183,7 @@ class CallCaptionsFooterTest {
 
     @Test
     fun `in full screen with the captions on the pill resolves to the captions alone, and without them to nothing`() {
-        assertThat(text(captions = true, revealed = false).isOnStage(isStageFullScreen = true)).isTrue()
-        assertThat(text(captions = false, revealed = false).isOnStage(isStageFullScreen = true)).isFalse()
+        assertThat(CallPillText.resolve(isCaptionsEnabled = true, layer = CallScreenLayer.Idle, isChromeRevealed = false).isOnStage(isStageFullScreen = true)).isTrue()
+        assertThat(CallPillText.resolve(isCaptionsEnabled = false, layer = CallScreenLayer.Idle, isChromeRevealed = false).isOnStage(isStageFullScreen = true)).isFalse()
     }
 }
