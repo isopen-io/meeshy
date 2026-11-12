@@ -38,13 +38,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import java.text.DecimalFormatSymbols
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallVerticalEdge
@@ -53,13 +51,6 @@ import me.meeshy.sdk.model.call.group.GroupCallStageFocus
 import me.meeshy.sdk.model.call.group.GroupCallStageGeometry
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshySpacing
-
-/** Le séparateur décimal de la langue courante, pour « 2,5× » (U2.5). */
-@Composable
-internal fun rememberCallDecimalSeparator(): Char {
-    val locale = Locale.current.platformLocale
-    return remember(locale) { DecimalFormatSymbols.getInstance(locale).decimalSeparator }
-}
 
 /**
  * U2.5 — la puce de verre de l'écran partagé mis à la une, en haut à gauche de la scène : « Écran de X », puis le facteur

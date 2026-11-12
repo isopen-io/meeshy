@@ -1,5 +1,8 @@
 package me.meeshy.sdk.model.call.group
 
+import java.util.Locale
+import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
+
 /** Ce que la scène d'un appel de groupe montre : la grille, ou une vignette « à la une » — iOS `GroupCallStageFocus`. */
 sealed interface GroupCallStageFocus {
     data object Grid : GroupCallStageFocus
@@ -75,14 +78,13 @@ object GroupCallSpotlight {
         return tenths.takeIf { it > 1f }
     }
 
-    /** « Écran de Karim · 2,5× » : le titre déjà localisé, puis le facteur de zoom quand il y en a un. */
-    fun featuredChipText(title: String, zoom: Float, decimalSeparator: Char): String {
+    /**
+     * « Écran de Karim · 2,5× » : le titre déjà localisé, puis le facteur de zoom quand il y en a un, écrit par l'unique
+     * libellé de zoom de l'appel ([CameraZoomPolicy.label]) — iOS `CameraZoomPolicy.label(forDisplay:locale:)`.
+     */
+    fun featuredChipText(title: String, zoom: Float, locale: Locale): String {
         val factor = displayedZoom(zoom) ?: return title
-        val tenths = Math.round(factor * 10f)
-        val whole = tenths / 10
-        val fraction = tenths % 10
-        val label = if (fraction == 0) "$whole×" else "$whole$decimalSeparator$fraction×"
-        return "$title · $label"
+        return "$title · ${CameraZoomPolicy.label(factor, locale)}"
     }
 
     /** La pellicule des autres : aucune en plein écran, en colonne à droite en paysage, en rangée dessous sinon. */

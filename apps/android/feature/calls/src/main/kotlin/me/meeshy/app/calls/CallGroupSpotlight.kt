@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -35,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.group.GroupCallFilmstrip
 import me.meeshy.sdk.model.call.group.GroupCallSpotlight
@@ -211,7 +213,7 @@ private fun CallGroupFeaturedTile(
     val title = if (isScreenShare) stringResource(R.string.call_screen_share_of, tile.displayName) else null
     val speech = callGroupTileSpeech(tile, title)
     val motion = scope.motionOf(tile.id)
-    val separator = rememberCallDecimalSeparator()
+    val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     Box(modifier) {
         scope.Tile(
             render = CallGroupTileRender(
@@ -245,7 +247,7 @@ private fun CallGroupFeaturedTile(
         )
         if (title != null) {
             CallScreenShareChip(
-                text = GroupCallSpotlight.featuredChipText(title, zoom, separator),
+                text = GroupCallSpotlight.featuredChipText(title, zoom, locale),
                 modifier = Modifier.align(Alignment.TopStart).padding(MeeshySpacing.sm).graphicsLayer { alpha = chipArrival.value },
             )
         }

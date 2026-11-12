@@ -1,6 +1,8 @@
 package me.meeshy.sdk.model.call.group
 
 import com.google.common.truth.Truth.assertThat
+import java.util.Locale
+import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
 import org.junit.Test
 
 /** La mise à la une d'une vignette, miroir de iOS `GroupCallSpotlightTests`. */
@@ -116,14 +118,16 @@ class GroupCallSpotlightTest {
     }
 
     @Test
-    fun `the chip carries the zoom factor after the title, with the local decimal separator`() {
-        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2f, decimalSeparator = ',')).isEqualTo("Écran de Karim · 2×")
-        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2.5f, decimalSeparator = ',')).isEqualTo("Écran de Karim · 2,5×")
-        assertThat(GroupCallSpotlight.featuredChipText("Karim's screen", zoom = 2.5f, decimalSeparator = '.')).isEqualTo("Karim's screen · 2.5×")
+    fun `the chip carries the zoom factor after the title, written by the camera's one zoom label in the reader's language`() {
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2f, locale = Locale.FRANCE)).isEqualTo("Écran de Karim · 2×")
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2.5f, locale = Locale.FRANCE)).isEqualTo("Écran de Karim · 2,5×")
+        assertThat(GroupCallSpotlight.featuredChipText("Karim's screen", zoom = 2.5f, locale = Locale.US)).isEqualTo("Karim's screen · 2.5×")
+        assertThat(GroupCallSpotlight.featuredChipText("Karim's screen", zoom = 2.46f, locale = Locale.US))
+            .isEqualTo("Karim's screen · " + CameraZoomPolicy.label(2.5f, Locale.US))
     }
 
     @Test
     fun `at one times the chip is the title alone`() {
-        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 1f, decimalSeparator = ',')).isEqualTo("Écran de Karim")
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 1f, locale = Locale.FRANCE)).isEqualTo("Écran de Karim")
     }
 }

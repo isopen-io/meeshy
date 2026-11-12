@@ -25,14 +25,17 @@ class CallGroupFeaturedGuardTest {
         val spotlight = code("CallGroupSpotlight.kt")
         assertThat(spotlight).contains("CallScreenShareChip(")
         assertThat(spotlight).contains("Alignment.TopStart")
-        assertThat(spotlight).contains("GroupCallSpotlight.featuredChipText(title, zoom, separator)")
+        assertThat(spotlight).contains("GroupCallSpotlight.featuredChipText(title, zoom, locale)")
         val chrome = code("CallGroupFeaturedChrome.kt")
         val chip = chrome.substringAfter("fun CallScreenShareChip(").substringBefore("private class CallCapsuleSpot")
         assertThat(chip).contains("CallGlassPlate(")
         assertThat(chip).contains("clearAndSetSemantics")
         val tile = code("CallGroupTile.kt")
-        assertThat(tile).doesNotContain("title ?: tile.displayName.ifBlank")
-        assertThat(tile).doesNotContain("title: String?")
+        val view = tile.substringAfter("internal fun CallGroupTile(").substringBefore(") {")
+        val plate = tile.substringAfter("private fun CallGroupTilePlate(")
+        assertThat(view).doesNotContain("title")
+        assertThat(plate).contains("val name = tile.displayName.ifBlank")
+        assertThat(plate).doesNotContain("title")
     }
 
     @Test
@@ -79,10 +82,11 @@ class CallGroupFeaturedGuardTest {
 
     @Test
     fun `a stage size is passed down as a parameter, never read out of the BoxWithConstraints scope`() {
+        // A bare `maxWidth` resolves only against an implicit BoxWithConstraintsScope (#17693); `constraints.maxWidth`
+        // inside a layout modifier has its receiver written out and is not one.
+        val implicitRead = Regex("""(?<![.\w])max(Width|Height)\b""")
         listOf("CallGroupSpotlight.kt", "CallGroupFeaturedChrome.kt", "CallGroupStripExit.kt").forEach { file ->
-            val source = code(file)
-            assertThat(source).doesNotContain("maxHeight")
-            assertThat(source).doesNotContain("maxWidth")
+            assertThat(implicitRead.findAll(code(file)).map { it.value }.toList()).isEmpty()
         }
     }
 }
