@@ -140,6 +140,8 @@ data class CallUiState(
     val isPeerScreenCapturing: Boolean = false,
     /** #16665 — who the capsule names: the capturer in a group, the call's name in a duo. */
     val peerScreenCapturerName: String = "",
+    /** R2.2 — who is who in the call, by user id: the consent card names the requester from it, never the call's main peer. */
+    val participantNames: Map<String, String> = emptyMap(),
     /**
      * The latest live caption from the remote speaker (`call:translated-segment`),
      * preferring the server-side translation over the original text — `null` when

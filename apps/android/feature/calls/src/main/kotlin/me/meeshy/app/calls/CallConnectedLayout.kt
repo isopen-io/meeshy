@@ -308,14 +308,6 @@ internal fun CallConnectedColumn(
                 onRevive = { chrome.onInteraction(CallChromeInteraction.Revive) },
             )
         }
-        // #16665 — R1 : la capsule de capture, UNE fois sous l'en-tête, en audio comme en vidéo, en duo
-        // comme en groupe ; hors du fondu du chrome : une capture ne se cache pas.
-        if (state.isPeerScreenCapturing && !inPip) {
-            CallCaptureCapsule(
-                name = state.peerScreenCapturerName.ifBlank { state.peerName },
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = CALL_CAPTURE_CAPSULE_TOP, start = MeeshySpacing.lg, end = MeeshySpacing.lg),
-            )
-        }
     }
 
     val pickerBridge: CallCameraPickerViewModel = hiltViewModel()

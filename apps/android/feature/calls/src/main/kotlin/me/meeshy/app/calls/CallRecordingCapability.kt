@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -19,7 +20,10 @@ import me.meeshy.sdk.model.call.CallAction
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallTopBanner
 import me.meeshy.sdk.model.call.CallTopBannerStack
+import me.meeshy.sdk.model.call.CallRecordingKind
+import me.meeshy.sdk.model.call.CallRecordingNotice
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.CallVerticalEdge
 import me.meeshy.ui.theme.MeeshySpacing
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -104,32 +108,54 @@ class CallRecordingActionHandler @Inject constructor(
     }
 }
 
-/** La carte de consentement : posée hors du chrome, donc visible même quand il est masqué. */
+/** Ce que la carte d'accord montre : qui demande, et quoi enregistrer. */
+private data class ConsentFace(val requesterName: String, val kind: CallRecordingKind)
+
+/**
+ * La carte de consentement : le bandeau « enregistrement » de la pile du haut, SOUS la rangée d'en-tête (R2.1) — elle ne se pose plus
+ * au milieu de l'écran, par-dessus le pair. Hors du chrome, donc visible même quand il est masqué ; composée par la pile, elle
+ * reste au-dessus des modes Effets et Montage (R2.5). Elle nomme CELUI QUI DEMANDE (R2.2), arrive du haut et y repart (R2.10).
+ */
 @Singleton
 class CallRecordingConsentOverlay @Inject constructor(
     private val recording: CallRecordingController,
 ) : CallOverlay {
     override val id: String = "call-recording-consent"
-    override val slot: CallOverlaySlot = CallOverlaySlot.Center
-    override val priority: Int = 100
+    override val slot: CallOverlaySlot = CallOverlaySlot.TopBanner
+    override val priority: Int = CallTopBannerStack.priority(CallTopBanner.Recording)
 
     @Composable
     override fun Content(context: CallOverlayContext) {
         val state by recording.state.collectAsState()
-        if (!CallRecordingPresenter.asksConsent(state.phase)) return
-        CallRecordingConsentCard(
-            requesterName = context.state.peerName,
-            kind = state.kind,
-            accent = context.accent,
-            onAnswer = { accepted -> recording.answer(accepted) },
-        )
+        val face = if (CallRecordingPresenter.asksConsent(state.phase)) {
+            ConsentFace(state.phase.requesterName(context.state.participantNames), state.kind)
+        } else {
+            null
+        }
+        CallBannerPresence(face) { shown ->
+            CallRecordingConsentCard(
+                requesterName = shown.requesterName,
+                kind = shown.kind,
+                onAnswer = { accepted -> recording.answer(accepted) },
+                modifier = Modifier
+                    .padding(top = CallTopBannerStack.GAP_DP.dp)
+                    .reportsTopBannerHeight(CallTopBanner.Recording),
+            )
+        }
     }
 }
 
+/** Ce que la capsule d'enregistrement montre : l'attente ou l'enregistrement, ou l'avis qui suit une fin. */
+private sealed interface RecordingFace {
+    data class Status(val status: CallRecordingStatus) : RecordingFace
+
+    data class Notice(val notice: CallRecordingNotice) : RecordingFace
+}
+
 /**
- * Le voyant « Enregistrement en cours » (persistant chez tous), l'attente de l'accord, et les avis. Ils
- * s'effacent avec les commandes de l'appel (`CallChromeElement.RecordingStatus`, iOS `showsStatus`, #13766) ;
- * la carte de consentement, elle, reste.
+ * Le voyant « Enregistrement en cours » (persistant chez tous), l'attente de l'accord, et les avis : UNE capsule dont seuls les
+ * mots changent de l'attente à l'enregistrement. Elle arrive du haut et y repart (R2.10), et s'efface avec les commandes de l'appel
+ * (`CallChromeElement.RecordingStatus`, iOS `showsStatus`, #13766) en montant avec l'en-tête (R3.6) ; la carte de consentement, elle, reste.
  */
 @Singleton
 class CallRecordingStatusOverlay @Inject constructor(
@@ -143,26 +169,34 @@ class CallRecordingStatusOverlay @Inject constructor(
     override fun Content(context: CallOverlayContext) {
         val state by recording.state.collectAsState()
         val status = CallRecordingPresenter.status(state.phase)
-        val notice = state.notice
-        val showsNotice = notice != null && !CallRecordingPresenter.asksConsent(state.phase)
-        if (status == null && !showsNotice) return
-        val modifier = Modifier.padding(top = MeeshySpacing.sm)
-        CallChromeFade(
-            isVisible = context.chrome.isVisible(CallChromeElement.RecordingStatus),
-            onRevive = context.onChromeRevive,
-        ) {
-            when {
-                status != null -> CallRecordingStatusPill(
-                    text = stringResource(status.textRes),
-                    stopLabel = stringResource(status.stopLabelRes),
-                    onStop = { recording.stop() },
-                    modifier = modifier,
-                )
-                notice != null -> CallRecordingNoticePill(
-                    notice = notice,
-                    onDismiss = recording::dismissNotice,
-                    modifier = modifier,
-                )
+        val notice = state.notice?.takeIf { !CallRecordingPresenter.asksConsent(state.phase) }
+        val face = when {
+            status != null -> RecordingFace.Status(status)
+            notice != null -> RecordingFace.Notice(notice)
+            else -> null
+        }
+        val modifier = Modifier.padding(top = MeeshySpacing.sm).reportsTopBannerHeight(CallTopBanner.Recording)
+        CallBannerPresence(face) { shown ->
+            CallChromeFade(
+                isVisible = context.chrome.isVisible(CallChromeElement.RecordingStatus),
+                onRevive = context.onChromeRevive,
+                stowsToward = CallVerticalEdge.Top,
+                edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp,
+            ) {
+                when (shown) {
+                    is RecordingFace.Status -> CallRecordingStatusPill(
+                        text = stringResource(shown.status.textRes),
+                        stopWord = stringResource(shown.status.stopWordRes),
+                        stopLabel = stringResource(shown.status.stopLabelRes),
+                        onStop = { recording.stop() },
+                        modifier = modifier,
+                    )
+                    is RecordingFace.Notice -> CallRecordingNoticePill(
+                        notice = shown.notice,
+                        onDismiss = recording::dismissNotice,
+                        modifier = modifier,
+                    )
+                }
             }
         }
     }

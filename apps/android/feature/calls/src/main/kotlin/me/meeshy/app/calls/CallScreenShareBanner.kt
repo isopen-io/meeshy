@@ -2,16 +2,6 @@ package me.meeshy.app.calls
 
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
@@ -27,7 +17,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -44,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeElement
-import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallTopBanner
 import me.meeshy.sdk.model.call.CallTopBannerStack
 import me.meeshy.sdk.model.call.CallVerticalEdge
@@ -80,42 +68,23 @@ class CallScreenShareBannerOverlay @Inject constructor(
         ScreenShareConsentRequest(share, controller::onConsent)
         val current = bannerText(share, context.state)?.let { ScreenShareFace(it, stoppable = share.phase == CallScreenSharePhase.Sharing) }
         // Le dernier visage reste le temps de la sortie : le texte ne saute pas pendant que le bandeau repart.
-        val last = remember { arrayOfNulls<ScreenShareFace>(1) }
-        if (current != null) last[0] = current
-        val reduceMotion = rememberCallReduceMotion()
-        val millis = CallChromeStow.fadeMillis(reduceMotion)
-        val towardTop = CallTopBannerStack.leavesTowardTop(reduceMotion)
-        AnimatedVisibility(
-            visible = current != null,
-            enter = fadeIn(tween(millis)) + if (towardTop) {
-                slideInVertically(tween(millis)) { -it } + expandVertically(tween(millis))
-            } else {
-                EnterTransition.None
-            },
-            exit = fadeOut(tween(millis)) + if (towardTop) {
-                slideOutVertically(tween(millis)) { -it } + shrinkVertically(tween(millis))
-            } else {
-                ExitTransition.None
-            },
-        ) {
-            val face = current ?: last[0]
-            if (face != null) {
-                CallChromeFade(
-                    isVisible = context.chrome.isVisible(CallChromeElement.ScreenShareBanner),
-                    onRevive = context.onChromeRevive,
-                    modifier = Modifier.fillMaxWidth(),
-                    stowsToward = CallVerticalEdge.Top,
-                    edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp,
-                ) {
-                    ScreenShareBanner(
-                        text = face.text,
-                        onStop = if (face.stoppable) controller::toggle else null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
-                            .padding(top = CallTopBannerStack.GAP_DP.dp),
-                    )
-                }
+        CallBannerPresence(current) { face ->
+            CallChromeFade(
+                isVisible = context.chrome.isVisible(CallChromeElement.ScreenShareBanner),
+                onRevive = context.onChromeRevive,
+                modifier = Modifier.fillMaxWidth(),
+                stowsToward = CallVerticalEdge.Top,
+                edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp,
+            ) {
+                ScreenShareBanner(
+                    text = face.text,
+                    onStop = if (face.stoppable) controller::toggle else null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
+                        .padding(top = CallTopBannerStack.GAP_DP.dp)
+                        .reportsTopBannerHeight(CallTopBanner.ScreenShare),
+                )
             }
         }
     }
