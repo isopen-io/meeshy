@@ -345,6 +345,23 @@
         "source": "Releve du 2026-11-12 (#17709, `bun run build` puis `node scripts/measure-weight.mjs`) : 3,82 Ko a l integration -- le facteur du zoom ecrit dans la langue d interface (`zoomLabel` de `lib/calls/camera-zoom.ts`, reutilise) et la capsule, le zoom de ma camera et les `<video>` tenus extraits de `CallGrid` (fonction <= 80 lignes) -- ; 3,73 Ko au developpement (4,11 avec la capsule qui repart, le bandeau qui sort par son bord et la puce d ecran en verre, sans plafond releve), plafond 4 inchange : le crochet du zoom de l ecran partage (`use-screen-zoom.ts`, ses lois dans `lib/calls/screen-zoom.ts`) quitte la grille, l ecran le lui remet par le kit. PRECEDENT : Releve du 2026-11-11 (#17699, `bun run build` puis `node scripts/measure-weight.mjs`) : 3,90 Ko (2,96 avant), plafond 4 inchange. La grille suit l ordre d arrivee et l orientation, porte le halo de parole (le calque unique de `SpeechRing`, remis par l ecran), le bandeau 84 x 112 / colonne de 128 effacee en fondu, la capsule unique et ses `<video>` DEPLACES d un arbre a l autre. Le crochet du mouvement (`use-stage-flip.ts`) et celui de la descente du pointeur (`use-pressed-chrome.ts`) vivent dans l ecran, qui les remet par le kit ; le moteur du mouvement a son chunk (`call_stage_flip_engine`). Aucun plafond releve. PRECEDENT : Mesure du 2026-11-11 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,96 Ko -- la GRILLE d un appel de groupe (`components/call-grid.tsx` : les tuiles, la une, l ecran partage et son zoom `use-screen-zoom.ts`, les gestes de la une `lib/calls/call-spotlight-gestures.ts`), sortie de `call_overlay` (#17650) : un duo ne la telecharge jamais. Chargee par `call-stage.tsx` (`callGridView`), prechargee par l ecran des qu un appel de GROUPE se montre et quand l appel vivant souffle. Elle n importe rien de `call_overlay` : l ecran lui REMET son kit (`CALL_GRID_KIT`). Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
       }
     },
+    "call_screen_zoom_surface": {
+      "pattern": "^assets/call-screen-zoom-surface-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #17747, NON ARBITREE",
+        "source": "Mesure du 2026-11-12 (`bun run build` puis `node scripts/measure-weight.mjs`) : 0,41 Ko -- la surface qui zoome l ecran recu en duo (`components/call-screen-zoom-surface.tsx`, P15.11) : le calque GPU de l image, l indice du lecteur d ecran, et la surface qui garde le doigt une fois zoomee. Chargee par `call-stage.tsx` (`screenZoomSurfaceView`), prechargee par l ecran d appel (`PREFETCH`) ; tant qu elle n est pas la, l ecran recu se montre entier. Sortie de `call_overlay` avec le crochet du zoom (20,94 -> 20,13 Ko), pour laisser la place au bandeau « Vous partagez » (#17746). Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
+      }
+    },
+    "call_screen_zoom": {
+      "pattern": "^assets/use-screen-zoom-[A-Za-z0-9_-]{7}\\.js$",
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #17747, NON ARBITREE",
+        "source": "Mesure du 2026-11-12 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,73 Ko -- le crochet du zoom d un ecran partage (`components/use-screen-zoom.ts`, ses lois dans `lib/calls/screen-zoom.ts`) : pincement, Ctrl + molette, double toucher, et pour l ecran recu en duo le calque ecrit par image, le deplacement une fois zoome et l arbitrage avec le toucher qui range les commandes. Partage par la grille d un groupe (`call_grid`) et la surface du duo (`call_screen_zoom_surface`) : il quitte `call_overlay`, aucun des deux ne l importe de lui. Chunk PARTAGE, importe statiquement par ces deux chunks a la demande (donc sans `dynamic_only`) : il n atteint jamais la premiere peinture. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
     "call_ring_and_end": {
       "pattern": "^assets/call-ring-and-end-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,

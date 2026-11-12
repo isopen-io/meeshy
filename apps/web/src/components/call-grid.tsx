@@ -6,7 +6,7 @@ import { PeerAvatar } from '@/components/peer-avatar';
 import type { Portrait } from '@/components/call-portrait';
 import type { CallButton } from '@/components/call-glass-button';
 import type { Arrives } from '@/components/call-arrives';
-import type { useScreenZoom } from '@/components/use-screen-zoom';
+import { useScreenZoom } from '@/components/use-screen-zoom';
 import type { HeldSwap } from '@/lib/calls/use-pill-motion';
 import type { PeerSpeechRing } from '@/components/call-camera-off';
 import type { CallModerationSlot } from '@/components/call-control-slots';
@@ -17,6 +17,7 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import type { autoSharer, resolveSpotlight, SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { chooseGrid, chooseMember, chooseSelf } from '@/lib/calls/call-spotlight-gestures';
+import { edgeFadeMask } from '@/lib/calls/call-row-keys';
 import type { CallMember } from '@/lib/calls/call-store';
 import { zoomLabel } from '@/lib/calls/camera-zoom';
 import { filmstripOf, type Filmstrip, STRIP_COLUMN_WIDTH, STRIP_HALO_PAD, STRIP_TILE_HEIGHT, STRIP_TILE_WIDTH } from '@/lib/calls/call-group-stage';
@@ -87,8 +88,6 @@ export type CallGridKit = {
   readonly useStageFlip: typeof useStageFlip;
   /** Ce qui arrive avec la une (la capsule) y entre en fondu, et repart de même (`leaving`), plus court sous « Réduire les animations » : rien n'apparaît ni ne disparaît d'un coup. */
   readonly Arrives: typeof Arrives;
-  /** Le zoom de l'écran partagé à la une (pincer, Ctrl + molette, double toucher) : son crochet et ses lois vivent dans l'écran, qui le remet. */
-  readonly useScreenZoom: typeof useScreenZoom;
   /** Le bandeau des autres sort par son bord quand l'écran devient plein, et revient par lui (U2.10). */
   readonly HeldSwap: typeof HeldSwap;
 };
@@ -244,7 +243,7 @@ function Slot({ menu = null, ...tile }: TileProps & { readonly menu?: ReactNode 
 
 function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGridKit; readonly member: CallMember; readonly stream: MediaStream | undefined; readonly language: InterfaceLanguage }) {
   const title = translate(language, 'call.screen.of', { name: member.name });
-  const { zoom, pinching, handlers } = kit.useScreenZoom();
+  const { zoom, pinching, handlers } = useScreenZoom();
   const hint = useId();
   return (
     <div className="relative min-h-0 min-w-0 flex-1 origin-top-left overflow-hidden rounded-card" style={{ touchAction: 'none' }} data-call-slot={member.userId} aria-describedby={hint} data-call-shared-screen="" data-call-screen-zoom={String(zoom)} {...handlers}>
@@ -273,7 +272,7 @@ function SharedScreen({ kit, member, stream, language }: { readonly kit: CallGri
  */
 const stripBox = (strip: Filmstrip): CSSProperties => {
   const bottom = strip !== 'trailing';
-  const fade = `linear-gradient(to ${bottom ? 'right' : 'bottom'}, transparent, #000 8px, #000 calc(100% - 8px), transparent)`;
+  const fade = edgeFadeMask(bottom ? 'to right' : 'to bottom');
   return bottom ? { maskImage: fade, gridAutoColumns: STRIP_TILE_WIDTH, gridTemplateRows: STRIP_TILE_HEIGHT, height: STRIP_TILE_HEIGHT + 2 * STRIP_HALO_PAD } : { maskImage: fade, gridAutoRows: STRIP_TILE_HEIGHT, gridTemplateColumns: STRIP_TILE_WIDTH, width: STRIP_COLUMN_WIDTH };
 };
 
