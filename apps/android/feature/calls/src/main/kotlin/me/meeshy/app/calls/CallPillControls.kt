@@ -1,5 +1,13 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -31,8 +39,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -105,14 +115,33 @@ internal fun CallShareStopButton(
             .padding(horizontal = MeeshySpacing.md),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = word,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = MeeshyPalette.ErrorInk,
-            maxLines = 1,
-        )
+        val reduceMotion = rememberCallReduceMotion()
+        AnimatedContent(
+            targetState = word,
+            transitionSpec = { callWordSwap(reduceMotion) },
+            contentAlignment = Alignment.Center,
+            label = "callStopWord",
+        ) { shown ->
+            Text(
+                text = shown,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyPalette.ErrorInk,
+                maxLines = 1,
+            )
+        }
     }
+}
+
+/**
+ * R3.3 — un mot qui change (« Annuler » → « Arrêter », l'attente → l'enregistrement) passe en fondu croisé pendant que sa
+ * capsule prend sa nouvelle largeur : rien ne saute. « Réduire les animations » : le fondu court, la largeur sans glissement.
+ */
+internal fun callWordSwap(reduceMotion: Boolean): ContentTransform {
+    val millis = CallChromeStow.fadeMillis(reduceMotion)
+    return (fadeIn(tween(millis)) togetherWith fadeOut(tween(millis))).using(
+        SizeTransform(clip = false) { _, _ -> if (reduceMotion) snap<IntSize>() else tween<IntSize>(millis) },
+    )
 }
 
 @Composable

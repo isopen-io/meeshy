@@ -1,8 +1,7 @@
 package me.meeshy.app.calls
 
 import androidx.annotation.StringRes
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -38,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallButtonRole
-import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallRecordingKind
 import me.meeshy.sdk.model.call.CallRecordingNotice
 import me.meeshy.sdk.model.call.CallRecordingPhase
@@ -99,7 +97,7 @@ internal fun CallRecordingStatusPill(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val fadeMillis = CallChromeStow.fadeMillis(rememberCallReduceMotion())
+    val reduceMotion = rememberCallReduceMotion()
     CallGlassPlate(
         modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
         shape = CircleShape,
@@ -111,7 +109,7 @@ internal fun CallRecordingStatusPill(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.smPlus),
         ) {
             RecordingDot()
-            Crossfade(targetState = text, animationSpec = tween(fadeMillis), label = "callRecordingWords") { words ->
+            AnimatedContent(targetState = text, transitionSpec = { callWordSwap(reduceMotion) }, label = "callRecordingWords") { words ->
                 Text(
                     text = words,
                     style = MaterialTheme.typography.labelMedium,
