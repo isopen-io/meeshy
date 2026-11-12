@@ -300,3 +300,33 @@
 [data-call-deck][data-call-compact] [data-call-row-scroll] {
   overflow: visible;
 }
+
+/* L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT (S1.7, S2.1, #17774) — l'un se contracte vers
+   l'autre et s'en redéploie par une échelle et un fondu courts, jouée par le moteur
+   (`playViewSwap`, Web Animations, que la règle générale de « Réduire les animations » n'éteint
+   pas) ; la feuille n'y met que l'ancre : l'écran se déploie depuis le haut, là où la capsule se
+   tient, la capsule depuis son centre. Qui repart ne prend plus le doigt. */
+[data-call-screen] {
+  transform-origin: 50% 0;
+}
+
+[data-call-pill-bar] {
+  transform-origin: 50% 0;
+}
+
+[data-call-screen][data-leaving],
+[data-call-pill-bar][data-leaving] {
+  pointer-events: none;
+}
+
+/* LA PILE DES BANDEAUX SE REFERME SANS ATTENDRE (S2.6, #17774) — le bandeau de partage et la capsule de
+   capture (R1.6) qui repartent quittent la mise en page à l'instant et glissent vers le haut (`HeldSwap`),
+   si bien que les bandeaux qui les suivaient remontent aussitôt, en translation (`useBannersClose`), au
+   lieu de sauter quand ils se démontent. Le haut (`top`) de chacun est épinglé à sa place d'avant par
+   le moteur ; 0 tient pour le premier. */
+[data-call-banner-stack] > [data-call-capture-slot][data-leaving],
+[data-call-banner-stack] > [data-call-screen-share-banner][data-leaving] {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+}

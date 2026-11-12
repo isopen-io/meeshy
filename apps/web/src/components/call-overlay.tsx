@@ -4,6 +4,7 @@ import { useStore } from 'zustand/react';
 import { StreamAudio } from '@/components/call-media-elements';
 import { CallScreen } from '@/components/call-screen';
 import { callStore, type ActiveCall } from '@/lib/calls/call-store';
+import { type CallView, useViewHold } from '@/lib/calls/use-pill-motion';
 
 /**
  * **CE QUE LA COUCHE D'APPEL PEINT** (#6382) — l'écran plein, OU la pastille
@@ -26,21 +27,33 @@ const SecondCallLayer = lazy(() => import('./call-waiting-banner').then((module)
 /* La pastille de l'appel réduit (`FloatingCallPillView.swift`) : son chunk, chargé dès que l'appel vit (`call-screen.tsx`), si bien que réduire ne l'attend pas. */
 const CallPill = lazy(() => import('./call-floating-pill').then((module) => ({ default: module.CallPill })));
 
-/** L'écran plein ou la pastille — la bulle est un chunk frère (`call-layer.tsx`) ; la sonnerie et la fin reprennent toujours l'écran plein. */
-export function ActiveCallView({ call }: { readonly call: ActiveCall }) {
+/** Ce que la couche montre pour cet appel : la sonnerie et la fin reprennent toujours l'écran plein ; la bulle est un chunk frère (`call-layer.tsx`), elle ne montre ni l'un ni l'autre. */
+const viewOf = (call: ActiveCall): CallView | null => {
   const reduced = call.phase.kind !== 'incoming' && call.phase.kind !== 'ended';
-  if (reduced && call.display === 'pill')
-    return (
-      <Suspense fallback={null}>
-        <CallPill call={call} />
-      </Suspense>
-    );
-  if (reduced && call.display === 'bubble') return null;
+  if (reduced && call.display === 'pill') return 'pill';
+  return reduced && call.display === 'bubble' ? null : 'screen';
+};
+
+/**
+ * L'écran plein ou la pastille. Passer de l'un à l'autre se joue (S1.7, S2.1, `useViewHold`) : celui qui repart
+ * reste monté le temps de son mouvement pendant que l'autre arrive.
+ */
+export function ActiveCallView({ call }: { readonly call: ActiveCall }) {
+  const { screen, pill } = useViewHold(viewOf(call));
   /* Ce que l'écran charge à part pour son premier rendu (la réponse d'un appel entrant, #17650) le retient ENTIER : jamais un portrait sans ses boutons. Le son des pairs, monté à côté, n'attend rien. */
   return (
-    <Suspense fallback={null}>
-      <CallScreen call={call} />
-    </Suspense>
+    <>
+      {pill === null ? null : (
+        <Suspense fallback={null}>
+          <CallPill call={call} motion={pill} />
+        </Suspense>
+      )}
+      {screen === null ? null : (
+        <Suspense fallback={null}>
+          <CallScreen call={call} motion={screen} />
+        </Suspense>
+      )}
+    </>
   );
 }
 

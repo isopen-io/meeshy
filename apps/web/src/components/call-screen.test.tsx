@@ -8,6 +8,8 @@ import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { callActions } from '@/lib/calls/call-actions';
+import { callChromeStore } from '@/lib/calls/call-chrome-store';
+import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
@@ -226,9 +228,9 @@ describe('CallScreen — partage d’écran (#8063)', () => {
     expect(expandedScreen({ phase: { kind: 'outgoing' } }, true)).not.toContain('data-call-screen-share');
   });
 
-  test('celui qui partage lit « Vous partagez votre écran » et peut arrêter', () => {
+  test('celui qui partage peut arrêter depuis les actions ; « Vous partagez » n’est plus une pastille mais un bandeau (P16.4)', () => {
     const html = expandedScreen({ screenSharing: true, members: { 'u-peer': member() } }, true);
-    expect(html).toContain('data-call-pill="screen-sharing"');
+    expect(html).not.toContain('data-call-pill="screen-sharing"');
     expect(html).toContain('aria-label="Arrêter le partage d’écran"');
     expect(html).toContain('aria-pressed="true"');
   });
@@ -505,7 +507,10 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail]')).toBeNull();
     expect(view.find('[data-call-rails]')).toBeNull();
     expect(view.host.querySelectorAll('[data-call-mode-carousel]')).toHaveLength(1);
+    /* R3.6, #17551 : l'en-tête est masqué, la capsule d'enregistrement part avec lui ; la carte d'accord, jamais. */
+    expect(callChromeStore.getState().stowed).toBe(true);
     view.press('[data-call-mode-quit]');
+    expect(callChromeStore.getState().stowed).toBe(false);
     expect(view.find('[data-call-mode="effects"]')).toBeNull();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
     expect(view.find('[data-call-control-pill]')).not.toBeNull();
@@ -710,6 +715,25 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     });
     expect(chrome()).toBe('shown');
     expect(view.find('[data-call-corner]')?.hasAttribute('data-call-self-tile')).toBe(true);
+    view.done();
+  });
+
+  test('duo vidéo : ma vignette descend sous la capsule d’enregistrement, puis sous la carte d’accord à sa hauteur mesurée, et remonte quand tout est dit (R3.10)', () => {
+    const view = mount({ media: 'video', cameraOn: true, members: { 'u-peer': member({ cameraOn: true }) } });
+    const top = () => Number(/\+ (\d+(?:\.\d+)?)px\)$/.exec((view.find('[data-call-corner-frame]') as HTMLElement).style.top)?.[1]);
+    const rest = top();
+    act(() => callRecordingStore.setState({ view: { kind: 'recording', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-1', recorderId: 'u-peer', mine: false }, notice: null }));
+    expect(top() - rest).toBe(60);
+    act(() => {
+      callRecordingStore.setState({ view: { kind: 'pending', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-2', requesterId: 'u-peer', mine: false, mustAnswer: true }, notice: null });
+      callChromeStore.setState({ recordingCard: 132 });
+    });
+    expect(top() - rest).toBe(140);
+    act(() => {
+      callRecordingStore.setState({ view: { kind: 'idle' }, notice: null });
+      callChromeStore.setState({ recordingCard: 0 });
+    });
+    expect(top()).toBe(rest);
     view.done();
   });
 
@@ -1177,11 +1201,44 @@ describe('CallScreen — voir et entendre l’appelant avant de décrocher (#848
     view.done();
   });
 
-  test('le bouton de son se lit d’emblée, en toutes lettres, au-dessus de l’identité (#8627)', () => {
+  test('le bouton de son se lit d’emblée, en toutes lettres, en verre (#8627, P17.13)', () => {
     const view = mount(ringing('video', previewStream(['video', 'audio'])));
     const button = view.find('[data-call-preview-sound]');
     expect(button?.textContent).toContain('Activer le son');
     expect(button?.className).toContain('glass-call-prominent');
+    view.done();
+  });
+
+  test('l’en-tête d’un appel vidéo qui sonne : la puce de verre « Appel vidéo entrant », le nom, puis « Activer le son » (P17.2, P17.13)', () => {
+    const view = mount(ringing('video', previewStream(['video', 'audio'])));
+    const chip = view.find('[data-call-status]');
+    expect(chip?.className.split(' ')).toContain('glass-call');
+    expect(chip?.querySelector('svg')).not.toBeNull();
+    expect(chip?.textContent).toBe('Appel vidéo entrant');
+    expect(chip?.className.split(' ')).toContain('text-mini');
+    const name = view.find('h2');
+    const sound = view.find('[data-call-preview-sound]');
+    const before = (a: Element | null, b: Element | null) => ((a?.compareDocumentPosition(b as Node) ?? 0) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(before(chip, name)).toBe(true);
+    expect(before(name, sound)).toBe(true);
+    view.done();
+  });
+
+  test('connecté, partager pose le bandeau sous l’en-tête, dans la pile et AVANT la capture (P16.4, P16.7)', async () => {
+    const view = mount({ phase: { kind: 'connected' }, connectedAt: Date.now(), screenSharing: true, members: { 'u-peer': member({ capturing: true }) } });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const stack = view.find('[data-call-banner-stack]');
+    expect(stack?.children[0]?.hasAttribute('data-call-screen-share-banner')).toBe(true);
+    expect(stack?.children[1]?.hasAttribute('data-call-capture-slot')).toBe(true);
+    expect(stack?.textContent).toContain('Vous partagez votre écran');
+    expect(view.find('[data-call-pill="screen-sharing"]')).toBeNull();
+    view.done();
+  });
+
+  test('un appel VOCAL qui sonne garde son bouton de son en haut et son statut sous le nom', () => {
+    const view = mount(ringing('audio', previewStream(['audio'])));
+    expect(view.find('[data-call-status]')?.className).not.toContain('glass-call');
+    expect(view.find('[data-call-preview-sound]')?.className).toContain('absolute');
     view.done();
   });
 

@@ -107,6 +107,9 @@ struct BubbleCallNoticeView: View, Equatable {
                 if let recording = notice.recording {
                     CallRecordingPlayback(recording: recording, accentHex: accentHex)
                 }
+                if BubbleCallJournalOffer.isOffered(summary) {
+                    BubbleCallJournalUnderCard(callId: summary.callId, accentHex: accentHex, alignsTrailing: isOutgoing)
+                }
             }
             if !isOutgoing { Spacer(minLength: 48) }
         }

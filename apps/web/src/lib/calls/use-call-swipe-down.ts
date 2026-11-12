@@ -15,7 +15,10 @@ import { tapTogglesChrome } from './use-call-chrome';
  *   pas les commandes. Le toucher suivant repart de zéro ;
  * - un glissé n'est pas non plus un glisser-déposer : à la souris, passer sur
  *   le portrait lancerait celui du navigateur, qui annule le pointeur — le
- *   `dragstart` est refusé tant qu'un doigt est posé sur la scène.
+ *   `dragstart` est refusé tant qu'un doigt est posé sur la scène ;
+ * - un second doigt en fait un pincement, jamais un glissé ; et ce qui garde le
+ *   doigt pour lui (`data-call-owns-drag` : l'écran reçu zoomé qui se déplace,
+ *   P15.11) ne le cède pas.
  */
 
 type Input = {
@@ -38,6 +41,10 @@ export type CallSwipeDown = {
 
 /** Un doigt immobile plus longtemps que ça avant d'être levé n'a plus d'élan. */
 const HELD_MS = 100;
+
+const OWNS_DRAG = '[data-call-owns-drag]';
+
+const ownsDrag = (event: PointerEvent): boolean => event.target instanceof Element && event.target.closest(OWNS_DRAG) !== null;
 
 type Gesture = { readonly id: number; readonly x: number; readonly y: number; started: boolean; lastY: number; lastAt: number; velocity: number };
 
@@ -92,8 +99,9 @@ export function useCallSwipeDown({ root, allowed, canPip, reducedMotion, onOutco
       if (state.gesture !== null) event.preventDefault();
     };
     const down = (event: PointerEvent) => {
+      if (!event.isPrimary) return void (state.gesture === null ? undefined : end());
       swiped.current = false;
-      if (!latest.current.allowed || !event.isPrimary || event.button !== 0 || !tapTogglesChrome(event)) return;
+      if (!latest.current.allowed || event.button !== 0 || !tapTogglesChrome(event) || ownsDrag(event)) return;
       state.gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, started: false, lastY: event.clientY, lastAt: event.timeStamp, velocity: 0 };
     };
     element.addEventListener('pointerdown', down);

@@ -67,13 +67,19 @@ export type CallLayout = 'portrait' | 'video-duo' | 'grid' | 'screen';
  * direct dont au moins une caméra tourne passe en vidéo plein cadre avec la
  * vignette locale ; le reste est le portrait audio d'iOS.
  */
-export function callLayout(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup'>): CallLayout {
+export function callLayout(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'cameraPreview' | 'remoteStreams' | 'isGroup'>): CallLayout {
   const members = Object.values(call.members);
   if (call.isGroup && members.length > 1) return 'grid';
   if (members.some((member) => member.screenSharing && hasVideo(call.remoteStreams[member.userId]))) return 'screen';
   const remoteVideo = members.some((member) => member.cameraOn && hasVideo(call.remoteStreams[member.userId]));
-  return call.cameraOn || remoteVideo ? 'video-duo' : 'portrait';
+  return selfCameraShown(call) || remoteVideo ? 'video-duo' : 'portrait';
 }
+
+/** Ma caméra se montre : émise, ou gardée en aperçu local pendant mon partage (S2.8). */
+export const selfCameraShown = (call: Pick<ActiveCall, 'cameraOn' | 'cameraPreview'>): boolean => call.cameraOn || (call.cameraPreview ?? null) !== null;
+
+/** Le flux de ma vignette : l'aperçu de ma caméra pendant mon partage, sinon mon flux local. */
+export const selfCameraStream = (call: Pick<ActiveCall, 'cameraPreview' | 'localStream'>): MediaStream | null => call.cameraPreview ?? call.localStream;
 
 export function hasVideo(stream: MediaStream | undefined | null): boolean {
   return stream !== undefined && stream !== null && stream.getVideoTracks().some((track) => track.readyState !== 'ended');
@@ -97,24 +103,22 @@ export function canShareScreen(mediaDevices: unknown): boolean {
   return typeof mediaDevices === 'object' && mediaDevices !== null && typeof (mediaDevices as { readonly getDisplayMedia?: unknown }).getDisplayMedia === 'function';
 }
 
-export type StatusPill = 'mic-muted' | 'screen-sharing' | 'peer-muted' | 'poor-network' | 'video-frozen' | 'video-suspended';
+export type StatusPill = 'mic-muted' | 'peer-muted' | 'poor-network' | 'video-frozen' | 'video-suspended';
 
 export const STATUS_PILL_KEY: Readonly<Record<StatusPill, PlainCallKey>> = {
   'mic-muted': 'call.mic.muted',
-  'screen-sharing': 'call.screen.sharing',
   'peer-muted': 'call.peer.muted',
   'poor-network': 'call.quality.poor',
   'video-frozen': 'call.video.frozen',
   'video-suspended': 'call.video.suspended',
 };
 
-/** Les pastilles de `CallView.swift` que le web sait dire. */
+/** Les pastilles de `CallView.swift` que le web sait dire — le partage d'écran n'en est plus une : c'est un bandeau sous l'en-tête (P16.4, `call-top-banners.ts`). */
 export function statusPills(call: Pick<ActiveCall, 'micMuted' | 'screenSharing' | 'members' | 'quality' | 'isGroup'>): readonly StatusPill[] {
   const members = Object.values(call.members);
   const peerMuted = !call.isGroup && members.length === 1 && members[0]?.micMuted === true;
   return [
     ...(call.micMuted ? (['mic-muted'] as const) : []),
-    ...(call.screenSharing ? (['screen-sharing'] as const) : []),
     ...(peerMuted ? (['peer-muted'] as const) : []),
     ...(call.quality?.level === 'poor' ? (['poor-network'] as const) : []),
     ...(call.quality?.survival === 'frozen' ? (['video-frozen'] as const) : []),

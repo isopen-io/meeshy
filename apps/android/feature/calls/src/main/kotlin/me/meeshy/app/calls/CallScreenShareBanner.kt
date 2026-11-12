@@ -2,19 +2,7 @@ package me.meeshy.app.calls
 
 import android.content.ActivityNotFoundException
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,18 +17,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -49,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallChromeElement
-import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallTopBanner
 import me.meeshy.sdk.model.call.CallTopBannerStack
 import me.meeshy.sdk.model.call.CallVerticalEdge
@@ -85,42 +68,23 @@ class CallScreenShareBannerOverlay @Inject constructor(
         ScreenShareConsentRequest(share, controller::onConsent)
         val current = bannerText(share, context.state)?.let { ScreenShareFace(it, stoppable = share.phase == CallScreenSharePhase.Sharing) }
         // Le dernier visage reste le temps de la sortie : le texte ne saute pas pendant que le bandeau repart.
-        val last = remember { arrayOfNulls<ScreenShareFace>(1) }
-        if (current != null) last[0] = current
-        val reduceMotion = rememberCallReduceMotion()
-        val millis = CallChromeStow.fadeMillis(reduceMotion)
-        val towardTop = CallTopBannerStack.leavesTowardTop(reduceMotion)
-        AnimatedVisibility(
-            visible = current != null,
-            enter = fadeIn(tween(millis)) + if (towardTop) {
-                slideInVertically(tween(millis)) { -it } + expandVertically(tween(millis))
-            } else {
-                EnterTransition.None
-            },
-            exit = fadeOut(tween(millis)) + if (towardTop) {
-                slideOutVertically(tween(millis)) { -it } + shrinkVertically(tween(millis))
-            } else {
-                ExitTransition.None
-            },
-        ) {
-            val face = current ?: last[0]
-            if (face != null) {
-                CallChromeFade(
-                    isVisible = context.chrome.isVisible(CallChromeElement.ScreenShareBanner),
-                    onRevive = context.onChromeRevive,
-                    modifier = Modifier.fillMaxWidth(),
-                    stowsToward = CallVerticalEdge.Top,
-                    edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp,
-                ) {
-                    ScreenShareBanner(
-                        text = face.text,
-                        onStop = if (face.stoppable) controller::toggle else null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
-                            .padding(top = CallTopBannerStack.GAP_DP.dp),
-                    )
-                }
+        CallBannerPresence(current) { face ->
+            CallChromeFade(
+                isVisible = context.chrome.isVisible(CallChromeElement.ScreenShareBanner),
+                onRevive = context.onChromeRevive,
+                modifier = Modifier.fillMaxWidth(),
+                stowsToward = CallVerticalEdge.Top,
+                edgeMargin = CallTopBannerStack.HEADER_ROW_CLEARANCE_DP.dp,
+            ) {
+                ScreenShareBanner(
+                    text = face.text,
+                    onStop = if (face.stoppable) controller::toggle else null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
+                        .padding(top = CallTopBannerStack.GAP_DP.dp)
+                        .reportsTopBannerHeight(CallTopBanner.ScreenShare),
+                )
             }
         }
     }
@@ -197,31 +161,10 @@ private fun ScreenShareBanner(text: String, onStop: (() -> Unit)?, modifier: Mod
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            if (onStop != null) ScreenShareStopButton(onStop)
+            if (onStop != null) CallShareStopButton(onStop)
         }
     }
 }
 
-@Composable
-private fun ScreenShareStopButton(onStop: () -> Unit) {
-    val label = stringResource(R.string.call_screen_share_stop)
-    Box(
-        modifier = Modifier
-            .defaultMinSize(minWidth = BANNER_MIN_HEIGHT, minHeight = BANNER_MIN_HEIGHT)
-            .clip(CircleShape)
-            .clickable(onClickLabel = label, role = Role.Button, onClick = onStop)
-            .padding(horizontal = MeeshySpacing.md),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = stringResource(R.string.call_screen_share_stop_caption),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-            modifier = Modifier.semantics { this.contentDescription = label },
-        )
-    }
-}
-
-private const val BANNER_TINT_ALPHA = 0.35f
+internal const val BANNER_TINT_ALPHA = 0.35f
 private val BANNER_MIN_HEIGHT = CallTopBannerStack.BANNER_HEIGHT_DP.dp

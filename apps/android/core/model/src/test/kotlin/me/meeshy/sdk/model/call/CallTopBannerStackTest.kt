@@ -43,11 +43,52 @@ class CallTopBannerStackTest {
         assertThat(CallTopBannerStack.BANNER_HEIGHT_DP).isAtLeast(48f)
     }
 
+    private val bannerPlace = CallTopBannerStack.BANNER_HEIGHT_DP + CallTopBannerStack.GAP_DP
+
     @Test
-    fun `ma vignette ne descend que pour mon propre partage`() {
-        assertThat(CallTopBannerStack.selfTileClearanceDp(isLocalScreenShareShown = false)).isEqualTo(0f)
-        assertThat(CallTopBannerStack.selfTileClearanceDp(isLocalScreenShareShown = true))
-            .isEqualTo(CallTopBannerStack.BANNER_HEIGHT_DP + CallTopBannerStack.GAP_DP)
+    fun `sans bandeau, ma vignette ne descend pas`() {
+        assertThat(CallTopBannerStack.selfTileClearanceDp(counted = emptySet(), heightsDp = emptyMap())).isEqualTo(0f)
+    }
+
+    @Test
+    fun `mon partage, un enregistrement ou une capture prennent chacun leur place, vignette dessous (R1_5, R3_10)`() {
+        for (banner in listOf(CallTopBanner.ScreenShare, CallTopBanner.Recording, CallTopBanner.Capture)) {
+            assertThat(CallTopBannerStack.selfTileClearanceDp(setOf(banner), emptyMap())).isEqualTo(bannerPlace)
+        }
+    }
+
+    @Test
+    fun `la pile entiere pousse la vignette, chaque bandeau a sa hauteur mesuree et son ecart`() {
+        val heights = mapOf(CallTopBanner.Recording to 112f)
+
+        assertThat(
+            CallTopBannerStack.selfTileClearanceDp(
+                setOf(CallTopBanner.ScreenShare, CallTopBanner.Recording, CallTopBanner.Capture),
+                heights,
+            ),
+        ).isEqualTo(bannerPlace + (112f + CallTopBannerStack.GAP_DP) + bannerPlace)
+    }
+
+    @Test
+    fun `un bandeau mesure plus bas que le plancher compte le plancher`() {
+        assertThat(CallTopBannerStack.selfTileClearanceDp(setOf(CallTopBanner.Capture), mapOf(CallTopBanner.Capture to 10f)))
+            .isEqualTo(bannerPlace)
+    }
+
+    @Test
+    fun `le cadre en direct ne repousse pas la vignette, un partage recu non plus (#17730)`() {
+        assertThat(CallTopBannerStack.selfTileClearanceDp(setOf(CallTopBanner.LiveFrame), emptyMap())).isEqualTo(0f)
+        assertThat(
+            CallTopBannerStack.countedForSelfTile(isLocalScreenShareShown = false, isRecordingShown = false, isCaptureAlertShown = false),
+        ).isEmpty()
+    }
+
+    @Test
+    fun `les bandeaux comptes pour la vignette sont ceux qui sont montres`() {
+        assertThat(CallTopBannerStack.countedForSelfTile(isLocalScreenShareShown = true, isRecordingShown = true, isCaptureAlertShown = true))
+            .containsExactly(CallTopBanner.ScreenShare, CallTopBanner.Recording, CallTopBanner.Capture)
+        assertThat(CallTopBannerStack.countedForSelfTile(isLocalScreenShareShown = false, isRecordingShown = true, isCaptureAlertShown = false))
+            .containsExactly(CallTopBanner.Recording)
     }
 
     @Test

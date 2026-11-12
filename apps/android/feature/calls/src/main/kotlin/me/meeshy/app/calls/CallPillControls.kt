@@ -1,5 +1,12 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -31,8 +38,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -82,27 +91,58 @@ internal fun CallPillControls(
     }
 }
 
-/** The one control of the sharing capsule (#16664): stop the share, without reopening the call. */
+/**
+ * « Arrêter » du partage d'écran (#16664) : UNE capsule blanche à encre rouge (planche S1 et S2, iOS `CallShareStopButton`),
+ * posée sur le verre rouge de la capsule de partage comme sur celui du bandeau. Elle arrête le partage sans rouvrir l'appel ;
+ * la cible fait 48 dp et la capsule blanche s'y inscrit avec un léger retrait. R3.3 : la capsule d'enregistrement est la MÊME
+ * — son mot (« Arrêter », « Annuler » en attente) et son libellé accessible, qui garde la phrase entière, se passent en paramètres.
+ */
 @Composable
-internal fun CallPillStopShare(onStop: () -> Unit) {
-    val label = stringResource(R.string.call_screen_share_stop)
+internal fun CallShareStopButton(
+    onStop: () -> Unit,
+    label: String = stringResource(R.string.call_screen_share_stop),
+    word: String = stringResource(R.string.call_screen_share_stop_caption),
+) {
     Box(
         modifier = Modifier
             .defaultMinSize(minWidth = STOP_SHARE_TARGET, minHeight = STOP_SHARE_TARGET)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = 0.22f), CircleShape)
             .clickable(onClickLabel = label, role = Role.Button, onClick = onStop)
             .semantics { contentDescription = label }
+            .padding(vertical = MeeshySpacing.xs)
+            .background(Color.White, CircleShape)
             .padding(horizontal = MeeshySpacing.md),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = stringResource(R.string.call_screen_share_stop_caption),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-        )
+        val reduceMotion = rememberCallReduceMotion()
+        AnimatedContent(
+            targetState = word,
+            transitionSpec = { callWordSwap(reduceMotion) },
+            contentAlignment = Alignment.Center,
+            label = "callStopWord",
+        ) { shown ->
+            Text(
+                text = shown,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyPalette.ErrorInk,
+                maxLines = 1,
+            )
+        }
     }
+}
+
+/**
+ * R3.3 — un mot qui change (« Annuler » → « Arrêter », l'attente → l'enregistrement) passe en fondu croisé pendant que sa
+ * capsule prend sa nouvelle largeur : rien ne saute. « Réduire les animations » : le fondu court, la largeur sans glissement.
+ */
+internal fun callWordSwap(reduceMotion: Boolean): ContentTransform {
+    val millis = CallChromeStow.fadeMillis(reduceMotion)
+    return ContentTransform(
+        targetContentEnter = fadeIn(tween(millis)),
+        initialContentExit = fadeOut(tween(millis)),
+        sizeTransform = SizeTransform(clip = false) { _, _ -> if (reduceMotion) snap<IntSize>() else tween<IntSize>(millis) },
+    )
 }
 
 @Composable

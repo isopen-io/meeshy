@@ -206,7 +206,7 @@ internal fun CallMontagePicker(
  * (iOS `CallModeActionBar`, options `holdOptions + [faces]`), refusé pendant une prise ou un film.
  */
 @Composable
-private fun MontageActionBar(
+internal fun MontageActionBar(
     hold: CallMontageHold?,
     isRecording: Boolean,
     facesEnabled: Boolean,
@@ -238,7 +238,8 @@ private fun MontageActionBar(
                 hint = stringResource(R.string.call_live_frame_hold_hint),
                 toggleState = option.isOn,
                 diameter = SIDE_DIAMETER,
-                onClick = { if (!isRecording) onHold(option.frameId) },
+                enabled = CallMontagePickRule.holdEnabled(isRecording),
+                onClick = { onHold(option.frameId) },
             )
         }
         CallPillButton(

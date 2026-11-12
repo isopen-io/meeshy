@@ -9,7 +9,7 @@ import { setLocalZoom, useLocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
-import { CallStage } from './call-stage';
+import { CallStage, callGridView } from './call-stage';
 
 /**
  * MON IMAGE PENDANT UN APPEL (#8441, #8576, #8577) — en coin, ma vignette se
@@ -76,7 +76,7 @@ const call = (camera: ZoomCamera, overrides: Partial<ActiveCall> = {}): ActiveCa
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(async () => {
-  await loadCallControlsCatalog('fr');
+  await Promise.all([loadCallControlsCatalog('fr'), callGridView.load()]);
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
@@ -272,6 +272,20 @@ describe('mon image pendant un appel', () => {
     view.press('[data-call-zoom-in]');
     await act(async () => {});
     expect(camera.applied).toEqual([1.3]);
+    view.done();
+  });
+
+  test('en groupe, pendant MON partage, ma tuile montre ma caméra gardée en aperçu, jamais mon portrait ni mon écran (S2.8)', async () => {
+    fresh();
+    const mine = streamOf(zoomCamera());
+    const view = mount(call(zoomCamera(), { isGroup: true, cameraOn: false, screenSharing: true, cameraPreview: mine, members: { 'u-peer': member(), 'u-b': member({ userId: 'u-b', name: 'Bintou' }) } }), { layout: 'grid' });
+    await act(async () => {
+      await import('./call-grid');
+    });
+    await act(async () => {});
+    const video = view.find('[data-call-tile-self] video[data-call-self]') as HTMLVideoElement | null;
+    expect(video).not.toBeNull();
+    expect(video?.srcObject).toBe(mine);
     view.done();
   });
 

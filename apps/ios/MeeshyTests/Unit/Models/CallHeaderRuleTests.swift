@@ -267,11 +267,14 @@ final class CallReducedWiringTests: XCTestCase {
         XCTAssertTrue(line.contains("durationLabel"))
     }
 
-    /// #17731 — la forme de l'appel réduit est en décision : la bannière se replie
-    /// toujours en bulle, partage compris. Ce lot n'y touche pas.
-    func test_pill_collapseToBubble_isUntouchedByTheShare() throws {
+    /// #17731 — la forme de l'appel réduit est en décision et ne change pas : hors
+    /// partage, la bannière se replie en bulle par le glissé comme avant. Pendant
+    /// MON partage (#17763, P18.10), elle reste la capsule de S1, comme sur le web
+    /// (#17760) : le repli s'arrête là, la règle vit dans `CallReturnPoint`.
+    func test_pill_collapseToBubble_isKeptOutsideTheShare_andGatedDuringIt() throws {
         let source = try code("FloatingCallPillView.swift")
-        XCTAssertFalse(source.contains("allowsCollapse"))
         XCTAssertTrue(source.contains("if CallBubbleGestureResolver.shouldCollapse("))
+        XCTAssertTrue(source.contains("CallReturnPoint.mayCollapseToBubble(isSharing: callManager.screenShare.isSharing)"))
+        XCTAssertFalse(source.contains("allowsCollapse"), "Une seule règle de repli : CallReturnPoint.mayCollapseToBubble")
     }
 }

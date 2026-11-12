@@ -333,6 +333,7 @@ struct HeaderFlameDecoration: ViewModifier {
     let dismissed: Bool
     let avatarDiameter: CGFloat
     let onDismiss: () -> Void
+    let onOpenGame: () -> Void
 
     @ObservedObject private var store: ConversationEngagementStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -342,17 +343,21 @@ struct HeaderFlameDecoration: ViewModifier {
     @State private var heldPoints: Int?
     /// Le rejeu en cours : un envoi qui en relance un autre reprend la main.
     @State private var replayCount = 0
+    /// La carte de la série, ouverte par le toucher sur la flamme (#17770).
+    @State private var isCardOpen = false
 
     private static let gapUnderAvatar: CGFloat = 4
 
     init(conversationId: String, seed: ConversationEngagementSnapshot?, headerExpanded: Bool, dismissed: Bool,
-         avatarDiameter: CGFloat, onDismiss: @escaping () -> Void, store: ConversationEngagementStore = .shared) {
+         avatarDiameter: CGFloat, onDismiss: @escaping () -> Void, onOpenGame: @escaping () -> Void,
+         store: ConversationEngagementStore = .shared) {
         self.conversationId = conversationId
         self.seed = seed
         self.headerExpanded = headerExpanded
         self.dismissed = dismissed
         self.avatarDiameter = avatarDiameter
         self.onDismiss = onDismiss
+        self.onOpenGame = onOpenGame
         self.store = store
     }
 
@@ -392,7 +397,10 @@ struct HeaderFlameDecoration: ViewModifier {
     }
 
     private func flameButton(_ shown: ConversationEngagementSnapshot) -> some View {
-        Button(action: onDismiss) {
+        Button {
+            HapticFeedback.light()
+            isCardOpen.toggle()
+        } label: {
             HStack(alignment: .center, spacing: 2) {
                 HeaderFlameBurner(phase: phase, animates: isPlaying && !reduceMotion)
                 HeaderFlameCount(text: "\(shown.streakDays) ·")
@@ -403,11 +411,26 @@ struct HeaderFlameDecoration: ViewModifier {
         }
         .accessibilityLabel(ConversationEngagementPill.accessibilityText(for: shown))
         .accessibilityHint(String(
-            localized: "conversation.header.flame.hint",
-            defaultValue: "Masque la flamme jusqu'au prochain dépliement de l'en-tête",
+            localized: "conversation.header.flame.card.hint",
+            defaultValue: "Ouvre la série de la conversation",
             bundle: .main
         ))
         .accessibilityIdentifier("conversation.header.flame")
+        .anchoredBubble(isPresented: $isCardOpen, compactHeight: 240) {
+            if let model = HeaderFlameCardModel.make(shown) {
+                HeaderFlameCard(
+                    model: model,
+                    onOpenGame: {
+                        isCardOpen = false
+                        onOpenGame()
+                    },
+                    onHide: {
+                        isCardOpen = false
+                        onDismiss()
+                    }
+                )
+            }
+        }
     }
 
     private func replay(holding current: Int) {
@@ -428,5 +451,89 @@ struct HeaderFlameDecoration: ViewModifier {
             guard replay == replayCount else { return }
             isPlaying = false
         }
+    }
+}
+
+// MARK: - La carte de la série (#17770)
+
+/// Ce que montre le toucher sur la flamme : la série, les étincelles du jour
+/// et le total gagné dans la conversation. L'instantané reçu est déjà relu au
+/// jour du lecteur (`ConversationEngagementStore.displayed`) ; sans série en
+/// cours, aucune carte, puisqu'aucune flamme.
+struct HeaderFlameCardModel: Equatable {
+    let streakDays: Int
+    let todayPoints: Int
+    let totalPoints: Int
+
+    static func make(_ snapshot: ConversationEngagementSnapshot?) -> HeaderFlameCardModel? {
+        guard let snapshot, snapshot.streakDays > 0 else { return nil }
+        return HeaderFlameCardModel(streakDays: snapshot.streakDays,
+                                    todayPoints: snapshot.todayPoints,
+                                    totalPoints: snapshot.totalPoints)
+    }
+}
+
+/// La carte : la série en grand, « Aujourd'hui +N », « Ici depuis le début N »,
+/// puis « Voir le jeu » (la Progression, comme depuis le Profil) et « Masquer
+/// la flamme » — le masquage qu'assurait le premier toucher jusqu'ici.
+struct HeaderFlameCard: View {
+    let model: HeaderFlameCardModel
+    let onOpenGame: () -> Void
+    let onHide: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(model.streakDays)")
+                    .font(.title.bold())
+                    .monospacedDigit()
+                Text(streakText)
+                    .font(.subheadline.weight(.semibold))
+            }
+            .accessibilityElement(children: .combine)
+            row(String(localized: "conversation.header.flame.card.today", defaultValue: "Aujourd'hui", bundle: .main),
+                value: "+\(CompactCountLabel.text(model.todayPoints))",
+                tint: MeeshyColors.warning)
+            row(String(localized: "conversation.header.flame.card.total", defaultValue: "Ici depuis le début", bundle: .main),
+                value: CompactCountLabel.text(model.totalPoints),
+                tint: nil)
+            HStack(spacing: 8) {
+                Button(action: onOpenGame) {
+                    Text(String(localized: "conversation.header.flame.card.open", defaultValue: "Voir le jeu", bundle: .main))
+                        .font(.footnote.bold())
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("conversation.header.flame.card.open")
+                Button(action: onHide) {
+                    Text(String(localized: "conversation.header.flame.card.hide", defaultValue: "Masquer la flamme", bundle: .main))
+                        .font(.footnote.weight(.semibold))
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityIdentifier("conversation.header.flame.card.hide")
+            }
+        }
+        .padding(16)
+        .frame(width: 260)
+    }
+
+    private var streakText: String {
+        model.streakDays == 1
+            ? String(localized: "conversation.header.flame.card.streak.one", defaultValue: "jour de suite ici", bundle: .main)
+            : String(localized: "conversation.header.flame.card.streak.other", defaultValue: "jours de suite ici", bundle: .main)
+    }
+
+    private func row(_ label: String, value: String, tint: Color?) -> some View {
+        HStack {
+            Text(label)
+            Spacer(minLength: 16)
+            Text(value)
+                .bold()
+                .monospacedDigit()
+                .foregroundStyle(tint ?? .primary)
+        }
+        .font(.footnote)
+        .accessibilityElement(children: .combine)
     }
 }

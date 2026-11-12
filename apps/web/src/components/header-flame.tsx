@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
 
 import { conversationEngagementForDay, type ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 
@@ -21,6 +21,14 @@ export const FLAME_VALUE_RELEASE_MS = 1640;
 const TONGUES = [0, 1, 2] as const;
 
 /**
+ * La carte n'existe qu'après un toucher : elle vit dans son propre chunk
+ * (`header-flame-card.tsx`), hors du chunk « thread » que chaque ouverture de
+ * conversation paie (`budgets.json`).
+ */
+export const loadFlameCard = () => import('./header-flame-card');
+const FlameCard = lazy(() => loadFlameCard().then((m) => ({ default: m.FlameCard })));
+
+/**
  * **LA FLAMME DU JOUR SOUS L'AVATAR DE L'EN-TÊTE** (#9031, #9044) — miroir de
  * `HeaderFlameDecoration` (iOS). « 🔥 M » : les points que la conversation a
  * rapportés au lecteur AUJOURD'HUI, précédés de la série en jours (« 🔥 3 · 42 »), abrégés et relus au jour du lecteur
@@ -34,7 +42,9 @@ const TONGUES = [0, 1, 2] as const;
  * l'avatar et la rejoint, la flamme S'ALLUME (elle grossit en vacillant, des
  * mèches montent d'elle), puis le compte passe à sa nouvelle valeur. En CSS,
  * sur `transform`/`opacity` seulement (`styles/header-flame.css`). Le toucher
- * la masque ; l'hôte décide quand elle revient.
+ * ouvre la carte de la série (`FlameCard`, #17770) : série, étincelles du
+ * jour, total, un lien vers le Jeu et le masquage — qui ne se fait plus au
+ * premier toucher. L'hôte décide quand une flamme masquée revient.
  *
  * Posée en `absolute` sur la boîte de l'avatar : elle ne déplace rien.
  */
@@ -57,9 +67,11 @@ export function HeaderFlame({
 }) {
   const minute = useMinute();
   const interfaceLanguage = language ?? currentInterfaceLanguage();
-  const model = engagementPillModel(snapshot, localDayOf(now === undefined ? minute * 60_000 : now()), interfaceLanguage);
-  const today =
-    snapshot === undefined ? 0 : conversationEngagementForDay(snapshot, localDayOf(now === undefined ? minute * 60_000 : now())).todayPoints;
+  const day = localDayOf(now === undefined ? minute * 60_000 : now());
+  const model = engagementPillModel(snapshot, day, interfaceLanguage);
+  const today = snapshot === undefined ? 0 : conversationEngagementForDay(snapshot, day).todayPoints;
+  const [cardOpen, setCardOpen] = useState(false);
+  const cardId = useId();
   const latest = useRef(today);
   latest.current = today;
   const [held, setHeld] = useState<number | null>(null);
@@ -84,7 +96,14 @@ export function HeaderFlame({
     >
       <span className="header-flame-glow" aria-hidden="true" />
       <span className="header-flame-seat">
-        <button type="button" onClick={onDismiss} aria-label={label} className="header-flame-mark pointer-events-auto text-mini">
+        <button
+          type="button"
+          onClick={() => setCardOpen((open) => !open)}
+          aria-label={label}
+          aria-expanded={cardOpen}
+          aria-controls={cardOpen ? cardId : undefined}
+          className="header-flame-mark pointer-events-auto text-mini"
+        >
           <span className="header-flame-burner" aria-hidden="true">
             <span className="header-flame-glyph">
               <Glyph name="flameFill" size={13} style={{ color: 'var(--ios-warning)' }} />
@@ -102,6 +121,21 @@ export function HeaderFlame({
             {compactCount(shown, interfaceLanguage)}
           </span>
         </button>
+        {cardOpen ? (
+          <Suspense fallback={null}>
+            <FlameCard
+              id={cardId}
+              snapshot={snapshot}
+              day={day}
+              language={interfaceLanguage}
+              onClose={() => setCardOpen(false)}
+              onHide={() => {
+                setCardOpen(false);
+                onDismiss();
+              }}
+            />
+          </Suspense>
+        ) : null}
       </span>
     </span>
   );

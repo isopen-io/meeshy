@@ -103,6 +103,21 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
     expect(html).toContain('aria-label="Qualité de l’appel : faible"');
   });
 
+  test('un écran reçu (P15.4) : la capsule dit « Écran de X » avec l’icône d’écran, sans durée, et son nom accessible le dit', async () => {
+    await loadInterfaceCatalog('fr');
+    const screen: CallHeaderCapsule = { title: 'Awa', participantCount: null, duration: false, network: false, receivedScreen: true };
+    const html = chip({ level: 'good' }, screen);
+    expect(html).toContain('Écran de Awa');
+    expect(html).toContain('data-call-chip-screen');
+    expect(html).not.toContain('1:23');
+    expect(html).toMatch(/aria-label="Écran de Awa — Qualité de l’appel : bonne"/);
+    expect(chip(null, screen)).toContain('Écran de Awa');
+  });
+
+  test('une capsule sans écran reçu ne porte pas l’icône d’écran', () => {
+    expect(chip({ level: 'good' }, { ...video, network: false })).not.toContain('data-call-chip-screen');
+  });
+
   test('sans relevé de qualité, la capsule ne promet aucun détail : pas de bouton', () => {
     const html = chip(null);
     expect(html).toContain('Awa');

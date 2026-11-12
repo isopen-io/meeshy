@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.engagement
 
+import me.meeshy.sdk.model.ConversationEngagementSnapshot
 import kotlin.math.PI
 import kotlin.math.min
 import kotlin.math.sin
@@ -12,10 +13,20 @@ object HeaderFlameLaw {
 
     /**
      * La flamme pend sous l'avatar REPLIÉ tant qu'une série court. L'en-tête déplié la porte déjà ;
-     * un toucher la masque jusqu'au prochain dépliement.
+     * « Masquer la flamme », dans sa carte, la masque jusqu'au prochain dépliement.
      */
     fun isShown(headerExpanded: Boolean, dismissed: Boolean, hasEngagement: Boolean): Boolean =
         !headerExpanded && !dismissed && hasEngagement
+
+    /**
+     * La carte que le toucher sur la flamme ouvre (#17770, iOS `HeaderFlameCardModel`) : la série,
+     * les points du jour et le total gagné ici, lus sur l'instantané déjà relu au jour du lecteur.
+     * Sans série en cours, aucune carte, puisqu'aucune flamme.
+     */
+    fun card(displayed: ConversationEngagementSnapshot?): HeaderFlameCard? =
+        displayed?.takeIf { it.hasRunningStreak }?.let {
+            HeaderFlameCard(streakDays = it.streakDays, todayPoints = it.todayPoints, totalPoints = it.totalPoints)
+        }
 
     /** Déplier l'en-tête RENDRE la flamme (le masquage ne dure que jusque-là) ; replié, il tient. */
     fun dismissedAfterHeaderExpanded(expanded: Boolean, wasDismissed: Boolean): Boolean =
@@ -76,3 +87,6 @@ object HeaderFlameLaw {
 
     private fun clamped(value: Float): Float = value.coerceIn(0f, 1f)
 }
+
+/** Ce que montre la carte de la flamme (#17770). */
+data class HeaderFlameCard(val streakDays: Int, val todayPoints: Int, val totalPoints: Int)

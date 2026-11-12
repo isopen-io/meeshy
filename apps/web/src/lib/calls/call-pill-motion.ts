@@ -86,9 +86,9 @@ export const swapMs = (reducedMotion: boolean): number => (reducedMotion ? STOW_
  * capsule de l'en-tête grandit depuis son bord de fin (P9.8, `.scale(scale: 0.8, anchor: .trailing)`
  * d'iOS ; l'ancre est `transform-origin`, dans `call-motion.css`) ; `fade` : la capsule de la une
  * repart sur place, en fondu (U1.12) ; `bottom` et `end` : le bandeau des autres repart par le bord
- * du bas, ou — en colonne — par le bord de FIN de l'écran (U2.10), et revient par le même chemin.
+ * du bas, ou — en colonne — par le bord de FIN de l'écran (U2.10), et revient par le même chemin ; `top` : le bandeau « Vous partagez » repart par le bord du haut, comme l'en-tête (P16.6).
  */
-export type SwapShape = 'rise' | 'scale' | 'fade' | 'bottom' | 'end';
+export type SwapShape = 'rise' | 'scale' | 'fade' | 'bottom' | 'end' | 'top';
 
 const SCALE_FROM = 0.8;
 
@@ -98,6 +98,7 @@ const SWAP_SHAPES: Readonly<Record<SwapShape, { readonly shown: string; readonly
   fade: { shown: 'none', hidden: 'none' },
   bottom: { shown: 'translateY(0)', hidden: 'translateY(100%)' },
   end: { shown: 'translateX(0)', hidden: 'translateX(100%)' },
+  top: { shown: 'translateY(0)', hidden: 'translateY(-100%)' },
 };
 
 /** `rtl` : le bord de FIN est à gauche. */
@@ -136,4 +137,37 @@ export function portraitMorphKeyframes(first: MorphRect, last: MorphRect, reduce
   const scale = first.width / last.width;
   if (Math.abs(dx) < EPSILON_PX && Math.abs(dy) < EPSILON_PX && Math.abs(first.width - last.width) < EPSILON_PX) return null;
   return [{ transform: `translate(${dx}px, ${dy}px) scale(${scale})` }, { transform: 'none' }];
+}
+
+/**
+ * **L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT EN MOUVEMENT** (S1.7, S2.1, #17774 ; `CallShareCapsuleMotion`
+ * d'iOS #17765, `CallCapsuleTransitions` d'Android #17772) — lancer le partage contracte l'écran vers la capsule, la
+ * toucher le redéploie : l'un repart (180 ms) pendant que l'autre arrive (220 ms), par un fondu et une échelle de
+ * 0,92 à 1, la transformation et l'opacité seules. « Réduire les animations » ne garde que le fondu, 120 ms. La
+ * capsule qui devient pastille ordinaire (ou l'inverse) quand le partage finit ou commence prend le même mouvement.
+ */
+export const VIEW_IN_MS = 220;
+export const VIEW_OUT_MS = 180;
+export const VIEW_REDUCED_MS = 120;
+const VIEW_SCALE_FROM = 0.92;
+
+export const viewSwapMs = (entering: boolean, reducedMotion: boolean): number => (reducedMotion ? VIEW_REDUCED_MS : entering ? VIEW_IN_MS : VIEW_OUT_MS);
+
+/** `seen` : la transformation sous laquelle la vue qui repart se voit (l'écran que le glissé vers le bas a laissé sous le doigt) — elle s'y contracte, sans revenir d'abord à sa place. */
+export function viewSwapKeyframes(entering: boolean, reducedMotion: boolean, seen = 'none'): readonly Keyframe[] {
+  if (reducedMotion) return entering ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: 0 }];
+  const scaled = `scale(${VIEW_SCALE_FROM})`;
+  if (entering) return [{ opacity: 0, transform: scaled }, { opacity: 1, transform: 'none' }];
+  return seen === 'none' ? [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: scaled }] : [{ opacity: 1, transform: seen }, { opacity: 0, transform: `${seen} ${scaled}` }];
+}
+
+/**
+ * **LA PILE DES BANDEAUX SE REFERME EN MOUVEMENT** (S2.6, #17774) — un bandeau qui change de place parce qu'un
+ * autre arrive ou repart repart de sa place d'avant, vue comme une translation (FLIP), et rejoint la sienne : la
+ * mise en page passe d'un coup à son état final, seule la transformation bouge. Sous « Réduire les animations »,
+ * un fondu court au lieu du déplacement.
+ */
+export function bannerCloseKeyframes(delta: number, reducedMotion: boolean): readonly Keyframe[] | null {
+  if (Math.abs(delta) < EPSILON_PX) return null;
+  return reducedMotion ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: `translateY(${delta}px)` }, { transform: 'none' }];
 }

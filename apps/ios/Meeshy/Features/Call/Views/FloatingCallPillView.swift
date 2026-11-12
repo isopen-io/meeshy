@@ -169,6 +169,7 @@ struct FloatingCallPillView: View {
             Spacer(minLength: 8)
             controlButtons
         }
+        .animation(CallShareCapsuleMotion.swapAnimation(reduceMotion: reduceMotion), value: callManager.screenShare.isSharing)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         // minHeight (not an exact height): userInfoSection stacks two
         // Dynamic-Type-scalable Text lines that can exceed pillHeight at
@@ -205,10 +206,15 @@ struct FloatingCallPillView: View {
         // système y étend son fond sans que rien ne le déclare — une seconde
         // propriété de la bande, muette, chez chaque barre. C'est le défaut que
         // ce lot ferme ; le laisser implicite le rouvrirait par omission.
-        .background(TopChromeTint.call.bandColor, ignoresSafeAreaEdges: [])
+        .background(callManager.screenShare.isSharing ? Color.clear : TopChromeTint.call.bandColor, ignoresSafeAreaEdges: [])
+        .background {
+            if callManager.screenShare.isSharing {
+                Color.clear.meeshyGlass(in: Rectangle(), tint: MeeshyColors.error)
+            }
+        }
         .offset(x: pillDragOffset)
         .opacity(pillDragOpacity)
-        .simultaneousGesture(collapseDragGesture)
+        .simultaneousGesture(collapseDragGesture, including: mayCollapseToBubble ? .all : .subviews)
         .contentShape(Rectangle())
         .onTapGesture {
             expandToFullScreen()
@@ -220,8 +226,12 @@ struct FloatingCallPillView: View {
         )
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
-            collapseToBubble(exitTranslation: 1)
+        .accessibilityActions {
+            if mayCollapseToBubble {
+                Button(String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
+                    collapseToBubble(exitTranslation: 1)
+                }
+            }
         }
         .callQualityDetailSheet(isPresented: $showQualityDetail)
     }
@@ -233,10 +243,12 @@ struct FloatingCallPillView: View {
     /// partage, l'avatar, le nom et la ligne d'état.
     @ViewBuilder private var identitySection: some View {
         if callManager.screenShare.isSharing {
-            statusEntry
+            statusEntry.transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         } else {
             CallParticipantVisual(diameter: 44, callManager: callManager)
+                .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
             userInfoSection
+                .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         }
     }
 
@@ -324,32 +336,20 @@ struct FloatingCallPillView: View {
 
     @ViewBuilder private var controlButtons: some View {
         if callManager.screenShare.isSharing {
-            stopShareButton
+            stopShareButton.transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         } else {
             HStack(spacing: MeeshySpacing.sm) {
                 muteButton
                 speakerButton
                 hangupButton
             }
+            .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         }
     }
 
     /// #16664 — je partage mon écran : la capsule offre l'écran et « Arrêter ».
     private var stopShareButton: some View {
-        Button {
-            callManager.screenShare.stopSharing()
-            HapticFeedback.light()
-        } label: {
-            Label(CallScreenShareCopy.stopCaption, systemImage: "rectangle.on.rectangle.slash")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
-                .padding(.horizontal, MeeshySpacing.md)
-                .frame(minHeight: 44)
-                .background(Capsule().fill(MeeshyColors.error))
-        }
-        .pressable()
-        .accessibilityLabel(CallScreenShareCopy.label(isSharing: true))
+        CallShareStopButton { callManager.screenShare.stopSharing() }
     }
 
     private var muteButton: some View {
@@ -427,6 +427,11 @@ struct FloatingCallPillView: View {
 
     // MARK: - Collapse Gesture
 
+    /// P18.10 — pendant mon partage, la capsule ne se replie pas en bulle.
+    private var mayCollapseToBubble: Bool {
+        CallReturnPoint.mayCollapseToBubble(isSharing: callManager.screenShare.isSharing)
+    }
+
     private var pillDragOpacity: Double {
         let progress = min(abs(pillDragOffset) / 300, 1.0)
         return 1.0 - Double(progress) * 0.6
@@ -485,6 +490,10 @@ struct FloatingCallPillView: View {
             // against flipping displayMode to .bubble for a call that's no
             // longer active, matching CallBubbleView's own display guard.
             guard callManager.callState.isActive else { return }
+            guard mayCollapseToBubble else {
+                withAnimation(CallShareCapsuleMotion.swapAnimation(reduceMotion: reduceMotion)) { pillDragOffset = 0 }
+                return
+            }
             callManager.displayMode = .bubble
             callManager.bubbleSizeTier = .circle
             pillDragOffset = 0

@@ -1,6 +1,6 @@
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-import { followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape } from './call-pill-motion';
+import { bannerCloseKeyframes, followKeyframes, MORPH_MS, morphKeyframes, type GlassSize, type MorphRect, portraitMorphKeyframes, portraitMorphMs, STAGE_LABEL, STAGE_PORTRAIT, STOW_REDUCED_MS, stowedGlass, stowFadeKeyframes, swapKeyframes, swapMs, type SwapShape, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
 
 /**
  * **LE MOTEUR DOM DU MOUVEMENT DU VERRE** (#17536, lois dans `call-pill-motion.ts`) — il mesure
@@ -147,4 +147,60 @@ export function playStageMorph(stage: HTMLElement, first: MorphRect | null, prev
   const moved = frames === null || portrait === null ? [] : [quiet(portrait.animate([...frames], { duration, easing: EASING }))];
   const labels = [...stage.querySelectorAll<HTMLElement>(STAGE_LABEL)].map((label) => quiet(label.animate([...FADE_IN], { duration, easing: 'ease-out' })));
   return [...moved, ...labels];
+}
+
+/**
+ * L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT (S1.7, S2.1, #17774) : ce qui arrive grandit de 0,92 à 1 en
+ * fondu, ce qui repart fait le chemin inverse — l'ancre est `transform-origin`, posée par la feuille — depuis
+ * là où il se voit (l'écran que le glissé vers le bas a laissé sous le doigt). Ce qui repart reste invisible
+ * jusqu'à son démontage (`fill`). Interruptible : un mouvement repris en route annule le précédent et part
+ * de l'opacité et de la transformation affichées à cet instant.
+ */
+export function playViewSwap(element: HTMLElement, entering: boolean, previous: Animation | null): Animation | null {
+  if (typeof element.animate !== 'function') return null;
+  const reduced = prefersReducedMotion();
+  const seen = getComputedStyle(element);
+  const resumed = (previous?.effect as KeyframeEffect | null | undefined)?.target === element;
+  const [from = {}, to = {}] = viewSwapKeyframes(entering, reduced, resumed ? 'none' : seen.transform || 'none');
+  const shown = resumed ? { ...from, opacity: seen.opacity, ...(reduced ? {} : { transform: seen.transform || 'none' }) } : from;
+  previous?.cancel();
+  return quiet(element.animate([shown, to], { duration: viewSwapMs(entering, reduced), easing: EASING, fill: entering ? 'none' : 'forwards' }));
+}
+
+const SLIDING = new WeakMap<Element, Animation>();
+
+/** Où se voit un élément à cet instant — un mouvement en cours compris. */
+export const placeOf = (element: Element | null): number | undefined => element?.getBoundingClientRect().top;
+
+/** Où se voit chaque bandeau de la pile à cet instant — un mouvement en cours compris. */
+export const measureBanners = (stack: HTMLElement | null): ReadonlyMap<Element, number> => new Map([...(stack?.children ?? [])].map((banner) => [banner, banner.getBoundingClientRect().top] as const));
+
+/**
+ * CE QUI CHANGE DE PLACE REJOINT LA SIENNE EN GLISSANT (S2.6, #17774) : l'élément repart de sa place d'avant
+ * (`before`, relevée avant que la mise en page ne change), vue comme une translation, et rejoint la nouvelle.
+ * Interruptible : le glissé en cours est annulé, `before` comptant déjà là où il se voyait.
+ */
+export function slideFrom(element: HTMLElement, before: number | undefined, reduced = prefersReducedMotion()): void {
+  SLIDING.get(element)?.cancel();
+  const frames = before === undefined || typeof element.animate !== 'function' ? null : bannerCloseKeyframes(before - element.getBoundingClientRect().top, reduced);
+  if (frames !== null) SLIDING.set(element, quiet(element.animate([...frames], { duration: reduced ? STOW_REDUCED_MS : MORPH_MS, easing: EASING })));
+}
+
+/**
+ * LA PILE SE REFERME (S2.6, #17774) : chaque bandeau resté repart de sa place d'avant (`from`, relevée avant que
+ * la mise en page ne change) et rejoint la sienne ; celui qui repart a quitté la mise en page (`call-motion.css`)
+ * et reste ÉPINGLÉ à sa place d'avant, d'où il glisse vers le haut (R1.6) au lieu de sauter en tête de pile.
+ * Toutes les places sont relevées AVANT la première écriture : aucune mise en page forcée entre deux lectures.
+ */
+export function playBannersClose(stack: HTMLElement, from: ReadonlyMap<Element, number>): void {
+  const reduced = prefersReducedMotion();
+  const base = stack.getBoundingClientRect().top;
+  const banners = [...stack.children].filter((banner): banner is HTMLElement => banner instanceof HTMLElement);
+  const staying = banners.filter((banner) => !banner.hasAttribute('data-leaving'));
+  for (const banner of staying) slideFrom(banner, from.get(banner), reduced);
+  for (const banner of staying) banner.style.removeProperty('top');
+  for (const banner of banners) {
+    const was = from.get(banner);
+    if (banner.hasAttribute('data-leaving') && was !== undefined) banner.style.top = `${was - base}px`;
+  }
 }

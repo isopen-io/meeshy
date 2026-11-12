@@ -222,6 +222,7 @@ internal fun ChatHeaderHost(host: ChatHostContext, serverSearch: ChatServerSearc
                                 flameDismissed = true
                                 memory.setFlameDismissed(true, state.conversationId)
                             },
+                            onOpenProgression = navigation.onOpenProgression,
                         ) { headerAvatar(AvatarContext.ConversationHeaderCollapsed) }
                     },
                     readingModeSlot = {

@@ -5,6 +5,7 @@ import { CallCameraPicker } from '@/components/call-camera-picker';
 import type { CallButton, CallButtonTone } from '@/components/call-glass-button';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
+import { selfCameraShown } from '@/lib/calls/call-view';
 import type { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import type { CallAction, MineAction } from '@/lib/calls/call-controls';
@@ -87,7 +88,7 @@ const badged = (base: ReactNode, badge: ReactNode) => (
  * pose `video.badge.plus`, la caméra et son « + » (#9095).
  */
 function cameraGlyph(call: ActiveCall, kit: CallRowsKit): ReactNode {
-  const state = call.cameraOn ? 'on' : call.media === 'audio' ? 'add' : 'off';
+  const state = selfCameraShown(call) ? 'on' : call.media === 'audio' ? 'add' : 'off';
   const glyph = state === 'on' ? screenGlyph('videoCamera') : state === 'off' ? screenGlyph('videoCameraSlash') : badged(screenGlyph('videoCamera'), <GlyphSvg glyph={kit.glyphs.plus} size={10} />);
   return <span className="contents" data-call-camera-glyph={state}>{glyph}</span>;
 }
@@ -123,18 +124,20 @@ const panelView = (panels: CallPanels, panel: CallPanelKind) => ({
 
 function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, language, panels, kit, effectsActive }: ActionContext): ActionView {
   switch (action) {
-    case 'camera':
+    case 'camera': {
+      const shown = selfCameraShown(call);
       return {
         key: action,
-        label: translate(language, call.cameraOn ? 'call.camera.off' : 'call.camera.on'),
+        label: translate(language, shown ? 'call.camera.off' : 'call.camera.on'),
         caption: translate(language, 'call.devices.camera'),
         glyph: cameraGlyph(call, kit),
         onPress: callActions.toggleCamera,
-        tone: call.cameraOn ? 'active' : 'disc',
-        pressed: call.cameraOn,
+        tone: shown ? 'active' : 'disc',
+        pressed: shown,
         disabled: call.screenSharing,
         data: { 'data-call-control': 'camera' },
       };
+    }
     case 'flip':
       return {
         key: action,
