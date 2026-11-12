@@ -243,12 +243,17 @@ describe('runGloryCatchUp — l\'exécutable, par le vrai GloryService', () => {
     expect(ledgerTotal(db)).toBe(afterFirst);
   });
 
-  it('n\'annonce rien, même quand le rang monté ouvre des niveaux', async () => {
+  it('n\'annonce rien, même quand le rang monté ouvre des niveaux (Écho ouvre l\'étape du 30)', async () => {
     const db = fakeGameDb();
-    seedJcnm(db);
+    seedUser(db, { username: 'echo', levelRecord: 29, engagementScore: 100 * 35 * 35, meeshMintedLifetime: 1, longestStreakDays: 0 });
+    db.dailyMission.rows.push({ id: 'done-0', userId: USER, dayKey: '2026-09-01', slot: 0, completedAt: new Date('2026-09-30T00:00:00Z') });
+    db.meeshLedger.rows.push({ id: 'meesh-0', userId: USER, delta: 1, reason: 'mint', requestId: 'req-0' });
+    db.gloryLedger.rows.push({ id: 'gl-mint', userId: USER, reason: 'mint', requestId: 'mint:req-0', delta: 100 });
+    db.gloryLedger.rows.push({ id: 'gl-chest', userId: USER, reason: 'chest', requestId: 'chest:2026-09-01', delta: 1400 });
 
     const { reached } = await run(db, false);
 
+    expect(db.user.rows[0]?.levelRecord).toBe(35);
     expect(reached).toEqual([]);
   });
 
