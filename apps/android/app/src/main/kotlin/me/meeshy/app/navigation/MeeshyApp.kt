@@ -1,6 +1,7 @@
 package me.meeshy.app.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -216,7 +217,13 @@ fun MeeshyApp(
                     // A live, non-incoming call while off the CALL screen. A tap rebuilds the
                     // CALL route from the live config; the Activity-scoped [callViewModel] is
                     // reused, so `start()` is inert.
-                    if (showsCallPill) {
+                    // « Réduire les animations » est résolu SOUS ce niveau (AccessibilityLocalsProvider) : on lit la valeur relayée.
+                    val reduceCapsuleMotion = FeedOverlayTransition.reduceMotion
+                    AnimatedVisibility(
+                        visible = showsCallPill,
+                        enter = CallCapsuleTransitions.enter(reduceCapsuleMotion),
+                        exit = CallCapsuleTransitions.exit(reduceCapsuleMotion),
+                    ) {
                         MinimizedCallPill(
                             callViewModel = callViewModel,
                             navController = navController,
@@ -378,5 +385,6 @@ internal fun MinimizedCallPill(
         modifier = modifier,
         isScreenSharing = share.phase == CallScreenSharePhase.Sharing,
         onStopScreenShare = screenShare::stop,
+        reduceMotion = FeedOverlayTransition.reduceMotion,
     )
 }

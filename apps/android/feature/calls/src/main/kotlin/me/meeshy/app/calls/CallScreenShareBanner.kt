@@ -223,5 +223,5 @@ private fun ScreenShareStopButton(onStop: () -> Unit) {
     }
 }
 
-private const val BANNER_TINT_ALPHA = 0.35f
+internal const val BANNER_TINT_ALPHA = 0.35f
 private val BANNER_MIN_HEIGHT = CallTopBannerStack.BANNER_HEIGHT_DP.dp
