@@ -113,9 +113,13 @@ struct GroupCallStageView: View {
     @GestureState private var pinch: CGFloat = 1
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.locale) private var locale
+    @Environment(\.layoutDirection) private var layoutDirection
     @Namespace private var tileSpace
 
     static let spacing: CGFloat = 8
+    /// Le bandeau des autres : une rangée en portrait, une colonne en paysage.
+    static let rowStripHeight: CGFloat = 112
+    static let columnStripWidth: CGFloat = 128
     /// La distance du haut de la scène au haut de l'écran, par excès : rangée, la capsule la franchit toute.
     private static let capsuleStowReach: CGFloat = 60
 
@@ -129,7 +133,7 @@ struct GroupCallStageView: View {
             case .grid:
                 grid(current, in: proxy.size)
             case .spotlight(let tileId, let isScreenShare):
-                spotlight(current, tileId: tileId, isScreenShare: isScreenShare, in: proxy.size)
+                spotlight(current, tileId: tileId, isScreenShare: isScreenShare, in: proxy.size, stageFrame: proxy.frame(in: .global))
             }
         }
         .animation(stageAnimation, value: focus)
@@ -229,7 +233,7 @@ struct GroupCallStageView: View {
     // MARK: - À la une
 
     @ViewBuilder
-    private func spotlight(_ current: [GroupCallStageTile], tileId: String, isScreenShare: Bool, in size: CGSize) -> some View {
+    private func spotlight(_ current: [GroupCallStageTile], tileId: String, isScreenShare: Bool, in size: CGSize, stageFrame: CGRect) -> some View {
         let others = current.filter { $0.id != tileId }
         let isLandscape = size.width > size.height
         let spacing = isFullScreen ? 0 : Self.spacing
@@ -239,8 +243,8 @@ struct GroupCallStageView: View {
                     featuredTile(featured, isScreenShare: isScreenShare)
                     if !isFullScreen {
                         filmstrip(others, axis: .vertical)
-                            .frame(width: 128)
-                            .transition(stripExit(toward: .trailing))
+                            .frame(width: Self.columnStripWidth)
+                            .transition(stripExit(toward: .trailing, extent: Self.columnStripWidth, stage: stageFrame))
                     }
                 }
             } else {
@@ -248,20 +252,22 @@ struct GroupCallStageView: View {
                     featuredTile(featured, isScreenShare: isScreenShare)
                     if !isFullScreen {
                         filmstrip(others, axis: .horizontal)
-                            .frame(height: 112)
-                            .transition(stripExit(toward: .bottom))
+                            .frame(height: Self.rowStripHeight)
+                            .transition(stripExit(toward: .bottom, extent: Self.rowStripHeight, stage: stageFrame))
                     }
                 }
             }
         }
     }
 
-    /// U2.10 — le bandeau des autres entre par son bord de l'écran et en sort par lui (bas en
-    /// portrait, côté en paysage) ; « Réduire les animations » le remplace par un fondu.
-    private func stripExit(toward edge: Edge) -> AnyTransition {
-        GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion)
-            ? .move(edge: edge).combined(with: .opacity)
-            : .opacity
+    /// U2.10 · #17726 — le bandeau des autres entre par son bord de l'écran et en sort par lui (bas
+    /// en portrait, côté en paysage), jusqu'au bord MESURÉ de la fenêtre ; « Réduire les
+    /// animations » le remplace par un fondu.
+    private func stripExit(toward edge: Edge, extent: CGFloat, stage: CGRect) -> AnyTransition {
+        guard GroupCallStageMotion.movesTiles(reduceMotion: reduceMotion) else { return .opacity }
+        let travel = GroupCallStageMotion.stripTravel(toward: edge, stage: stage, window: DeviceLayout.windowSize, stripExtent: extent, isRightToLeft: layoutDirection == .rightToLeft)
+        return AnyTransition.modifier(active: GroupCallStripSlide(travel: travel), identity: GroupCallStripSlide(travel: .zero))
+            .combined(with: .opacity)
     }
 
     private func featuredTile(_ tile: GroupCallStageTile, isScreenShare: Bool) -> some View {
@@ -356,6 +362,16 @@ struct GroupCallStageView: View {
             selectableTile(tile)
                 .frame(width: 84, height: 112)
         }
+    }
+}
+
+/// U2.10 · #17726 — le bandeau des autres, translaté hors de l'écran par une simple
+/// transformation (`GroupCallStageMotion.stripTravel`) : la mise en page ne bouge pas.
+private struct GroupCallStripSlide: ViewModifier {
+    let travel: CGSize
+
+    func body(content: Content) -> some View {
+        content.offset(travel)
     }
 }
 

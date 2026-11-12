@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 import MeeshySDK
 @testable import Meeshy
