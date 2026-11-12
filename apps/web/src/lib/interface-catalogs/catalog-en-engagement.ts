@@ -19,7 +19,7 @@ const enEngagement = {
   'engagement.card.total': 'Here since the start',
   'engagement.card.open': 'Open the game',
   'engagement.card.hide': 'Hide the flame',
-  'engagement.card.title': 'Conversation streak',
+  'engagement.card.title': 'Conversation Flame',
 } as const;
 
 export default enEngagement;

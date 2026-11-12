@@ -106919,43 +106919,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يفتح سلسلة المحادثة"
+            "value": "يفتح لهب المحادثة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Öffnet die Serie der Unterhaltung"
+            "value": "Öffnet die Flamme der Unterhaltung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Opens the conversation streak"
+            "value": "Opens the conversation Flame"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abre la racha de la conversación"
+            "value": "Abre la Llama de la conversación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre la série de la conversation"
+            "value": "Ouvre la Flamme de la conversation"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apre la serie della conversazione"
+            "value": "Apre la Fiamma della conversazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abre a sequência da conversa"
+            "value": "Abre a Chama da conversa"
           }
         }
       }
@@ -107107,7 +107107,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إخفاء الشعلة"
+            "value": "إخفاء اللهب"
           }
         },
         "de": {

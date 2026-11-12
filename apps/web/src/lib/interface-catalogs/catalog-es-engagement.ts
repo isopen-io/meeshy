@@ -19,7 +19,7 @@ const esEngagement = {
   'engagement.card.total': 'Aquí desde el principio',
   'engagement.card.open': 'Ver el juego',
   'engagement.card.hide': 'Ocultar la llama',
-  'engagement.card.title': 'Racha de la conversación',
+  'engagement.card.title': 'Llama de la conversación',
 } as const;
 
 export default esEngagement;

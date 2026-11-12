@@ -139,7 +139,7 @@
     <string name="chat_forward_sent">Transféré</string>
     <string name="chat_guest_bar_close">Fermer la conversation</string>
     <string name="chat_header_flame_card_hide">Masquer la flamme</string>
-    <string name="chat_header_flame_card_hint">Ouvre la série de la conversation</string>
+    <string name="chat_header_flame_card_hint">Ouvre la Flamme de la conversation</string>
     <string name="chat_header_flame_card_open">Voir le jeu</string>
     <string name="chat_header_flame_card_streak_one">jour de suite ici</string>
     <string name="chat_header_flame_card_streak_other">jours de suite ici</string>

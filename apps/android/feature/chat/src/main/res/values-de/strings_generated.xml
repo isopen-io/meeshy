@@ -135,7 +135,7 @@
     <string name="chat_forward_sent">Weitergeleitet</string>
     <string name="chat_guest_bar_close">Unterhaltung schließen</string>
     <string name="chat_header_flame_card_hide">Flamme ausblenden</string>
-    <string name="chat_header_flame_card_hint">Öffnet die Serie der Unterhaltung</string>
+    <string name="chat_header_flame_card_hint">Öffnet die Flamme der Unterhaltung</string>
     <string name="chat_header_flame_card_open">Zum Spiel</string>
     <string name="chat_header_flame_card_streak_one">Tag in Folge hier</string>
     <string name="chat_header_flame_card_streak_other">Tage in Folge hier</string>

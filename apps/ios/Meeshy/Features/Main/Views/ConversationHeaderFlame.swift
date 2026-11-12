@@ -412,7 +412,7 @@ struct HeaderFlameDecoration: ViewModifier {
         .accessibilityLabel(ConversationEngagementPill.accessibilityText(for: shown))
         .accessibilityHint(String(
             localized: "conversation.header.flame.card.hint",
-            defaultValue: "Ouvre la série de la conversation",
+            defaultValue: "Ouvre la Flamme de la conversation",
             bundle: .main
         ))
         .accessibilityIdentifier("conversation.header.flame")

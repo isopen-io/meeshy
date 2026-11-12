@@ -19,7 +19,7 @@ const deEngagement = {
   'engagement.card.total': 'Hier seit Beginn',
   'engagement.card.open': 'Zum Spiel',
   'engagement.card.hide': 'Flamme ausblenden',
-  'engagement.card.title': 'Serie der Unterhaltung',
+  'engagement.card.title': 'Flamme der Unterhaltung',
 } as const;
 
 export default deEngagement;

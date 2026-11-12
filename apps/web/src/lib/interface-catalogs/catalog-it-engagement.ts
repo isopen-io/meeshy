@@ -19,7 +19,7 @@ const itEngagement = {
   'engagement.card.total': 'Qui dall’inizio',
   'engagement.card.open': 'Apri il gioco',
   'engagement.card.hide': 'Nascondi la fiamma',
-  'engagement.card.title': 'Serie della conversazione',
+  'engagement.card.title': 'Fiamma della conversazione',
 } as const;
 
 export default itEngagement;

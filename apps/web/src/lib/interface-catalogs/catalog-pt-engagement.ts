@@ -19,7 +19,7 @@ const ptEngagement = {
   'engagement.card.total': 'Aqui desde o início',
   'engagement.card.open': 'Ver o jogo',
   'engagement.card.hide': 'Ocultar a chama',
-  'engagement.card.title': 'Sequência da conversa',
+  'engagement.card.title': 'Chama da conversa',
 } as const;
 
 export default ptEngagement;
