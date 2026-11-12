@@ -4,6 +4,7 @@ import XCTest
 /// LES DÉCLINAISONS BALAYABLES SOUS iOS 16 (#12685, C1.6) — la loi du glissement vertical dans la
 /// vignette : l'axe se lit au premier geste (le carrousel garde l'horizontal), la page suit le doigt
 /// avec une résistance aux bords, et elle ne change qu'au franchissement du seuil ou d'un élan.
+@MainActor
 final class CallFrameDeclinationSwipeTests: XCTestCase {
     private let height: CGFloat = 100
 
