@@ -120,6 +120,7 @@ struct MeeshyModeChromeTests {
 
     // MARK: - Action
 
+    @MainActor
     @Test("l'action part UNE fois, avec UN impact léger ; rien si désactivée ou occupée")
     func action_firesOnceThroughTheSingleSite() {
         var fired = 0
@@ -135,6 +136,7 @@ struct MeeshyModeChromeTests {
         #expect(fired == 1 && impacts == 1)
     }
 
+    @MainActor
     @Test("Échap, l'échappement et ⌘ + Entrée prennent le chemin du toucher : perform part une fois, rien si occupée")
     func action_performIsThePathOfTouch() {
         var fired = 0
@@ -150,6 +152,7 @@ struct MeeshyModeChromeTests {
         #expect(fired == 1)
     }
 
+    @MainActor
     @Test("sans impact, l'hôte joue le sien")
     func action_noneHapticPlaysNothing() {
         var impacts = 0
@@ -322,6 +325,7 @@ struct MeeshyModeChromeTests {
         #expect(solidDiffers)
     }
 
+    @MainActor
     @Test("sans plaque, ni verre ni bande : le cadre le sait avant de dessiner")
     func empty_slotsAreRecognised() {
         let bareCenter = MeeshyModeHeader<EmptyView, EmptyView>.hasCenter
