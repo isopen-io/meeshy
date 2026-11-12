@@ -3,14 +3,7 @@ package me.meeshy.app.calls
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -60,8 +53,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.PermissionNature
-import me.meeshy.sdk.model.call.CallChromeStow
-import me.meeshy.sdk.model.call.CallModeChromeMotion
 import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFramePerson
@@ -89,8 +80,8 @@ private val STOP_SQUARE = 24.dp
  * Choisir un cadre ne le pose pas sur l'appel (#13732) : il ne sert que la capture, et l'option « Cadre » le
  * garde pendant l'appel. La scène suit `CallMontageFrameStage` d'iOS : le cadre posé sur le flux s'il est servi
  * en direct — le cadre gardé compris, dont la surface d'appel s'arrête sous le mode (#13738) —, sinon l'aperçu
- * peint. La prise se déclenche sur l'élément centré du carrousel (#13733). La couche fond (loi 17) ; la barre et le
- * carrousel montent du bas et y redescendent, sauf sous « Réduire les animations » où le seul fondu court reste (#17814).
+ * peint. La prise se déclenche sur l'élément centré du carrousel (#13733). La couche fond et la barre avec le carrousel
+ * montent du bas, par [CallModeLayer] (#17814).
  */
 @Composable
 internal fun CallMontageMode(
@@ -102,20 +93,11 @@ internal fun CallMontageMode(
     reduceMotion: Boolean,
     onClose: () -> Unit,
 ) {
-    val millis = CallChromeStow.fadeMillis(reduceMotion)
-    val rises = CallModeChromeMotion.risesFromBottom(CallScreenMode.Montage, reduceMotion)
-    AnimatedVisibility(visible = visible, modifier = Modifier.fillMaxSize(), enter = fadeIn(tween(millis)), exit = fadeOut(tween(millis))) {
-        Box(Modifier.fillMaxSize()) {
-            CallMontageContent(
-                state, localTrack, remoteTrack, eglContext, reduceMotion, onClose,
-                pickerModifier = Modifier.align(Alignment.BottomCenter)
-                    .animateEnterExit(
-                        enter = if (rises) slideInVertically(tween(millis)) { it } + fadeIn(tween(millis)) else EnterTransition.None,
-                        exit = if (rises) slideOutVertically(tween(millis)) { it } + fadeOut(tween(millis)) else ExitTransition.None,
-                    )
-                    .systemBarsPadding(),
-            )
-        }
+    CallModeLayer(visible = visible, mode = CallScreenMode.Montage, reduceMotion = reduceMotion) { chrome ->
+        CallMontageContent(
+            state, localTrack, remoteTrack, eglContext, reduceMotion, onClose,
+            pickerModifier = Modifier.align(Alignment.BottomCenter).then(chrome).systemBarsPadding(),
+        )
     }
 }
 
