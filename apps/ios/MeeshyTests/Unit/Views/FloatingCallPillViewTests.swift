@@ -251,6 +251,18 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    /// L1.3 — même règle, deux surfaces : la bannière réduite d'un appel vidéo
+    /// n'allume pas sa sortie quand le haut-parleur est celui d'office ; elle
+    /// demande son état à `CallOutputButtonRule`, comme la pilule de l'écran.
+    func test_speakerButton_takesItsLitStateFromTheOutputRule_withTheCallKind() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var speakerButton", in: source))
+        XCTAssertTrue(body.contains("CallOutputButtonRule.kind("))
+        XCTAssertTrue(body.contains("isVideoCall: callManager.isVideoUIActive"))
+        XCTAssertFalse(body.contains("callManager.isSpeaker || route.routesExternally"),
+                       "la bannière ne recompose pas l'état allumé à côté de la loi")
+    }
+
     func test_pill_neverReimplementsTheRoutePickerOrTheQualitySheet() throws {
         let source = AppSourceGuard.stripComments(try pillSource())
         XCTAssertFalse(source.contains("AVRoutePickerView"),
