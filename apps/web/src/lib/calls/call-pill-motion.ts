@@ -153,10 +153,12 @@ const VIEW_SCALE_FROM = 0.92;
 
 export const viewSwapMs = (entering: boolean, reducedMotion: boolean): number => (reducedMotion ? VIEW_REDUCED_MS : entering ? VIEW_IN_MS : VIEW_OUT_MS);
 
-export function viewSwapKeyframes(entering: boolean, reducedMotion: boolean): readonly Keyframe[] {
-  const shown: Keyframe = reducedMotion ? { opacity: 1 } : { opacity: 1, transform: 'none' };
-  const gone: Keyframe = reducedMotion ? { opacity: 0 } : { opacity: 0, transform: `scale(${VIEW_SCALE_FROM})` };
-  return entering ? [gone, shown] : [shown, gone];
+/** `seen` : la transformation sous laquelle la vue qui repart se voit (l'écran que le glissé vers le bas a laissé sous le doigt) — elle s'y contracte, sans revenir d'abord à sa place. */
+export function viewSwapKeyframes(entering: boolean, reducedMotion: boolean, seen = 'none'): readonly Keyframe[] {
+  if (reducedMotion) return entering ? [{ opacity: 0 }, { opacity: 1 }] : [{ opacity: 1 }, { opacity: 0 }];
+  const scaled = `scale(${VIEW_SCALE_FROM})`;
+  if (entering) return [{ opacity: 0, transform: scaled }, { opacity: 1, transform: 'none' }];
+  return seen === 'none' ? [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: scaled }] : [{ opacity: 1, transform: seen }, { opacity: 0, transform: `${seen} ${scaled}` }];
 }
 
 /**

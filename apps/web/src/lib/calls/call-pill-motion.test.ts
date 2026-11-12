@@ -194,6 +194,17 @@ describe('#17774 — l’écran d’appel et la capsule s’échangent en mouvem
     expect(viewSwapKeyframes(true, true)).toEqual([{ opacity: 0 }, { opacity: 1 }]);
     expect(viewSwapKeyframes(false, true)).toEqual([{ opacity: 1 }, { opacity: 0 }]);
   });
+
+  test('ce qui repart d’où le doigt l’a laissé (le glissé vers le bas) s’y contracte : aucun saut vers le haut', () => {
+    const seen = 'matrix(1, 0, 0, 1, 0, 480)';
+    expect(viewSwapKeyframes(false, false, seen)).toEqual([
+      { opacity: 1, transform: seen },
+      { opacity: 0, transform: `${seen} scale(0.92)` },
+    ]);
+    expect(viewSwapKeyframes(false, false, 'none')).toEqual(viewSwapKeyframes(false, false));
+    expect(viewSwapKeyframes(false, true, seen)).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+    expect(viewSwapKeyframes(true, false, seen)).toEqual(viewSwapKeyframes(true, false));
+  });
 });
 
 describe('#17774 — la pile des bandeaux se referme en mouvement (S2.6)', () => {

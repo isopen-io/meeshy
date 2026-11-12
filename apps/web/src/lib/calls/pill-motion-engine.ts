@@ -151,36 +151,46 @@ export function playStageMorph(stage: HTMLElement, first: MorphRect | null, prev
 
 /**
  * L'ÉCRAN D'APPEL ET LA CAPSULE S'ÉCHANGENT (S1.7, S2.1, #17774) : ce qui arrive grandit de 0,92 à 1 en
- * fondu, ce qui repart fait le chemin inverse — l'ancre est `transform-origin`, posée par la feuille. Ce
- * qui repart reste invisible jusqu'à son démontage (`fill`). Interruptible : un mouvement repris en route
- * annule le précédent et part de l'opacité affichée à cet instant.
+ * fondu, ce qui repart fait le chemin inverse — l'ancre est `transform-origin`, posée par la feuille — depuis
+ * là où il se voit (l'écran que le glissé vers le bas a laissé sous le doigt). Ce qui repart reste invisible
+ * jusqu'à son démontage (`fill`). Interruptible : un mouvement repris en route annule le précédent et part
+ * de l'opacité et de la transformation affichées à cet instant.
  */
 export function playViewSwap(element: HTMLElement, entering: boolean, previous: Animation | null): Animation | null {
   if (typeof element.animate !== 'function') return null;
   const reduced = prefersReducedMotion();
-  const [from = {}, to = {}] = viewSwapKeyframes(entering, reduced);
+  const seen = getComputedStyle(element);
   const resumed = (previous?.effect as KeyframeEffect | null | undefined)?.target === element;
-  const shown = resumed ? { ...from, opacity: getComputedStyle(element).opacity } : from;
+  const [from = {}, to = {}] = viewSwapKeyframes(entering, reduced, resumed ? 'none' : seen.transform || 'none');
+  const shown = resumed ? { ...from, opacity: seen.opacity, ...(reduced ? {} : { transform: seen.transform || 'none' }) } : from;
   previous?.cancel();
   return quiet(element.animate([shown, to], { duration: viewSwapMs(entering, reduced), easing: EASING, fill: entering ? 'none' : 'forwards' }));
 }
 
-const BANNER_CLOSING = new WeakMap<Element, Animation>();
+const SLIDING = new WeakMap<Element, Animation>();
+
+/** Où se voit un élément à cet instant — un mouvement en cours compris. */
+export const placeOf = (element: Element | null): number | undefined => element?.getBoundingClientRect().top;
 
 /** Où se voit chaque bandeau de la pile à cet instant — un mouvement en cours compris. */
 export const measureBanners = (stack: HTMLElement | null): ReadonlyMap<Element, number> => new Map([...(stack?.children ?? [])].map((banner) => [banner, banner.getBoundingClientRect().top] as const));
+
+/**
+ * CE QUI CHANGE DE PLACE REJOINT LA SIENNE EN GLISSANT (S2.6, #17774) : l'élément repart de sa place d'avant
+ * (`before`, relevée avant que la mise en page ne change), vue comme une translation, et rejoint la nouvelle.
+ * Interruptible : le glissé en cours est annulé, `before` comptant déjà là où il se voyait.
+ */
+export function slideFrom(element: HTMLElement, before: number | undefined, reduced = prefersReducedMotion()): void {
+  SLIDING.get(element)?.cancel();
+  const frames = before === undefined || typeof element.animate !== 'function' ? null : bannerCloseKeyframes(before - element.getBoundingClientRect().top, reduced);
+  if (frames !== null) SLIDING.set(element, quiet(element.animate([...frames], { duration: reduced ? STOW_REDUCED_MS : MORPH_MS, easing: EASING })));
+}
 
 /**
  * LA PILE SE REFERME (S2.6, #17774) : chaque bandeau resté repart de sa place d'avant (`from`, relevée avant que
  * la mise en page ne change) et rejoint la sienne ; celui qui repart, quitté la mise en page, glisse de son côté.
  */
 export function playBannersClose(stack: HTMLElement, from: ReadonlyMap<Element, number>): void {
-  const banners = [...stack.children].filter((banner): banner is HTMLElement => banner instanceof HTMLElement && !banner.hasAttribute('data-leaving'));
-  for (const banner of banners) BANNER_CLOSING.get(banner)?.cancel();
   const reduced = prefersReducedMotion();
-  for (const banner of banners) {
-    const before = from.get(banner);
-    const frames = before === undefined || typeof banner.animate !== 'function' ? null : bannerCloseKeyframes(before - banner.getBoundingClientRect().top, reduced);
-    if (frames !== null) BANNER_CLOSING.set(banner, quiet(banner.animate([...frames], { duration: reduced ? STOW_REDUCED_MS : MORPH_MS, easing: EASING })));
-  }
+  for (const banner of stack.children) if (banner instanceof HTMLElement && !banner.hasAttribute('data-leaving')) slideFrom(banner, from.get(banner), reduced);
 }

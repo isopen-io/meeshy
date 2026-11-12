@@ -97,6 +97,7 @@ async function mount(first: ActiveCall) {
   return {
     screen: () => host.querySelector<HTMLElement>('[data-call-screen]'),
     bar: () => host.querySelector<HTMLElement>('[data-call-pill-bar]'),
+    screens: () => host.querySelectorAll('[data-call-screen]').length,
     render: async (next: ActiveCall) => {
       await act(async () => root.render(<ActiveCallView call={next} />));
       await settle();
@@ -135,6 +136,40 @@ describe('l’écran d’appel se contracte vers la capsule (S1.7)', () => {
     await settle();
     expect(view.screen()).toBeNull();
     expect(view.bar()).not.toBeNull();
+    await view.done();
+    motion.restore();
+  });
+
+  test('réduit par le glissé vers le bas, l’écran se contracte là où le doigt l’a laissé, sans remonter d’abord', async () => {
+    const motion = recordAnimations();
+    const view = await mount(call());
+    view.screen()?.style.setProperty('transform', 'translateY(480px)');
+    motion.played.length = 0;
+    await view.render(call({ display: 'pill' }));
+    const exit = motion.played.find((move) => move.element === view.screen());
+    expect(exit?.frames).toEqual([
+      { opacity: 1, transform: 'translateY(480px)' },
+      { opacity: 0, transform: 'translateY(480px) scale(0.92)' },
+    ]);
+    await view.done();
+    motion.restore();
+  });
+
+  test('rouvert pendant qu’il repart, l’écran reprend sa place SANS être remonté : ni scène ni vidéo recréées', async () => {
+    const motion = recordAnimations();
+    const view = await mount(call());
+    const first = view.screen();
+    await view.render(call({ display: 'pill', screenSharing: true }));
+    const exit = motion.played.find((move) => move.element === first && move.options.duration === 180);
+    motion.played.length = 0;
+    await view.render(call({ display: 'full', screenSharing: true }));
+    expect(view.screen()).toBe(first);
+    expect(first?.hasAttribute('data-leaving')).toBe(false);
+    expect(motion.played.find((move) => move.element === first)?.options.duration).toBe(220);
+    await act(async () => exit?.finish());
+    await settle();
+    expect(view.screen()).toBe(first);
+    expect(view.screens()).toBe(1);
     await view.done();
     motion.restore();
   });

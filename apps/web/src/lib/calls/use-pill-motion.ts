@@ -217,3 +217,21 @@ export function useBannersClose(stack: RefObject<HTMLElement | null>, key: strin
     if (from !== null && stack.current !== null) engine?.playBannersClose(stack.current, from);
   }, [key]);
 }
+
+/**
+ * CE QUI FLOTTE À UNE PLACE QUE LA PILE LUI GARDE LA SUIT (S2.6, #17774) — l'indicateur d'enregistrement vit hors
+ * de la pile, à la hauteur de sa case : quand `place` change, il est relevé AU RENDU qui le change, puis rejoint sa
+ * nouvelle place par la transformation seule, avec la case qu'il suit, au lieu de sauter.
+ */
+export function useFollowPlace(node: RefObject<HTMLElement | null>, place: number): void {
+  const engine = usePillEngine();
+  const committed = useRef(place);
+  const first = useRef<number | undefined>(undefined);
+  if (place !== committed.current && first.current === undefined && loaded !== null) first.current = loaded.placeOf(node.current);
+  useLayoutEffect(() => {
+    const from = first.current;
+    first.current = undefined;
+    committed.current = place;
+    if (from !== undefined && node.current !== null) engine?.slideFrom(node.current, from);
+  }, [place]);
+}
