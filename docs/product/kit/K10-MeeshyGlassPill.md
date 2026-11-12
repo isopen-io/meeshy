@@ -26,7 +26,6 @@ Paramètres, tous opaques, mêmes défauts partout :
 - `label` (obligatoire, non vide) : le nom du groupe (« Pilule du composer », « Outils du sticker », « Commandes de l'appel ») ;
 - `presence = shown` ; `layout = hug` ; `tone: MeeshyGlassTone? = nil` (celui de l'hôte, par K01) ;
 - `showsDivider = false` : le filet entre `above` et la rangée ; `expandedMaxWidth = 560` ;
-- `buttonCount: Int? = nil` : le nombre de boutons de la rangée, quand l'hôte le sait ; sans lui, la pilule le déduit de la largeur mesurée de la rangée (voir § 9, 14) ;
 - `onRevive: (() -> Void)? = nil` : un toucher reçu pendant le retrait ; le web ajoute `data` (sondes `data-*`).
 
 Emplacements :
@@ -60,7 +59,7 @@ Loi 13 :
 - Débord : un toucher à moins de 8 de son bord reste à elle et ne traverse pas vers la scène (#8735).
 - Retrait (`stowed`) : translation vers le bas de toute sa hauteur MESURÉE plus sa marge, et fondu, 250 ms ; retour par le chemin inverse. Elle répond jusqu'au TERME du fondu ; un toucher reçu pendant le retrait appelle `onRevive` sans prendre le toucher. Au terme, son contenu est retiré du rendu (ni toucher, ni focus, ni lecteur d'écran) en gardant sa place.
 - `withoutRow` : la rangée se replie vers le bas dans le même verre, qui se resserre autour d'`above`.
-- Morphisme : le verre suit la taille mesurée de son contenu, ancré en bas, le contenu rogné à sa forme. Ressort (réponse 0,35, amorti 0,85) sur iOS, 250 ms sur Android, 260 ms `cubic-bezier(0.2, 0.9, 0.3, 1)` sur le web ; interruptible, il repart de la taille affichée. La première mesure ne joue rien.
+- Morphisme : le verre suit la taille mesurée de son contenu, ancré en bas, le contenu rogné à sa forme. iOS : le verre est le FOND du contenu, que sa taille ne contraint jamais (aucune boucle de mesure) ; la taille mesurée pilote un cadre animé qui sert de verre et de masque. Ressort (réponse 0,35, amorti 0,85) sur iOS, 250 ms sur Android, 260 ms `cubic-bezier(0.2, 0.9, 0.3, 1)` sur le web ; interruptible, il repart de la taille affichée. La première mesure ne joue rien.
 - « Réduire les animations » : retrait en fondu seul, 150 ms, sans déplacement ; taille du verre en 200 ms, sans ressort ni échelle.
 - Changement de densité ou de ton : le fondu de K01 (200 ms).
 
@@ -131,7 +130,7 @@ Catalogue : entrée K10 remplie sur les trois plateformes, mêmes identifiants d
 11. « Réduire les animations ». Le web remplace le morphisme par un fondu de 150 ms, iOS et Android redimensionnent en 200 ms. Retenu : 200 ms sans ressort, le web s'aligne.
 12. Voile. Les appels posent un voile noir sous le verre de la pilule ; retenu : le ton `deep` de K01 le remplace, sans paramètre de voile. Web : `MeeshyGlassScope` ne sait pas dire « emboîté » à un frère du verre ; le lot web lui ajoute `nested`, seul ajout permis au fichier de K01.
 13. Légendes sous les boutons (appels de groupe) : elles restent dans l'emplacement, à l'app ; la hauteur de la pilule a un plancher, pas un plafond.
-14. Le nombre de boutons (lot iOS, mode autonome). La loi d'ajustement exige `n`, que l'emplacement `buttons(size)` ne dit pas (un `@ViewBuilder` ne se compte pas sans SPI). Retenu : un paramètre optionnel `buttonCount` que l'hôte passe quand il le sait, et sinon une déduction pure (`MeeshyGlassPillFit.inferredButtonCount`) depuis la largeur mesurée de la rangée à la taille courante, exacte pour des disques K02. Écarté : `_VariadicView` (SPI, aucun précédent dans le dépôt) ; `ViewThatFits` (mesure asynchrone sur iOS 26, #9456).
+14. Le nombre de boutons (lot iOS, mode autonome). La loi d'ajustement exige `n`, que l'emplacement `buttons(size)` ne dit pas (un `@ViewBuilder` ne se compte pas sans SPI). Retenu : la loi reste pure (`MeeshyGlassPillFit.resolve`, vecteurs communs) et la pilule iOS la réalise par `ViewThatFits` sur quatre candidats construits sur le fil principal (48, 44, 40, 40 qui défile) : la première largeur idéale qui tient gagne, sans compter ni mesurer, juste dès la première passe. Android et le web, qui connaissent la liste de leurs boutons ou la mesurent, appliquent la loi directement. Écarté : `_VariadicView` (SPI, aucun précédent dans le dépôt), un paramètre `buttonCount` (une table de plus à tenir par chaque hôte), une déduction par la largeur mesurée (deux passes, image fausse au premier rendu).
 15. Cette étape ne change aucun écran (iOS). Les lois de la pilule d'appel (`CallChromeStow`, `CallChromeVisibility.acceptsTouches`, `CallPillWidth`) deviennent des appelants minces des lois du kit ; l'enveloppe `callControlsPill` et `CallEdgeStow` sont rebranchées par I1, pas par ce lot.
 
 Aucune question ne reste au porteur.

@@ -16,15 +16,15 @@ struct MeeshyGlassPillTests {
     @Test("chaque vecteur (largeur, nombre, action principale) rend la taille, le défilement et la largeur attendus")
     func fit_followsTheVectors() throws {
         for row in try Self.rows("fit") {
-            let host = try Self.number(row["hostWidth"])
+            let host = CGFloat(try Self.number(row["hostWidth"]))
             let fit = MeeshyGlassPillFit.resolve(
                 availableWidth: MeeshyGlassPillFit.place(forHostWidth: host),
                 buttonCount: Int(try Self.number(row["buttonCount"])),
-                primaryWidth: Self.optionalNumber(row["primaryWidth"])
+                primaryWidth: Self.optionalNumber(row["primaryWidth"]).map { CGFloat($0) }
             )
             #expect(fit.size.diameter == (try Self.number(row["size"])), "\(row)")
             #expect(fit.scrolls == row["scrolls"] as? Bool, "\(row)")
-            #expect(fit.width == (try Self.number(row["width"])), "\(row)")
+            #expect(fit.width == CGFloat(try Self.number(row["width"])), "\(row)")
         }
     }
 
@@ -36,17 +36,6 @@ struct MeeshyGlassPillTests {
         #expect(fit(390).size == .s44 && !fit(390).scrolls)
         #expect(fit(360).size == .s40 && !fit(360).scrolls)
         #expect(fit(320).size == .s40 && fit(320).scrolls)
-    }
-
-    @Test("le nombre de boutons se déduit de la largeur mesurée de la rangée à la taille courante")
-    func fit_inferredButtonCount_followsTheVectors() throws {
-        for row in try Self.rows("inference") {
-            let size = try #require(Self.size(try Self.number(row["size"])))
-            let count = MeeshyGlassPillFit.inferredButtonCount(rowWidth: try Self.number(row["rowWidth"]), size: size)
-            #expect(count == Int(try Self.number(row["buttonCount"])), "\(row)")
-        }
-        #expect(MeeshyGlassPillFit.inferredButtonCount(rowWidth: 0, size: .s48) == 0)
-        #expect(MeeshyGlassPillFit.inferredButtonCount(rowWidth: .nan, size: .s48) == 0)
     }
 
     @Test("une place négative ou non finie ne casse rien : 40, qui défile")
@@ -64,10 +53,10 @@ struct MeeshyGlassPillTests {
             let layout: MeeshyGlassPillLayout = (row["layout"] as? String) == "spread" ? .spread() : .hug
             let width = MeeshyGlassPillRecipe.width(
                 layout: layout, hasAbove: row["hasAbove"] as? Bool ?? false,
-                place: try Self.number(row["place"]), naturalWidth: try Self.number(row["natural"]),
+                place: CGFloat(try Self.number(row["place"])), naturalWidth: CGFloat(try Self.number(row["natural"])),
                 expandedMaxWidth: MeeshyGlassPillRecipe.expandedMaxWidth
             )
-            #expect(width == (try Self.number(row["width"])), "\(row)")
+            #expect(width == CGFloat(try Self.number(row["width"])), "\(row)")
         }
     }
 
@@ -128,27 +117,50 @@ struct MeeshyGlassPillTests {
         #expect(MeeshyGlassPillPresence.stowed.isStowed)
     }
 
+    // MARK: - La rangée
+
+    @Test("la largeur d'une rangée serrée : les boutons et leurs écarts")
+    func row_width_followsTheVectors() throws {
+        for row in try Self.rows("rowWidth") {
+            let widths = (row["widths"] as? [NSNumber] ?? []).map { CGFloat($0.doubleValue) }
+            #expect(MeeshyGlassPillRecipe.rowWidth(widths: widths, gap: CGFloat(try Self.number(row["gap"]))) == CGFloat(try Self.number(row["width"])), "\(row)")
+        }
+    }
+
+    @Test("serrée ils se suivent ; répartie ils sont centrés dans des cases égales, et se suivent si la place manque")
+    func row_offsets_followTheVectors() throws {
+        for row in try Self.rows("offsets") {
+            let widths = (row["widths"] as? [NSNumber] ?? []).map { CGFloat($0.doubleValue) }
+            let expected = (row["offsets"] as? [NSNumber] ?? []).map { CGFloat($0.doubleValue) }
+            let offsets = MeeshyGlassPillRecipe.rowOffsets(
+                widths: widths, gap: CGFloat(try Self.number(row["gap"])),
+                available: CGFloat(try Self.number(row["available"])), spreads: row["spreads"] as? Bool ?? false
+            )
+            #expect(offsets == expected, "\(row)")
+        }
+    }
+
     // MARK: - Recette et dock
 
     @Test("les mesures de la recette sont celles des vecteurs")
     func recipe_followsTheVectors() throws {
         let recipe = try Self.object("recipe")
-        #expect(MeeshyGlassPillRecipe.restingHeight == (try Self.number(recipe["restingHeight"])))
-        #expect(MeeshyGlassPillRecipe.radius == (try Self.number(recipe["radius"])))
-        #expect(MeeshyGlassPillRecipe.spreadMaxWidth == (try Self.number(recipe["spreadMaxWidth"])))
-        #expect(MeeshyGlassPillRecipe.expandedMaxWidth == (try Self.number(recipe["expandedMaxWidth"])))
-        #expect(MeeshyGlassPillRecipe.overflow == (try Self.number(recipe["overflow"])))
+        #expect(MeeshyGlassPillRecipe.restingHeight == CGFloat(try Self.number(recipe["restingHeight"])))
+        #expect(MeeshyGlassPillRecipe.radius == CGFloat(try Self.number(recipe["radius"])))
+        #expect(MeeshyGlassPillRecipe.spreadMaxWidth == CGFloat(try Self.number(recipe["spreadMaxWidth"])))
+        #expect(MeeshyGlassPillRecipe.expandedMaxWidth == CGFloat(try Self.number(recipe["expandedMaxWidth"])))
+        #expect(MeeshyGlassPillRecipe.overflow == CGFloat(try Self.number(recipe["overflow"])))
         #expect(MeeshyGlassPillRecipe.dividerOpacity == (try Self.number(recipe["dividerOpacity"])))
-        #expect(MeeshyGlassPillRecipe.dividerHeight == (try Self.number(recipe["dividerHeight"])))
+        #expect(MeeshyGlassPillRecipe.dividerHeight == CGFloat(try Self.number(recipe["dividerHeight"])))
         #expect(MeeshyGlassPillRecipe.stowDuration == (try Self.number(recipe["stowMs"])) / 1000)
         #expect(MeeshyGlassPillRecipe.reducedStowDuration == (try Self.number(recipe["reducedStowMs"])) / 1000)
         #expect(MeeshyGlassPillRecipe.reducedSizeDuration == (try Self.number(recipe["reducedSizeMs"])) / 1000)
         #expect(MeeshyGlassPillRecipe.springResponse == (try Self.number(recipe["springResponse"])))
         #expect(MeeshyGlassPillRecipe.springDamping == (try Self.number(recipe["springDamping"])))
-        #expect(MeeshyGlassPillRecipe.defaultBottomGap == (try Self.number(recipe["bottomGap"])))
-        #expect(MeeshyGlassPillRecipe.defaultMinimumBottom == (try Self.number(recipe["minimumBottom"])))
-        #expect(MeeshyGlassPillRecipe.defaultSideMargin == (try Self.number(recipe["sideMargin"])))
-        #expect(MeeshyGlassPillRecipe.edgeFade == (try Self.number(recipe["edgeFade"])))
+        #expect(MeeshyGlassPillRecipe.defaultBottomGap == CGFloat(try Self.number(recipe["bottomGap"])))
+        #expect(MeeshyGlassPillRecipe.defaultMinimumBottom == CGFloat(try Self.number(recipe["minimumBottom"])))
+        #expect(MeeshyGlassPillRecipe.defaultSideMargin == CGFloat(try Self.number(recipe["sideMargin"])))
+        #expect(MeeshyGlassPillRecipe.edgeFade == CGFloat(try Self.number(recipe["edgeFade"])))
         #expect(MeeshyGlassPillRecipe.gap == MeeshySpacing.xsPlus)
         #expect(MeeshyGlassPillRecipe.inset == MeeshySpacing.sm)
         #expect(MeeshyGlassPillRecipe.spreadVerticalInset == MeeshySpacing.smPlus)
@@ -178,13 +190,27 @@ struct MeeshyGlassPillTests {
 
     // MARK: - Source
 
-    @Test("un seul verre, demandé à K01, pour la pilule et tout ce qu'elle porte")
+    @Test("un seul verre, demandé à K01 par le morphisme, pour la pilule et tout ce qu'elle porte")
     func source_oneGlass() throws {
+        let pill = try Self.code("MeeshyGlassPill.swift")
+        let morph = try Self.code("MeeshyGlassPillMorph.swift")
+        #expect(pill.components(separatedBy: ".meeshyGlass(").count == 1)
+        #expect(morph.components(separatedBy: ".meeshyGlass(").count == 2)
+        #expect(morph.contains(".environment(\\.meeshyGlassIsNested, true)"))
+        #expect(pill.contains("MeeshyGlassGroup("))
+        #expect(pill.contains("density: Self.hasAbove ? .dense : .regular"))
+    }
+
+    @Test("la loi d'ajustement : quatre candidats dans l'ordre des tailles de la recette, le dernier défile")
+    func source_fitIsTheLaw() throws {
         let code = try Self.code("MeeshyGlassPill.swift")
-        #expect(code.components(separatedBy: ".meeshyGlass(").count == 2)
-        #expect(code.contains("MeeshyGlassGroup("))
-        #expect(code.contains("MeeshyGlassPillFit.resolve("))
-        #expect(code.contains("density: hasAbove ? .dense : .regular"))
+        #expect(code.contains("ViewThatFits(in: .horizontal)"))
+        #expect(code.contains("let sizes = MeeshyGlassPillRecipe.sizes"))
+        #expect(code.contains("rowBlock(size: sizes[0], scrolls: false)"))
+        #expect(code.contains("rowBlock(size: sizes[1], scrolls: false)"))
+        #expect(code.contains("rowBlock(size: sizes[2], scrolls: false)"))
+        #expect(code.contains("rowBlock(size: sizes[2], scrolls: true)"))
+        #expect(MeeshyGlassPillRecipe.sizes.map(\.diameter) == [48, 44, 40])
     }
 
     @Test("nom, groupe nommé, ordre de lecture : le dessus, la rangée, l'action principale ; rangée, absente du lecteur d'écran")
@@ -195,9 +221,9 @@ struct MeeshyGlassPillTests {
         #expect(code.contains("assert(!label.isEmpty"))
         let stow = try Self.code("MeeshyGlassPillStow.swift")
         #expect(stow.contains(".accessibilityHidden("))
-        let aboveAt = try #require(code.range(of: "above\n"))
-        let rowAt = try #require(code.range(of: "buttonRow("))
-        let primaryAt = try #require(code.range(of: "primarySlot"))
+        let aboveAt = try #require(code.range(of: "            above\n"))
+        let rowAt = try #require(code.range(of: "rowSection\n"))
+        let primaryAt = try #require(code.range(of: "primarySlot\n"))
         #expect(aboveAt.lowerBound < rowAt.lowerBound)
         #expect(rowAt.lowerBound < primaryAt.lowerBound)
     }
@@ -227,6 +253,7 @@ struct MeeshyGlassPillTests {
     func source_hasNoOwnGlassNoLiteral() throws {
         let files = ["MeeshyGlassPill.swift", "MeeshyGlassPillRecipe.swift", "MeeshyGlassPillFit.swift",
                      "MeeshyGlassPillPresenceRule.swift", "MeeshyGlassPillDock.swift", "MeeshyGlassPillStow.swift",
+                     "MeeshyGlassPillMorph.swift",
                      "Catalog/MeeshyKitCatalog+K10.swift"]
         let forbidden = [
             "caption", "Color(hex:", "Color(red:", "Color(white:", "Color.white", "Color.black", "Color.gray",
@@ -241,12 +268,12 @@ struct MeeshyGlassPillTests {
         }
     }
 
-    @Test("le catalogue porte les douze états de la fiche, dans l'ordre")
+    @Test("le catalogue porte les douze états de la fiche, puis la bascule « ranger »")
     func catalog_states() throws {
         let entry = try #require(MeeshyKitCatalog.listedEntry(matching: "K10"))
         #expect(entry.states.map(\.id) == [
             "repos-vide", "repos", "ouvert", "clair", "en-cours", "objet", "texte",
-            "retouche-video", "agrandie", "sans-rangee", "repartie", "defilement",
+            "retouche-video", "agrandie", "sans-rangee", "repartie", "defilement", "retrait",
         ])
     }
 

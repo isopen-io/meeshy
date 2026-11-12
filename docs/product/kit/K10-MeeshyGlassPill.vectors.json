@@ -163,83 +163,6 @@
       "width": 388
     }
   ],
-  "inference": [
-    {
-      "rowWidth": 48,
-      "size": 48,
-      "buttonCount": 1
-    },
-    {
-      "rowWidth": 44,
-      "size": 44,
-      "buttonCount": 1
-    },
-    {
-      "rowWidth": 40,
-      "size": 40,
-      "buttonCount": 1
-    },
-    {
-      "rowWidth": 156,
-      "size": 48,
-      "buttonCount": 3
-    },
-    {
-      "rowWidth": 144,
-      "size": 44,
-      "buttonCount": 3
-    },
-    {
-      "rowWidth": 132,
-      "size": 40,
-      "buttonCount": 3
-    },
-    {
-      "rowWidth": 264,
-      "size": 48,
-      "buttonCount": 5
-    },
-    {
-      "rowWidth": 244,
-      "size": 44,
-      "buttonCount": 5
-    },
-    {
-      "rowWidth": 224,
-      "size": 40,
-      "buttonCount": 5
-    },
-    {
-      "rowWidth": 372,
-      "size": 48,
-      "buttonCount": 7
-    },
-    {
-      "rowWidth": 344,
-      "size": 44,
-      "buttonCount": 7
-    },
-    {
-      "rowWidth": 316,
-      "size": 40,
-      "buttonCount": 7
-    },
-    {
-      "rowWidth": 642,
-      "size": 48,
-      "buttonCount": 12
-    },
-    {
-      "rowWidth": 594,
-      "size": 44,
-      "buttonCount": 12
-    },
-    {
-      "rowWidth": 546,
-      "size": 40,
-      "buttonCount": 12
-    }
-  ],
   "width": [
     {
       "layout": "hug",
@@ -434,6 +357,107 @@
     {
       "safeBottom": 16,
       "bottom": 28
+    }
+  ],
+  "offsets": [
+    {
+      "widths": [
+        48,
+        48,
+        48
+      ],
+      "gap": 6,
+      "available": 300,
+      "spreads": false,
+      "offsets": [
+        0,
+        54,
+        108
+      ]
+    },
+    {
+      "widths": [
+        48,
+        48,
+        48
+      ],
+      "gap": 6,
+      "available": 300,
+      "spreads": true,
+      "offsets": [
+        26,
+        126,
+        226
+      ]
+    },
+    {
+      "widths": [
+        48,
+        48,
+        48
+      ],
+      "gap": 6,
+      "available": 100,
+      "spreads": true,
+      "offsets": [
+        0,
+        54,
+        108
+      ]
+    },
+    {
+      "widths": [
+        48,
+        44
+      ],
+      "gap": 6,
+      "available": 200,
+      "spreads": true,
+      "offsets": [
+        26,
+        122
+      ]
+    },
+    {
+      "widths": [],
+      "gap": 6,
+      "available": 200,
+      "spreads": true,
+      "offsets": []
+    },
+    {
+      "widths": [
+        48
+      ],
+      "gap": 6,
+      "available": 0,
+      "spreads": false,
+      "offsets": [
+        0
+      ]
+    }
+  ],
+  "rowWidth": [
+    {
+      "widths": [
+        48,
+        48,
+        48
+      ],
+      "gap": 6,
+      "width": 156
+    },
+    {
+      "widths": [],
+      "gap": 6,
+      "width": 0
+    },
+    {
+      "widths": [
+        44
+      ],
+      "gap": 6,
+      "width": 44
     }
   ]
 }
