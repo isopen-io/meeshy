@@ -188,7 +188,8 @@ private sealed interface LiveFrameFace {
 /**
  * Le texte du haut de l'écran : la proposition à trancher, la réponse de l'autre, ou l'échec de la mienne. Comme les trois
  * autres bandeaux de la pile, il arrive du haut et y repart par [CallBannerPresence] (#17820 C2.7), à la marge de la pile
- * (C2.1). La proposition n'est montrée qu'en duo vidéo ([offersProposal], C2.10) ; sa mesure ne compte pas pour ma vignette.
+ * (C2.1). La proposition n'est montrée qu'en duo vidéo ([offersProposal], C2.10) ; sa mesure ne compte pas pour ma vignette (la loi
+ * l'écarte), mais la grille de groupe lui cède sa place (L4.11).
  */
 @Composable
 internal fun CallLiveFrameStatus(controller: CallLiveFrameController, offersProposal: Boolean = true, modifier: Modifier = Modifier) {
@@ -227,6 +228,7 @@ internal fun CallLiveFrameStatus(controller: CallLiveFrameController, offersProp
         val place = modifier
             .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
             .padding(top = CallTopBannerStack.GAP_DP.dp)
+            .reportsTopBannerHeight(CallTopBanner.LiveFrame)
         when (shown) {
             is LiveFrameFace.Proposal -> CallLiveFrameProposalCard(shown.text, onAccept = controller::accept, onDecline = controller::decline, modifier = place)
             is LiveFrameFace.Line -> CallLiveFrameNotice(shown.text, modifier = place)

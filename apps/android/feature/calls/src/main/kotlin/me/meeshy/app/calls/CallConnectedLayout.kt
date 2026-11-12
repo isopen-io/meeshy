@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -232,7 +234,7 @@ internal fun CallConnectedColumn(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Spacer(Modifier.height(MeeshySpacing.xl))
+            CallGroupStageTopReserve(base = MeeshySpacing.xl, clearance = LocalCallGroupGridClearance.current)
 
             if (groupStage != null) {
                 groupStage(Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md))
@@ -332,4 +334,14 @@ internal fun CallConnectedColumn(
             onDismiss = { routeSheetOpen = false },
         )
     }
+}
+
+/**
+ * L4.11 — la réserve haute de la scène : la marge fixe d'avant, plus la place que la pile des bandeaux prend sous l'en-tête
+ * (même loi que ma vignette de duo, hauteurs mesurées, cadre en direct compris), pour que la grille de groupe lui cède sa place au
+ * lieu de passer dessous. Elle lit son état À LA MESURE : le glissement ne recompose pas tout l'appel à chaque image.
+ */
+@Composable
+private fun CallGroupStageTopReserve(base: Dp, clearance: State<Dp>) {
+    Spacer(Modifier.layout { _, _ -> layout(0, (base + clearance.value).roundToPx()) {} })
 }

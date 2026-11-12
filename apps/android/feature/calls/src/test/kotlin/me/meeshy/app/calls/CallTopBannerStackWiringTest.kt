@@ -56,8 +56,8 @@ class CallTopBannerStackWiringTest {
         val host = code("CallTopBannerStackHost.kt")
         val presence = block(host, "internal fun <T : Any> CallBannerPresence(", "\n}")
         assertThat(presence).contains("CallTopBannerStack.leavesTowardTop(reduceMotion)")
-        assertThat(presence).contains("slideInVertically(")
-        assertThat(presence).contains("slideOutVertically(")
+        assertThat(presence).contains("presenceTranslationFraction(")
+        assertThat(presence).doesNotContain("slideInVertically(")
         assertThat(presence).contains("CallChromeStow.fadeMillis(reduceMotion)")
 
         assertThat(code("CallScreenShareBanner.kt")).contains("CallBannerPresence(")

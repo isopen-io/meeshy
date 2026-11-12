@@ -57,7 +57,42 @@ object CallTopBannerStack {
      * plus l'écart de la pile.
      */
     fun selfTileClearanceDp(counted: Set<CallTopBanner>, heightsDp: Map<CallTopBanner, Float>): Float =
-        ordered(counted - CallTopBanner.LiveFrame).sumOf { ((heightsDp[it] ?: 0f).coerceAtLeast(BANNER_HEIGHT_DP) + GAP_DP).toDouble() }.toFloat()
+        stackHeightDp(counted - CallTopBanner.LiveFrame, heightsDp)
+
+    /**
+     * #17845 (L4.11) — les bandeaux présents à l'écran : un partage (le mien ou reçu), l'enregistrement, la capture, le cadre en
+     * direct. Le site UNIQUE de la présence que la grille de groupe lit, miroir de iOS `CallTopBannerStack.present`.
+     */
+    fun present(
+        isScreenShareShown: Boolean,
+        isRecordingShown: Boolean,
+        isCaptureAlertShown: Boolean,
+        isLiveFrameShown: Boolean,
+    ): Set<CallTopBanner> = countedForSelfTile(isScreenShareShown, isRecordingShown, isCaptureAlertShown) +
+        if (isLiveFrameShown) setOf(CallTopBanner.LiveFrame) else emptySet()
+
+    /**
+     * #17845 (L4.11) — en groupe, la grille cède sa place à la pile au lieu de passer dessous : MÊME loi que ma vignette de duo,
+     * mais tous les bandeaux présents comptent (un partage reçu aussi, le cadre en direct aussi), la grille n'ayant pas de coin
+     * à garder. Plein écran, la pile est rangée avec le chrome : la scène reprend tout l'écran.
+     */
+    fun groupGridClearanceDp(present: Set<CallTopBanner>, heightsDp: Map<CallTopBanner, Float>, isStageFullScreen: Boolean): Float =
+        if (isStageFullScreen) 0f else stackHeightDp(present, heightsDp)
+
+    private fun stackHeightDp(banners: Set<CallTopBanner>, heightsDp: Map<CallTopBanner, Float>): Float =
+        ordered(banners).sumOf { ((heightsDp[it] ?: 0f).coerceAtLeast(BANNER_HEIGHT_DP) + GAP_DP).toDouble() }.toFloat()
+
+    /**
+     * #17845 (L1.9) — la présence d'un bandeau ne remesure jamais la pile : il garde sa place entière et se déplace seul, de sa
+     * propre hauteur au-dessus de sa place (`progress` 0) jusqu'à elle (`progress` 1). Sans déplacement (`travels` faux), il ne fait que se fondre.
+     */
+    fun presenceTranslationFraction(progress: Float, travels: Boolean): Float = if (travels) progress - 1f else 0f
+
+    /**
+     * #17845 (L1.9) — un bandeau voisin dont la place vient de changer (un bandeau au-dessus est parti ou arrivé) repart du
+     * point où l'œil le voyait : l'écart entre sa place d'avant, déjà décalée, et la nouvelle, résorbé ensuite par la transformation.
+     */
+    fun placementShiftPx(previousTopPx: Float, previousShiftPx: Float, newTopPx: Float): Float = previousTopPx + previousShiftPx - newTopPx
 
     /** P16.6 — un bandeau repart vers le haut, d'où il vient ; « Réduire les animations » ne garde que le fondu court. */
     fun leavesTowardTop(reduceMotion: Boolean): Boolean = !reduceMotion
