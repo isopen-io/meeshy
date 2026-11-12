@@ -1,14 +1,14 @@
 import SwiftUI
 
 /// Le rôle d'une capsule dans l'en-tête : sa place, et son rang quand la place manque.
-enum MeeshyModeHeaderRole: Hashable {
+nonisolated enum MeeshyModeHeaderRole: Hashable, Sendable {
     case exit
     case center
     case accessory
     case confirm
 }
 
-private struct MeeshyModeHeaderRoleKey: LayoutValueKey {
+private nonisolated struct MeeshyModeHeaderRoleKey: LayoutValueKey {
     static let defaultValue = MeeshyModeHeaderRole.exit
 }
 
@@ -63,7 +63,7 @@ struct MeeshyModeHeaderLayout: Layout {
         }
     }
 
-    private static func ideals(_ subviews: Subviews) -> [MeeshyModeHeaderRole: CGFloat] {
+    private nonisolated static func ideals(_ subviews: Subviews) -> [MeeshyModeHeaderRole: CGFloat] {
         var result: [MeeshyModeHeaderRole: CGFloat] = [:]
         for subview in subviews {
             result[subview[MeeshyModeHeaderRoleKey.self]] = subview.sizeThatFits(.unspecified).width
