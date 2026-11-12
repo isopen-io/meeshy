@@ -8,6 +8,7 @@ import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { callActions } from '@/lib/calls/call-actions';
+import { callChromeStore } from '@/lib/calls/call-chrome-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 
@@ -505,7 +506,10 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(view.find('[data-call-rail]')).toBeNull();
     expect(view.find('[data-call-rails]')).toBeNull();
     expect(view.host.querySelectorAll('[data-call-mode-carousel]')).toHaveLength(1);
+    /* R3.6, #17551 : l'en-tête est masqué, la capsule d'enregistrement part avec lui ; la carte d'accord, jamais. */
+    expect(callChromeStore.getState().stowed).toBe(true);
     view.press('[data-call-mode-quit]');
+    expect(callChromeStore.getState().stowed).toBe(false);
     expect(view.find('[data-call-mode="effects"]')).toBeNull();
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('idle');
     expect(view.find('[data-call-control-pill]')).not.toBeNull();
