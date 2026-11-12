@@ -945,11 +945,11 @@
     <string name="game_photo_title_start">بدايتي على Meeshy</string>
     <string name="game_photo_title_tier">نورك في %1$s</string>
     <string name="game_progression_load_error">تعذّر تحميل التقدّم</string>
-    <string name="game_progression_loading">جارٍ تحميل التقدّم</string>
+    <string name="game_progression_loading">جارٍ تحميل أسطورتي</string>
     <string name="game_progression_offline">غير متصل — التقدّم كما كان عند آخر فتح</string>
     <string name="game_progression_offline_empty">غير متصل — لا يوجد تقدّم محفوظ. سيظهر عند إعادة الاتصال.</string>
     <string name="game_progression_retry">إعادة المحاولة</string>
-    <string name="game_progression_title">التقدّم</string>
+    <string name="game_progression_title">أسطورتي</string>
     <string name="game_rank_ambassadeur">سفير</string>
     <string name="game_rank_conteur">حكّاء</string>
     <string name="game_rank_echo">صدى</string>

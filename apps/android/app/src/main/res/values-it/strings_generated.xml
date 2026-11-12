@@ -58,7 +58,7 @@
     <string name="menu_communities">Community</string>
     <string name="menu_contacts">Contatti</string>
     <string name="menu_discover">Scopri</string>
-    <string name="menu_game">Gioco</string>
+    <string name="menu_game">La mia Leggenda</string>
     <string name="menu_my_links">I miei link</string>
     <string name="menu_notifications">Notifiche</string>
     <string name="menu_settings">Impostazioni</string>
@@ -97,7 +97,7 @@
     <string name="route_title_notifications">Notifiche</string>
     <string name="route_title_post">Post</string>
     <string name="route_title_profile">Profilo</string>
-    <string name="route_title_progression">Progressi</string>
+    <string name="route_title_progression">La mia Leggenda</string>
     <string name="route_title_settings">Impostazioni</string>
     <string name="route_title_share_links">Link di condivisione</string>
     <string name="route_title_starred">Messaggi preferiti</string>

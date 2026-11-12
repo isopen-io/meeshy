@@ -316,7 +316,7 @@
     <string name="settings_theme_light">Hell</string>
     <string name="settings_theme_system">System</string>
     <string name="settings_title">Einstellungen</string>
-    <string name="settings_tools_progression">Fortschritt</string>
+    <string name="settings_tools_progression">Meine Legende</string>
     <string name="settings_tools_stats">Statistiken</string>
     <string name="settings_transcription_auto">Automatisch</string>
     <string name="settings_transcription_engine">Transkriptions-Engine</string>

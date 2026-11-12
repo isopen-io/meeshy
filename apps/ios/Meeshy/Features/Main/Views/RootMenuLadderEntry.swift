@@ -14,8 +14,8 @@ enum RootMenuBadge: Hashable {
 /// sur le bouton avatar. Le DERNIER barreau est la roue dentée (→ préférences
 /// générales). L'ordre de `allCases` EST l'ordre de l'échelle.
 ///
-/// Le PREMIER barreau, au plus près du bouton, ouvre le **jeu** (la Progression, #17769), nommé « Le Jeu »
-/// (décision porteur du 2026-11-12), sous le trophée du Profil et des Réglages. Il disparaît quand le joueur a masqué le jeu
+/// Le PREMIER barreau, au plus près du bouton, ouvre le **jeu** (la Progression, #17769), nommé « Ma Légende » —
+/// l'objectif visé, pas l'outil (décision porteur du 2026-11-12), sous le trophée du Profil et des Réglages. Il disparaît quand le joueur a masqué le jeu
 /// (`ladder(gameHidden:)`). La Progression reste un écran profond, pas un hub : le bandeau du jeu ne
 /// se pose pas au-dessus du jeu lui-même.
 ///
@@ -58,7 +58,7 @@ enum RootMenuLadderEntry: CaseIterable, Hashable {
     var label: String {
         switch self {
         case .game:
-            return String(localized: "root.menu.game", defaultValue: "Le Jeu")
+            return String(localized: "root.menu.game", defaultValue: "Ma Légende")
         case .links:
             return String(localized: "root.menu.links", defaultValue: "Mes liens")
         case .notifications:
