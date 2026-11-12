@@ -6,7 +6,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
-import { pillSwipeCollapses } from '@/lib/calls/call-bubble';
+import { pillSwipeOutcome } from '@/lib/calls/call-bubble';
 import { reducedCaption, reducedTitle } from '@/lib/calls/call-header';
 import { cachedCallNames } from '@/lib/calls/call-header-names';
 import { pipOpenStore } from '@/lib/calls/call-pip';
@@ -58,9 +58,10 @@ export function CallPillBar({ call, away }: { readonly call: ActiveCall; readonl
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
     const from = swipeFrom.current;
     swipeFrom.current = null;
-    if (from === null || !pillSwipeCollapses({ travelled: event.clientX - from, sharing })) return;
+    const outcome = from === null ? 'tap' : pillSwipeOutcome({ travelled: event.clientX - from, sharing });
+    if (outcome === 'tap') return;
     swiped.current = true;
-    callActions.collapse();
+    if (outcome === 'collapse') callActions.collapse();
   };
   const expand = () => {
     if (swiped.current) {

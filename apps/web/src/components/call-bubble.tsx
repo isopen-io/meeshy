@@ -1,4 +1,3 @@
-import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { useStore } from 'zustand/react';
 
@@ -32,6 +31,7 @@ import { browserPreferenceStorage, sinkSelectionSupported } from '@/lib/calls/ca
 import { reducedCaption, reducedTitle } from '@/lib/calls/call-header';
 import { cachedCallNames } from '@/lib/calls/call-header-names';
 import { browserPipSupport, pipOpenStore, remoteSource, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
+import { peerColor } from '@/lib/calls/call-speaker-color';
 import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callStatusKey } from '@/lib/calls/call-view';
 import { translate } from '@/lib/i18n-catalog';
@@ -116,7 +116,7 @@ export function CallBubble({ call, away = false }: { readonly call: ActiveCall; 
   const pinchFrom = useRef(0);
   const wheel = useRef(0);
   const source = remoteSource(call);
-  const tint = authorAccentColor(call.peerKey, call.title);
+  const tint = peerColor(call);
   const offerPip = shouldOfferPip(call, browserPipSupport());
   const offerOutput = outputChoiceHere();
   const kind = source === null ? 'portrait' : 'video';

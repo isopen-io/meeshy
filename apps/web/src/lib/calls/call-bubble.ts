@@ -32,9 +32,16 @@ export const BUBBLE_KEY = 'meeshy.call.bubble.v1';
 /** Au-delà, un glissement horizontal de la pastille la replie en bulle (iOS : swipe de `FloatingCallPillView`). */
 export const PILL_COLLAPSE_DISTANCE = 64;
 
-/** Pendant MON partage d'écran la capsule ne se replie pas (P18.10) : la bulle n'offre pas « Arrêter ». */
-export function pillSwipeCollapses({ travelled, sharing }: { readonly travelled: number; readonly sharing: boolean }): boolean {
-  return !sharing && Math.abs(travelled) >= PILL_COLLAPSE_DISTANCE;
+/**
+ * Ce que fait un glissé horizontal de la capsule : plus court que `PILL_COLLAPSE_DISTANCE`, c'est un toucher ;
+ * au-delà, il la replie en bulle — sauf pendant MON partage d'écran (P18.10), où la bulle n'offrirait pas
+ * « Arrêter » : la capsule reste, et le glissé n'est pas non plus le toucher qui rouvrirait l'appel.
+ */
+export type PillSwipeOutcome = 'tap' | 'collapse' | 'stay';
+
+export function pillSwipeOutcome({ travelled, sharing }: { readonly travelled: number; readonly sharing: boolean }): PillSwipeOutcome {
+  if (Math.abs(travelled) < PILL_COLLAPSE_DISTANCE) return 'tap';
+  return sharing ? 'stay' : 'collapse';
 }
 
 const MARGIN = 12;
