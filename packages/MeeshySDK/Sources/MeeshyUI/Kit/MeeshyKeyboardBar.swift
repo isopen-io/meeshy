@@ -79,12 +79,13 @@ public struct MeeshyKeyboardBar<Glyph: View>: View, Equatable {
         MeeshyKeyboardDockRule.visibleItems(items)
     }
 
+    /// Les entrées sont construites ICI, par le `body`, sur le fil principal : la rangée est un candidat de
+    /// `ViewThatFits`, que le rendu asynchrone d'iOS 26 mesure hors du fil principal — le `ForEach` n'y relit
+    /// que des vues déjà faites (`AsyncRenderRow`, #9456).
     private func row(display: MeeshyModeCapsuleDisplay) -> some View {
         HStack(spacing: 0) {
-            ForEach(tools) { item in
-                tool(item)
-                Spacer(minLength: 0)
-            }
+            ForEach(tools.map { AsyncRenderRow(id: $0.id, content: toolSlot($0)) },
+                    content: asyncRenderRowContent)
             if tools.isEmpty { Spacer(minLength: 0) }
             MeeshyModeCapsule(
                 title: confirm.title,
@@ -96,6 +97,15 @@ public struct MeeshyKeyboardBar<Glyph: View>: View, Equatable {
             )
             .disabled(!confirm.isEnabled)
             .accessibilityLabel(confirm.label)
+        }
+    }
+
+    /// Un outil suivi de son espace : le `Group` est transparent à la mise en page, la rangée répartit donc
+    /// l'espace libre entre les outils comme si chacun y était posé à plat.
+    private func toolSlot(_ item: MeeshyKeyboardDockItem) -> some View {
+        Group {
+            tool(item)
+            Spacer(minLength: 0)
         }
     }
 
