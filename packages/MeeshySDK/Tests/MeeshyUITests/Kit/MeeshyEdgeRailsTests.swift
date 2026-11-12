@@ -136,7 +136,7 @@ struct MeeshyEdgeRailsTests {
     @Test("la translation d'un rail rangé : vers SON bord, retournée en lecture de droite à gauche")
     func slideOffset_vectors() throws {
         for row in try Self.rows("slideOffset") {
-            let side = try #require(MeeshyEdgeRailSide(rawValue: try #require(row["side"] as? String)))
+            let side = try kitRequired(MeeshyEdgeRailSide(rawValue: try #require(row["side"] as? String)))
             let offset = try #require(row["offset"] as? Double)
             let measured = MeeshyEdgeRailsRecipe.slideOffset(
                 side: side, isRightToLeft: try #require(row["rtl"] as? Bool),
@@ -170,7 +170,7 @@ struct MeeshyEdgeRailsTests {
     @Test("la visibilité : opacité, lecteur d'écran, toucher")
     func visibility_vectors() throws {
         for row in try Self.rows("visibility") {
-            let visibility = try #require(MeeshyEdgeRailsVisibility(rawValue: try #require(row["visibility"] as? String)))
+            let visibility = try kitRequired(MeeshyEdgeRailsVisibility(rawValue: try #require(row["visibility"] as? String)))
             #expect(MeeshyEdgeRailsRecipe.opacity(of: visibility) == row["opacity"] as? Double)
             #expect(MeeshyEdgeRailsRecipe.isReadByScreenReader(visibility) == row["readByScreenReader"] as? Bool)
             #expect(MeeshyEdgeRailsRecipe.servesTouch(visibility) == row["servesTouch"] as? Bool)
@@ -238,7 +238,7 @@ struct MeeshyEdgeRailsTests {
         #expect(Self.item("a").discKind == .normal)
         #expect(Self.item("a", role: .destructive).discKind == .destructive)
         #expect(Self.item("a", isOn: true).discKind == .active)
-        #expect(Self.item("a", role: .destructive, isOn: true).discKind == .active)
+        #expect(Self.item("a", isOn: true, role: .destructive).discKind == .active)
     }
 
     // MARK: - Présence
@@ -349,10 +349,12 @@ struct MeeshyEdgeRailsTests {
     @Test("un appui long : UN impact moyen, puis `onLongPress` ; désactivé, rien")
     func trigger_longPress() {
         var events: [String] = []
-        #expect(MeeshyEdgeRailsTrigger.longPress(isEnabled: true, play: { events.append("haptic:\($0)") }, action: { events.append("long") }))
+        let served = MeeshyEdgeRailsTrigger.longPress(isEnabled: true, play: { events.append("haptic:\($0)") }, action: { events.append("long") })
+        #expect(served)
         #expect(events == ["haptic:medium", "long"])
         events = []
-        #expect(!MeeshyEdgeRailsTrigger.longPress(isEnabled: false, play: { events.append("haptic:\($0)") }, action: { events.append("long") }))
+        let refused = MeeshyEdgeRailsTrigger.longPress(isEnabled: false, play: { events.append("haptic:\($0)") }, action: { events.append("long") })
+        #expect(!refused)
         #expect(events.isEmpty)
     }
 
