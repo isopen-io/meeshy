@@ -82,3 +82,18 @@ export function callHeaderNames(conversation: NamedConversation | undefined, kno
   if (conversation.type === 'direct') return { givenName: customName, groupName: null };
   return { givenName: null, groupName: customName ?? meaningful(conversation.title) ?? meaningful(knownTitle) };
 }
+
+export type ReducedTitleInput = { readonly givenName: string | null; readonly groupName: string | null; readonly displayName: string | null };
+
+/**
+ * L'appel réduit dit « nom · durée » (P18.5, miroir de `CallReducedRule.swift`) : en groupe le nom du
+ * groupe, sinon le nom que j'ai donné à la personne, sinon son nom d'affichage — les noms de la capsule
+ * de l'en-tête. `null` : aucun nom connu, la durée seule.
+ */
+export function reducedTitle({ givenName, groupName, displayName }: ReducedTitleInput): string | null {
+  return meaningful(groupName) ?? meaningful(givenName) ?? meaningful(displayName);
+}
+
+export function reducedCaption(title: string | null, duration: string): string {
+  return title === null ? duration : `${title} · ${duration}`;
+}

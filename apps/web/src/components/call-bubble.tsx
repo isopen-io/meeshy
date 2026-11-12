@@ -1,4 +1,4 @@
-import { colorForName } from '@meeshy/shared/utils/conversation-colors';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { useStore } from 'zustand/react';
 
@@ -29,7 +29,9 @@ import {
   type Size,
 } from '@/lib/calls/call-bubble';
 import { browserPreferenceStorage, sinkSelectionSupported } from '@/lib/calls/call-devices';
-import { browserPipSupport, pipSource, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
+import { reducedCaption, reducedTitle } from '@/lib/calls/call-header';
+import { cachedCallNames } from '@/lib/calls/call-header-names';
+import { browserPipSupport, pipOpenStore, remoteSource, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { callStatusKey } from '@/lib/calls/call-view';
 import { translate } from '@/lib/i18n-catalog';
@@ -39,7 +41,7 @@ import { initialsOf } from '@/lib/view/conversation';
 /**
  * **LA BULLE D'APPEL** (#8046, D9) — miroir de `CallBubbleView.swift` : la
  * forme repliée de l'appel, atteinte depuis la pastille (bouton ou glissement).
- * Elle porte la vidéo du pair (sinon la mienne, sinon son portrait), se
+ * Elle porte la vidéo du pair, sinon son portrait — jamais ma vidéo (P18.3) —, se
  * déplace au doigt ou à la souris, se clipse au bord le plus proche et garde
  * sa place d'un appel à l'autre. Toucher la bulle rend l'écran d'appel ; sa
  * barre garde le micro, l'image dans l'image et raccrocher à portée — le
@@ -59,6 +61,9 @@ const CallDevicesSheet = lazy(() => import('./call-devices-sheet').then((module)
    recouvrait de 18. La zone sûre du système s'y AJOUTE en CSS. */
 const INSETS = { top: 64, bottom: 120 };
 const BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
+/** Le liseré à la couleur de l'autre (P18.4) et le fondu qui efface la bulle pendant l'image dans l'image (P18.9) : la transformation et l'opacité seules ; « Réduire les animations » garde ce fondu court. */
+const RING_WIDTH = 2;
+const AWAY_FADE = 'opacity 200ms ease-out';
 const AVATAR: Readonly<Record<BubbleTier, number>> = { small: 48, medium: 60, large: 72 };
 
 const distance = ([a, b]: readonly Point[]): number => (a === undefined || b === undefined ? 0 : Math.hypot(a.x - b.x, a.y - b.y));
@@ -78,7 +83,8 @@ function useViewport(): Size {
   return viewport;
 }
 
-function BubbleClock({ call }: { readonly call: ActiveCall }) {
+/** P18.5 — « nom · durée » sur un verre, en bas à gauche du cadre, en portrait audio comme sur la vidéo ; le nom donné (#17341), sinon le nom d'affichage. */
+function BubbleCaption({ call }: { readonly call: ActiveCall }) {
   const language = currentInterfaceLanguage();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -86,10 +92,17 @@ function BubbleClock({ call }: { readonly call: ActiveCall }) {
     return () => clearInterval(handle);
   }, []);
   const statusKey = callStatusKey(call);
-  return <span className="text-mini tabular-nums">{statusKey === null ? formatCallClock(elapsedSeconds(call, now)) : translate(language, statusKey)}</span>;
+  const names = cachedCallNames(call);
+  const title = reducedTitle({ givenName: names.givenName, groupName: names.groupName, displayName: call.title });
+  const duration = statusKey === null ? formatCallClock(elapsedSeconds(call, now)) : translate(language, statusKey);
+  return (
+    <span className="glass-call pointer-events-none absolute bottom-1 start-1 max-w-[calc(100%-0.5rem)] truncate rounded-full px-2 text-mini tabular-nums text-on-media" data-call-bubble-caption="">
+      {reducedCaption(title, duration)}
+    </span>
+  );
 }
 
-export function CallBubble({ call }: { readonly call: ActiveCall }) {
+export function CallBubble({ call, away = false }: { readonly call: ActiveCall; readonly away?: boolean }) {
   const language = currentInterfaceLanguage();
   const hintId = useId();
   const viewport = useViewport();
@@ -102,7 +115,8 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
   const pointers = useRef<ReadonlyMap<number, Point>>(new Map());
   const pinchFrom = useRef(0);
   const wheel = useRef(0);
-  const source = pipSource(call);
+  const source = remoteSource(call);
+  const tint = authorAccentColor(call.peerKey, call.title);
   const offerPip = shouldOfferPip(call, browserPipSupport());
   const offerOutput = outputChoiceHere();
   const kind = source === null ? 'portrait' : 'video';
@@ -192,13 +206,17 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
           color: 'var(--color-on-media)',
           transform: pinch === null ? undefined : `scale(${Math.min(1.6, Math.max(0.6, pinch))})`,
           transformOrigin: placement.edge === 'left' ? 'left center' : 'right center',
-          transition: drag === null && pinch === null ? BUBBLE_SETTLE_TRANSITION : 'none',
+          transition: drag === null && pinch === null ? `${BUBBLE_SETTLE_TRANSITION}, ${AWAY_FADE}` : 'none',
           touchAction: 'none',
+          opacity: away ? 0 : 1,
         }}
+        aria-hidden={away ? true : undefined}
+        inert={away}
         onWheel={onWheel}
         data-call-bubble={placement.edge}
         data-call-bubble-size={tier}
       >
+        <span aria-hidden className="pointer-events-none absolute inset-0 z-10 rounded-card" style={{ boxShadow: `inset 0 0 0 ${RING_WIDTH}px ${tint}` }} data-call-bubble-ring="" />
         <button
           type="button"
           aria-label={translate(language, 'call.expand')}
@@ -213,18 +231,11 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
           data-call-bubble-body=""
         >
           {source === null ? (
-            <span className="flex flex-col items-center gap-1">
-              <PeerAvatar presenceKey={call.peerKey ?? undefined} initials={initialsOf(call.title)} color={colorForName(call.title)} size={AVATAR[tier]} {...(call.avatar === null ? {} : { src: call.avatar })} />
-              <BubbleClock call={call} />
-            </span>
+            <PeerAvatar presenceKey={call.peerKey ?? undefined} initials={initialsOf(call.title)} color={tint} size={AVATAR[tier]} {...(call.avatar === null ? {} : { src: call.avatar })} />
           ) : (
-            <>
-              <StreamVideo stream={source.stream} mirrored={source.mirrored} fit={source.fit} className="absolute inset-0 size-full" label={call.title} />
-              <span className="absolute bottom-1 left-1 rounded-full px-1.5 text-mini" style={{ background: 'var(--color-scrim)' }}>
-                <BubbleClock call={call} />
-              </span>
-            </>
+            <StreamVideo stream={source.stream} mirrored={source.mirrored} fit={source.fit} className="absolute inset-0 size-full" label={call.title} />
           )}
+          <BubbleCaption call={call} />
           <span id={hintId} className="sr-only">
             {`${translate(language, 'call.bubble.moveHint')}. ${translate(language, 'call.bubble.resizeHint')}`}
           </span>
@@ -279,6 +290,7 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
  */
 export function CallBubbleLayer() {
   const call = useStore(callStore, (state) => state.call);
+  const pipOpen = useStore(pipOpenStore, (state) => state.open);
   if (call === null || call.display !== 'bubble' || call.phase.kind === 'incoming' || call.phase.kind === 'ended') return null;
-  return <CallBubble call={call} />;
+  return <CallBubble call={call} away={pipOpen} />;
 }

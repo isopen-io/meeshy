@@ -32,6 +32,11 @@ export const BUBBLE_KEY = 'meeshy.call.bubble.v1';
 /** Au-delà, un glissement horizontal de la pastille la replie en bulle (iOS : swipe de `FloatingCallPillView`). */
 export const PILL_COLLAPSE_DISTANCE = 64;
 
+/** Pendant MON partage d'écran la capsule ne se replie pas (P18.10) : la bulle n'offre pas « Arrêter ». */
+export function pillSwipeCollapses({ travelled, sharing }: { readonly travelled: number; readonly sharing: boolean }): boolean {
+  return !sharing && Math.abs(travelled) >= PILL_COLLAPSE_DISTANCE;
+}
+
 const MARGIN = 12;
 const TAP_SLOP = 8;
 const KEY_STEP = 0.1;
