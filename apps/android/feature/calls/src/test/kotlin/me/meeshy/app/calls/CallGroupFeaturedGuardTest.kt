@@ -40,7 +40,7 @@ class CallGroupFeaturedGuardTest {
 
     @Test
     fun `U2_6 the plate, the chip and the capsule wear the tone of the screen`() {
-        assertThat(code("CallGlassToneUi.kt")).contains("LocalCallGlassTone.current")
+        assertThat(code("CallGlassToneUi.kt")).contains("LocalCallGlassToneProgress.current")
         assertThat(code("CallGroupTile.kt")).contains("CallToneScrim()")
         assertThat(code("CallGroupFeaturedChrome.kt").split("CallToneScrim()").size - 1).isEqualTo(2)
         assertThat(code("CallGroupFeaturedChrome.kt")).doesNotContain("MeeshyGlassSurface(")

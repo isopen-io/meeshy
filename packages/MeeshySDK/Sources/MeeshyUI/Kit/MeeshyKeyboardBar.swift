@@ -84,8 +84,11 @@ public struct MeeshyKeyboardBar<Glyph: View>: View, Equatable {
     /// que des vues déjà faites (`AsyncRenderRow`, #9456).
     private func row(display: MeeshyModeCapsuleDisplay) -> some View {
         HStack(spacing: 0) {
-            ForEach(tools.map { AsyncRenderRow(id: $0.id, content: toolSlot($0)) },
-                    content: asyncRenderRowContent)
+            ForEach(tools.map {
+                AsyncRenderRow(id: $0.id, content: MeeshyKeyboardBarToolSlot(
+                    item: $0, openItem: openItem, onItem: onItem, glyph: glyph
+                ))
+            }, content: asyncRenderRowContent)
             if tools.isEmpty { Spacer(minLength: 0) }
             MeeshyModeCapsule(
                 title: confirm.title,
@@ -98,27 +101,6 @@ public struct MeeshyKeyboardBar<Glyph: View>: View, Equatable {
             .disabled(!confirm.isEnabled)
             .accessibilityLabel(confirm.label)
         }
-    }
-
-    /// Un outil suivi de son espace : le `Group` est transparent à la mise en page, la rangée répartit donc
-    /// l'espace libre entre les outils comme si chacun y était posé à plat.
-    private func toolSlot(_ item: MeeshyKeyboardDockItem) -> some View {
-        Group {
-            tool(item)
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func tool(_ item: MeeshyKeyboardDockItem) -> some View {
-        MeeshyGlassButton(
-            label: item.label,
-            hint: item.hint,
-            value: item.value,
-            activation: MeeshyKeyboardDockRule.activation(for: item, openItem: openItem),
-            action: { onItem(item.id) },
-            glyph: { glyph(item.id) }
-        )
-        .disabled(!item.isEnabled)
     }
 }
 
@@ -140,5 +122,33 @@ public extension MeeshyKeyboardBar where Glyph == MeeshyGlassButtonSymbol {
             onItem: onItem,
             glyph: { id in MeeshyGlassButtonSymbol(items.first { $0.id == id }?.systemImage ?? "circle") }
         )
+    }
+}
+
+/// Un outil suivi de son espace : le `Group` est transparent à la mise en page, la rangée répartit donc
+/// l'espace libre entre les outils comme si chacun y était posé à plat.
+///
+/// Une vue CONCRÈTE plutôt qu'une fonction à type opaque : `AsyncRenderRow<String, some View>` imbriqué dans le
+/// `ForEach` d'une rangée de `ViewThatFits` faisait planter la génération d'IR de Swift 6.2.1 (Xcode 26.1.1,
+/// celui de la CI) sur `row(display:)` — le même motif que les cellules de `MeeshyEdgeRailsBodies`.
+struct MeeshyKeyboardBarToolSlot<Glyph: View>: View {
+    let item: MeeshyKeyboardDockItem
+    let openItem: String?
+    let onItem: (String) -> Void
+    let glyph: (String) -> Glyph
+
+    var body: some View {
+        Group {
+            MeeshyGlassButton(
+                label: item.label,
+                hint: item.hint,
+                value: item.value,
+                activation: MeeshyKeyboardDockRule.activation(for: item, openItem: openItem),
+                action: { onItem(item.id) },
+                glyph: { glyph(item.id) }
+            )
+            .disabled(!item.isEnabled)
+            Spacer(minLength: 0)
+        }
     }
 }
