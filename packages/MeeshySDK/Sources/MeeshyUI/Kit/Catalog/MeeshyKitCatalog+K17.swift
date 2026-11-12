@@ -109,7 +109,7 @@ private struct MeeshyKeyboardDockSample: View {
 
     private var width: CGFloat {
         switch stateID {
-        case "coche": return 280
+        case "coche": return 296
         case "large": return 820
         default: return 390
         }
