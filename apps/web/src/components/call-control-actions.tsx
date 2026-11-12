@@ -12,7 +12,7 @@ import type { CallFamilyRow } from '@/lib/calls/call-controls-disposition';
 import type { CallPanelKind, CallPanels } from '@/lib/calls/call-screen-layer';
 import { callRecording } from '@/lib/calls/call-recording-live';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
-import { onRowKeyDown, onRowWheel, ROW_EDGE_FADE, ROW_ITEM } from '@/lib/calls/call-row-keys';
+import { edgeFadeMask, onRowKeyDown, onRowWheel, ROW_EDGE_FADE, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import type { ActiveCall } from '@/lib/calls/call-store';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -321,8 +321,8 @@ export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-on-med
 
 const FAMILY_LEGEND = { mine: 'call.section.mine', call: 'call.section.call' } as const;
 
-/** Ce qui défile dans un rail s'efface en fondu à ses deux bords, sur les 8 px de son bord : au repos, aucun bouton n'est estompé. */
-const RAIL_FADE = { maskImage: 'linear-gradient(to bottom, transparent, #000 8px, #000 calc(100% - 8px), transparent)' } as const;
+/** Ce qui défile dans un rail s'efface en fondu à ses deux bords (masque de `call-row-keys`, axe vertical) : au repos, aucun bouton n'est estompé. */
+const RAIL_FADE = { maskImage: edgeFadeMask('to bottom') } as const;
 
 /**
  * UN RAIL (#17327) — une famille en colonne de verre sur le bord de l'écran :
