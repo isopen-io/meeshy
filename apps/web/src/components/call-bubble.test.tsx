@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
-import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { authorAccentColor, colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
@@ -9,6 +9,7 @@ import { ActiveCallView } from './call-overlay';
 import { CallScreen, loadColdCallViews } from './call-screen';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { appQueryClient } from '@/lib/api/query-client';
+import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 /**
@@ -192,16 +193,28 @@ describe('la bulle montre l’autre, pas moi (P18.3)', () => {
 });
 
 describe('le liseré de la bulle (P18.4)', () => {
-  test('il porte la couleur partagée de l’autre — celle de son id et de son nom, jamais celle du titre seul', () => {
+  /* La couleur que l'écran d'appel donne à l'autre — son portrait et le liseré de sa vignette (`speakerColor`, tirée d'`authorAccentColor`
+     et rendue lisible sur le verre d'appel, miroir de `CallSpeakerColor`) : réduire l'appel ne change pas sa couleur. `u-peer` est un
+     identifiant dont la couleur partagée brute n'est PAS lisible telle quelle, donc où les deux tons se distinguent. */
+  const shown = speakerColor('u-peer', 'Amina Diallo');
+
+  test('il porte la couleur de l’autre que l’écran d’appel lui donne — celle de son id, jamais celle du titre seul', () => {
+    expect(shown).not.toBe(authorAccentColor('u-peer', 'Amina Diallo').toLowerCase());
     const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', peerKey: 'u-peer', title: 'Amina Diallo' })} />);
     const ring = tagOf(html, 'data-call-bubble-ring');
     expect(ring).not.toBe('');
-    expect(ring.toLowerCase()).toContain(authorAccentColor('u-peer', 'Amina Diallo').toLowerCase());
+    expect(ring.toLowerCase()).toContain(shown);
   });
 
-  test('la teinte de l’avatar est la même', () => {
-    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', peerKey: 'u-peer', title: 'Amina Diallo' })} />).toLowerCase();
-    expect(html.split(authorAccentColor('u-peer', 'Amina Diallo').toLowerCase()).length - 1).toBeGreaterThanOrEqual(2);
+  test('la teinte de l’avatar est la même, et c’est celle du portrait de l’écran d’appel', () => {
+    const bubble = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', peerKey: 'u-peer', title: 'Amina Diallo' })} />).toLowerCase();
+    expect(bubble.split(shown).length - 1).toBeGreaterThanOrEqual(2);
+    expect(renderToStaticMarkup(<CallScreen call={call({ peerKey: 'u-peer', title: 'Amina Diallo' })} />).toLowerCase()).toContain(shown);
+  });
+
+  test('sans pair connu (un groupe), la couleur du nom, comme le portrait de l’écran d’appel', () => {
+    const ring = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', isGroup: true, peerKey: null, title: 'Famille' })} />), 'data-call-bubble-ring');
+    expect(ring.toLowerCase()).toContain(colorForName('Famille').toLowerCase());
   });
 });
 
