@@ -3,6 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { Arrives } from '@/components/call-arrives';
+import { useScreenZoom } from '@/components/use-screen-zoom';
 import { HeldSwap } from '@/lib/calls/use-pill-motion';
 import { CameraOffStage, PeerSpeechRing } from '@/components/call-camera-off';
 import { CallModerationSlot } from '@/components/call-control-slots';
@@ -118,6 +119,7 @@ export const CALL_GRID_KIT: CallGridKit = {
   useStageFlip,
   Arrives,
   HeldSwap,
+  useScreenZoom,
 };
 
 /** Une cible de 44 et ses 4 de marge de chaque côté : en deçà, la vignette n'a pas la place du cran du zoom. */

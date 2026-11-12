@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { choiceAfterSharerChange, resolveSpotlight, type SpotlightChoice } from './call-spotlight';
-import { chooseGrid, chooseMember, chooseSelf, SCREEN_MAX_ZOOM, screenZoomAfterPinch, screenZoomAfterWheel } from './call-spotlight-gestures';
+import { chooseGrid, chooseMember, chooseSelf } from './call-spotlight-gestures';
+import { SCREEN_MAX_ZOOM, screenZoomAfterPinch, screenZoomAfterWheel } from './screen-zoom';
 import type { CallMember } from './call-store';
 
 /**
