@@ -5,11 +5,13 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { CallRecordingState } from '@/lib/calls/call-recording';
 import { callChromeStore } from '@/lib/calls/call-chrome-store';
+import { callRecordingStore } from '@/lib/calls/call-recording-store';
+import { callStore, type ActiveCall, type CallMember } from '@/lib/calls/call-store';
 import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { loadCallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { CallRecordingPanel } from './call-recording-layer';
+import CallRecordingLayer, { CallRecordingPanel } from './call-recording-layer';
 
 /**
  * CE QUE CHACUN VOIT PENDANT UN ENREGISTREMENT D'APPEL (#8064) — la question
@@ -337,5 +339,79 @@ describe('la carte d’accord et la capsule de l’enregistrement', () => {
       if (real === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'offsetHeight');
       else Object.defineProperty(HTMLElement.prototype, 'offsetHeight', real);
     });
+  });
+});
+
+/**
+ * EN GROUPE, LA CARTE NOMME CELUI QUI DEMANDE (#8064, R2.2) — la question porte le nom du membre dont
+ * l'identifiant est `requesterId`, jamais celui du premier membre de l'appel ni du titre de la conversation.
+ */
+describe('la carte d’accord nomme le demandeur, en groupe', () => {
+  const member = (userId: string, name: string): CallMember => ({ userId, name, avatar: null, micMuted: false, cameraOn: false, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected' });
+  const group: ActiveCall = {
+    callId: 'call-1',
+    conversationId: 'c-1',
+    media: 'audio',
+    direction: 'incoming',
+    isGroup: true,
+    title: 'Équipe',
+    avatar: null,
+    callerName: 'Amina',
+    phase: { kind: 'connected' },
+    connectedAt: 0,
+    endedDurationSec: null,
+    micMuted: false,
+    cameraOn: false,
+    facing: 'user',
+    screenSharing: false,
+    members: { 'u-a': member('u-a', 'Amina'), 'u-b': member('u-b', 'Bintou'), 'u-c': member('u-c', 'Chloé') },
+    display: 'full',
+    localStream: null,
+    remoteStreams: {},
+    captions: [],
+    captionsMode: 'off',
+    captionPeers: [],
+    preview: null,
+    previewed: false,
+    transcription: 'idle',
+    initiatorId: 'u-a',
+    invitedBy: null,
+    quality: null,
+  };
+
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  const asks = (requesterId: string): string => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => {
+      callStore.setState({ call: group });
+      callRecordingStore.setState({ view: { kind: 'pending', callId: 'call-1', recordingKind: 'audio', recordingId: 'rec-1', requesterId, mine: false, mustAnswer: true }, notice: null });
+      root.render(<CallRecordingLayer />);
+    });
+    const question = host.querySelector('[data-call-recording-ask]')?.getAttribute('aria-label') ?? '';
+    act(() => {
+      root.unmount();
+      callRecordingStore.setState({ view: { kind: 'idle' }, notice: null });
+      callStore.setState({ call: null });
+    });
+    host.remove();
+    return question;
+  };
+
+  test('Bintou demande : la carte dit « Bintou veut enregistrer l’appel » ; un inconnu de l’appel reste « Un participant »', () => {
+    expect(asks('u-b')).toBe('Bintou veut enregistrer l’appel');
+    expect(asks('u-gone')).toBe('Un participant veut enregistrer l’appel');
   });
 });

@@ -227,6 +227,28 @@ describe('la pile des bandeaux du haut se referme en mouvement (S2.6)', () => {
     motion.restore();
   });
 
+  test('la pile relève toutes les places AVANT d’épingler celui qui repart : aucune mise en page forcée entre deux lectures (R1.6)', async () => {
+    const motion = recordAnimations();
+    const unlay = layOutStack();
+    const view = await mountStack(true);
+    const measured = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+    const readsAfterPin: string[] = [];
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value(this: HTMLElement) {
+        const pinned = document.querySelector<HTMLElement>('[data-call-screen-share-banner][data-leaving]')?.style.top ?? '';
+        if (pinned !== '') readsAfterPin.push(this.getAttribute('data-call-banner-slot') ?? this.tagName);
+        return measured?.value.call(this);
+      },
+    });
+    await view.render(false);
+    expect(view.host.querySelector<HTMLElement>('[data-call-screen-share-banner]')?.style.top).toBe('0px');
+    expect(readsAfterPin).toEqual([]);
+    view.done();
+    unlay();
+    motion.restore();
+  });
+
   test('la feuille sort le bandeau sortant de la mise en page, pour que la pile se referme sans l’attendre', () => {
     const sheet = readFileSync(new URL('../styles/call-motion.css', import.meta.url), 'utf8');
     expect(sheet).toMatch(/\[data-call-banner-stack\]\s*>\s*\[data-call-screen-share-banner\]\[data-leaving\]\s*\{[^}]*position:\s*absolute/);
