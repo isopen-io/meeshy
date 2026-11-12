@@ -593,13 +593,14 @@ describe('ModeCarousel', () => {
     view.done();
   });
 
-  test('le geste qui a balayé n’est pas un toucher : il ne prend pas de photo, et ne lance pas de vidéo', async () => {
+  test('le geste qui a balayé n’est pas un toucher : son clic est avalé, il ne compte pas dans les deux tapes de la photo', async () => {
     const view = mountDeclined({ index: 0 });
+    const tap = () => act(async () => view.pages?.click());
     view.swipe(70, 25);
-    await act(async () => view.host.querySelector<HTMLElement>('[data-carousel-item="gold"]')?.click());
-    await act(async () => view.host.querySelector<HTMLElement>('[data-carousel-item="gold"]')?.click());
+    await tap();
+    await tap();
     expect(view.captured).toEqual([]);
-    await act(async () => view.pages?.click());
+    await tap();
     expect(view.captured).toEqual(['photo']);
     view.done();
   });

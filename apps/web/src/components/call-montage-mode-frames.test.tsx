@@ -125,17 +125,58 @@ describe('CallMontageMode — les cadres', () => {
   const duo = callOf(member('u-awa', 'Awa'));
   const trio = callOf(member('u-awa', 'Awa'), member('u-karim', 'Karim'));
 
-  test('« Classiques » d’abord et par défaut, puis les ambiances qui servent deux personnes ; le carrousel reste celui des montages', async () => {
+  test('« Classiques » d’abord et par défaut, puis les ambiances mises en avant qui servent deux personnes ; le carrousel reste celui des montages', async () => {
     const view = await mount(duo);
-    const moods = loaded.module?.createFrameStudio({ fonts: undefined }).moods(2) ?? [];
-    expect(moods.length).toBeGreaterThan(1);
+    const studio = loaded.module?.createFrameStudio({ fonts: undefined });
+    const spotlight = studio?.moods(2, 'spotlight') ?? [];
+    expect(spotlight).toHaveLength(7);
     expect(view.find('[data-call-frame-moods]')?.getAttribute('aria-label')).toBe('Ambiances');
     expect(view.chips()[0]).toEqual(['classics', 'Classiques', 'true']);
-    expect(view.chips().slice(1).map(([id]) => id)).toEqual([...moods]);
+    expect(view.chips().slice(1).map(([id]) => id)).toEqual([...spotlight]);
     expect(view.chips().slice(1).every(([, , pressed]) => pressed === 'false')).toBe(true);
     expect(view.find('[data-call-frame-mood="jovial"]')?.textContent).toBe('Jovial');
     expect(view.items()).toHaveLength(13);
     expect(view.checked()).toBe('grid');
+    view.done();
+  });
+
+  test('« Plus d’ambiances » ouvre tout le catalogue, « Moins d’ambiances » le range (C1.3)', async () => {
+    const view = await mount(duo);
+    const studio = loaded.module?.createFrameStudio({ fonts: undefined });
+    const scope = () => view.find('[data-call-frame-scope]');
+    expect(scope()?.textContent).toBe('Plus d’ambiances');
+    expect(scope()?.getAttribute('aria-description')).toBe('Montre toutes les ambiances et tous les cadres');
+    await view.press('[data-call-frame-scope]');
+    expect(view.chips().slice(1).map(([id]) => id)).toEqual([...(studio?.moods(2) ?? [])]);
+    expect(scope()?.textContent).toBe('Moins d’ambiances');
+    await view.press('[data-call-frame-scope]');
+    expect(view.chips().slice(1).map(([id]) => id)).toEqual([...(studio?.moods(2, 'spotlight') ?? [])]);
+    expect(scope()?.textContent).toBe('Plus d’ambiances');
+    view.done();
+  });
+
+  test('une ambiance ouverte d’office ne montre que ses vedettes, dans l’ordre de la mise en avant ; tout le catalogue les montre toutes', async () => {
+    const view = await mount(duo);
+    const studio = loaded.module?.createFrameStudio({ fonts: undefined });
+    await view.press('[data-call-frame-mood="morbide"]');
+    expect(view.items()).toEqual((studio?.framesOf(2, 'morbide', 'spotlight') ?? []).map((frame) => frame.id));
+    expect(view.items().length).toBeLessThan((studio?.framesOf(2, 'morbide') ?? []).length);
+    await view.press('[data-call-frame-scope]');
+    expect(view.items()).toEqual((studio?.framesOf(2, 'morbide') ?? []).map((frame) => frame.id));
+    view.done();
+  });
+
+  test('un cadre choisi hors de la mise en avant garde la rangée ouverte : le choix en cours reste visible', async () => {
+    const view = await mount(duo);
+    const studio = loaded.module?.createFrameStudio({ fonts: undefined });
+    const hidden = studio?.moods(2).flatMap((mood) => studio.framesOf(2, mood)).find((frame) => !(studio.framesOf(2, frame.mood, 'spotlight').some((other) => other.id === frame.id)));
+    if (hidden === undefined) throw new Error('aucun cadre hors mise en avant');
+    await view.press('[data-call-frame-scope]');
+    await view.press(`[data-call-frame-mood="${hidden.mood}"]`);
+    await view.press(`[data-carousel-item="${hidden.id}"]`);
+    await view.press('[data-call-frame-scope]');
+    expect(view.find(`[data-carousel-item="${hidden.id}"]`)).not.toBeNull();
+    expect(view.find('[data-call-frame-scope]')?.textContent).toBe('Moins d’ambiances');
     view.done();
   });
 
@@ -172,7 +213,8 @@ describe('CallMontageMode — les cadres', () => {
     const module = loaded.module as FrameStudioModule;
     const base = module.createFrameStudio({ fonts: undefined }).frames.find((frame) => frame.mood === 'jovial' && frame.bucket === 'duo');
     if (base === undefined) throw new Error('aucun cadre jovial de duo');
-    const many = Array.from({ length: 9 }, (_, index) => ({ ...base, id: `jovial.m${index}.duo`, motif: `jovial.m${index}`, name: `Motif ${index}` }));
+    const { styles: _styles, ...plain } = base;
+    const many = Array.from({ length: 9 }, (_, index) => ({ ...plain, id: `jovial.m${index}.duo`, motif: `jovial.m${index}`, name: `Motif ${index}` }));
     const view = await mount(duo, { module: { createFrameStudio: () => module.createFrameStudio({ frames: many, fonts: undefined }) } });
     await view.press('[data-call-frame-mood="jovial"]');
     const ids = view.items();
@@ -203,9 +245,9 @@ describe('CallMontageMode — les cadres', () => {
     const detail = (id: string) => view.find(`[data-carousel-item="${id}"]`)?.getAttribute('title');
     expect(detail('jovial.photo.duo')).toBe('Capture photo et vidéo uniquement');
     expect(detail('jovial.direct.duo')).toBe('Utilisable : appels vidéo et captures');
-    expect(view.find('[data-call-mode-detail]')?.textContent).toBe('Capture photo et vidéo uniquement');
+    expect(view.find('[data-call-mode-detail]')).toBeNull();
     await view.press('[data-carousel-item="jovial.direct.duo"]');
-    expect(view.find('[data-call-mode-detail]')?.textContent).toBe('Utilisable : appels vidéo et captures');
+    expect(view.find('[data-call-mode-detail]')).toBeNull();
     const described = view.find('[data-carousel-item="jovial.direct.duo"]')?.getAttribute('aria-describedby') ?? '';
     expect(described.split(' ').map((id) => view.find(`[id="${id}"]`)?.textContent)).toContain('Utilisable : appels vidéo et captures');
     view.done();
@@ -249,6 +291,67 @@ describe('CallMontageMode — les cadres', () => {
     else Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', original);
     if (measured === undefined) delete (HTMLElement.prototype as { getBoundingClientRect?: unknown }).getBoundingClientRect;
     else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', measured);
+  });
+
+  test('les vignettes du Montage sont portrait, 48 × 85, classiques comme cadres (C1.5)', async () => {
+    const view = await mount(duo);
+    const box = (id: string) => [view.find(`[data-carousel-item="${id}"]`)?.getAttribute('style')?.includes('width: 48px'), view.find(`[data-carousel-item="${id}"]`)?.getAttribute('style')?.includes('height: 85px')];
+    expect(box('grid')).toEqual([true, true]);
+    await view.press('[data-call-frame-mood="jovial"]');
+    expect(box(view.items()[0] ?? '')).toEqual([true, true]);
+    view.done();
+  });
+
+  const declined = () => {
+    const studio = loaded.module?.createFrameStudio({ fonts: undefined });
+    const base = studio?.moods(2, 'spotlight').flatMap((mood) => studio.framesOf(2, mood, 'spotlight')).find((frame) => (frame.styles?.length ?? 0) > 0);
+    if (studio === undefined || base === undefined) throw new Error('aucun cadre à déclinaisons dans la mise en avant');
+    return { studio, base, style: base.styles?.[0] };
+  };
+
+  test('le cadre choisi montre ses déclinaisons empilées, et le clavier passe de l’une à l’autre sans quitter le cadre (C1.6)', async () => {
+    const { base, style } = declined();
+    const view = await mount(duo);
+    await view.press(`[data-call-frame-mood="${base.mood}"]`);
+    await view.press(`[data-carousel-item="${base.id}"]`);
+    const pages = () => view.all(`[data-carousel-item="${base.id}"] [data-call-declination-pages] [data-call-frame-thumb]`).map((canvas) => canvas.getAttribute('data-call-frame-thumb'));
+    expect(pages()).toEqual([base.id, `${base.id}.${style?.id ?? ''}`]);
+    expect(view.all('[data-call-declination-pages]')).toHaveLength(1);
+    const item = view.find(`[data-carousel-item="${base.id}"]`) as HTMLElement;
+    await act(async () => void item.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
+    expect(view.checked()).toBe(base.id);
+    expect(view.find('[data-call-capture-preview]')?.getAttribute('data-call-capture-preview')).toBe(`${base.id}.${style?.id ?? ''}`);
+    expect(view.find(`[data-carousel-item="${base.id}"]`)?.getAttribute('aria-label')).toContain(' · ');
+    expect(view.find('[data-call-mode-selected]')?.textContent).toContain(' · ');
+    await act(async () => void item.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true })));
+    expect(view.find('[data-call-capture-preview]')?.getAttribute('data-call-capture-preview')).toBe(base.id);
+    view.done();
+  });
+
+  test('la photo d’une déclinaison se prend sous son nom de fichier, et son aperçu se peint', async () => {
+    const { base, style } = declined();
+    const view = await mount(duo);
+    await view.press(`[data-call-frame-mood="${base.mood}"]`);
+    await view.press(`[data-carousel-item="${base.id}"]`);
+    await act(async () => void (view.find(`[data-carousel-item="${base.id}"]`) as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
+    await view.press(`[data-carousel-item="${base.id}"]`);
+    await view.press(`[data-carousel-item="${base.id}"]`);
+    const styled = `${base.id}.${style?.id ?? ''}`;
+    expect(view.saved.map((files) => files.map((file) => file.fileName))).toEqual([[`meeshy-appel-cadre-${styled.replaceAll('.', '-')}-20260929-180409.jpg`]]);
+    view.done();
+  });
+
+  test('un troisième arrive : la déclinaison choisie suit son cadre dans la variante de la nouvelle tranche', async () => {
+    const { studio, base, style } = declined();
+    const view = await mount(duo);
+    await view.press(`[data-call-frame-mood="${base.mood}"]`);
+    await view.press(`[data-carousel-item="${base.id}"]`);
+    await act(async () => void (view.find(`[data-carousel-item="${base.id}"]`) as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
+    await view.rerender(trio);
+    await act(async () => {});
+    const expected = studio.reconcile(`${base.id}.${style?.id ?? ''}`, 3);
+    if (expected !== null && expected.mood === base.mood) expect(view.find('[data-call-capture-preview]')?.getAttribute('data-call-capture-preview')).toBe(expected.id);
+    view.done();
   });
 
   test('les classiques ne portent aucun libellé d’usage', async () => {
@@ -337,7 +440,7 @@ describe('CallMontageMode — les cadres', () => {
     const moods = loaded.module?.createFrameStudio({ fonts: undefined }).moods(2) ?? [];
     const kept = moods.filter((mood) => mood !== 'jovial');
     const view = await mount(duo, { shelf: kept });
-    expect(view.chips().map(([id]) => id)).toEqual(['classics', ...kept]);
+    expect(view.chips().map(([id]) => id)).toEqual(['classics', ...(loaded.module?.createFrameStudio({ fonts: undefined }).moods(2, 'spotlight') ?? []).filter((mood) => kept.includes(mood))]);
     expect(view.find('[data-call-frame-mood="jovial"]')).toBeNull();
     view.done();
   });
@@ -346,7 +449,8 @@ describe('CallMontageMode — les cadres', () => {
     forgetShelf();
     const moods = loaded.module?.createFrameStudio({ fonts: undefined }).moods(2) ?? [];
     const view = await mount(duo, { shelf: null });
-    expect(view.chips().map(([id]) => id)).toEqual(['classics', ...moods]);
+    expect(moods.length).toBeGreaterThan(7);
+    expect(view.chips().map(([id]) => id)).toEqual(['classics', ...(loaded.module?.createFrameStudio({ fonts: undefined }).moods(2, 'spotlight') ?? [])]);
     view.done();
   });
 
