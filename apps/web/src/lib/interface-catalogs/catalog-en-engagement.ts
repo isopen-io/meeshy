@@ -13,6 +13,13 @@ const enEngagement = {
   'engagement.pill.join': '{streak}, {points}',
   'engagement.post.points.one': 'This post made {count} spark fly for you',
   'engagement.post.points.other': 'This post made {count} sparks fly for you',
+  'engagement.card.streak.one': 'day in a row here',
+  'engagement.card.streak.other': 'days in a row here',
+  'engagement.card.today': 'Today',
+  'engagement.card.total': 'Here since the start',
+  'engagement.card.open': 'Open the game',
+  'engagement.card.hide': 'Hide the flame',
+  'engagement.card.title': 'Conversation streak',
 } as const;
 
 export default enEngagement;

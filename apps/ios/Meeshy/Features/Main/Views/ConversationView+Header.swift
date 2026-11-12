@@ -63,7 +63,7 @@ extension ConversationView {
             isPreview: previewMode,
             door: headerAvatarDoor,
             onSetExpanded: { setHeaderExpanded($0) },
-            onDismissFlame: { dismissHeaderFlame() },
+            onDismissFlame: { dismissHeaderFlame() }, onOpenGame: { router.push(.progression) },
             onNavigateToDM: { userId, name in
                 Task { await self.navigateToDM(with: userId, name: name) }
             },
@@ -352,6 +352,7 @@ struct ConversationHeaderAvatarView: View {
     let door: ConversationHeaderAvatarDoor
     var onSetExpanded: (Bool) -> Void
     var onDismissFlame: () -> Void
+    var onOpenGame: () -> Void
     var onNavigateToDM: (String, String) -> Void
     var onViewProfile: (() -> Void)?
     var onViewMemberProfile: (ProfileSheetUser) -> Void
@@ -618,7 +619,7 @@ struct ConversationHeaderAvatarView: View {
                 headerExpanded: showsIdentity,
                 dismissed: headerState.flameDismissed,
                 avatarDiameter: 44,
-                onDismiss: onDismissFlame
+                onDismiss: onDismissFlame, onOpenGame: onOpenGame
             ))
         }
     }
