@@ -27,6 +27,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  /* Un arrêt d'enregistrement lancé par un témoin finit APRÈS lui et pose son avis dans le magasin : il ne doit pas survivre au fichier — la pile des bandeaux de l'écran d'appel le lirait comme un bandeau (P16.7). */
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  callRecordingStore.setState({ view: { kind: 'idle' }, notice: null });
   delete globals.IS_REACT_ACT_ENVIRONMENT;
   await releaseHappyDomIfRegistered();
 });
