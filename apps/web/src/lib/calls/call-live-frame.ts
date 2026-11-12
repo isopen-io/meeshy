@@ -99,8 +99,11 @@ type LiveFrameContext = {
 
 function liveFrameContext(deps: LiveFrameDeps): LiveFrameContext {
   const state = (): CallLiveFrameState => deps.store.getState();
-  const place = (proposal: LiveFrameProposal | null): void =>
-    deps.store.setState(liveFrameMayShowProposal(deps.calls.getState().call) ? { proposal, withheld: null } : { proposal: null, withheld: proposal });
+  const place = (proposal: LiveFrameProposal | null): void => {
+    const next = liveFrameMayShowProposal(deps.calls.getState().call) ? { proposal, withheld: null } : { proposal: null, withheld: proposal };
+    if (next.proposal === state().proposal && next.withheld === state().withheld) return;
+    deps.store.setState(next);
+  };
   return {
     place,
     deps,
@@ -160,7 +163,7 @@ async function applyFrame(ctx: LiveFrameContext, id: string | null): Promise<voi
 
 async function answerProposal(ctx: LiveFrameContext, reply: CallLiveFrameReply): Promise<void> {
   const { proposal, callId } = ctx.state();
-  if (proposal === null || callId === null || !liveFrameMayShowProposal(ctx.deps.calls.getState().call)) return;
+  if (proposal === null || callId === null) return;
   ctx.patch(reply === 'accepted' ? { proposal: null, frameId: proposal.frameId, peerFrameId: proposal.frameId } : { proposal: null });
   await sendReply(ctx.deps, callId, proposal.frameId, reply);
 }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import { createCallLiveFrame, decodeLiveFrameSelected, isLiveFrameId, liveFrameDuo, toggledHold, type LiveFrameDeps } from './call-live-frame';
+import { createCallLiveFrame, decodeLiveFrameSelected, isLiveFrameId, liveFrameDuo, liveFrameMayShowProposal, toggledHold, type LiveFrameDeps } from './call-live-frame';
 import { createCallLiveFrameStore } from './call-live-frame-store';
 import { createCallStore, type ActiveCall, type CallMember } from './call-store';
 
@@ -214,6 +214,28 @@ describe('la proposition de l’autre (C2)', () => {
 describe('la proposition n’est montrée qu’en duo vidéo (C2.10)', () => {
   const audio = () => activeCall({ media: 'audio', cameraOn: false, members: { 'u-awa': { ...member('u-awa', 'Awa'), cameraOn: false } } });
 
+  test('la loi : duo vidéo seulement — ni duo audio, ni groupe, ni appel pas encore joint (table de `CallLiveFrameRule.mayShowProposal`)', () => {
+    expect(liveFrameMayShowProposal(activeCall())).toBe(true);
+    expect(liveFrameMayShowProposal(audio())).toBe(false);
+    expect(liveFrameMayShowProposal(activeCall({ isGroup: true, members: { 'u-awa': member('u-awa', 'Awa'), 'u-k': member('u-k', 'Karim') } }))).toBe(false);
+    expect(liveFrameMayShowProposal(activeCall({ members: { 'u-awa': member('u-awa', 'Awa'), 'u-k': member('u-k', 'Karim') } }))).toBe(false);
+    expect(liveFrameMayShowProposal(activeCall({ phase: { kind: 'incoming' } }))).toBe(false);
+    expect(liveFrameMayShowProposal(null)).toBe(false);
+  });
+
+  test('un appel qui bouge sans toucher la proposition ne réécrit pas l’état du cadre', () => {
+    const h = harness();
+    h.frame.start();
+    h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
+    let writes = 0;
+    h.store.subscribe(() => {
+      writes += 1;
+    });
+    h.calls.setState({ call: activeCall({ micMuted: true }) });
+    h.calls.setState({ call: activeCall({ micMuted: false }) });
+    expect(writes).toBe(0);
+  });
+
   test('en duo audio, une proposition reçue ne se montre pas', () => {
     const h = harness({ call: audio() });
     h.frame.start();
@@ -221,7 +243,7 @@ describe('la proposition n’est montrée qu’en duo vidéo (C2.10)', () => {
     expect(h.state().proposal).toBeNull();
   });
 
-  test('« Appliquer » ne pose rien en duo audio', async () => {
+  test('en duo audio, aucune carte : rien n’est à appliquer, aucun cadre ne se pose', async () => {
     const h = harness({ call: audio() });
     h.frame.start();
     h.frame.receive(SERVER_EVENTS.CALL_FRAME_SELECTED, selected());
