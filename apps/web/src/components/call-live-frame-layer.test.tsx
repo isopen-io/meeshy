@@ -1,13 +1,14 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { NO_LIVE_FRAME, callLiveFrameStore, type CallLiveFrameState } from '@/lib/calls/call-live-frame-store';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { CallLiveFrameStatus, LIVE_FRAME_NOTICE_MS, liveFramePaintSize } from './call-live-frame-layer';
+import { CallLiveFrameStatus, CallLiveFrameSurface, LIVE_FRAME_NOTICE_MS, liveFramePaintSize } from './call-live-frame-layer';
 import { CallScreen } from './call-screen';
 
 /**
@@ -19,6 +20,7 @@ import { CallScreen } from './call-screen';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(async () => {
+  await loadPillMotion();
   await loadCallControlsCatalog('fr');
   await loadCallControlsCatalog('en');
   await import('./call-control-actions');
@@ -201,5 +203,121 @@ describe('le cadre gardé à l’écran (C3)', () => {
     const audio = mountNode(<CallScreen call={duoCall({ media: 'audio', cameraOn: false, members: { 'u-awa': { ...member('u-awa', 'Awa'), cameraOn: false } } })} canShare effectsSupport={{ color: false, blur: false }} />);
     expect(audio.find('[data-call-live-frame-surface]')).toBeNull();
     audio.done();
+  });
+});
+
+describe('la carte et la capsule entrent et repartent en mouvement (C2.1, C2.7, C3.6)', () => {
+  type Played = { readonly what: string; readonly keyframes: Keyframe[]; readonly duration: unknown };
+  const proto = (): { animate?: unknown } => HTMLElement.prototype as unknown as { animate?: unknown };
+  const played: Played[] = [];
+  const finishers: Array<() => void> = [];
+  let before: PropertyDescriptor | undefined;
+  let media: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    before = Object.getOwnPropertyDescriptor(proto(), 'animate');
+    media = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+    played.length = 0;
+    finishers.length = 0;
+    Object.defineProperty(proto(), 'animate', {
+      configurable: true,
+      writable: true,
+      value: function (this: HTMLElement, keyframes: Keyframe[], options: { duration: number }) {
+        played.push({ what: this.hasAttribute('data-call-live-frame-slot') ? 'slot' : this.hasAttribute('data-call-live-frame-surface-host') ? 'surface' : 'other', keyframes, duration: options.duration });
+        const finished = new Promise<void>((resolve) => finishers.push(resolve));
+        return { cancel: () => undefined, finished, onfinish: null };
+      },
+    });
+  });
+  afterEach(() => {
+    if (before === undefined) Reflect.deleteProperty(proto(), 'animate');
+    else Object.defineProperty(proto(), 'animate', before);
+    if (media === undefined) Reflect.deleteProperty(window, 'matchMedia');
+    else Object.defineProperty(window, 'matchMedia', media);
+  });
+
+  const none = { proposal: null, answer: null, notice: null } as const;
+  const proposal = { proposal: { frameId: 'jovial.confettis', from: 'Awa' }, answer: null, notice: null } as const;
+  const answer = { proposal: null, answer: { from: 'Awa', reply: 'accepted' as const }, notice: null };
+  const slots = () => played.filter((entry) => entry.what === 'slot');
+  const finish = () => act(async () => void finishers.splice(0).forEach((resolve) => resolve()));
+
+  test('la carte tient la largeur de la pile : sa case est pleine largeur, la carte garde sa marge', () => {
+    const view = mountNode(status(proposal, spy()));
+    expect(view.find('[data-call-live-frame-slot]')?.className.split(' ')).toContain('w-full');
+    expect(view.find('[data-call-live-frame-proposal]')?.className.split(' ')).toContain('mx-3');
+    view.done();
+  });
+
+  test('la carte entre depuis le haut, et repart vers lui sans prendre le doigt', async () => {
+    const view = mountNode(status(none, spy()));
+    expect(view.find('[data-call-live-frame-slot]')).toBeNull();
+    view.rerender(status(proposal, spy()));
+    expect(slots().map((entry) => [entry.keyframes[0], entry.keyframes[1], entry.duration])).toEqual([[{ opacity: 0, transform: 'translateY(-100%)' }, { opacity: 1, transform: 'translateY(0)' }, 200]]);
+    await finish();
+    view.rerender(status(none, spy()));
+    const leaving = view.find('[data-call-live-frame-slot]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.hasAttribute('inert')).toBe(true);
+    expect(leaving?.querySelector('[data-call-live-frame-proposal]')).not.toBeNull();
+    expect(slots()[1]?.keyframes.map((frame) => frame.transform)).toEqual(['translateY(0)', 'translateY(-100%)']);
+    await finish();
+    expect(view.find('[data-call-live-frame-slot]')).toBeNull();
+    view.done();
+  });
+
+  test('la capsule de réponse entre et repart de même, et se retire seule au bout de quatre secondes', async () => {
+    const view = mountNode(status(none, spy()));
+    view.rerender(status(answer, spy()));
+    expect(slots()).toHaveLength(1);
+    expect(view.find('[data-call-live-frame-answer]')?.textContent).toBe('Awa a appliqué votre cadre');
+    await finish();
+    view.rerender(status(none, spy()));
+    expect(view.find('[data-call-live-frame-slot]')?.hasAttribute('data-leaving')).toBe(true);
+    expect(view.find('[data-call-live-frame-answer]')?.textContent).toBe('Awa a appliqué votre cadre');
+    expect(slots()).toHaveLength(2);
+    await finish();
+    expect(view.find('[data-call-live-frame-slot]')).toBeNull();
+    view.done();
+  });
+
+  test('sous « Réduire les animations » : un fondu court, sans déplacement', async () => {
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: true }) });
+    const view = mountNode(status(none, spy()));
+    view.rerender(status(proposal, spy()));
+    await finish();
+    view.rerender(status(none, spy()));
+    expect(slots().map((entry) => entry.duration)).toEqual([150, 150]);
+    expect(slots().every((entry) => entry.keyframes.every((frame) => frame.transform === undefined))).toBe(true);
+    view.done();
+  });
+
+  test('une proposition qui revient pendant le départ reprend sa place, sans se démonter', async () => {
+    const view = mountNode(status(proposal, spy()));
+    view.rerender(status(none, spy()));
+    view.rerender(status(proposal, spy()));
+    expect(view.find('[data-call-live-frame-slot]')?.hasAttribute('data-leaving')).toBe(false);
+    await finish();
+    expect(view.find('[data-call-live-frame-proposal]')).not.toBeNull();
+    view.done();
+  });
+
+  test('le cadre gardé se fond : sa toile paraît et s’efface en fondu, sans déplacement, et ne prend aucun toucher', async () => {
+    const studio = (await import('@/lib/calls/frames/frame-studio')).createFrameStudio();
+    const surface = (frameId: string | null) => <CallLiveFrameSurface language="fr" studio={studio} shown={frameId === null ? null : { frameId, remoteSharedName: null }} call={duoCall()} stage={() => null} />;
+    const view = mountNode(surface(null));
+    expect(view.find('[data-call-live-frame-surface-host]')).toBeNull();
+    view.rerender(surface('jovial.fete.duo'));
+    expect(view.find('[data-call-live-frame-surface-host] canvas[data-call-live-frame-surface]')).not.toBeNull();
+    expect(played.filter((entry) => entry.what === 'surface').map((entry) => entry.keyframes)).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
+    await finish();
+    view.rerender(surface(null));
+    const leaving = view.find('[data-call-live-frame-surface-host]');
+    expect(leaving?.hasAttribute('data-leaving')).toBe(true);
+    expect(leaving?.querySelector('canvas')).not.toBeNull();
+    expect(played.filter((entry) => entry.what === 'surface').map((entry) => entry.keyframes[1])).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+    await finish();
+    expect(view.find('[data-call-live-frame-surface-host]')).toBeNull();
+    view.done();
   });
 });
