@@ -7,6 +7,7 @@ import type { CallRecordingNotice, CallRecordingState } from '@/lib/calls/call-r
 import { callRecording } from '@/lib/calls/call-recording-live';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import { callStore } from '@/lib/calls/call-store';
+import { topBannersAbove } from '@/lib/calls/call-top-banners';
 import { translateCallRecording as translate } from '@/lib/i18n-call-recording-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
@@ -43,7 +44,8 @@ const noticeKey = (notice: CallRecordingNotice): NoticeKey => {
   return 'callRecording.stopped.other';
 };
 
-const TOP = 'calc(env(safe-area-inset-top) + 3.75rem)';
+/** Sous l'en-tête, et sous les bandeaux que la pile pose avant lui (`call-top-banners.ts`, P16.7) : le partage d'écran. */
+const topOf = (offset: number): string => `calc(env(safe-area-inset-top) + 3.75rem + ${offset}px)`;
 
 /**
  * L'indicateur « Enregistrement en cours » (et son bouton Arrêter) se range avec le reste de
@@ -51,7 +53,7 @@ const TOP = 'calc(env(safe-area-inset-top) + 3.75rem)';
  * et revient avec lui (`call-motion.css`, `call-chrome-store.ts`). La carte d'accord, elle,
  * ne se range jamais (G1.6).
  */
-function RecordingStatus({ recording, label, stowed, children }: { readonly recording: boolean; readonly label: string; readonly stowed: boolean; readonly children: ReactNode }) {
+function RecordingStatus({ recording, label, stowed, top, children }: { readonly recording: boolean; readonly label: string; readonly stowed: boolean; readonly top: string; readonly children: ReactNode }) {
   const node = useRef<HTMLDivElement>(null);
   useStowFade(node, stowed);
   return (
@@ -60,7 +62,7 @@ function RecordingStatus({ recording, label, stowed, children }: { readonly reco
       role="status"
       aria-hidden={stowed ? true : undefined}
       className="fixed inset-x-0 z-[215] mx-auto flex w-fit items-center gap-2 rounded-full py-1 ps-4 pe-1 text-body shadow-lg"
-      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: TOP, '--stow-clearance': '3.75rem' } as CSSProperties}
+      style={{ background: PILL_BG, color: 'var(--color-on-media)', top, '--stow-clearance': '3.75rem' } as CSSProperties}
       data-call-stow="top"
       data-call-stowed={stowed ? '' : undefined}
       data-call-recording-indicator={recording ? 'recording' : 'waiting'}
@@ -80,6 +82,7 @@ export function CallRecordingPanel({
   onStop,
   onDismiss,
   stowed = false,
+  offset = 0,
 }: {
   readonly state: CallRecordingState;
   readonly requesterName: string;
@@ -89,7 +92,10 @@ export function CallRecordingPanel({
   readonly onDismiss: () => void;
   /** Un toucher a rangé les commandes : l'indicateur part avec elles (G1.1). */
   readonly stowed?: boolean;
+  /** Ce que les bandeaux posés avant lui prennent sous l'en-tête (px). */
+  readonly offset?: number;
 }) {
+  const top = topOf(offset);
   const { view, notice } = state;
   if (view.kind === 'pending' && view.mustAnswer) {
     const question = translate(language, view.recordingKind === 'video' ? 'callRecording.askVideo' : 'callRecording.ask', { name: requesterName });
@@ -98,7 +104,7 @@ export function CallRecordingPanel({
         role="alertdialog"
         aria-label={question}
         className="fixed inset-x-3 z-[215] mx-auto flex max-w-md flex-col gap-3 rounded-card p-4 shadow-lg"
-        style={{ background: PILL_BG, color: 'var(--color-on-media)', top: TOP }}
+        style={{ background: PILL_BG, color: 'var(--color-on-media)', top }}
         data-call-recording-ask=""
       >
         <p className="text-body font-semibold">{question}</p>
@@ -120,7 +126,7 @@ export function CallRecordingPanel({
     const recording = view.kind === 'recording';
     const label = translate(language, recording ? 'callRecording.active' : 'callRecording.waiting');
     return (
-      <RecordingStatus recording={recording} label={label} stowed={stowed}>
+      <RecordingStatus recording={recording} label={label} stowed={stowed} top={top}>
         {view.kind === 'asking' ? <span className="size-11" /> : (
           <button
             type="button"
@@ -140,7 +146,7 @@ export function CallRecordingPanel({
     <div
       role="status"
       className="fixed inset-x-0 z-[215] mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full py-1 ps-4 pe-1 text-body shadow-lg"
-      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: TOP }}
+      style={{ background: PILL_BG, color: 'var(--color-on-media)', top }}
       data-call-recording-notice={notice.kind}
     >
       <span>{translate(language, noticeKey(notice))}</span>
@@ -157,6 +163,7 @@ export default function CallRecordingLayer() {
   const requesterName = useStore(callStore, (calls) => (requesterId === null ? null : (calls.call?.members[requesterId]?.name ?? null)));
   const language = currentInterfaceLanguage();
   const stowed = useStore(callChromeStore, (chrome) => chrome.stowed);
+  const offset = useStore(callStore, (calls) => topBannersAbove('recording', { 'screen-share': calls.call?.display === 'full' && calls.call.screenSharing }));
   const noticeShown = state.view.kind === 'idle' && state.notice !== null;
   useEffect(() => {
     if (!noticeShown) return undefined;
@@ -172,6 +179,7 @@ export default function CallRecordingLayer() {
       onStop={() => void callRecording.stop()}
       onDismiss={callRecording.dismiss}
       stowed={stowed}
+      offset={offset}
     />
   );
 }

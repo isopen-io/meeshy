@@ -120,9 +120,6 @@ export function CallCaptureAlerts({ members, language }: { readonly members: Rea
   );
 }
 
-/** La place que la capsule prend sous l'en-tête (44 px et sa marge) : la vignette et ses commandes descendent d'autant. */
-export const CALL_CAPTURE_ROW_CLEARANCE = 56;
-
 export const someoneCaptures = (members: Readonly<Record<string, CallMember>>): boolean => Object.values(members).some((member) => member.capturing);
 
 export function CallPeerAlerts({ members, language }: { readonly members: Readonly<Record<string, CallMember>>; readonly language: InterfaceLanguage }) {

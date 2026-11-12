@@ -62,11 +62,15 @@ export const browserSelfPreview: SelfPreviewDeps<MediaStream> = {
 
 export type IncomingChoice = { readonly micOn: boolean; readonly cameraOn: boolean };
 
-export type IncomingConsentKey = 'callControls.incoming.seenBy' | 'callControls.incoming.heardBy' | 'callControls.incoming.silent';
+export type IncomingConsentKey = 'callControls.incoming.seenBy' | 'callControls.incoming.seenMuted' | 'callControls.incoming.heardBy' | 'callControls.incoming.silent';
 
-/** Ce que la barre promet : ce que l'autre recevra de moi en décrochant. */
-export function incomingConsentKey(choice: IncomingChoice): IncomingConsentKey {
-  if (choice.cameraOn) return 'callControls.incoming.seenBy';
+/** Ma caméra filme vraiment : une piste vidéo VIVANTE est ouverte. Choisie ne suffit pas — tant qu'elle démarre, ou si elle est refusée, rien ne promet une image. */
+export const hasLiveVideo = (stream: { readonly getVideoTracks: () => readonly { readonly readyState: string }[] } | null): boolean => stream?.getVideoTracks().some((track) => track.readyState === 'live') === true;
+
+/** Ce que la barre promet (P17.7, `IncomingPreAnswer.Exposure` d'iOS) : ce que l'autre recevra de moi en décrochant, selon ma caméra `filming` et mon micro. */
+export function incomingConsentKey(choice: IncomingChoice, filming: boolean): IncomingConsentKey {
+  const seen = choice.cameraOn && filming;
+  if (seen) return choice.micOn ? 'callControls.incoming.seenBy' : 'callControls.incoming.seenMuted';
   return choice.micOn ? 'callControls.incoming.heardBy' : 'callControls.incoming.silent';
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { orderedTopBanners, topBannersClearance, topBannersAbove, TOP_BANNER_CLEARANCE } from './call-top-banners';
+import { orderedTopBanners, recordingBannerPresent, topBannersAbove, topBannersClearance, TOP_BANNER_CLEARANCE } from './call-top-banners';
 
 /**
  * LA PILE DES BANDEAUX DU HAUT (P16.7, `CallTopBannerStack.ordered` d'iOS) — ordre fixe, quel que
@@ -28,5 +28,16 @@ describe('la place réservée', () => {
   test('l’indicateur d’enregistrement se pose sous le partage, et lui seul', () => {
     expect(topBannersAbove('recording', { 'screen-share': true, capture: true, recording: true })).toBe(TOP_BANNER_CLEARANCE['screen-share']);
     expect(topBannersAbove('recording', { capture: true, recording: true })).toBe(0);
+  });
+});
+
+describe('l’enregistrement dans la pile', () => {
+  test('l’indicateur et son avis occupent leur place ; la carte d’accord flotte par-dessus', () => {
+    expect(recordingBannerPresent({ view: { kind: 'recording' }, notice: null })).toBe(true);
+    expect(recordingBannerPresent({ view: { kind: 'asking' }, notice: null })).toBe(true);
+    expect(recordingBannerPresent({ view: { kind: 'pending', mustAnswer: false }, notice: null })).toBe(true);
+    expect(recordingBannerPresent({ view: { kind: 'idle' }, notice: { kind: 'stopped' } })).toBe(true);
+    expect(recordingBannerPresent({ view: { kind: 'pending', mustAnswer: true }, notice: null })).toBe(false);
+    expect(recordingBannerPresent({ view: { kind: 'idle' }, notice: null })).toBe(false);
   });
 });

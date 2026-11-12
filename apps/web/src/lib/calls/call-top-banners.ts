@@ -23,3 +23,11 @@ export const topBannersAbove = (banner: TopBanner, present: PresentBanners): num
   orderedTopBanners(present)
     .filter((other) => ORDER.indexOf(other) < ORDER.indexOf(banner))
     .reduce((sum, other) => sum + TOP_BANNER_CLEARANCE[other], 0);
+
+type RecordingBannerState = { readonly view: { readonly kind: 'idle' | 'pending' | 'recording' | 'asking'; readonly mustAnswer?: boolean }; readonly notice: unknown };
+
+/** L'indicateur d'enregistrement (ou son avis) occupe-t-il sa place dans la pile ? La carte d'accord, elle, flotte par-dessus : elle n'en est pas un bandeau. */
+export const recordingBannerPresent = ({ view, notice }: RecordingBannerState): boolean => {
+  if (view.kind === 'idle') return notice !== null;
+  return view.kind !== 'pending' || view.mustAnswer !== true;
+};

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 
 import type { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { callActions } from '@/lib/calls/call-actions';
@@ -26,9 +26,35 @@ export type CallPreviewKit = {
   readonly soundOff: ReactNode;
 };
 
-export function CallPreview({ stream, language, kit }: { readonly stream: MediaStream; readonly language: InterfaceLanguage; readonly kit: CallPreviewKit }) {
-  const [audible, setAudible] = useState(false);
+type SoundProps = { readonly language: InterfaceLanguage; readonly kit: CallPreviewKit; readonly audible: boolean; readonly onAudible: (audible: boolean) => void; readonly className?: string; readonly style?: CSSProperties };
+
+/**
+ * Le bouton de son, une puce de verre (P17.2) : posé par l'écran dans l'ordre de l'en-tête d'un
+ * appel vidéo qui sonne — la puce « Appel vidéo entrant », le nom, puis lui —, ou en haut au
+ * centre pour un appel vocal. L'état « audible » est celui de l'écran, qui le rend aussi à l'aperçu.
+ */
+export function CallPreviewSound({ language, kit, audible, onAudible, className = '', style }: SoundProps & { readonly stream?: MediaStream }) {
   const label = translate(language, audible ? 'call.preview.soundOff' : 'call.preview.soundOn');
+  return (
+    <button
+      type="button"
+      className={`glass-call-prominent flex min-h-11 items-center gap-2 rounded-full px-4 text-body font-semibold text-on-media ${className}`}
+      style={style}
+      aria-label={label}
+      aria-pressed={audible}
+      data-call-preview-sound=""
+      onClick={() => {
+        if (!audible) callActions.hearPreview();
+        onAudible(!audible);
+      }}
+    >
+      {audible ? kit.soundOn : kit.soundOff}
+      <span aria-hidden>{label}</span>
+    </button>
+  );
+}
+
+export function CallPreview({ stream, language, kit, audible, onAudible, soundInHeader }: Omit<SoundProps, 'className' | 'style'> & { readonly stream: MediaStream; readonly soundInHeader: boolean }) {
   return (
     <>
       {stream.getVideoTracks().length > 0 ? (
@@ -37,21 +63,7 @@ export function CallPreview({ stream, language, kit }: { readonly stream: MediaS
           <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--color-media-backdrop) 55%, transparent) 0%, color-mix(in srgb, var(--color-media-backdrop) 25%, transparent) 40%, color-mix(in srgb, var(--color-media-backdrop) 80%, transparent) 100%)' }} />
         </div>
       ) : null}
-      <button
-        type="button"
-        className="glass-call-prominent absolute left-1/2 top-4 z-10 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full px-4 text-body font-semibold text-on-media"
-        style={{ marginTop: 'env(safe-area-inset-top)' }}
-        aria-label={label}
-        aria-pressed={audible}
-        data-call-preview-sound=""
-        onClick={() => {
-          if (!audible) callActions.hearPreview();
-          setAudible(!audible);
-        }}
-      >
-        {audible ? kit.soundOn : kit.soundOff}
-        <span aria-hidden>{label}</span>
-      </button>
+      {soundInHeader ? null : <CallPreviewSound language={language} kit={kit} audible={audible} onAudible={onAudible} className="absolute left-1/2 top-4 z-10 -translate-x-1/2" style={{ marginTop: 'env(safe-area-inset-top)' }} />}
       {audible ? (
         <span hidden data-call-preview-audio="">
           <kit.Audio stream={stream} />

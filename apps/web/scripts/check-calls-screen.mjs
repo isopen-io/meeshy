@@ -199,7 +199,9 @@ try {
         check(await appears(page, '[data-call-pill-bar][data-call-pill-sharing] [data-call-pill-stop-share]'), `${label} : partager réduit l'appel en capsule « Arrêter » (#16664)`);
         await capture(page, `partage-capsule-${slug}`);
         await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
-        check(await appears(page, '[data-call-pill="screen-sharing"]'), `${label} : la pastille « Vous partagez votre écran » s'affiche`);
+        check(await appears(page, '[data-call-screen-share-banner] [data-call-screen-share-stop]'), `${label} : le bandeau « Vous partagez votre écran · Arrêter » s'affiche sous l'en-tête (P16.4)`);
+        const shareStop = await page.locator('[data-call-screen-share-stop]').boundingBox();
+        check(shareStop !== null && shareStop.height >= TAP_FLOOR, `${label} : « Arrêter » fait au moins ${TAP_FLOOR} de haut (${JSON.stringify(shareStop && Math.round(shareStop.height))})`);
         await openActions(page);
         check((await share.getAttribute('aria-pressed')) === 'true' && (await share.getAttribute('aria-label')) === 'Arrêter le partage d’écran', `${label} : le bouton devient « Arrêter le partage d’écran », enfoncé`);
         check((await peerToggles(page)).some((t) => t.event === 'call:toggle-screen' && t.enabled), `${label} : le partage est annoncé (call:toggle-screen)`);
@@ -212,7 +214,7 @@ try {
           track.stop();
           track.dispatchEvent(new Event('ended'));
         });
-        const stopped = await page.waitForSelector('[data-call-pill="screen-sharing"]', { state: 'detached', timeout: 5000 }).then(() => true, () => false);
+        const stopped = await page.waitForSelector('[data-call-screen-share-banner]', { state: 'detached', timeout: 5000 }).then(() => true, () => false);
         check(stopped && (await share.getAttribute('aria-pressed')) === 'false', `${label} : « Arrêter le partage » du navigateur arrête le partage`);
         const toggles = await peerToggles(page);
         check(toggles.at(-1)?.event === 'call:toggle-screen' && toggles.at(-1)?.enabled === false, `${label} : la fin du partage est annoncée`);
@@ -226,7 +228,7 @@ try {
         await share.click();
         await appears(page, '[data-call-pill-stop-share]');
         await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
-        await appears(page, '[data-call-pill="screen-sharing"]');
+        await appears(page, '[data-call-screen-share-banner]');
         await openActions(page);
         check(await page.locator('button[aria-label="Couper la caméra"], button[aria-label="Activer la caméra"]').first().isDisabled(), `${label} : la caméra ne se rallume pas par-dessus un partage`);
         await page.click('[data-call-screen] button[aria-label="Réduire"]');
