@@ -22,8 +22,10 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
         VStack(spacing: MeeshySpacing.sm) {
             ForEach(CallTopBannerStack.ordered(present), id: \.self) { banner in
                 content(banner)
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
         }
+        .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallTopBannerStack.ordered(present))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: captureJournal.alert)
         .padding(.top, topInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -44,6 +46,8 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
         case .screenShare:
             CallScreenShareBanner(isSharing: screenShare.isSharing, remoteSharerName: screenShare.isRemoteSharing ? remoteName : nil, onStop: screenShare.stopSharing)
                 .equatable()
+                .padding(.horizontal, CallTopBannerStack.horizontalMargin)
+                .modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.screenShareBanner), reduceMotion: reduceMotion))
                 .callChromeVisibility(chrome.isVisible(.screenShareBanner))
         case .recording:
             CallRecordingOverlay(phase: recording.phase, notice: recording.notice, kind: recording.kind, requesterName: remoteName, onAnswer: { _ = recording.answer(accepted: $0) }, onStop: { _ = recording.stop() }, onDismiss: recording.dismissNotice, showsStatus: chrome.isVisible(.recordingStatus))
