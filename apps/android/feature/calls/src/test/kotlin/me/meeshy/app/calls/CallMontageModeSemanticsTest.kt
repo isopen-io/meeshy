@@ -139,16 +139,14 @@ class CallMontageModeSemanticsTest {
     private fun code(name: String): String = File(calls(), name).readText()
 
     @Test
-    fun `C1_12 - le Montage n'est plus compose d'un coup, la couche fond et la barre monte du bas`() {
+    fun `C1_12 - le Montage est toujours compose par sa couche, qui fond et fait monter la barre du bas`() {
         val screen = code("CallScreen.kt")
         val mode = code("CallMontageCapture.kt")
 
         assertThat(screen).doesNotContain("if (chromeState.layer.activeMode == CallScreenMode.Montage)")
         assertThat(screen).contains("visible = chromeState.layer.activeMode == CallScreenMode.Montage")
-        assertThat(mode).contains("AnimatedVisibility(visible = visible")
-        assertThat(mode).contains("CallModeChromeMotion.risesFromBottom(CallScreenMode.Montage, reduceMotion)")
-        assertThat(mode).contains("slideInVertically(tween(millis)) { it }")
-        assertThat(mode).contains("slideOutVertically(tween(millis)) { it }")
+        assertThat(mode).contains("CallModeLayer(visible = visible, mode = CallScreenMode.Montage, reduceMotion = reduceMotion)")
+        assertThat(mode).contains("pickerModifier = Modifier.align(Alignment.BottomCenter).then(chrome)")
     }
 
     @Test
