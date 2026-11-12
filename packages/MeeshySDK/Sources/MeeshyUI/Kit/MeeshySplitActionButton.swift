@@ -21,7 +21,7 @@ public struct MeeshySplitActionChevronFace: View, Equatable {
                 .frame(width: CGFloat(MeeshySplitActionButtonRecipe.ruleWidth))
                 .accessibilityHidden(true)
             Image(systemName: "chevron.down")
-                .font(.system(size: CGFloat(MeeshySplitActionButtonRecipe.chevronGlyph), weight: .bold))
+                .font(MeeshySplitActionButtonRecipe.font(size: CGFloat(MeeshySplitActionButtonRecipe.chevronGlyph), weight: .bold))
                 .foregroundStyle(MeeshyColors.onBrand)
                 .padding(.leading, CGFloat(MeeshySplitActionButtonRecipe.chevronMarginStart))
                 .padding(.trailing, CGFloat(MeeshySplitActionButtonRecipe.chevronMarginEnd))
@@ -185,7 +185,7 @@ struct MeeshySplitActionTitleText: View, Equatable {
 
     var body: some View {
         Text(verbatim: text)
-            .font(.system(size: size, weight: .bold))
+            .font(MeeshySplitActionButtonRecipe.font(size: size, weight: .bold))
             .foregroundStyle(ink)
             .lineLimit(lines)
             .multilineTextAlignment(.center)
@@ -255,7 +255,7 @@ struct MeeshySplitActionFittedLabel<Fallback: View>: View {
 
     private var glyph: some View {
         fallback
-            .font(.system(size: size, weight: .bold))
+            .font(MeeshySplitActionButtonRecipe.font(size: size, weight: .bold))
             .foregroundStyle(ink)
             .fixedSize()
     }
@@ -485,7 +485,7 @@ public struct MeeshySplitActionButton<StatusGlyph: View, FallbackGlyph: View, Ch
     ) -> some View {
         HStack(spacing: CGFloat(MeeshySplitActionButtonRecipe.deferredGap)) {
             statusGlyph
-                .font(.system(size: CGFloat(MeeshySplitActionButtonRecipe.deferredGlyph), weight: .bold))
+                .font(MeeshySplitActionButtonRecipe.font(size: CGFloat(MeeshySplitActionButtonRecipe.deferredGlyph), weight: .bold))
                 .foregroundStyle(ink)
                 .accessibilityHidden(true)
             MeeshySplitActionTitleText(text: title, size: deferredLabelSize, lines: 1, ink: ink).equatable()

@@ -64,6 +64,20 @@ struct CallGlassVeil<S: Shape>: ViewModifier {
     }
 }
 
+/// Loi 18 · R2.11 · R3.12 · #17815 — le verre d'un bandeau de la pile du haut (carte d'accord et
+/// capsule d'enregistrement, carte et capsule du cadre en direct) : `adaptiveLiquidGlass` par son
+/// entrée du kit (`meeshyGlass`, ton `theme`) — Liquid Glass sur iOS 26, verre dessiné avant, plein
+/// sous « Réduire la transparence » — sous le voile d'appel qui l'assombrit sur un contenu clair (loi 3).
+struct CallBannerGlass<S: Shape>: ViewModifier {
+    let shape: S
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(CallGlassVeil(shape: shape, resting: 0.22))
+            .meeshyGlass(in: shape, tone: .theme)
+    }
+}
+
 extension View {
     /// #17323 — Liquid Glass interactif sous iOS 26, verre dessiné avant. Active
     /// state tints the glass; inactive renders plain glass.

@@ -167,6 +167,19 @@ nonisolated enum CallEffectsSettingsMotion {
     }
 }
 
+/// #17811 · C1.12 — la barre et le carrousel du Montage montent depuis le bas et y
+/// redescendent, sur la couche qui fond. Effets garde le seul fondu de la couche :
+/// la loi 17 l'excepte (« Effets emprunte au composer », loi 9). « Réduire les
+/// animations » ne laisse que ce fondu court.
+enum CallModeChromeMotion {
+    static func risesFromBottom(_ mode: CallScreenMode, reduceMotion: Bool) -> Bool {
+        switch mode {
+        case .montage: return !reduceMotion
+        case .effects: return false
+        }
+    }
+}
+
 enum CallModeGesture: CaseIterable, Sendable {
     case tap
     case doubleTap
