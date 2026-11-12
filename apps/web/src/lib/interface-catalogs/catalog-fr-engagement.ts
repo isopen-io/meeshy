@@ -17,6 +17,13 @@ const frEngagement = {
   'engagement.pill.join': '{streak}, {points}',
   'engagement.post.points.one': 'Ce post a fait jaillir {count} étincelle pour toi',
   'engagement.post.points.other': 'Ce post a fait jaillir {count} étincelles pour toi',
+  'engagement.card.streak.one': 'jour de suite ici',
+  'engagement.card.streak.other': 'jours de suite ici',
+  'engagement.card.today': 'Aujourd’hui',
+  'engagement.card.total': 'Ici depuis le début',
+  'engagement.card.open': 'Voir le jeu',
+  'engagement.card.hide': 'Masquer la flamme',
+  'engagement.card.title': 'Série de la conversation',
 } as const;
 
 export default frEngagement;
