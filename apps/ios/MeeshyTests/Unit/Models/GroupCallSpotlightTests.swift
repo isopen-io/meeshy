@@ -1,6 +1,7 @@
 import SwiftUI
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// #8395 — la mise à la une d'un appel de groupe : toucher une vignette la met
@@ -258,5 +259,69 @@ final class GroupCallSpotlightTests: XCTestCase {
         XCTAssertEqual(mask.components(separatedBy: "ramp(from:").count - 1, 3, "une déclaration et deux rampes, opposées")
         XCTAssertTrue(mask.contains(".allowsHitTesting(false)"), "le fondu ne prend aucun toucher")
         XCTAssertTrue(cue.contains("ScrollEdgeFadeMask(axis: .vertical, start: edges.top, end: edges.bottom"), "le rail du composer garde son fondu")
+    }
+
+    // MARK: - P15.11 — le zoom de l'écran reçu en duo (même loi que la une du groupe)
+
+    func test_receivedScreenZoom_followsThePinch_clampedBetweenOneAndFour() {
+        XCTAssertEqual(GroupCallSpotlight.receivedScreenZoom(committed: 1, pinch: 2.5, isReceivingScreen: true), 2.5, accuracy: 0.0001)
+        XCTAssertEqual(GroupCallSpotlight.receivedScreenZoom(committed: 2, pinch: 3, isReceivingScreen: true), 4, accuracy: 0.0001)
+        XCTAssertEqual(GroupCallSpotlight.receivedScreenZoom(committed: 1, pinch: 0.4, isReceivingScreen: true), 1, accuracy: 0.0001)
+    }
+
+    func test_receivedScreenZoom_withoutAReceivedScreen_isAlwaysOne() {
+        XCTAssertEqual(GroupCallSpotlight.receivedScreenZoom(committed: 3, pinch: 1.5, isReceivingScreen: false), 1, accuracy: 0.0001)
+    }
+
+    func test_duoVideoLayout_zoomsTheReceivedScreen_withoutDelayingTheTapThatStowsTheChrome() throws {
+        let connected = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift"))
+        let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "var videoCallLayout: some View", in: connected))
+        XCTAssertTrue(layout.contains(".modifier(CallReceivedScreenZoom(isReceivingScreen: callManager.screenShare.isRemoteSharing))"))
+        let zoom = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallReceivedScreenZoom.swift"))
+        XCTAssertTrue(zoom.contains("MagnificationGesture()"))
+        XCTAssertTrue(zoom.contains("GroupCallSpotlight.receivedScreenZoom("), "la loi du groupe, jamais une copie")
+        XCTAssertTrue(zoom.contains("TapGesture(count: 2)"))
+        XCTAssertTrue(zoom.contains(".simultaneousGesture(zoomGesture, including: isReceivingScreen ? .all : .subviews)"), "le pincement ne retarde pas le toucher simple, et hors partage reçu il n'est pas posé")
+        XCTAssertTrue(zoom.contains(".highPriorityGesture(resetTap, including: isZoomed ? .all : .subviews)"), "zoomé, le double toucher l'emporte sur le toucher du chrome : il ne le range ni ne le rend")
+        XCTAssertFalse(zoom.contains("simultaneousGesture(resetTap"), "un double toucher simultané faisait basculer le chrome deux fois")
+        XCTAssertTrue(zoom.contains("private var isZoomed: Bool { zoom > 1 }"), "à 1×, aucun double toucher : le toucher simple n'attend rien")
+        XCTAssertTrue(zoom.contains("reduceMotion ? CallChromeStow.reducedFadeDuration : 0.2"), "Réduire les animations : un fondu court")
+        XCTAssertTrue(zoom.contains(".clipped()"), "l'image zoomée ne déborde pas sur l'en-tête")
+    }
+
+    // MARK: - P15.5 — le verre s'assombrit sur un écran reçu
+
+    func test_glassTone_noReceivedScreen_keepsTheUsualGlass() {
+        XCTAssertNil(CallGlassTone.resolve(showsReceivedScreen: false))
+        XCTAssertNil(CallGlassTone.resolve(showsReceivedScreen: false, luminance: 0.9))
+    }
+
+    func test_glassTone_receivedScreen_isOnLightUntilALuminanceSaysOtherwise() {
+        XCTAssertEqual(CallGlassTone.resolve(showsReceivedScreen: true), .onLight)
+        XCTAssertEqual(CallGlassTone.resolve(showsReceivedScreen: true, luminance: 0.8), .onLight)
+        XCTAssertEqual(CallGlassTone.resolve(showsReceivedScreen: true, luminance: 0.3), .deep)
+    }
+
+    func test_glassTone_veil_darkensOnlyOnLightContent_withTheSDKsOwnMeasure() {
+        XCTAssertEqual(CallGlassTone.veilOpacity(tone: nil, resting: 0.22), 0.22, accuracy: 0.0001)
+        XCTAssertEqual(CallGlassTone.veilOpacity(tone: .deep, resting: 0.22), 0.22, accuracy: 0.0001)
+        let dark = CallGlassTone.veilOpacity(tone: .onLight, resting: 0.22)
+        XCTAssertEqual(dark, MeeshyGlassRecipe.liquidWash(tone: .onLight) ?? -1, accuracy: 0.0001, "la mesure du SDK, jamais un second chiffre")
+        XCTAssertGreaterThan(dark, 0.22)
+    }
+
+    func test_callGlass_everySurfaceOfTheCallTakesItsVeilFromTheTone() throws {
+        let glass = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift"))
+        let chromeGlass = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func callChromeGlass<S: Shape>(", in: glass))
+        let controlsGlass = try XCTUnwrap(DeclarationBodyScanner.body(containing: "func callControlsGlass<S: Shape>(", in: glass))
+        let capsule = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallInteractiveChromeCapsule: ViewModifier", in: glass))
+        XCTAssertTrue(chromeGlass.contains("CallGlassVeil(shape: shape"))
+        XCTAssertTrue(controlsGlass.contains("CallGlassVeil(shape: shape"))
+        XCTAssertTrue(capsule.contains("CallGlassVeil(shape: Capsule()"))
+        XCTAssertFalse(glass.contains("Color.black.opacity(0.22)"), "plus de voile noir fixe")
+        let header = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Header.swift"))
+        XCTAssertTrue(header.contains("CallGlassVeil(shape: Circle()"), "les boutons de l'en-tête s'assombrissent aussi")
+        let root = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView.swift"))
+        XCTAssertTrue(root.contains(".environment(\\.callGlassTone, CallGlassTone.resolve(showsReceivedScreen:"), "le ton se pose une fois, à la racine de l'appel")
     }
 }

@@ -45,7 +45,8 @@ final class CallHeaderRuleTests: XCTestCase {
         givenName: String? = nil,
         displayName: String? = nil,
         groupName: String? = nil,
-        participantCount: Int = 0
+        participantCount: Int = 0,
+        receivesScreen: Bool = false
     ) -> CallHeaderCapsuleInput {
         CallHeaderCapsuleInput(
             layout: layout,
@@ -54,7 +55,8 @@ final class CallHeaderRuleTests: XCTestCase {
             givenName: givenName,
             displayName: displayName,
             groupName: groupName,
-            participantCount: participantCount
+            participantCount: participantCount,
+            receivesScreen: receivesScreen
         )
     }
 
@@ -97,6 +99,45 @@ final class CallHeaderRuleTests: XCTestCase {
         for layout in [CallHeaderCapsuleLayout.audio, .video, .group] {
             XCTAssertNil(CallHeaderCapsuleRule.resolve(input(layout: layout, isEstablished: false, isNetworkDegraded: true, givenName: "Awa", groupName: "G", participantCount: 4)))
         }
+    }
+
+    // MARK: - P15.4 — l'écran reçu en duo s'annonce dans la capsule
+
+    func test_capsule_videoDuo_receivedScreen_namesTheScreenInsteadOfNameAndDuration() {
+        let capsule = CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: "Karim", displayName: "Karim Diallo", receivesScreen: true))
+        XCTAssertEqual(capsule, CallHeaderCapsule(title: "Karim", participantCount: nil, showsDuration: false, showsNetwork: false, isReceivedScreen: true))
+    }
+
+    func test_capsule_videoDuo_receivedScreen_withoutGivenName_fallsBackToTheDisplayName() {
+        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: " ", displayName: "Karim Diallo", receivesScreen: true))?.title, "Karim Diallo")
+    }
+
+    func test_capsule_videoDuo_receivedScreen_keepsTheNetworkOnlyWhenDegraded() {
+        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: "Karim", receivesScreen: true))?.showsNetwork, false)
+        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, isNetworkDegraded: true, givenName: "Karim", receivesScreen: true))?.showsNetwork, true)
+    }
+
+    func test_capsule_noReceivedScreen_isNeverMarkedAsScreen() {
+        XCTAssertEqual(CallHeaderCapsuleRule.resolve(input(layout: .video, givenName: "Karim"))?.isReceivedScreen, false)
+    }
+
+    func test_capsule_groupAndAudio_ignoreTheReceivedScreen() {
+        XCTAssertEqual(
+            CallHeaderCapsuleRule.resolve(input(layout: .group, groupName: "Équipe", participantCount: 4, receivesScreen: true)),
+            CallHeaderCapsuleRule.resolve(input(layout: .group, groupName: "Équipe", participantCount: 4))
+        )
+        XCTAssertNil(CallHeaderCapsuleRule.resolve(input(layout: .audio, givenName: "Karim", receivesScreen: true)))
+    }
+
+    func test_capsule_receivedScreen_beforeTheCallIsEstablished_neverShows() {
+        XCTAssertNil(CallHeaderCapsuleRule.resolve(input(layout: .video, isEstablished: false, givenName: "Karim", receivesScreen: true)))
+    }
+
+    func test_capsule_spokenTitle_namesTheScreenOnlyWhenItIsTheReceivedScreen() {
+        let screen = CallHeaderCapsule(title: "Karim", participantCount: nil, showsDuration: false, showsNetwork: false, isReceivedScreen: true)
+        XCTAssertEqual(screen.spokenTitle, CallScreenShareCopy.screenOf(name: "Karim"))
+        let video = CallHeaderCapsule(title: "Karim", participantCount: nil, showsDuration: true, showsNetwork: false)
+        XCTAssertEqual(video.spokenTitle, "Karim")
     }
 
     // MARK: - Les noms lus dans la conversation en cache

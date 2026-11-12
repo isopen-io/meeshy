@@ -63,6 +63,13 @@ enum GroupCallSpotlight {
         min(max(scale, 1), maxZoom)
     }
 
+    /// P15.11 — le zoom de l'écran reçu en duo : la même loi (1× à 4×) que la une du groupe,
+    /// le pincement en cours s'appliquant à la valeur acquise. Sans écran reçu, 1× : un zoom
+    /// ne survit pas au partage qui l'a fait naître.
+    static func receivedScreenZoom(committed: CGFloat, pinch: CGFloat, isReceivingScreen: Bool) -> CGFloat {
+        isReceivingScreen ? clampedZoom(committed * pinch) : 1
+    }
+
     /// U2.5 — le facteur que la puce de l'écran à la une annonce : arrondi au dixième, jamais
     /// au-delà du plafond ; `nil` à 1× (la puce ne porte alors que « Écran de X »).
     static func displayedZoom(_ zoom: CGFloat) -> CGFloat? {
