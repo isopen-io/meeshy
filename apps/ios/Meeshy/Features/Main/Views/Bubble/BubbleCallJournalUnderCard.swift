@@ -27,6 +27,14 @@ enum BubbleCallJournalPhase: Equatable {
     case nothingKept
 }
 
+/// Ce que rend le chargement du journal. `abandoned` : la bascule s'est repliée (ou la cellule est partie) pendant
+/// l'attente — le `nil` d'un replay annulé ne dit rien de l'appel, et ne doit pas s'afficher « Aucune transcription ».
+enum BubbleCallJournalOutcome: Equatable {
+    case served(CallTranscript)
+    case nothingKept
+    case abandoned
+}
+
 /// Le journal d'un appel, cache chiffré d'abord (aucune attente affichée), replay serveur ensuite. Le cache est lu
 /// ICI pour savoir s'il faut annoncer une attente ; la cascade complète reste `CallTranscriptLoader`, partagée
 /// avec la feuille « Détails de l'appel ».
@@ -37,10 +45,42 @@ enum BubbleCallJournalLoading {
         readCache: @MainActor (String) async -> CallTranscript? = { await CallTranscriptStore.shared.transcript(for: $0) },
         replay: @MainActor (String) async -> CallTranscript? = { await CallTranscriptLoader.load(callId: $0) },
         willWaitOnNetwork: @MainActor () -> Void
-    ) async -> CallTranscript? {
-        if let cached = await readCache(callId) { return cached }
+    ) async -> BubbleCallJournalOutcome {
+        if let cached = await readCache(callId) { return .served(cached) }
+        guard !Task.isCancelled else { return .abandoned }
         willWaitOnNetwork()
-        return await replay(callId)
+        let replayed = await replay(callId)
+        guard !Task.isCancelled else { return .abandoned }
+        return replayed.map(BubbleCallJournalOutcome.served) ?? .nothingKept
+    }
+}
+
+/// Les journaux d'appel ouverts sous leur bulle, pour la session (#17802). Le fil UIKit recycle ses cellules
+/// `UIHostingConfiguration` : sans cette mémoire, un journal déplié se repliait dès que sa bulle quittait l'écran
+/// (Android le garde par `rememberSaveable`). Elle ne retient que des identifiants d'appel — jamais le texte du
+/// journal —, bornée, et n'est jamais observée : rien ne se re-rend quand elle change.
+@MainActor
+final class BubbleCallJournalMemory {
+    nonisolated deinit {}
+
+    static let shared = BubbleCallJournalMemory()
+    nonisolated static let defaultCapacity = 32
+
+    private let capacity: Int
+    private var openedOldestFirst: [String] = []
+
+    init(capacity: Int = BubbleCallJournalMemory.defaultCapacity) {
+        self.capacity = max(1, capacity)
+    }
+
+    func isOpen(_ callId: String) -> Bool {
+        openedOldestFirst.contains(callId)
+    }
+
+    func remember(_ callId: String, isOpen: Bool) {
+        let others = openedOldestFirst.filter { $0 != callId }
+        let kept = isOpen ? others + [callId] : others
+        openedOldestFirst = Array(kept.suffix(capacity))
     }
 }
 
@@ -49,13 +89,14 @@ enum BubbleCallJournalLoading {
 ///
 /// Feuille de liste : égalité par primitives, aucun observateur d'un singleton global, et rien n'est lu ni
 /// chargé tant que la bascule est fermée. La bascule se range du côté de la carte (droite pour un appel
-/// sortant), comme Android.
+/// sortant), comme Android. L'état ouvert vit dans `BubbleCallJournalMemory` : une cellule recyclée le reprend.
 struct BubbleCallJournalUnderCard: View, Equatable {
     let callId: String
     let accentHex: String
     let alignsTrailing: Bool
+    private let memory: BubbleCallJournalMemory
 
-    @State private var isOpen = false
+    @State private var isOpen: Bool
     @State private var phase: BubbleCallJournalPhase = .closed
     @State private var transcript: CallTranscript?
 
@@ -63,6 +104,14 @@ struct BubbleCallJournalUnderCard: View, Equatable {
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     private var reduceMotion: Bool {
         MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
+    init(callId: String, accentHex: String, alignsTrailing: Bool, memory: BubbleCallJournalMemory = .shared) {
+        self.callId = callId
+        self.accentHex = accentHex
+        self.alignsTrailing = alignsTrailing
+        self.memory = memory
+        _isOpen = State(initialValue: memory.isOpen(callId))
     }
 
     static func == (lhs: BubbleCallJournalUnderCard, rhs: BubbleCallJournalUnderCard) -> Bool {
@@ -97,6 +146,7 @@ struct BubbleCallJournalUnderCard: View, Equatable {
         Button {
             HapticFeedback.light()
             isOpen.toggle()
+            memory.remember(callId, isOpen: isOpen)
         } label: {
             Text(toggleTitle)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
@@ -129,8 +179,14 @@ struct BubbleCallJournalUnderCard: View, Equatable {
     private func load() async {
         guard isOpen else { return }
         guard transcript == nil, phase != .nothingKept else { return }
-        let loaded = await BubbleCallJournalLoading.load(callId: callId, willWaitOnNetwork: { phase = .loading })
-        transcript = loaded
-        phase = loaded == nil ? .nothingKept : .shown
+        switch await BubbleCallJournalLoading.load(callId: callId, willWaitOnNetwork: { phase = .loading }) {
+        case .served(let loaded):
+            transcript = loaded
+            phase = .shown
+        case .nothingKept:
+            phase = .nothingKept
+        case .abandoned:
+            return
+        }
     }
 }
