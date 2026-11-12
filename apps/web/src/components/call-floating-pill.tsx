@@ -79,7 +79,7 @@ export function CallPill({ call }: { readonly call: ActiveCall }) {
           onClick={callActions.toggleScreen}
           aria-label={translate(language, 'call.screen.stop')}
           className="min-h-11 whitespace-nowrap rounded-full px-4 text-body font-semibold"
-          style={{ background: 'color-mix(in srgb, white 22%, transparent)' }}
+          style={{ background: 'var(--color-media-hairline)' }}
           data-call-pill-stop-share=""
         >
           {translate(language, 'call.screen.stopShort')}

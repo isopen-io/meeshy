@@ -30,14 +30,21 @@ export function rowStep({ key, index, count, rtl, vertical = false }: Step): num
 export const ROW_ITEM = 'data-row-item';
 
 /**
- * Une rangée qui défile n'est jamais coupée net (facture #17406, P12.8) : elle
- * s'efface en fondu à ses DEUX bords, sur les 8 px du retrait (`px-2`) que la
- * rangée garde de chaque côté — au repos, aucun bouton n'est estompé, et ce qui
- * déborde s'efface en entrant dans le retrait. Le dégradé est symétrique : le
- * même masque est juste en arabe, où la rangée commence à droite. Comme le
- * rail (`RAIL_FADE`), le fondu est posé sur ce qui défile, jamais sur le verre.
+ * LE FONDU DE BORD — ce qui défile n'est jamais coupé net (facture #17406,
+ * P12.8) : il s'efface en fondu à ses DEUX bords, sur les 8 px du retrait
+ * (`px-2`) gardé de chaque côté. Le masque est une LUMINANCE (`#000` = opaque,
+ * pas une couleur), et sa recette est UNIQUE : la rangée (`ROW_EDGE_FADE`, à
+ * l'horizontale), le rail (`RAIL_FADE`, à la verticale) et le bandeau des
+ * vignettes de `call-grid` (axe paramétré) la partagent, plutôt que trois
+ * jumelles qui dérivent en silence. Le dégradé est symétrique : le même masque
+ * vaut en arabe, où le défilement commence à droite. Le fondu est posé sur ce
+ * qui défile, jamais sur le verre.
  */
-export const ROW_EDGE_FADE = { maskImage: 'linear-gradient(to right, transparent, #000 8px, #000 calc(100% - 8px), transparent)' } as const;
+export type EdgeFadeAxis = 'to right' | 'to bottom';
+// harmony-exempt: masque de LUMINANCE (#000 = opaque, jamais une couleur) — le fondu d'un bord qui défile (#17406)
+export const edgeFadeMask = (axis: EdgeFadeAxis): string => `linear-gradient(${axis}, transparent, #000 8px, #000 calc(100% - 8px), transparent)`;
+
+export const ROW_EDGE_FADE = { maskImage: edgeFadeMask('to right') } as const;
 
 type Wheel = { readonly deltaX: number; readonly deltaY: number; readonly scrollLeft: number; readonly maxScroll: number; readonly rtl: boolean };
 
