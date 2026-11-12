@@ -556,7 +556,7 @@ describe('les réglages ne mènent plus au legacy', () => {
 
 describe('les outils', () => {
   test('la progression mène à son écran', () => {
-    expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression')?.textContent).toContain('Progression');
+    expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression')?.textContent).toContain('Ma Légende');
   });
 
   test('les réglages du jeu (#9481) ont leur rangée, juste sous Progression', () => {
