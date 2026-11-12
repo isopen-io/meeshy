@@ -2,6 +2,7 @@ package me.meeshy.app.calls
 
 import com.google.common.truth.Truth.assertThat
 import java.io.File
+import me.meeshy.sdk.model.call.CallTopBanner
 import org.junit.Test
 
 /**
@@ -226,10 +227,26 @@ class CallTopBannerStackWiringTest {
     fun `#17845 L1_9 - les bandeaux voisins glissent a leur nouvelle place par une transformation lue au dessin`() {
         val host = code("CallTopBannerStackHost.kt")
         val glide = block(host, "internal fun Modifier.glidesToItsPlace(", "\n}")
-        assertThat(glide).contains("CallTopBannerStack.placementShiftPx(")
-        assertThat(glide).contains("onPlaced {")
+        assertThat(glide).contains("CallTopBannerStack.glideTranslationPx(")
         assertThat(glide).contains("graphicsLayer {")
         assertThat(block(host, "internal fun <T : Any> CallBannerPresence(", "\n}")).contains("glidesToItsPlace(")
+    }
+
+    @Test
+    fun `#17845 L1_9 - le glissement d'un voisin lit sa nouvelle place au placement, sans image perdue au depart`() {
+        val host = code("CallTopBannerStackHost.kt")
+        val glide = block(host, "internal fun Modifier.glidesToItsPlace(", "\n}")
+        assertThat(glide).contains("coordinates?.positionInParent()")
+        assertThat(glide).contains("placeWithLayer(")
+        assertThat(glide).doesNotContain("onPlaced")
+        assertThat(glide).doesNotContain("snapTo(")
+    }
+
+    @Test
+    fun `#17845 L1_9 - un bandeau qui repart rend sa place des le depart, la pile se referme pendant qu'il monte`() {
+        val presence = block(code("CallTopBannerStackHost.kt"), "internal fun <T : Any> CallBannerPresence(", "\n}")
+        assertThat(presence).contains("CallTopBannerStack.keepsPlaceWhileLeaving(")
+        assertThat(presence).contains("yieldsItsPlace(")
     }
 
     @Test
@@ -253,7 +270,41 @@ class CallTopBannerStackWiringTest {
     @Test
     fun `#17845 L4_11 - le cadre en direct dit sa hauteur et s'oublie en partant, pour que la grille lui cede sa place`() {
         val host = code("CallTopBannerStackHost.kt")
-        assertThat(host).contains("fun forget(banner: CallTopBanner)")
-        assertThat(host).contains("onDispose { heights.forget(banner) }")
+        assertThat(host).contains("fun forget(banner: CallTopBanner, owner: Any)")
+        assertThat(host).contains("onDispose { heights.forget(banner, owner) }")
+    }
+
+    @Test
+    fun `#17845 L4_11 - la grille glisse par une transformation lue au dessin, sa mise en page ne change qu'une fois par mouvement`() {
+        val host = code("CallTopBannerStackHost.kt")
+        val grid = block(host, "internal fun rememberGroupGridBannerClearance(", "\n}")
+        assertThat(grid).contains("CallTopBannerStack.groupGridLayoutClearanceDp(")
+        assertThat(grid).doesNotContain("animateDpAsState(")
+        assertThat(host).contains("CallTopBannerStack.groupGridShiftDp(")
+
+        val layout = code("CallConnectedLayout.kt")
+        assertThat(layout).contains("translationY = gridClearance.shift.toPx()")
+        assertThat(block(layout, "private fun CallGroupStageTopReserve(", "\n}")).contains("clearance?.layout")
+    }
+
+    @Test
+    fun `#17845 L4_11 - en duo, la pile ne pousse rien : seule la grille de groupe lui cede sa place`() {
+        val layout = code("CallConnectedLayout.kt")
+        assertThat(layout).contains("LocalCallGroupGridClearance.current.takeIf { groupStage != null }")
+    }
+
+    @Test
+    fun `#17845 L4_11 - deux bandeaux d'un meme rang ne s'effacent pas l'un l'autre en partant`() {
+        val heights = CallTopBannerHeights()
+        val card = Any()
+        val pill = Any()
+
+        heights.report(CallTopBanner.Recording, 112f, owner = card)
+        heights.report(CallTopBanner.Recording, 40f, owner = pill)
+        heights.forget(CallTopBanner.Recording, owner = card)
+        assertThat(heights.snapshot()).containsEntry(CallTopBanner.Recording, 40f)
+
+        heights.forget(CallTopBanner.Recording, owner = pill)
+        assertThat(heights.isReported(CallTopBanner.Recording)).isFalse()
     }
 }

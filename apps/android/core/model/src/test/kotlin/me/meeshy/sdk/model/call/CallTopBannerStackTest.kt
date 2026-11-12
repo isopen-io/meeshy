@@ -131,9 +131,50 @@ class CallTopBannerStackTest {
     }
 
     @Test
-    fun `#17845 L1_9 - un bandeau qui change de place sans mesure repart de sa place d'avant, puis glisse`() {
-        assertThat(CallTopBannerStack.placementShiftPx(previousTopPx = 200f, previousShiftPx = 0f, newTopPx = 120f)).isEqualTo(80f)
-        assertThat(CallTopBannerStack.placementShiftPx(previousTopPx = 200f, previousShiftPx = 30f, newTopPx = 120f)).isEqualTo(110f)
-        assertThat(CallTopBannerStack.placementShiftPx(previousTopPx = 120f, previousShiftPx = 0f, newTopPx = 120f)).isEqualTo(0f)
+    fun `#17845 L1_9 - un bandeau dont la place change se dessine la ou l'oeil le voyait, puis glisse jusqu'a elle`() {
+        assertThat(CallTopBannerStack.glideTranslationPx(shownTopPx = 200f, placedTopPx = 120f)).isEqualTo(80f)
+        assertThat(CallTopBannerStack.glideTranslationPx(shownTopPx = 150f, placedTopPx = 200f)).isEqualTo(-50f)
+        assertThat(CallTopBannerStack.glideTranslationPx(shownTopPx = 120f, placedTopPx = 120f)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `#17845 L1_9 - un bandeau qui repart rend sa place des le depart, pour que la pile se referme pendant qu'il monte`() {
+        assertThat(CallTopBannerStack.keepsPlaceWhileLeaving(travels = true, reduceMotion = false)).isFalse()
+        assertThat(CallTopBannerStack.keepsPlaceWhileLeaving(travels = true, reduceMotion = true)).isTrue()
+        assertThat(CallTopBannerStack.keepsPlaceWhileLeaving(travels = false, reduceMotion = false)).isTrue()
+    }
+
+    @Test
+    fun `#17845 L4_11 - la grille met en page la plus petite des deux reserves, une seule fois, et le decalage fait le reste`() {
+        val arriving = CallTopBannerStack.groupGridLayoutClearanceDp(settledDp = 0f, targetDp = 80f)
+        assertThat(arriving).isEqualTo(0f)
+        assertThat(CallTopBannerStack.groupGridShiftDp(shownDp = 30f, layoutDp = arriving)).isEqualTo(30f)
+
+        val leaving = CallTopBannerStack.groupGridLayoutClearanceDp(settledDp = 80f, targetDp = 0f)
+        assertThat(leaving).isEqualTo(0f)
+        assertThat(CallTopBannerStack.groupGridShiftDp(shownDp = 50f, layoutDp = leaving)).isEqualTo(50f)
+
+        assertThat(CallTopBannerStack.groupGridLayoutClearanceDp(settledDp = 80f, targetDp = 80f)).isEqualTo(80f)
+        assertThat(CallTopBannerStack.groupGridShiftDp(shownDp = 80f, layoutDp = 80f)).isEqualTo(0f)
+    }
+
+    @Test
+    fun `#17845 L4_11 - le haut de la grille suit la pile sans saut, quelle que soit la reserve mise en page`() {
+        for ((settled, target) in listOf(0f to 80f, 80f to 0f, 40f to 120f, 120f to 40f)) {
+            val layout = CallTopBannerStack.groupGridLayoutClearanceDp(settled, target)
+            for (shown in listOf(settled, (settled + target) / 2f, target)) {
+                assertThat(layout + CallTopBannerStack.groupGridShiftDp(shown, layout)).isEqualTo(shown)
+                assertThat(CallTopBannerStack.groupGridShiftDp(shown, layout)).isAtLeast(0f)
+            }
+        }
+    }
+
+    @Test
+    fun `#17845 L4_11 - le cadre en direct rend sa mesure pour la grille, et ma vignette l'ignore toujours`() {
+        val heights = mapOf(CallTopBanner.LiveFrame to 120f)
+
+        assertThat(CallTopBannerStack.selfTileClearanceDp(setOf(CallTopBanner.LiveFrame), heights)).isEqualTo(0f)
+        assertThat(CallTopBannerStack.groupGridClearanceDp(setOf(CallTopBanner.LiveFrame), heights, isStageFullScreen = false))
+            .isEqualTo(120f + CallTopBannerStack.GAP_DP)
     }
 }
