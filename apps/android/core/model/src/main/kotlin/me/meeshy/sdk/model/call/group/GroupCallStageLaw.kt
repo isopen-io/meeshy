@@ -8,7 +8,8 @@ data class GroupCallGridLayout(val columns: Int, val rows: Int) {
         fun layout(tileCount: Int, isLandscape: Boolean): GroupCallGridLayout = when (maxOf(1, tileCount)) {
             1 -> GroupCallGridLayout(1, 1)
             2 -> if (isLandscape) GroupCallGridLayout(2, 1) else GroupCallGridLayout(1, 2)
-            3, 4 -> GroupCallGridLayout(2, 2)
+            3 -> GroupCallGridLayout(2, 2)
+            4 -> if (isLandscape) GroupCallGridLayout(4, 1) else GroupCallGridLayout(2, 2)
             else -> if (isLandscape) GroupCallGridLayout(3, 2) else GroupCallGridLayout(2, 3)
         }
     }

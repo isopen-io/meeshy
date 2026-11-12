@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
@@ -19,6 +20,8 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +54,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.util.lerp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
@@ -75,7 +79,7 @@ internal object CallSelfTileMemories {
 private val TileShadow = 8.dp
 
 /**
- * La vignette locale (ratio 1,4) : on la glisse, elle s'accroche au coin le plus proche en
+ * La vignette locale (portrait 1,4 ; couchée en 130 × 96 dans une fenêtre plus large que haute, L1.5) : on la glisse, elle s'accroche au coin le plus proche en
  * ressort avec une haptique ; on la pince sur trois paliers (72 / 100 / 150 dp), retenus par
  * appel ; un toucher permute les deux vidéos quand les contrôles sont montrés, et les rend d'abord quand ils sont
  * rangés ([GroupStageTapRule], loi 15, [onReveal]). Rangée, elle se range par une TRANSFORMATION (G1.11) : son cadre reste
@@ -130,6 +134,7 @@ internal fun CallSelfTile(
             label = "callSelfTileStow",
         )
         val center = CallSelfTileLaw.center(corner, container, size, insets)
+        val rotation = rememberCallSelfTileRotation(CallSelfTileLaw.isLandscape(container), size, reduceMotion)
 
         fun settle(target: CallSelfTileScale) {
             val previous = scale
@@ -205,6 +210,7 @@ internal fun CallSelfTile(
             modifier = Modifier
                 .offset { IntOffset((abs.x - widthPx / 2 + drag.x).roundToInt(), (abs.y - heightPx / 2 + drag.y).roundToInt()) }
                 .size(size.widthDp.dp, size.heightDp.dp)
+                .callSelfTileRotating(rotation, pivot)
                 .callSelfTileStowed(stowFactor, pivot, rim)
                 .callSelfTileGestures(handlers)
                 .semantics(mergeDescendants = true) {
@@ -243,6 +249,37 @@ private fun Modifier.callSelfTileStowed(stowFactor: Float, pivot: TransformOrigi
         .shadow(CallSelfTileLaw.counterScaled(TileShadow.value, stowFactor).dp, shape)
         .clip(shape)
         .border(BorderStroke(CallSelfTileLaw.counterScaled(rim.width.value, stowFactor).dp, rim.brush), shape)
+}
+
+/** L1.5 — la transition d'une rotation : d'où part la taille ([start], rapport de l'ancienne) et où elle en est ([progress], 0 → 1). */
+internal class CallSelfTileRotation(val start: CallTilePoint, val progress: Animatable<Float, *>)
+
+/**
+ * L1.5 — quand la fenêtre change de forme, la vignette se couche ou se relève dans le même mouvement que la place :
+ * sa taille d'avant, en rapport de la nouvelle ([CallSelfTileLaw.rotationStart]), revient à 1. « Réduire les animations » :
+ * elle se pose sans mouvement. Une nouvelle transition par forme de fenêtre, donc interruptible par la rotation suivante.
+ */
+@Composable
+private fun rememberCallSelfTileRotation(isLandscape: Boolean, size: CallTileSize, reduceMotion: Boolean): CallSelfTileRotation {
+    val lastSize = remember { floatArrayOf(size.widthDp, size.heightDp) }
+    val start = remember(isLandscape) { CallSelfTileLaw.rotationStart(CallTileSize(lastSize[0], lastSize[1]), size) }
+    val progress = remember(isLandscape) { Animatable(0f) }
+    SideEffect {
+        lastSize[0] = size.widthDp
+        lastSize[1] = size.heightDp
+    }
+    LaunchedEffect(progress) {
+        if (reduceMotion) progress.snapTo(1f) else progress.animateTo(1f, tween(CallChromeStow.fadeMillis(reduceMotion = false)))
+    }
+    return CallSelfTileRotation(start, progress)
+}
+
+/** La rotation est une TRANSFORMATION lue à la phase de dessin : aucune recomposition par image. */
+private fun Modifier.callSelfTileRotating(rotation: CallSelfTileRotation, pivot: TransformOrigin): Modifier = graphicsLayer {
+    val fraction = rotation.progress.value
+    scaleX = lerp(rotation.start.xDp, 1f, fraction)
+    scaleY = lerp(rotation.start.yDp, 1f, fraction)
+    transformOrigin = pivot
 }
 
 /** Le pivot d'une ancre de la vignette : ses fractions vont du début de lecture vers la fin, miroitées en RTL. */
