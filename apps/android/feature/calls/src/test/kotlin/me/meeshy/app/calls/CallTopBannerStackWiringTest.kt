@@ -289,7 +289,7 @@ class CallTopBannerStackWiringTest {
     }
 
     @Test
-    fun `#17845 L4_11 - en duo, la pile ne pousse rien : seule la grille de groupe lui cede sa place`() {
+    fun `#17845 L4_11 - en duo, la pile ne pousse rien, seule la grille de groupe lui cede sa place`() {
         val layout = code("CallConnectedLayout.kt")
         assertThat(layout).contains("LocalCallGroupGridClearance.current.takeIf { groupStage != null }")
     }
