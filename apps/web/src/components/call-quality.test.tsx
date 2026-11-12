@@ -96,6 +96,27 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
     expect(html).toContain('aria-label="Famille · 4 participants · 1:23 — Qualité de l’appel : bonne"');
   });
 
+  test('la capsule montre ses « · » entre le nom, le nombre et la durée — lus une seule fois, par le nom accessible (L1.2, L4.5)', () => {
+    const duo = chip({ level: 'good' }, { ...video, network: false });
+    expect(duo).toMatch(/Awa<\/span><span[^>]*data-call-chip-sep=""[^>]*aria-hidden="true"[^>]*>·<\/span>/);
+    expect((duo.match(/data-call-chip-sep/g) ?? []).length).toBe(1);
+    const group = chip({ level: 'good' }, { title: 'Équipe', participantCount: 4, duration: true, network: false });
+    expect((group.match(/data-call-chip-sep/g) ?? []).length).toBe(2);
+    expect(group).toMatch(/Équipe<\/span><span[^>]*data-call-chip-sep[^>]*>·<\/span><span[^>]*data-call-chip-count[^>]*>.*4<\/span><span[^>]*data-call-chip-sep[^>]*>·<\/span><span class="shrink-0">1:23<\/span>/);
+    expect(group).toContain('aria-label="Équipe · 4 participants · 1:23 — Qualité de l’appel : bonne"');
+    expect((chip(null, { title: 'Awa', participantCount: null, duration: true, network: false }).match(/data-call-chip-sep/g) ?? []).length).toBe(1);
+  });
+
+  test('aucun « · » orphelin : un nom seul, une durée seule, l’audio et l’écran reçu n’en dessinent pas', () => {
+    const none = [
+      chip({ level: 'good' }, { title: 'Awa', participantCount: null, duration: false, network: false }),
+      chip({ level: 'good' }, { title: null, participantCount: null, duration: true, network: false }),
+      chip({ level: 'poor' }, { title: null, participantCount: null, duration: false, network: true }),
+      chip({ level: 'good' }, { title: 'Awa', participantCount: null, duration: false, network: false, receivedScreen: true }),
+    ];
+    for (const html of none) expect(html).not.toContain('data-call-chip-sep');
+  });
+
   test('en audio : la capsule n’existe que pour le réseau dégradé — ni nom, ni durée, les barres seules', () => {
     const html = chip({ level: 'poor' }, { title: null, participantCount: null, duration: false, network: true });
     expect(barsLit(html)).toBe(1);
