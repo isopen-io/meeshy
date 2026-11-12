@@ -38,13 +38,12 @@ private struct MeeshyExpandingPillSample: View {
     let stateID: String
 
     private static let phonePlace: CGFloat = 366
-    private static let tallHost: CGFloat = 640
     private static let roomyBody: CGFloat = 420
+    private static let cappedBody: CGFloat = 260
 
     var body: some View {
         sample
             .frame(width: Self.phonePlace)
-            .frame(height: stateID == "defile" ? Self.tallHost : nil)
     }
 
     @ViewBuilder
@@ -143,7 +142,7 @@ private struct MeeshyExpandingPillSample: View {
 
     private var toolPill: some View {
         pill(option: MeeshyExpandingPillOption(id: "reglages", title: "Réglages", showsHeader: false),
-             tools: Self.objectTools, primary: nil) { _ in
+             tools: Self.objectTools, primary: nil, maxBodyHeight: Self.roomyBody) { _ in
             VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                 HStack {
                     Text(verbatim: "Réglages").font(.headline)
@@ -238,7 +237,8 @@ private struct MeeshyExpandingPillSample: View {
     }
 
     private var scrollingPill: some View {
-        pill(option: MeeshyExpandingPillOption(id: "journal", title: "Journal"), tools: Self.composerTools, primary: nil) { _ in
+        pill(option: MeeshyExpandingPillOption(id: "journal", title: "Journal"), tools: Self.composerTools, primary: nil,
+             maxBodyHeight: Self.cappedBody) { _ in
             VStack(spacing: 0) {
                 ForEach(0..<14, id: \.self) { index in
                     MeeshyExpandingPillSampleRow(title: "Événement \(index + 1)", subtitle: "Il y a \(index + 1) min", isOn: false, isEnabled: true)

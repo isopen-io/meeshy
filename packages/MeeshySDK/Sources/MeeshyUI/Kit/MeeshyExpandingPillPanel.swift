@@ -87,11 +87,14 @@ private struct MeeshyExpandingPillEscape: ViewModifier {
 
 // MARK: - Le corps
 
-/// **Le corps d'une option** : à sa taille tant qu'il tient sous le plafond, puis
-/// dans un défilement vertical sous un fondu de bord, en-tête et rangée fixes. Sa
-/// hauteur NATURELLE est mesurée au changement de taille (jamais à chaque image) ;
-/// le conteneur qui défile n'existe qu'au-delà du plafond. Pas de `ViewThatFits`
-/// autour du corps (rendu asynchrone d'iOS 26, #9456).
+/// **Le corps d'une option** : il épouse sa taille sous le plafond, puis défile
+/// à la verticale sous un fondu de bord, en-tête et rangée fixes. La mise en page
+/// décide seule, en une passe : un défilement plafonné (`frame(maxHeight:)`), dont
+/// la hauteur idéale est celle du corps (`fixedSize` vertical), donc jamais plus
+/// haut que lui ni que le plafond. Sa hauteur NATURELLE n'est mesurée que pour
+/// couper le rebond d'un corps qui tient (`scrolls`) et détecter un corps vide,
+/// au changement de taille, jamais à chaque image. Pas de `ViewThatFits` autour du
+/// corps (rendu asynchrone d'iOS 26, #9456).
 struct MeeshyExpandingPillBody<Content: View>: View {
     let ceiling: CGFloat
     let isScrollLocked: Bool
@@ -108,19 +111,15 @@ struct MeeshyExpandingPillBody<Content: View>: View {
     }
 
     var body: some View {
-        if MeeshyExpandingPillRule.scrolls(contentHeight: naturalHeight, ceiling: ceiling) {
-            MeeshyFadingScrollView(axis: .vertical, fade: MeeshyExpandingPillRecipe.edgeFade) { measured }
-                .scrollDisabled(isScrollLocked)
-                .frame(height: ceiling)
-        } else {
-            measured
-        }
+        MeeshyFadingScrollView(axis: .vertical, fade: MeeshyExpandingPillRecipe.edgeFade) { measured }
+            .scrollDisabled(isScrollLocked || !MeeshyExpandingPillRule.scrolls(contentHeight: naturalHeight, ceiling: ceiling))
+            .frame(maxHeight: ceiling)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var measured: some View {
         content
             .frame(maxWidth: .infinity)
-            .fixedSize(horizontal: false, vertical: true)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                 naturalHeight = height
                 isEmpty = height <= 0

@@ -299,6 +299,8 @@ struct MeeshyExpandingPillTests {
         #expect(panel.contains("MeeshyExpandingPillRule.scrolls("))
         #expect(panel.contains("MeeshyFadingScrollView(axis: .vertical"))
         #expect(panel.contains(".onGeometryChange(for: CGFloat.self)"))
+        #expect(panel.contains(".frame(maxHeight: ceiling)"))
+        #expect(panel.contains(".fixedSize(horizontal: false, vertical: true)"))
     }
 
     @Test("K11 enveloppe K10 : un seul MeeshyGlassPill, et le dessus est dit montré ou non à l'exécution")

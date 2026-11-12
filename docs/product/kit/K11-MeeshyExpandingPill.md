@@ -140,6 +140,7 @@ Aucune question ne reste au porteur.
 Fichiers : `MeeshyExpandingPill.swift` (la pilule), `MeeshyExpandingPillPanel.swift` (panneau et corps mesuré), `MeeshyExpandingPillHeader.swift` (en-tête et mots), `MeeshyPillConfirmation.swift` (confirmation, choix, disposition), `MeeshyExpandingPillModels.swift` (option, choix, rôle), `MeeshyExpandingPillRecipe.swift` (recette et lois pures). K10 reçoit un seul ajout interne (`aboveIsShown`), sans changement d'API publique.
 
 - Rouge du choix destructif (§ 9.9) : `MeeshyColors.errorInk` (5,7:1 avec le blanc). `errorStrong`, le rouge de K02, n'y tient que 3,8:1 : K02 le destine à un GLYPHE (3:1), un libellé de choix en exige 4,5.
+- Corps : un défilement plafonné (`frame(maxHeight:)` puis `fixedSize` vertical) décide seul, en une passe : il épouse le corps sous le plafond et défile au-delà ; la hauteur naturelle, mesurée au changement de taille, ne sert qu'à couper le rebond d'un corps qui tient et à détecter un corps vide.
 - Ouverture : `MeeshyExpandingPillRule.isOpen` garde la pilule fermée pour un corps de hauteur nulle sans en-tête ; le panneau reste monté (il mesure), K10 reçoit `aboveIsShown: false`.
 - Hôte : `.frame(maxHeight: .infinity)` donne à K11 la hauteur que l'ancrage offre (`MeeshyGlassPillDock`) ; hors d'un ancrage, `maxBodyHeight` fixe le plafond.
 - Aucun écran n'est rebranché : les jumeaux du § 7 restent en place jusqu'à I1, I2, I5, I6 et I7, qui les remplaceront par ce composant.
