@@ -69,6 +69,8 @@ type DeckProps = {
   readonly box: RefObject<HTMLElement | null>;
   /** Le verre rangé autour des sous-titres : le deck en part, inerte et muet. */
   readonly away: Readonly<Record<string, unknown>>;
+  /** P12.7 : hauteur compacte — les rangées se replient en UNE ligne sans légendes (`call-motion.css`). */
+  readonly compact: boolean;
 };
 
 /**
@@ -76,11 +78,11 @@ type DeckProps = {
  * d'un groupe OU le panneau ouvert, puis le séparateur. Chargé avec les rangées : l'écran
  * d'appel ne paie que son `import()` (`budgets.json` › `call_deck_motion`).
  */
-export function Deck({ call, language, rows, panels, kit, panel, text, box, away }: DeckProps) {
+export function Deck({ call, language, rows, panels, kit, panel, text, box, away, compact }: DeckProps) {
   const kind = panel === null ? 'rows' : 'panel';
   return (
     <>
-      <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="" {...away}>
+      <div className="flex max-h-[calc(100dvh-13rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain pt-1.5" data-call-deck="" {...(compact ? { 'data-call-compact': '' } : {})} {...away}>
         <DeckContent key={kind} kind={kind} box={box}>
           {panel === null ? (
             <Suspense fallback={null}>
