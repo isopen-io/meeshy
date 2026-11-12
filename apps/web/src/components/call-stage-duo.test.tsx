@@ -105,7 +105,9 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
     const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) + Number(moved?.[1] ?? 0);
     const lifted = /\+ (\d+(?:\.\d+)?)px\)/.exec(this.style.top);
     const top = 80 + Number(lifted?.[1] ?? 0) + Number(moved?.[2] ?? 0);
-    return { left, top, right: left, bottom: top, width: 0, height: 0, x: left, y: top, toJSON: () => ({}) };
+    const width = Number.parseFloat(this.style.width) || 0;
+    const height = Number.parseFloat(this.style.height) || 0;
+    return { left, top, right: left + width, bottom: top + height, width, height, x: left, y: top, toJSON: () => ({}) };
   };
   Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: reducedMotion }) });
   try {
@@ -264,6 +266,70 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
       view.done();
     }, { reducedMotion: true });
     expect(played).toEqual([]);
+  });
+});
+
+describe('L1.5 — en paysage, ma vignette se couche en 130 × 96 à sa hauteur de coin', () => {
+  const turn = (width: number, height: number) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: height });
+    act(() => window.dispatchEvent(new Event('resize')));
+  };
+  const upright = () => ({ width: window.innerWidth, height: window.innerHeight });
+
+  test('fenêtre couchée : le cadre fait 130 × 96, à 60 sous la zone sûre ; debout, il garde 112 × 160 à 128', () => {
+    fresh();
+    const real = upright();
+    turn(844, 390);
+    const view = mount();
+    expect(view.frame().style.width).toBe('130px');
+    expect(view.frame().style.height).toBe('96px');
+    expect(view.frame().style.top).toBe('calc(env(safe-area-inset-top) + 60px)');
+    view.done();
+    turn(real.width, real.height);
+    const standing = mount();
+    expect(standing.frame().style.width).toBe('112px');
+    expect(standing.frame().style.top).toBe('calc(env(safe-area-inset-top) + 128px)');
+    standing.done();
+  });
+
+  test('les coins bas se tiennent à 130 au-dessus du bas : ils ne retombent plus sur les coins hauts', () => {
+    fresh();
+    const real = upright();
+    turn(844, 390);
+    const view = mount();
+    view.key('ArrowDown');
+    expect(view.frame().style.top).toBe('max(calc(env(safe-area-inset-top) + 60px), calc(100% - env(safe-area-inset-bottom) - 226px))');
+    view.done();
+    turn(real.width, real.height);
+  });
+
+  test('tourner l’écran joue le changement de taille en transform (translation + échelle autour du coin), sans saut', () => {
+    fresh();
+    const real = upright();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      turn(844, 390);
+      view.done();
+    });
+    turn(real.width, real.height);
+    const [first] = played;
+    expect(first).toHaveLength(2);
+    expect(first?.[0]?.transform).toMatch(/^translate\(.+\) scale\(.+\)$/);
+    expect(first?.[1]).toEqual({ transform: 'none' });
+    expect(Object.keys(first?.[0] ?? {})).toEqual(['transform']);
+  });
+
+  test('mouvement réduit : la rotation se remplace par un fondu court, opacité seule', () => {
+    fresh();
+    const real = upright();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      turn(844, 390);
+      view.done();
+    }, { reducedMotion: true });
+    turn(real.width, real.height);
+    expect(played).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
   });
 });
 
