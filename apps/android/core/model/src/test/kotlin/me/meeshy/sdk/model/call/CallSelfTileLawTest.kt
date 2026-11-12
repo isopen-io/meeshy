@@ -113,4 +113,23 @@ class CallSelfTileLawTest {
         assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.BottomStart)).isEqualTo(CallTilePoint(0f, 1f))
         assertThat(CallSelfTileLaw.anchor(CallSelfTileCorner.BottomEnd)).isEqualTo(CallTilePoint(1f, 1f))
     }
+
+    @Test
+    fun `P16_8 - a banner under the header pushes the tile down and shrinks what it may fill`() {
+        val size = CallTileSize(100f, 140f)
+        val banner = CallSafeInsets(bannerDp = 56f)
+
+        val plain = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, phone, size, noInsets)
+        val lowered = CallSelfTileLaw.center(CallSelfTileCorner.TopEnd, phone, size, banner)
+        assertThat(lowered.yDp).isWithin(0.001f).of(plain.yDp + 56f)
+        assertThat(lowered.xDp).isEqualTo(plain.xDp)
+
+        val bottom = CallSelfTileLaw.center(CallSelfTileCorner.BottomEnd, phone, size, banner)
+        assertThat(bottom.yDp).isEqualTo(CallSelfTileLaw.center(CallSelfTileCorner.BottomEnd, phone, size, noInsets).yDp)
+
+        val tall = CallSelfTileLaw.tileSize(CallTileSize(200f, 400f), noInsets, CallSelfTileScale.X3, 1f)
+        val shorter = CallSelfTileLaw.tileSize(CallTileSize(200f, 400f), banner, CallSelfTileScale.X3, 1f)
+        assertThat(shorter.heightDp).isAtMost(tall.heightDp - 0f)
+        assertThat(shorter.heightDp).isAtMost(400f - 60f - 130f - 56f)
+    }
 }
