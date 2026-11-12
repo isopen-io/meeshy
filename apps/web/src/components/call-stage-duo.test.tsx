@@ -313,6 +313,19 @@ describe('L1.5 — en paysage, ma vignette se couche en 130 × 96 à sa hauteur 
     expect(Object.keys(first?.[0] ?? {})).toEqual(['transform']);
   });
 
+  test('redimensionner la fenêtre sans changer de forme ne rejoue rien : la vignette suit la fenêtre, aucune mesure ni animation à chaque image', () => {
+    fresh();
+    turn(568, 200);
+    const played = withFlipProbe(() => {
+      const view = mount();
+      const before = view.frame().style.width;
+      turn(568, 220);
+      expect(view.frame().style.width).not.toBe(before);
+      view.done();
+    });
+    expect(played).toEqual([]);
+  });
+
   test('mouvement réduit : la rotation se remplace par un fondu court, opacité seule', () => {
     fresh();
     turn(upright.width, upright.height);

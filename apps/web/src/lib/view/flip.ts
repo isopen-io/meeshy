@@ -27,25 +27,31 @@ const scaleOf = (first: FlipBox, last: FlipBox): { readonly sx: number; readonly
   return Math.abs((first.width ?? 0) - (last.width ?? 0)) < FLIP_EPSILON_PX && Math.abs((first.height ?? 0) - (last.height ?? 0)) < FLIP_EPSILON_PX ? null : { sx, sy };
 };
 
+/** Une échelle portée nulle, négative ou absente ne divise rien. */
+const carriedFactor = (value: number | undefined): number => (value !== undefined && Number.isFinite(value) && value > 0 ? value : 1);
+
 export function flipKeyframes({
   first,
   last,
   reducedMotion,
   fadeFrom,
   origin,
+  carried,
 }: {
   readonly first: FlipBox;
   readonly last: FlipBox;
   readonly reducedMotion: boolean;
   /** Où la boîte s'ancre, en fractions de sa taille (0 = bord haut/gauche, 1 = bas/droite) : déclarée, le changement de taille se joue en échelle autour d'elle. */
   readonly origin?: FlipPoint;
+  /** L'échelle que l'élément porte HORS du FLIP (sa propriété `scale`) : la transformation jouée se compose SOUS elle, sa translation s'y divise. */
+  readonly carried?: FlipPoint;
   /** Opacité de départ d'un fondu d'entrée, qui accompagne ou remplace le déplacement. */
   readonly fadeFrom?: number;
 }): readonly Keyframe[] | null {
   const scale = origin === undefined ? null : scaleOf(first, last);
   if (reducedMotion) return scale === null ? null : [{ opacity: 0 }, { opacity: 1 }];
-  const dx = first.x - last.x - (scale === null || origin === undefined ? 0 : origin.x * (last.width ?? 0) * (1 - scale.sx));
-  const dy = first.y - last.y - (scale === null || origin === undefined ? 0 : origin.y * (last.height ?? 0) * (1 - scale.sy));
+  const dx = (first.x - last.x - (scale === null || origin === undefined ? 0 : origin.x * (last.width ?? 0) * (1 - scale.sx))) / carriedFactor(carried?.x);
+  const dy = (first.y - last.y - (scale === null || origin === undefined ? 0 : origin.y * (last.height ?? 0) * (1 - scale.sy))) / carriedFactor(carried?.y);
   const moved = Math.abs(dx) >= FLIP_EPSILON_PX || Math.abs(dy) >= FLIP_EPSILON_PX || scale !== null;
   if (!moved && fadeFrom === undefined) return null;
   const from = moved ? { transform: `translate(${dx}px, ${dy}px)${scale === null ? '' : ` scale(${scale.sx}, ${scale.sy})`}` } : {};
