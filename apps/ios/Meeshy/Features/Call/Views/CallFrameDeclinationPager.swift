@@ -43,8 +43,21 @@ enum CallFrameDeclinationSwipe {
     private static let momentumShare: CGFloat = 0.6
     private static let edgeResistance: CGFloat = 0.3
 
+    /// L'axe lu au premier mouvement d'un toucher, gardé jusqu'à sa fin.
+    struct Latch: Equatable {
+        let start: CGPoint
+        let isVertical: Bool
+    }
+
     static func isVertical(_ translation: CGSize) -> Bool {
         abs(translation.height) > abs(translation.width)
+    }
+
+    /// Un toucher se reconnaît à son point de départ : un nouveau relit l'axe même si le
+    /// précédent n'a jamais fini (annulé, sans `onEnded`).
+    static func latch(_ current: Latch?, start: CGPoint, translation: CGSize) -> Latch {
+        if let current, current.start == start { return current }
+        return Latch(start: start, isVertical: isVertical(translation))
     }
 
     static func followedOffset(index: Int, count: Int, translation: CGFloat, height: CGFloat) -> CGFloat {
@@ -62,8 +75,9 @@ enum CallFrameDeclinationSwipe {
 }
 
 /// Chemin iOS 16 : trois pages au plus (la précédente, la posée, la suivante) portées par un
-/// décalage — transformation seule, aucune image perdue pendant le geste. « Réduire les
-/// animations » remplace le glissement par un fondu court.
+/// décalage — transformation seule, aucune image perdue pendant le geste. Le décalage est un
+/// état de geste : un geste annulé le rend de lui-même. « Réduire les animations » remplace le
+/// glissement par un fondu court.
 private struct CallFrameDeclinationDragPages: View {
     let ids: [String]
     let selected: String
@@ -73,8 +87,9 @@ private struct CallFrameDeclinationDragPages: View {
     let onSelect: (String) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var drag: CGFloat = 0
-    @State private var isVerticalDrag: Bool?
+    @GestureState(resetTransaction: Transaction(animation: .interactiveSpring(response: 0.3, dampingFraction: 0.85)))
+    private var drag: CGFloat = 0
+    @State private var latch: CallFrameDeclinationSwipe.Latch?
 
     private var index: Int { ids.firstIndex(of: selected) ?? 0 }
 
@@ -109,22 +124,26 @@ private struct CallFrameDeclinationDragPages: View {
 
     private func swipe(height: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: CallFrameDeclinationSwipe.minimumDistance)
-            .onChanged { value in
-                if isVerticalDrag == nil { isVerticalDrag = CallFrameDeclinationSwipe.isVertical(value.translation) }
-                guard isVerticalDrag == true, !reduceMotion else { return }
+            .updating($drag) { value, drag, _ in
+                guard !reduceMotion, axis(of: value).isVertical else { return }
                 drag = CallFrameDeclinationSwipe.followedOffset(index: index, count: ids.count, translation: value.translation.height, height: height)
             }
+            .onChanged { value in
+                guard latch?.start != value.startLocation else { return }
+                latch = axis(of: value)
+            }
             .onEnded { value in
-                defer { isVerticalDrag = nil }
-                guard isVerticalDrag == true else { return }
+                guard axis(of: value).isVertical else { return }
                 let next = CallFrameDeclinationSwipe.target(index: index, count: ids.count, translation: value.translation.height,
                                                             predictedEnd: value.predictedEndTranslation.height, height: height)
-                if next != index { HapticFeedback.light() }
-                withAnimation(reduceMotion ? nil : .interactiveSpring(response: 0.3, dampingFraction: 0.85)) {
-                    drag = 0
-                    if next != index { onSelect(ids[next]) }
-                }
+                guard next != index else { return }
+                HapticFeedback.light()
+                onSelect(ids[next])
             }
+    }
+
+    private func axis(of value: DragGesture.Value) -> CallFrameDeclinationSwipe.Latch {
+        CallFrameDeclinationSwipe.latch(latch, start: value.startLocation, translation: value.translation)
     }
 }
 
