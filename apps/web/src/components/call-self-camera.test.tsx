@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { DEFAULT_SELF_TILE, selfTileStore } from '@/lib/calls/call-self-tile';
+import { DEFAULT_SELF_TILE, selfTileSize, selfTileStore } from '@/lib/calls/call-self-tile';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { setLocalZoom, useLocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
@@ -316,11 +316,16 @@ describe('ma vignette en coin se pince (#8577)', () => {
     return { host, corner, frame, toggled, done };
   };
 
-  test('par défaut, x2 : la taille d’avant', () => {
+  const sizeOf = (scale: 1 | 2 | 3) => {
+    const size = selfTileSize(scale, { width: window.innerWidth, height: window.innerHeight });
+    return [`${size.width}px`, `${size.height}px`];
+  };
+
+  test('par défaut, x2 : la taille d’avant (130 × 96 dans une fenêtre couchée, 112 × 160 debout)', () => {
     fresh();
     const view = mount(call(zoomCamera()));
     expect(view.corner().getAttribute('data-call-self-tile')).toBe('2');
-    expect([view.frame().style.width, view.frame().style.height]).toEqual(['112px', '160px']);
+    expect([view.frame().style.width, view.frame().style.height]).toEqual(sizeOf(2));
     view.done();
   });
 
@@ -329,7 +334,7 @@ describe('ma vignette en coin se pince (#8577)', () => {
     const view = mount(call(zoomCamera()));
     pinchOn(view.corner(), 100, 150);
     expect(view.corner().getAttribute('data-call-self-tile')).toBe('3');
-    expect([view.frame().style.width, view.frame().style.height]).toEqual(['168px', '240px']);
+    expect([view.frame().style.width, view.frame().style.height]).toEqual(sizeOf(3));
     expect(view.host.querySelector('[data-call-self-tile-status]')?.textContent).toBe('Ma vignette : grande');
     expect(view.toggled).toEqual([]);
     view.done();

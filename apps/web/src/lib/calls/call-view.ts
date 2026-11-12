@@ -158,13 +158,15 @@ export const membersInArrival = (members: Readonly<Record<string, CallMember>>):
 
 /**
  * Colonnes d'une grille de `count` tuiles (soi compris) — `GroupCallGridLayout.layout` d'iOS et
- * d'Android : deux tuiles s'empilent en portrait et se côtoient en paysage, trois et quatre font
- * 2 × 2, cinq et six font 2 × 3 en portrait et 3 × 2 en paysage.
+ * d'Android : deux tuiles s'empilent en portrait et se côtoient en paysage, trois font 2 × 2, quatre
+ * font 2 × 2 en portrait et tiennent sur UNE rangée de quatre en paysage (L4.1), cinq et six font 2 × 3
+ * en portrait et 3 × 2 en paysage.
  */
 export function gridColumns(count: number, landscape: boolean): number {
   if (count <= 1) return 1;
   if (count === 2) return landscape ? 2 : 1;
-  if (count <= 4) return 2;
+  if (count === 3) return 2;
+  if (count === 4) return landscape ? 4 : 2;
   return landscape ? 3 : 2;
 }
 

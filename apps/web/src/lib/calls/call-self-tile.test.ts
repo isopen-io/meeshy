@@ -44,7 +44,7 @@ describe('selfTileSize', () => {
     expect(small.width).toBeLessThanOrEqual(144);
     expect(small.height).toBeLessThanOrEqual(227);
     expect(small).toEqual({ width: 144, height: 206 });
-    expect(selfTileSize(3, { width: 400, height: 300 })).toEqual({ width: 112, height: 160 });
+    expect(selfTileSize(3, { width: 300, height: 400 })).toEqual({ width: 112, height: 160 });
   });
 });
 
@@ -112,8 +112,10 @@ describe('selfTileBox — les quatre coins de repos', () => {
   });
 
   test('un écran trop court : le coin bas ne remonte jamais au-dessus du coin haut', () => {
-    const short = { width: 700, height: 360 };
+    const short = { width: 300, height: 360 };
     expect(selfTileBox({ corner: 'bottom-right', size, viewport: short }).y).toBe(128);
+    const landscapeShort = { width: 700, height: 200 };
+    expect(selfTileBox({ corner: 'bottom-right', size: selfTileSize(2, landscapeShort), viewport: landscapeShort }).y).toBe(60);
   });
 });
 

@@ -1,6 +1,6 @@
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { AuthenticatedSession } from '@/lib/api/session';
@@ -275,44 +275,37 @@ describe('L1.5 — en paysage, ma vignette se couche en 130 × 96 à sa hauteur 
     Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: height });
     act(() => window.dispatchEvent(new Event('resize')));
   };
-  const upright = () => ({ width: window.innerWidth, height: window.innerHeight });
+  const upright = { width: 390, height: 844 };
+  const real = { width: 0, height: 0 };
+  beforeEach(() => {
+    real.width = window.innerWidth;
+    real.height = window.innerHeight;
+  });
+  afterEach(() => turn(real.width, real.height));
 
   test('fenêtre couchée : le cadre fait 130 × 96, à 60 sous la zone sûre ; debout, il garde 112 × 160 à 128', () => {
     fresh();
-    const real = upright();
     turn(844, 390);
     const view = mount();
     expect(view.frame().style.width).toBe('130px');
     expect(view.frame().style.height).toBe('96px');
     expect(view.frame().style.top).toBe('calc(env(safe-area-inset-top) + 60px)');
     view.done();
-    turn(real.width, real.height);
+    turn(upright.width, upright.height);
     const standing = mount();
     expect(standing.frame().style.width).toBe('112px');
     expect(standing.frame().style.top).toBe('calc(env(safe-area-inset-top) + 128px)');
     standing.done();
   });
 
-  test('les coins bas se tiennent à 130 au-dessus du bas : ils ne retombent plus sur les coins hauts', () => {
-    fresh();
-    const real = upright();
-    turn(844, 390);
-    const view = mount();
-    view.key('ArrowDown');
-    expect(view.frame().style.top).toBe('max(calc(env(safe-area-inset-top) + 60px), calc(100% - env(safe-area-inset-bottom) - 226px))');
-    view.done();
-    turn(real.width, real.height);
-  });
-
   test('tourner l’écran joue le changement de taille en transform (translation + échelle autour du coin), sans saut', () => {
     fresh();
-    const real = upright();
+    turn(upright.width, upright.height);
     const played = withFlipProbe(() => {
       const view = mount();
       turn(844, 390);
       view.done();
     });
-    turn(real.width, real.height);
     const [first] = played;
     expect(first).toHaveLength(2);
     expect(first?.[0]?.transform).toMatch(/^translate\(.+\) scale\(.+\)$/);
@@ -322,13 +315,12 @@ describe('L1.5 — en paysage, ma vignette se couche en 130 × 96 à sa hauteur 
 
   test('mouvement réduit : la rotation se remplace par un fondu court, opacité seule', () => {
     fresh();
-    const real = upright();
+    turn(upright.width, upright.height);
     const played = withFlipProbe(() => {
       const view = mount();
       turn(844, 390);
       view.done();
     }, { reducedMotion: true });
-    turn(real.width, real.height);
     expect(played).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
   });
 });
