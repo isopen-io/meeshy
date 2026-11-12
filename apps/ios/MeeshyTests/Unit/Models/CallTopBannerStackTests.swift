@@ -152,4 +152,18 @@ final class CallTopBannerStackTests: XCTestCase {
         XCTAssertTrue(stack.contains("CallEdgeStow(edge: .top"), "il se range vers son bord avec le chrome, comme l'en-tête")
         XCTAssertTrue(stack.contains("CallChromeStow.animation(reduceMotion: reduceMotion)"))
     }
+
+    /// Loi 18 (`docs/product/appels-vue-finale.md`) — le bandeau de partage porte
+    /// le verre dessiné `adaptiveLiquidGlass`, comme l'en-tête et les boutons d'appel ;
+    /// `adaptiveGlass` n'en donne qu'un matériau nu sous iOS 16 à 25.
+    func test_shareBanner_usesTheDrawnLiquidGlassAtom_likeHeaderAndCallButtons() throws {
+        let controls = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallScreenShareControls.swift")
+        )
+        XCTAssertTrue(
+            controls.contains(".adaptiveLiquidGlass(in: Capsule(), tint: MeeshyColors.error.opacity(MeeshyOpacity.medium), interactive: showsStop)"),
+            "le bandeau porte le verre dessiné de la loi 18 : reflet, liseré, ombre sous iOS 16 à 25"
+        )
+        XCTAssertFalse(controls.contains(".adaptiveGlass("), "adaptiveGlass : matériau nu sous iOS 16 à 25, pas le verre de la loi 18")
+    }
 }
