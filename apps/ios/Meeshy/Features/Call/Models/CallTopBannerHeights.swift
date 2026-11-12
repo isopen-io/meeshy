@@ -32,6 +32,7 @@ struct CallGroupStageTopReserve: View {
     let hasLiveFrameStatus: Bool
     let heights: [CallTopBanner: CGFloat]
     let base: CGFloat
+    let isStageFullScreen: Bool
     let reduceMotion: Bool
 
     var body: some View {
@@ -48,7 +49,8 @@ struct CallGroupStageTopReserve: View {
                 isCaptureAlertShown: captureJournal.alert != nil,
                 isLiveFrameShown: hasLiveFrameStatus
             ),
-            heights: heights
+            heights: heights,
+            isStageFullScreen: isStageFullScreen
         )
     }
 }

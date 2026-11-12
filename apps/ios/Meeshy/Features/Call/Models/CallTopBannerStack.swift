@@ -54,9 +54,11 @@ nonisolated enum CallTopBannerStack {
 
     /// #17833 (L4.11) — en groupe, la grille cède sa place à la pile au lieu de passer dessous : MÊME loi
     /// que ma vignette de duo, mais tous les bandeaux présents comptent (un partage reçu aussi, le cadre
-    /// en direct aussi), puisque la grille n'a pas de coin à se garder.
-    static func groupGridClearance(present: Set<CallTopBanner>, heights: [CallTopBanner: CGFloat]) -> CGFloat {
-        selfTileClearance(counted: present, heights: heights)
+    /// en direct aussi), puisque la grille n'a pas de coin à se garder. Plein écran, la pile est rangée
+    /// avec le chrome : la scène reprend tout l'écran.
+    static func groupGridClearance(present: Set<CallTopBanner>, heights: [CallTopBanner: CGFloat], isStageFullScreen: Bool) -> CGFloat {
+        guard !isStageFullScreen else { return 0 }
+        return selfTileClearance(counted: present, heights: heights)
     }
 
     /// Le haut de la pile, depuis le bord de l'écran.
