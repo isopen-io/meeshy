@@ -396,17 +396,15 @@ fun CallScreen(
 
             // Le mode « Capturer l'appel » : la scène qui se photographie (deux tapes) ou se filme (appui
             // long), sous le choix du cadre en direct ; le chrome de l'appel s'efface.
-            if (chromeState.layer.activeMode == CallScreenMode.Montage) {
-                CallMontageMode(
-                    state = state,
-                    localTrack = viewModel.localVideoTrack,
-                    remoteTrack = remoteVideo,
-                    eglContext = viewModel.eglBaseContext,
-                    reduceMotion = reduceMotion,
-                    onClose = chrome::exitMode,
-                    pickerModifier = Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
-                )
-            }
+            CallMontageMode(
+                visible = chromeState.layer.activeMode == CallScreenMode.Montage,
+                state = state,
+                localTrack = viewModel.localVideoTrack,
+                remoteTrack = remoteVideo,
+                eglContext = viewModel.eglBaseContext,
+                reduceMotion = reduceMotion,
+                onClose = chrome::exitMode,
+            )
 
             // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet.
             if (chromeState.layer.activeMode == CallScreenMode.Effects) {
