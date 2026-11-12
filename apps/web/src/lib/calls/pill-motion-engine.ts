@@ -214,14 +214,14 @@ function settleGlassTone(element: HTMLElement): void {
 
 /**
  * Le TON d'un verre d'appel change en fondu (L5.8, #17849) : la classe a déjà posé le ton visé, le verre
- * est tenu à sa densité régulière le temps du fondu et le voile (`::after`, `glass.css`) passe de l'opacité
+ * est tenu à sa densité régulière le temps du fondu et le voile (`::before`, `glass.css`) passe de l'opacité
  * AFFICHÉE à celle de la cible ; à la fin la classe reprend, sans saut (régulière + voile = proéminente).
  * Interruptible : un changement en route part de l'opacité vue à cet instant. Sous « Réduire la
  * transparence » le verre est plein dans les deux tons : rien à fondre. `null` : posé d'un coup.
  */
 export function playGlassTone(element: HTMLElement, prominent: boolean, previous: Animation | null): Animation | null {
   if (typeof element.animate !== 'function' || window.matchMedia?.('(prefers-reduced-transparency: reduce)').matches) return null;
-  const seen = previous?.playState === 'running' ? Number(getComputedStyle(element, '::after').opacity) : Number.NaN;
+  const seen = previous?.playState === 'running' ? Number(getComputedStyle(element, '::before').opacity) : Number.NaN;
   const shown = Number.isNaN(seen) ? glassVeil(!prominent) : seen;
   previous?.cancel();
   const fading = element.getAttribute('data-glass-fading');
@@ -229,7 +229,7 @@ export function playGlassTone(element: HTMLElement, prominent: boolean, previous
   element.setAttribute('data-glass-fading', lifted ? 'static' : 'placed');
   element.style.setProperty('--glass-density', `${GLASS_REGULAR_DENSITY}%`);
   if (lifted) element.style.position = 'relative';
-  const played = element.animate([...glassToneKeyframes(shown, glassVeil(prominent))], { duration: glassToneMs(prefersReducedMotion()), easing: 'ease-in-out', fill: 'forwards', pseudoElement: '::after' });
+  const played = element.animate([...glassToneKeyframes(shown, glassVeil(prominent))], { duration: glassToneMs(prefersReducedMotion()), easing: 'ease-in-out', fill: 'forwards', pseudoElement: '::before' });
   played.finished.then(() => settleGlassTone(element), () => undefined);
   return played;
 }

@@ -179,7 +179,7 @@ export function bannerCloseKeyframes(delta: number, reducedMotion: boolean): rea
  * LE TON DU VERRE CHANGE EN FONDU (L5.8, #17849 ; `CallGlassVeil` d'iOS, loi 17) — sur un écran reçu
  * le verre d'appel s'assombrit (`glass-call` → `glass-call-prominent`, `glass.css`), puis revient. Le
  * passage n'est pas un fond recalculé à chaque image : le verre garde sa densité régulière et un VOILE
- * (le calque `::after`, de la couleur du verre) monte de zéro à la mesure qui, posée dessus, rend
+ * (le calque `::before`, de la couleur du verre) monte de zéro à la mesure qui, posée dessus, rend
  * EXACTEMENT la densité proéminente. Seule son opacité bouge. Sous « Réduire les animations », le
  * même fondu, plus court.
  */

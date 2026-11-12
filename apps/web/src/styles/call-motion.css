@@ -358,3 +358,44 @@
   inset-inline: 0;
   bottom: 1.5rem;
 }
+
+/* LE TON DU VERRE CHANGE EN FONDU (L5.8, #17849 ; `CallGlassVeil` d'iOS, loi 17) — le temps du
+   passage, le moteur de mouvement (`pill-motion-engine.ts`, `playGlassTone`) tient le verre à sa
+   densité régulière et pose un VOILE (`::before`) : un calque de la couleur du verre dont l'OPACITÉ
+   seule monte ou redescend (le compositeur la porte, aucun fond n'est recalculé à chaque image), en
+   Web Animations — la règle générale de « Réduire les animations » coupe les transitions, pas elles.
+   Le liseré et le reflet du haut quittent le verre pour un calque posé AU-DESSUS du voile (`::after`) :
+   sinon le voile les éteindrait à moitié, et la fin du fondu les rallumerait d'un coup.
+   Au repos aucun calque n'existe : le ton est celui des classes de `glass.css`, dont ces calques
+   reprennent le liseré et le reflet (`--glass-call-rim`, `--glass-call-sheen`). Régulière + voile à la
+   mesure de `glassVeil` = exactement la densité proéminente : la fin du fondu ne saute pas. Chargé
+   avec l'écran d'appel, comme tout ce qui porte ce verre : la première peinture ne le paie pas. */
+.glass-call[data-glass-fading],
+.glass-call-prominent[data-glass-fading] {
+  border-color: transparent;
+  box-shadow: var(--glass-call-drop);
+}
+
+.glass-call[data-glass-fading]::before,
+.glass-call-prominent[data-glass-fading]::before,
+.glass-call[data-glass-fading]::after,
+.glass-call-prominent[data-glass-fading]::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.glass-call[data-glass-fading]::before,
+.glass-call-prominent[data-glass-fading]::before {
+  background-color: var(--ios-indigo-950);
+  opacity: 0;
+}
+
+.glass-call[data-glass-fading]::after,
+.glass-call-prominent[data-glass-fading]::after {
+  border: var(--glass-call-rim);
+  box-shadow: var(--glass-call-sheen);
+}

@@ -107,12 +107,13 @@
 .glass-call,
 .glass-call-prominent,
 .glass-call-danger {
+  --glass-call-rim: 1px solid rgb(255 255 255 / 0.22);
+  --glass-call-sheen: inset 0 1px 0 rgb(255 255 255 / 0.18);
+  --glass-call-drop: 0 8px 24px rgb(0 0 0 / 0.28);
   background-color: color-mix(in srgb, var(--ios-indigo-950) var(--glass-density), transparent);
   backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid rgb(255 255 255 / 0.22);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.18),
-    0 8px 24px rgb(0 0 0 / 0.28);
+  border: var(--glass-call-rim);
+  box-shadow: var(--glass-call-sheen), var(--glass-call-drop);
   color: white;
 }
 
@@ -122,25 +123,6 @@
 
 .glass-call-prominent {
   --glass-density: 86%;
-}
-
-/* LE TON DU VERRE CHANGE EN FONDU (L5.8, #17849 ; `CallGlassVeil` d'iOS, loi 17) — le temps du
-   passage, le moteur de mouvement (`pill-motion-engine.ts`, `playGlassTone`) tient le verre à sa
-   densité régulière et pose ce voile : un calque de la couleur du verre dont l'OPACITÉ seule monte
-   ou redescend (le compositeur la porte, aucun fond n'est recalculé à chaque image), en Web
-   Animations — la règle générale de « Réduire les animations » coupe les transitions, pas elles.
-   Au repos le calque n'existe pas : le ton est celui des classes ci-dessus. Régulière + voile à la
-   mesure de `glassVeil` = exactement la densité proéminente : la fin du fondu ne saute pas. */
-.glass-call[data-glass-fading]::after,
-.glass-call-prominent[data-glass-fading]::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  z-index: -1;
-  border-radius: inherit;
-  background-color: var(--ios-indigo-950);
-  opacity: 0;
-  pointer-events: none;
 }
 
 /* LE VERRE D'APPEL TEINTÉ DE ROUGE (P16.12, #17746) — le bandeau « Vous partagez votre écran » :
