@@ -101,6 +101,18 @@ class GroupCallSpotlightTest {
     }
 
     @Test
+    fun `the screen received in a duo zooms by the same law, a pinch in progress applies to the committed zoom`() {
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 2f, pinch = 1.5f, isReceivingScreen = true)).isEqualTo(3f)
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 2f, pinch = 9f, isReceivingScreen = true)).isEqualTo(GroupCallSpotlight.MAX_ZOOM)
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 3f, pinch = 0.1f, isReceivingScreen = true)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `a zoom does not outlive the share that made it`() {
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 3f, pinch = 1.2f, isReceivingScreen = false)).isEqualTo(1f)
+    }
+
+    @Test
     fun `the others go below in portrait, on the side in landscape, nowhere in full screen`() {
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = false, isLandscape = false)).isEqualTo(GroupCallFilmstrip.Bottom)
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = false, isLandscape = true)).isEqualTo(GroupCallFilmstrip.Trailing)
