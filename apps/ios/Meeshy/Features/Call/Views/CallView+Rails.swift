@@ -80,7 +80,7 @@ extension CallView {
         return AdaptiveGlassContainer(spacing: CallControlGlassMetrics.containerSpacing) {
             ViewThatFits(in: .vertical) {
                 column
-                ScrollView(.vertical, showsIndicators: false) { column }
+                ScrollView(.vertical, showsIndicators: false) { column }.mask { ScrollEdgeFadeMask(axis: .vertical, start: true, end: true) }
             }
         }
         .clipShape(Capsule())
