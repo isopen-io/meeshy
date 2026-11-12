@@ -7,6 +7,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import me.meeshy.ui.appearance.LocalPackShopOpener
+import me.meeshy.ui.component.focal.LocalCallJournal
 import me.meeshy.ui.appearance.PackShopOpener
 import me.meeshy.ui.settings.LocalSettingsInviteOpener
 import me.meeshy.ui.settings.SettingsInviteOpener
@@ -74,7 +75,9 @@ internal fun NavGraphBuilder.chatDestination(
                     val settingsInviteOpener = remember(navController) {
                         SettingsInviteOpener { invite -> navController.navigate(Routes.settingsFocus(invite)) }
                     }
+                    val callJournal = rememberCallJournalSlot(conversationId)
                     CompositionLocalProvider(
+                        LocalCallJournal provides callJournal,
                         LocalPackShopOpener provides packShopOpener,
                         LocalSettingsInviteOpener provides settingsInviteOpener,
                     ) {

@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -108,14 +109,14 @@ internal fun CallDetailParticipantsSection(participants: List<CallDetailParticip
 @Composable
 internal fun CallDetailTranscriptSection(
     state: CallTranscriptState,
-    accentHex: String,
+    accent: Color,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
 ) {
     when (state) {
         CallTranscriptState.Loading, CallTranscriptState.Absent -> Unit
         CallTranscriptState.Failed -> TranscriptFailure(onRetry)
-        is CallTranscriptState.Ready -> TranscriptLines(state, accentHex, onDelete)
+        is CallTranscriptState.Ready -> TranscriptLines(state, accent, onDelete)
     }
 }
 
@@ -152,9 +153,8 @@ private fun TranscriptFailure(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun TranscriptLines(state: CallTranscriptState.Ready, accentHex: String, onDelete: () -> Unit) {
+private fun TranscriptLines(state: CallTranscriptState.Ready, accent: Color, onDelete: () -> Unit) {
     var showOriginal by rememberSaveable { mutableStateOf(false) }
-    val accent = hexColor(accentHex, MeeshyPalette.Indigo500)
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
         TranscriptHeader {
             if (state.canShowOriginal) {

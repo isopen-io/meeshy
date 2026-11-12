@@ -31,6 +31,8 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import me.meeshy.sdk.model.CallSummaryMetadata
+import me.meeshy.sdk.model.reading.focal.FocalCallJournalOffer
 import me.meeshy.sdk.model.reading.focal.FocalCallNotice
 import me.meeshy.sdk.model.reading.focal.FocalCallNoticePresenter
 import me.meeshy.sdk.model.reading.focal.FocalCallTitle
@@ -79,12 +81,17 @@ internal fun FocalSpecialRowView(
                 accentColor = accentColor,
                 onCallBack = callbacks.onCallBack,
                 onLongPress = callbacks.onLongPress,
+                journal = content.callJournalRequest(summary, accentColor),
             )
         }
         FocalSpecialRow.JoinNotice, FocalSpecialRow.SystemNotice -> SystemNoticeLine(content = content, callbacks = callbacks, accentColor = accentColor)
         FocalSpecialRow.Empty, FocalSpecialRow.None -> Unit
     }
 }
+
+/** La demande de journal d'après l'appel de cette bulle, ou `null` quand l'appel n'en offre pas (R1.11). */
+private fun BubbleContent.callJournalRequest(summary: CallSummaryMetadata, accent: Color): CallJournalRequest? =
+    if (FocalCallJournalOffer.isOffered(summary)) CallJournalRequest(summary.callId, createdAtIso.orEmpty(), accent) else null
 
 /** Message supprimé : une ligne fantôme italique sans fond, au retrait de la colonne du nom. */
 @Composable
@@ -144,6 +151,22 @@ internal fun FocalCallNoticeRow(
     onCallBack: (() -> Unit)?,
     onLongPress: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    journal: CallJournalRequest? = null,
+) {
+    val slot = LocalCallJournal.current
+    Column(modifier = modifier) {
+        FocalCallNoticeCard(notice, createdAtIso, accentColor, onCallBack, onLongPress)
+        if (journal != null && slot != null) FocalCallJournalUnderBubble(journal, slot)
+    }
+}
+
+@Composable
+private fun FocalCallNoticeCard(
+    notice: FocalCallNotice,
+    createdAtIso: String?,
+    accentColor: Color,
+    onCallBack: (() -> Unit)?,
+    onLongPress: (() -> Unit)?,
 ) {
     val tokens = MeeshyTheme.tokens
     val tint = when (notice.tone) {
@@ -159,7 +182,7 @@ internal fun FocalCallNoticeRow(
     val detailsAction = stringResource(R.string.focal_call_details_action)
     val shape = RoundedCornerShape(MeeshyRadius.lg)
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
         horizontalArrangement = if (notice.isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
         Column(
