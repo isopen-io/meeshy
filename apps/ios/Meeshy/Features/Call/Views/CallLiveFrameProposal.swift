@@ -108,7 +108,7 @@ struct CallLiveFrameProposalCard: View {
             }
         }
         .padding(MeeshySpacing.md)
-        .modifier(CallRecordingGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)))
+        .modifier(CallBannerGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)))
         .accessibilityElement(children: .contain)
     }
 }
@@ -128,7 +128,7 @@ struct CallLiveFrameNotice: View {
         .foregroundStyle(Color.white)
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
-        .modifier(CallRecordingGlass(shape: Capsule()))
+        .modifier(CallBannerGlass(shape: Capsule()))
         .accessibilityElement(children: .combine)
     }
 }

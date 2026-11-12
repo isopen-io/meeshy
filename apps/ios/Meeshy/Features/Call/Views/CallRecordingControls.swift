@@ -252,7 +252,7 @@ struct CallRecordingOverlay: View, Equatable {
             }
         }
         .padding(MeeshySpacing.lg)
-        .modifier(CallRecordingGlass(shape: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)))
+        .modifier(CallBannerGlass(shape: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)))
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
@@ -294,7 +294,7 @@ struct CallRecordingOverlay: View, Equatable {
         }
         .padding(.leading, MeeshySpacing.mdPlus)
         .padding(.trailing, MeeshySpacing.xs)
-        .modifier(CallRecordingGlass(shape: Capsule()))
+        .modifier(CallBannerGlass(shape: Capsule()))
         .accessibilityElement(children: .contain)
     }
 
@@ -332,7 +332,7 @@ struct CallRecordingOverlay: View, Equatable {
             .accessibilityLabel(CallRecordingCopy.close)
         }
         .padding(.leading, MeeshySpacing.mdPlus)
-        .modifier(CallRecordingGlass(shape: Capsule()))
+        .modifier(CallBannerGlass(shape: Capsule()))
         .task(id: notice) {
             guard await cancellableSleep(for: .seconds(4)), !Task.isCancelled else { return }
             onDismiss()
@@ -381,18 +381,5 @@ struct CallRecordingPlayback: View {
                 accentColor: accentHex
             )
         }
-    }
-}
-
-/// Loi 18 · R2.11 · R3.12 — le verre adaptatif d'`adaptiveLiquidGlass`, par son entrée du kit
-/// (`meeshyGlass`, ton `theme`) : Liquid Glass sur iOS 26, verre dessiné avant, plein sous
-/// « Réduire la transparence » ; sous le voile d'appel qui l'assombrit sur un contenu clair (loi 3).
-struct CallRecordingGlass<S: Shape>: ViewModifier {
-    let shape: S
-
-    func body(content: Content) -> some View {
-        content
-            .modifier(CallGlassVeil(shape: shape, resting: 0.22))
-            .meeshyGlass(in: shape, tone: .theme)
     }
 }
