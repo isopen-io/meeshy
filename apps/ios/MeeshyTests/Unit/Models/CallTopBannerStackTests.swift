@@ -137,17 +137,30 @@ final class CallTopBannerStackTests: XCTestCase {
         XCTAssertEqual(CallTopBannerStack.groupGridClearance(present: [.screenShare, .liveFrame], heights: [:]), 52 + 52)
     }
 
+    func test_present_gathersEveryBannerOfTheStack() {
+        XCTAssertEqual(
+            CallTopBannerStack.present(isScreenShareShown: true, isRecordingShown: true, isCaptureAlertShown: true, isLiveFrameShown: true),
+            [.screenShare, .recording, .capture, .liveFrame]
+        )
+        XCTAssertEqual(CallTopBannerStack.present(isScreenShareShown: false, isRecordingShown: false, isCaptureAlertShown: false, isLiveFrameShown: false), [])
+    }
+
     func test_groupGrid_yieldsToTheStack_inMotion() throws {
         let connected = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Connected.swift")
         )
         let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
-        XCTAssertTrue(layout.contains("+ groupGridTopBannerClearance"), "la réserve haute de la grille compte la pile mesurée")
+        XCTAssertTrue(layout.contains("CallGroupStageTopReserve("), "la réserve haute de la grille compte la pile mesurée")
+        XCTAssertTrue(layout.contains("heights: topBannerHeights"))
+        let reserve = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Call/Models/CallTopBannerHeights.swift")
+        )
+        XCTAssertTrue(reserve.contains(".frame(height: base + clearance)"))
         XCTAssertTrue(
-            layout.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: groupGridTopBannerClearance)"),
+            reserve.contains(".animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: clearance)"),
             "la grille glisse avec la pile ; Réduire les animations : un fondu court"
         )
-        XCTAssertTrue(connected.contains("CallTopBannerStack.groupGridClearance(present: present, heights: topBannerHeights)"))
+        XCTAssertTrue(reserve.contains("CallTopBannerStack.groupGridClearance("))
     }
 
     func test_bannerGap_isTheStackSpacing() {

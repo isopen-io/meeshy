@@ -44,6 +44,21 @@ nonisolated enum CallTopBannerStack {
         ordered(counted).reduce(0) { $0 + max(heights[$1] ?? 0, bannerMinimumHeight) + bannerGap }
     }
 
+    /// #17833 — les bandeaux présents à l'écran : un partage (le mien ou reçu), l'enregistrement, la
+    /// capture, le cadre en direct. Le site UNIQUE de la présence, que la pile et la grille lisent.
+    static func present(isScreenShareShown: Bool, isRecordingShown: Bool, isCaptureAlertShown: Bool, isLiveFrameShown: Bool) -> Set<CallTopBanner> {
+        var present = countedForSelfTile(isLocalScreenShareShown: isScreenShareShown, isRecordingShown: isRecordingShown, isCaptureAlertShown: isCaptureAlertShown)
+        if isLiveFrameShown { present.insert(.liveFrame) }
+        return present
+    }
+
+    /// #17833 (L4.11) — en groupe, la grille cède sa place à la pile au lieu de passer dessous : MÊME loi
+    /// que ma vignette de duo, mais tous les bandeaux présents comptent (un partage reçu aussi, le cadre
+    /// en direct aussi), puisque la grille n'a pas de coin à se garder.
+    static func groupGridClearance(present: Set<CallTopBanner>, heights: [CallTopBanner: CGFloat]) -> CGFloat {
+        selfTileClearance(counted: present, heights: heights)
+    }
+
     /// Le haut de la pile, depuis le bord de l'écran.
     static func topInset(chromeTopInset: CGFloat) -> CGFloat {
         chromeTopInset + headerRowClearance
