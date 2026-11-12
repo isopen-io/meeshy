@@ -50,4 +50,18 @@ final class CallFrameDeclinationSwipeTests: XCTestCase {
         XCTAssertGreaterThan(pulled, 0)
         XCTAssertLessThan(pulled, 30)
     }
+
+    func test_latch_withinOneGesture_keepsTheAxisReadAtTheFirstMove() {
+        let start = CGPoint(x: 20, y: 30)
+        let first = CallFrameDeclinationSwipe.latch(nil, start: start, translation: CGSize(width: 2, height: -12))
+        let later = CallFrameDeclinationSwipe.latch(first, start: start, translation: CGSize(width: 40, height: -14))
+        XCTAssertTrue(later.isVertical)
+    }
+
+    func test_latch_aNewTouchRelatchesEvenWhenThePreviousGestureWasCancelled() {
+        let cancelled = CallFrameDeclinationSwipe.latch(nil, start: CGPoint(x: 20, y: 30), translation: CGSize(width: 18, height: 3))
+        XCTAssertFalse(cancelled.isVertical)
+        let next = CallFrameDeclinationSwipe.latch(cancelled, start: CGPoint(x: 24, y: 52), translation: CGSize(width: 1, height: -15))
+        XCTAssertTrue(next.isVertical)
+    }
 }
