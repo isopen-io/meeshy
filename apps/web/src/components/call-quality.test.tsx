@@ -110,7 +110,7 @@ describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#
     expect(html).toContain('Écran de Awa');
     expect(html).toContain('data-call-chip-screen');
     expect(html).not.toContain('1:23');
-    expect(html).toMatch(/aria-label="Écran de Awa — Qualité de l’appel : bon"/);
+    expect(html).toMatch(/aria-label="Écran de Awa — Qualité de l’appel : bonne"/);
     expect(chip(null, screen)).toContain('Écran de Awa');
   });
 

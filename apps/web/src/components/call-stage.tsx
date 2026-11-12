@@ -198,10 +198,17 @@ function PeerMuted({ where }: { readonly where: 'main' | 'corner' }) {
 function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageProps, 'call' | 'language' | 'immersive' | 'onToggleImmersive'>) {
   const sharer = screenSharer(call.members);
   const selfMirrored = selfPreviewMirrored(call);
+  const layer = useRef<HTMLDivElement>(null);
+  const zoom = useScreenZoom(layer);
   if (sharer === null) return null;
   return (
-    <div className="absolute inset-0" data-call-shared-screen="">
-      <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />
+    <div className="absolute inset-0" data-call-shared-screen="" data-call-screen-zoom={String(zoom.zoom)}>
+      {/* L'écran reçu se zoome (P15.11) : la surface des gestes et son calque GPU ne portent QUE l'image — ma vignette et le bouton plein écran, posés après, ne bougent jamais. */}
+      <div className="absolute inset-0 overflow-hidden" style={{ touchAction: 'none' }} data-call-screen-surface="" {...zoom.handlers}>
+        <div ref={layer} className="absolute inset-0 transition-transform duration-200 motion-reduce:transition-none" style={{ transform: zoom.transform, transformOrigin: 'center' }} data-call-screen-layer="">
+          <StreamVideo stream={call.remoteStreams[sharer.userId] ?? null} mirrored={false} fit="contain" className="absolute inset-0 size-full" label={translate(language, 'call.screen.peerSharing', { name: sharer.name })} member={sharer.userId} />
+        </div>
+      </div>
       {call.cameraOn && !immersive ? (
         <div className="absolute overflow-hidden rounded-card shadow-lg" style={screenCorner} data-call-corner="">
           <StreamVideo stream={call.localStream} mirrored={selfMirrored} className="size-full" self />

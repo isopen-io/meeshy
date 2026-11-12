@@ -5,7 +5,8 @@ import type { CallQuality } from './call-store';
  * `CallHeaderRule.swift`. Les boutons, de début à fin : Réduire · Image dans
  * l'image · Conversation. Et la capsule de droite : vidéo « nom donné · durée »,
  * audio le réseau dégradé seul, groupe « nom · nombre · durée » — le réseau ne
- * paraît jamais que dégradé. `call-screen-header.tsx` ne fait que les dessiner.
+ * paraît jamais que dégradé. Un écran reçu en duo (P15.4) remplace le nom et la durée
+ * par « Écran de X » et l'icône d'écran. `call-screen-header.tsx` ne fait que les dessiner.
  */
 
 export type CallHeaderAction = 'minimize' | 'pip' | 'conversation';
@@ -38,6 +39,8 @@ export type CallHeaderCapsuleInput = {
   readonly displayName: string | null;
   readonly groupName: string | null;
   readonly participantCount: number;
+  /** P15.4 — l'écran du correspondant tient la scène du duo. */
+  readonly receivesScreen?: boolean;
 };
 
 export type CallHeaderCapsule = {
@@ -45,6 +48,8 @@ export type CallHeaderCapsule = {
   readonly participantCount: number | null;
   readonly duration: boolean;
   readonly network: boolean;
+  /** P15.4 — `title` est alors le NOM de qui partage : la capsule dit « Écran de X », avec l'icône d'écran, sans durée. */
+  readonly receivedScreen?: true;
 };
 
 const meaningful = (text: string | null | undefined): string | null => {
@@ -55,7 +60,10 @@ const meaningful = (text: string | null | undefined): string | null => {
 export function callHeaderCapsule(input: CallHeaderCapsuleInput): CallHeaderCapsule | null {
   if (!input.established) return null;
   if (input.layout === 'audio') return input.degraded ? { title: null, participantCount: null, duration: false, network: true } : null;
-  if (input.layout === 'video') return { title: meaningful(input.givenName) ?? meaningful(input.displayName), participantCount: null, duration: true, network: input.degraded };
+  if (input.layout === 'video') {
+    const title = meaningful(input.givenName) ?? meaningful(input.displayName);
+    return input.receivesScreen === true ? { title, participantCount: null, duration: false, network: input.degraded, receivedScreen: true } : { title, participantCount: null, duration: true, network: input.degraded };
+  }
   return { title: meaningful(input.groupName), participantCount: input.participantCount > 0 ? input.participantCount : null, duration: true, network: input.degraded };
 }
 

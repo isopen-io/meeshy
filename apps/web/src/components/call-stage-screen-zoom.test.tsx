@@ -71,7 +71,7 @@ const mount = () => {
   act(() => root.render(<CallStage call={sharing()} layout="screen" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={{ full: false, onToggle: () => undefined, zoom: 'step' as const, column: () => null }} />));
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
   const layer = () => find('[data-call-screen-layer]') as HTMLElement;
-  const screen = () => find('[data-call-shared-screen]') as HTMLElement;
+  const screen = () => find('[data-call-screen-surface]') as HTMLElement;
   const pointer = (type: string, id: number, x: number, y: number) => act(() => void screen().dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: id, clientX: x, clientY: y, pointerType: 'touch' })));
   const wheel = (deltaY: number) => act(() => void screen().dispatchEvent(Object.defineProperty(new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true }), 'ctrlKey', { value: true })));
   const flush = () => act(async () => void (await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))));
