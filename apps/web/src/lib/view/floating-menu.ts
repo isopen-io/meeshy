@@ -128,8 +128,8 @@ export const SETTINGS_DESTINATION: FloatingDestination = {
 
 /**
  * **LE JEU** (#17769) — en tête de l'échelle, au plus près du bouton : le jeu
- * s'ouvre en deux touchers depuis tout écran racine. Même mot et même trophée
- * que la rangée « Progression » des Réglages ; teinte orange de la Flamme,
+ * s'ouvre en deux touchers depuis tout écran racine. Nommé « Le Jeu »
+ * (décision porteur du 2026-11-12), sous le trophée de la rangée des Réglages ; teinte orange de la Flamme,
  * distincte de l'ambre de « Mes liens » au coin de l'œil. Retiré quand le
  * joueur a masqué le jeu (`menuLadderFor`).
  */

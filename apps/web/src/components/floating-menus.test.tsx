@@ -89,7 +89,7 @@ describe('dans une autre langue d’interface', () => {
 
       expect(container.querySelector('[role="menu"]')?.getAttribute('aria-label')).toBe('Meeshy-Navigation');
       expect(barreaux().map((a) => a.getAttribute('aria-label'))).toEqual([
-        'Fortschritt',
+        'Spiel',
         'Meine Links',
         'Mitteilungen',
         'Anrufe',

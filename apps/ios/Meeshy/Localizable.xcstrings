@@ -170931,43 +170931,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التقدّم"
+            "value": "اللعبة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fortschritt"
+            "value": "Spiel"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progress"
+            "value": "Game"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progreso"
+            "value": "Juego"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progression"
+            "value": "Le Jeu"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progressi"
+            "value": "Gioco"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Progresso"
+            "value": "Jogo"
           }
         }
       }

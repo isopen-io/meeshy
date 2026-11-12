@@ -247,7 +247,7 @@ const fr = {
   'feed.share.copied': 'Lien copié — il ne reste qu’à le coller.',
 
   'root.menu.feed': 'Flux',
-  'root.menu.game': 'Progression',
+  'root.menu.game': 'Le Jeu',
   'root.menu.links': 'Mes liens',
   'root.menu.notifications': 'Notifications',
   'root.menu.calls': 'Appels',

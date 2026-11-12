@@ -258,7 +258,7 @@ const ar = {
   'feed.share.copied': 'تم نسخ الرابط — لم يتبقَّ سوى لصقه.',
 
   'root.menu.feed': 'التدفق',
-  'root.menu.game': 'التقدّم',
+  'root.menu.game': 'اللعبة',
   'root.menu.links': 'روابطي',
   'root.menu.notifications': 'الإشعارات',
   'root.menu.calls': 'المكالمات',

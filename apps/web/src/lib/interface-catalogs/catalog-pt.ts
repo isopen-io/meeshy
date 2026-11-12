@@ -262,7 +262,7 @@ const pt = {
   'feed.share.copied': 'Link copiado — é só colar.',
 
   'root.menu.feed': 'Feed',
-  'root.menu.game': 'Progresso',
+  'root.menu.game': 'Jogo',
   'root.menu.links': 'Meus links',
   'root.menu.notifications': 'Notificações',
   'root.menu.calls': 'Chamadas',
