@@ -194,4 +194,26 @@ class CallSelfTileLawTest {
         assertThat(CallSelfTileLaw.rotationStart(to, to)).isEqualTo(CallTilePoint(1f, 1f))
         assertThat(CallSelfTileLaw.rotationStart(from, CallTileSize(0f, 0f))).isEqualTo(CallTilePoint(1f, 1f))
     }
+
+    @Test
+    fun `a rotation scale goes from its start to one`() {
+        assertThat(CallSelfTileLaw.rotationScale(start = 0.5f, fraction = 0f)).isWithin(0.0001f).of(0.5f)
+        assertThat(CallSelfTileLaw.rotationScale(start = 0.5f, fraction = 0.5f)).isWithin(0.0001f).of(0.75f)
+        assertThat(CallSelfTileLaw.rotationScale(start = 1.46f, fraction = 1f)).isWithin(0.0001f).of(1f)
+    }
+
+    @Test
+    fun `a rotation interrupted midway restarts from the size shown, not from the laid out one`() {
+        val lying = CallTileSize(130f, 96f)
+        val start = CallSelfTileLaw.rotationStart(CallTileSize(100f, 140f), lying)
+        val shown = CallSelfTileLaw.shownDuringRotation(lying, start, fraction = 0.5f)
+        assertThat(shown.widthDp).isWithin(0.01f).of(115f)
+        assertThat(shown.heightDp).isWithin(0.01f).of(118f)
+        val settled = CallSelfTileLaw.shownDuringRotation(lying, start, fraction = 1f)
+        assertThat(settled.widthDp).isWithin(0.01f).of(130f)
+        assertThat(settled.heightDp).isWithin(0.01f).of(96f)
+        val back = CallSelfTileLaw.rotationStart(shown, CallTileSize(100f, 140f))
+        assertThat(back.xDp).isWithin(0.001f).of(115f / 100f)
+        assertThat(back.yDp).isWithin(0.001f).of(118f / 140f)
+    }
 }
