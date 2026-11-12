@@ -64,7 +64,7 @@ class CallPillToneMotionTest {
         val ui = code("CallGlassToneUi.kt")
         assertThat(ui).contains("drawWithCache")
         assertThat(ui).contains("progress.value")
-        assertThat(ui).contains("LocalCallGlassTone.current")
+        assertThat(ui).contains("LocalCallGlassToneProgress.current")
         assertThat(code("CallControlGlass.kt")).contains("callToneVeil(")
         assertThat(code("CallControlGlass.kt")).doesNotContain(".background(tone.veil(")
         assertThat(code("CallHeaderBar.kt")).contains("callToneVeil(")

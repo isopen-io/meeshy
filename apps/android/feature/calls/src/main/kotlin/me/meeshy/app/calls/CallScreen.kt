@@ -186,6 +186,7 @@ fun CallScreen(
         CompositionLocalProvider(
             LocalCallLiveSeconds provides liveSeconds,
             LocalCallGlassTone provides glassTone,
+            LocalCallGlassToneProgress provides rememberCallGlassToneProgress(glassTone, reduceMotion),
             LocalCallSelfTileBannerClearance provides selfTileClearance,
             LocalCallTopBannerHeights provides bannerHeights,
         ) {

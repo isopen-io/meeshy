@@ -10,5 +10,11 @@ object CallPillMotion {
 
     fun millis(reduceMotion: Boolean): Int = if (reduceMotion) REDUCED_MILLIS else UNFOLD_MILLIS
 
+    /**
+     * L3.3 — the width of the glass (440 → 560 dp past a 440 dp window) travels over the same curve as its height; a
+     * width cannot fade, so « Reduce animations » lets it settle at once while the content cross-fades.
+     */
+    fun widthMillis(reduceMotion: Boolean): Int = if (reduceMotion) 0 else UNFOLD_MILLIS
+
     fun scalesOnUnfold(reduceMotion: Boolean): Boolean = !reduceMotion
 }
