@@ -84,6 +84,8 @@ struct MeeshySplitActionContext {
 final class MeeshySplitActionPressRelay: ObservableObject {
     @Published private(set) var segment: MeeshySplitActionSegment?
 
+    nonisolated deinit {}
+
     func set(_ segment: MeeshySplitActionSegment, pressed: Bool) {
         if pressed {
             self.segment = segment
