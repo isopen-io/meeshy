@@ -7,6 +7,7 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -35,8 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.contentDescription
@@ -116,12 +117,7 @@ internal fun CallControlsPill(
     val shrink = shrinkVertically(tween(millis), shrinkTowards = Alignment.Bottom)
     val held = remember { HeldLayer() }
     if (expanded) held.layer = layer
-    // L3.3 : 440 → 560 dp sur la même courbe que la hauteur ; lu à la mise en page, la composition ne repasse pas par image.
-    val maxWidth = animateDpAsState(
-        targetValue = CallPillWidth.maxWidthDp(pillText).dp,
-        animationSpec = CallPillMotion.widthMillis(reduceMotion).let { if (it == 0) snap() else tween(it) },
-        label = "callPillWidth",
-    )
+    val maxWidth = rememberCallPillMaxWidth(pillText, reduceMotion)
     CallControlsGlass(modifier = modifier.animatedMaxWidth(maxWidth)) {
         AnimatedVisibility(
             visible = expanded,
@@ -165,6 +161,14 @@ internal fun CallControlsPill(
             BaseRow(state, captioned = expanded && layer.captionsBaseRow, menuOpen = layer.isExpanded, outputIcon, onToggleMenu, onToggleMute, onOutput, onHangUp)
         }
     }
+}
+
+/** L3.3 — 440 → 560 dp sur la même courbe que la hauteur ; un State lu à la mise en page, la composition ne repasse pas par image. */
+@Composable
+private fun rememberCallPillMaxWidth(pillText: CallPillText, reduceMotion: Boolean): State<Dp> {
+    val widthMillis = CallPillMotion.widthMillis(reduceMotion)
+    val widthSpec: AnimationSpec<Dp> = if (widthMillis == 0) snap() else tween(widthMillis)
+    return animateDpAsState(CallPillWidth.maxWidthDp(pillText).dp, widthSpec, label = "callPillWidth")
 }
 
 /** Le plafond de largeur de la pilule, animé : la pilule remplit la largeur offerte jusqu'à [maxWidth], lue à la mise en page. */
