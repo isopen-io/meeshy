@@ -2,7 +2,7 @@ import { CALL_LIVE_FRAME_ID_MAX, CALL_LIVE_FRAME_ID_PATTERN, CALL_LIVE_FRAME_REP
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import { decodeControlAck } from './call-decode';
-import { NO_LIVE_FRAME, type CallLiveFrameState, type CallLiveFrameStoreApi } from './call-live-frame-store';
+import { NO_LIVE_FRAME, type CallLiveFrameState, type CallLiveFrameStoreApi, type LiveFrameProposal } from './call-live-frame-store';
 import type { ActiveCall, CallStoreApi } from './call-store';
 import type { CallTransport } from './call-transport';
 import { callLayout } from './call-view';
@@ -44,6 +44,9 @@ export function liveFramePair(call: ActiveCall | null): call is ActiveCall {
 export function liveFrameDuo(call: ActiveCall | null): boolean {
   return liveFramePair(call) && callLayout(call) === 'video-duo';
 }
+
+/** La proposition d'un cadre ne se montre qu'en duo vidéo : ni en audio, ni en groupe (iOS `CallLiveFrameRule.mayShowProposal`, #17816). */
+export const liveFrameMayShowProposal = (call: ActiveCall | null): boolean => liveFrameDuo(call);
 
 export type DecodedLiveFrame = {
   readonly callId: string;
@@ -90,11 +93,16 @@ type LiveFrameContext = {
   readonly pairCallId: () => string | null;
   /** Un autre appel, ou plus d'appel à deux : tout s'efface, sans rien envoyer. */
   readonly follow: (callId: string | null) => void;
+  /** Le duo vidéo montre la proposition ; hors de lui elle est gardée à l'écart, et revient avec lui. */
+  readonly place: (proposal: LiveFrameProposal | null) => void;
 };
 
 function liveFrameContext(deps: LiveFrameDeps): LiveFrameContext {
   const state = (): CallLiveFrameState => deps.store.getState();
+  const place = (proposal: LiveFrameProposal | null): void =>
+    deps.store.setState(liveFrameMayShowProposal(deps.calls.getState().call) ? { proposal, withheld: null } : { proposal: null, withheld: proposal });
   return {
+    place,
     deps,
     state,
     patch: (next) => deps.store.setState(next),
@@ -103,8 +111,11 @@ function liveFrameContext(deps: LiveFrameDeps): LiveFrameContext {
       return liveFramePair(call) ? call.callId : null;
     },
     follow: (callId) => {
-      if (callId === state().callId) return;
-      deps.store.setState({ ...NO_LIVE_FRAME, callId }, true);
+      if (callId !== state().callId) {
+        deps.store.setState({ ...NO_LIVE_FRAME, callId }, true);
+        return;
+      }
+      place(state().proposal ?? state().withheld);
     },
   };
 }
@@ -149,7 +160,7 @@ async function applyFrame(ctx: LiveFrameContext, id: string | null): Promise<voi
 
 async function answerProposal(ctx: LiveFrameContext, reply: CallLiveFrameReply): Promise<void> {
   const { proposal, callId } = ctx.state();
-  if (proposal === null || callId === null) return;
+  if (proposal === null || callId === null || !liveFrameMayShowProposal(ctx.deps.calls.getState().call)) return;
   ctx.patch(reply === 'accepted' ? { proposal: null, frameId: proposal.frameId, peerFrameId: proposal.frameId } : { proposal: null });
   await sendReply(ctx.deps, callId, proposal.frameId, reply);
 }
@@ -164,14 +175,14 @@ function receiveReply(ctx: LiveFrameContext, reply: CallLiveFrameReply, answered
 function receivePeerFrame(ctx: LiveFrameContext, callId: string, id: string | null): Promise<void> | null {
   ctx.patch({ peerFrameId: id });
   if (id === null) {
-    ctx.patch({ proposal: null });
+    ctx.place(null);
     return null;
   }
   if (id === ctx.state().frameId) {
-    ctx.patch({ proposal: null });
+    ctx.place(null);
     return sendReply(ctx.deps, callId, id, 'accepted');
   }
-  ctx.patch({ proposal: { frameId: id, from: ctx.state().remoteSharedName } });
+  ctx.place({ frameId: id, from: ctx.state().remoteSharedName });
   return null;
 }
 
