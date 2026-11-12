@@ -33,7 +33,29 @@ struct CallTileNameplate: View {
         .foregroundStyle(Color.white)
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, MeeshySpacing.xs)
-        .background(.ultraThinMaterial, in: Capsule())
+        .callChromeGlass(in: Capsule())
+    }
+}
+
+/// U2.5 — la puce de verre de l'écran partagé mis à la une, en haut à gauche de la scène :
+/// « Écran de X », puis le facteur de zoom (« · 2× »). Décorative : la vignette porte déjà
+/// « Écran de X » à VoiceOver ; elle ne prend aucun toucher, le pincement la traverse.
+struct CallScreenShareChip: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "rectangle.on.rectangle")
+            Text(text)
+                .lineLimit(1)
+        }
+        .font(.caption.weight(.semibold).monospacedDigit())
+        .foregroundStyle(Color.white)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xs)
+        .callChromeGlass(in: Capsule())
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

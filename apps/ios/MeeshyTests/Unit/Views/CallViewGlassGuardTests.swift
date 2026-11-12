@@ -467,11 +467,12 @@ final class CallViewGlassGuardTests: XCTestCase {
         let stage = try stageSource()
         let featured = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func featuredTile(", in: stage))
         XCTAssertTrue(featured.contains(".callChromeVisibility(isCapsuleVisible)"))
-        XCTAssertTrue(featured.contains("CallEdgeStow(edge: .top, margin: capsuleStowMargin"))
+        XCTAssertTrue(featured.contains("CallEdgeStow(edge: .top, margin: CallView.chromeTopInset + Self.capsuleStowReach"))
         XCTAssertTrue(featured.contains("isVisible: isCapsuleVisible, reduceMotion: reduceMotion"))
         let connected = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
         let layout = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var groupStageLayout: some View", in: connected))
-        XCTAssertTrue(layout.contains("isCapsuleVisible: chromeVisibility.isVisible(.featuredCapsule)"), "la visibilité vient de la loi pure")
+        XCTAssertTrue(layout.contains("chrome: chromeVisibility"), "la visibilité vient de la loi pure, remise telle quelle à la scène")
+        XCTAssertTrue(stage.contains("private var isCapsuleVisible: Bool { chrome.isVisible(.featuredCapsule) }"))
     }
 
     /// U2.9 — en plein écran de groupe, les sous-titres allumés restent (verre sans rangée) ;
