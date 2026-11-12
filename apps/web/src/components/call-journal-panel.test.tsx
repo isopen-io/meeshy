@@ -48,7 +48,11 @@ describe('CallJournalPanel', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = (captions: readonly CallCaption[], options: { readonly listening?: boolean; readonly notes?: readonly CallJournalNote[]; readonly startedAt?: number | null } = {}) => {
+  let mounts = 0;
+
+  const mount = (captions: readonly CallCaption[], options: { readonly listening?: boolean; readonly notes?: readonly CallJournalNote[]; readonly startedAt?: number | null; readonly callId?: string } = {}) => {
+    mounts += 1;
+    const callId = options.callId ?? `call-journal-${mounts}`;
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -59,6 +63,7 @@ describe('CallJournalPanel', () => {
           <CallJournalPanel
           Button={CallButton}
             id="call-journal-panel"
+            callId={callId}
             closeGlyph={null}
             language="fr"
             onClose={() => void events.push('close')}
@@ -208,6 +213,38 @@ describe('CallJournalPanel', () => {
     expect((view.all('[data-call-journal-view] button') as HTMLButtonElement[]).map((option) => option.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
     act(() => (view.all('[data-call-journal-view] button')[0] as HTMLButtonElement).click());
     expect(view.all('[data-call-journal-text]').map((text) => text.textContent)).toEqual(['Bonjour à tous', 'À plus', 'Salut']);
+    view.done();
+  });
+
+  test('L3.9 — fermer le journal puis le rouvrir rend la phrase dépliée telle qu’on l’a laissée ; un autre appel repart de rien', () => {
+    const first = mount([caption({ id: 'a' })], { callId: 'call-journal-kept' });
+    act(() => (first.find('[data-call-journal-line="a"]') as HTMLButtonElement).click());
+    expect(first.find('[data-call-journal-original]')).not.toBeNull();
+    first.done();
+    const back = mount([caption({ id: 'a' })], { callId: 'call-journal-kept' });
+    expect(back.find('[data-call-journal-line="a"]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(back.find('[data-call-journal-original]')?.textContent).toBe('Original · Hello everyone');
+    back.done();
+    const other = mount([caption({ id: 'a' })], { callId: 'call-journal-next' });
+    expect(other.find('[data-call-journal-line="a"]')?.getAttribute('aria-expanded')).toBe('false');
+    other.done();
+  });
+
+  test('L3.9 — vue « Original » : une phrase qui a une traduction reste touchable, la toucher montre sa traduction (EN → FR) à sa place, un second toucher rend l’original', () => {
+    const view = mount([caption({ id: 'a' }), caption({ id: 'me', mine: true, speakerName: '', original: 'Salut', translated: null, pair: null, at: 3_000 })]);
+    act(() => (view.all('[data-call-journal-view] button')[1] as HTMLButtonElement).click());
+    const line = () => view.find('[data-call-journal-line="a"]');
+    expect(line()?.getAttribute('aria-pressed')).toBe('false');
+    expect(line()?.hasAttribute('aria-expanded')).toBe(false);
+    expect(line()?.querySelector('[data-call-journal-text]')?.textContent).toBe('Hello everyone');
+    act(() => (line() as HTMLButtonElement).click());
+    expect(line()?.getAttribute('aria-pressed')).toBe('true');
+    expect(line()?.querySelector('[data-call-journal-text]')?.textContent).toBe('Bonjour à tous');
+    expect(line()?.textContent).toContain('EN → FR');
+    expect(view.find('[data-call-journal-original]')).toBeNull();
+    act(() => (line() as HTMLButtonElement).click());
+    expect(line()?.querySelector('[data-call-journal-text]')?.textContent).toBe('Hello everyone');
+    expect(view.find('[data-call-journal-line="me"]')).toBeNull();
     view.done();
   });
 
