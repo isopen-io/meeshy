@@ -174,11 +174,12 @@ final class GroupCallModelTests: XCTestCase {
         XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 6, isLandscape: true), GroupCallGridLayout(columns: 3, rows: 2))
     }
 
-    /// L4.1 — en paysage, quatre personnes tiennent sur UNE rangée de quatre (planche `cols:4`) ;
-    /// trois tiennent sur une rangée de trois. Le portrait garde sa grille 2 × 2.
-    func test_layout_landscape_putsThreeAndFourOnASingleRow() {
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 3, isLandscape: true), GroupCallGridLayout(columns: 3, rows: 1))
+    /// L4.1 — en paysage, quatre personnes tiennent sur UNE rangée de quatre (planche `cols:4`).
+    /// La planche ne dessine pas trois personnes en paysage : leur grille 2 × 2 (#3585) ne change pas.
+    /// Le portrait garde sa grille 2 × 2.
+    func test_layout_landscape_putsFourOnASingleRow_andKeepsThreeInTheirGrid() {
         XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: true), GroupCallGridLayout(columns: 4, rows: 1))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 3, isLandscape: true), GroupCallGridLayout(columns: 2, rows: 2))
         XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 3, isLandscape: false), GroupCallGridLayout(columns: 2, rows: 2))
         XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: false), GroupCallGridLayout(columns: 2, rows: 2))
     }

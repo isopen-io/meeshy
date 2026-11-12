@@ -129,6 +129,19 @@ final class CallSelfTileTests: XCTestCase {
         XCTAssertTrue(code.contains("isLandscape: CallSelfTileScale.isLandscape(container)"))
     }
 
+    /// L1.5 — quand la fenêtre tourne, ma vignette se couche (ou se relève) dans le même mouvement
+    /// que sa place, sans saut ; Réduire les animations : elle se pose sans mouvement.
+    func test_tile_turnsWithTheWindow_inOneMovement() throws {
+        let selfView = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+SelfView.swift"))
+        XCTAssertEqual(
+            selfView.components(separatedBy: "isLandscape: CallSelfTileScale.isLandscape(geo.size), clearance: selfTileTopBannerClearance, reduceMotion: reduceMotion))").count - 1,
+            2,
+            "la vignette vivante ET la tuile « vidéo en pause » suivent la forme de la fenêtre"
+        )
+        let glass = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallControlGlass.swift"))
+        XCTAssertTrue(glass.contains(".animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isLandscape)"))
+    }
+
     // MARK: - Mémoire de l'appel
 
     func test_memory_sameCall_givesBackTheStep() {
