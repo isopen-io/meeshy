@@ -7,8 +7,6 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.using
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -140,8 +138,10 @@ internal fun CallShareStopButton(
  */
 internal fun callWordSwap(reduceMotion: Boolean): ContentTransform {
     val millis = CallChromeStow.fadeMillis(reduceMotion)
-    return (fadeIn(tween(millis)) togetherWith fadeOut(tween(millis))).using(
-        SizeTransform(clip = false) { _, _ -> if (reduceMotion) snap<IntSize>() else tween<IntSize>(millis) },
+    return ContentTransform(
+        targetContentEnter = fadeIn(tween(millis)),
+        initialContentExit = fadeOut(tween(millis)),
+        sizeTransform = SizeTransform(clip = false) { _, _ -> if (reduceMotion) snap<IntSize>() else tween<IntSize>(millis) },
     )
 }
 
