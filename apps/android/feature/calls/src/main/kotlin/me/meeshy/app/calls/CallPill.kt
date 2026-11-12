@@ -179,7 +179,7 @@ private fun CallPillSharing(
                 val title = CallReducedCaption.title(names.givenName, names.groupName, displayName = state.peerName)
                 CallPillSharingIdentity(CallReducedCaption.caption(title, pillStatusLine(state)))
             }
-            CallPillStopShare(onStopScreenShare)
+            CallShareStopButton(onStopScreenShare)
         }
     }
 }
