@@ -238,7 +238,10 @@ struct MeeshyExpandingPillTests {
     @Test("le texte secondaire tient 4,5:1 sur le verre dense de K01, même posé sur un fond blanc")
     func contrast_secondaryText() throws {
         let floor = try #require(try Self.object("contrast")["secondaryTextMin"] as? Double)
-        let fill = MeeshyGlassRecipe.fillOpacity(tone: .deep, density: .dense)
+        let fill = MeeshyGlassRecipe.resolve(
+            tone: .deep, density: .dense, isTinted: false, isInteractive: false, isPressed: false,
+            material: .drawn, reduceMotion: false, isNested: false, isHovered: false
+        ).fillOpacity
         let backdrop = 1.0
         let glass = backdrop * (1 - fill)
         let inkAlpha = 0.85

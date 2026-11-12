@@ -45,6 +45,7 @@ public struct MeeshyPillConfirmation: View {
             MeeshyPillChoiceLayout(gap: MeeshyExpandingPillRecipe.choiceGap) {
                 MeeshyPillChoiceButton(choice: choices[0])
                     .accessibilityFocused($neutralHasFocus)
+                    .keyboardShortcut(.cancelAction)
                 MeeshyPillChoiceButton(choice: choices[1])
             }
         }

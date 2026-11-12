@@ -66,10 +66,22 @@ private struct MeeshyExpandingPillEscape: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if let action {
-            content.accessibilityAction(.escape, action)
+            content
+                .accessibilityAction(.escape, action)
+                .background { keyboardEscape(action) }
         } else {
             content
         }
+    }
+
+    /// Échap au clavier matériel : un bouton sans taille ni rendu, muet pour le
+    /// lecteur d'écran, qui ne prend aucun toucher.
+    private func keyboardEscape(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) { Color.clear }
+            .keyboardShortcut(.cancelAction)
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .allowsHitTesting(false)
     }
 }
 
