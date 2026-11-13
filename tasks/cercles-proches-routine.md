@@ -620,3 +620,29 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste : jouer la migration sur staging et relever l'`explain()` avant/après (critère de preuve de l'issue) ; la
   production attend le feu vert du porteur.
 - Prochain lot recommandé : mener les PR ouvertes ; puis « ensemble » sur Android (#17100, PR #17998 en cours).
+
+## 2026-11-13 — réveil repris : le prochain minuit du Bring quand le minuit local n'existe pas (#14473)
+
+- Reprise : onze PR de la routine ouvertes et toutes poussées dans l'heure par des réveils vivants ; ce réveil n'en prend
+  aucune. Aucune branche n'écrit `services/bring/` : lot #14473 (petit, serveur seul, prouvable en conteneur) réservé
+  sur `claude/cercles-14473-minuit`, témoin rouge poussé avant le correctif.
+- Lot : `bringDayOf` lisait minuit avec le décalage d'APRÈS le changement d'heure ; un jour où l'heure saute à minuit
+  (Santiago le 2026-09-06, La Havane), `resetsAt` tombait une heure trop tôt, encore dans la veille. Il garde désormais
+  le plus tôt des deux minuits candidats qui tombe dans le jour visé. La clé du quota était déjà juste.
+- Gates locaux : `bringDay.test.ts` 12/12 (dont un balayage des 365 jours de 2026 sur sept fuseaux, rouge sur
+  Santiago et La Havane sans le correctif) ; routes et services du Bring 101/101 ; `tsc` passerelle vert.
+- Reste du Bring côté décisions : #14450 (fuseau servi) inchangée.
+- Prochain lot recommandé : mener à la fusion les PR ouvertes ; ensuite un autre petit lot serveur sans branche vivante
+  (#14468, #14469 ou #14470, contre-audit du Bring).
+
+## 2026-11-13 — réveil repris (15:27) : mener #18000 (minuit du Bring) à la fusion (#14473)
+
+- Reprise : dix-neuf PR de la routine ouvertes ; toutes sauf #18000 et #17979 poussées dans l'heure par des réveils
+  vivants. #18000 était en conflit (journal seul) et sans écriture depuis 14:21 : ce réveil la mène à la fusion.
+- `origin/dev` fusionnée à la main, conflit du journal résolu en gardant les deux entrées.
+
+## 2026-11-13 — réveil repris (17:15) : #18000 rouge sur le poids web hérité de `dev`
+
+- La CI dispatchée sur `7c2ea8c85` rend « Qualité TS » rouge : `call_overlay` 21.01 Ko > plafond 21 Ko, chunk web
+  que ce lot ne touche pas (diff passerelle seule). `origin/dev` refusionnée à la main (journal : les trois entrées
+  gardées) pour reprendre le correctif de `dev`, puis CI redispatchée.
