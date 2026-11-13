@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 
 import { VIBRANT_PALETTE } from '../utils/conversation-colors.js';
-import { inkForTint, legibleTint } from '../utils/author-ink.js';
+import { legibleTint } from '../utils/author-ink.js';
 
 type Scheme = 'dark' | 'light';
 type Vectors = {
@@ -49,7 +49,7 @@ describe('la loi de lisibilité de la couleur d’auteur (#17879)', () => {
 
   it('chaque vecteur est le résultat de la loi sur les fonds du fichier', () => {
     for (const { scheme, tint, expected } of vectors.vectors) {
-      expect(inkForTint({ tint, toward: vectors.ink[scheme], backgrounds: vectors.backgrounds[scheme] })).toBe(expected);
+      expect(legibleTint({ tint, toward: vectors.ink[scheme], backgrounds: vectors.backgrounds[scheme] })).toBe(expected);
     }
   });
 
@@ -83,7 +83,8 @@ describe('la loi de lisibilité de la couleur d’auteur (#17879)', () => {
           .join('')}`;
       const index = steps.findIndex((t) => mixed(t) === expected);
       expect(index).toBeGreaterThan(0);
-      for (const bg of vectors.backgrounds[scheme]) expect(contrast(mixed(steps[index - 1] as number), bg)).toBeLessThan(vectors.aa);
+      const previous = mixed(steps[index - 1] as number);
+      expect(vectors.backgrounds[scheme].some((bg) => contrast(previous, bg) < vectors.aa)).toBe(true);
     }
   });
 

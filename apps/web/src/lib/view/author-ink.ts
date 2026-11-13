@@ -1,3 +1,4 @@
+import { legibleTint, mixHex as mix } from '@meeshy/shared/utils/author-ink';
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 import {
@@ -24,41 +25,13 @@ import type { CSSProperties } from 'react';
  * clair. Chaque schéma reçoit donc la teinte rapprochée de SON encre primaire
  * du plus petit pas qui tient l'AA sur TOUS les fonds que le fil peint sous
  * une ligne d'identité : une teinte déjà lisible reste exactement la sienne.
- * Le calcul vit ici, la feuille ne fait que choisir le schéma
+ * La RÈGLE (4,5:1, le plus petit pas vers l'encre) est la loi pure PARTAGÉE
+ * `legibleTint` (`@meeshy/shared/utils/author-ink`, vecteurs
+ * `fixtures/author-ink.vectors.json` rejoués par les miroirs iOS et Android) ;
+ * ce fichier ne porte que les FONDS du fil, la feuille choisit le schéma
  * (`.author-ink`, `styles/conversation-look.css`).
  */
 export type AuthorInk = { readonly dark: string; readonly light: string };
-
-type Rgb = readonly [number, number, number];
-
-const rgbOf = (hex: string): Rgb => {
-  const value = hex.replace('#', '');
-  return [0, 2, 4].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16)) as unknown as Rgb;
-};
-
-const hexOf = (rgb: Rgb): string => `#${rgb.map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')}`;
-
-/** `color-mix(in srgb, a (1−t), b t)` — l'interpolation que la feuille applique. */
-const mix = (a: string, b: string, t: number): string => {
-  const [ra, ga, ba] = rgbOf(a);
-  const [rb, gb, bb] = rgbOf(b);
-  return hexOf([ra + (rb - ra) * t, ga + (gb - ga) * t, ba + (bb - ba) * t]);
-};
-
-const luminance = (hex: string): number => {
-  const linear = (c: number): number => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  const [r, g, b] = rgbOf(hex);
-  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
-};
-
-const contrast = (a: string, b: string): number => {
-  const la = luminance(a);
-  const lb = luminance(b);
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-};
 
 /**
  * LES FONDS QU'UNE LIGNE D'IDENTITÉ PEUT AVOIR SOUS ELLE — la surface et la
@@ -120,23 +93,7 @@ export const AUTHOR_INK_BACKGROUNDS: { readonly dark: readonly string[]; readonl
 };
 
 const INK = { dark: AUTHOR_INK_SURFACES.dark.ink, light: AUTHOR_INK_SURFACES.light.ink } as const;
-const AA = 4.5;
-const STEP = 0.04;
-
-const legibleOn = (backgrounds: readonly string[]) => (hex: string): boolean =>
-  backgrounds.every((background) => contrast(hex, background) >= AA);
-
-/**
- * La teinte rapprochée de `toward` du plus PETIT pas qui tient l'AA (4,5:1)
- * sur TOUS les `backgrounds` — une teinte déjà lisible reste exactement la
- * sienne. Partagé par la ligne d'identité du fil et les sous-titres d'appel
- * (#16614) : une couleur d'auteur, une seule façon de la rendre lisible.
- */
-export const legibleTint = ({ tint, toward, backgrounds }: { readonly tint: string; readonly toward: string; readonly backgrounds: readonly string[] }): string => {
-  const legible = legibleOn(backgrounds);
-  const steps = Array.from({ length: Math.ceil(1 / STEP) + 1 }, (_, i) => Math.min(1, i * STEP));
-  return steps.map((t) => mix(tint, toward, t)).find(legible) ?? toward;
-};
+export { legibleTint };
 
 const inkFor = (tint: string, scheme: 'dark' | 'light'): string =>
   legibleTint({ tint, toward: INK[scheme], backgrounds: AUTHOR_INK_BACKGROUNDS[scheme] });

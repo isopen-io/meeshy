@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 
 import { describe, expect, test } from 'bun:test';
 
-import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { authorAccentColor, VIBRANT_PALETTE } from '@meeshy/shared/utils/conversation-colors';
 
-import { AUTHOR_INK_BACKGROUNDS, AUTHOR_INK_SURFACES, authorInk, authorInkStyle } from './author-ink';
+import { AUTHOR_INK_BACKGROUNDS, AUTHOR_INK_SURFACES, authorInk, authorInkStyle, legibleTint } from './author-ink';
 import {
   BACKDROP_DARK_END,
   BACKDROP_DARK_START,
@@ -33,6 +33,33 @@ const contrast = (a: string, b: string): number => {
 };
 
 const SEEDS = Array.from({ length: 400 }, (_, i) => `65f0${i.toString(16).padStart(20, '0')}`);
+
+type InkVectors = {
+  readonly ink: Record<'dark' | 'light', string>;
+  readonly backgrounds: Record<'dark' | 'light', readonly string[]>;
+  readonly vectors: readonly { readonly scheme: 'dark' | 'light'; readonly tint: string; readonly expected: string }[];
+};
+
+describe('les vecteurs partagés de la règle de lisibilité (#17879)', () => {
+  const shared = JSON.parse(
+    readFileSync(new URL('../../../../../packages/shared/fixtures/author-ink.vectors.json', import.meta.url).pathname, 'utf8'),
+  ) as InkVectors;
+
+  test('les fonds et l’encre du fichier sont ceux que le fil mesure — un fond qui bouge rougit ici', () => {
+    expect(shared.backgrounds.dark).toEqual([...AUTHOR_INK_BACKGROUNDS.dark]);
+    expect(shared.backgrounds.light).toEqual([...AUTHOR_INK_BACKGROUNDS.light]);
+    expect(shared.ink).toEqual({ dark: AUTHOR_INK_SURFACES.dark.ink, light: AUTHOR_INK_SURFACES.light.ink });
+  });
+
+  test('les 78 couples (palette × schémas) sont ceux que le web sert, tel quel', () => {
+    expect(shared.vectors).toHaveLength(VIBRANT_PALETTE.length * 2);
+    for (const { scheme, tint, expected } of shared.vectors) {
+      const seed = VIBRANT_PALETTE.find((hex) => `#${hex.toLowerCase()}` === tint);
+      expect(seed).toBeDefined();
+      expect(legibleTint({ tint, toward: shared.ink[scheme], backgrounds: AUTHOR_INK_BACKGROUNDS[scheme] })).toBe(expected);
+    }
+  });
+});
 
 describe('le nom d’auteur teinté (#10004)', () => {
   test('la même personne garde la même teinte, quel que soit son nom affiché', () => {
