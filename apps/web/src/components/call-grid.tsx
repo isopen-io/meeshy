@@ -121,6 +121,8 @@ export type CallGridProps = {
   readonly onRevealChrome?: () => void;
   /** L'écran est-il plus large que haut : 2 × 3 devient 3 × 2, le bandeau passe en colonne à droite (`GroupCallGridLayout`, P11.1, P14.2). */
   readonly landscape?: boolean;
+  /** La FENÊTRE est-elle de hauteur compacte (`isCompactHeight`) : seule une scène paysage qui l'est pose quatre tuiles sur une rangée (L4.1, W2.1). */
+  readonly compact?: boolean;
 };
 
 /** Les `<video>` de la grille, tenus par identité : une vignette qui change d'arbre (grille, à la une, bandeau) y retrouve le sien (P14.10). */
@@ -338,7 +340,7 @@ function SpotlightCapsule({ kit, language, screen, full, leaving, onGrid, onTogg
   );
 }
 
-export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false }: CallGridProps) {
+export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, choice, onChoose, immersive, onToggleImmersive, moderation, language, chromeVisible = true, onRevealChrome = () => undefined, landscape = false, compact = false }: CallGridProps) {
   const press = kit.usePressedChrome(chromeVisible);
   /** #9183 — chrome masqué, toucher une vignette le RENDS au lieu de changer la une (`GroupStageTapRule` sur iOS) ; décidé à la descente du pointeur (#17548). */
   const decide = (next: SpotlightChoice) => () => (press.release() ? onRevealChrome() : onChoose(next));
@@ -348,14 +350,14 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
   const shown = useRef<{ readonly screen: boolean; readonly full: boolean } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const fullscreen = immersive;
-  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}`);
+  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}|${compact}`);
   const mine = selfSubject(kit, self, language);
   const peer = (member: CallMember) => peerSubject(kit, member, remoteStreams[member.userId], language);
   const tile = (subject: Subject, onPress: (() => void) | null, label: string, portrait: number) => ({ kit, subject, held: held.current, onPress, label, portrait, press });
   const selfLabel = translateCallControls(language, 'callControls.spotlight.self');
 
   const gridScene = (ghost: ReactNode) => (
-    <div className="relative grid min-h-[140px] flex-1 gap-2 px-3" style={{ gridTemplateColumns: `repeat(${gridColumns(members.length + 1, landscape)}, minmax(0, 1fr))`, gridAutoRows: '1fr' }}>
+    <div className="relative grid min-h-[140px] w-full max-w-[1064px] mx-auto flex-1 gap-2 px-3" style={{ gridTemplateColumns: `repeat(${gridColumns(members.length + 1, landscape, compact)}, minmax(0, 1fr))`, gridAutoRows: '1fr' }}>
       {members.map((member) => {
         const moderated = moderation !== null && moderation.canModerate(member.userId);
         const menu = moderated ? (

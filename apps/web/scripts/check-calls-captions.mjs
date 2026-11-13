@@ -145,6 +145,8 @@ const tapSize = async (locator) => {
   return { ok: box !== null && box.width >= TAP_FLOOR && box.height >= TAP_FLOOR, size: box && [Math.round(box.width), Math.round(box.height)] };
 };
 
+/** La bascule « Voir l'original » refond ses lignes (`useTranscriptSwapFade`) : la capture attend que ce fondu soit FINI, jamais un délai. */
+const swapSettled = (page) => page.waitForFunction(() => [...document.querySelectorAll('[data-call-transcript-swap]')].every((line) => line.getAnimations().every((animation) => animation.playState !== 'running')), undefined, { timeout: 3000 }).then(() => true, () => false);
 /** Les rails glissent (300 ms) : on mesure et on touche posés, jamais en route (#17327). */
 const railsSettled = (page) => page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => !(animation instanceof CSSTransition) || animation.playState !== 'running') ?? true, undefined, { timeout: 3000 }).then(() => true, () => false);
 
@@ -445,7 +447,7 @@ try {
       check(inverted.length === 1 && inverted[0] === 'Traduit · Salut, tu m’entends ?', `${label} : et INVERSE les deux lignes, « Traduit · … » dessous, rien ne disparaît (${JSON.stringify(inverted)})`);
       check((await page.$('[data-call-transcript-line] [data-call-transcript-original-line]')) === null, `${label} : « Original · … » a cédé la place à « Traduit · … »`);
       check((await foot.getAttribute('aria-pressed')) === 'true' && (await foot.textContent()) === 'Voir la traduction', `${label} : le pied dit « Voir la traduction », pressé`);
-      await page.waitForTimeout(260);
+      check(await swapSettled(page), `${label} : le fondu de la bascule se termine avant la capture`);
       await capture(page, `transcription-inversee-${width}x${height}`);
       await page.click('[data-call-transcript-original]');
       const restored = await page.$$eval('[data-call-transcript-line] [data-call-transcript-original-line]', (rows) => rows.map((row) => row.textContent ?? ''));
