@@ -115,12 +115,20 @@ const VERDICTS_ATTENDUS = [
   // refus devenait un `no-response` non rattrapé à chaque lecture de story.
   { href: `${PASSERELLE}${SONS}/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a`, gardable: false },
   { href: `${PASSERELLE}${SONS}/42af6b03-975a-4232-9123-de3301dc260c.mp3`, gardable: false },
+  // #16984 — les positions que mes liens me partagent : une copie disque
+  // rejouée hors réseau survivrait au blocage, à la baisse sous Ami et à la fin
+  // du partage, à la précision servie, jusqu'à son échéance.
+  { href: `${PASSERELLE}/api/v1/relations/locations?bbox=-180,-90,180,90`, gardable: false },
+  { href: `${PASSERELLE}/api/v1/relations/locations`, gardable: false },
+  { href: `${PASSERELLE}/api/v1/relations/locations/`, gardable: false },
   { href: `${ORIGINE}/api/v1/conversations`, gardable: true },
   // CONTRASTE — la garde lit un SEGMENT, jamais un préfixe de chaîne.
   { href: `${ORIGINE}/api/v1/statistiques`, gardable: true },
   { href: `${PASSERELLE}/api/v1/conversations/c1/messages`, gardable: true },
   { href: `${ORIGINE}/api/v1/users/administrateur`, gardable: true },
   { href: `${ORIGINE}/api/v1/attachmentsfoo`, gardable: true },
+  { href: `${PASSERELLE}/api/v1/relations/locationsfoo`, gardable: true },
+  { href: `${PASSERELLE}/api/v1/relations/config`, gardable: true },
   { href: `${ORIGINE}/assets/app.js`, gardable: false },
 ];
 

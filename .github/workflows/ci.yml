@@ -124,7 +124,7 @@ jobs:
   # ===========================================================================
   changes:
     name: Zones touchées
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -192,7 +192,7 @@ jobs:
   # ===========================================================================
   quality:
     name: Qualité TS (${{ github.event.inputs.package_manager || 'bun' }})
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -402,7 +402,7 @@ jobs:
   # échoue : installation, build de shared, lint, types, jetons web, dette `any`.
   gardes-depot:
     name: Gardes du dépôt
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -1894,7 +1894,7 @@ jobs:
     name: Tests · gateway · couverture fusionnée
     runs-on: ubuntu-24.04
     needs: [changes, test]
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (needs.test.result != 'skipped' && needs.changes.outputs.tests_gateway == 'true') }}
+    if: ${{ !cancelled() && ((github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))) && (needs.test.result != 'skipped' && needs.changes.outputs.tests_gateway == 'true') }}
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -1938,7 +1938,7 @@ jobs:
   # tient pas à la main. Sans `needs` : elle ne lit rien d'un autre job.
   test-parite:
     name: Tests · voie de parité (web et passerelle)
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -2570,7 +2570,7 @@ jobs:
   # ===========================================================================
   security:
     name: Sécurité · Trivy du dépôt
-    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    if: (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     runs-on: ubuntu-24.04
     # Sans `security-events: write`, l'envoi du SARIF échoue sur les pushes de
     # dev (« Resource not accessible by integration », masqué par
@@ -2731,7 +2731,14 @@ jobs:
     # nécessaires** : un job sauté produit quand même un check run à ce nom, et
     # `SKIPPED` comptait vert — déplacer ce `if` SANS le correctif de l'oracle
     # n'aurait rien gardé, en ayant l'air d'une garde.
-    if: always() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true')
+    # #18048 — la clause `CI_DEV_SEUL` vient de `dev` et elle est CONSERVÉE :
+    # elle n'est pas en conflit avec ce lot, elle est un SECOND gel. Elle est
+    # simplement portée au JOB avec la première, au lieu d'être répétée sur
+    # chacune des trois étapes — c'est le motif que ce lot retire, et l'y
+    # laisser aurait fait conclure `success` à un job sans étape exécutée dès
+    # que `CI_DEV_SEUL` est posé, c'est-à-dire sur toute branche hors dev,
+    # main et ci/promotion-*.
+    if: always() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     steps:
       - name: Checkout (le script du verdict seul)
         uses: actions/checkout@v7

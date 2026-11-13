@@ -59,6 +59,7 @@ const EXEMPTIONS: readonly Exemption[] = [
   { fichier: 'routes/onboarding-cards.tsx', combien: 1, pourquoi: `les suggestions de l’arrivée — ${NON_SERVI}` },
   { fichier: 'routes/share-link-arrivals-parts.tsx', combien: 1, pourquoi: `les arrivées d’un lien (\`LinkArrival\`) — ${NON_SERVI}` },
   { fichier: 'routes/share-link-detail-parts.tsx', combien: 1, pourquoi: `les arrivées d’un lien (\`LinkArrival\`) — ${NON_SERVI}` },
+  { fichier: 'components/shared-locations-map-view.tsx', combien: 1, pourquoi: `les positions partagées (\`GET /relations/locations\`) — ${NON_SERVI}` },
   { fichier: 'components/admin/entity-chip.tsx', combien: 1, pourquoi: ADMIN },
   { fichier: 'components/admin/fiche.tsx', combien: 1, pourquoi: ADMIN },
   { fichier: 'components/world-participant-card-sheet.tsx', combien: 1, pourquoi: ADMIN },

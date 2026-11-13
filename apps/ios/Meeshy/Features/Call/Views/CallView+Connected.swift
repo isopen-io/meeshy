@@ -67,8 +67,8 @@ extension CallView {
                 isSelfFeatured = false
             }
         }
-        .adaptiveOnChange(of: isVideoStage) { _, isVideo in
-            if !isVideo { withAnimation(.easeInOut(duration: 0.25)) { showControls = true } }
+        .adaptiveOnChange(of: isTapStage) { _, stows in
+            if !stows { withAnimation(.easeInOut(duration: 0.25)) { showControls = true } }
         }
         // Surfaces a start failure that `advanceCaptionsMode()` couldn't see at
         // tap time (the start path is async — permission request + on-device
@@ -266,14 +266,14 @@ extension CallView {
             .accessibilityHidden(true)
     }
 
-    /// La bascule au toucher existe sur la scène de la loi 11 (vidéo, duo audio établi), mais pas
-    /// sous VoiceOver, où les contrôles restent en place.
+    /// La bascule au toucher existe sur la scène de la loi 11 (vidéo, duo audio établi, groupe sans
+    /// caméra), mais pas sous VoiceOver, où les contrôles restent en place.
     private var exposesTheTapToggle: Bool {
         CallChromeVisibility.mayToggleByTap(isTapStage: isTapStage, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning)
     }
 
     private var isTapStage: Bool {
-        CallChromeVisibility.isTapStage(isGroup: isGroupStage, isVideoStage: isVideoStage, isConnected: showsConnectedLayout)
+        CallChromeVisibility.isTapStage(isVideoStage: isVideoStage, isConnected: showsConnectedLayout)
     }
 
     /// La porte UNIQUE par laquelle un contrôle dit qu'il est touché

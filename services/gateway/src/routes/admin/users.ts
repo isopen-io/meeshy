@@ -61,6 +61,8 @@ import { logError, logWarn } from '../../utils/logger.js';
 import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
 import { sendZodRefusal } from '../../utils/identity-name-floor';
 import { forgetTeamCircles } from '../../services/relations/relationCaches';
+import { endSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
+import { relationIoOf } from '../../socketio/relationEvents';
 
 const userConversationSortSchema = z.object({
   sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
@@ -159,6 +161,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
     notifyPasswordReset: passwordResetNotifier(emailService),
     forgetTeamCircles: (userId) => forgetTeamCircles(fastify, userId),
+    endSharedLocation: (userId) =>
+      endSharedLocationAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logWarn(fastify.log, `[ADMIN] shared location not ended (userId=${userId})`, error) }, userId, { forget: false }),
   });
   const userAuditService = new UserAuditService(fastify.prisma);
   const banService = new BanService(fastify.prisma, userManagementService);

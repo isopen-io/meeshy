@@ -2192,6 +2192,8 @@ model PairInteractionDay {
 
   @@unique([userLowId, userHighId, day])
   @@index([day])
+  /// La branche haute de la paire (#14529) : la purge et l'export lisent `OR: [{ userLowId }, { userHighId }]`.
+  @@index([userHighId, day])
 }
 
 /// Les CONSENTEMENTS d'une personne envers UNE AUTRE, écrits au rituel du Sang
@@ -2235,11 +2237,16 @@ model RelationFeatureSetting {
   /// préférence de réception, active par défaut (spec `talkieDirect @default(true)`,
   /// écrite en date nullable — aucun couple booléen + horodatage).
   talkieBlockedAt       DateTime?
+  /// Non nul = `ownerId` a coupé les invitations « regarder ou écouter ensemble » de `otherId`
+  /// (#17023) : préférence de réception, active par défaut ; la séance déjà rejointe continue.
+  togetherBlockedAt     DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
   @@unique([ownerId, otherId])
+  /// Le sens « ce qu'on m'a accordé » (#14529) : la purge lit `OR: [{ ownerId }, { otherId }]`.
+  @@index([otherId])
 }
 
 /// RÉSERVÉ — le lien parent/tuteur vérifié du niveau ATOME (hors MVP, #13926).

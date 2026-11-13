@@ -129,7 +129,7 @@ function monde(options: { readonly participants?: readonly Row[] } = {}) {
   const cache = cacheEnMemoire(() => now);
   let ids = 0;
   const deps: TogetherRelayDeps = {
-    prisma: { ...world.prisma, messageAttachment } as unknown as PrismaClient,
+    prisma: { ...world.prisma, messageAttachment, relationFeatureSetting: table([]), userPreferences: table([]) } as unknown as PrismaClient,
     cache,
     io: { to: (room: string) => ({ emit: (event: string, data: Record<string, unknown>) => emissions.push({ room, event, data }) }) } as unknown as TogetherRelayDeps['io'],
     now: () => now,
@@ -156,7 +156,7 @@ const inviter = (m: ReturnType<typeof monde>, toUserId = PROCHE, attachmentId = 
 const REFUS = { success: false, error: expect.any(String), code: TOGETHER_ERROR_CODES.NOT_ALLOWED };
 const INTROUVABLE = { success: false, error: expect.any(String), code: TOGETHER_ERROR_CODES.NOT_FOUND };
 const sessionValues = (m: ReturnType<typeof monde>) =>
-  [...m.cache.entries.entries()].filter(([key]) => !key.startsWith('together:ended:') && !key.startsWith('together:user:') && !key.startsWith('together:conversation:')).map(([, entry]) => entry);
+  [...m.cache.entries.entries()].filter(([key]) => !key.startsWith('together:ended:') && !key.startsWith('together:user:') && !key.startsWith('together:conversation:') && !key.startsWith('together:invites:')).map(([, entry]) => entry);
 const KEY = 'MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=';
 
 afterEach(() => {
