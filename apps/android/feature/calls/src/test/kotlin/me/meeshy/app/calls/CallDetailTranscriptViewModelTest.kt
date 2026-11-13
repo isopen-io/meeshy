@@ -303,4 +303,32 @@ class CallDetailTranscriptViewModelTest {
         reading.complete(CachedCallTranscript.None)
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Loading)
     }
+
+    /**
+     * A1.6 — rendre la main quand la bulle quitte l'écran arrête la LECTURE, jamais une suppression confirmée : le journal
+     * supprimé puis replié aussitôt est bien effacé de l'appareil, et le rouvrir ne le fait pas revenir.
+     */
+    @Test
+    fun `leaving the screen right after deleting still dismisses the transcript and reopening keeps it gone`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        var dismissed = false
+        coEvery { cache.dismiss("call-1") } coAnswers {
+            gate.await()
+            dismissed = true
+        }
+        coEvery { cache.cached("call-1") } coAnswers {
+            if (dismissed) CachedCallTranscript.Dismissed else CachedCallTranscript.Copy(page(peerSegment()))
+        }
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
+        val viewModel = viewModel()
+        viewModel.load(request())
+
+        viewModel.delete()
+        viewModel.release()
+        viewModel.load(request())
+        gate.complete(Unit)
+
+        assertThat(dismissed).isTrue()
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
+    }
 }
