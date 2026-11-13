@@ -174,6 +174,14 @@ nonisolated enum CallEffectsBarRule {
     /// Toute fonction choisie dans les réglages (« Chaque visage » au Montage) rend le menu de base.
     static let afterChoice: CallEffectsBarMode = .base
 
+    /// #17947 — ‹ referme le panneau de réglages par le chemin inverse de « Réglages » ; ailleurs il
+    /// revient à l'appel (`nil`). Un réglage continu (curseur, interrupteur) n'est pas un choix :
+    /// le panneau reste ouvert tant qu'on règle, la fermeture automatique ne vaut que pour un look
+    /// ou un cadre.
+    static func afterBack(from mode: CallEffectsBarMode) -> CallEffectsBarMode? {
+        mode == .settings ? afterSettings(from: mode) : nil
+    }
+
     /// Une liste qui a perdu sa dernière couche n'a plus rien à montrer.
     static func reconciled(_ mode: CallEffectsBarMode, hasLayers: Bool) -> CallEffectsBarMode {
         mode == .applied && !hasLayers ? .base : mode

@@ -99,8 +99,8 @@ struct CallEffectsGenreChips: View {
 /// qui parle la langue du composer. En haut, la rangée de puces des looks et son filet ; en bas, la
 /// rangée de base ‹ · Réglages · (+). Réglages (ou la liste des effets appliqués) ouvert, la MÊME
 /// barre perd sa rangée de puces, en fondu, et se resserre par morphisme sur ‹ · Réglages · (+) ;
-/// le panneau vit au-dessus d'elle, dans son propre verre. Retoucher Réglages (disque blanc) rend
-/// les puces par le chemin inverse.
+/// le panneau vit au-dessus d'elle, dans son propre verre. Retoucher Réglages (disque blanc), ou ‹
+/// (#17947), rend les puces par le chemin inverse ; un réglage continu laisse le panneau ouvert.
 struct CallEffectsBar<Looks: View>: View {
     let mode: CallEffectsBarMode
     let layers: CallEffectLayers
@@ -147,8 +147,8 @@ struct CallEffectsBar<Looks: View>: View {
             CallPillButton(
                 symbol: "chevron.backward",
                 kind: .normal,
-                label: CallModeCopy.backToCall,
-                hint: CallModeCopy.backToCallHint,
+                label: CallEffectsBarRule.afterBack(from: mode) == nil ? CallModeCopy.backToCall : CallControlsCopy.closePanel,
+                hint: CallEffectsBarRule.afterBack(from: mode) == nil ? CallModeCopy.backToCallHint : nil,
                 diameter: Self.diameter,
                 action: onBack
             )

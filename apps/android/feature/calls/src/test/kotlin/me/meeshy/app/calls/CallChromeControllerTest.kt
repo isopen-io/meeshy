@@ -3,6 +3,7 @@ package me.meeshy.app.calls
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallChromeElement
 import me.meeshy.sdk.model.call.CallChromeInteraction
+import me.meeshy.sdk.model.call.CallChromeVisibility
 import me.meeshy.sdk.model.call.CallScreenLayer
 import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallScreenPanel
@@ -19,37 +20,50 @@ class CallChromeControllerTest {
     @Test
     fun `the chrome starts revealed`() {
         val chrome = controller()
-        assertThat(chrome.visibility(isVideoStage = true, isTouchExplorationOn = false).isVisible(CallChromeElement.Controls)).isTrue()
+        assertThat(chrome.visibility(isTapStage = true, isTouchExplorationOn = false).isVisible(CallChromeElement.Controls)).isTrue()
     }
 
     @Test
     fun `a tap on a video scene hides the chrome and a second tap brings it back`() {
         val chrome = controller()
-        chrome.onSceneTap(isVideoStage = true, isTouchExplorationOn = false)
+        chrome.onSceneTap(isTapStage = true, isTouchExplorationOn = false)
         assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Controls)).isFalse()
         assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Header)).isFalse()
-        chrome.onSceneTap(isVideoStage = true, isTouchExplorationOn = false)
+        chrome.onSceneTap(isTapStage = true, isTouchExplorationOn = false)
         assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Controls)).isTrue()
     }
 
+    /** #17945 (B) — this witness used to read « an audio call never hides its chrome »: the decision extends law 11 to a duo audio call. */
     @Test
-    fun `an audio call never hides its chrome`() {
+    fun `a tap on the background of a duo audio call stows the chrome and a second tap brings it back`() {
         val chrome = controller()
-        chrome.onSceneTap(isVideoStage = false, isTouchExplorationOn = false)
-        assertThat(chrome.visibility(false, false).isVisible(CallChromeElement.Controls)).isTrue()
+        val duoAudio = CallChromeVisibility.isTapStage(isGroup = false, isVideoStage = false, isConnected = true)
+        chrome.onSceneTap(isTapStage = duoAudio, isTouchExplorationOn = false)
+        assertThat(chrome.visibility(duoAudio, false).isVisible(CallChromeElement.Header)).isFalse()
+        assertThat(chrome.visibility(duoAudio, false).isVisible(CallChromeElement.Controls)).isFalse()
+        chrome.onSceneTap(isTapStage = duoAudio, isTouchExplorationOn = false)
+        assertThat(chrome.visibility(duoAudio, false).isVisible(CallChromeElement.Controls)).isTrue()
+    }
+
+    @Test
+    fun `a group with no camera on never hides its chrome to a tap`() {
+        val chrome = controller()
+        val audioGroup = CallChromeVisibility.isTapStage(isGroup = true, isVideoStage = false, isConnected = true)
+        chrome.onSceneTap(isTapStage = audioGroup, isTouchExplorationOn = false)
+        assertThat(chrome.visibility(audioGroup, false).isVisible(CallChromeElement.Controls)).isTrue()
     }
 
     @Test
     fun `under TalkBack the chrome never hides`() {
         val chrome = controller()
-        chrome.onSceneTap(isVideoStage = true, isTouchExplorationOn = true)
+        chrome.onSceneTap(isTapStage = true, isTouchExplorationOn = true)
         assertThat(chrome.visibility(true, true).isVisible(CallChromeElement.Controls)).isTrue()
     }
 
     @Test
     fun `turning TalkBack on lights a hidden chrome without a tap`() {
         val chrome = controller()
-        chrome.onSceneTap(isVideoStage = true, isTouchExplorationOn = false)
+        chrome.onSceneTap(isTapStage = true, isTouchExplorationOn = false)
         assertThat(chrome.visibility(true, true).isVisible(CallChromeElement.Controls)).isTrue()
     }
 
@@ -66,9 +80,9 @@ class CallChromeControllerTest {
         val chrome = controller(clock)
         chrome.onSceneTap(true, false)
         clock.now += 249
-        assertThat(chrome.acceptsTouches(isVideoStage = true, isTouchExplorationOn = false)).isTrue()
+        assertThat(chrome.acceptsTouches(isTapStage = true, isTouchExplorationOn = false)).isTrue()
         clock.now += 1
-        assertThat(chrome.acceptsTouches(isVideoStage = true, isTouchExplorationOn = false)).isFalse()
+        assertThat(chrome.acceptsTouches(isTapStage = true, isTouchExplorationOn = false)).isFalse()
     }
 
     @Test
@@ -168,5 +182,14 @@ class CallChromeControllerTest {
         assertThat(callIsVideoStage(connected(video = true, cameraOn = true), CallGroupVideoStage(remoteCamerasOn = 0))).isTrue()
         assertThat(callIsVideoStage(connected(video = true, cameraOn = false))).isTrue()
         assertThat(callIsVideoStage(connected(video = false, cameraOn = false))).isFalse()
+    }
+
+    @Test
+    fun `law 11 (#17945) a duo audio call in progress is a tap stage, a group with no camera on is not`() {
+        val audio = connected(video = false, cameraOn = false)
+        assertThat(callIsTapStage(audio)).isTrue()
+        assertThat(callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 0))).isFalse()
+        assertThat(callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 1))).isTrue()
+        assertThat(callIsTapStage(connected(video = true, cameraOn = false))).isTrue()
     }
 }
