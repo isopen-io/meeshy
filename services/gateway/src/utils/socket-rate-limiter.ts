@@ -479,6 +479,14 @@ export class SocketRateLimiter {
 }
 
 /**
+ * #17952 — le budget `call:signal` est tenu PAR SOCKET : un appareil du compte
+ * qui inonde de signaux ne fait jamais refuser la réponse SDP d'un autre.
+ */
+export function callSignalBudgetId(userId: string, socketId: string): string {
+  return `${userId}:${socketId}`;
+}
+
+/**
  * Helper function to check rate limit and emit error if exceeded
  *
  * @param socket - Socket.IO socket
