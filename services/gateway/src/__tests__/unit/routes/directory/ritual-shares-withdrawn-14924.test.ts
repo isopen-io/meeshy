@@ -68,7 +68,10 @@ const CATEGORIE_PARTAGEE = [
   { ownerId: AUTRE, otherId: MOI, listeningCategoryShared: true },
 ];
 
-async function rompreLeSang(niveau: { targetLevel: string; relation: typeof SANG; partages: typeof PARTAGES | typeof CATEGORIE_PARTAGEE } = { targetLevel: 'BLOOD', relation: SANG, partages: PARTAGES }) {
+async function rompreLeSang(
+  niveau: { targetLevel: string; relation: typeof SANG; partages: typeof PARTAGES | typeof CATEGORIE_PARTAGEE } = { targetLevel: 'BLOOD', relation: SANG, partages: PARTAGES },
+  options: { retraitEnPanne?: boolean } = {},
+) {
   const links = relationStore({
     friendRequests: [{ id: FR_ID, senderId: AUTRE, receiverId: MOI, status: 'accepted', targetLevel: niveau.targetLevel }],
     relations: [niveau.relation],
@@ -78,7 +81,9 @@ async function rompreLeSang(niveau: { targetLevel: string; relation: typeof SANG
     user: { findUnique: jest.fn(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })), findFirst: jest.fn(async () => null) },
     friendRequest: links.prisma.friendRequest,
     userRelation: links.prisma.userRelation,
-    relationFeatureSetting: reglages.relationFeatureSetting,
+    relationFeatureSetting: options.retraitEnPanne
+      ? { ...reglages.relationFeatureSetting, updateMany: jest.fn(async () => { throw new Error('mongo down'); }) }
+      : reglages.relationFeatureSetting,
   };
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma as never);
@@ -145,6 +150,13 @@ describe('#14924 — la rupture d’une demande de Sang acceptée éteint les pa
     expect(partage(partages, MOI)).toMatchObject({ ...SHARES_OFF, listeningTitleWithdrawnAt: expect.any(Date) });
     expect(partage(partages, AUTRE)).toMatchObject(SHARES_OFF);
     expect(partage(partages, AUTRE)).not.toHaveProperty('listeningTitleWithdrawnAt');
+  });
+
+  it('un retrait des partages en panne ne rend pas 500 sur une rupture déjà écrite : le lien est baissé et la réponse réussit', async () => {
+    const { status, liens } = await rompreLeSang(undefined, { retraitEnPanne: true });
+
+    expect(status).toBeLessThan(300);
+    expect(liens[0]).toEqual(expect.objectContaining({ grantedByLow: 'CLOSE' }));
   });
 
   it('ne touche pas aux blocages de réception (Bring, talkie) : ce ne sont pas des partages', async () => {
