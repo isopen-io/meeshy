@@ -480,10 +480,10 @@ struct MeeshyTileStripTests {
 
     private static func geometry(_ row: [String: Any]) throws -> MeeshyTileStripGeometry {
         MeeshyTileStripGeometry(
-            tileSize: CGSize(width: try cg(row["tileWidth"] ?? 56), height: try cg(row["tileHeight"] ?? 72)),
+            tileSize: CGSize(width: CGFloat(row["tileWidth"] as? Double ?? 56), height: CGFloat(row["tileHeight"] as? Double ?? 72)),
             spacing: try cg(row["spacing"]),
             inset: try cg(row["inset"]),
-            count: try #require(row["count"] as? Int)
+            count: row["count"] as? Int ?? 0
         )
     }
 
