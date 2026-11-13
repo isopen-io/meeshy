@@ -4,7 +4,7 @@ import { decodeAck, decodeInitiated, decodeSessionMembers, decodeSignal, mapServ
 import type { Attachment } from '@/lib/api/types';
 
 import { callNoticeTarget } from './call-notice';
-import { formatCallClock, meshPhase, type CallMember } from './call-store';
+import { formatCallClock, formatCallJournalClock, meshPhase, type CallMember } from './call-store';
 import { bindCallTransport, listenCallEvents, resetCallTransportForTests, setCallEngineWake } from './call-transport';
 import { callLayout, callStatusKey, canRetry, gridColumns, membersInArrival, orderedMembers, statusPills, visibleStatusPills } from './call-view';
 
@@ -126,6 +126,9 @@ describe('ce que l’écran dit', () => {
   test('horloge d’appel et phase du maillage', () => {
     expect(formatCallClock(65)).toBe('1:05');
     expect(formatCallClock(3_725)).toBe('1:02:05');
+    expect(formatCallJournalClock(4)).toBe('00:04');
+    expect(formatCallJournalClock(65)).toBe('01:05');
+    expect(formatCallJournalClock(3_725)).toBe('1:02:05');
     expect(meshPhase({})).toBeNull();
     expect(meshPhase({ a: member(), b: member({ link: 'reconnecting' }) })).toBe('connected');
     expect(meshPhase({ a: member({ link: 'reconnecting' }) })).toBe('reconnecting');

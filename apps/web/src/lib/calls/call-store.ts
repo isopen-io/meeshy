@@ -156,6 +156,12 @@ export function formatCallClock(seconds: number): string {
   return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
 }
 
+/** L'heure d'une phrase du journal : `MM:SS` (minutes complétées), `H:MM:SS` passé une heure — `paddedClockPromotingHours` d'iOS (#17878 A1.5). */
+export function formatCallJournalClock(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  return safe >= 3600 ? formatCallClock(safe) : `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`;
+}
+
 export function elapsedSeconds(call: Pick<ActiveCall, 'connectedAt'>, now: number): number {
   return call.connectedAt === null ? 0 : Math.max(0, Math.floor((now - call.connectedAt) / 1000));
 }

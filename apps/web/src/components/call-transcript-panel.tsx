@@ -8,7 +8,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import { formatCallClock } from '@/lib/calls/call-store';
+import { formatCallJournalClock } from '@/lib/calls/call-store';
 import { callTranscriptQueryKey, loadCallTranscript, transcriptEntries, transcriptLines, transcriptNotes, type TranscriptLine, type TranscriptNote } from '@/lib/calls/call-transcript';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -95,7 +95,7 @@ function NoteItem({ note, language }: { readonly note: TranscriptNote; readonly 
         <span>
           <JournalNoteSentence note={note} language={language} ink={{ className: 'author-ink', style: authorInkStyle({ authorId: note.userId ?? '', name: note.name ?? '' }) }} />
         </span>
-        <span className="text-mini font-semibold tabular-nums">{formatCallClock(note.offsetMs / 1000)}</span>
+        <span className="text-mini font-semibold tabular-nums">{formatCallJournalClock(note.offsetMs / 1000)}</span>
       </span>
     </li>
   );
@@ -116,7 +116,7 @@ export function CallTranscriptLines({ lines, notes = [], language, original, onT
             <li key={line.id} data-call-transcript-line={line.mine ? 'mine' : 'peer'}>
               <span className="flex justify-between gap-3 text-mini font-semibold" style={muted}>
                 <span className="author-ink" style={ink}>{name}</span>
-                <span className="tabular-nums">{formatCallClock(line.offsetMs / 1000)}</span>
+                <span className="tabular-nums">{formatCallJournalClock(line.offsetMs / 1000)}</span>
               </span>
               {!original && line.translated ? (
                 <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={line.language || undefined} data-call-transcript-text="translated">
