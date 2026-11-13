@@ -139,6 +139,16 @@ object CallTranscriptReplay {
 sealed interface CallTranscriptState {
     val isVisible: Boolean
 
+    /**
+     * Nothing is known of the call yet: the encrypted copy on this device is being read (or is about to be). Not a wait
+     * on the network — a copy found here is drawn at once, so no waiting is ever shown on it (A1.14, iOS
+     * `BubbleCallJournalLoading.load(willWaitOnNetwork:)`).
+     */
+    data object ReadingCopy : CallTranscriptState {
+        override val isVisible: Boolean get() = false
+    }
+
+    /** The device holds no copy: the server replay is awaited (the only state that shows a waiting). */
     data object Loading : CallTranscriptState {
         override val isVisible: Boolean get() = false
     }

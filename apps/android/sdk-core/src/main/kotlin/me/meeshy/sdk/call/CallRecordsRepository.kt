@@ -86,7 +86,7 @@ class CallRecordsRepository @Inject constructor(
         NetworkResult.Failure(ApiError(message = message, code = INVALID_ARGUMENT))
 
     companion object {
-        const val TRANSCRIPT_PAGE_SIZE = 100
+        const val TRANSCRIPT_PAGE_SIZE = CallTranscriptPaging.PAGE_SIZE
         const val INVALID_ARGUMENT = "INVALID_ARGUMENT"
     }
 }

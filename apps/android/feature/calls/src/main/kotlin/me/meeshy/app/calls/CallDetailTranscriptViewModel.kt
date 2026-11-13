@@ -40,7 +40,7 @@ data class CallTranscriptSnapshot(
     val state: CallTranscriptState,
 ) {
     fun stateFor(callId: String): CallTranscriptState =
-        if (callId == this.callId) state else CallTranscriptState.Loading
+        if (callId == this.callId) state else CallTranscriptState.ReadingCopy
 }
 
 /**
@@ -66,7 +66,7 @@ class CallDetailTranscriptViewModel internal constructor(
         regime: LedgerCallConversationRegime,
     ) : this(records, session, cache, regime.asRegime())
 
-    private val _state = MutableStateFlow(CallTranscriptSnapshot(callId = null, state = CallTranscriptState.Loading))
+    private val _state = MutableStateFlow(CallTranscriptSnapshot(callId = null, state = CallTranscriptState.ReadingCopy))
     val state: StateFlow<CallTranscriptSnapshot> = _state.asStateFlow()
 
     private var request: CallTranscriptRequest? = null
@@ -106,8 +106,7 @@ class CallDetailTranscriptViewModel internal constructor(
             publish(request, CallTranscriptState.Absent)
             return
         }
-        val shown = _state.value
-        if (shown.callId != request.callId || shown.state !is CallTranscriptState.Ready) publish(request, CallTranscriptState.Loading)
+        showUnlessReady(request, CallTranscriptState.ReadingCopy)
         job = viewModelScope.launch {
             if (regime.isEndToEnd(request.conversationId) == true) {
                 apply(request, CallTranscriptRevalidation.sealedEndToEnd)
@@ -119,7 +118,10 @@ class CallDetailTranscriptViewModel internal constructor(
                     return@launch
                 }
                 is CachedCallTranscript.Copy -> CallTranscriptState.of(project(held.page, request)).also { publish(request, it) }
-                CachedCallTranscript.None -> null
+                CachedCallTranscript.None -> {
+                    showUnlessReady(request, CallTranscriptState.Loading)
+                    null
+                }
             }
             val remote = when (val result = records.fullTranscript(request.callId)) {
                 is NetworkResult.Success -> CallTranscriptRemote.Served(result.data)
@@ -145,6 +147,12 @@ class CallDetailTranscriptViewModel internal constructor(
         youLabel = request.youLabel,
         participantLabel = request.participantLabel,
     )
+
+    /** A1.14 — what this call already shows stays drawn: the reading of the copy, then the wait, never cover lines. */
+    private fun showUnlessReady(request: CallTranscriptRequest, state: CallTranscriptState) {
+        val shown = _state.value
+        if (shown.callId != request.callId || shown.state !is CallTranscriptState.Ready) publish(request, state)
+    }
 
     private fun publish(request: CallTranscriptRequest, state: CallTranscriptState) {
         _state.value = CallTranscriptSnapshot(callId = request.callId, state = state)

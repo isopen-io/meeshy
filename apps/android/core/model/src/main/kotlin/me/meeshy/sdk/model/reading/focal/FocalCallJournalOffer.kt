@@ -23,7 +23,8 @@ object FocalCallJournalOffer {
 
     /**
      * A1.14 — sur cache vide, le journal déplié attend le replay du serveur avec un indicateur sobre (iOS `ProgressView`,
-     * `BubbleCallJournalUnderCard`). Une copie déjà là se dessine aussitôt : elle n'est jamais en [CallTranscriptState.Loading].
+     * `BubbleCallJournalUnderCard`). Pendant la lecture de la copie de l'appareil ([CallTranscriptState.ReadingCopy]) rien
+     * n'attend encore le réseau : une copie trouvée se dessine aussitôt, sans être jamais passée par [CallTranscriptState.Loading].
      */
     fun showsWaiting(state: CallTranscriptState): Boolean = state == CallTranscriptState.Loading
 }
