@@ -6,8 +6,8 @@ import org.junit.Test
 class GroupCallStageGeometryTest {
     private val ids = listOf("a", "b", "m")
 
-    private fun rects(focus: GroupCallStageFocus, w: Float = 400f, h: Float = 800f, full: Boolean = false, rtl: Boolean = false) =
-        GroupCallStageGeometry.rects(ids, focus, w, h, full, rtl)
+    private fun rects(focus: GroupCallStageFocus, w: Float = 400f, h: Float = 800f, full: Boolean = false, rtl: Boolean = false, compact: Boolean = false) =
+        GroupCallStageGeometry.rects(ids, focus, w, h, full, rtl, compact)
 
     @Test
     fun `the grid gives every person a cell, in arrival order, 8 dp apart`() {
@@ -16,6 +16,31 @@ class GroupCallStageGeometryTest {
         assertThat(grid.getValue("a")).isEqualTo(CallStageRect(0f, 0f, 196f, 396f))
         assertThat(grid.getValue("b")).isEqualTo(CallStageRect(204f, 0f, 196f, 396f))
         assertThat(grid.getValue("m")).isEqualTo(CallStageRect(0f, 404f, 196f, 396f))
+    }
+
+    private val four = listOf("a", "b", "c", "m")
+
+    @Test
+    fun `L4,1 - four people share one row in a landscape window of compact height`() {
+        val grid = GroupCallStageGeometry.rects(four, GroupCallStageFocus.Grid, 800f, 390f, false, false, true)
+        assertThat(grid.values.map { it.top }.toSet()).containsExactly(0f)
+        assertThat(grid.getValue("a")).isEqualTo(CallStageRect(0f, 0f, 194f, 390f))
+        assertThat(grid.getValue("m").left).isEqualTo(3 * 202f)
+    }
+
+    @Test
+    fun `W2 - four people make a 2 by 2 on a wide window of ample height, edge to edge like iOS`() {
+        val grid = GroupCallStageGeometry.rects(four, GroupCallStageFocus.Grid, 1280f, 800f, false, false, false)
+        assertThat(grid.getValue("a")).isEqualTo(CallStageRect(0f, 0f, 636f, 396f))
+        assertThat(grid.getValue("b")).isEqualTo(CallStageRect(644f, 0f, 636f, 396f))
+        assertThat(grid.getValue("c")).isEqualTo(CallStageRect(0f, 404f, 636f, 396f))
+    }
+
+    @Test
+    fun `W2 - the 2 by 2 mirrors in right-to-left`() {
+        val rtl = GroupCallStageGeometry.rects(four, GroupCallStageFocus.Grid, 1280f, 800f, false, true, false)
+        assertThat(rtl.getValue("a").left).isEqualTo(644f)
+        assertThat(rtl.getValue("b").left).isEqualTo(0f)
     }
 
     @Test
@@ -53,8 +78,8 @@ class GroupCallStageGeometryTest {
 
     @Test
     fun `an empty or zero-sized stage places nobody`() {
-        assertThat(GroupCallStageGeometry.rects(emptyList(), GroupCallStageFocus.Grid, 400f, 800f, false, false)).isEmpty()
-        assertThat(GroupCallStageGeometry.rects(ids, GroupCallStageFocus.Grid, 0f, 800f, false, false)).isEmpty()
+        assertThat(GroupCallStageGeometry.rects(emptyList(), GroupCallStageFocus.Grid, 400f, 800f, false, false, false)).isEmpty()
+        assertThat(GroupCallStageGeometry.rects(ids, GroupCallStageFocus.Grid, 0f, 800f, false, false, false)).isEmpty()
     }
     @Test
     fun `an interrupted move starts again from where the tile IS, not from where it was going (P14_10)`() {

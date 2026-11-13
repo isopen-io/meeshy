@@ -30,10 +30,11 @@ object GroupCallStageGeometry {
         height: Float,
         isFullScreen: Boolean,
         isRtl: Boolean,
+        isCompactHeight: Boolean,
     ): Map<String, CallStageRect> {
         if (tileIds.isEmpty() || width <= 0f || height <= 0f) return emptyMap()
         val leftToRight = when (focus) {
-            GroupCallStageFocus.Grid -> grid(tileIds, width, height)
+            GroupCallStageFocus.Grid -> grid(tileIds, width, height, isCompactHeight)
             is GroupCallStageFocus.Spotlight -> spotlight(tileIds, focus.tileId, width, height, isFullScreen)
         }
         return if (isRtl) leftToRight.mapValues { (_, rect) -> rect.copy(left = width - rect.left - rect.width) } else leftToRight
@@ -77,8 +78,8 @@ object GroupCallStageGeometry {
         }
     }
 
-    private fun grid(tileIds: List<String>, width: Float, height: Float): Map<String, CallStageRect> {
-        val layout = GroupCallGridLayout.layout(tileIds.size, isLandscape = width > height)
+    private fun grid(tileIds: List<String>, width: Float, height: Float, isCompactHeight: Boolean): Map<String, CallStageRect> {
+        val layout = GroupCallGridLayout.layout(tileIds.size, isLandscape = width > height, isCompactHeight = isCompactHeight)
         val rows = tileIds.chunked(layout.columns)
         val cellWidth = (width - SPACING * (layout.columns - 1)) / layout.columns
         val cellHeight = (height - SPACING * (rows.size - 1)) / rows.size

@@ -197,7 +197,7 @@ internal fun CallConnectedColumn(
     /** What the group stage shows of the others' cameras (G1.13); `null` on a duo. */
     groupVideo: CallGroupVideoStage? = null,
     /** La scène d'un appel de groupe (#13740), posée à la place du bloc du pair ; `null` en duo. */
-    groupStage: (@Composable (Modifier) -> Unit)? = null,
+    groupStage: (@Composable (Modifier, Boolean) -> Unit)? = null,
     /** La parole du pair, pour l'anneau de la scène audio. */
     peerSpeech: CallPeerSpeechSource = CallPeerSpeechSource.NONE,
 ) {
@@ -227,7 +227,8 @@ internal fun CallConnectedColumn(
         // #17327 : à deux le (…) fait sortir deux rails sur les bords, à plusieurs il déplie des rangées dans la pilule.
         val disposition = CallControlsDisposition.resolve(CallControlsDisposition.MAX_PARTICIPANTS_ON_RAILS, showsGroupGrid = groupStage != null)
         val stageMaxHeight = maxHeight
-        val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), CallGroupStageSizing.isCompactHeight(maxHeight.value))
+        val isCompactHeight = CallGroupStageSizing.isCompactHeight(maxHeight.value)
+        val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), isCompactHeight)
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -237,7 +238,10 @@ internal fun CallConnectedColumn(
             CallGroupStageTopReserve(base = MeeshySpacing.xl, clearance = gridClearance)
 
             if (groupStage != null && gridClearance != null) {
-                groupStage(Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance))
+                groupStage(
+                    Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance),
+                    isCompactHeight,
+                )
             } else if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
                 // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal
                 // vivent dans la puce de l'en-tête (CallHeaderBar) ; la capture, dans la capsule ci-dessous.

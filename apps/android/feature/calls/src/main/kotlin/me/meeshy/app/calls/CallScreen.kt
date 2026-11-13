@@ -267,7 +267,7 @@ fun CallScreen(
                     groupVideo = groupVideo,
                     peerSpeech = peerSpeech,
                     groupStage = if (groupShown) {
-                        { stageModifier ->
+                        { stageModifier, isCompactHeight ->
                             CallGroupStage(
                                 state = state,
                                 mesh = groupMesh,
@@ -282,6 +282,7 @@ fun CallScreen(
                                 onStageTap = sceneTap,
                                 modifier = stageModifier,
                                 onFocusChange = { groupFocus = it },
+                                isCompactHeight = isCompactHeight,
                             )
                         }
                     } else {
