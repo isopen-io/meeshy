@@ -29,20 +29,18 @@ class GroupCallStageGeometryTest {
     }
 
     @Test
-    fun `W2 - four people make a 2 by 2 on a wide window of ample height, within bounded side margins`() {
+    fun `W2 - four people make a 2 by 2 on a wide window of ample height, edge to edge like iOS`() {
         val grid = GroupCallStageGeometry.rects(four, GroupCallStageFocus.Grid, 1280f, 800f, false, false, false)
-        assertThat(grid.getValue("a")).isEqualTo(CallStageRect(120f, 0f, 516f, 396f))
-        assertThat(grid.getValue("b")).isEqualTo(CallStageRect(644f, 0f, 516f, 396f))
-        assertThat(grid.getValue("c")).isEqualTo(CallStageRect(120f, 404f, 516f, 396f))
+        assertThat(grid.getValue("a")).isEqualTo(CallStageRect(0f, 0f, 636f, 396f))
+        assertThat(grid.getValue("b")).isEqualTo(CallStageRect(644f, 0f, 636f, 396f))
+        assertThat(grid.getValue("c")).isEqualTo(CallStageRect(0f, 404f, 636f, 396f))
     }
 
     @Test
-    fun `the side margins are nil until the stage is wider than the bound, and mirror in right-to-left`() {
-        assertThat(GroupCallStageGeometry.gridSideMargin(1040f)).isEqualTo(0f)
-        assertThat(GroupCallStageGeometry.gridSideMargin(400f)).isEqualTo(0f)
-        assertThat(GroupCallStageGeometry.gridSideMargin(1280f)).isEqualTo(120f)
+    fun `W2 - the 2 by 2 mirrors in right-to-left`() {
         val rtl = GroupCallStageGeometry.rects(four, GroupCallStageFocus.Grid, 1280f, 800f, false, true, false)
-        assertThat(rtl.getValue("a").left).isEqualTo(1280f - 120f - 516f)
+        assertThat(rtl.getValue("a").left).isEqualTo(644f)
+        assertThat(rtl.getValue("b").left).isEqualTo(0f)
     }
 
     @Test
