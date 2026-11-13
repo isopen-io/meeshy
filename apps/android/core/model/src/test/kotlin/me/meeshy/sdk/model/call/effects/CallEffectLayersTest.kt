@@ -203,30 +203,74 @@ class CallEffectLayersTest {
 
     // endregion
 
-    // region (+) dans Effets : la generalisation de « ajouter un autre look »
+    // region UNE rangee de genres pour Effets et Montage (#16979), memes vecteurs que `CallEffectLayersTests` (iOS)
+
+    private val family = listOf(CallEffectKind.Face, CallEffectKind.Color, CallEffectKind.Frame)
+    private val effectsOnly = listOf(CallEffectKind.Face, CallEffectKind.Color)
 
     @Test
-    fun `(+) depuis Visage ouvre Couleur et depuis Couleur ouvre Visage`() {
-        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Face, stack(face))).isEqualTo(CallEffectsCategory.Color)
-        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Color, stack(filterA))).isEqualTo(CallEffectsCategory.Face)
+    fun `la rangee de genres est une seule famille, quel que soit le mode`() {
+        assertThat(CallEffectsGenreRule.row(offersEffects = true, offersFrames = true)).isEqualTo(family)
     }
 
     @Test
-    fun `(+) laisse parcourir l'autre genre quand les deux sont deja appliques`() {
-        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Face, stack(filterA, face))).isEqualTo(CallEffectsCategory.Color)
+    fun `sans Montage la rangee garde les genres d'Effets`() {
+        assertThat(CallEffectsGenreRule.row(offersEffects = true, offersFrames = false)).isEqualTo(effectsOnly)
+    }
+
+    @Test
+    fun `sans Effets la rangee garde les cadres`() {
+        assertThat(CallEffectsGenreRule.row(offersEffects = false, offersFrames = true)).isEqualTo(listOf(CallEffectKind.Frame))
+    }
+
+    @Test
+    fun `(+) depuis Visage ouvre Couleur et depuis Couleur ouvre Visage`() {
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Face, stack(face), family)).isEqualTo(CallEffectKind.Color)
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Color, stack(filterA), family)).isEqualTo(CallEffectKind.Face)
+    }
+
+    @Test
+    fun `(+) ouvre les cadres quand les deux genres d'Effets sont poses`() {
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Face, stack(filterA, face), family)).isEqualTo(CallEffectKind.Frame)
+    }
+
+    @Test
+    fun `sans Montage, les deux genres poses, (+) laisse parcourir l'autre genre`() {
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Face, stack(filterA, face), effectsOnly)).isEqualTo(CallEffectKind.Color)
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Color, stack(filterA, face), effectsOnly)).isEqualTo(CallEffectKind.Face)
+    }
+
+    @Test
+    fun `(+) depuis les cadres ouvre le premier genre d'Effets absent`() {
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Frame, stack(frame), family)).isEqualTo(CallEffectKind.Face)
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Frame, stack(frame, face), family)).isEqualTo(CallEffectKind.Color)
+    }
+
+    @Test
+    fun `(+) depuis les cadres, les deux effets poses, ouvre encore Effets`() {
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Frame, stack(filterA, face), family)).isEqualTo(CallEffectKind.Face)
+    }
+
+    @Test
+    fun `(+) depuis les cadres n'ouvre rien quand Effets n'est pas offert`() {
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Frame, stack(frame), listOf(CallEffectKind.Frame))).isNull()
+    }
+
+    @Test
+    fun `(+) depuis un genre hors de la rangee n'ouvre rien`() {
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Frame, CallEffectLayers.EMPTY, effectsOnly)).isNull()
     }
 
     @Test
     fun `(+) n'ajoute rien avec trois couches`() {
-        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Face, stack(frame, filterA, face))).isNull()
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Face, stack(frame, filterA, face), family)).isNull()
+        assertThat(CallEffectsGenreRule.adding(CallEffectKind.Frame, stack(frame, filterA, face), family)).isNull()
     }
 
     @Test
-    fun `(+) du Montage ouvre Visage d'abord, puis Couleur quand Visage est deja pose`() {
-        val among = listOf(CallEffectKind.Face, CallEffectKind.Color, CallEffectKind.Frame)
-        assertThat(CallEffectsModeRule.addingKind(CallEffectKind.Frame, among, stack(frame))).isEqualTo(CallEffectKind.Face)
-        assertThat(CallEffectsModeRule.addingKind(CallEffectKind.Frame, among, stack(frame, face))).isEqualTo(CallEffectKind.Color)
-        assertThat(CallEffectsModeRule.addingKind(CallEffectKind.Frame, among, stack(frame, filterA, face))).isNull()
+    fun `(+) sans genre courant part du debut de la rangee`() {
+        assertThat(stack(face).opening(null, family)).isEqualTo(CallEffectKind.Color)
+        assertThat(CallEffectLayers.EMPTY.opening(null, family)).isEqualTo(CallEffectKind.Face)
     }
 
     @Test
@@ -252,6 +296,7 @@ class CallEffectLayersTest {
         assertThat(CallEffectsBarRule.afterAddingLook(CallEffectsBarMode.Settings)).isEqualTo(CallEffectsBarMode.Base)
         assertThat(CallEffectsBarRule.afterAddingLook(CallEffectsBarMode.Applied)).isEqualTo(CallEffectsBarMode.Base)
         assertThat(CallEffectsBarRule.afterRemoval).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(CallEffectsBarRule.afterChoice).isEqualTo(CallEffectsBarMode.Base)
     }
 
     @Test
@@ -306,7 +351,18 @@ class CallEffectLayersTest {
         val state = CallEffectsModeState.opening(VideoFilterConfig(), full)
         assertThat(state.selecting(CallFaceEffect.Angel)).isEqualTo(state)
         assertThat(state.selecting(VideoFilterPreset.Golden)).isEqualTo(state)
-        assertThat(state.addingLook()).isEqualTo(state)
+        assertThat(state.addedGenre(listOf(CallEffectKind.Face, CallEffectKind.Color, CallEffectKind.Frame))).isNull()
+    }
+
+    @Test
+    fun `(+) en Effets montre le genre ouvert et rend le menu de base, un genre du Montage ne change rien ici`() {
+        val open = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Toad).togglingSettings()
+        val row = listOf(CallEffectKind.Face, CallEffectKind.Color, CallEffectKind.Frame)
+        assertThat(open.addedGenre(row)).isEqualTo(CallEffectKind.Color)
+        val shown = open.showingAdded(CallEffectKind.Color)
+        assertThat(shown.category).isEqualTo(CallEffectsCategory.Color)
+        assertThat(shown.bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(open.showingAdded(CallEffectKind.Frame)).isEqualTo(open)
     }
 
     @Test

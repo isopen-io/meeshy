@@ -78,8 +78,6 @@ class CallEffectsModeRuleTest {
 
     @Test
     fun `(+) opens the looks of the other kind to stack on the one in hand, and closes the settings`() {
-        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Face)).isEqualTo(CallEffectsCategory.Color)
-        assertThat(CallEffectsModeRule.addingLook(CallEffectsCategory.Color)).isEqualTo(CallEffectsCategory.Face)
         val open = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Angel).togglingSettings()
         val added = open.addingLook()
         assertThat(added.showsSettings).isFalse()
