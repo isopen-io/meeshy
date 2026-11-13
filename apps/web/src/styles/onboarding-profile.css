@@ -1,0 +1,172 @@
+/* « Montre-toi » (#17237) — l'aperçu du profil tel que les autres le verront :
+   bannière 3:1, avatar rond de 96 px qui en chevauche le bas, nom et @pseudo. */
+
+.onb-profile-perks {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onb-profile-perks li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--onb-soft);
+  color: var(--onb-ink);
+  font-family: var(--onb-rounded);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.onb-profile-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.onb-profile-banner {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 1;
+  min-height: 44px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 18px;
+  background: var(--onb-brand);
+  color: #fff;
+  cursor: pointer;
+}
+
+.onb-profile-banner img,
+.onb-profile-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.onb-profile-banner-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 100%;
+  font-family: var(--onb-rounded);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.onb-profile-avatar {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  margin-top: -48px;
+  padding: 0;
+  border: 4px solid var(--ios-surface, #fff);
+  border-radius: 50%;
+  background: var(--ios-surface, #fff);
+  cursor: pointer;
+  overflow: visible;
+  box-sizing: content-box;
+}
+
+.onb-profile-avatar img,
+.onb-profile-avatar > :first-child {
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.onb-profile-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--ios-surface, #fff);
+  border-radius: 50%;
+  background: var(--onb-brand);
+  color: #fff;
+}
+
+.onb-profile-progress {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, #000 28%, transparent);
+}
+
+.onb-profile-progress::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2.5px solid color-mix(in srgb, #fff 40%, transparent);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: onb-profile-spin 900ms linear infinite;
+}
+
+@keyframes onb-profile-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onb-profile-progress::after {
+    animation-duration: 2.4s;
+  }
+}
+
+.onb-profile-banner:focus-visible,
+.onb-profile-avatar:focus-visible {
+  outline: 3px solid var(--ios-indigo-500);
+  outline-offset: 3px;
+}
+
+.onb-profile-banner:disabled,
+.onb-profile-avatar:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.onb-profile-name {
+  margin: 8px 0 0;
+  color: var(--onb-ink);
+  font-family: var(--onb-rounded);
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.onb-profile-handle {
+  margin: 2px 0 0;
+  color: var(--onb-ink-2);
+  font-size: 0.9375rem;
+}
+
+.onb-profile-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.onb-profile-retry {
+  min-height: 44px;
+}

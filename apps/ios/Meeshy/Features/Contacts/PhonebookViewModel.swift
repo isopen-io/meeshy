@@ -159,7 +159,7 @@ final class PhonebookViewModel: ObservableObject {
     private func refreshFromNetwork() async {
         do {
             // Le répertoire ENTIER, page par page — plus de plafond à 200
-            // (directive 2026-08-21, « Répertoire vide » au-delà).
+            // (« Répertoire vide » au-delà).
             let all = try await directoryService.listAll(filter: .all, query: nil)
             contacts = all
             loadState = .loaded
@@ -280,7 +280,7 @@ final class PhonebookViewModel: ObservableObject {
     }
 }
 
-// MARK: - Pagination complète du répertoire (2026-08-21)
+// MARK: - Pagination complète du répertoire
 
 /// Règle pure : y a-t-il une page de plus ? Le serveur fait foi quand il le
 /// dit (`hasMore`) ; sinon une page PLEINE en annonce une autre, une page

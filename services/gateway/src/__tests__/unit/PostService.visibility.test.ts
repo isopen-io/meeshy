@@ -19,6 +19,7 @@ function makeMockPrisma() {
     postBookmark: { findFirst: jest.fn().mockResolvedValue(null) },
     friendRequest: { findMany: jest.fn().mockResolvedValue([]) },
     communityMember: { findMany: jest.fn() },
+    community: { findMany: jest.fn<any>().mockResolvedValue([]) },
   } as any;
 }
 
@@ -26,15 +27,20 @@ describe('PostService.getPostById COMMUNITY visibility', () => {
   let prisma: any;
   beforeEach(() => {
     prisma = makeMockPrisma();
-    prisma.communityMember.findMany
-      .mockResolvedValueOnce([{ communityId: 'c1' }])
-      .mockResolvedValueOnce([{ userId: 'co-1' }]);
+    prisma.communityMember.findMany.mockImplementation((args: { where: Record<string, unknown> }) =>
+      Promise.resolve(args.where.communityId ? [{ userId: 'co-1' }] : [{ communityId: 'c1' }]),
+    );
   });
 
   it('includes a COMMUNITY clause scoped to co-members in the where filter', async () => {
     const service = new PostService(prisma);
     await service.getPostById('post-1', 'viewer-1');
     const whereArg = prisma.post.findFirst.mock.calls[0][0].where;
-    expect(whereArg.OR).toContainEqual({ visibility: 'COMMUNITY', authorId: { in: ['co-1'] } });
+    expect(whereArg.OR).toContainEqual({
+      visibility: 'COMMUNITY',
+      authorId: { in: ['co-1'] },
+      OR: [{ communityId: null }, { communityId: { isSet: false } }],
+    });
+    expect(whereArg.OR).toContainEqual({ visibility: 'COMMUNITY', communityId: { in: ['c1'] } });
   });
 });

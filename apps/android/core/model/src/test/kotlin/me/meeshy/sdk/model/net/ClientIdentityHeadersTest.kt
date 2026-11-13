@@ -59,8 +59,8 @@ class ClientIdentityHeadersTest {
     }
 
     @Test
-    fun `ce binaire ne declare encore aucune capacite dont l ecran manque`() {
-        assertThat(ClientCapabilities.declared).isEmpty()
-        assertThat(ClientCapabilities.headerValue()).isNull()
+    fun `ce binaire ne declare que les capacites dont l ecran est livre`() {
+        assertThat(ClientCapabilities.declared).containsExactly(ClientCapability.ONBOARDING_PROFILE)
+        assertThat(ClientCapabilities.headerValue()).isEqualTo("onboarding-profile")
     }
 }

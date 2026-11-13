@@ -338,7 +338,12 @@ export class ZmqTranslationClient extends EventEmitter {
       }
 
       this.stats.errors_received++;
-      this._cbRecordError();
+
+      // Le translator publie aussi ce libellé pour chaque tâche refusée à son
+      // ARRÊT : un arrêt chargé ouvrait le disjoncteur et bloquait TOUTES les
+      // traductions 30 s (#17004). Le refus est neutre : il ne compte pas, et
+      // ne remet pas non plus la série à zéro — ce n'est pas un succès.
+      if (event.error !== 'translation pool full') this._cbRecordError();
 
       // « pool full » est un refus TRANSITOIRE, pas un échec : le pool de
       // workers du translator est saturé à l'instant t, et la même requête

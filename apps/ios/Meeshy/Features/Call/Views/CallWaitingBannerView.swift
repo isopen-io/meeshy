@@ -68,7 +68,7 @@ struct CallWaitingBannerView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, MeeshySpacing.lg)
                             .padding(.vertical, 8)
-                            // HIG 44x44pt minimum tap target (audit 2026-07-03):
+                            // HIG 44x44pt minimum tap target:
                             // the capsule's own padding alone yields a ~32-36pt
                             // hit height, undersized for a ringing banner where a
                             // mis-tap answers/rejects a live incoming call.
@@ -145,7 +145,7 @@ struct CallWaitingBannerView: View {
         let seconds = autoDismissSeconds
         autoDismissTask = Task { @MainActor in
             guard await cancellableSleep(for: .seconds(seconds)), !Task.isCancelled else { return }
-            // Audit 2026-07-02 — ignoring the banner for `autoDismissSeconds`
+            // ignoring the banner for `autoDismissSeconds`
             // used to just hide it (isVisible = false) without ever calling
             // `onReject()`, unlike the explicit "Refuser" button. The caller
             // was left ringing indefinitely (no busy signal) until their own

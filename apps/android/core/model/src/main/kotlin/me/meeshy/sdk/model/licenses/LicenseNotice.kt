@@ -14,7 +14,7 @@ public data class LicenseNotice(
  * pinned tag.
  */
 public object LibsignalNotices {
-    public const val VERSION: String = "0.105.4"
+    public const val VERSION: String = "0.106.2"
     public const val PROBE_CLASS: String = "org.signal.libsignal.protocol.IdentityKey"
     public const val UPSTREAM_ACKNOWLEDGMENTS_URL: String =
         "https://github.com/signalapp/libsignal/blob/v$VERSION/acknowledgments/acknowledgments-android.md"

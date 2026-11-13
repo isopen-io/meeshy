@@ -17,7 +17,7 @@ import MeeshyUI
 /// caption). The full repost chain is still preserved server-side via
 /// `RepostContent.originalRepostOfId`.
 ///
-/// **Depuis le 2026-09-05, sa lecture obéit au viewport** (directive porteur :
+/// **Depuis, sa lecture obéit au viewport** (directive porteur:
 /// « repartage ou non, les scènes sont comme les vidéos »). Cette cellule était
 /// la seule surface du fil à jouer INCONDITIONNELLEMENT : `isPaused` restait à
 /// `false`, sans élection ni call-awareness, si bien que toutes les stories

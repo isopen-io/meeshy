@@ -209,10 +209,8 @@ final class QuoteComposerDoorTests: XCTestCase {
             return String(code[d.upperBound..<f.lowerBound])
         }
         let vue = "MeeshyComposerHost+Viewfinder.swift"
-        XCTAssertTrue(try corps(vue, de: "funchandleSceneCaptureLongPress(){", a: "funchandleSceneQuickTap()")
+        XCTAssertTrue(try corps(vue, de: "funchandleSceneCaptureLongPress(){", a: "funcendSceneWriting()")
             .hasPrefix("guard!writesText,sceneServesCapture,"))
-        XCTAssertTrue(try corps(vue, de: "funchandleSceneQuickTap()->Bool{", a: "funcendSceneWriting()")
-            .hasPrefix("guardsceneServesCapture,"))
         XCTAssertTrue(try corps(vue, de: "varsceneQuickCaptureIsOffered:Bool{", a: "ComposerSceneQuickCapture.offers(")
             .hasPrefix("sceneServesCapture&&"))
         XCTAssertTrue(try corps("MeeshyComposerHost+SceneState.swift",

@@ -1,7 +1,7 @@
 /**
  * LES COLLÈGUES DE L'ÉQUIPE d'un compte (#16623, correction porteur 2026-11-08).
  *
- * Entre deux comptes de l'équipe (MODERATOR, ADMIN, BIGBOSS), TOUTES les features de
+ * Entre deux comptes de l'équipe (ANALYST, AUDIT, MODERATOR, ADMIN, BIGBOSS), TOUTES les features de
  * cercle s'ouvrent sans lien (`RELATION_TEAM_CLOSED_FEATURES` ne garde que la
  * Connaissance automatique). La loi (`resolveRelationAccess`) juge une PAIRE ; les
  * énumérateurs d'audience (« à qui pousser ? », « quels auteurs dans mes cercles ? »)

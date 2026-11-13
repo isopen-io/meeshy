@@ -33,6 +33,8 @@ class MessageActionMenuTest {
         exitOffer: MessageExitOffer = MessageExitOffer.Unrestricted,
         signalClearance: ConversationClearance = ConversationClearance.CLEAR,
         isReadByServer: Boolean = false,
+        isNotice: Boolean = false,
+        isQuotableNotice: Boolean = false,
     ) = MessageActionContext(
         isDeleted = isDeleted,
         isPending = isPending,
@@ -52,10 +54,25 @@ class MessageActionMenuTest {
         exitOffer = exitOffer,
         signalClearance = signalClearance,
         isReadByServer = isReadByServer,
+        isNotice = isNotice,
+        isQuotableNotice = isQuotableNotice,
     )
 
     private fun offer(law: ContentExitLaw, blur: Boolean = false) =
         MessageExitOffer(law, holdsBlur = blur, isEncrypted = false)
+
+    @Test
+    fun a_quotable_notice_is_answered_and_never_forwarded_nor_edited() {
+        val actions = MessageActionMenu.actions(ctx(isNotice = true, isQuotableNotice = true, isOutgoing = true, canEdit = false))
+        assertThat(actions).contains(MessageAction.Reply)
+        assertThat(actions).containsNoneOf(MessageAction.Forward, MessageAction.Edit)
+    }
+
+    @Test
+    fun a_notice_that_is_not_quotable_is_never_answered() {
+        val actions = MessageActionMenu.actions(ctx(isNotice = true))
+        assertThat(actions).containsNoneOf(MessageAction.Reply, MessageAction.Forward)
+    }
 
     @Test
     fun a_view_once_message_offers_no_exit_entry() {

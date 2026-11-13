@@ -59,6 +59,8 @@ const es = {
   'game.banner.link.trophies': 'Trofeos: {count}',
   'game.banner.link.missions': 'Sueño: {done} de {total}',
   'game.banner.link.season': 'Viaje: {stars} pasos',
+  'game.banner.treasury.tiers': 'Monedero|Escarcela|Cofrecillo|Cofre|Tesoro|Reserva',
+  'game.banner.link.treasury': 'Legado: {tier}',
   'game.banner.link.meesh': '{count} Meeshes en tu legado',
   'game.banner.glory': 'gloria {glory}',
   'game.banner.glory_missing': '{glory} de gloria hasta {rank}',

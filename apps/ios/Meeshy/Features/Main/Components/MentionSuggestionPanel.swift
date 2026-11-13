@@ -45,7 +45,7 @@ struct MentionSuggestionPanel: View {
                 } else if controller.suggestions.isEmpty {
                     Text(ComposerDocumentCopy.mentionEmpty)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 } else {
                     ForEach(controller.suggestions) { candidate in
@@ -64,10 +64,10 @@ struct MentionSuggestionPanel: View {
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(candidate.displayName)
                                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                                        .foregroundColor(theme.textPrimary)
+                                        .foregroundStyle(theme.textPrimary)
                                     Text("@\(candidate.username)")
                                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                                        .foregroundColor(theme.textSecondary)
+                                        .foregroundStyle(theme.textSecondary)
                                 }
                                 Spacer()
                             }

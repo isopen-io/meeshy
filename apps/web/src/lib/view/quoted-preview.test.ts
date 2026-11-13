@@ -65,7 +65,7 @@ const quoted = (partial: Partial<Message> = {}): Message =>
   }) as Message;
 
 const preview = (message: Message, readerLanguages: readonly string[] = ['fr']) =>
-  quotedPreviewOf({ quoted: message, readerLanguages, interfaceLanguage: 'fr' });
+  quotedPreviewOf({ quoted: message, readerLanguages, interfaceLanguage: 'fr', viewerId: 'u-viewer' });
 
 const PHOTO = attachment({
   id: 'a-photo',
@@ -281,7 +281,7 @@ describe('quotedPreviewOf — la pièce NOMMÉE prime sur la première', () => {
     );
 
   test('la citation montre la pièce visée, pas la première', () => {
-    const preview = quotedPreviewOf({ quoted: twoPieces(), readerLanguages: ['fr'], interfaceLanguage: 'fr' });
+    const preview = quotedPreviewOf({ quoted: twoPieces(), readerLanguages: ['fr'], interfaceLanguage: 'fr', viewerId: 'u-viewer' });
     expect(preview.media?.kind).toBe('audio');
     expect(preview.media?.durationLabel).toBe('0:12');
   });
@@ -294,7 +294,7 @@ describe('quotedPreviewOf — la pièce NOMMÉE prime sur la première', () => {
       quoted({ attachments: [attachment({ id: 'a-1', mimeType: 'image/png', thumbnailUrl: 'https://cdn.meeshy.me/t.png' })] }),
       { attachmentReplyTo: { attachmentId: 'a-9', kind: 'audio' } },
     );
-    const media = quotedPreviewOf({ quoted: orphan, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).media;
+    const media = quotedPreviewOf({ quoted: orphan, readerLanguages: ['fr'], interfaceLanguage: 'fr', viewerId: 'u-viewer' }).media;
     expect(media?.kind).toBe('audio');
     expect(media?.label).toBe('Audio');
     expect(media?.thumbnailSrc).toBeNull();
@@ -307,7 +307,7 @@ describe('quotedPreviewOf — la pièce NOMMÉE prime sur la première', () => {
 
   test('une nature inconnue ou un lieu disparus se disent « Fichier »', () => {
     const orphan = Object.assign(quoted({ attachments: [PHOTO] }), { attachmentReplyTo: { attachmentId: 'a-9', kind: 'location' } });
-    expect(quotedPreviewOf({ quoted: orphan, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).media?.kind).toBe('file');
+    expect(quotedPreviewOf({ quoted: orphan, readerLanguages: ['fr'], interfaceLanguage: 'fr', viewerId: null }).media?.kind).toBe('file');
   });
 });
 
@@ -478,7 +478,7 @@ describe('quotedPreviewOf — un éphémère cité ÉCHU pour son lecteur', () =
 
   test('dans la langue du lecteur', async () => {
     await loadInterfaceCatalog('en');
-    expect(quotedPreviewOf({ quoted: lapsed, readerLanguages: ['en'], interfaceLanguage: 'en' }).text).toBe('Ephemeral message expired');
+    expect(quotedPreviewOf({ quoted: lapsed, readerLanguages: ['en'], interfaceLanguage: 'en', viewerId: null }).text).toBe('Ephemeral message expired');
   });
 
   test('rien ne voyage, comme une suppression', () => {
@@ -545,5 +545,34 @@ describe('quotedPreviewOf — le fichier et la pièce ouvrable d’une citation 
     const media = preview(quoted({ content: 'Écoute', attachments: [floute] })).media;
     expect(media?.fileSrc).toBeNull();
     expect(media?.openable).toBeNull();
+  });
+});
+
+describe('#17441 — la citation d’un avis se dit dans la langue du lecteur', () => {
+  const missedCall = { kind: 'call', callId: 'c-1', initiatorId: 'u-ama', callType: 'audio', outcome: 'missed', durationSeconds: 0, bytesTotal: null, bytesEstimated: false, networkQuality: null };
+  const cite = (message: Message, viewerId: string | null = 'u-viewer') =>
+    quotedPreviewOf({ quoted: message, readerLanguages: ['en'], interfaceLanguage: 'en', viewerId });
+
+  test('un appel cité depuis le fil (métadonnée) dit son issue, vue du lecteur — jamais le repli français', () => {
+    const notice = quoted({ messageType: 'system', messageSource: 'system', content: 'Appel manqué', metadata: missedCall } as Partial<Message>);
+    expect(cite(notice).text).toBe('Missed call');
+    expect(cite(notice, 'u-ama').text).toBe('Unanswered call');
+    expect(cite(notice).language).toBe('');
+    expect(cite(notice).media).toBeNull();
+  });
+
+  test('une citation servie par la passerelle porte l’avis sous `notice` : même texte', () => {
+    const served = quoted({ messageType: 'system', content: 'Bob a quitté la conversation', notice: { kind: 'member-left', actor: { participantId: 'p-b', displayName: 'Bob' } } } as Partial<Message>);
+    expect(cite(served).text).toBe('Bob left the conversation');
+  });
+
+  test('sans métadonnée lisible (ancienne passerelle), la citation retombe sur le texte servi', () => {
+    const legacy = quoted({ messageType: 'system', content: 'Appel manqué' } as Partial<Message>);
+    expect(cite(legacy).text).toBe('Appel manqué');
+  });
+
+  test('un message ordinaire qui porterait une clé d’avis n’est pas un avis', () => {
+    const text = quoted({ messageType: 'text', content: 'Salut', originalLanguage: 'en', notice: { kind: 'member-left', actor: { participantId: 'p-b', displayName: 'Bob' } } } as Partial<Message>);
+    expect(cite(text).text).toBe('Salut');
   });
 });

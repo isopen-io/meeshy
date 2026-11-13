@@ -59,10 +59,10 @@ public struct ProfileConnectedBadge: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: MeeshyIconSize.sm))
-                .foregroundColor(MeeshyColors.success)
+                .foregroundStyle(MeeshyColors.success)
             Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
-                .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.success)
+                .meeshyScaledFont(MeeshyFont.labelSize, weight: .semibold)
+                .foregroundStyle(MeeshyColors.success)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.md)

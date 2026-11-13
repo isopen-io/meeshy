@@ -20,10 +20,7 @@ extension StoryViewerView {
     // C'était le lecteur de story d'AVANT le canvas : du texte SwiftUI positionné
     // par `StoryEffects.textPosition/textAlign`, et une image posée en overlay. Le
     // rendu vivant est le canvas — `StoryViewerView+Canvas.swift` côté app,
-    // `StorySlideRenderer` côté SDK, qui honore `fontFamily`/`textStyle` (c'est
-    // l'extension à 18 familles du 2026-08-20 : `italic` et `retro` y sont entrés
-    // précisément parce que des stories publiées portaient le vocabulaire
-    // historique de `fontForStyle`).
+    // `StorySlideRenderer` côté SDK, qui honore `fontFamily`/`textStyle`.
     //
     // Elles emportaient `story.viewer.a11y.storyText` — une clé traduite en sept
     // locales pour un `accessibilityLabel` qu'aucun lecteur d'écran n'a jamais
@@ -162,7 +159,7 @@ extension StoryViewerView {
         // Toutes les surfaces du reader tombent au changement de slide, pas
         // seulement les commentaires : un strip de langues ou une barre d'emojis
         // laissés ouverts se retrouvaient posés sur la story SUIVANTE, à laquelle
-        // ils ne se rapportent plus (directive user 2026-07-25).
+        // ils ne se rapportent plus.
         showCommentsOverlay = false
         showLanguageOptions = false
         showFullLanguagePicker = false
@@ -294,8 +291,7 @@ extension StoryViewerView {
         }
     }
 
-    // Le compte à rebours d'expiration a quitté le header du reader (directive
-    // user 2026-07-30) : il n'existe plus de surface qui l'affiche, donc plus
+    // Le compte à rebours d'expiration a quitté le header du reader: il n'existe plus de surface qui l'affiche, donc plus
     // de formateur. `story.expiresAt` reste la source de vérité côté logique
     // (`isExpired(at:)` pilote la sélection de slide et le bandeau « Story
     // expirée ») — c'est seulement la relecture permanente du chrono qui part.

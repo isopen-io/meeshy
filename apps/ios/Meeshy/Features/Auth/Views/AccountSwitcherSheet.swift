@@ -83,10 +83,10 @@ struct SavedAccountRow: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs / 2) {
                 Text(account.shortName)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(textPrimary)
+                    .foregroundStyle(textPrimary)
                 Text(verbatim: "@\(account.username)")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                    .foregroundColor(textMuted)
+                    .foregroundStyle(textMuted)
             }
 
             Spacer(minLength: MeeshySpacing.sm)
@@ -104,7 +104,7 @@ struct SavedAccountRow: View {
             } else {
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(textMuted.opacity(0.5))
+                    .foregroundStyle(textMuted.opacity(0.5))
                     .accessibilityHidden(true)
             }
         }

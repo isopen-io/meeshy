@@ -1,13 +1,13 @@
 import SwiftUI
 
 /// **Où la pastille de synchronisation se pose : juste au-dessus du chrome bas,
-/// et elle suit le clavier avec lui** (#10840, retour porteur 2026-10-16).
+/// et elle suit le clavier avec lui** (#10840).
 ///
 /// > « Déplace la pastille plus bas au niveau de la universal composer bar
 /// > (lorsque la universal composer bar remonte à cause du clavier, il faut
 /// > remonter la pastille syncpill aussi et quand ça descend, redescendre). »
 ///
-/// **Cette règle SUPPLANTE la pose haute de #10371** (2026-10-12, 34 pt sous la
+/// **Cette règle SUPPLANTE la pose haute de #10371** (34 pt sous la
 /// zone sûre), qui supplantait elle-même la bande de la barre d'état de #9680.
 /// La pastille quitte le haut de l'écran : elle se pose sur ce que l'utilisateur
 /// regarde quand il écrit.
@@ -24,8 +24,7 @@ import SwiftUI
 /// valeur ne se republie pendant le geste, la pastille et la barre bougent du
 /// même mouvement.
 ///
-/// **Écrans sans barre de composition** (confirmé par le porteur le
-/// 2026-10-16) : la pastille se pose en bas, au-dessus de la barre du bas, et
+/// **Écrans sans barre de composition**: la pastille se pose en bas, au-dessus de la barre du bas, et
 /// suit toujours le clavier. Une barre du bas se DÉCLARE (`docksSyncPill`) :
 /// la barre de recherche de la liste des conversations (iPhone et iPad), la
 /// plaque du lecteur de story. Sans barre déclarée, la pastille se pose au ras
@@ -64,7 +63,7 @@ nonisolated enum SyncPillPlacement {
     /// de la liste est décollée de 8 pt du bord sûr).
     ///
     /// L'encart bas que rapporte la mesure ne se retranche PAS. Mesuré au
-    /// simulateur (iPhone 15 Pro Max, 2026-10-16) : la pile de la barre de la
+    /// simulateur (iPhone 15 Pro Max): la pile de la barre de la
     /// conversation, pourtant posée sous `ignoresSafeArea(.container, edges:
     /// .bottom)`, s'arrête au bord sûr (`maxY` 898 = 932 − 34) pendant que son
     /// lecteur rapporte un encart de 34 pt. Le retrancher posait la pastille

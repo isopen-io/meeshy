@@ -98,9 +98,9 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertEqual(ComposerRestChrome.tools(offered: sansPalette, hasBackgroundMedia: true)
                         .filter { $0 == .background }, [.background])
         let repos = try ComposerSceneArrangementTests.source("MeeshyComposerHost+Rest.swift")
-        XCTAssertTrue(repos.contains("if tool == .background, let fond = sceneBackgroundMedia?.id { return selectSceneBackground(fond) }"),
+        XCTAssertTrue(repos.contains("if tool == .background, let fond = host.sceneBackgroundMedia?.id { return host.selectSceneBackground(fond) }"),
                       "avec un média de fond, « Fond » sélectionne le fond au lieu d'ouvrir la palette")
-        XCTAssertTrue(repos.contains("hasBackgroundMedia: sceneBackgroundMedia != nil"))
+        XCTAssertTrue(repos.contains("hasBackgroundMedia: host.sceneBackgroundMedia != nil"))
     }
 
     func test_tools_lePlusEstToujoursLeDernier_memeSansAucunePorte() {
@@ -348,11 +348,22 @@ final class ComposerSceneRestChromeTests: XCTestCase {
                        .openDoor)
     }
 
-    /// La colonne s'alignait sur le bord de la scène : sans la pastille
-    /// « Coller », plus large, qui la décalait, ses boutons touchaient ce bord
-    /// sur l'iPhone et le débordaient sur le petit écran.
-    func test_toolColumnInnerMargin_keepsTheButtonsInsideTheScene() {
-        XCTAssertGreaterThanOrEqual(ComposerRestChrome.toolColumnInnerMargin, 8)
+    /// Porteur (#17469) : la colonne des outils et des options s'aligne sur la
+    /// rangée du haut (↶ ↷), au même écart du bord ; « Coller » n'est plus
+    /// qu'un glyphe (#17434), plus rien ne la décale. L'écart commun de la
+    /// couche la garde dans la scène.
+    func test_toolColumn_alignsWithTheTopRow_andStaysInsideTheScene() throws {
+        XCTAssertEqual(ComposerRestChrome.toolColumnInnerMargin, 0, "aucun écart de plus que la rangée du haut")
+        XCTAssertGreaterThanOrEqual(MeeshySpacing.smPlus, 8, "l'écart commun garde les boutons dans la scène")
+        let chrome = try String(contentsOfFile: Self.overlayChromePath, encoding: .utf8)
+        XCTAssertTrue(chrome.contains(".padding(.horizontal, MeeshySpacing.smPlus)"),
+                      "la rangée et la colonne partagent l'écart de la couche")
+    }
+
+    private static var overlayChromePath: String {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneOverlayChrome.swift").path
     }
 
     // MARK: - #17111 : la porte Caméra
@@ -459,15 +470,14 @@ final class ComposerSceneRestChromeTests: XCTestCase {
     }
 
     func test_concealment_unSecondToucher_rendLeChrome() {
-        for issue: ComposerSceneEmptyTap.Outcome in [.nothing, .deselect, .armViewfinder, .endWriting] {
+        for issue: ComposerSceneEmptyTap.Outcome in [.nothing, .deselect, .closeEffect, .endWriting] {
             XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: true, emptyTap: issue, sceneHasContent: true),
                            .reveal, "\(issue)")
         }
     }
 
-    func test_concealment_uneSceneVierge_armeToujoursLaCamera() {
-        XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: false, emptyTap: .armViewfinder,
-                                                     sceneHasContent: false), .passThrough)
+    /// Une scène vierge n'a rien à masquer : le toucher la traverse (#17269 : il n'arme plus rien).
+    func test_concealment_uneSceneVierge_laisseLeToucherPasser() {
         XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: false, emptyTap: .nothing,
                                                      sceneHasContent: false), .passThrough)
     }

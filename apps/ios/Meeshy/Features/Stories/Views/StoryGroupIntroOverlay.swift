@@ -16,7 +16,7 @@ struct StoryGroupIntroOverlay: View {
     let presence: UserPresence?
     /// `true` quand l'auteur du groupe est un ami — gate le détail de
     /// présence (« En ligne » / « Actif·ve récemment » / « Absent·e ») dans
-    /// `presenceBadge`. Directive user 2026-07-13 : le statut « en ligne »
+    /// `presenceBadge`.: le statut « en ligne »
     /// est une information réservée aux amis, pas affichée pour un auteur
     /// hors contacts.
     let isFriend: Bool
@@ -25,7 +25,7 @@ struct StoryGroupIntroOverlay: View {
     /// déjà courant).
     let onSkip: () -> Void
     /// Tap zone gauche — annule ce switch de groupe, retourne au groupe
-    /// précédent (directive user 2026-07-14).
+    /// précédent.
     let onBack: () -> Void
     /// Jeton de purge partagé avec `StoryGestureOverlayView` — bumpé par le
     /// viewer sur les chemins gestuels non nominaux. Sert ici de FILET au
@@ -73,7 +73,7 @@ struct StoryGroupIntroOverlay: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                // Base OPAQUE obligatoire (directive 2026-07-10) : pendant que la
+                // Base OPAQUE obligatoire: pendant que la
                 // bannière charge, CachedAsyncImage peut rendre un placeholder
                 // translucide — sans cette base, le slide et son chrome restaient
                 // visibles SOUS l'interstitiel (IMG_0976). L'intro est un ÉCRAN,

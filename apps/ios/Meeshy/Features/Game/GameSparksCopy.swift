@@ -28,7 +28,7 @@ enum GameSparksCopy {
         return cycleAndRecord(cycle: cycle, lifetime: lifetime)
     }
 
-    /// Le « depuis toujours » en petit sous ta lumière (porteur 2026-10-17, #10899 ; épopée § 3.3) : « 12 000 reçues
+    /// Le « depuis toujours » en petit sous ta lumière (#10899, épopée § 3.3): « 12 000 reçues
     /// depuis toujours » ; après une renaissance, « 4 200 cet Âge · 12 000 en tout ».
     static func cumulLine(cycle: Int, lifetime: Int) -> String {
         guard cycle < lifetime else {

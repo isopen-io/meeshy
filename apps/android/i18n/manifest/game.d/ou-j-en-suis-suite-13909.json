@@ -168,12 +168,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.state.elans.idle",
-          "androidName": "game_state_elans_idle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.concept.fact.tier",
           "androidName": "game_concept_fact_tier",
           "status": "adopted"

@@ -68,6 +68,16 @@ const capture = async (page, name) => {
 
 const appears = (page, selector, timeout = 8000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
+/** L'écran d'appel et la capsule s'échangent en mouvement (S1.7, S2.1, #17774) : on ne mesure qu'une fois la vue qui repart démontée et plus aucune animation Web finie en cours (une pulsation sans fin ne se termine jamais : elle n'est pas attendue). */
+/* Le départ de l'écran relâché se lit une fois qu'il EXISTE — l'écran porte `data-leaving` et ses animations — jamais après un délai parié sur la vitesse de la machine (#7176). */
+const departureFrames = (page) =>
+  page
+    .waitForFunction(() => (document.querySelector('[data-call-screen][data-leaving]')?.getAnimations().length ?? 0) > 0, undefined, { timeout: 2000 })
+    .then(
+      () => page.evaluate(() => document.querySelector('[data-call-screen][data-leaving]')?.getAnimations().filter((animation) => !(animation instanceof CSSTransition)).map((animation) => String(animation.effect?.getKeyframes()[0]?.transform ?? '')) ?? null),
+      () => null,
+    );
+const swapped = (page) => page.waitForFunction(() => document.querySelector('[data-leaving][data-call-screen], [data-leaving][data-call-pill-bar]') === null && document.getAnimations().every((animation) => animation instanceof CSSTransition || animation.playState !== 'running' || animation.effect?.getComputedTiming().endTime === Infinity), undefined, { timeout: 5000 }).then(() => true, () => false);
 
 /* Le pair est armé, et getDisplayMedia rend un canevas animé : ce qu'un écran enverrait. */
 const ARM_PEER_AND_DISPLAY = () => {
@@ -109,6 +119,9 @@ const peerReceives = async (page) => {
   return false;
 };
 
+/** Les rails glissent (300 ms) : on mesure et on touche posés, jamais en route (#17327). */
+const railsSettled = (page) => page.waitForFunction(() => document.querySelector('[data-call-screen]')?.getAnimations({ subtree: true }).every((animation) => !(animation instanceof CSSTransition) || animation.playState !== 'running') ?? true, undefined, { timeout: 3000 }).then(() => true, () => false);
+
 /**
  * Les actions vivent derrière le (…) de la pilule (#8391), qui les déplie
  * s'il ne l'a pas déjà fait. En vidéo, aucune attente n'efface les commandes
@@ -118,7 +131,8 @@ const openActions = async (page) => {
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
-  await appears(page, '[data-call-actions]');
+  await appears(page, '[data-call-rails="shown"], [data-call-actions]');
+  await railsSettled(page);
 };
 
 const startConnectedAudioCall = async (page) => {
@@ -167,7 +181,9 @@ try {
           });
           await page.waitForTimeout(150);
           await page.mouse.up();
-          return { from: [x, y], distance, held };
+          /* Relâché assez loin, l'écran repart en se contractant LÀ OÙ le doigt l'a laissé (#17774) : son départ part de la translation du glissé, jamais d'un retour en haut. */
+          const released = await departureFrames(page);
+          return { from: [x, y], distance, held, released };
         };
         await drag(30);
         await page.waitForTimeout(300);
@@ -176,6 +192,8 @@ try {
         check(swiped.held?.swipe === 'dragging' && swiped.held.transform !== '', `${label} : pendant le glissé, l'écran suit le pointeur — aucun glisser-déposer du navigateur ne l'annule (${JSON.stringify(swiped.held)})`);
         const reduced = await appears(page, '[data-call-pill-bar]', 3000);
         check(reduced, `${label} : glissé aux trois quarts et relâché, l'appel se réduit — ${JSON.stringify(swiped)}`);
+        check(swiped.released?.some((from) => /matrix|translate/.test(from)) === true, `${label} : relâché, l'écran se contracte depuis la place où le doigt l'a laissé, sans sauter en haut (${JSON.stringify(swiped.released)})`);
+        check(await swapped(page), `${label} : l'échange se termine — la vue qui repart est démontée, aucun mouvement fini ne court encore`);
         check((await page.$('[data-call-screen]')) === null, `${label} : réduit, l'écran d'appel a quitté le plein écran`);
         await capture(page, `glisse-reduit-${slug}`);
         if (reduced) {
@@ -195,7 +213,10 @@ try {
         check(await appears(page, '[data-call-pill-bar][data-call-pill-sharing] [data-call-pill-stop-share]'), `${label} : partager réduit l'appel en capsule « Arrêter » (#16664)`);
         await capture(page, `partage-capsule-${slug}`);
         await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
-        check(await appears(page, '[data-call-pill="screen-sharing"]'), `${label} : la pastille « Vous partagez votre écran » s'affiche`);
+        check(await appears(page, '[data-call-screen-share-banner] [data-call-screen-share-stop]'), `${label} : le bandeau « Vous partagez votre écran · Arrêter » s'affiche sous l'en-tête (P16.4)`);
+        check(await swapped(page), `${label} : l'échange se termine — la vue qui repart est démontée, aucun mouvement fini ne court encore`);
+        const shareStop = await page.locator('[data-call-screen-share-stop]').boundingBox();
+        check(shareStop !== null && shareStop.height >= TAP_FLOOR, `${label} : « Arrêter » fait au moins ${TAP_FLOOR} de haut (${JSON.stringify(shareStop && Math.round(shareStop.height))})`);
         await openActions(page);
         check((await share.getAttribute('aria-pressed')) === 'true' && (await share.getAttribute('aria-label')) === 'Arrêter le partage d’écran', `${label} : le bouton devient « Arrêter le partage d’écran », enfoncé`);
         check((await peerToggles(page)).some((t) => t.event === 'call:toggle-screen' && t.enabled), `${label} : le partage est annoncé (call:toggle-screen)`);
@@ -208,7 +229,7 @@ try {
           track.stop();
           track.dispatchEvent(new Event('ended'));
         });
-        const stopped = await page.waitForSelector('[data-call-pill="screen-sharing"]', { state: 'detached', timeout: 5000 }).then(() => true, () => false);
+        const stopped = await page.waitForSelector('[data-call-screen-share-banner]', { state: 'detached', timeout: 5000 }).then(() => true, () => false);
         check(stopped && (await share.getAttribute('aria-pressed')) === 'false', `${label} : « Arrêter le partage » du navigateur arrête le partage`);
         const toggles = await peerToggles(page);
         check(toggles.at(-1)?.event === 'call:toggle-screen' && toggles.at(-1)?.enabled === false, `${label} : la fin du partage est annoncée`);
@@ -222,10 +243,10 @@ try {
         await share.click();
         await appears(page, '[data-call-pill-stop-share]');
         await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
-        await appears(page, '[data-call-pill="screen-sharing"]');
+        await appears(page, '[data-call-screen-share-banner]');
         await openActions(page);
         check(await page.locator('button[aria-label="Couper la caméra"], button[aria-label="Activer la caméra"]').first().isDisabled(), `${label} : la caméra ne se rallume pas par-dessus un partage`);
-        await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+        await page.click('[data-call-screen] button[aria-label="Réduire"]');
         await page.click('[data-call-pill-stop-share]');
         await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
         await openActions(page);
@@ -243,7 +264,7 @@ try {
         const banner = await page.$eval('[data-call-screen-banner]', (el) => el.textContent ?? '').catch(() => '');
         check(banner === `${PEER_NAME} partage son écran`, `${label} : la bannière nomme celui qui partage (« ${banner} »)`);
         await capture(page, `partage-recu-${slug}`);
-        await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+        await page.click('[data-call-screen] button[aria-label="Réduire"]');
         await page.click('[data-call-pill-collapse]');
         const bubbleFit = await page.waitForSelector('[data-call-bubble] video', { timeout: 5000 }).then((video) => video.evaluate((el) => getComputedStyle(el).objectFit), () => null);
         check(bubbleFit === 'contain', `${label} : réduit en bulle, l'écran partagé reste ENTIER (object-fit ${bubbleFit})`);

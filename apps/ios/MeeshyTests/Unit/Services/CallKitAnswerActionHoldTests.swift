@@ -40,13 +40,14 @@ final class CallKitAnswerActionHoldTests: XCTestCase {
         XCTAssertFalse(hold.isHolding)
     }
 
-    func test_hold_aSecondAction_failsTheSupersededOne() {
+    func test_hold_aSecondAction_fulfillsTheSupersededOne_neverFailsIt() {
         let hold = CallKitAnswerActionHold(safetyNetSeconds: 60)
         let first = SpyAction()
         let second = SpyAction()
         hold.hold(first)
         hold.hold(second)
-        XCTAssertEqual(first.failCount, 1, "CallKit requires every action to be completed")
+        XCTAssertEqual(first.fulfillCount, 1, "CallKit requires every action to be completed")
+        XCTAssertEqual(first.failCount, 0, "a failed answer makes CallKit end the call the user just answered (#17954)")
         hold.settle(fulfilled: true, reason: "connected")
         XCTAssertEqual(second.fulfillCount, 1)
     }

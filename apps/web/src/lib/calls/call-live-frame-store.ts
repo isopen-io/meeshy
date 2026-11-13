@@ -19,6 +19,8 @@ export type CallLiveFrameState = {
   /** Le cadre montré CHEZ MOI. */
   readonly frameId: string | null;
   readonly proposal: LiveFrameProposal | null;
+  /** Une proposition reçue hors duo vidéo : gardée, jamais montrée, rendue au retour en duo vidéo (iOS `mayShowProposal`). */
+  readonly withheld: LiveFrameProposal | null;
   /** Ma proposition qui attend sa réponse. */
   readonly sentProposal: string | null;
   readonly answer: LiveFrameAnswer | null;
@@ -32,7 +34,7 @@ export type CallLiveFrameState = {
 
 export type CallLiveFrameStoreApi = StoreApi<CallLiveFrameState>;
 
-export const NO_LIVE_FRAME: CallLiveFrameState = { callId: null, frameId: null, proposal: null, sentProposal: null, answer: null, remoteSharedName: null, peerFrameId: null, notice: null };
+export const NO_LIVE_FRAME: CallLiveFrameState = { callId: null, frameId: null, proposal: null, withheld: null, sentProposal: null, answer: null, remoteSharedName: null, peerFrameId: null, notice: null };
 
 export function createCallLiveFrameStore(): CallLiveFrameStoreApi {
   return createStore<CallLiveFrameState>(() => NO_LIVE_FRAME);

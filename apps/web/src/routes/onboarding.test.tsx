@@ -1,12 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
+import { MY_PROFILE_QUERY_KEY } from '@/lib/api/profile';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
+import { loadOnboardingProfileCatalog } from '@/lib/i18n-onboarding-profile-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { harness, served, signIn } from '@/test-support/onboarding-harness';
+import { bareServed, harness, served, signIn } from '@/test-support/onboarding-harness';
 
 import { OnboardingJourney } from './onboarding';
 
@@ -23,7 +25,7 @@ const { mount, unmountAll, click, type } = createActMounter();
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/onboarding' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await Promise.all([loadOnboardingCatalog('fr'), loadOnboardingCatalog('ar'), loadInterfaceCatalog('ar')]);
+  await Promise.all([loadOnboardingCatalog('fr'), loadOnboardingCatalog('ar'), loadInterfaceCatalog('ar'), loadOnboardingProfileCatalog('fr')]);
 });
 
 afterAll(async () => {
@@ -43,6 +45,12 @@ const landed = () => act(() => new Promise<void>((resolve) => setTimeout(resolve
 
 const card = (host: ParentNode): string | null => host.querySelector('[data-onb-card]')?.getAttribute('data-onb-card') ?? null;
 const action = (host: ParentNode, id: string) => host.querySelector<HTMLElement>(`[data-onb-action="${id}"]`);
+const cardOnceLoaded = async (host: ParentNode, expected: string): Promise<string | null> => {
+  for (let tick = 0; tick < 200 && card(host) !== expected; tick += 1) {
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+  }
+  return card(host);
+};
 
 describe('la reprise — la première étape manquante, « Passer tout » dès la carte 1', () => {
   test('un compte neuf commence aux langues, et « Passer tout » est là', async () => {
@@ -380,5 +388,59 @@ describe('accessibilité et langue', () => {
     const { deps, visits } = harness({ state: served({ eligible: false, completedAt: '2026-09-24T10:00:00.000Z' }) });
     await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
     expect(visits).toEqual([{ path: '/chats', replace: true }]);
+  });
+});
+
+describe('« Montre-toi » (#17237) — après le courriel, avant le salut, jamais bloquante', () => {
+  test('un compte sans photo ni bannière la voit après les langues, comptée dans les étapes ; « Plus tard » la passe et mène au salut', async () => {
+    signIn();
+    const { deps, patches } = harness({ state: bareServed({ seenSteps: ['languages'] }) });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(await cardOnceLoaded(host, 'profile')).toBe('profile');
+    expect(host.textContent).toContain('@maya');
+    await click(action(host, 'profile.continue'));
+    expect(patches).toEqual([{ step: 'profile', outcome: 'skipped' }]);
+    expect(card(host)).toBe('global');
+  });
+
+  test('une photo posée : « Continuer » enregistre l’étape faite', async () => {
+    signIn();
+    const { deps, patches, uploads } = harness({ state: bareServed({ seenSteps: ['languages'] }) });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(await cardOnceLoaded(host, 'profile')).toBe('profile');
+    const input = host.querySelector<HTMLInputElement>('[data-onb-profile-input="avatar"]');
+    if (input === null) throw new Error('champ de la photo absent');
+    Object.defineProperty(input, 'files', { value: [new File(['x'], 'moi.png', { type: 'image/png' })], configurable: true });
+    await act(async () => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+    expect(uploads).toEqual([]);
+    expect(document.querySelector('[data-harness-retouch]')?.getAttribute('data-harness-retouch')).toBe('avatar');
+    await click(document.querySelector('[data-harness-retouch-done]'));
+    expect(uploads).toEqual(['avatar']);
+    await click(action(host, 'profile.continue'));
+    expect(patches).toEqual([{ step: 'profile', outcome: 'done' }]);
+    expect(card(host)).toBe('global');
+  });
+
+  test('photo ET bannière déjà là, passerelle qui ne pré-coche pas : la carte est sautée côté client', async () => {
+    sessionStore.getState().establish({
+      user: { id: 'u-maya', username: 'maya', displayName: 'Maya', systemLanguage: 'fr', avatar: 'https://cdn.test/maya.jpg' },
+      token: 'jwt',
+      sessionToken: 's',
+      expiresIn: 3600,
+    });
+    const { deps } = harness({ state: bareServed({ seenSteps: ['languages'] }) });
+    deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, { banner: 'https://cdn.test/banniere.jpg' });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(card(host)).toBe('global');
+  });
+
+  test('pré-cochée par la passerelle (photo ET bannière déjà là) : jamais montrée', async () => {
+    signIn();
+    const { deps } = harness({ state: bareServed({ seenSteps: ['languages'], prefilledSteps: ['profile'] }) });
+    const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
+    expect(card(host)).toBe('global');
   });
 });

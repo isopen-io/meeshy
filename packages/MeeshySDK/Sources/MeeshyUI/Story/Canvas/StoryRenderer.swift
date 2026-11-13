@@ -54,7 +54,7 @@ extension StoryMediaObject: RenderableItem {}
 extension StorySticker: RenderableItem {}
 
 /// **La pastille de lieu porte ses quatre champs de timing comme ses trois
-/// sœurs** (directive porteur 2026-08-31, #4591) — donc la conformité est vide,
+/// sœurs** (#4591) — donc la conformité est vide,
 /// comme les leurs.
 ///
 /// > Elle fabriquait ici quatre `nil` EN DUR, justifiés par le doc-comment du
@@ -259,14 +259,14 @@ public enum StoryRenderer {
                 mediaLayer.applyExportFrame(mediaFrameProvider(media, time))
             }
 
-            // C2 (2026-07-25) — MÊME post-passe pour les textes et stickers.
+            // C2 — MÊME post-passe pour les textes et stickers.
             // `ItemSignature` ne retient que l'opacité des KEYFRAMES
             // (`overrides.opacity ?? 1.0`), jamais l'enveloppe fadeIn/fadeOut :
             // une fois la layer construite au premier tick où sa fenêtre
             // s'ouvre, la signature ne bouge plus, le cache resert la même
             // layer, et l'opacité du tick de CONSTRUCTION reste figée.
             //
-            // Bug observé en production (2026-07-25) : un texte à
+            // Bug observé en production : un texte à
             // `startTime = 20.006` avec `fadeIn = 0.5` était construit à
             // t ≈ 20.01, donc à (20.01 − 20.006) / 0.5 ≈ 0.02, et restait à
             // 2 % d'opacité pour toute la story — invisible. Le composer n'en
@@ -309,7 +309,7 @@ public enum StoryRenderer {
 
         // Le dessin persisté, au-dessus des objets. `suppressDrawingOverlay` est
         // levé par le composer quand le `DrawingOverlayView` est actif : sinon
-        // deux dessins désalignés à l'écran (bug utilisateur 2026-05-27).
+        // deux dessins désalignés à l'écran.
         if let drawing = drawingOverlay(for: slide.effects, geometry: geometry, contentsScale: contentsScale,
                                         cache: cache, suppressed: suppressDrawingOverlay) {
             tree.append(drawing)
@@ -576,7 +576,7 @@ extension StoryRenderer {
     /// Une URL DISTANTE prime sur le `postMediaId`. L'identifiant n'est pas une
     /// URL : le layer doit le résoudre via le tableau `media[]` du post — et ce
     /// tableau revient vide dès qu'un rattachement média↔post a échoué à la
-    /// publication. Constaté en production le 2026-08-01 : deux stories sans
+    /// publication. Constaté en production : deux stories sans
     /// aucun fond, alors que leur objet portait une `mediaURL` parfaitement
     /// servable, jamais essayée parce que le `postMediaId` gagnait d'office.
     ///

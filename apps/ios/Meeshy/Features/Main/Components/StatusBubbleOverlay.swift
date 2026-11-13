@@ -4,6 +4,7 @@ import MeeshySDK
 import MeeshyUI
 
 struct StatusBubbleOverlay: View {
+    @State private var delayed = DelayedActions()
     let status: StatusEntry
     let anchorPoint: CGPoint
     @Binding var isPresented: Bool
@@ -63,22 +64,22 @@ struct StatusBubbleOverlay: View {
                             .onChanged { _ in dismiss() }
                     )
                     .allowsHitTesting(appearAnimation)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", bundle: .main))
+                    .accessibilityAction { dismiss() }
 
                 thoughtCircle(size: 4)
                     .position(x: anchor.x + dx * 0.08, y: anchor.y + dir * 7)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7), value: appearAnimation)
-
                 thoughtCircle(size: 7)
                     .position(x: anchor.x + dx * 0.22, y: anchor.y + dir * 15)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7).delay(0.03), value: appearAnimation)
-
                 thoughtCircle(size: 10)
                     .position(x: anchor.x + dx * 0.42, y: anchor.y + dir * 24)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.22, dampingFraction: 0.7).delay(0.06), value: appearAnimation)
-
                 bubbleContent
                     .frame(width: bubbleW)
                     .fixedSize(horizontal: false, vertical: true)
@@ -140,7 +141,7 @@ struct StatusBubbleOverlay: View {
             } else if let content = status.content, !content.isEmpty {
                 Text(content)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -149,7 +150,7 @@ struct StatusBubbleOverlay: View {
             if let via = status.viaUsername {
                 Text(String(localized: "status.bubble.via", defaultValue: "via @\(via)", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
 
             if onRepublish != nil {
@@ -162,12 +163,12 @@ struct StatusBubbleOverlay: View {
             HStack(spacing: MeeshySpacing.xs) {
                 Text(status.timeAgo)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
 
                 if onRepublish != nil {
                     MetaSeparator()
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
 
                     Button {
                         dismiss()
@@ -216,7 +217,7 @@ struct StatusBubbleOverlay: View {
                 // Glyphe dans un cercle de dimension fixe 18×18 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                 Image(systemName: audioPlayer.isPlaying ? "stop.fill" : "play.fill")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(Color(hex: status.avatarColor)))
             }
@@ -298,7 +299,7 @@ struct StatusBubbleOverlay: View {
     private func dismiss() {
         audioPlayer.stop()
         appearAnimation = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        delayed.run(after: .milliseconds(300)) {
             isPresented = false
         }
     }

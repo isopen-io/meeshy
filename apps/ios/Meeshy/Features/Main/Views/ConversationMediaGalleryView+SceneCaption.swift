@@ -137,7 +137,7 @@ struct GallerySceneCaptionBlock: View {
     }
 
     /// **LA feuille de traduction des messages et des audios**, réutilisée pour
-    /// le contenu affiché (directive porteur 2026-09-14). Une langue déjà
+    /// le contenu affiché. Une langue déjà
     /// traduite affiche la légende dans cette langue ; une autre demande la
     /// traduction de CE contenu par sa route — jamais la traduction locale d'un
     /// message qui n'existe pas.

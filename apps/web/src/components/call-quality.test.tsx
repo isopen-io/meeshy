@@ -1,13 +1,14 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import type { CallHeaderCapsule } from '@/lib/calls/call-header';
 import type { ActiveCall, CallMember, CallQuality } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import { CallCaptureAlerts, CallPeerAlerts, CallQualityChip } from './call-quality';
 import { CallQualityDetail } from './call-quality-detail';
-import { CallScreen } from './call-screen';
+import { CallScreen, loadColdCallViews } from './call-screen';
 
 /**
  * **LA QUALITÉ SE VOIT** (#8047) — l'indicateur de l'en-tête (quatre barres,
@@ -59,28 +60,88 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 
 const barsLit = (html: string): number => (html.match(/data-bar="on"/g) ?? []).length;
 
-describe('l’indicateur de qualité (#8047), dans la puce « Nom · durée » (#8391)', () => {
-  const chip = (overrides: Partial<CallQuality> | null = {}) => renderToStaticMarkup(<CallQualityChip title="Nadia Benali" clock="1:23" quality={overrides === null ? null : quality(overrides)} language="fr" prominent={false} />);
+describe('l’indicateur de qualité (#8047), dans la capsule de l’en-tête (#8391, #17341)', () => {
+  const video: CallHeaderCapsule = { title: 'Awa', participantCount: null, duration: true, network: true };
+  const chip = (overrides: Partial<CallQuality> | null = {}, capsule: CallHeaderCapsule = video) =>
+    renderToStaticMarkup(<CallQualityChip capsule={capsule} clock="1:23" quality={overrides === null ? null : quality(overrides)} language="fr" prominent={false} />);
 
-  test('quatre barres, allumées selon le niveau, et un nom qui DIT la puce ET le niveau', () => {
+  test('quatre barres, allumées selon le niveau, et un nom qui DIT la capsule ET le niveau', () => {
     const levels = (['excellent', 'good', 'fair', 'poor'] as const).map((level) => chip({ level }));
     expect(levels.map(barsLit)).toEqual([4, 3, 2, 1]);
-    expect(levels[3]).toContain('aria-label="Nadia Benali · 1:23 — Qualité de l’appel : faible"');
+    expect(levels[3]).toContain('aria-label="Awa · 1:23 — Qualité de l’appel : faible"');
     expect(levels[3]).toContain('data-call-quality="poor"');
     expect(levels[0]).toContain('aria-expanded="false"');
     expect(levels[0]).toContain('aria-haspopup="dialog"');
     expect(levels[0]).toContain('min-h-11');
   });
 
-  test('une puce de verre qui montre le nom et la durée', () => {
-    const html = chip();
-    expect(html).toContain('glass-call');
-    expect(html).toContain('Nadia Benali · 1:23');
+  test('tant que le lien n’est pas dégradé, la capsule ne dessine aucune barre — mais le niveau reste dit et le détail ouvrable', () => {
+    const html = chip({ level: 'good' }, { ...video, network: false });
+    expect(barsLit(html)).toBe(0);
+    expect(html).not.toContain('data-bar=');
+    expect(html).toContain('aria-label="Awa · 1:23 — Qualité de l’appel : bonne"');
+    expect(html).toContain('<button');
   });
 
-  test('sans relevé de qualité, la puce ne promet aucun détail : pas de bouton', () => {
+  test('une capsule de verre qui montre le nom donné et la durée', () => {
+    const html = chip({ level: 'good' }, { ...video, network: false });
+    expect(html).toContain('glass-call');
+    expect(html).toContain('Awa');
+    expect(html).toContain('1:23');
+  });
+
+  test('en groupe : le nom, le nombre de participants (dit en toutes lettres au lecteur d’écran) et la durée', () => {
+    const html = chip({ level: 'good' }, { title: 'Famille', participantCount: 4, duration: true, network: false });
+    expect(html).toContain('data-call-chip-count');
+    expect(html).toContain('aria-label="Famille · 4 participants · 1:23 — Qualité de l’appel : bonne"');
+  });
+
+  test('la capsule montre ses « · » entre le nom, le nombre et la durée — lus une seule fois, par le nom accessible (L1.2, L4.5)', () => {
+    const duo = chip({ level: 'good' }, { ...video, network: false });
+    expect(duo).toMatch(/Awa<\/span><span[^>]*aria-hidden="true"[^>]*data-call-chip-sep=""[^>]*>·<\/span><span class="shrink-0">1:23<\/span>/);
+    expect((duo.match(/data-call-chip-sep/g) ?? []).length).toBe(1);
+    const group = chip({ level: 'good' }, { title: 'Équipe', participantCount: 4, duration: true, network: false });
+    expect((group.match(/data-call-chip-sep/g) ?? []).length).toBe(2);
+    expect(group).toMatch(/Équipe<\/span><span[^>]*data-call-chip-sep[^>]*>·<\/span><span[^>]*data-call-chip-count[^>]*>.*4<\/span><span[^>]*data-call-chip-sep[^>]*>·<\/span><span class="shrink-0">1:23<\/span>/);
+    expect(group).toContain('aria-label="Équipe · 4 participants · 1:23 — Qualité de l’appel : bonne"');
+    expect((chip(null, { title: 'Awa', participantCount: null, duration: true, network: false }).match(/data-call-chip-sep/g) ?? []).length).toBe(1);
+  });
+
+  test('aucun « · » orphelin : un nom seul, une durée seule, l’audio et l’écran reçu n’en dessinent pas', () => {
+    const none = [
+      chip({ level: 'good' }, { title: 'Awa', participantCount: null, duration: false, network: false }),
+      chip({ level: 'good' }, { title: null, participantCount: null, duration: true, network: false }),
+      chip({ level: 'poor' }, { title: null, participantCount: null, duration: false, network: true }),
+      chip({ level: 'good' }, { title: 'Awa', participantCount: null, duration: false, network: false, receivedScreen: true }),
+    ];
+    for (const html of none) expect(html).not.toContain('data-call-chip-sep');
+  });
+
+  test('en audio : la capsule n’existe que pour le réseau dégradé — ni nom, ni durée, les barres seules', () => {
+    const html = chip({ level: 'poor' }, { title: null, participantCount: null, duration: false, network: true });
+    expect(barsLit(html)).toBe(1);
+    expect(html).not.toContain('1:23');
+    expect(html).toContain('aria-label="Qualité de l’appel : faible"');
+  });
+
+  test('un écran reçu (P15.4) : la capsule dit « Écran de X » avec l’icône d’écran, sans durée, et son nom accessible le dit', async () => {
+    await loadInterfaceCatalog('fr');
+    const screen: CallHeaderCapsule = { title: 'Awa', participantCount: null, duration: false, network: false, receivedScreen: true };
+    const html = chip({ level: 'good' }, screen);
+    expect(html).toContain('Écran de Awa');
+    expect(html).toContain('data-call-chip-screen');
+    expect(html).not.toContain('1:23');
+    expect(html).toMatch(/aria-label="Écran de Awa — Qualité de l’appel : bonne"/);
+    expect(chip(null, screen)).toContain('Écran de Awa');
+  });
+
+  test('une capsule sans écran reçu ne porte pas l’icône d’écran', () => {
+    expect(chip({ level: 'good' }, { ...video, network: false })).not.toContain('data-call-chip-screen');
+  });
+
+  test('sans relevé de qualité, la capsule ne promet aucun détail : pas de bouton', () => {
     const html = chip(null);
-    expect(html).toContain('Nadia Benali · 1:23');
+    expect(html).toContain('Awa');
     expect(html).not.toContain('<button');
     expect(html).not.toContain('data-call-quality=');
   });
@@ -130,13 +191,15 @@ describe('l’indicateur de qualité (#8047), dans la puce « Nom · durée » (
     expect(economy).toContain('data-call-quality-profile="economy"');
   });
 
-  test('l’écran d’appel connecté porte l’indicateur ; sans relevé, il n’invente rien', () => {
+  test('l’écran d’appel connecté porte l’indicateur ; sans relevé, il n’invente rien', async () => {
+    await loadColdCallViews();
     expect(renderToStaticMarkup(<CallScreen call={call()} canShare={false} />)).toContain('data-call-quality="good"');
     expect(renderToStaticMarkup(<CallScreen call={call({ quality: null })} canShare={false} />)).not.toContain('data-call-quality=');
     expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' } })} canShare={false} />)).not.toContain('data-call-quality=');
   });
 
-  test('ma vidéo gelée puis suspendue se dit par une pastille', () => {
+  test('ma vidéo gelée puis suspendue se dit par une pastille', async () => {
+    await loadColdCallViews();
     expect(renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'frozen' }) })} canShare={false} />)).toContain('data-call-pill="video-frozen"');
     const paused = renderToStaticMarkup(<CallScreen call={call({ quality: quality({ level: 'poor', survival: 'suspended' }) })} canShare={false} />);
     expect(paused).toContain('data-call-pill="video-suspended"');

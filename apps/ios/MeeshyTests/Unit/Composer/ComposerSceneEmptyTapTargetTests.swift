@@ -30,27 +30,29 @@ final class ComposerSceneEmptyTapTargetTests: XCTestCase {
 
     func test_outcome_whileWritingText_endsTheWritingInsteadOfArming() {
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
-                                                     quickCaptureOffered: true, backgroundMediaId: nil,
+                                                     backgroundMediaId: nil,
                                                      writesText: true),
                        .endWriting)
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: true, effectIsOpen: true,
-                                                     quickCaptureOffered: false, backgroundMediaId: "fond",
+                                                     backgroundMediaId: "fond",
                                                      bandIsOpen: true, writesText: true),
                        .endWriting,
                        "un seul geste, un seul effet : le toucher rend d'abord la scène")
     }
 
-    func test_outcome_withoutWriting_keepsArmingTheViewfinder() {
+    /// **Le toucher d'une scène vide n'arme plus rien** (#17269, porteur 2026-11-09).
+    func test_outcome_withoutWriting_neverArmsTheViewfinder() {
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
-                                                     quickCaptureOffered: true, backgroundMediaId: nil,
+                                                     backgroundMediaId: nil,
                                                      writesText: false),
-                       .armViewfinder)
+                       .nothing)
     }
 
     func test_host_feedsTheWritingStateToEveryCameraGesture() throws {
         let viseur = try Self.compactSource("MeeshyComposerHost+Viewfinder.swift")
-        XCTAssertEqual(viseur.components(separatedBy: "writesText:writesText").count - 1, 2,
-                       "le toucher et son indication lisent l'écriture en cours")
+        XCTAssertEqual(viseur.components(separatedBy: "writesText:writesText").count - 1, 1,
+                       "l'indication de l'appui long lit l'écriture en cours ; le toucher n'arme plus rien (#17269)")
+        XCTAssertFalse(viseur.contains("funchandleSceneQuickTap("), "le toucher d'armement a quitté le composer")
         XCTAssertTrue(viseur.contains("guard!writesText,sceneServesCapture,ComposerSceneCaptureGesture.offersCapture("),
                       "l'appui long n'ouvre pas la caméra pendant l'écriture")
         let etat = try Self.compactSource("MeeshyComposerHost+SceneState.swift")

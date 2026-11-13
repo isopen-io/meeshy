@@ -4,7 +4,8 @@ import Foundation
 //
 // MIROIR de `playerBannerModel` (`apps/web/src/lib/view/player-banner.ts`) : ce que le bandeau du haut montre
 // quand ni un appel ni un audio ne l'occupe. Ordre FIXE, de gauche à droite : anneau de niveau, jauge vers le
-// niveau suivant, Meeshes, blason du rang, gemme de ligue et place, Flamme.
+// niveau suivant, Meeshes, blason du rang, gemme de ligue et place, Flamme, puis trophées, Rêve du jour, contenant de
+// l'Héritage (#17437) et saison.
 //
 // SEULEMENT CE QUI EXISTE : un élément sans donnée vaut `nil` et ne se dessine pas — jamais un zéro, un tiret ou
 // une case vide. Un joueur qui n'a rien fait n'a PAS de bandeau ; le détail du niveau paraît au niveau 2, le total
@@ -14,7 +15,7 @@ import Foundation
 // Le modèle ne calcule RIEN : il LIT le bloc `game` servi (le cache d'abord) et ne fait que choisir ce qui se
 // montre. Aucune règle du jeu n'est réécrite ici.
 //
-// « N'AFFICHER QUE CE QUI A DU SENS » (#9536, directive porteur 2026-10-06) : `make(game:)` est LA fonction qui
+// « N'AFFICHER QUE CE QUI A DU SENS » (#9536) : `make(game:)` est LA fonction qui
 // décide. Toutes les données à zéro ⇒ `nil` (aucun bandeau) ; sinon chaque morceau se tait tant qu'il n'a rien à dire :
 // pas de points ⇒ pas de total (`showsScore`) ; niveau 1 ⇒ ni anneau ni jauge (`showsLevel`) ; pas de Meeshes, de
 // Gloire, de ligue ni de Flamme ⇒ rien d'eux (leurs champs valent `nil`).
@@ -87,9 +88,9 @@ public struct GamePlayerBanner: Equatable, Sendable {
         }
     }
 
-    /// Une pièce du bandeau — chacune est SON bouton vers SA fiche (#10846, décision porteur 2026-10-16).
+    /// Une pièce du bandeau — chacune est SON bouton vers SA fiche (#10846).
     public enum Piece: String, CaseIterable, Hashable, Sendable {
-        case level, sparks, meesh, rank, league, flame, trophies, mission, season
+        case level, sparks, meesh, rank, league, flame, trophies, mission, season, treasury
 
         /// La fiche que la pièce ouvre.
         public var concept: ProgressionConcept {
@@ -103,6 +104,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
             case .trophies: .showcase
             case .mission: .missions
             case .season: .season
+            case .treasury: .meesh
             }
         }
     }
@@ -128,10 +130,14 @@ public struct GamePlayerBanner: Equatable, Sendable {
     public let dailyMission: DailyMission?
     /// La saison en cours — `nil` hors saison.
     public let season: Season?
+    /// Le contenant de l'Héritage (Bourse → Réserve, #17437) — `nil` sans Meesh gardée.
+    public let treasury: TreasuryTierKey?
 
     public init(level: Int, tier: LevelTierKey, progress: Double, prestige: Int = 0, score: Int, nextLevel: Int?, pointsToNext: Int?,
                 levelCap: Int? = nil, meeshes: Int? = nil, rank: Rank? = nil, league: League? = nil, flame: Flame? = nil,
-                trophies: Int? = nil, dailyMission: DailyMission? = nil, season: Season? = nil) {
+                trophies: Int? = nil, dailyMission: DailyMission? = nil, season: Season? = nil,
+                treasury: TreasuryTierKey? = nil) {
+        self.treasury = treasury
         self.trophies = trophies
         self.dailyMission = dailyMission
         self.season = season
@@ -166,6 +172,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
         self.pointsToNext = atTop ? nil : level.pointsToNext
         self.levelCap = level.isMax ? level.cap : nil
         self.meeshes = game.treasury.held > 0 ? game.treasury.held : nil
+        self.treasury = game.treasury.held > 0 ? game.treasury.tier : nil
         let glory = game.glory
         self.rank = glory.glory > 0
             ? Rank(rank: glory.rank, division: glory.shownDivision, mythic: glory.mythicSeat, glory: glory.glory,
@@ -200,6 +207,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
         if flame != nil { shown.append(.flame) }
         if trophies != nil { shown.append(.trophies) }
         if dailyMission != nil { shown.append(.mission) }
+        if treasury != nil { shown.append(.treasury) }
         if season != nil { shown.append(.season) }
         return shown
     }

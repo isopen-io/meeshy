@@ -143,7 +143,7 @@ public struct TextEditToolOptions: View {
     @Environment(\.colorScheme) private var colorScheme
 
     /// Gabarit commun des pastilles de choix. Compressé de 48 à 38 pt
-    /// (directive user 2026-07-26) pour qu'un maximum de valeurs tienne dans
+    /// pour qu'un maximum de valeurs tienne dans
     /// la largeur : les panneaux les plus fournis — 14 couleurs, 12 fonds —
     /// restent scrollables, décision assumée plutôt qu'un passage à la ligne.
     static let chipHeight: CGFloat = 38
@@ -200,7 +200,7 @@ public struct TextEditToolOptions: View {
 
     /// La taille coiffe la liste des polices : c'est une valeur continue, elle
     /// se règle là où on choisit la famille plutôt que derrière une bulle.
-    /// La graisse, elle, vit avec l'alignement (directive user 2026-07-28) —
+    /// La graisse, elle, vit avec l'alignement —
     /// sauf chez l'hôte qui la range avec la police (`omitting`).
 
     private var sizeSlider: some View {
@@ -220,7 +220,7 @@ public struct TextEditToolOptions: View {
                 .font(.system(size: 16))
                 .foregroundStyle(.secondary)
             Text("\(Int(Self.displayedSize(for: textObject)))")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 34)
         }
@@ -340,7 +340,7 @@ public struct TextEditToolOptions: View {
                     .foregroundStyle(ink)
                     .storyTextEffect(effect, fontSize: 17, textColor: ink)
                 Text(TextEditLabels.title(for: effect))
-                    .font(.system(size: 9, weight: .semibold))
+                    .meeshyScaledFont(9, weight: .semibold)
                     .foregroundStyle(ink.opacity(0.85))
                     .lineLimit(1)
             }
@@ -424,13 +424,13 @@ public struct TextEditToolOptions: View {
 
     private var alignRow: some View {
         HStack(spacing: 10) {
-            alignButton("left", "text.alignleft")
-            alignButton("center", "text.aligncenter")
-            alignButton("right", "text.alignright")
+            alignButton("left", "text.alignleft", label: String(localized: "story.text.align.left.a11y", bundle: .module))
+            alignButton("center", "text.aligncenter", label: String(localized: "story.text.align.center.a11y", bundle: .module))
+            alignButton("right", "text.alignright", label: String(localized: "story.text.align.right.a11y", bundle: .module))
         }
     }
 
-    private func alignButton(_ value: String, _ symbol: String) -> some View {
+    private func alignButton(_ value: String, _ symbol: String, label: String) -> some View {
         let isSel = (textObject.textAlign ?? "center") == value
         return Button {
             textObject.textAlign = value
@@ -447,6 +447,7 @@ public struct TextEditToolOptions: View {
                                     : AnyShapeStyle(Color.gray.opacity(0.18)))
                 )
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 
@@ -498,7 +499,7 @@ public struct TextEditToolOptions: View {
             HapticFeedback.light()
         } label: {
             Text(code.uppercased())
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundStyle(isSel ? Color.white : Color.primary)
                 .frame(minWidth: 38)
                 .frame(height: Self.chipHeight)
@@ -546,7 +547,7 @@ public struct TextEditToolOptions: View {
                         .overlay(Circle().stroke(.white.opacity(0.4), lineWidth: 0.5))
                 }
                 Text(StoryTextBackgroundPresets.label(for: style))
-                    .font(.system(size: Self.chipFontSize, weight: .semibold))
+                    .meeshyScaledFont(Self.chipFontSize, weight: .semibold)
             }
             .foregroundStyle(isSel ? Color.white : Color.primary)
             .padding(.horizontal, 9)
@@ -579,7 +580,7 @@ public struct TextEditToolOptions: View {
                         HapticFeedback.light()
                     } label: {
                         Text(TextEditLabels.title(for: shape))
-                            .font(.system(size: Self.chipFontSize, weight: .semibold))
+                            .meeshyScaledFont(Self.chipFontSize, weight: .semibold)
                             .foregroundStyle(isSel ? Color.white : Color.primary)
                             .padding(.horizontal, 10)
                             .frame(height: Self.chipHeight)
@@ -617,7 +618,7 @@ public struct TextEditToolOptions: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
             Text("×\(String(format: "%.1f", textObject.resolvedFramePaddingScale))")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 40)
         }
@@ -648,7 +649,7 @@ public struct TextEditToolOptions: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.secondary)
             Text(String(format: "%.1f", textObject.frameBorderWidth ?? 0))
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 34)
         }
@@ -749,7 +750,7 @@ public struct TextEditToolOptions: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(.secondary)
             Text(Self.outlineWidthLabel(Double(textObject.borderWidth ?? 0)))
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .fixedSize()

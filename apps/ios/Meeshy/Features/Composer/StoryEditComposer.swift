@@ -59,10 +59,7 @@ extension View {
     /// épinglée et les deux racines. Le publish route vers
     /// `StoryViewModel.updateStoryInBackground` (PUT qui met l'existant à
     /// jour et garde ses vues, #16386) au lieu de `publishStoryInBackground`.
-    func storyEditComposerCover(
-        session: Binding<StoryEditSession?>,
-        viewModel: StoryViewModel
-    ) -> some View {
+    func storyEditComposerCover(session: Binding<StoryEditSession?>, viewModel: StoryViewModel) -> some View {
         fullScreenCover(item: session) { current in
             StoryEditComposer(
                 session: current,
@@ -89,7 +86,7 @@ struct StoryEditComposer: View {
     /// de socle.
     @State private var previewAssets: StoryPreviewAssets?
 
-    @EnvironmentObject private var router: Router
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
@@ -183,12 +180,12 @@ struct StoryEditComposer: View {
             ) else { return }
             session.composer.adoptDeclaredReferences(served)
         }
-        .modifier(StoryPreviewReaderCover(
+        .relayingMeeshyRouter(meeshyRouter) { $0.modifier(StoryPreviewReaderCover(
             assets: $previewAssets,
             storyViewModel: viewModel,
             statusViewModel: statusViewModel,
-            router: router,
+            router: $1,
             conversationList: conversationListViewModel
-        ))
+        )) }
     }
 }

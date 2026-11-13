@@ -20,12 +20,14 @@ import MeeshyUI
 /// All inputs are plain values / closures so the row re-evaluates only when
 /// its own inputs change, not on every ConversationListView body pass.
 ///
-/// Menu d'appui long — deux chemins par version d'OS :
-/// - iOS 26+ : `.contextMenu(menuItems:preview:)` NATIF (rendu Liquid Glass
-///   système, exposé automatiquement à VoiceOver). Le contenu vient du
-///   builder `conversationContextMenu(for:)` (+Overlays) via `nativeContextMenu`.
-/// - < iOS 26 : overlay custom (`RowPressBounceModifier` → `onLongPress` →
-///   `ConversationContextMenuView`), avec émergence/morph maison.
+/// Menu d'appui long — deux chemins, tranchés par `ConversationRowMenuRoute` :
+/// - iPhone, toutes versions d'iOS (#17242) : aperçu personnalisé
+///   (`RowPressBounceModifier` → `onLongPress` → `ConversationLongPressPeek`) —
+///   grande carte, menu compact qu'on tire vers le haut, émergence/morph maison.
+/// - iPad sous iOS 26 : `.contextMenu(menuItems:preview:)` NATIF (rendu Liquid
+///   Glass système, exposé automatiquement à VoiceOver), le seul qui coexiste
+///   avec le `.onDrag` système. Le contenu vient du builder
+///   `conversationContextMenu(for:)` (+Overlays) via `nativeContextMenu`.
 struct ConversationRowItem: View {
     let conversation: Conversation
     let community: MeeshyCommunity?
@@ -72,16 +74,15 @@ struct ConversationRowItem: View {
     /// .autoPreviewLoadRowLimit`, computed by the caller via
     /// `ConversationListView.shouldAutoLoadPreview`). Without this, EVERY
     /// row firing `.task` on appear meant scrolling through a cold cache
-    /// issued one REST call per newly-visible conversation (audit
-    /// 2026-07-20). Rows past the limit still get their preview populated
+    /// issued one REST call per newly-visible conversation. Rows past the limit still get their preview populated
     /// on-demand via the long-press path (`onLongPress` →
     /// `loadPreviewMessages`, ConversationListView.swift).
     let enableAutoPreviewLoad: Bool
-    /// Fallback < iOS 26 : appui long → overlay de menu custom (dessine ses
-    /// icônes). Reçoit la frame GLOBALE de la ligne pressée — point de départ
+    /// Chemin personnalisé (iPhone, toutes versions d'iOS — #17242) : appui
+    /// long → aperçu `ConversationLongPressPeek`. Reçoit la frame GLOBALE de la ligne pressée — point de départ
     /// de l'émergence de l'aperçu (+Overlays). `.zero` quand la frame n'est
     /// pas connue (action de rotor accessibilité) : l'overlay retombe sur le
-    /// zoom centré 0.7 → 1.0. Jamais appelé sur iOS 26+ (menu natif).
+    /// zoom centré 0.7 → 1.0. Jamais appelé sur la route native (iPad iOS 26).
     let onLongPress: (CGRect) -> Void
     /// Chemin iOS 26+ : items du `.contextMenu` NATIF (rendu Liquid Glass
     /// système), résolus UNE fois à la construction de la row et stockés en
@@ -91,14 +92,14 @@ struct ConversationRowItem: View {
     ///    builder à CHAQUE body pass (mesures LazyVStack comprises) et
     ///    matérialisait un tuple géant (9 items + sous-menus) copié en pleine
     ///    récursion de layout → EXC_BAD_ACCESS `initializeWithCopy for
-    ///    Button` au LANCEMENT sur iOS 26 (crash 2026-07-11, PAC failure).
+    /// Button` au LANCEMENT sur iOS 26 (PAC failure).
     /// 2. Le paramètre générique regonflait le type de la row — la famille
     ///    de crash type-metadata que l'extraction en structs nominales avait
     ///    éliminée (voir l'en-tête du fichier). AnyView est ACCEPTABLE ici,
     ///    contrairement aux rows : un contenu de menu n'a pas d'identité
     ///    structurelle à préserver (reconstruit à l'ouverture du menu).
     /// `EmptyView` boxé sur le chemin fallback < iOS 26 (jamais rendu).
-    /// 2026-08-21 (audit fluidité H3) : une CLOSURE, plus une valeur. La
+    /// (audit fluidité H3): une CLOSURE, plus une valeur. La
     /// valeur était matérialisée par `ConversationListView.conversationRow`
     /// à CHAQUE passe de body de la LISTE (N menus complets par passe, dont
     /// les passes déclenchées par la présence ou la frappe d'autrui). La
@@ -106,7 +107,7 @@ struct ConversationRowItem: View {
     /// portillon `.equatable()` — et son type reste `AnyView` (aucun
     /// paramètre générique : les deux raisons ci-dessus tiennent toujours).
     let nativeContextMenu: () -> AnyView
-    /// MAGNIFICATION EN PLACE (2026-08-23) — les deux magasins d'élection et
+    /// MAGNIFICATION EN PLACE — les deux magasins d'élection et
     /// de scène, PAR RÉFÉRENCE, plus les données/actions dont la rangée élue a
     /// besoin. Ils ne sont jamais LUS ici : c'est `LentilleMagnifiableRow`,
     /// dans son propre fichier, qui s'y abonne (§H15 — ce body ne doit pas se
@@ -124,11 +125,11 @@ struct ConversationRowItem: View {
             leadingActions: leadingActions,
             trailingActions: trailingActions
         ) {
-            if #available(iOS 26.0, *) {
+            if #available(iOS 26.0, *), ConversationRowMenuRoute.current == .native {
                 // Menu contextuel NATIF (Liquid Glass) : le système possède le
                 // long-press, la preview et l'exposition VoiceOver ; l'avatar
                 // garde son propre `.contextMenu`, donc un appui maintenu dessus
-                // n'ouvre PAS le menu de la ligne (feedback user 2026-07-08). Le
+                // n'ouvre PAS le menu de la ligne. Le
                 // tap plein-ligne laisse la priorité aux gestes de l'avatar.
                 countedRowCore
                     .contentShape(Rectangle())
@@ -138,13 +139,13 @@ struct ConversationRowItem: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
+                    .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main)).accessibilityAction { onTap() }
                     // Drag-to-section natif : press-and-hold = menu, press-and-
                     // move = drag — la coordination est SYSTÈME avec le
                     // `.contextMenu` natif. C'est le long-press CUSTOM du
                     // fallback que `.onDrag` cassait (raison de son retrait,
                     // 135af8f2) — il ne doit donc JAMAIS être attaché sur la
-                    // branche < iOS 26. La source ne publie que l'id ; les
+                    // branche personnalisée. La source ne publie que l'id ; les
                     // headers (`SectionDropDelegate` → `handleDrop`) décident
                     // via `ChipDropResolver`, même sémantique que le drop de
                     // la chip du morph custom.
@@ -162,7 +163,7 @@ struct ConversationRowItem: View {
                         nativeContextMenu()
                     } preview: {
                         // Aperçu = la carte des DERNIERS MESSAGES, drapeau Lentille
-                        // ON comme OFF (décision 2026-08-21), dessinés dans le mode
+                        // ON comme OFF, dessinés dans le mode
                         // que le fil ouvrirait (#11213). STATIQUE dans un menu
                         // natif : sans boutons (`isInteractive: false`), qui y
                         // seraient inertes. Long-press-only (portillon `.equatable()`).
@@ -338,7 +339,7 @@ struct ConversationRowItem: View {
     @ViewBuilder
     private var rowCore: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
-            // La rangée élue se rend elle-même MAGNIFIÉE (2026-08-23) : plus
+            // La rangée élue se rend elle-même MAGNIFIÉE: plus
             // aucune carte au-dessus d'elle, donc swipe, glisser-déposer et
             // appui long restent les siens, et elle hérite de toutes ses
             // features sans qu'aucune soit recopiée ailleurs. Le portillon
@@ -416,8 +417,7 @@ struct ConversationRowItem: View {
 
 // MARK: - Contexte de passe (résolu UNE fois par passe de body de la liste)
 
-/// Ce que chaque rangée lirait sinon par elle-même à chaque passe (audit
-/// fluidité 2026-08-21, H4/H18) : les langues du lecteur (copie de tableau par
+/// Ce que chaque rangée lirait sinon par elle-même à chaque passe (H4/H18): les langues du lecteur (copie de tableau par
 /// rang) et l'éligibilité à l'auto-chargement d'aperçu (`firstIndex` O(n) par
 /// rang ⇒ O(n²) par passe). `autoPreviewIds` applique la MÊME règle que
 /// `ConversationListView.shouldAutoLoadPreview` (préfixe `limit` de l'ordre
@@ -440,7 +440,7 @@ struct ConversationRowPassContext {
 /// .ringSize`). Les gestes tap/long-press de la LIGNE n'écoutent pas cette
 /// bande — l'avatar y possède ses propres gestes (tap story/profil, badge
 /// mood, menu contextuel) et un appui maintenu dessus ne doit PAS ouvrir le
-/// menu de la ligne (feedback user 2026-07-08).
+/// menu de la ligne.
 enum ConversationRowMetrics {
     static let avatarInteractionExclusionWidth: CGFloat =
         MeeshySpacing.md + AvatarContext.conversationList.ringSize
@@ -508,9 +508,11 @@ private struct RowPressBounceModifier: ViewModifier {
     /// rebondit alors visiblement (damping 0.25). Tout autre relâchement —
     /// début de swipe d'actions, départ de scroll, tap — retombe sur un
     /// retour discret quasi sans rebond (damping 0.85) : le rebond appartient
-    /// au long-press/preview, PAS au swipe des lignes (feedback user
-    /// 2026-07-03).
+    /// au long-press/preview, PAS au swipe des lignes.
     @State private var triggered = false
+    /// La loi de l'appui (#17316) : un appui qui a montré l'aperçu n'ouvre
+    /// jamais la conversation, même quand son tap part au relâchement.
+    @State private var press = ConversationRowPress()
     @State private var frameBox = RowFrameBox()
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
@@ -560,21 +562,23 @@ private struct RowPressBounceModifier: ViewModifier {
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture {
+                            guard press.handle(.tapped) == .openConversation else { return }
                             HapticFeedback.light()
                             onTap()
                         }
+                        .accessibilityHidden(true)
                         // Détecteur d'état d'appui PUR : minimumDuration
                         // inatteignable, seul `onPressingChanged` sert (true au
                         // touch-down, false au relâchement/échec). Sa variante
                         // `perform:` composée avec le `.onTapGesture` de la
-                        // ligne ne fire qu'au RELÂCHEMENT (vérifié frame par
-                        // frame 2026-07-03) — d'où le déclencheur séparé.
+                        // ligne ne fire qu'au RELÂCHEMENT — d'où le déclencheur séparé.
                         .onLongPressGesture(
                             minimumDuration: 3600,
                             maximumDistance: 10,
                             perform: {},
                             onPressingChanged: { pressing in
                                 if pressing { triggered = false }
+                                _ = press.handle(pressing ? .began : .released)
                                 isPressing = pressing
                             }
                         )
@@ -584,6 +588,7 @@ private struct RowPressBounceModifier: ViewModifier {
                         .simultaneousGesture(
                             LongPressGesture(minimumDuration: 0.4)
                                 .onEnded { _ in
+                                    guard press.handle(.longPressRecognized) == .showPeek else { return }
                                     triggered = true
                                     HapticFeedback.medium()
                                     onTrigger(frameBox.rect)

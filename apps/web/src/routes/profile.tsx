@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
@@ -27,6 +27,7 @@ import {
 } from '@/lib/api/profile-actions';
 import { needsServedPreview, UPLOAD_FORMAT_REFUSED } from '@/lib/media/heif';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
+import { useEntityImageEdit } from '@/lib/profile/use-entity-image-edit';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type SessionUser } from '@/lib/api/session';
 import { statusMoodsQueryOptions } from '@/lib/api/stories';
@@ -245,10 +246,7 @@ export default function ProfileScreen() {
     void editPrism({ [rank]: code });
   };
 
-  const uploadImage = async (kind: ProfileImageKind, event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = '';
-    if (file === undefined) return;
+  const uploadImage = async (kind: ProfileImageKind, file: File) => {
     /* W9 (#11315) — un HEIC que ce navigateur ne décode pas n'a pas d'aperçu
        local : l'écran garde l'image servie sous son voile, puis montre le JPEG
        que la passerelle sert une fois la photo posée. */
@@ -261,6 +259,10 @@ export default function ProfileScreen() {
     setPending((current) => withoutKind(current, kind));
     setNotice({ text: imageNotice(language, kind, outcome), ...(outcome.status === 'saved' ? { bytes: outcome.bytesSent } : {}) });
   };
+
+  /* #17256 — l'image choisie passe par la retouche de la capture, au format
+     de sa cible ; seule l'image retouchée part, Annuler ne pose rien. */
+  const retouch = useEntityImageEdit<ProfileImageKind>({ deliver: (kind, file) => void uploadImage(kind, file) });
 
   const equipDecor = async (side: DecorSide, choice: ServedProfileDecorItem | null) => {
     const equipped = profile?.profileDecor?.[side] ?? null;
@@ -397,9 +399,10 @@ export default function ProfileScreen() {
           tabIndex={-1}
           aria-hidden="true"
           hidden
-          onChange={(event) => void uploadImage(kind, event)}
+          onChange={(event) => retouch.pick(kind, event)}
         />
       ))}
+      {retouch.layer}
       {decorSide === null || !decorReady ? null : (
         <ProfileDecorSheet
           side={decorSide}

@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 /// **La date et l'accusé, au bas de la bulle — la seconde colonne de la rangée**
-/// (#5135, directive porteur 2026-09-04).
+/// (#5135).
 ///
 /// > « il faudrait mettre la date et coche au niveau de la bulle et non sur une
 /// > ligne […] un composant de deux colonnes dont la seconde colonne alignée en
@@ -13,7 +13,7 @@ import MeeshyUI
 /// ## Ce que ce type déplace, et ce qu'il rend possible
 ///
 /// La méta vivait sur la LIGNE BASSE (`FocalRow.flagAndReactionsRow`), à droite
-/// des drapeaux et des réactions — disposition posée le 2026-08-24, qui avait
+/// des drapeaux et des réactions — disposition posée, qui avait
 /// déjà supprimé une ligne. Elle en laissait une : cette ligne basse se montait
 /// **toujours**, y compris sans drapeau ni réaction, *parce que* c'est elle qui
 /// portait la méta. Son propre doc-comment le disait — « elle se monte
@@ -51,11 +51,10 @@ struct FocalMetaColumn: View, Equatable {
     /// chercher.
     ///
     /// Les deux gardes historiques sont portées ICI, pas laissées derrière :
-    /// - **jamais de drapeau en clair sur un message voilé** (revue
-    ///   adversariale 2026-08-18) — révéler la langue d'origine d'un message
+    /// **jamais de drapeau en clair sur un message voilé** — révéler la langue d'origine d'un message
     ///   protégé fuiterait une information ;
     /// - **un seul jeu de drapeaux par groupe, sur son DERNIER message**
-    ///   (#3919, directive porteur 2026-08-26).
+    /// (#3919).
     ///
     /// Les réactions, elles, restent **hors voile** (parité bulle historique) :
     /// un message protégé sur lequel on a réagi garde sa ligne.
@@ -86,7 +85,7 @@ struct FocalMetaColumn: View, Equatable {
     var isEditSaving: Bool = false
     var hasEditHistory: Bool = false
     /// Toucher les COCHES ouvre les détails de lecture. Relayé tel quel à
-    /// `FocalMetaRow`, qui porte l'affordance depuis la directive 2026-08-23.
+    /// `FocalMetaRow`, qui porte l'affordance depuis la.
     var onShowReadStatus: (() -> Void)? = nil
     /// Relayés à `FocalMetaRow` : l'envoi d'une vue unique reste visible au repos (#16130).
     var pinsPendingDelivery: Bool = false

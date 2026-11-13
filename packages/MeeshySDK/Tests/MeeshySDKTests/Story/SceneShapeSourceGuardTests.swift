@@ -58,11 +58,10 @@ final class SceneShapeSourceGuardTests: XCTestCase {
 
         let deliberes: Set<String> = [
             "MeeshySDK/Story/SceneShape.swift",   // la loi
-            // Les deux tables de RECADRAGE proposées à l'auteur : `9:16` y est
-            // un choix parmi d'autres (1:1, 4:5, 16:9…), pas le gabarit d'une
-            // scène. Les faire projeter la loi ferait dire à la loi qu'elle
+            // La table de RECADRAGE proposée à l'auteur : `9:16` y est un
+            // choix parmi d'autres (1:1, 4:5, 16:9…), pas le gabarit d'une
+            // scène. La faire projeter la loi ferait dire à la loi qu'elle
             // gouverne un menu de recadrage — elle ne gouverne que la scène.
-            "MeeshyUI/Media/MediaTypes.swift",
             "MeeshySDK/Models/MediaCrop.swift",
             // La borne PAYSAGE du hero d'une carte de message (#10915) : 0,5625 y
             // est la hauteur / largeur d'un média 16:9 au-delà duquel le hero est

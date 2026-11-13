@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { TALKIE_NOT_ALLOWED, judgeTalkie, type TalkieGateDb } from '../../../../services/talkie/talkieGate';
-import { TALKIE_ERROR_CODES } from '@meeshy/shared/types/talkie';
+import { TALKIE_ERROR_CODES, TALKIE_FALLBACK_VOICE_MESSAGE } from '@meeshy/shared/types/talkie';
 import { relationStore } from '../../../helpers/user-relation-store';
 import { matchesMongoWhere } from '../../../helpers/mongo-where';
 import { AUTRE, MOI, NOW, lien } from '../../../helpers/relation-app';
@@ -26,6 +26,10 @@ type Options = {
   readonly presenceServed?: boolean;
   readonly recipient?: Record<string, unknown>;
   readonly sender?: Record<string, unknown>;
+  /** La voix est scellée sur l'appareil (#13949). */
+  readonly sealed?: boolean;
+  /** Le canal de réveil du destinataire (#17142) : absent ⇒ aucune dépendance de réveil. */
+  readonly wake?: 'pushtotalk' | 'push' | null | 'throws' | { readonly miss: 'no-token' | 'apns-not-configured' | 'fcm-not-configured' | 'push-disabled' };
 };
 
 function db(options: Options = {}) {
@@ -70,8 +74,17 @@ const juger = async (options: Options = {}) => {
   const prisma = db(options);
   const presenceServed = jest.fn(async (_viewer: { userId: string; role: string }, _targetId: string) => options.presenceServed ?? true);
   const recipientConnected = jest.fn(async () => options.connected ?? true);
-  const verdict = await judgeTalkie({ prisma: prisma as unknown as TalkieGateDb, now: () => NOW, recipientConnected, presenceServed }, MOI, AUTRE);
-  return { verdict, prisma, presenceServed, recipientConnected };
+  const wakeChannel = jest.fn(async (_userId: string) => {
+    if (options.wake === 'throws') throw new Error('mongo');
+    return options.wake ?? null;
+  });
+  const verdict = await judgeTalkie(
+    { prisma: prisma as unknown as TalkieGateDb, now: () => NOW, recipientConnected, presenceServed, ...(options.wake === undefined ? {} : { wakeChannel }) },
+    MOI,
+    AUTRE,
+    { sealed: options.sealed ?? false },
+  );
+  return { verdict, prisma, presenceServed, recipientConnected, wakeChannel };
 };
 
 describe('#16623 — l\'équipe a le talkie sans lien', () => {
@@ -226,5 +239,114 @@ describe('#17131 — chaque refus nomme sa cause exacte, pour le journal', () =>
     ]);
     const visibles = verdicts.map(({ verdict }) => (verdict.ok ? null : { code: verdict.code, message: verdict.message }));
     expect(new Set(visibles.map((v) => JSON.stringify(v))).size).toBe(1);
+  });
+});
+
+describe('#17142 — un Proche sans socket mais joignable par push : la voix le réveille', () => {
+  const DND = { dndEnabled: true, dndStartTime: '00:00', dndEndTime: '23:59', dndDays: [] };
+
+  it.each(['pushtotalk', 'push'] as const)('destinataire déconnecté avec un canal %s : ouverture en mode waking', async (wake) => {
+    const { verdict, wakeChannel } = await juger({ level: 'CLOSE', connected: false, wake });
+
+    expect(verdict).toEqual({ ok: true, delivery: 'waking', channel: wake });
+    expect(wakeChannel).toHaveBeenCalledWith(AUTRE);
+  });
+
+  it('sans aucun canal de push : le repli inchangé', async () => {
+    expect((await juger({ level: 'CLOSE', connected: false, wake: null })).verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE', cause: 'not-connected' });
+  });
+
+  it('une lecture des jetons qui échoue : le repli, jamais une ouverture sur un doute ni une panne', async () => {
+    expect((await juger({ level: 'CLOSE', connected: false, wake: 'throws' })).verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE' });
+  });
+
+  it.each([
+    ['en appel', { inCall: true }],
+    ['en Ne pas déranger', { notification: DND }],
+    ['les pushs coupés', { notification: { pushEnabled: false } }],
+  ])('déconnecté ET %s : le repli, aucun réveil demandé', async (_cas, options) => {
+    const { verdict, wakeChannel } = await juger({ level: 'CLOSE', connected: false, wake: 'push', ...options });
+
+    expect(verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE' });
+    expect(wakeChannel).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['présence masquée', { presenceServed: false }],
+    ['paire chiffrée', { directMode: 'e2ee' }],
+    ['lien trop faible', { level: 'FRIEND' }],
+    ['talkie coupé', { talkieBlocked: true }],
+  ])('%s : les gardes passent AVANT le réveil', async (_cas, options) => {
+    const { verdict, wakeChannel } = await juger({ level: 'CLOSE', connected: false, wake: 'pushtotalk', ...options } as Options);
+
+    expect(verdict.ok).toBe(false);
+    expect(wakeChannel).not.toHaveBeenCalled();
+  });
+
+  it('un destinataire connecté reste en direct, sans lire ses jetons', async () => {
+    const { verdict, wakeChannel } = await juger({ level: 'CLOSE', wake: 'push' });
+
+    expect(verdict).toEqual({ ok: true });
+    expect(wakeChannel).not.toHaveBeenCalled();
+  });
+
+  it.each(['apns-not-configured', 'fcm-not-configured', 'push-disabled', 'no-token'] as const)(
+    '#17249 — aucun canal ne peut partir (%s) : le repli, et sa cause pour le journal',
+    async (miss) => {
+      const { verdict } = await juger({ level: 'CLOSE', connected: false, wake: { miss } });
+
+      expect(verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE', cause: 'not-connected', wakeMiss: miss });
+    },
+  );
+
+  it('#17249 — sans jeton (null) ou sur une lecture qui échoue, le repli nomme pourquoi personne n’est réveillé', async () => {
+    expect((await juger({ level: 'CLOSE', connected: false, wake: null })).verdict).toMatchObject({ wakeMiss: 'no-token' });
+    expect((await juger({ level: 'CLOSE', connected: false, wake: 'throws' })).verdict).toMatchObject({ wakeMiss: 'lookup-failed' });
+  });
+
+  it('#17249 — pushs coupés par le destinataire : le repli le dit, sans lire ses jetons', async () => {
+    const { verdict, wakeChannel } = await juger({ level: 'CLOSE', connected: false, wake: 'push', notification: { pushEnabled: false } });
+
+    expect(verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE', wakeMiss: 'recipient-push-off' });
+    expect(wakeChannel).not.toHaveBeenCalled();
+  });
+
+  it('#17249 — la cause du réveil manqué ne change rien de ce que voit le client', async () => {
+    const [manque, sansRaison] = await Promise.all([
+      juger({ level: 'CLOSE', connected: false, wake: { miss: 'apns-not-configured' } }),
+      juger({ level: 'CLOSE', connected: false }),
+    ]);
+    const visible = ({ verdict }: { verdict: { ok: boolean; code?: string; message?: string } }) => ({ code: verdict.code, message: verdict.message });
+
+    expect(visible(manque)).toEqual(visible(sansRaison));
+  });
+
+  it('le repli porte le message informatif du porteur', async () => {
+    expect((await juger({ level: 'CLOSE', connected: false })).verdict).toMatchObject({ message: TALKIE_FALLBACK_VOICE_MESSAGE });
+  });
+});
+
+describe('#13949 — le talkie scellé passe dans une paire chiffrée, le clair jamais', () => {
+  it.each(['e2ee', 'E2EE', 'mls-futur'])('paire « %s » et voix scellée : la voix passe', async (directMode) => {
+    expect((await juger({ level: 'BLOOD', directMode, sealed: true })).verdict).toEqual({ ok: true });
+  });
+
+  it('paire chiffrée et voix en clair : refus TALKIE_E2EE_CONVERSATION (fail-closed)', async () => {
+    expect((await juger({ level: 'BLOOD', directMode: 'e2ee', sealed: false })).verdict)
+      .toMatchObject({ ok: false, code: 'TALKIE_E2EE_CONVERSATION' });
+  });
+
+  it('une voix scellée ne contourne ni la loi ni la présence', async () => {
+    expect((await juger({ level: 'COMMUNITY', directMode: 'e2ee', sealed: true })).verdict).toMatchObject({ ok: false, code: 'TALKIE_NOT_ALLOWED' });
+    expect((await juger({ level: 'BLOOD', directMode: 'e2ee', sealed: true, connected: false })).verdict).toMatchObject({ ok: false, code: 'TALKIE_FALLBACK_VOICE' });
+  });
+
+  it('une paire SANS conversation chiffrée refuse une voix scellée : sa clé n’a aucun canal pour voyager', async () => {
+    expect((await juger({ level: 'BLOOD', directMode: 'server', sealed: true })).verdict)
+      .toMatchObject({ ok: false, code: 'TALKIE_INVALID', cause: 'sealed-without-e2ee' });
+  });
+
+  it('le refus d’une voix scellée en paire claire ne passe qu’APRÈS la loi : un inconnu n’apprend rien du chiffrement', async () => {
+    expect((await juger({ level: 'COMMUNITY', directMode: 'server', sealed: true })).verdict).toMatchObject({ ok: false, code: 'TALKIE_NOT_ALLOWED' });
   });
 });

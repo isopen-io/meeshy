@@ -19,7 +19,7 @@ extension StoryViewModel {
         /// un kill le laisse en queue → repris au boot.
         var queueId: String?
         var queueTempStoryId: String?
-        /// Brouillon d'origine (directive 2026-08-02) : gelé au hand-off, il
+        /// Brouillon d'origine: gelé au hand-off, il
         /// n'est supprimé qu'au SUCCÈS serveur confirmé ; l'annulation le
         /// dégèle, l'échec permanent le ramène éditable avec son erreur.
         var draftId: String?
@@ -62,7 +62,7 @@ extension StoryViewModel {
         /// texte. Vide = aucune référence hors texte ; le serveur relit le
         /// texte lui-même.
         var declaredMentions: [PostMentionInput] = []
-        /// **Les mentions PAR SLIDE** (#4068, porteur 2026-09-03).
+        /// **Les mentions PAR SLIDE** (#4068).
         ///
         /// > Une mention est attachée à la publication. En Story, une
         /// > publication est une slide ; en Post et en Réel, il n'y en a qu'une.

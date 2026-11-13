@@ -35,7 +35,7 @@ public struct StatsCard: View {
 
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.md, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
 
             // Label and value

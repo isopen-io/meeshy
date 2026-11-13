@@ -1,9 +1,5 @@
 package me.meeshy.app.community
 
-import me.meeshy.sdk.media.readMediaUploadItem
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -61,6 +57,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.MutableSharedFlow
 import me.meeshy.feature.community.R
 import me.meeshy.sdk.model.ImageUploadTarget
+import me.meeshy.ui.component.retouch.EntityImageRetouchHost
+import me.meeshy.ui.component.retouch.rememberEntityImagePicker
+import me.meeshy.ui.component.retouch.rememberEntityImageRetouch
 import me.meeshy.ui.component.FeedbackKind
 import me.meeshy.ui.component.FeedbackToastHost
 import me.meeshy.ui.component.FeedbackToastRequest
@@ -73,10 +72,6 @@ import me.meeshy.ui.theme.MeeshyMotion
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import androidx.compose.runtime.rememberCoroutineScope
 
 private val PresetColors = listOf(
     "FF2E63", "A855F7", "08D9D6", "FF6B6B", "4ECDC4", "45B7D1",
@@ -99,17 +94,8 @@ fun CommunitySettingsScreen(
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 2) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }
     var confirmLeave by rememberSaveable { mutableStateOf(false) }
-    var pickTarget by rememberSaveable { mutableStateOf(ImageUploadTarget.AVATAR) }
-    val editor = rememberCommunityImageEditor { target, item -> viewModel.upload(target, item) }
-    val pickScope = rememberCoroutineScope()
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        pickScope.launch { withContext(Dispatchers.IO) { context.readMediaUploadItem(uri) }?.let { editor.offer(pickTarget, it) } }
-    }
-    fun pick(target: ImageUploadTarget) {
-        pickTarget = target
-        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-    }
+    val editor = rememberEntityImageRetouch { target, item -> viewModel.upload(target, item) }
+    val pick = rememberEntityImagePicker(editor::offer)
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -275,7 +261,7 @@ fun CommunitySettingsScreen(
             dismissButton = { TextButton(onClick = { confirmLeave = false }) { Text(stringResource(R.string.community_common_cancel)) } },
         )
     }
-    CommunityImageEditorHost(editor)
+    EntityImageRetouchHost(editor)
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },

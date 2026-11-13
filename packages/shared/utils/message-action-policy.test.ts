@@ -276,3 +276,44 @@ describe('editContentRefusal — ce que le CONTENU refuse à toute édition (#12
     expect(refusal({ id: 'm', content: 'x', isBlurred: true, attachments: [{ mimeType: 'image/jpeg' }] })).toBeNull();
   });
 });
+
+describe('messageActionsFor — un avis AFFICHÉ se cite (#17441)', () => {
+  const notice = (kind: string, extra: Record<string, unknown> = {}): Partial<MessageActionSubject> => ({
+    messageType: 'system', content: 'repli', metadata: { kind, ...extra },
+  });
+
+  it.each([
+    ['un appel manqué', notice('call', { callId: 'c1' })],
+    ['un appel en cours', notice('call-live', { callId: 'c1' })],
+    ['une arrivée', notice('member-joined', { participantId: 'p1', displayName: 'Zoé' })],
+    ['des arrivées regroupées', notice('members-arrived', { count: 2 })],
+    ['un départ annoncé', notice('member-left', { actor: { participantId: 'p1', displayName: 'Zoé' } })],
+  ])('%s s’offre à « Répondre », en tête du menu', (_label, subject) => {
+    const { verdicts, groups } = actions({ message: subject });
+    expect(verdicts.canReply).toBe(true);
+    expect(groups.primary[0]).toBe('reply');
+  });
+
+  it.each([
+    ['un avis de capture', notice('content-capture', { capturedMessageId: 'm1' })],
+    ['un retrait par un tiers', notice('member-removed')],
+    ['un renommage', notice('conversation-renamed')],
+    ['un avis système sans nature', { messageType: 'system', content: 'Zoé a rejoint' } as Partial<MessageActionSubject>],
+  ])('%s ne se cite pas', (_label, subject) => {
+    expect(actions({ message: subject }).verdicts.canReply).toBe(false);
+  });
+
+  it('citer un avis ne lui ouvre ni la réaction, ni l’édition, ni le transfert, ni l’épingle, ni le signalement', () => {
+    const { verdicts } = actions({ message: notice('call', { callId: 'c1' }) });
+    expect([verdicts.canReact, verdicts.edit, verdicts.forward, verdicts.pin, verdicts.report, verdicts.copy])
+      .toEqual([false, null, false, null, false, false]);
+  });
+
+  it('un avis citable suit le droit d’écrire : canal d’annonces, invité muet, conversation close', () => {
+    const call = notice('call', { callId: 'c1' });
+    expect(actions({ message: call, conversation: { type: 'broadcast', isAnnouncementChannel: true } }).verdicts.canReply).toBe(false);
+    expect(actions({ message: call, viewer: { hasAccount: false, isAnonymous: true, canSendMessages: false } }).verdicts.canReply).toBe(false);
+    expect(actions({ message: call, conversation: { closedAt: '2026-10-19T00:00:00.000Z' } }).verdicts.canReply).toBe(false);
+    expect(actions({ message: call, viewer: { isActiveMember: false } }).verdicts.canReply).toBe(false);
+  });
+});

@@ -70,7 +70,7 @@ final class MediaCaptionExpandedReadingGuardTests: XCTestCase {
                       "La branche PEINTE garde son dégradé — c'est elle que le réel et le plein écran utilisent.")
         XCTAssertTrue(fond.contains("Color.clear"),
                       "La branche transparente ne peint rien — c'est elle que la story utilise.")
-        XCTAssertEqual(fond.components(separatedBy: "onTapGesture").count - 1, 2,
+        XCTAssertEqual(fond.components(separatedBy: "meeshyTapAction(").count - 1, 2,
                        "Les DEUX branches referment au tap : une seule les rendrait inégales sans qu'on le voie.")
     }
 

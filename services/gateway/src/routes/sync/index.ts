@@ -17,6 +17,7 @@ import { syncReactions, syncReactionCollectionSchema, SYNC_REACTION_SERVED_FIELD
 import { syncParticipants, syncParticipantCollectionSchema, SYNC_PARTICIPANT_SERVED_FIELDS } from './participants';
 import type { SyncCollectionResult } from './schema-shared';
 import { parseStrictTokenList, parseScopedFieldList, type FieldSet } from '../../utils/sparse-fieldset';
+import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITIES_HEADER } from '../../utils/client-capabilities';
 
 /**
  * SyncEngine unifié (spec §7) — endpoint delta `/sync` read-only.
@@ -368,7 +369,10 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     if (requested.includes('conversations')) {
       collectionsResult.conversations = hasGap
         ? emptyOnGap
-        : await syncConversations({ prisma, identity, sinceDate, cap, scope, cursor: syncCursor, fields: champsDe('conversations') });
+        : await syncConversations({
+            prisma, identity, sinceDate, cap, scope, cursor: syncCursor, fields: champsDe('conversations'),
+            servesExternal: announcesCapability(request.headers, CLIENT_CAPABILITIES.externalConversations),
+          });
     }
     if (requested.includes('messages')) {
       collectionsResult.messages = hasGap
@@ -449,6 +453,8 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     });
     reply.header('Cache-Control', 'no-store');
     reply.header('ETag', etag);
+    // #17117 — la collection `conversations` dépend du jeton `external-conversations`.
+    appendVary(reply, CLIENT_CAPABILITIES_HEADER);
     if (ifNoneMatchMatches(request.headers['if-none-match'], etag)) {
       return reply.status(304).send();
     }

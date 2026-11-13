@@ -184,6 +184,8 @@ dependencies {
     implementation(libs.okhttp)
     // lot: lecture-moteur-partage-carte-systeme-et-caches — la couture AudioPlaybackSources (MediaSource) se lie ici, au cache AUDIO du compte.
     implementation(libs.androidx.media3.exoplayer)
+    // K00 : le catalogue du kit (fiche docs/product/kit/K00-Catalogue.md) n'existe que dans l'APK debug.
+    debugImplementation(project(":feature:kit"))
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
 

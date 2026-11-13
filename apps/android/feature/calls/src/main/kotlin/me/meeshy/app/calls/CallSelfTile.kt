@@ -1,9 +1,14 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -16,17 +21,23 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -48,16 +59,15 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
-import me.meeshy.sdk.model.call.CallCameraFoldedTap
-import me.meeshy.sdk.model.call.CallCameraRail
+import me.meeshy.sdk.model.call.CallChromeStow
 import me.meeshy.sdk.model.call.CallSafeInsets
-import me.meeshy.sdk.model.call.CallSelfTileControlsLaw
 import me.meeshy.sdk.model.call.CallSelfTileCorner
 import me.meeshy.sdk.model.call.CallSelfTileLaw
 import me.meeshy.sdk.model.call.CallSelfTileMemory
 import me.meeshy.sdk.model.call.CallSelfTileScale
 import me.meeshy.sdk.model.call.CallTilePoint
 import me.meeshy.sdk.model.call.CallTileSize
+import me.meeshy.sdk.model.call.GroupStageTapRule
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshyTheme
 import kotlin.math.roundToInt
@@ -70,15 +80,17 @@ internal object CallSelfTileMemories {
 private val TileShadow = 8.dp
 
 /**
- * La vignette locale (ratio 1,4) : on la glisse, elle s'accroche au coin le plus proche en
+ * La vignette locale (portrait 1,4 ; couchée en 130 × 96 dans une fenêtre plus large que haute, L1.5) : on la glisse, elle s'accroche au coin le plus proche en
  * ressort avec une haptique ; on la pince sur trois paliers (72 / 100 / 150 dp), retenus par
- * appel ; un toucher permute les deux vidéos. Pour TalkBack elle est ajustable (petite, moyenne,
+ * appel ; un toucher permute les deux vidéos quand les contrôles sont montrés, et les rend d'abord quand ils sont
+ * rangés ([GroupStageTapRule], loi 15, [onReveal]). Rangée, elle se range par une TRANSFORMATION (G1.11) : son cadre reste
+ * celui du palier choisi, une échelle ancrée à son coin d'écran la ramène à sa petite taille (immédiate avec « Réduire
+ * les animations »), et son liseré, ses coins et son badge gardent ceux d'une petite vignette. Pour TalkBack elle est ajustable (petite, moyenne,
  * grande) et dit son état de survie quand [paused].
  *
- * Ses commandes l'ENTOURENT (iOS `CallSelfTileControlsPlacement`) : [effectsControls] ([effectsCount] boutons,
- * « Effets · Écran ») au-dessus, [cameraControls] ([cameraCount] boutons, « Retourner · Caméra ») en dessous ; elles
- * la suivent au glissé et s'effacent avec le chrome. Au repos, la vignette leur laisse la place sous l'en-tête et
- * au-dessus de la pilule.
+ * Elle ne porte AUCUNE commande autour d'elle (#17327) : Caméra, Retourner, Effets et Écran sont le rail « Mon image » du
+ * (…) ([CallActionRails]), si bien qu'au repos elle ne réserve plus la place d'une rangée sous l'en-tête ni au-dessus de la
+ * pilule.
  *
  * [content] est le flux qu'elle montre ; [overlay] se pose par-dessus, au coin (micro coupé du pair
  * après une permutation). [rimHex] est la couleur de qui elle montre (loi 4, [CallTileRim]) : son liseré la porte,
@@ -92,34 +104,38 @@ internal fun CallSelfTile(
     reduceMotion: Boolean,
     onSwap: () -> Unit,
     modifier: Modifier = Modifier,
-    effectsCount: Int = 0,
-    cameraCount: Int = 0,
     controlsVisible: Boolean = true,
+    /** Le toucher d'une vignette dont les contrôles sont rangés : ils reviennent d'abord (G1.9). */
+    onReveal: () -> Unit = {},
     rimHex: String? = null,
-    effectsControls: @Composable () -> Unit = {},
-    cameraControls: @Composable () -> Unit = {},
-    overlay: @Composable BoxScope.() -> Unit = {},
+    /** Posé par-dessus, au coin ; reçoit le facteur de rangement pour garder sa taille de petite vignette. */
+    overlay: @Composable BoxScope.(stowFactor: Float) -> Unit = {},
     content: @Composable BoxScope.() -> Unit,
 ) {
     BoxWithConstraints(modifier) {
         val density = LocalDensity.current
         val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
         val container = CallTileSize(maxWidth.value, maxHeight.value)
-        val insets = rememberCallSafeInsets(rtl)
+        val safe = rememberCallSafeInsets(rtl)
+        val bannerClearance = LocalCallSelfTileBannerClearance.current.value.value
+        val insets = remember(safe, bannerClearance) { safe.copy(bannerDp = bannerClearance) }
         var corner by remember { mutableStateOf(CallSelfTileLaw.InitialCorner) }
         var scale by remember(callKey) { mutableStateOf(memory.scale(callKey)) }
         var pinch by remember { mutableFloatStateOf(1f) }
         var drag by remember { mutableStateOf(Offset.Zero) }
         var snapJob by remember { mutableStateOf<Job?>(null) }
-        var unfolded by remember { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
         val haptics = LocalHapticFeedback.current
 
-        val size = CallSelfTileLaw.tileSize(container, insets, CallSelfTileLaw.resting(scale, controlsVisible), pinch)
-        val rowBounds = CallSelfTileControlsLaw.bounds(container, insets)
-        fun restingCenter(at: CallSelfTileCorner): CallTilePoint =
-            CallSelfTileControlsLaw.restingCenter(CallSelfTileLaw.center(at, container, size, insets), size, rowBounds)
-        val center = restingCenter(corner)
+        val size = CallSelfTileLaw.tileSize(container, insets, scale, pinch)
+        val stowTarget = CallSelfTileLaw.restingFactor(scale, controlsVisible)
+        val stowFactor by animateFloatAsState(
+            targetValue = stowTarget,
+            animationSpec = if (reduceMotion) snap<Float>() else tween<Float>(CallChromeStow.fadeMillis(reduceMotion = false)),
+            label = "callSelfTileStow",
+        )
+        val center = CallSelfTileLaw.center(corner, container, size, insets)
+        val rotation = rememberCallSelfTileRotation(CallSelfTileLaw.isLandscape(container), size, reduceMotion)
 
         fun settle(target: CallSelfTileScale) {
             val previous = scale
@@ -140,7 +156,7 @@ internal fun CallSelfTile(
         fun dropAt(point: CallTilePoint) {
             val next = CallSelfTileLaw.nearestCorner(point, container, size, insets)
             val from = absolutePx(center, container, rtl, density) + drag
-            val to = absolutePx(restingCenter(next), container, rtl, density)
+            val to = absolutePx(CallSelfTileLaw.center(next, container, size, insets), container, rtl, density)
             corner = next
             val start = from - to
             if (reduceMotion) {
@@ -163,7 +179,7 @@ internal fun CallSelfTile(
                 drag += delta
             },
             onPinch = { magnification -> pinch = magnification },
-            onTap = onSwap,
+            onTap = { if (GroupStageTapRule.tapsTheSwap(controlsVisible)) onSwap() else onReveal() },
             onEnd = { dragged, pinched ->
                 if (dragged) {
                     val shift = drag / density.density
@@ -178,7 +194,8 @@ internal fun CallSelfTile(
             },
         )
 
-        val shape = RoundedCornerShape(MeeshyRadius.smPlus)
+        val rim = CallTileRim.selfTileBorder(paused, rimHex, MeeshyTheme.tokens.warning)
+        val pivot = CallSelfTileLaw.anchor(corner).transformOrigin(rtl)
         val abs = absolutePx(center, container, rtl, density)
         val widthPx = size.widthDp * density.density
         val heightPx = size.heightDp * density.density
@@ -194,9 +211,8 @@ internal fun CallSelfTile(
             modifier = Modifier
                 .offset { IntOffset((abs.x - widthPx / 2 + drag.x).roundToInt(), (abs.y - heightPx / 2 + drag.y).roundToInt()) }
                 .size(size.widthDp.dp, size.heightDp.dp)
-                .shadow(TileShadow, shape)
-                .clip(shape)
-                .border(CallTileRim.selfTileBorder(paused, rimHex, MeeshyTheme.tokens.warning), shape)
+                .callSelfTileRotating(rotation, pivot)
+                .callSelfTileStowed(stowFactor, pivot, rim)
                 .callSelfTileGestures(handlers)
                 .semantics(mergeDescendants = true) {
                     contentDescription = if (paused) "$swapLabel, $pausedName. $pausedHint" else swapLabel
@@ -215,30 +231,88 @@ internal fun CallSelfTile(
             contentAlignment = Alignment.Center,
         ) {
             content()
-            overlay()
+            overlay(stowFactor)
         }
+    }
+}
 
-        val hasControls = effectsCount + cameraCount > 0
-        val folded = hasControls && CallCameraRail.foldsRows(size.widthDp)
-        val rows = CallSelfTileControlsLaw.rows(center, size, rowBounds, effectsCount, cameraCount)
-        if (!folded) {
-            rows.effects?.let { CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible, effectsControls) }
-            rows.camera?.let { CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible, cameraControls) }
+/**
+ * G1.11 — ma vignette rangée par une échelle ancrée à [pivot], jamais relayoutée ; ses coins, son ombre et son liseré
+ * (loi 4) gardent ceux d'une petite vignette.
+ */
+private fun Modifier.callSelfTileStowed(stowFactor: Float, pivot: TransformOrigin, rim: BorderStroke): Modifier {
+    val shape = RoundedCornerShape(CallSelfTileLaw.counterScaled(MeeshyRadius.smPlus.value, stowFactor).dp)
+    return graphicsLayer {
+        scaleX = stowFactor
+        scaleY = stowFactor
+        transformOrigin = pivot
+    }
+        .shadow(CallSelfTileLaw.counterScaled(TileShadow.value, stowFactor).dp, shape)
+        .clip(shape)
+        .border(BorderStroke(CallSelfTileLaw.counterScaled(rim.width.value, stowFactor).dp, rim.brush), shape)
+}
+
+/** L1.5 — la transition d'une rotation : d'où part la taille ([start], rapport de l'ancienne) et où elle en est ([progress], 0 → 1). */
+internal class CallSelfTileRotation(val start: CallTilePoint, val progress: Animatable<Float, AnimationVector1D>)
+
+/** Ce que la vignette montrait à la composition d'avant : sa taille posée, et la rotation qui la mettait à l'échelle. */
+private class CallSelfTileShown(var layout: CallTileSize, var rotation: CallSelfTileRotation?) {
+    fun size(): CallTileSize {
+        val running = rotation ?: return layout
+        val fraction = Snapshot.withoutReadObservation { running.progress.value }
+        return CallSelfTileLaw.shownDuringRotation(layout, running.start, fraction)
+    }
+}
+
+/**
+ * L1.5 — quand la fenêtre change de forme, la vignette se couche ou se relève : la taille qu'elle MONTRAIT, en rapport
+ * de la nouvelle ([CallSelfTileLaw.rotationStart]), revient à 1, ancrée à son coin d'écran qui garde sa marge.
+ * Interruptible : une rotation reprise à mi-course repart de la taille montrée ([CallSelfTileLaw.shownDuringRotation]).
+ * « Réduire les animations » : elle se pose sans mouvement, comme le rangement.
+ */
+@Composable
+private fun rememberCallSelfTileRotation(isLandscape: Boolean, size: CallTileSize, reduceMotion: Boolean): CallSelfTileRotation {
+    val shown = remember { CallSelfTileShown(size, rotation = null) }
+    val rotation = remember(isLandscape) {
+        val settled = shown.rotation == null
+        CallSelfTileRotation(CallSelfTileLaw.rotationStart(shown.size(), size), Animatable(if (settled) 1f else 0f))
+    }
+    SideEffect {
+        shown.layout = size
+        shown.rotation = rotation
+    }
+    LaunchedEffect(rotation) {
+        if (reduceMotion) {
+            rotation.progress.snapTo(1f)
         } else {
-            if (unfolded) CallCameraRailScrim(onDismiss = { unfolded = CallCameraRail.foldedMenu(true, CallCameraFoldedTap.Elsewhere) })
-            val foldFrame = CallSelfTileControlsLaw.rows(center, size, rowBounds, effectsCount = 0, cameraCount = 1).camera
-            foldFrame?.let {
-                CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible) {
-                    CallCameraFoldButton(unfolded, onTap = { unfolded = CallCameraRail.foldedMenu(unfolded, CallCameraFoldedTap.Button) })
-                }
-            }
-            if (unfolded) {
-                rows.effects?.let { CallCameraRailRowSlot(it, container, rtl, drag, controlsVisible, effectsControls) }
-                rows.camera?.let {
-                    CallCameraRailRowSlot(it.copy(yDp = it.yDp + CallSelfTileControlsLaw.ROW_SPAN_DP), container, rtl, drag, controlsVisible, cameraControls)
-                }
-            }
+            rotation.progress.animateTo(1f, tween(CallChromeStow.fadeMillis(reduceMotion = false)))
         }
+    }
+    return rotation
+}
+
+/** La rotation est une TRANSFORMATION lue à la phase de dessin : aucune recomposition par image. */
+private fun Modifier.callSelfTileRotating(rotation: CallSelfTileRotation, pivot: TransformOrigin): Modifier = graphicsLayer {
+    val fraction = rotation.progress.value
+    scaleX = CallSelfTileLaw.rotationScale(rotation.start.xDp, fraction)
+    scaleY = CallSelfTileLaw.rotationScale(rotation.start.yDp, fraction)
+    transformOrigin = pivot
+}
+
+/** Le pivot d'une ancre de la vignette : ses fractions vont du début de lecture vers la fin, miroitées en RTL. */
+internal fun CallTilePoint.transformOrigin(rtl: Boolean): TransformOrigin = TransformOrigin(if (rtl) 1f - xDp else xDp, yDp)
+
+/**
+ * Ce qui garde, sur ma vignette rangée, sa taille de petite vignette (le badge du micro coupé, loi 11) : contre-mis à
+ * l'échelle depuis son [corner] de vignette, miroité en RTL (iOS `scaleEffect(anchor: .bottomLeading)`).
+ */
+internal fun Modifier.callKeepsSmallTileSize(stowFactor: Float, corner: CallSelfTileCorner, rtl: Boolean): Modifier {
+    val pivot = CallSelfTileLaw.anchor(corner).transformOrigin(rtl)
+    val keep = CallSelfTileLaw.counterScaled(1f, stowFactor)
+    return graphicsLayer {
+        scaleX = keep
+        scaleY = keep
+        transformOrigin = pivot
     }
 }
 

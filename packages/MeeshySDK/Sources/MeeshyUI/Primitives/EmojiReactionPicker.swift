@@ -73,7 +73,7 @@ public nonisolated struct ScrubTileFramesKey: PreferenceKey {
 /// messages) — elle y sépare la rangée de ce qu'elle survole. Elle a tort sur
 /// une story plein écran, où la scène EST le fond et où la pilule ajoute un
 /// cadre que la directive porteur refuse (#6083, 2026-09-11 : « pas de
-/// contour ») — et, depuis le 2026-10-01 (#9043), sur le voile de l'appui long
+/// contour ») — et, (#9043), sur le voile de l'appui long
 /// d'un message, « sans cadre comme pour les story ».
 ///
 /// `nonisolated` : un habillage est une VALEUR. Le paquet est sous
@@ -231,6 +231,7 @@ public struct EmojiReactionPicker: View {
                 .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
                 .background(tileFrameReader(index: quickEmojis.count))
             }
+            .accessibilityLabel(String(localized: "reaction.picker.more.a11y", bundle: .module))
             // La tuile "+" cloture la vague — son index est place juste
             // apres le dernier emoji pour qu'elle arrive en derniere.
             .modifier(WaveTileModifier(index: quickEmojis.count, hasEntered: hasEntered))
@@ -433,6 +434,7 @@ public struct EmojiFullPickerSheet: View {
     @State private var reactedEmoji: String?
     @State private var sheetHeight: CGFloat = 340
     @State private var dragOffset: CGFloat = 0
+    @State private var dismissal: Task<Void, Never>?
     /// Dernière hauteur du conteneur lue dans le `GeometryReader` du body.
     /// Captée ici parce que `sheetDragGesture` et `dismiss()` tournent en
     /// dehors du scope du `GeometryReader` (computed properties) et ont
@@ -459,7 +461,7 @@ public struct EmojiFullPickerSheet: View {
     public var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .bottom) {
-                Color.black.opacity(0.4).ignoresSafeArea().onTapGesture { dismiss() }
+                Color.black.opacity(0.4).ignoresSafeArea().meeshyTapAction(label: String(localized: "common.close", bundle: .module)) { dismiss() }
                 VStack(spacing: 0) {
                     dragHandle
                     categoryTabs
@@ -489,7 +491,7 @@ public struct EmojiFullPickerSheet: View {
                 .frame(width: 36, height: 4).padding(.top, MeeshySpacing.smPlus)
             Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
+                .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.intense) : Color.primary)
                 .padding(.bottom, MeeshySpacing.xs)
         }
     }
@@ -502,9 +504,9 @@ public struct EmojiFullPickerSheet: View {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
                         VStack(spacing: MeeshySpacing.xxs) {
-                            Text(category.icon).font(.system(size: MeeshyFont.title3Size))
+                            Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: MeeshyFont.microSize, weight: .medium))
+                                .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                     : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
@@ -575,7 +577,7 @@ public struct EmojiFullPickerSheet: View {
 
     private func dismiss() {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragOffset = maxHeight(for: containerHeight) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss?() }
+        dismissal = Task { await DelayedUI.perform(after: .milliseconds(300)) { onDismiss?() } }
     }
 }
 
@@ -603,7 +605,7 @@ public struct CategorizedEmojiPickerSheet: View {
             // Titre seul — pas de bouton Close (dismiss via drag/detent) ni recherche.
             Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
+                .foregroundStyle(style == .dark ? .white.opacity(MeeshyOpacity.intense) : Color.primary)
                 .padding(.top, MeeshySpacing.lg)
                 .padding(.bottom, MeeshySpacing.xxs)
             categoryTabs
@@ -625,9 +627,9 @@ public struct CategorizedEmojiPickerSheet: View {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                     } label: {
                         VStack(spacing: MeeshySpacing.xxs) {
-                            Text(category.icon).font(.system(size: MeeshyFont.title3Size))
+                            Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                             Text(category.name)
-                                .font(.system(size: MeeshyFont.microSize, weight: .medium))
+                                .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                 .foregroundColor(selectedCategory == index
                                     ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                     : (style == .dark ? .white.opacity(MeeshyOpacity.strong) : .gray))
@@ -689,9 +691,9 @@ public struct EmojiKeyboardPanel: View {
                             withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { selectedCategory = index }
                         } label: {
                             VStack(spacing: MeeshySpacing.xxs) {
-                                Text(category.icon).font(.system(size: MeeshyFont.title3Size))
+                                Text(category.icon).font(MeeshyFont.relative(MeeshyFont.title3Size))
                                 Text(category.name)
-                                    .font(.system(size: MeeshyFont.microSize, weight: .medium))
+                                    .meeshyScaledFont(MeeshyFont.microSize, weight: .medium)
                                     .foregroundColor(selectedCategory == index
                                         ? (style == .dark ? .white : MeeshyColors.brandPrimary)
                                         : (style == .dark ? .white.opacity(0.4) : .gray))

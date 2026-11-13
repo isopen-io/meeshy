@@ -1,0 +1,86 @@
+{
+  "kit": "K13",
+  "recipe": {
+    "regularHeight": 48,
+    "compactHeight": 44,
+    "labelSize": 15,
+    "smallLabelSize": 13,
+    "labelPaddingHorizontal": 14,
+    "labelPaddingVertical": 8,
+    "chevronGlyph": 18,
+    "chevronMarginStart": 10,
+    "chevronMarginEnd": 12,
+    "chevronDrawn": 40,
+    "tapTarget": {
+      "ios": 44,
+      "android": 48,
+      "web": 44
+    },
+    "ruleWidth": 1,
+    "ruleOpacity": 0.35,
+    "ruleOpacityHighContrast": 0.6,
+    "ringDiameter": 40,
+    "ringMarginStart": 4,
+    "ringGap": 8,
+    "ringMarginEnd": 16,
+    "deferredPadding": 14,
+    "deferredGap": 6,
+    "deferredGlyph": 16,
+    "deferredLabelSize": 14,
+    "deferredVeilOpacity": 0.12,
+    "disabledOpacity": 0.4,
+    "pressVeilPressedOpacity": 0.22,
+    "pressVeilHoveredOpacity": 0.11,
+    "contentFadeMs": 200,
+    "shadow": {
+      "opacity": 0.45,
+      "blur": 18,
+      "y": 6
+    }
+  },
+  "contrast": {
+    "restMinimum": 3,
+    "increasedMinimum": 7
+  },
+  "labelFit": {
+    "wrapEfficiency": 0.9,
+    "rows": [
+      { "name": "tient entier", "widths": { "title": 120, "titleSmall": 104, "longestWordSmall": 52, "shortTitle": 60, "shortTitleSmall": 52 }, "room": 200, "maxLines": 1, "step": "title" },
+      { "name": "juste a la place", "widths": { "title": 120, "titleSmall": 104, "longestWordSmall": 52, "shortTitle": 60, "shortTitleSmall": 52 }, "room": 120, "maxLines": 1, "step": "title" },
+      { "name": "taille 13", "widths": { "title": 120, "titleSmall": 104, "longestWordSmall": 52, "shortTitle": 60, "shortTitleSmall": 52 }, "room": 110, "maxLines": 1, "step": "titleSmall" },
+      { "name": "titre court", "widths": { "title": 120, "titleSmall": 104, "longestWordSmall": 52, "shortTitle": 60, "shortTitleSmall": 52 }, "room": 100, "maxLines": 1, "step": "shortTitle" },
+      { "name": "titre court, maxLines 0 vaut 1", "widths": { "title": 120, "titleSmall": 104, "longestWordSmall": 52, "shortTitle": 60, "shortTitleSmall": 52 }, "room": 100, "maxLines": 0, "step": "shortTitle" },
+      { "name": "retour a la ligne avant le titre court", "widths": { "title": 120, "titleSmall": 104, "longestWordSmall": 52, "shortTitle": 60, "shortTitleSmall": 52 }, "room": 100, "maxLines": 2, "step": "titleSmallWrapped" },
+      { "name": "titre court a 13", "widths": { "title": 120, "titleSmall": 104, "longestWordSmall": 52, "shortTitle": 60, "shortTitleSmall": 52 }, "room": 55, "maxLines": 2, "step": "shortTitleSmall" },
+      { "name": "glyphe seul", "widths": { "title": 120, "titleSmall": 104, "longestWordSmall": 52, "shortTitle": 60, "shortTitleSmall": 52 }, "room": 40, "maxLines": 2, "step": "glyphOnly" },
+      { "name": "sans titre court", "widths": { "title": 120, "titleSmall": 104, "longestWordSmall": 52 }, "room": 50, "maxLines": 1, "step": "glyphOnly" },
+      { "name": "jamais un mot coupe", "widths": { "title": 200, "titleSmall": 180, "longestWordSmall": 150 }, "room": 100, "maxLines": 3, "step": "glyphOnly" }
+    ],
+    "steps": [
+      { "hasShortTitle": false, "maxLines": 1, "order": ["title", "titleSmall", "glyphOnly"] },
+      { "hasShortTitle": true, "maxLines": 1, "order": ["title", "titleSmall", "shortTitle", "shortTitleSmall", "glyphOnly"] },
+      { "hasShortTitle": false, "maxLines": 2, "order": ["title", "titleSmall", "titleSmallWrapped", "glyphOnly"] },
+      { "hasShortTitle": true, "maxLines": 2, "order": ["title", "titleSmall", "titleSmallWrapped", "shortTitle", "shortTitleSmall", "glyphOnly"] }
+    ]
+  },
+  "spoken": {
+    "separators": {
+      "fr": ", ",
+      "en": ", ",
+      "ar": "، "
+    },
+    "rows": [
+      { "locale": "fr", "title": "Publication…", "percent": 62 },
+      { "locale": "en", "title": "Publishing…", "percent": 62 },
+      { "locale": "ar", "title": "جارٍ النشر…", "percent": 62 },
+      { "locale": "fr", "title": "Publication…", "percent": null }
+    ]
+  },
+  "phases": [
+    { "phase": "ready", "hasChevron": true, "isEnabled": true, "content": "label", "chevron": true, "ring": false, "touch": true },
+    { "phase": "ready", "hasChevron": false, "isEnabled": true, "content": "label", "chevron": false, "ring": false, "touch": true },
+    { "phase": "ready", "hasChevron": true, "isEnabled": false, "content": "label", "chevron": true, "ring": false, "touch": false },
+    { "phase": "busy", "hasChevron": true, "isEnabled": true, "content": "ring", "chevron": false, "ring": true, "touch": false },
+    { "phase": "deferred", "hasChevron": true, "isEnabled": true, "content": "deferred", "chevron": false, "ring": false, "touch": false }
+  ]
+}

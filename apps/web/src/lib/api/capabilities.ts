@@ -4,6 +4,8 @@
  * n'envoie pas l'en-tête, garde l'ancienne forme (rétrocompatibilité,
  * #9223). `onboarding-age` : l'étape `age` et `viewerWriteRestriction` de
  * `GET`/`PATCH me.onboarding` (passerelle #9927, PR #9940).
+ * `onboarding-profile` : l'étape `profile` (« Montre-toi », #17237), servie
+ * dans `seenSteps`/`prefilledSteps` au seul client qui l'annonce.
  *
  * L'en-tête part avec les seuls appels qui en dépendent (`onboarding.ts`),
  * jamais par le transport commun : posé là, ses octets entraient dans la
@@ -14,7 +16,7 @@
  */
 export const CAPABILITIES_HEADER = 'X-Meeshy-Capabilities';
 
-export const CLIENT_CAPABILITIES = ['onboarding-age'] as const;
+export const CLIENT_CAPABILITIES = ['onboarding-age', 'onboarding-profile'] as const;
 
 export const capabilitiesHeaderValue = (capabilities: readonly string[] = CLIENT_CAPABILITIES): string => capabilities.join(',');
 

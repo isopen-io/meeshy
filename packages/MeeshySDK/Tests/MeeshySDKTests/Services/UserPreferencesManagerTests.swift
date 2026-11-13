@@ -730,6 +730,28 @@ final class UserPreferencesManagerTests: XCTestCase {
                        "et la valeur relue atteint le bloc en mémoire")
     }
 
+    func test_socketReconnect_twoBursts_fetchesInArrivalOrder() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        var stale = UserPreferences.defaults
+        stale.notification.newMessageEnabled = true
+        var latest = UserPreferences.defaults
+        latest.notification.newMessageEnabled = false
+        mock.queuedResults = [stale, latest]
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 2)
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "la seconde réponse est appliquée en dernier")
+    }
+
     func test_socketReconnect_notAuthenticated_doesNotRefetch() async throws {
         let mock = MockPreferenceService()
         manager.service = mock
@@ -801,6 +823,7 @@ final class UserPreferencesManagerTests: XCTestCase {
 /// DO have one, in `PreferenceService.swift`).
 private final class MockPreferenceService: PreferenceServiceProviding, @unchecked Sendable {
     var allPreferencesResult: UserPreferences?
+    var queuedResults: [UserPreferences] = []
     private(set) var getAllPreferencesCallCount = 0
 
     func getCategories() async throws -> [ConversationCategory] { [] }
@@ -815,6 +838,7 @@ private final class MockPreferenceService: PreferenceServiceProviding, @unchecke
 
     func getAllPreferences() async throws -> UserPreferences {
         getAllPreferencesCallCount += 1
+        if !queuedResults.isEmpty { return queuedResults.removeFirst() }
         guard let allPreferencesResult else { throw MockPreferenceServiceError.notStubbed }
         return allPreferencesResult
     }

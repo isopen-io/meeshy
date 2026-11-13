@@ -38,7 +38,7 @@ struct CommentQuotedMediaBanner: View {
 
             Text(citation.legende)
                 .font(.caption)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .lineLimit(1)
 
             Spacer(minLength: 0)
@@ -92,7 +92,7 @@ struct CommentQuotationChip: View {
                         .foregroundColor(theme.textMuted)
                     Text(citation.legende)
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                 }
 
@@ -109,9 +109,11 @@ struct CommentQuotationChip: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption2.weight(.bold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(width: 22, height: 22)
                         .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
+                        .meeshyTapTarget()
+                        .padding(-MeeshyTapTarget.inset(forVisualSide: 22))
                 }
                 .accessibilityLabel(Text(String(localized: "comment.quote.remove",
                                                 defaultValue: "Retirer la citation",
@@ -160,7 +162,7 @@ private struct CommentQuotedMediaThumbnail: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: side * 0.42, height: side * 0.42)
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundStyle(Color(hex: accentColor))
                     )
             }
         }

@@ -52,12 +52,36 @@ nonisolated enum ComposerTriggerOutline {
     }
 }
 
-/// Le cadre, posé hors de la case qu'il entoure.
+/// **La prise en cours, telle que la miniature choisie la montre** (#17268) :
+/// posée par la bande sur ses déclencheurs, lue par leur cadre. La miniature
+/// choisie, seule ou dans la bande ouverte, porte la même jauge que l'anneau.
+nonisolated struct ComposerCaptureProgress: Equatable, Sendable {
+    var capturing = false
+    /// La part du maximum du format déjà prise, `0...1`.
+    var fraction: Double = 0
+}
+
+private struct ComposerCaptureProgressKey: EnvironmentKey {
+    static let defaultValue = ComposerCaptureProgress()
+}
+
+extension EnvironmentValues {
+    var composerCaptureProgress: ComposerCaptureProgress {
+        get { self[ComposerCaptureProgressKey.self] }
+        set { self[ComposerCaptureProgressKey.self] = newValue }
+    }
+}
+
+/// Le cadre, posé hors de la case qu'il entoure. Pendant la prise, il devient la
+/// jauge du maximum : une piste pâle que le rouge remplit, comme l'anneau.
 struct ComposerTriggerOutlineStyle: ViewModifier {
     let recording: Bool
     var shown = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.composerCaptureProgress) private var progress
     @State private var startedAt = Date()
+
+    private var capturing: Bool { recording || progress.capturing }
 
     func body(content: Content) -> some View {
         content.overlay {
@@ -66,25 +90,46 @@ struct ComposerTriggerOutlineStyle: ViewModifier {
     }
 
     private var outline: some View {
-        let bat = ComposerTriggerOutline.pulses(recording: recording, reduceMotion: reduceMotion)
-        return TimelineView(.animation(paused: !bat)) { horloge in
-            RoundedRectangle(cornerRadius: ComposerTriggerOutline.cornerRadius(inner: MeeshyRadius.sm),
-                             style: .continuous)
-                .strokeBorder(color, lineWidth: ComposerTriggerOutline.lineWidth)
-                .opacity(ComposerTriggerOutline.opacity(elapsed: horloge.date.timeIntervalSince(startedAt),
-                                                         pulses: bat))
+        Group {
+            if capturing { gauge } else { pulsingOutline }
         }
         .padding(-ComposerTriggerOutline.outset)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: recording)
-        .adaptiveOnChange(of: recording) { _, enregistre in
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: capturing)
+        .adaptiveOnChange(of: capturing) { _, enregistre in
             if enregistre { startedAt = Date() }
         }
     }
 
+    private var pulsingOutline: some View {
+        let bat = ComposerTriggerOutline.pulses(recording: capturing, reduceMotion: reduceMotion)
+        return TimelineView(.animation(paused: !bat)) { horloge in
+            frame.strokeBorder(color, lineWidth: ComposerTriggerOutline.lineWidth)
+                .opacity(ComposerTriggerOutline.opacity(elapsed: horloge.date.timeIntervalSince(startedAt),
+                                                         pulses: bat))
+        }
+    }
+
+    /// La jauge du maximum, autour de la miniature (#17268) : la piste pâle, et
+    /// le rouge qui la parcourt.
+    private var gauge: some View {
+        ZStack {
+            frame.strokeBorder(Color.white.opacity(0.35), lineWidth: ComposerTriggerOutline.lineWidth)
+            frame.inset(by: ComposerTriggerOutline.lineWidth / 2)
+                .trim(from: 0, to: max(0.001, progress.fraction))
+                .stroke(MeeshyColors.error, style: StrokeStyle(lineWidth: ComposerTriggerOutline.lineWidth,
+                                                               lineCap: .round))
+        }
+        .animation(reduceMotion ? nil : .linear(duration: 0.2), value: progress.fraction)
+    }
+
+    private var frame: RoundedRectangle {
+        RoundedRectangle(cornerRadius: ComposerTriggerOutline.cornerRadius(inner: MeeshyRadius.sm), style: .continuous)
+    }
+
     private var color: Color {
-        switch ComposerTriggerOutline.tint(recording: recording) {
+        switch ComposerTriggerOutline.tint(recording: capturing) {
         case .idle: return .white
         case .recording: return MeeshyColors.error
         }

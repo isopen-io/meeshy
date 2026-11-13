@@ -40,6 +40,19 @@ final class TalkieHeaderTests: XCTestCase {
         XCTAssertTrue(TalkieOfferRule.offers(link("a", .public, access: .blood)))
     }
 
+    /// Recette du 2026-11-09 : un destinataire qui n'avait jamais parlé n'avait aucun canal PushToTalk, et iOS
+    /// jetait chaque réveil. Le canal se rejoint dès qu'au moins une personne peut lui parler.
+    func test_reachable_assoonAsOnePeerIsCloseOrTheAccountIsTeam() {
+        XCTAssertFalse(TalkieOfferRule.reachable(links: [], role: "USER"))
+        XCTAssertFalse(TalkieOfferRule.reachable(links: [link("a", .friend)], role: "USER"))
+        XCTAssertTrue(TalkieOfferRule.reachable(links: [link("a", .friend), link("b", .close)], role: "USER"))
+        XCTAssertTrue(TalkieOfferRule.reachable(links: [], role: "MODERATOR"))
+        XCTAssertTrue(TalkieOfferRule.reachable(links: [], role: "AUDIT"))
+        XCTAssertTrue(TalkieOfferRule.reachable(links: [], role: "ANALYST"))
+        XCTAssertFalse(TalkieOfferRule.reachable(links: [], role: "AGENT"))
+        XCTAssertFalse(TalkieOfferRule.reachable(links: [], role: nil))
+    }
+
     func test_header_hidesTheTalkie_inAnEncryptedDirect() {
         XCTAssertFalse(TalkieOfferRule.mayShowInHeader(encryptionMode: "e2ee"))
         XCTAssertTrue(TalkieOfferRule.mayShowInHeader(encryptionMode: "server"))

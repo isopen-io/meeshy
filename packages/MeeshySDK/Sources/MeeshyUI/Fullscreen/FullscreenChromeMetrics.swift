@@ -53,7 +53,7 @@ public nonisolated enum FullscreenChromeMetrics {
     public static let reactionStripLeadingOffset: CGFloat = -floatingCellWidth
 
     /// Le CONTOUR d'une action flottante : le même symbole, agrandi d'autant, derrière le
-    /// glyphe (`StoryActionButton` d'avant #8878, restauré le 2026-10-01).
+    /// glyphe (`StoryActionButton` d'avant #8878, restauré).
     public static let outlineScale: CGFloat = 1.22
 
     /// Le HALO qui l'accompagne : une ombre de la teinte du contour.

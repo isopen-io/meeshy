@@ -83,9 +83,16 @@ nonisolated enum ComposerShutterGesture {
     /// l'auteur découvrir l'état après coup, et la directive du 2026-08-30 sur
     /// les gestes progressifs demande l'inverse — le geste se voit pendant
     /// qu'il se fait, et reste annulable jusqu'au bout.
+    /// **La piste du cadenas avance par crans** (#17433) : un cran par 4 pt de
+    /// course, sous le pas qu'un œil lit sur une piste de 64 pt. Une valeur
+    /// continue republiait la session — donc tout le viseur — à chaque
+    /// mouvement du doigt, 60 à 120 fois par seconde pendant qu'on filme.
+    static let lockProgressSteps = 16
+
     static func lockProgress(translationX: CGFloat) -> Double {
         guard slideToLock > 0 else { return 0 }
-        return min(1, max(0, Double(translationX / slideToLock)))
+        let brute = min(1, max(0, Double(translationX / slideToLock)))
+        return (brute * Double(lockProgressSteps)).rounded(.down) / Double(lockProgressSteps)
     }
 
     /// **Ce que la prise DEVIENT une fois lancée**, pour que la vue sache quoi

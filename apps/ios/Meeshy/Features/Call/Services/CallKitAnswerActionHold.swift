@@ -17,7 +17,7 @@ protocol CallKitAnswerActionHoldProviding: AnyObject {
     func discardTimedOut(_ action: SettleableCallAction)
 }
 
-/// [Fix 2026-07-02] CallKit answer action held until the call actually
+/// [] CallKit answer action held until the call actually
 /// connects. CallKit starts the callee's elapsed timer the moment the
 /// answer action is fulfilled — fulfilling at tap time made the counter
 /// run while WebRTC was still connecting (user-reported "0:00 before the
@@ -44,11 +44,11 @@ final class CallKitAnswerActionHold: CallKitAnswerActionHoldProviding {
 
     func hold(_ action: SettleableCallAction) {
         // CallKit's contract requires every CX*Action to eventually be
-        // completed — settle any still-pending action instead of silently
-        // dropping its reference, or an uncompleted action can get the app
-        // killed by the system.
+        // completed. Both actions answer the SAME call (the provider only holds
+        // the active call's UUID): the superseded one is FULFILLED — failing an
+        // answer makes CallKit end the call the user just picked up (#17954).
         if pending != nil {
-            settle(fulfilled: false, reason: "superseded by a new CXAnswerCallAction")
+            settle(fulfilled: true, reason: "superseded by a new CXAnswerCallAction")
         }
         pending = action
         safetyTask?.cancel()

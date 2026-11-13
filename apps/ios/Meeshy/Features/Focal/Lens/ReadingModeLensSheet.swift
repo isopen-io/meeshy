@@ -44,7 +44,7 @@ struct LensRowModel: Equatable, Identifiable {
 /// Catalogue + libellés — SEUL domicile des titres/sous-titres (le chip ET
 /// la feuille lisent d'ici, jamais une seconde résolution).
 enum ReadingModeLensCatalog {
-    /// Ordre d'affichage (2026-08-21) : les TROIS vues du fil — Focal, Script,
+    /// Ordre d'affichage: les TROIS vues du fil — Focal, Script,
     /// Bulles — puis Résumé et Rivière. Parité avec le `LensSwitcher` web
     /// (« Focal, Script, Bulles — et rien d'autre »). `.bubbles` est un CHOIX
     /// de rendu (règle de consommation `ReadingModeController.renderDecision`),
@@ -185,6 +185,6 @@ enum ReadingModeLensCatalog {
     }
 }
 
-// P2 (spec Magnificence 2026-08-17) : la feuille Lentille est REMPLACÉE par
+// P2: la feuille Lentille est REMPLACÉE par
 // le menu d'appui long du chip (`ReadingModeChip.menuContent`). Le catalogue
 // ci-dessus reste la seule source des libellés/lignes — consommé par le menu.

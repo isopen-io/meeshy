@@ -118,6 +118,33 @@ class CallOngoingControllerTest {
     }
 
     @Test
+    fun `the microphone state reaches the holder at once, while the notification still waits for its debounce`() = runTest {
+        val state = MutableStateFlow(ui(CallStatus.CONNECTED))
+        attach(state)
+        advanceTimeBy(CallOngoingController.DEBOUNCE_MS + 1)
+
+        controller.microphoneMuted(true)
+
+        assertThat(holder.microphoneMuted.value).isTrue()
+        assertThat(holder.snapshot.value?.isMuted).isFalse()
+        controller.detach()
+        assertThat(holder.microphoneMuted.value).isFalse()
+    }
+
+    @Test
+    fun `a fresh call state resets the microphone state, even before the notification debounce`() = runTest {
+        val state = MutableStateFlow(ui(CallStatus.CONNECTED, muted = true))
+        attach(state)
+        assertThat(holder.microphoneMuted.value).isTrue()
+
+        state.value = ui(CallStatus.CONNECTED, muted = false)
+        runCurrent()
+
+        assertThat(holder.microphoneMuted.value).isFalse()
+        controller.detach()
+    }
+
+    @Test
     fun `the end of the call publishes the final state at once`() = runTest {
         val state = MutableStateFlow(ui(CallStatus.CONNECTED))
         attach(state)

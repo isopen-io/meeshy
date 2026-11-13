@@ -30,7 +30,17 @@ export type StudioBackgroundToolAction = 'retake' | 'forward' | 'rotate' | 'remo
  * ÉDITIONS DE BASE d'une pièce (#9136) : une image se recadre, une vidéo se
  * coupe et se tait ; l'une et l'autre PIVOTENT (#9160), d'un toucher — une
  * action, comme « Pivoter » dans `ComposerMediaActionRow`, pas un panneau. */
-export function studioBackgroundSections({ mediaType, retouching }: { readonly mediaType: StudioMediaKind; readonly retouching: boolean }): readonly StudioBackgroundSection[] {
+export function studioBackgroundSections({
+  mediaType,
+  retouching,
+  formatLocked = false,
+}: {
+  readonly mediaType: StudioMediaKind;
+  readonly retouching: boolean;
+  /** Une image d'identité (#17256) : son format est imposé, rien ne le change. */
+  readonly formatLocked?: boolean;
+}): readonly StudioBackgroundSection[] {
+  if (formatLocked) return ['frame'];
   if (retouching) return mediaType === 'image' ? ['frame', 'crop'] : ['frame', 'trim', 'sound'];
   return mediaType === 'image' ? ['frame', 'filter', 'describe'] : ['frame', 'describe'];
 }
@@ -39,11 +49,14 @@ export function studioBackgroundToolActions({
   offersPhoto,
   overlayFree,
   retouching,
+  formatLocked = false,
 }: {
   readonly offersPhoto: boolean;
   readonly overlayFree: boolean;
   readonly retouching: boolean;
+  readonly formatLocked?: boolean;
 }): readonly StudioBackgroundToolAction[] {
+  if (formatLocked) return ['remove'];
   if (retouching) return ['rotate', 'remove'];
   return studioBackgroundMenuActions({ offersPhoto, overlayFree }).filter((action): action is Exclude<StudioBackgroundMenuAction, 'edit'> => action !== 'edit');
 }

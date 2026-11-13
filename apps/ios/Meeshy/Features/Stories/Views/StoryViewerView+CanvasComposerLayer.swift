@@ -90,8 +90,7 @@ extension StoryCardView {
             Spacer()
 
             // **Toujours visible** quand l'utilisateur n'est pas l'auteur
-            // de la story (un seul composer pour la story-reply ET la
-            // comment-reply — spec user 2026-05-28). Quand l'overlay
+            // de la story. Quand l'overlay
             // commentaires est ouvert et qu'on tape « Répondre » sur un
             // commentaire, la reply banner apparaît au-dessus de CETTE
             // rangée de saisie via le binding `replyingToStoryComment`.
@@ -102,7 +101,7 @@ extension StoryCardView {
             // dès que `replyingToStoryComment` est posé (tap « Répondre »
             // dans l'overlay), avec la reply banner, puis se referme à
             // l'envoi (`sendComment` remet le binding à nil) ou à la
-            // fermeture de la banner (spec user 2026-06-25).
+            // fermeture de la banner.
             if !isOwnStory || replyingToStoryComment != nil {
                 composerBlock(geometry: geometry).replacedWhenCommentsClosed(currentStory?.commentsClosed == true, tone: .overMedia)
                     .modifier(StoryComposerBlockMeasure())
@@ -114,15 +113,14 @@ extension StoryCardView {
         // hauteur intrinsèque (~150pt = composer + emoji panel). Le canvas
         // ZStack parent utilisant `alignment: .center`, une VStack courte se
         // faisait CENTRER verticalement dans le canvas 874pt → composer
-        // apparaissait à y≈360pt au lieu de y≈760pt en bas (bug user
-        // 2026-05-28 « le composeur est rogné au lieu d'être bien aligné »).
+        // apparaissait à y≈360pt au lieu de y≈760pt en bas.
         //
         // **CRITIQUE (largeur)** : `maxWidth: geometry.size.width` (et NON
         // `.infinity`) borne la proposition de largeur du bloc au viewport réel.
         // Le canvas UIViewRepresentable gonfle la largeur intrinsèque du ZStack
         // parent au-delà de l'écran (~480pt vs 402pt sur iPhone 16 Pro) ; avec
         // `.infinity` le composer remplissait ces ~480pt et son bouton d'envoi
-        // sortait à droite de l'écran (bug user 2026-06-03). Borné au viewport,
+        // sortait à droite de l'écran. Borné au viewport,
         // le bloc se cadre sur l'écran réel et reste centré — même principe que
         // le pin `.frame(width: geometry.size.width)` du header et du sidebar.
         .frame(maxWidth: geometry.size.width, maxHeight: .infinity, alignment: .bottom)

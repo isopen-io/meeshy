@@ -35,7 +35,7 @@ struct BubbleSticker: View, Equatable {
     // MARK: - Mesures
 
     /// Le côté de référence d'un sticker dans le fil — 200 pt, la cote
-    /// UNIQUE des deux clients (décision porteur 2026-10-15, #10705) : en bulle
+    /// UNIQUE des deux clients (#10705): en bulle
     /// ~200, proportionnelle en Focal / rangée plate (`FocalMetrics.Sticker`).
     static let side: CGFloat = 200
     /// La boîte maximale d'un GABARIT — un cartouche (« Depuis le 12 mai »)

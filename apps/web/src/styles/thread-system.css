@@ -19,6 +19,31 @@
 }
 
 /*
+ * LA CARTE D'UN APPEL DANS LE FIL (#17878, A1.2 ; `BubbleCallNoticeView.swift` `simpleContour` et
+ * `leadingGlyph`) — le contour, le disque et la bascule du journal à la teinte d'accent, pâle sur le fond du fil :
+ * 3 % / 15 % en clair, 6 % / 25 % en sombre pour la carte, 9 % / 14 % pour le disque.
+ */
+.call-notice-card {
+  background-color: color-mix(in srgb, var(--accent) 6%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--accent) 25%, transparent);
+}
+:root.light .call-notice-card {
+  background-color: color-mix(in srgb, var(--accent) 3%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+.call-notice-disc {
+  color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+:root.light .call-notice-disc {
+  background-color: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+.call-notice-toggle {
+  color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/*
  * LE FOND DE SECOURS DE LA CARTE DE STORY CITÉE (revue-correction #5936,
  * défaut majeur 7) — copie littérale de `BubbleStoryCitationCard
  * .sceneFallback` (`Color(hex: reply.authorColor).opacity(isDark ? 0.32 :

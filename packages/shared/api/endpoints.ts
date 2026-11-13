@@ -77,6 +77,7 @@ import * as statusMetricsGroup from './endpoints/status-metrics.js';
 import * as stickerPacksGroup from './endpoints/sticker-packs.js';
 import * as storiesGroup from './endpoints/stories.js';
 import * as syncGroup from './endpoints/sync.js';
+import * as talkieGroup from './endpoints/talkie.js';
 import * as trackingLinksGroup from './endpoints/tracking-links.js';
 import * as translateGroup from './endpoints/translate.js';
 import * as translateBlockingGroup from './endpoints/translate-blocking.js';
@@ -142,6 +143,7 @@ export const API_ENDPOINTS = {
   stickerPacks: stickerPacksGroup,
   stories: storiesGroup,
   sync: syncGroup,
+  talkie: talkieGroup,
   trackingLinks: trackingLinksGroup,
   translate: translateGroup,
   translateBlocking: translateBlockingGroup,
@@ -421,6 +423,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/conversations/:id/card',
   '/api/v1/conversations/:id/delete-for-me',
   '/api/v1/conversations/:id/engagement',
+  '/api/v1/conversations/:id/external/report',
   '/api/v1/conversations/:id/invite',
   '/api/v1/conversations/:id/leave',
   '/api/v1/conversations/:id/mark-read',
@@ -450,6 +453,8 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/conversations/:id/status',
   '/api/v1/conversations/:id/threads/:messageId',
   '/api/v1/conversations/check-identifier/:identifier',
+  '/api/v1/conversations/external',
+  '/api/v1/conversations/external/consent',
   '/api/v1/conversations/join/:linkId',
   '/api/v1/conversations/search',
   '/api/v1/directory/availability',
@@ -723,6 +728,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/sticker-packs/submissions',
   '/api/v1/stories/audio',
   '/api/v1/sync',
+  '/api/v1/talkie/:talkieId/audio',
   '/api/v1/tracking-links',
   '/api/v1/tracking-links/:token',
   '/api/v1/tracking-links/:token/click',
@@ -775,6 +781,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/users/me/devices',
   '/api/v1/users/me/devices/:deviceId',
   '/api/v1/users/me/password',
+  '/api/v1/users/me/push-to-talk-token',
   '/api/v1/users/me/referral-code',
   '/api/v1/users/me/resend-email-change-verification',
   '/api/v1/users/me/stats',
@@ -1080,6 +1087,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/conversations/:id/card': ['GET'],
   '/api/v1/conversations/:id/delete-for-me': ['DELETE'],
   '/api/v1/conversations/:id/engagement': ['GET'],
+  '/api/v1/conversations/:id/external/report': ['POST'],
   '/api/v1/conversations/:id/invite': ['POST'],
   '/api/v1/conversations/:id/leave': ['POST'],
   '/api/v1/conversations/:id/mark-read': ['POST'],
@@ -1109,6 +1117,8 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/conversations/:id/status': ['GET'],
   '/api/v1/conversations/:id/threads/:messageId': ['GET'],
   '/api/v1/conversations/check-identifier/:identifier': ['GET'],
+  '/api/v1/conversations/external': ['POST'],
+  '/api/v1/conversations/external/consent': ['GET', 'PUT'],
   '/api/v1/conversations/join/:linkId': ['POST'],
   '/api/v1/conversations/search': ['GET'],
   '/api/v1/directory/availability': ['GET'],
@@ -1382,6 +1392,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/sticker-packs/submissions': ['GET', 'POST'],
   '/api/v1/stories/audio': ['GET'],
   '/api/v1/sync': ['GET'],
+  '/api/v1/talkie/:talkieId/audio': ['GET'],
   '/api/v1/tracking-links': ['POST'],
   '/api/v1/tracking-links/:token': ['GET', 'PATCH', 'DELETE'],
   '/api/v1/tracking-links/:token/click': ['POST'],
@@ -1434,6 +1445,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/users/me/devices': ['GET'],
   '/api/v1/users/me/devices/:deviceId': ['DELETE'],
   '/api/v1/users/me/password': ['PATCH'],
+  '/api/v1/users/me/push-to-talk-token': ['POST', 'DELETE'],
   '/api/v1/users/me/referral-code': ['GET'],
   '/api/v1/users/me/resend-email-change-verification': ['POST'],
   '/api/v1/users/me/stats': ['GET'],

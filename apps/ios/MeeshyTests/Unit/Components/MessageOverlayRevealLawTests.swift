@@ -107,4 +107,30 @@ final class MessageOverlayRevealLawTests: XCTestCase {
     func test_restingFactor_voiceOverRunning_opensAlreadyRevealed() {
         XCTAssertEqual(MessageOverlayRevealLaw.restingFactor(floor: 0.7, assistiveReveal: true), 0.7)
     }
+
+    // MARK: - La même approche que l'aperçu de conversation (#17275)
+
+    func test_menuWidth_isTheConversationPeekWidth_eightyPercentBetweenTheMargins() {
+        let conversation = ConversationPeekLayout(
+            availableHeight: 800, availableWidth: 402, compactMenuHeight: 100, naturalMenuHeight: 400)
+        XCTAssertEqual(LongPressPeekWidth.menuWidth(availableWidth: 402), conversation.menuWidth)
+        XCTAssertEqual(LongPressPeekWidth.menuWidth(availableWidth: 402), (402 - 2 * ConversationPeekLayout.sideMargin) * 0.8, accuracy: 0.001)
+    }
+
+    func test_estimatedSize_takesTheWidthItIsGiven() {
+        XCTAssertEqual(MessageActionsMenu.estimatedSize(actionCount: 5, width: 300).width, 300)
+        XCTAssertEqual(MessageActionsMenu.estimatedSize(actionCount: 5, width: 300).height,
+                       MessageActionsMenu.estimatedSize(actionCount: 5).height)
+    }
+
+    func test_overlay_sizesItsMenuByTheSharedLaw_andOpensRevealedUnderVoiceOverAndReducedMotion() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/MessageOverlayMenu.swift")
+        let overlay = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
+        XCTAssertTrue(overlay.contains("LongPressPeekWidth.menuWidth(availableWidth: containerW)"))
+        XCTAssertTrue(overlay.contains("width: nlMenuWidth"), "la liste reçoit la largeur de la loi")
+        XCTAssertFalse(overlay.contains("MessageActionsMenu.menuWidth"))
+        XCTAssertTrue(overlay.contains("assistiveReveal: voiceOverEnabled || reduceMotion"))
+    }
 }

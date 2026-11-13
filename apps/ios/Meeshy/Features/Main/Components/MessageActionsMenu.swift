@@ -9,6 +9,9 @@ struct MessageActionsMenu: View {
     let actions: [PrimaryAction]
     let accentHex: String
     let onSelect: (PrimaryAction) -> Void
+    /// La largeur posée par l'hôte : l'overlay d'un message lui donne celle de
+    /// l'aperçu de conversation (`LongPressPeekWidth`, #17275).
+    var width: CGFloat = MessageActionsMenu.menuWidth
 
     // Dynamic Type : la hauteur de row et la colonne d'icône scalent avec la
     // taille de texte préférée. `estimatedSize` (statique, utilisée par
@@ -30,7 +33,7 @@ struct MessageActionsMenu: View {
             }
         }
         .padding(.vertical, MeeshySpacing.xsPlus)
-        .frame(width: Self.menuWidth)
+        .frame(width: width)
         // Design système par version d'iOS : Liquid Glass natif iOS 26
         // (`.regular` pur, sans teinte ni ombre manuelle) / fallback material
         // avant — MÊME rendu que le menu des lignes de conversation
@@ -84,10 +87,10 @@ struct MessageActionsMenu: View {
     /// La hauteur de row est scalée par `UIFontMetrics` pour rester cohérente
     /// avec le rendu Dynamic Type (`@ScaledMetric` côté vue). À la taille par
     /// défaut, `scaledValue(for: 44) == 44` → aucun changement de layout.
-    static func estimatedSize(actionCount: Int) -> CGSize {
+    static func estimatedSize(actionCount: Int, width: CGFloat = menuWidth) -> CGSize {
         let count = max(1, actionCount)
         let scaledRow = UIFontMetrics.default.scaledValue(for: rowHeight)
         // +20 : padding vertical (6+6) + marge des séparateurs/divider delete.
-        return CGSize(width: menuWidth, height: CGFloat(count) * scaledRow + 20)
+        return CGSize(width: width, height: CGFloat(count) * scaledRow + 20)
     }
 }

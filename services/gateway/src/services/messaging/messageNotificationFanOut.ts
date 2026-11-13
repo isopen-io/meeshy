@@ -9,6 +9,7 @@ import {
   type PreviewPrismBasis,
 } from '../notifications/notification-preview';
 import { contactCardNameFromFileName, isContactCardAttachment } from '@meeshy/shared/utils/vcard';
+import { deviceEnvelopeForPush } from '../messages/push-envelope-protection';
 import {
   transcriptTranslationTexts,
   transcriptTranslationTracks,
@@ -357,21 +358,6 @@ async function listeningRegularRecipients(
  * envoi réussi en 500. `onError` laisse l'appelant journaliser dans le contexte
  * de sa requête.
  */
-/**
- * #13114 — le seul chiffré qui voyage sur le fil push est l'enveloppe qu'un
- * APPAREIL a scellée (`e2ee`), que la NSE ouvre avec ses propres clés. En
- * `server` et `hybrid`, `encryptedContent` est le chiffré AU REPOS, sous la clé
- * de conversation que seule la passerelle détient : il ne quitte pas le
- * serveur. Le mode de la LIGNE décide, celui de la conversation ne supplée
- * qu'une ligne héritée qui n'en porte aucun.
- */
-export function deviceEnvelopeForPush(
-  message: Pick<FanOutMessage, 'encryptedContent' | 'encryptionMode'>,
-  conversationMode: string | null | undefined,
-): string | undefined {
-  if (!message.encryptedContent) return undefined;
-  return isEndToEndMode(message.encryptionMode ?? conversationMode) ? message.encryptedContent : undefined;
-}
 
 export async function notifyMessageRecipients(params: {
   prisma: FanOutPrisma;
@@ -676,6 +662,42 @@ export async function notifyMessageRecipients(params: {
         }
       : previewBasis;
 
+    // #17080 — l'ENVELOPPE de l'appareil, élue UNE fois pour les trois lots.
+    //
+    // Elle ne partait que sur `regular`, et pour la raison exacte du cycle 126 :
+    // **elle ne compose aucune chaîne.** Ce n'est ni un texte, ni un
+    // qualificatif de texte — c'est la charge que le LECTEUR déchiffre. On ne la
+    // trouve donc pas en cherchant « qui compose ce corps ? », la question qui a
+    // guidé les cycles 125 bis à 128.
+    //
+    // Conséquence mesurée : la NSE ne remplace le corps que si
+    // `userInfo["encryptedContent"]` est non vide, et sa branche de repli
+    // (`locKey`) exige `isEncryptedPush`, dérivé du MÊME champ. Avec `''`,
+    // aucune des deux ne tire — une RÉPONSE ou une MENTION en conversation
+    // chiffrée restait « 🔒 💬 » à vie, pendant qu'un message simple du même
+    // fil arrivait déchiffré.
+    //
+    // Aucune audience n'est élargie : les destinataires de ces deux lots sortent
+    // de `memberIds`, et ce sont exactement ceux que `regular` aurait servis si
+    // `alreadyNotified` ne les en avait pas retirés.
+    // Les cinq champs de protection sont ÉNUMÉRÉS ici parce que la garde les
+    // exige : un appelant qui n'en dit rien ne compile pas (cf. le doc-comment
+    // de `deviceEnvelopeForPush`). `FanOutMessage` les déclare optionnels, donc
+    // la coercition vers `null` se fait AU SITE, visible, et non en silence
+    // dans la garde.
+    const deviceEnvelope = deviceEnvelopeForPush(
+      {
+        encryptedContent: message.encryptedContent,
+        encryptionMode: message.encryptionMode,
+        isViewOnce: message.isViewOnce ?? null,
+        isBlurred: message.isBlurred ?? null,
+        effectFlags: message.effectFlags ?? null,
+        expiresAt: message.expiresAt ?? null,
+        ephemeralDuration: message.ephemeralDuration ?? null,
+      },
+      conversation.encryptionMode,
+    );
+
     // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
     // qui était visé — même règle de compte rendu que
     // `createMemberJoinedNotificationsBatch`. Une préférence, un DND ou une
@@ -683,8 +705,31 @@ export async function notifyMessageRecipients(params: {
     // sans cela, un éventail entièrement tombé continuerait d'annoncer son
     // audience comme si elle avait été servie.
 
+    // #17194 — l'auteur du message CITÉ est-il encore membre ?
+    //
+    // Les deux lectures qui décident de cette audience étaient ASYMÉTRIQUES, et
+    // c'est l'asymétrie qui portait le défaut : `memberIds` vient de
+    // `conversation.participants` sous `where: { isActive: true, type: 'user' }`,
+    // quand le destinataire de la réponse vient d'un
+    // `participant.findUnique({ where: { id: … } })` SANS aucun filtre. Un
+    // auteur qui a quitté la conversation, en a été retiré, banni, ou dont la
+    // participation a été désactivée par une action souveraine admin reste donc
+    // résolu — et le lot `reply` le servait, seul des trois : le lot de mentions
+    // pose la question (`NotificationService.createMentionNotificationsBatch`),
+    // et `regular` ne lit que `memberIds`.
+    //
+    // Ce que ça coûtait AVANT ce cycle : une bannière `🔒 💬` et des métadonnées
+    // (le défaut de métadonnées est HÉRITÉ, et il a son issue). Ce que ça
+    // coûterait APRÈS : l'ENVELOPPE, que la clé de session de l'ex-membre ouvre
+    // — elle est par PAIR, indépendante de la conversation, et rien ne la rote
+    // quand quelqu'un part. Le texte entier d'un message écrit après son départ
+    // s'afficherait sur son écran verrouillé.
+    //
+    // C'est pourquoi la garde part dans le MÊME lot que #17080 : l'audience
+    // d'un éventail se vérifie AVANT de lui confier du contenu déchiffrable.
     const owesReplyNotification =
       !!originalMessageAuthorUserId &&
+      memberIds.includes(originalMessageAuthorUserId) &&
       !silenced.has(originalMessageAuthorUserId) &&
       originalMessageAuthorUserId !== sender.actorId &&
       !validatedMentionUserIds.includes(originalMessageAuthorUserId);
@@ -716,6 +761,8 @@ export async function notifyMessageRecipients(params: {
             // localisation cliente du placeholder et le second verrou de
             // `createNotification`.
             notificationLocKey,
+            // #17080 — cf. `deviceEnvelope` : la charge que le LECTEUR ouvre.
+            encryptedContent: deviceEnvelope,
           });
           return created != null;
         })
@@ -747,6 +794,9 @@ export async function notifyMessageRecipients(params: {
               // Cycle 126 — cf. `createReplyNotification` : la clé de protection
               // qualifie l'aperçu que ce lot vient de recevoir.
               notificationLocKey,
+              // #17080 — cf. `deviceEnvelope`. Le relais la RÉPAND
+              // (`...banner`) : rien à recopier par mentionné.
+              encryptedContent: deviceEnvelope,
             },
             memberIds
           )
@@ -783,7 +833,7 @@ export async function notifyMessageRecipients(params: {
           messageId: message.id,
           conversationId,
           messagePreview: notificationPreviewForPush,
-          encryptedContent: deviceEnvelopeForPush(message, conversation.encryptionMode),
+          encryptedContent: deviceEnvelope,
           notificationLocKey,
           // La transcription d'un vocal n'est PAS `Message.content` : ses
           // traductions vivent sur `MessageAttachment.translations`. Le cycle 122

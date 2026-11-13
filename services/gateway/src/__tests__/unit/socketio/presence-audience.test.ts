@@ -132,7 +132,12 @@ describe('presenceStatusEmissions — l\'équipe (#16623)', () => {
     });
   });
 
-  it.each(['USER', 'AUDIT', 'ANALYST', null, undefined])('la transition d\'un sujet %s ne part chez aucun modérateur', (subjectRole) => {
+  it.each(['ANALYST', 'AUDIT'])('la transition d\'un sujet %s part chez ses collègues', (subjectRole) => {
+    const rooms = presenceStatusEmissions({ ...base, subjectRole }).flatMap((e) => e.rooms);
+    expect(rooms).toContain(ROOMS.user('u_mod'));
+  });
+
+  it.each(['USER', 'AGENT', null, undefined])('la transition d\'un sujet %s ne part chez aucun modérateur', (subjectRole) => {
     const rooms = presenceStatusEmissions({ ...base, subjectRole }).flatMap((e) => e.rooms);
     expect(rooms).not.toContain(ROOMS.user('u_mod'));
   });
@@ -235,8 +240,21 @@ describe('presenceStatusEmissions', () => {
   });
 });
 
-describe('TEAM_COLLEAGUES_WHERE — les modérateurs destinataires de `user:status` (#16623)', () => {
-  it('ne retient que les modérateurs actifs, ni supprimés ni désactivés', () => {
+describe('TEAM_COLLEAGUES_WHERE — les collègues de l\'équipe destinataires de `user:status` (#16623)', () => {
+  it('retient ANALYST, AUDIT et MODERATOR actifs, jamais un utilisateur ordinaire ni un administrateur (déjà servi)', () => {
+    const comptes = [
+      { id: 'analyst', role: 'ANALYST', isActive: true, deletedAt: null, deactivatedAt: null },
+      { id: 'audit', role: 'AUDIT', isActive: true, deletedAt: null, deactivatedAt: null },
+      { id: 'moderator', role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: null },
+      { id: 'user', role: 'USER', isActive: true, deletedAt: null, deactivatedAt: null },
+      { id: 'agent', role: 'AGENT', isActive: true, deletedAt: null, deactivatedAt: null },
+      { id: 'bigboss', role: 'BIGBOSS', isActive: true, deletedAt: null, deactivatedAt: null },
+    ];
+    const retenus = comptes.filter((c) => matchesMongoWhere(c as unknown as MongoDocument, TEAM_COLLEAGUES_WHERE as unknown as MongoDocument));
+    expect(retenus.map((c) => c.id)).toEqual(['analyst', 'audit', 'moderator']);
+  });
+
+  it('ne retient que les collègues actifs, ni supprimés ni désactivés', () => {
     const passe = new Date('2026-10-01T00:00:00Z');
     const comptes = [
       { id: 'actif', role: 'MODERATOR', isActive: true, deletedAt: null, deactivatedAt: null },

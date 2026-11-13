@@ -64,6 +64,10 @@ jest.mock('../../../routes/conversations/threads', () => ({
   registerThreadsRoutes: (...args: any[]) => mockRegisterThreads(...args),
 }));
 
+jest.mock('../../../routes/conversations/external-compliance', () => ({
+  registerExternalComplianceRoutes: jest.fn(),
+}));
+
 jest.mock('../../../services/message-translation/MessageTranslationService', () => ({
   MessageTranslationService: jest.fn<any>(),
 }));

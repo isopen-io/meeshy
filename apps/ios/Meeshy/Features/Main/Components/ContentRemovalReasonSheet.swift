@@ -80,7 +80,7 @@ struct ContentRemovalReasonSheet: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     Text(gesture.reasonLabel)
                         .font(.callout.weight(.semibold))
-                        .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                        .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                         .accessibilityAddTraits(.isHeader)
                     reasonField
                     footer
@@ -116,11 +116,11 @@ struct ContentRemovalReasonSheet: View {
         HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.sm) {
             Label(String(localized: "moderation.removal.author_notified", defaultValue: "L'auteur sera prévenu du motif.", bundle: .main), systemImage: "bell")
                 .font(.footnote)
-                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
             Spacer(minLength: MeeshySpacing.sm)
             Text("\(reason.trimmingCharacters(in: .whitespacesAndNewlines).count)/\(maxLength)")
                 .font(.caption.monospacedDigit())
-                .foregroundColor(isOverLimit ? MeeshyColors.error : MeeshyColors.textMuted(isDark: isDark))
+                .foregroundStyle(isOverLimit ? MeeshyColors.error : MeeshyColors.textMuted(isDark: isDark))
                 .accessibilityHidden(true)
         }
     }

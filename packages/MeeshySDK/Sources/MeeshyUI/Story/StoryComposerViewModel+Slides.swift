@@ -121,7 +121,7 @@ extension StoryComposerViewModel {
         // rester sur le MÊME slide que l'on éditait. Sans ça (l'ancien code ne
         // faisait que clamper `>= count`), supprimer un slide antérieur via le
         // menu contextuel d'une vignette faisait sauter l'édition au slide
-        // suivant (bug 2026-06-01). Le clamp couvre ensuite le cas « on a
+        // suivant. Le clamp couvre ensuite le cas « on a
         // supprimé le dernier slide qui était le courant ».
         if index < currentSlideIndex {
             currentSlideIndex -= 1

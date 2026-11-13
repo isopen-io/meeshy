@@ -49,7 +49,7 @@ describe('le menu flottant sans appels', () => {
   test('le barreau « Appels » disparaît quand les appels sont coupés, les autres gardent leur ordre', () => {
     const keys = menuLadderFor({ canAccessAdmin: false, calls: false }).map((entry) => entry.key);
     expect(keys).not.toContain('calls');
-    expect(keys).toEqual(['links', 'notifications', 'discover', 'communities', 'settings']);
+    expect(keys).toEqual(['game', 'links', 'notifications', 'discover', 'communities', 'settings']);
   });
 
   test("l'administration reste en dernier", () => {

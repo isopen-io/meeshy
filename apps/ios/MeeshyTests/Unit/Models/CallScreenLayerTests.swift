@@ -20,7 +20,6 @@ final class CallScreenLayerTests: XCTestCase {
             hasSelectableCameras: hasSelectableCameras,
             isConnected: isConnected,
             mayRecord: true,
-            canPictureInPicture: false,
             showsVideo: showsVideo
         ))
     }
@@ -37,6 +36,40 @@ final class CallScreenLayerTests: XCTestCase {
 
     func test_togglingMenu_openPanel_closesEverything() {
         XCTAssertEqual(CallScreenLayer.panel(.react).togglingMenu(), .idle)
+        XCTAssertEqual(CallScreenLayer.panel(.record).togglingMenu(), .idle)
+    }
+
+    /// #17343 — (…) sur un journal ouvert le RANGE : il ne ferme rien.
+    func test_togglingMenu_openJournal_stowsItBehindTheMenu() {
+        XCTAssertEqual(CallScreenLayer.panel(.journal).togglingMenu(), .menuOverJournal)
+    }
+
+    /// #17343 — refermer les actions rend le journal.
+    func test_togglingMenu_menuOverJournal_givesTheJournalBack() {
+        XCTAssertEqual(CallScreenLayer.menuOverJournal.togglingMenu(), .panel(.journal))
+    }
+
+    func test_menuOverJournal_isAMenu_theRailsAndRowsComeOut_nothingIsOpenYet() {
+        let layer = CallScreenLayer.menuOverJournal
+        XCTAssertTrue(layer.isExpanded)
+        XCTAssertTrue(layer.showsFamilyRows)
+        XCTAssertNil(layer.openPanel)
+        XCTAssertNil(layer.pillPanel)
+        XCTAssertTrue(layer.mayAutoHide)
+        XCTAssertFalse(layer.freesTheScreen)
+    }
+
+    func test_opening_fromTheMenuOverAJournal_opensThePanelAsked() {
+        XCTAssertEqual(CallScreenLayer.menuOverJournal.opening(.journal), .panel(.journal))
+        XCTAssertEqual(CallScreenLayer.menuOverJournal.opening(.react), .panel(.react))
+    }
+
+    func test_backToMenu_menuOverJournal_changesNothing() {
+        XCTAssertEqual(CallScreenLayer.menuOverJournal.backToMenu(), .menuOverJournal)
+    }
+
+    func test_closed_menuOverJournal_returnsToIdle() {
+        XCTAssertEqual(CallScreenLayer.menuOverJournal.closed(), .idle)
     }
 
     func test_togglingMenu_mode_isIgnored() {
@@ -75,17 +108,26 @@ final class CallScreenLayerTests: XCTestCase {
         XCTAssertTrue(layers.allSatisfy { $0.closed() == .idle })
     }
 
-    func test_pillPanel_reactAndRecord_areDrawnInThePill_insteadOfTheRows() {
+    func test_pillPanel_reactRecordAndJournal_areDrawnInThePill_insteadOfTheRows() {
         XCTAssertEqual(CallScreenLayer.panel(.react).pillPanel, .react)
         XCTAssertEqual(CallScreenLayer.panel(.record).pillPanel, .record)
+        XCTAssertEqual(CallScreenLayer.panel(.journal).pillPanel, .journal)
         XCTAssertFalse(CallScreenLayer.panel(.react).showsFamilyRows)
         XCTAssertFalse(CallScreenLayer.panel(.record).showsFamilyRows)
+        XCTAssertFalse(CallScreenLayer.panel(.journal).showsFamilyRows)
     }
 
-    func test_pillPanel_peopleAndJournal_openAboveTheRows_notInThePill() {
+    /// #17343 — le journal n'est plus une feuille : il se dessine dans la pilule.
+    /// Seul « Ajouter » (la liste d'amis) reste une feuille, sous les rangées.
+    func test_pillPanel_people_staysASheetOverTheRows() {
         XCTAssertNil(CallScreenLayer.panel(.people).pillPanel)
-        XCTAssertNil(CallScreenLayer.panel(.journal).pillPanel)
-        XCTAssertTrue(CallScreenLayer.panel(.journal).showsFamilyRows)
+        XCTAssertTrue(CallScreenLayer.panel(.people).showsFamilyRows)
+    }
+
+    /// Ma vignette reste pendant que le journal est ouvert : il ne libère pas l'écran.
+    func test_openJournal_doesNotFreeTheScreen_myTileStays() {
+        XCTAssertFalse(CallScreenLayer.panel(.journal).freesTheScreen)
+        XCTAssertTrue(CallChromeVisibility(isModeActive: CallScreenLayer.panel(.journal).freesTheScreen).isVisible(.selfView))
     }
 
     func test_showsFamilyRows_onlyInTheMenuOrUnderASheet() {
@@ -150,6 +192,10 @@ final class CallScreenLayerTests: XCTestCase {
         XCTAssertEqual(CallScreenLayer.panel(.react).reconciled(with: notConnected), .menu)
     }
 
+    func test_reconciled_menuOverJournal_keepsTheLayer() {
+        XCTAssertEqual(CallScreenLayer.menuOverJournal.reconciled(with: actions()), .menuOverJournal)
+    }
+
     func test_reconciled_stillOffered_keepsTheLayer() {
         let video = actions()
         XCTAssertEqual(CallScreenLayer.mode(.montage).reconciled(with: video), .mode(.montage))
@@ -158,21 +204,20 @@ final class CallScreenLayerTests: XCTestCase {
 
     // MARK: - Les options caméra (#8576)
 
-    func test_cameraRail_videoOnPhone_flipCameraEffectsScreen_inOrder() {
-        XCTAssertEqual(CallCameraRail.actions(from: actions()), [.flipCamera, .camera, .effects, .screenShare])
+    func test_myImage_videoOnPhone_cameraFlipEffectsScreen_inOrder() {
+        XCTAssertEqual(actions().myImage, [.camera, .flipCamera, .effects, .screenShare])
     }
 
-    func test_cameraRail_selectableCameras_offersThePicker() {
-        XCTAssertEqual(CallCameraRail.actions(from: actions(hasSelectableCameras: true)), [.cameraPicker, .camera, .effects, .screenShare])
+    func test_myImage_selectableCameras_offersThePicker() {
+        XCTAssertEqual(actions(hasSelectableCameras: true).myImage, [.camera, .cameraPicker, .effects, .screenShare])
     }
 
-    func test_cameraRail_onMac_offersCameraAndEffectsOnly() {
-        XCTAssertEqual(CallCameraRail.actions(from: actions(isOnMac: true)), [.camera, .effects])
+    func test_myImage_onMac_offersCameraAndEffectsOnly() {
+        XCTAssertEqual(actions(isOnMac: true).myImage, [.camera, .effects])
     }
 
-    func test_cameraRail_neverOffersAnActionOfTheCall() {
-        let rail = Set(CallCameraRail.actions(from: actions()))
-        XCTAssertTrue(rail.isDisjoint(with: Set(actions().theCall)))
+    func test_myImage_neverOffersAnActionOfTheCall() {
+        XCTAssertTrue(Set(actions().myImage).isDisjoint(with: Set(actions().theCall)))
     }
 
     func test_isMyImageFullScreen_duo_followsTheLocalPrimary() {
@@ -183,5 +228,19 @@ final class CallScreenLayerTests: XCTestCase {
     func test_isMyImageFullScreen_group_followsMyTileAtTheFront() {
         XCTAssertTrue(CallCameraRail.isMyImageFullScreen(isGroupStage: true, isSelfFeatured: true, isLocalPrimary: false))
         XCTAssertFalse(CallCameraRail.isMyImageFullScreen(isGroupStage: true, isSelfFeatured: false, isLocalPrimary: true))
+    }
+
+    // MARK: - G3.2 — la rangée de base d'une option ouverte n'est pas légendée
+
+    func test_captionsBaseRow_anOptionDrawnInThePill_leavesTheBaseRowBare() {
+        XCTAssertFalse(CallScreenLayer.panel(.record).captionsBaseRow)
+        XCTAssertFalse(CallScreenLayer.panel(.react).captionsBaseRow)
+        XCTAssertFalse(CallScreenLayer.panel(.journal).captionsBaseRow)
+    }
+
+    func test_captionsBaseRow_theMenuAndTheSheetOption_keepTheirCaptions() {
+        XCTAssertTrue(CallScreenLayer.menu.captionsBaseRow)
+        XCTAssertTrue(CallScreenLayer.menuOverJournal.captionsBaseRow)
+        XCTAssertTrue(CallScreenLayer.panel(.people).captionsBaseRow)
     }
 }

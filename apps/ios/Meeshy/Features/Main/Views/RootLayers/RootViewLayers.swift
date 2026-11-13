@@ -202,6 +202,9 @@ struct RootChromeLayer: ViewModifier {
     let onMiniPlayerTap: () -> Void
     let showFeed: Bool
     let showMenu: Bool
+    /// L'aperçu d'appui long ouvert : la bannière du joueur et la pastille de
+    /// synchronisation lui cèdent la place (#17260).
+    @ObservedObject var peekPresence: LongPressPeekPresence
 
     func body(content: Content) -> some View {
         content
@@ -232,13 +235,14 @@ struct RootChromeLayer: ViewModifier {
                     // `SyncPillPlacement`, plus chez chaque hôte (#5941,
                     // #5944, #5835).
                     .inSyncPillBand()
+                    .modifier(ConcealedUnderLongPressPeek(presence: peekPresence))
                 }
             }
             // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
             // bannière call-waiting) : le tick `callDuration` 1 Hz et les stats
             // qualité WebRTC n'invalident que `CallPresentationLayer`, jamais la
             // racine (cause du watchdog 0x8BADF00D en arrière-plan pendant un
-            // appel). Le mini-lecteur audio y est hoisté (2026-08-13, même point
+            // appel). Le mini-lecteur audio y est hoisté (même point
             // de montage que la bannière d'appel) ; son tap route par
             // `navigateToConversationById`, le chemin des deep links et des push.
             .modifier(CallPresentationLayer(
@@ -251,7 +255,8 @@ struct RootChromeLayer: ViewModifier {
                 // flottants — ni un fil, ni Progression elle-même, ni le lecteur de réels. Une primitive
                 // calculée ICI, où le routeur et le lecteur de réels sont observés.
                 playerBannerHosted: PlayerBannerPlacement.hosts(
-                    routeIsDeep: router.isDeepRoute, reelsAreOpen: reelsPresenter.launch != nil),
+                    routeIsDeep: router.isDeepRoute, reelsAreOpen: reelsPresenter.launch != nil,
+                    peekIsOpen: peekPresence.isOpen),
                 onPlayerBannerTap: { router.openGame(at: .progressionConcept($0.concept)) }
             ))
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
@@ -366,8 +371,7 @@ struct RootSheetsLayer: ViewModifier {
                     }
                 }
             }
-            // Accès rapide « Publier un post » (liste de conversations, tableau de
-            // bord — 2026-08-21) : le flux se montre, et `ThemedFeedOverlay`
+            // Accès rapide « Publier un post » (liste de conversations): le flux se montre, et `ThemedFeedOverlay`
             // consomme le drapeau en ouvrant son composeur.
             .adaptiveOnChange(of: router.pendingOpenFeedComposer) { _, pending in
                 guard pending, !showFeed else { return }

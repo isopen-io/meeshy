@@ -181,6 +181,7 @@ import type {
   TalkieEndedEventData,
   TalkieEndPayload,
   TalkieIncomingEventData,
+  TalkieJoinPayload,
   TalkieStartAck,
   TalkieStartPayload,
 } from '../talkie.js';
@@ -555,6 +556,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TALKIE_START]: (data: TalkieStartPayload, callback?: (response: TalkieStartAck) => void) => void;
   [CLIENT_EVENTS.TALKIE_SEND_CHUNK]: (data: TalkieChunkPayload) => void;
   [CLIENT_EVENTS.TALKIE_END]: (data: TalkieEndPayload) => void;
+  [CLIENT_EVENTS.TALKIE_JOIN]: (data: TalkieJoinPayload) => void;
   [CLIENT_EVENTS.NOW_PLAYING_UPDATE]: (data: NowPlayingUpdatePayload, callback?: (response: NowPlayingAck) => void) => void;
   [CLIENT_EVENTS.NOW_PLAYING_CLEAR]: (data: Record<string, never>, callback?: (response: NowPlayingClearAck) => void) => void;
   [CLIENT_EVENTS.SHARED_LOCATION_START]: (data: SharedLocationStartPayload, callback?: (response: SharedLocationAck) => void) => void;

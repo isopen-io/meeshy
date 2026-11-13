@@ -33,7 +33,7 @@ enum VitrineReel {
     /// `nil` sinon — la requête de production part alors, inchangée.
     static func creerSiInstallee(_ corps: CreatePostBody, televerses: [VitrineTeleverse]) async throws -> APIPost? {
         guard let lecteur else { return nil }
-        try? await Task.sleep(for: delai)
+        guard await cancellableSleep(for: delai) else { throw CancellationError() }
         var servis: [VitrineTeleverse] = []
         for piece in televerses.map({ copieServie($0) }) {
             servis.append(await avecSonAffiche(piece))
@@ -67,7 +67,7 @@ extension VitrineReel {
     }
 
     /// La passerelle tire l'affiche d'une vidéo, ses dimensions et sa durée : sans elles, la carte du réel au fil peint sa
-    /// couleur d'attente en chatoiement, faute d'image à montrer avant la première frame (prise du 2026-10-09).
+    /// couleur d'attente en chatoiement, faute d'image à montrer avant la première frame.
     nonisolated static func avecSonAffiche(_ piece: VitrineTeleverse) async -> VitrineTeleverse {
         guard piece.mimeType.hasPrefix("video/"), let video = URL(string: piece.url), video.isFileURL,
               let affiche = await VitrineAffiche.tirer(de: video) else { return piece }

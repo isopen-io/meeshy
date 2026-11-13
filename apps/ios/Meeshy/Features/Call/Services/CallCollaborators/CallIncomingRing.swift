@@ -68,7 +68,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
             guard let error else { return }
             Logger.calls.error("CallKit VoIP report failed: \(error.localizedDescription)")
             Task { @MainActor [weak call] in
-                // Audit 2026-07-10 — route through failCall so this teardown
+                // route through failCall so this teardown
                 // also reports `.failed` to CallKit (via reportCall). Calling
                 // endCallInternal directly left a partially-registered system
                 // Recents entry never explicitly ended, unlike every other
@@ -87,7 +87,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
         // The VoIP push payload carries the per-user ICE servers (TURN credentials)
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
         Logger.calls.info("[CALL_SETUP] incoming 1/4 webRTC.configure begin (isVideo=\(isVideo))")
-        // Audit fix (calling-stack audit 2026-08-15): abort on a genuine
+        // Audit fix: abort on a genuine
         // peer-connection creation failure instead of silently proceeding.
         guard call.webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else {
             Logger.calls.error("[CALL_SETUP] incoming (VoIP) webRTC.configure failed — aborting")
@@ -423,7 +423,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
         call.activeCallUUID = uuid
         let update = CXCallUpdate.incoming(callerUserId: fromUserId, callerName: fromUsername, isVideo: isVideo)
 
-        // CALL-FIX 2026-06-06 (macOS) — CallKit's `reportNewIncomingCall` FAILS on
+        // CALL-FIX (macOS) — CallKit's `reportNewIncomingCall` FAILS on
         // iOS-app-on-Mac (no system call UI → CXErrorCodeIncomingCallError 3), which
         // previously killed every Mac incoming call (`endCallInternal(.failed)`).
         // On Mac we skip CallKit entirely and keep `callState=.ringing(incoming)` so
@@ -451,7 +451,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
             call.callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak call] error in
                 if let error {
                     Logger.calls.error("CallKit report incoming failed: \(error.localizedDescription)")
-                    // Audit 2026-07-10 — failCall (not endCallInternal directly)
+                    // failCall (not endCallInternal directly)
                     // also reports `.failed` back to CallKit, matching every
                     // other failure path in this file (see failCall's doc
                     // comment) instead of leaving Recents with a stranded entry.
@@ -461,7 +461,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
         }
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
-        // Audit fix (calling-stack audit 2026-08-15): abort on a genuine
+        // Audit fix: abort on a genuine
         // peer-connection creation failure instead of silently proceeding.
         guard call.webRTCService.configure(isVideo: isVideo, iceServers: iceServers) else {
             Logger.calls.error("[CALL_SETUP] incoming (notification) webRTC.configure failed — aborting")
@@ -500,7 +500,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
         if source == .voipPush { Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin") }
         call.audio.configureAudioSession()
         call.reliabilityMonitor.startReliabilityMonitor()
-        // Audit fix (calling-stack audit 2026-08-24) — arm the background
+        // Audit fix — arm the background
         // observer HERE, at ring time, not only from transitionToConnected().
         // promoteRingingCallToCallKitIfNeeded() is only ever invoked by the
         // observer startBackgroundMonitoring() registers; gating that
@@ -522,7 +522,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
         // waiting for our camera/mic warmup. Media init runs in parallel; the
         // answer creation paths (answerCall*, handleSignalOffer .connecting)
         // await `localMediaTask` before invoking createAnswer.
-        // [Fix 2026-07-02] via joinCallRoomReliably: on a VoIP cold start the
+        // [] via joinCallRoomReliably: on a VoIP cold start the
         // socket has never connected — a bare emit vanishes (prod-observed).
         call.joinCallRoomReliably(callId: callId)
         switch source {
@@ -582,7 +582,7 @@ final class CallIncomingRing: CallIncomingRingProviding {
         Logger.calls.info("Superseded waiting call ended: \(superseded.callId) (replaced by \(newCallId))")
     }
 
-    /// Audit 2026-07-02 (bug 3) — the caller of the WAITING call hung up (or it
+    /// (bug 3) — the caller of the WAITING call hung up (or it
     /// was answered/force-ended elsewhere) before the user acted on the banner.
     /// Every terminal socket listener guards on `currentCallId` (the ACTIVE
     /// call) and early-returns for the waiting call's id — without this check

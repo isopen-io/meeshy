@@ -5,7 +5,7 @@ import MeeshySDK
 /// j'ai déjà écouté ailleurs » de la reprise multi-appareil.
 ///
 /// **Extrait de `ConversationViewModel.swift` au 232i (#3914)**, qui passait
-/// 5 055 lignes : la directive 2026-08-28 interdit d'ajouter à un fichier hors
+/// 5 055 lignes: la interdit d'ajouter à un fichier hors
 /// budget, et `FileSizeBudgetGuardTests` la mesure. La ligne de découpe est une
 /// RESPONSABILITÉ — ici, la réconciliation entre deux sources de position (le
 /// magasin LOCAL de l'appareil et la valeur SERVIE) — qui n'a rien à voir avec

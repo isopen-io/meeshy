@@ -31,7 +31,7 @@ struct ShareLinkArrivalsListView: View {
                 if viewModel.totalCount > 0 {
                     Text(ShareLinkDetailCopy.arrivalsTotal(viewModel.totalCount))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(secondaryInk)
+                        .foregroundStyle(secondaryInk)
                         .padding(.horizontal, MeeshySpacing.xs)
                 }
                 content
@@ -62,7 +62,7 @@ struct ShareLinkArrivalsListView: View {
             card {
                 Text(ShareLinkDetailCopy.noArrivals)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                    .foregroundColor(secondaryInk)
+                    .foregroundStyle(secondaryInk)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         } else {
@@ -89,7 +89,7 @@ struct ShareLinkArrivalsListView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(viewModel.nextPageFailed ? ShareLinkDetailCopy.arrivalsMoreFailed : ShareLinkDetailCopy.arrivalsLoadFailed)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(secondaryInk)
+                    .foregroundStyle(secondaryInk)
                     .fixedSize(horizontal: false, vertical: true)
                 retryButton
             }
@@ -102,11 +102,11 @@ struct ShareLinkArrivalsListView: View {
             VStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "wifi.exclamationmark")
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .semibold))
-                    .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
                     .accessibilityHidden(true)
                 Text(ShareLinkDetailCopy.arrivalsLoadFailed)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                    .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 retryButton
@@ -122,7 +122,7 @@ struct ShareLinkArrivalsListView: View {
         } label: {
             Text(ShareLinkDetailCopy.retry)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
+                .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600)
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
         }

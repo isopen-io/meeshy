@@ -56,7 +56,7 @@ struct GameElementEmblemView: View {
             Image(systemName: name)
                 .resizable()
                 .scaledToFit()
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
                 .padding(size * 0.2)
         }
     }
@@ -125,7 +125,7 @@ struct GameElementSheet: View {
             VStack(spacing: MeeshySpacing.xs) {
                 Text(detail.name)
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
@@ -143,7 +143,7 @@ struct GameElementSheet: View {
                 GameBadgeStarsView(model: badge)
                 Text(badge.reason)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("game.badge.reason")
@@ -211,7 +211,7 @@ struct GameElementSheet: View {
         case .value(let value, _):
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("game.detail.value")
@@ -237,7 +237,7 @@ struct GameElementSheet: View {
             ProgressionConceptSectionTitle(text: title)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

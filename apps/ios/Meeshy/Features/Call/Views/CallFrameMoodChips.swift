@@ -128,6 +128,7 @@ struct CallFrameMoodChips: View {
                     .padding(.horizontal, MeeshySpacing.lg)
                 }
             }
+            .mask { ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true) }
             .disabled(!isEnabled)
             .opacity(isEnabled ? 1 : 0.5)
             .onAppear {
@@ -166,7 +167,8 @@ private struct CallFrameScopeChip: View {
     }
 }
 
-private struct CallFrameMoodChip: View {
+/// La puce de verre des cadres de l'appel — aussi celle du tri de la bande du composer (#17267).
+struct CallFrameMoodChip: View {
     let title: String
     let isSelected: Bool
     let action: () -> Void
@@ -178,6 +180,28 @@ private struct CallFrameMoodChip: View {
         .buttonStyle(CallPressButtonStyle())
         .accessibilityLabel(title)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+    }
+}
+
+/// C1 · loi 16 — l'option « Cadre » : garder le cadre choisi pour les deux et le proposer. Une puce
+/// de verre au-dessus des ambiances, pressée en blanc quand le cadre est gardé.
+struct CallFrameHoldChip: View {
+    let isOn: Bool
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            CallFrameMoodChipLabel(title: CallLiveFrameCopy.caption, isSelected: isOn, symbol: "photo.artframe")
+        }
+        .buttonStyle(CallPressButtonStyle())
+        .disabled(!isEnabled)
+        .accessibilityLabel(CallLiveFrameCopy.label)
+        .accessibilityHint(CallLiveFrameCopy.hint)
+        .toggleStateAccessibility(isToggle: true, isActive: isOn)
     }
 }
 

@@ -10,7 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.BirthDateDeclarationError
+import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.onboarding.ApiOnboardingState
 import me.meeshy.sdk.model.onboarding.OnboardingAgeRules
@@ -21,6 +23,7 @@ import me.meeshy.sdk.model.onboarding.OnboardingContactsRules
 import me.meeshy.sdk.model.onboarding.OnboardingGain
 import me.meeshy.sdk.model.onboarding.OnboardingGreeting
 import me.meeshy.sdk.model.onboarding.OnboardingPlan
+import me.meeshy.sdk.model.onboarding.OnboardingProfileCard
 import me.meeshy.sdk.model.onboarding.OnboardingRecap
 import me.meeshy.sdk.model.onboarding.OnboardingRewards
 import me.meeshy.sdk.model.onboarding.OnboardingSendState
@@ -72,6 +75,10 @@ class OnboardingViewModel @Inject constructor(
     private var knownScore: Int? = null
     private var servedElanFactor = 1
     private var servedRewards: OnboardingStepRewards? = null
+    /** Les images dont l'envoi a échoué, GARDÉES pour « Réessayer » jusqu'à ce que la carte se quitte. */
+    private var failedProfileImages: Map<ImageUploadTarget, FailedProfileImage> = emptyMap()
+
+    private class FailedProfileImage(val item: MediaUploadItem, val preview: String)
 
     /** Le parcours est-il en train de recouvrir l'écran ? Lu par ceux qui ne doivent pas le recouvrir. */
     val isPresented: Boolean get() = mutableState.value.isPresented
@@ -106,6 +113,7 @@ class OnboardingViewModel @Inject constructor(
      * sans quoi le calque recouvrirait l'écran de connexion et le compte suivant hériterait des cartes du précédent.
      */
     fun sessionEnded() {
+        releaseFailedProfileImages()
         user = null
         composedGreeting = ""
         initialLanguages = "" to null
@@ -144,6 +152,7 @@ class OnboardingViewModel @Inject constructor(
             state = served,
             contactsOfferable = OnboardingContactsRules.isOfferable(contacts),
             notificationsUndetermined = gateway.notificationsUndetermined(),
+            profileComplete = user?.let { OnboardingProfileCard.isComplete(it.avatar, it.banner) } ?: false,
         )
         mutableState.update {
             it.copy(
@@ -175,6 +184,8 @@ class OnboardingViewModel @Inject constructor(
                 secondaryLanguage = secondary,
                 accountEmail = user.email?.takeIf { email -> email.isNotEmpty() },
                 userDisplayName = user.displayName ?: user.username,
+                userHandle = user.username,
+                profileCard = OnboardingProfileCard.of(user.avatar, user.banner),
                 ageBirthDate = OnboardingAgeRules.initialDate(today()),
             )
         }
@@ -214,6 +225,7 @@ class OnboardingViewModel @Inject constructor(
     suspend fun finish() = close()
 
     private suspend fun close() {
+        releaseFailedProfileImages()
         awaitsRoute = false
         mutableState.update { it.copy(isPresented = false, card = null) }
         user?.let { gateway.markSettled(it.id) }
@@ -221,6 +233,7 @@ class OnboardingViewModel @Inject constructor(
     }
 
     private suspend fun showNext() {
+        releaseFailedProfileImages()
         val (plan, card) = mutableState.value.plan.next()
         mutableState.update { it.copy(plan = plan, card = card) }
         if (card == OnboardingCard.Recap) loadRecap()
@@ -270,6 +283,65 @@ class OnboardingViewModel @Inject constructor(
             initialLanguages = chosen
         }
         gateway.record(OnboardingStepId.LANGUAGES, OnboardingStepOutcome.DONE)
+    }
+
+    // endregion
+
+    // region Carte « Montre-toi »
+
+    /**
+     * Une image choisie (et retouchée) pour l'avatar ou la bannière : elle s'affiche AUSSITÔT ([preview], l'aperçu
+     * local), part par le trajet partagé du Profil, puis l'adresse servie la remplace. Un échec rend l'image précédente
+     * et garde le choix pour « Réessayer ». Hors de la carte, ou pendant un envoi de la même image, le choix est libéré.
+     */
+    suspend fun pickProfileImage(target: ImageUploadTarget, item: MediaUploadItem, preview: String) {
+        val current = mutableState.value
+        if (current.card != OnboardingCard.Step(OnboardingStepId.PROFILE) || current.profileCard.slot(target).isUploading) {
+            gateway.releaseProfileImage(item)
+            return
+        }
+        failedProfileImages[target]?.let { gateway.releaseProfileImage(it.item) }
+        failedProfileImages = failedProfileImages - target
+        sendProfileImage(target, item, preview)
+    }
+
+    /** « Réessayer » : chaque image qui a échoué repart telle quelle, sans repasser par le sélecteur (iOS `retryFailed`). */
+    suspend fun retryFailedProfileImages() {
+        if (mutableState.value.card != OnboardingCard.Step(OnboardingStepId.PROFILE)) return
+        val failed = failedProfileImages
+        failedProfileImages = emptyMap()
+        failed.forEach { (target, image) -> sendProfileImage(target, image.item, image.preview) }
+    }
+
+    private suspend fun sendProfileImage(target: ImageUploadTarget, item: MediaUploadItem, preview: String) {
+        mutableState.update { it.copy(profileCard = it.profileCard.picked(target, preview)) }
+        val url = gateway.uploadProfileImage(target, item)
+        if (url == null) {
+            failedProfileImages = failedProfileImages + (target to FailedProfileImage(item, preview))
+            mutableState.update { it.copy(profileCard = it.profileCard.failed(target)) }
+            return
+        }
+        gateway.releaseProfileImage(item)
+        mutableState.update { it.copy(profileCard = it.profileCard.uploaded(target, url)) }
+    }
+
+    /** « Continuer » : `done` si une image a été posée ou part encore ; « Plus tard » seul : `skipped`. */
+    suspend fun continueFromProfile() {
+        val current = mutableState.value
+        if (current.card != OnboardingCard.Step(OnboardingStepId.PROFILE)) return
+        showNext()
+        gateway.record(OnboardingStepId.PROFILE, current.profileCard.outcome)
+    }
+
+    private fun releaseFailedProfileImages() {
+        failedProfileImages.values.forEach { gateway.releaseProfileImage(it.item) }
+        failedProfileImages = emptyMap()
+        mutableState.update { state ->
+            val card = state.profileCard
+            state.copy(
+                profileCard = card.dismissFailure(ImageUploadTarget.AVATAR).dismissFailure(ImageUploadTarget.BANNER),
+            )
+        }
     }
 
     // endregion

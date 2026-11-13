@@ -43,11 +43,13 @@ const PATH = meEndpoints.onboarding;
    pour que l'écran n'importe qu'un seul port. `import type` : rien ne pèse. */
 export type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@meeshy/shared/types/onboarding';
 
-/** L'ordre du parcours — celui de `ONBOARDING_STEP_IDS` (shared), lu sans
- * importer `zod` : l'âge juste après les langues, avant Meeshy Global, dont il
- * dit si le salut peut y partir. `satisfies` + `ExhaustiveSteps` le tiennent
- * complet. */
-export const ONBOARDING_STEPS = ['languages', 'age', 'email', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
+/** L'ordre d'AFFICHAGE du parcours — les identifiants de `ONBOARDING_STEP_IDS`
+ * (shared), lus sans importer `zod` : l'âge juste après les langues, avant
+ * Meeshy Global, dont il dit si le salut peut y partir ; « Montre-toi »
+ * (`profile`, #17237) juste après le courriel et avant Global — le serveur la
+ * range en dernier dans son tableau, l'ordre montré est celui du client.
+ * `satisfies` + `ExhaustiveSteps` le tiennent complet. */
+export const ONBOARDING_STEPS = ['languages', 'age', 'email', 'profile', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
 
 /** Les étapes dont la vue clôt le parcours — `ONBOARDING_COMPLETION_STEP_IDS`
  * (shared) : `email`, proposée au seul courriel non vérifié, n'en est pas. */

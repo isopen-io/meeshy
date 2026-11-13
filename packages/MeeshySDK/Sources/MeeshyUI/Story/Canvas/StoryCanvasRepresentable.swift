@@ -5,8 +5,8 @@ import MeeshySDK
 /// Pont entre les bitmaps édités/foreground du composer (`viewModel.loadedImages`
 /// keyés par `media.id`) et l'`ImageCacheReader` consommé par `StoryMediaLayer`.
 ///
-/// Le composer mute `loadedImages[id] = edited` dans son `MeeshyImageEditorView`
-/// onAccept. Sans ce pont, le `StoryCanvasUIView` ne voyait que `media.mediaURL`
+/// Le composer mute `loadedImages[id] = edited` quand une image est
+/// retouchée. Sans ce pont, le `StoryCanvasUIView` ne voyait que `media.mediaURL`
 /// (URL inchangée → `ImageLoader` cache servait l'ancien bitmap) et le canvas
 /// principal restait stale après édition. Le mini canvas marchait déjà car
 /// `SlideMiniPreview` lit `loadedImages` direct.
@@ -112,7 +112,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var onViewportZoomResetRequested: (() -> Void)?
     /// Miroir de `viewModel.isDrawingActive` du composer. Quand `true`, le
     /// canvas supprime son drawingLayer persisté pour éviter le double rendu
-    /// avec le PKCanvasView SwiftUI overlay (bug "écrit en double", 2026-05-27).
+    /// avec le PKCanvasView SwiftUI overlay.
     public var isDrawingOverlayActive: Bool = false
     /// Side-cache des bitmaps édités/foreground du composer keyé par `media.id`.
     /// Wired vers `StoryCanvasUIView.readerContext.imageCache` via le pont
@@ -120,7 +120,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// éditions image (bug 2026-05-27 : main canvas stale après image edit).
     public var loadedImages: [String: UIImage] = [:]
     /// Cookie monotone à bumper côté composer à chaque mutation utile de
-    /// `loadedImages` (typiquement l'`onAccept` du `MeeshyImageEditorView`).
+    /// `loadedImages` (typiquement une image retouchée).
     /// Le `Coordinator` compare la valeur reçue à `lastVersionSeen` pour
     /// décider si un rebuild canvas est nécessaire (les dicts UIImage ne sont
     /// pas Equatable).
@@ -135,7 +135,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// URLs locales (file://) des clips audio importés, keyées par `audio.id`
     /// (miroir de `viewModel.loadedAudioURLs`). Wiré vers
     /// `readerContext.localAudioURLResolver` pour que le mixer joue le son en
-    /// preview d'édition (directive user 2026-07-14). `postMediaId` étant vide
+    /// preview d'édition. `postMediaId` étant vide
     /// pour un clip non publié, le resolver par `postMediaId` échouait.
     public var loadedAudioURLs: [String: URL] = [:]
     /// Les médias adoptés rendus à leur fichier (`StoryReaderContext.localMediaAliases`).
@@ -158,6 +158,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// qu'il peint lui-même (la retouche de la caméra, pour son texte) le demande ; le défaut
     /// garde le canvas du composer tel qu'il était.
     public var paintsSceneBackground: Bool = true
+    /// Le canvas posé sur le viseur ne garde que les touchers qui tombent sur un objet (#17432).
+    public var passesThroughEmptyTouches: Bool = false
     /// La barre collée au clavier et le panneau d'options de l'hôte (#13839, L4).
     public var inlineEditInputLink: StoryInlineEditInputLink?
 
@@ -197,8 +199,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 localMediaAliases: [String: URL] = [:],
                 inlineEditYieldsToManipulation: Bool = false,
                 paintsSceneBackground: Bool = true,
+                passesThroughEmptyTouches: Bool = false,
                 inlineEditInputLink: StoryInlineEditInputLink? = nil) {
         self.inlineEditInputLink = inlineEditInputLink
+        self.passesThroughEmptyTouches = passesThroughEmptyTouches
         self.paintsSceneBackground = paintsSceneBackground
         self.localMediaAliases = localMediaAliases
         self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
@@ -295,6 +299,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // jamais ce drapeau et reste silencieux.
         view.playsVideoInEditMode = true
         Self.applyBackgroundPolicy(to: view, paintsSceneBackground: paintsSceneBackground)
+        view.passesThroughEmptyTouches = passesThroughEmptyTouches
         // Troisième famille vivante sur le canvas d'édition (#4999) : une
         // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
         // comme la vidéo et le son juste au-dessus et juste en dessous.
@@ -397,7 +402,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // reader UNIQUEMENT quand `loadedImagesVersion` change pour éviter
         // un rebuild par body eval (updateUIView est appelé fréquemment).
         // Le bump de version est piloté par le composer (cf.
-        // `MeeshyImageEditorView` onAccept → `viewModel.loadedImagesVersion &+= 1`).
+        // une retouche → `viewModel.loadedImagesVersion &+= 1`).
         //
         // `invalidateImageCache()` bump la révision pour forcer le re-stamp
         // des layers du `StoryRendererCache` — cet appel EST réservé au

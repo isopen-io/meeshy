@@ -6,6 +6,7 @@ import MeeshySDK
 import MeeshyUI
 
 struct PostDetailView: View {
+    @State var delayed = DelayedActions()
     let postId: String
     var initialPost: FeedPost?
     var showComments: Bool = false
@@ -51,7 +52,7 @@ struct PostDetailView: View {
     @State var fullscreenMediaId: String? = nil
     @State var showFullscreenGallery = false
     /// La scène par laquelle on ENTRE en plein écran depuis la mosaïque du
-    /// détail (directive porteur 2026-09-06).
+    /// détail.
     @State var detailSceneIndex: Int = 0
     @State var audioFullscreen: AudioFullscreenSource?
     /// Lieu du post ouvert plein écran (sticker / carte de la page Detail).
@@ -254,7 +255,7 @@ struct PostDetailView: View {
         // ET garantit que la porte et le rendu voient EXACTEMENT le même item.
         let renderedItem = StoryItem(feedPost: post)
         // **La scène se rend parce que le post en PORTE une, pas parce qu'il
-        // est une story** (constat porteur 2026-09-06). `post.isStory` était
+        // est une story**. `post.isStory` était
         // ici une question de TYPE là où le fil pose, lui, une question de
         // CONTENU (`post.storyEffects?.canvasV3`) — d'où un POST à scène
         // peint dans le fil et ABSENT du détail. Le prédicat est partagé avec
@@ -267,7 +268,7 @@ struct PostDetailView: View {
                 .padding(.top, MeeshySpacing.sm)
         }
 
-        // Lieu attaché au post (constat user 2026-07-30) : même paire de
+        // Lieu attaché au post: même paire de
         // rendus que la card du feed — carte pleine largeur + texte overlay
         // quand la position est le seul visuel, sinon sticker compact.
         if let place = post.location {
@@ -295,8 +296,7 @@ struct PostDetailView: View {
         // STORY qui reposte une STORY : le canvas principal ci-dessus rend
         // DÉJÀ la republication complète (effects/médias/audio retombent sur
         // la source via `StoryItem(feedPost:)`). Rendre en plus l'embed de
-        // l'original doublait le contenu à l'écran (bug 2026-07-13,
-        // IMG_1161) — on le remplace par une ligne d'attribution « via
+        // l'original doublait le contenu à l'écran (IMG_1161) — on le remplace par une ligne d'attribution « via
         // @auteur » qui ouvre l'original.
         if let repost = post.repost {
             if post.isStory && isSharedStory {
@@ -367,7 +367,7 @@ struct PostDetailView: View {
             } label: {
                 Text(String(localized: "feed.post.detail.load_more", defaultValue: "Charger plus", bundle: .main))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
             }
             .padding()
         }
@@ -418,7 +418,7 @@ struct PostDetailView: View {
                         .onGeometryChange(for: CGSize.self) { $0.size } action: { sceneMeasures = sceneMeasures.recordingViewport($0, composerIsFocused: composerIsFocused) }
                         .onAppear {
                             if showComments {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                delayed.run(after: .milliseconds(500)) {
                                     attemptScrollToTargetComment(using: scrollProxy)
                                 }
                             }
@@ -548,9 +548,11 @@ struct PostDetailView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(width: 36, height: 36)
                 .background(Circle().fill(theme.inputBackground.opacity(0.6)))
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .accessibilityLabel(String(localized: "a11y.post.more_options", defaultValue: "Plus d'options", bundle: .main))
         .accessibilityHint(String(localized: "a11y.post.more_options.hint", defaultValue: "Copier le lien, partager, signaler", bundle: .main))
@@ -571,11 +573,11 @@ struct PostDetailView: View {
                 if hasUsername {
                     Text("@\(username)")
                         .font(.caption)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
                 if isPostAuthor {
                     if hasUsername {
-                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
                     }
                     HStack(spacing: MeeshySpacing.xxs) {
                         ReachMetricLabel(
@@ -584,7 +586,7 @@ struct PostDetailView: View {
                             label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
                             tint: theme.textMuted
                         )
-                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
                         ReachMetricLabel(
                             icon: "chart.bar.fill",
                             count: post.impressionCount,
@@ -598,6 +600,15 @@ struct PostDetailView: View {
     }
 
     // MARK: - Text Zone
+
+    private func toggleTextExpansion() {
+        guard textTruncation.isTruncated else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isTextExpanded.toggle()
+        }
+        guard isTextExpanded else { return }
+        EngagementTracker.shared.recordAction(.expandedText, surface: .detail)
+    }
 
     @ViewBuilder
     private func textZone(_ post: FeedPost) -> some View {
@@ -632,6 +643,7 @@ struct PostDetailView: View {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityLabel(String(format: String(localized: "a11y.post.author_profile", defaultValue: "Profil de %@", bundle: .main), post.author))
                         .accessibilityHint(String(localized: "a11y.post.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
+                        .accessibilityAction { selectedProfileUser = .from(feedPost: post) }
 
                     // @pseudo + portée (vues · impressions) — sous le nom, l'œil
                     // ne vit plus dans la barre d'actions du bas.
@@ -642,7 +654,7 @@ struct PostDetailView: View {
 
                         let flags = buildAvailableFlags()
                         if !flags.isEmpty || post.translations?.isEmpty == false {
-                            MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
+                            MetaSeparator().font(.caption).foregroundStyle(theme.textMuted)
 
                             ForEach(flags, id: \.self) { code in
                                 LanguageFlagChip(code: code, isActive: code == secondaryLangCode) {
@@ -687,19 +699,10 @@ struct PostDetailView: View {
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
             .padding(.horizontal, MeeshySpacing.lg)
-            .onTapGesture {
-                if truncation.isTruncated {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isTextExpanded.toggle()
-                    }
-                    if isTextExpanded {
-                        // L'ouverture du détail a déjà compté sa vue
-                        // (`registerDetailOpen`) : déplier le texte n'en est
-                        // pas une seconde (#10483, viewCount = total).
-                        EngagementTracker.shared.recordAction(.expandedText, surface: .detail)
-                    }
-                }
-            }
+            .onTapGesture { toggleTextExpansion() }
+            .accessibilityAction(named: Text(isTextExpanded
+                ? String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main)
+                : String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))) { toggleTextExpansion() }
 
             // Inline secondary translation panel
             if let content = secondaryContent, let code = secondaryLangCode {
@@ -749,11 +752,7 @@ struct PostDetailView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                     likeScale = 1.3
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                        likeScale = 1.0
-                    }
-                }
+                delayed.run(after: .milliseconds(150)) { withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { likeScale = 1.0 } }
             } label: {
                 HStack(spacing: MeeshySpacing.xs) {
                     let heartColor: Color = detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
@@ -814,7 +813,7 @@ EngagementGlyph(
                     if n > 0 {
                         Text("\(n)")
                             .font(.caption.weight(.medium))
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundStyle(Color(hex: accentColor))
                             .contentTransition(.numericText())
                     }
                 }
@@ -925,11 +924,11 @@ EngagementGlyph(
         HStack(spacing: MeeshySpacing.xsPlus) {
             Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text("(\(displayPost?.commentCount ?? 0))")
                 .font(.subheadline.weight(.bold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             Spacer()
         }

@@ -15,6 +15,7 @@ import {
   nudgeBubble,
   offersOutputChoice,
   PILL_COLLAPSE_DISTANCE,
+  pillSwipeOutcome,
   pinchTier,
   readBubblePlacement,
   snapBubble,
@@ -179,7 +180,7 @@ describe('les tailles de la bulle (#8145)', () => {
   });
 });
 
-describe('« Choisir les périphériques » dans la bulle (#9097)', () => {
+describe('« Sortie audio » dans la bulle (#9097)', () => {
   test('offert là où l’on choisit la sortie : setSinkId du navigateur, ou les routes de la coque', () => {
     expect(offersOutputChoice({ shell: false, sinks: true })).toBe(true);
     expect(offersOutputChoice({ shell: true, sinks: false })).toBe(true);
@@ -198,5 +199,19 @@ describe('bubbleTranslate — la bulle se déplace en `translate`, jamais en lef
 
   test('l’aimantation au bord ne joue QUE `translate`, au tempo de l’ancienne transition', () => {
     expect(BUBBLE_SETTLE_TRANSITION).toBe('translate 180ms ease-out');
+  });
+});
+
+describe('le glissé de la capsule (P18.10)', () => {
+  test('un glissé assez long replie la capsule en bulle ; plus court, c’est un toucher', () => {
+    expect(pillSwipeOutcome({ travelled: PILL_COLLAPSE_DISTANCE, sharing: false })).toBe('collapse');
+    expect(pillSwipeOutcome({ travelled: -PILL_COLLAPSE_DISTANCE - 10, sharing: false })).toBe('collapse');
+    expect(pillSwipeOutcome({ travelled: PILL_COLLAPSE_DISTANCE - 1, sharing: false })).toBe('tap');
+    expect(pillSwipeOutcome({ travelled: PILL_COLLAPSE_DISTANCE - 1, sharing: true })).toBe('tap');
+  });
+
+  test('pendant mon partage d’écran, le glissé ne replie pas, et il n’est pas non plus un toucher qui rouvrirait l’appel', () => {
+    expect(pillSwipeOutcome({ travelled: PILL_COLLAPSE_DISTANCE * 3, sharing: true })).toBe('stay');
+    expect(pillSwipeOutcome({ travelled: -PILL_COLLAPSE_DISTANCE, sharing: true })).toBe('stay');
   });
 });

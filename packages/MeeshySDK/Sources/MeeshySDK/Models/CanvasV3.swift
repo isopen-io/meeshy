@@ -2,8 +2,7 @@ import Foundation
 
 // MARK: - CanvasV3 (spec §C1 — miroir Swift du Zod canvas-v3.ts, fixtures gelées A2)
 
-/// **Comment l'auteur veut que ses scènes soient PRÉSENTÉES** (directive
-/// porteur 2026-09-06, #5322).
+/// **Comment l'auteur veut que ses scènes soient PRÉSENTÉES** (#5322).
 ///
 /// > « On peut définir comment la mosaïque sera affichée : il faut proposer 4
 /// > différentes manières — en vague, en mode hero, en mode défilement comme
@@ -29,7 +28,7 @@ public enum MosaicLayoutMode: String, CaseIterable, Equatable, Codable, Sendable
     /// Une en haut, une en bas, une en haut, une en bas.
     case sine
     /// **Défilement image par image** — une scène par page, on passe à la
-    /// suivante d'un glissement (directive porteur 2026-09-06).
+    /// suivante d'un glissement.
     ///
     /// > « Le défilement image par image est aussi un mode de mosaïque à
     /// > prendre et ce doit être le mode par défaut ! »

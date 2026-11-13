@@ -44,6 +44,7 @@ const POST_ACL_SLICE = {
   visibility: true,
   visibilityUserIds: true,
   expiresAt: true,
+  communityId: true,
 } as const;
 
 /**

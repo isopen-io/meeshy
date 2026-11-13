@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct SessionContent: View {
     let session: AppRootSession
@@ -14,6 +15,7 @@ struct SessionContent: View {
         case .connected:
             AdaptiveRootView()
                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
+                .environment(\.entityImageEditor, EntityImageRetouch.editor)
                 .modifier(ProfileSheetEnvironment())
         case .login:
             loginScreen

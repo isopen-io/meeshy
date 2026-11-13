@@ -430,3 +430,66 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reprise : #17101 (« ensemble » sur iOS) a été fusionnée dans `dev` par le porteur à 20:39, sans preuve Swift
   propre ; le run iOS de `dev` qui la contient (42523576676) est en attente de runner. Aucune PR de la routine ouverte.
   Aucune branche vivante n'écrit `services/together/` : lot #17022 réservé sur `claude/cercles-ensemble-coupures`.
+- Lot : PR #17146 vers `dev`. Relais : `rejudgeTogetherWhere` rejuge une paire, un compte (restreint ou non à une
+  conversation) ou une conversation ; la paire se lit aussi par l'index du compte, ce qui retrouve une séance sortie de
+  l'index de paire par des invitations concurrentes. Un index par conversation (HMAC, borné à 20, effacé avec la séance).
+  `cutTogetherWhere`, relais du processus posé au démarrage par `MeeshySocketIOHandler.setupSocketIO`, appelé après
+  l'écriture qui ferme par : `endConversationMembership` (départ, bannissement, retrait, suppression pour soi),
+  `applyMessageRemovalEffects` (les quatre écrivains de retrait), `DELETE /attachments/:id`, l'obsolescence d'une
+  conversation, la désactivation et la suppression par l'administration (bannissement de plateforme compris), la purge
+  de compte et la fin de grâce.
+- Revue adversariale : bloquante sur trois points, corrigés dans le lot (relais absent avant la première socket,
+  suppression d'une pièce, conversation obsolète). Ouvert en suivi : la porte ne lit pas une conversation CLOSE (#17147).
+  Assumés et écrits dans la PR : l'index de conversation plafonné à 20 et non atomique entre instances (la sauvegarde
+  suivante réinscrit), les séances déjà en cours au déploiement absentes de l'index de conversation jusqu'à leur
+  prochaine synchronisation.
+- Gates locaux : 374 suites voisines (together, socketio, messaging, admin, conversations, directory, relations,
+  attachments, handlers, jobs) 5 854/5 854 vertes ; `tsc` passerelle vert après fusion de `origin/dev` ; cliquet `any` 490.
+- Prochain lot recommandé : #17147 (la porte lit la conversation close, petit et serveur), puis « ensemble » sur Android
+  (#17100), puis l'icône de position par cercle (#17013) quand les clients de la position temporaire auront fusionné.
+
+## 2026-11-08 — réveil 23 : mener #17148 (suite de #17146) jusqu'à la fusion (#17022)
+
+- Reprise : #17146 a été fusionnée dans `dev` sur son premier commit (auto-fusion de la CI de PR gelée) ; ses
+  corrections d'audit sont dans #17148, restée ouverte parce que `dev` était verrouillée à 22:30. `dev` a repris ses
+  fusions depuis : ce réveil n'ouvre rien d'autre et mène #17148.
+- Fusion de `origin/dev` dans la branche : sans conflit, les nouveautés de `dev` ne touchent que l'iOS (caméra,
+  écoute) — aucun fichier de la passerelle. Le `ci.yml` dispatché sur la tête d'avant fusion (`ac2abe92`) était vert ;
+  un nouveau dispatch prouve le commit de fusion.
+- Prochain lot recommandé : inchangé — #17147 (la porte lit la conversation close), puis « ensemble » sur Android
+  (#17100), puis l'icône de position par cercle (#17013).
+
+## 2026-11-09 — réveil 24 : mener #17148 à la fusion (#17022)
+
+- Reprise : #17148 (coupures « ensemble » au démarrage, à la suppression d'une pièce ou d'une conversation) restait
+  ouverte, la fusion ayant été refusée deux fois (`dev` verrouillée la nuit, 405). Aucun nouveau lot ouvert.
+- `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
+  passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
+- Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil repris après coupure : clore #17188 sur sa preuve
+
+- Reprise : run coupé à 05:13 par une erreur d'API, repris à 13:49. Onze PR de la routine ou voisines sont ouvertes et
+  toutes écrites dans les vingt dernières minutes par des réveils vivants (#17956, #17967, #17969, #17973, #17976,
+  #17979, #17981…) : ce réveil n'en prend aucune et n'ouvre pas de branche de code concurrente (« celui qui n'a rien
+  écrit cède »).
+- Lot : #17188 (témoin « ensemble » du SDK, écart d'horloge en `Double`) fermée sur preuve. Le correctif était sur
+  `dev` par #17186 ; `sdk-tests.yml` sur `0a77cc7dbd` (run 43391316368) rend « Verdict iOS SDK » vert, six tranches
+  `Passed`, 0 échec, aucun témoin `TogetherTests` désactivé.
+- Décisions ouvertes pour le porteur : #17218 (niveau d'accès servi entre deux comptes de l'équipe dont l'un bloque
+  l'autre) et #17971 (une communauté désactivée coupe-t-elle ses séances « ensemble »).
+- Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
+  Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
+
+## 2026-11-13 — réveil 28 : « ensemble » sur Android, couche cœur (#17100)
+
+- Reprise : neuf PR de la routine (#17956, #17967, #17969, #17973, #17976, #17979, #17981, #17984, #17985) étaient
+  toutes poussées par d'autres sessions dans les vingt minutes précédentes : ce réveil n'en a doublé aucune. Aucune
+  branche vivante n'écrivait « ensemble » côté Android : lot #17100 réservé sur `claude/cercles-17100-android`.
+- Lot : la couche `:core:model` (Kotlin pur) de « ensemble » — lecture stricte des quatre événements et des accusés
+  `invite`/`join` (`Together.kt`), loi de synchronisation portée à l'identique du web et d'iOS (`TogetherSync.kt`), état
+  de séance en valeur (`TogetherState.kt`). Les 20 témoins reprennent un à un les cas web et iOS.
+- Gate local : `./meeshy.sh jvm-check -PjvmCheckModelOnly --tests '*TogetherTest*'` 20/20 vert (module entier compilé).
+  La preuve Android complète est `android.yml` sur la PR.
+- Reste pour fermer #17100 : émetteur socket et flux d'événements (`sdk-core`), lecteur Media3 piloté par la loi,
+  bandeau d'invitation, ligne de la fiche d'un Proche, libellés `together.*`.

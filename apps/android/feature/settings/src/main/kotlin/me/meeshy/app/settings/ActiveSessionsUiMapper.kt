@@ -77,8 +77,7 @@ internal class ActiveSessionsUiMapper(
         place ?: return null
         val named = listOfNotNull(place.city, place.countryCode?.let(countryName)).joinToString(", ")
         val located = named.ifEmpty { place.location }
-        val approximate = located?.let { string(R.string.sessions_place_approximate, listOf(it)) }
-        return listOfNotNull(approximate, place.ipAddress).takeIf { it.isNotEmpty() }?.joinToString(SEPARATOR)
+        return listOfNotNull(located, place.ipAddress).takeIf { it.isNotEmpty() }?.joinToString(SEPARATOR)
     }
 
     private fun opened(row: SessionRowPresentation): String? {

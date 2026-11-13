@@ -3,13 +3,13 @@ import MeeshySDK
 
 // MARK: - CE QU'UNE OUVERTURE EFFACE — ET CE QU'ELLE NE TOUCHE PAS
 //
-// **Directive porteur 2026-09-16** (#6789) : « Lorsqu'on affiche les reactions,
+// **** (#6789): « Lorsqu'on affiche les reactions,
 // les autres controlleurs doivent disparaitre. »
 // **Élargie le même jour** (#6817) : « Le fait de répondre à un attachement /
 // scène doit faire comme pour les réactions : faire disparaître les décorateurs
 // et autres. »
 //
-// La première directive SUPPLANTAIT la précision du 2026-09-11 (#6084, « les
+// La première (#6084, « les
 // réactions doivent apparaître par-dessus tous les autres contrôleurs ») : la
 // première demandait un RANG, celle-ci demande une ABSENCE. Le rang avait été
 // obtenu en montant la rangée en dernier enfant du `ZStack` racine — ce qui
@@ -87,7 +87,7 @@ nonisolated enum MediaStageVeil {
         presentation.showsPlateau && !overlays.isOpen
     }
 
-    /// **On entre en plein écran, sans chrome** (#10930, porteur 2026-10-18) :
+    /// **On entre en plein écran, sans chrome** (#10930):
     /// le toucher le pose par-dessus. **Sauf sous VoiceOver** : son toucher
     /// désigne au lieu d'agir, et un écran sans croix ni libellé n'y aurait
     /// aucune sortie annoncée — le chrome y est donc là dès l'entrée.
@@ -117,8 +117,7 @@ nonisolated enum MediaStageVeil {
     /// `geometryPresentation(p, overlays: x) == geometryPresentation(p, overlays: .closed)`
     /// pour tout `p` et tout `x`.
     ///
-    /// **Et le chrome lui-même ne la change plus** (directive porteur
-    /// 2026-10-18, #10930 : « la vidéo est toujours en plein écran et doit fit
+    /// **Et le chrome lui-même ne la change plus** (#10930: « la vidéo est toujours en plein écran et doit fit
     /// le viewport »). Le plateau est une SUPERPOSITION : le toucher qui le
     /// montre pose les contrôles par-dessus le média, il ne le rétrécit pas.
     /// Le solveur reçoit donc le plein cadre dans les deux états ; seule la

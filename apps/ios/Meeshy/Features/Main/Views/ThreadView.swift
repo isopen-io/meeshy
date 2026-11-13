@@ -49,7 +49,7 @@ struct ThreadView: View {
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(.callout.weight(.semibold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
@@ -57,14 +57,14 @@ struct ThreadView: View {
 
             Text(String(localized: "thread.title", defaultValue: "Discussion", bundle: .main))
                 .font(.body.weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
             Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) réponses", bundle: .main))
                 .font(.caption.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.md)
@@ -101,11 +101,11 @@ struct ThreadView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(parentMessage.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Text(parentMessage.createdAt, style: .relative)
                         .font(.caption2)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityElement(children: .combine)
 
@@ -114,7 +114,7 @@ struct ThreadView: View {
 
             Text(parentMessage.content)
                 .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .captureShield(parentMessage.exitOffer.capture.shieldsCapture()) // #9574
         }
         .padding(MeeshySpacing.mdPlus)
@@ -136,7 +136,7 @@ struct ThreadView: View {
 
             Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) réponses", bundle: .main))
                 .font(.caption2.weight(.bold))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundStyle(Color(hex: accentColor))
                 .padding(.horizontal, MeeshySpacing.sm)
 
             Rectangle()
@@ -176,12 +176,12 @@ struct ThreadView: View {
 
                     Text(message.createdAt, style: .relative)
                         .font(.caption2)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Text(message.content)
                     .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .captureShield(message.exitOffer.capture.shieldsCapture()) // #9574
             }
             .accessibilityElement(children: .combine)

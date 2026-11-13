@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_profile_title">Zeig dich</string>
+    <string name="onboarding_profile_banner_add">Banner hinzufügen</string>
+    <string name="onboarding_profile_banner_a11y">Banner auswählen</string>
+    <string name="onboarding_profile_avatar_a11y">Profilfoto auswählen</string>
+    <string name="onboarding_profile_failed">Das Bild konnte nicht gesendet werden.</string>
+    <string name="onboarding_profile_retry">Erneut versuchen</string>
+    <string name="onboarding_profile_uploading_a11y">Wird gesendet</string>
+</resources>

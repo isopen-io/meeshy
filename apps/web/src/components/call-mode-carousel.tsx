@@ -1,7 +1,10 @@
-import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type ButtonHTMLAttributes, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject, type WheelEvent } from 'react';
 
 import { CAPTURE_HOLD_MS, captureIntent, keyIntent, PRESS_SLOP_PX, tapGesture, type LastTap, type PressGesture } from '@/lib/calls/call-capture-gesture';
 import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
+import { useModeGlass } from '@/lib/calls/use-mode-motion';
+
+import { DeclinationActions, DeclinationPages, type CarouselDeclinations } from './call-declination-pages';
 
 /**
  * **LE CARROUSEL UNIQUE D'UN MODE** (#8578) — en bas, au milieu, seul : les
@@ -32,6 +35,10 @@ import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
  * donc dans la FACE d'un élément (la zone d'accroche garde sa boîte), et le
  * nom sous la piste est une boîte fixe, contenue.
  *
+ * Une piste qui a quitté la page ne choisit rien : le démontage remet son
+ * `scrollLeft` à zéro et émet un dernier `scroll`, qui rendait « Naturel » sous
+ * l'Échap qui venait de rendre les effets d'avant.
+ *
  * Seul un défilement TENU choisit (#8969) : un doigt (jusqu'au `scrollend`),
  * une molette ou une touche. Le réaccrochage de Chromium quand la mise en
  * page change (chunk chargé, piste remplacée) ne choisit rien — l'élément
@@ -52,8 +59,16 @@ export type CarouselCapture = {
   readonly longPressMs?: number;
 };
 
-/** `detail` : ce qu'on doit savoir de l'élément avant de le prendre — pour un cadre, où il sert (#10146). */
-export type CarouselItem = { readonly id: string; readonly label: string; readonly visual: ReactNode; readonly detail?: string };
+/**
+ * `detail` : ce qu'on doit savoir de l'élément avant de le prendre — pour un cadre, où il sert (#10146) ; il se LIT
+ * (lecteur d'écran, infobulle), il ne s'affiche pas sous le nom (C1.2, loi 18). `declinations` : les versions d'un
+ * cadre, qui défilent au balayage vertical dans sa vignette quand il est choisi (C1.6).
+ */
+export type CarouselItem = { readonly id: string; readonly label: string; readonly visual: ReactNode; readonly detail?: string; readonly declinations?: CarouselDeclinations };
+
+export type { CarouselDeclinations };
+
+export type ItemSize = { readonly width: number; readonly height: number };
 
 const describedBy = (...ids: readonly (string | null)[]): string | undefined => ids.filter((id) => id !== null).join(' ') || undefined;
 
@@ -64,9 +79,19 @@ type CarouselProps = {
   readonly onSelect: (id: string) => void;
   readonly onWheel?: ((event: WheelEvent<HTMLElement>) => void) | undefined;
   readonly capture?: CarouselCapture | undefined;
+  /** La boîte d'une vignette : le disque de 64 par défaut ; un portrait (48 × 85 au Montage, C1.5) montre l'aperçu entier. */
+  readonly itemSize?: ItemSize | undefined;
 };
 
-const ITEM = 64;
+const DISC: ItemSize = { width: 64, height: 64 };
+
+/** Le disque est rond ; un portrait prend le rayon des tuiles du design system. */
+const shapeOf = ({ width, height }: ItemSize): string => (width === height ? 'rounded-full' : 'rounded-tile');
+
+/** La piste s'efface à ses deux bords (#17409) : la même largeur des deux côtés, rien à inverser en arabe. */
+const EDGE_FADE_PX = 34;
+// harmony-exempt: masque alpha du fondu de bord, seule l'opacité compte, aucune couleur n'est peinte
+const EDGE_FADE = `linear-gradient(90deg, transparent 0, #000 ${EDGE_FADE_PX}px, #000 calc(100% - ${EDGE_FADE_PX}px), transparent 100%)`;
 
 type Press = { readonly id: string; readonly x: number; readonly y: number; readonly timer: ReturnType<typeof setTimeout> };
 
@@ -83,7 +108,9 @@ const SCROLL_QUIET_MS = 200;
 
 const reducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-export function ModeCarousel({ label, items, selected, onSelect, onWheel, capture }: CarouselProps) {
+export function ModeCarousel({ label, items, selected, onSelect, onWheel, capture, itemSize = DISC }: CarouselProps) {
+  const ITEM = itemSize.width;
+  const shape = shapeOf(itemSize);
   const track = useRef<HTMLDivElement>(null);
   const settling = useRef<string | null>(null);
   const frame = useRef(0);
@@ -139,6 +166,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
     };
     const settle = (): void => {
       clearTimeout(quiet);
+      if (!row.isConnected) return;
       const moved = travelled.current;
       const gripped = held();
       finger = false;
@@ -158,6 +186,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       } else center(announced.current, false);
     };
     const onScroll = (): void => {
+      if (!row.isConnected) return;
       travelled.current = true;
       if (settling.current === null && press.current !== null) {
         clearTimeout(press.current.timer);
@@ -171,7 +200,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       if (until > 0) until = performance.now() + GRIP_MS;
       cancelAnimationFrame(frame.current);
       frame.current = requestAnimationFrame(() => {
-        const nearest = centered();
+        const nearest = row.isConnected ? centered() : null;
         if (nearest === null || settling.current !== null || nearest === announced.current) return;
         announced.current = nearest;
         choose.current(nearest);
@@ -284,6 +313,13 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       capture.onCapture('photo');
       return;
     }
+    const declined = event.target instanceof HTMLElement && focused === selected ? items.find((item) => item.id === selected)?.declinations : undefined;
+    if (declined !== undefined && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      const to = declined.index + (event.key === 'ArrowDown' ? 1 : -1);
+      if (to >= 0 && to < declined.pages.length) declined.onSelect(to);
+      return;
+    }
     const rtl = typeof getComputedStyle === 'function' && getComputedStyle(event.currentTarget).direction === 'rtl';
     const next = carouselStep({ key: event.key, index: items.findIndex((item) => item.id === selected), count: items.length, rtl });
     const target = next === null ? undefined : items[next];
@@ -304,7 +340,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
         onKeyDown={onKeyDown}
         {...(onWheel === undefined ? {} : { onWheel })}
         className="flex w-full snap-x snap-mandatory items-center gap-2 overflow-x-auto overscroll-x-none py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        style={{ paddingInline: `calc(50% - ${ITEM / 2}px)` }}
+        style={{ paddingInline: `calc(50% - ${ITEM / 2}px)`, maskImage: EDGE_FADE, WebkitMaskImage: EDGE_FADE }}
         data-call-row-scroll=""
       >
         {items.map((item, index) => {
@@ -331,16 +367,16 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
                     onPointerLeave: drop,
                     onContextMenu: (event: { preventDefault: () => void }) => event.preventDefault(),
                   })}
-              className="grid shrink-0 touch-manipulation select-none snap-center [-webkit-touch-callout:none] place-items-center rounded-full"
-              style={{ width: ITEM, height: ITEM }}
+              className={`grid shrink-0 touch-manipulation select-none snap-center [-webkit-touch-callout:none] place-items-center ${shape}`}
+              style={{ width: itemSize.width, height: itemSize.height }}
               data-carousel-item={item.id}
             >
               <span
-                className={`grid size-full place-items-center overflow-hidden rounded-full transition-[scale,opacity] duration-200 motion-reduce:transition-none ${checked ? 'scale-110 opacity-100' : 'scale-[0.82] opacity-60'}`}
+                className={`relative grid size-full place-items-center overflow-hidden ${shape} transition-[scale,opacity] duration-200 motion-reduce:transition-none ${checked ? 'scale-110 opacity-100' : 'scale-[0.82] opacity-60'}`}
                 style={{ boxShadow: checked ? '0 0 0 3px var(--color-on-media), var(--shadow-lg)' : 'inset 0 0 0 1px var(--color-media-hairline)', background: 'var(--color-scrim-soft)' }}
                 data-carousel-face=""
               >
-                {item.visual}
+                {checked && item.declinations !== undefined && item.declinations.pages.length > 1 ? <DeclinationPages declinations={item.declinations} height={itemSize.height} /> : item.visual}
               </span>
               {detailId === null ? null : (
                 <span id={detailId} className="sr-only">
@@ -354,11 +390,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       <p aria-hidden className="h-5 w-full truncate px-4 text-center text-mini font-semibold text-on-media [contain:strict] [text-shadow:0_1px_2px_var(--color-scrim)]" style={{ height: '1lh' }} data-call-mode-selected="">
         {current?.label ?? ''}
       </p>
-      {current?.detail === undefined ? null : (
-        <p aria-hidden className="w-full truncate px-4 text-center text-mini text-on-media opacity-80 [text-shadow:0_1px_2px_var(--color-scrim)]" style={{ height: '1lh' }} data-call-mode-detail="">
-          {current.detail}
-        </p>
-      )}
+      {current?.declinations === undefined || current.declinations.pages.length < 2 ? null : <DeclinationActions declinations={current.declinations} name={current.label} />}
       {capture === undefined ? null : (
         <span id={hintId} className="sr-only">
           {capture.hint}
@@ -372,19 +404,47 @@ type Action = { readonly label: string; readonly onPress: () => void; readonly d
 
 type BarProps = {
   readonly quit: Action & { readonly glyph: ReactNode };
-  /** Au centre, rien de visible : la vidéo au clavier, qui ne se montre qu'au focus (#8625). */
+  /** Au centre : rien de visible en Montage (la vidéo au clavier, #8625) ; en Effets, Réglages. */
   readonly center?: ReactNode;
   readonly options: ReactNode;
+  /** Le verre : la barre est UNE surface, qui se resserre par morphisme quand `above` repart (P8b.8). */
+  readonly glass?: boolean;
+  /** Ce qui se pose AU-DESSUS de la rangée de base, dans le même verre (les puces, P8). */
+  readonly above?: ReactNode;
+  /** Ce qui est posé sur la barre, hors de son verre (le panneau, la bande de looks) : il suit son bord du haut pendant le morphisme. */
+  readonly rider?: RefObject<HTMLElement | null>;
 };
 
 const SIDE_SHAPE = 'grid size-12 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none';
 
 const SIDE = `${SIDE_SHAPE} text-on-media`;
 
-/** La barre d'un mode : ✕ Quitter · (la vidéo au clavier) · les options. */
-export function CallModeBar({ quit, center = null, options }: BarProps) {
+/** La largeur de la barre de verre, et du panneau qui la surmonte : celle de la pilule de l'appel, un liseré de chaque côté. */
+export const GLASS_WIDTH = 'w-[calc(100%-2rem)] max-w-[560px]';
+
+const GLASS_BAR = `relative isolate flex ${GLASS_WIDTH} flex-col items-center rounded-[24px] p-2`;
+
+/**
+ * Le verre de la barre : un élément à lui, seul mis à l'échelle par le morphisme (`createPillGlass`),
+ * depuis son bord du bas — le contenu garde ses proportions, et la barre ne quitte pas le bas de l'écran.
+ */
+function GlassBar({ above, rider, children }: { readonly above: ReactNode; readonly rider: RefObject<HTMLElement | null> | undefined; readonly children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const skin = useRef<HTMLSpanElement>(null);
+  useModeGlass(box, skin, rider);
   return (
-    <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-4 px-6" data-call-mode-bar="">
+    <div ref={box} className={GLASS_BAR} data-call-mode-bar="">
+      <span ref={skin} aria-hidden className="glass-call absolute inset-0 -z-10 origin-bottom rounded-[24px]" data-call-mode-bar-skin="" />
+      {above}
+      {children}
+    </div>
+  );
+}
+
+/** La barre d'un mode : ✕ Quitter (‹ en Effets) · le centre · les options ; posée sur son verre quand `glass`. */
+export function CallModeBar({ quit, center = null, options, glass: onGlass = false, above = null, rider }: BarProps) {
+  const row = (
+    <div className={`grid w-full grid-cols-[1fr_auto_1fr] items-center gap-4 ${onGlass ? '' : 'px-6'}`} {...(onGlass ? {} : { 'data-call-mode-bar': '' })}>
       <div className="flex justify-start">
         <button type="button" aria-label={quit.label} title={quit.label} onClick={quit.onPress} className={`glass-call ${SIDE}`} {...(quit.data ?? {})}>
           {quit.glyph}
@@ -394,10 +454,34 @@ export function CallModeBar({ quit, center = null, options }: BarProps) {
       <div className="flex justify-end gap-2">{options}</div>
     </div>
   );
+  return onGlass ? (
+    <GlassBar above={above} rider={rider}>
+      {row}
+    </GlassBar>
+  ) : (
+    row
+  );
 }
 
-/** Une option discrète de la barre : un rond de verre, pressé ou non. */
-export function ModeOption({ label, glyph, onPress, pressed, hint, data = {} }: { readonly label: string; readonly glyph: ReactNode; readonly onPress: () => void; readonly pressed?: boolean; readonly hint?: string; readonly data?: Readonly<Record<`data-${string}`, string>> }) {
+type OptionProps = {
+  readonly label: string;
+  readonly glyph: ReactNode;
+  readonly onPress: () => void;
+  readonly pressed?: boolean;
+  readonly hint?: string;
+  /** Une légende sous le disque (Réglages, P8b). */
+  readonly caption?: string;
+  readonly data?: Readonly<Record<`data-${string}`, string>>;
+  /** Un disque atténué : l'action est refusée, mais l'option reste atteignable (appui long de (+) à trois couches). */
+  readonly dimmed?: boolean;
+  /** Gestes de plus que la tape : appui long, menu contextuel, clavier. */
+  readonly extra?: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type' | 'className' | 'onClick'>;
+};
+
+/** Une option discrète de la barre : un rond de verre, pressé (disque blanc, glyphe indigo) ou non. */
+export function ModeOption({ label, glyph, onPress, pressed, hint, caption, data = {}, dimmed, extra }: OptionProps) {
+  const base = pressed === true ? `bg-on-media text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`;
+  const disc = dimmed === true ? `${base} opacity-60` : base;
   return (
     <button
       type="button"
@@ -405,11 +489,21 @@ export function ModeOption({ label, glyph, onPress, pressed, hint, data = {} }: 
       title={hint ?? label}
       {...(hint === undefined ? {} : { 'aria-description': hint })}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
+      {...extra}
       onClick={onPress}
-      className={pressed === true ? `bg-on-media text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`}
+      className={caption === undefined ? disc : 'flex min-h-11 touch-manipulation flex-col items-center gap-0.5 text-on-media'}
       {...data}
     >
-      {glyph}
+      {caption === undefined ? (
+        glyph
+      ) : (
+        <>
+          <span className={disc}>{glyph}</span>
+          <span aria-hidden className="text-mini font-semibold [text-shadow:0_1px_2px_var(--color-scrim)]">
+            {caption}
+          </span>
+        </>
+      )}
     </button>
   );
 }

@@ -215,7 +215,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
             if onEdit != nil {
                 Image(systemName: "slider.horizontal.below.rectangle")
-                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                    .meeshyScaledFont(MeeshyIconSize.xs, weight: .semibold)
                     .foregroundStyle(tint)
             }
         }
@@ -230,6 +230,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
                                            defaultValue: "Modifier le son",
                                            bundle: .module))
                 .accessibilityAddTraits(.isButton)
+                .accessibilityAction { onEdit() }
         } else {
             contenu
                 .accessibilityLabel(String(localized: "audio.content.waveform",

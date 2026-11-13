@@ -22,7 +22,8 @@ final class OnboardingRecetteTests: XCTestCase {
             eligible: true,
             completedAt: nil,
             seenSteps: seen,
-            prefilledSteps: prefilled,
+            // « Montre-toi » (#17236) est réglée : ces témoins suivent les autres cartes.
+            prefilledSteps: prefilled + [.profile],
             globalConversationId: Self.globalId,
             protectedRegime: false,
             storyDefaultVisibility: .public,

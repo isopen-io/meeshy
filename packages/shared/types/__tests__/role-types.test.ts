@@ -293,15 +293,15 @@ describe('WRITE_PERMISSION_HIERARCHY', () => {
 });
 
 describe('isPlatformTeam', () => {
-  it.each(['MODERATOR', 'ADMIN', 'BIGBOSS'])('%s est de l\'équipe', (role) => {
+  it.each(['ANALYST', 'AUDIT', 'MODERATOR', 'ADMIN', 'BIGBOSS'])('%s est de l\'équipe', (role) => {
     expect(isPlatformTeam(role)).toBe(true);
   });
 
-  it.each(['moderator', 'Admin', 'bigBoss'])('replie la casse comme ses voisins : %s', (role) => {
+  it.each(['analyst', 'moderator', 'Admin', 'bigBoss'])('replie la casse comme ses voisins : %s', (role) => {
     expect(isPlatformTeam(role)).toBe(true);
   });
 
-  it.each(['AUDIT', 'ANALYST', 'USER', 'AGENT'])('%s n\'en est pas', (role) => {
+  it.each(['USER', 'AGENT'])('%s n\'en est pas', (role) => {
     expect(isPlatformTeam(role)).toBe(false);
   });
 

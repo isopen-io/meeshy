@@ -51,8 +51,7 @@ nonisolated enum ConversationViewerIdentity: Equatable, Sendable {
 /// / `meeshy_lastopen_<scopeKey>_<conversationId>`, contrat §3.5).
 ///
 /// JAMAIS l'identifiant brut en clair pour l'anonyme : hash SHA-256 tronqué
-/// (même famille que `ConversationLockManager.sha256`, contrat §WS-1 —
-/// « fuite privacy multi-comptes de 2026-05-26 »). Le `userId` inscrit
+/// (même famille que `ConversationLockManager.sha256`). Le `userId` inscrit
 /// n'a pas cette contrainte : il est déjà la clé de stockage en clair
 /// utilisée ailleurs dans l'app (`DraftStore`, patron cité par le contrat).
 nonisolated enum ReadingModePreferenceScope: Hashable, Sendable {

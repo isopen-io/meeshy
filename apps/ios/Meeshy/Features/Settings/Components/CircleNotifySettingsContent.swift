@@ -13,7 +13,7 @@ struct CircleNotifySettingsContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(String(localized: "circleNotify.intro", defaultValue: "Choisissez, action par action, le cercle de votre entourage qui reçoit une notification.", bundle: .main))
+            Text(String(localized: "circleNotify.intro", defaultValue: "Pour chaque action, choisissez le cercle de votre entourage prévenu.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -145,8 +145,8 @@ struct CircleNotifySettingsContent: View {
     static func explanation(of choice: RelationAudienceChoice) -> String? {
         switch choice {
         case .nobody: return String(localized: "circleNotify.explain.NOBODY", defaultValue: "Personne de votre entourage n’est prévenu.", bundle: .main)
-        case .community: return String(localized: "circleNotify.explain.COMMUNITY", defaultValue: "Tous vos liens, de Sang à Connaissance, et les membres des communautés que vous partagez.", bundle: .main)
-        case .public: return String(localized: "circleNotify.explain.PUBLIC", defaultValue: "Les mêmes personnes que Communauté : Meeshy n’a pas d’abonnés, aucun inconnu n’est prévenu.", bundle: .main)
+        case .community: return String(localized: "circleNotify.explain.COMMUNITY", defaultValue: "Vos liens, de Sang à Connaissance, et les communautés que vous partagez.", bundle: .main)
+        case .public: return String(localized: "circleNotify.explain.PUBLIC", defaultValue: "Comme Communauté : sans abonnés, aucun inconnu n’est prévenu.", bundle: .main)
         case .blood, .close, .friend, .acquaintance: return nil
         }
     }

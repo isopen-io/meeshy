@@ -42,7 +42,7 @@ enum Route: Hashable {
     /// the iPad panel keep the directory default.
     case contacts(PeopleTab = PeopleTab.contacts)
     case peopleDiscovery(DiscoveryTab = .discover)
-    /// Découverte de publications par PROXIMITÉ (spec du 2026-08-02 §4) —
+    /// Découverte de publications par PROXIMITÉ —
     /// carte de densité, carte à pins, liste.
     ///
     /// `initialCoordinate` est le point de départ quand l'écran est ouvert
@@ -68,8 +68,7 @@ enum Route: Hashable {
     /// réengagement (`badge_earned`, `streak_milestone`, `level_up`,
     /// `achievement_unlocked`).
     case progression
-    /// UNE section du hub — Badges, Défis ou Succès (directive porteur
-    /// 2026-09-09). Elle était présentée en `.sheet` : une feuille INTERROMPT,
+    /// UNE section du hub — Badges, Défis ou Succès. Elle était présentée en `.sheet`: une feuille INTERROMPT,
     /// se ferme vers le bas, n'entre pas dans l'historique, et le glissement
     /// depuis le bord gauche n'y fait rien. Poussée dans la pile, elle reçoit
     /// les trois gratuitement — c'est le modèle que servent déjà l'Android et
@@ -167,7 +166,7 @@ extension Route {
         case .userStats:
             return String(localized: "route.title.stats", defaultValue: "Statistiques", bundle: .main)
         case .progression:
-            return String(localized: "route.title.progression", defaultValue: "Progression", bundle: .main)
+            return String(localized: "route.title.progression", defaultValue: "Ma Légende", bundle: .main)
         case .progressionSection(let section):
             // Le titre de la PAGE, pas celui du hub : c'est lui que la barre
             // de navigation d'iPad affiche et que VoiceOver annonce à
@@ -187,7 +186,7 @@ extension Route {
         case .progressionConcept(let concept, _):
             return ConceptText.name(concept)
         case .progressionDashboard:
-            return String(localized: "route.title.progression", defaultValue: "Progression", bundle: .main)
+            return String(localized: "route.title.progression", defaultValue: "Ma Légende", bundle: .main)
         case .links:
             return String(localized: "route.title.links", defaultValue: "Liens", bundle: .main)
         case .affiliate:
@@ -590,8 +589,7 @@ final class Router: ObservableObject {
     }
 
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant, posé jadis par l'item
-    /// « Focal (bêta) » du menu d'appui long de la liste (retiré avec Focal iOS
-    /// le 2026-08-18 ; ex-drapeau caché `focalDevPreview`).
+    /// « Focal (bêta) » du menu d'appui long de la liste (ex-drapeau caché `focalDevPreview`).
     /// Consommé + remis à `nil` par le site d'appel de
     /// `ConversationView(forcedReadingMode:)` à l'ouverture — MÊME patron que
     /// `pendingReplyContext`/`pendingOpenSearch` ci-dessus : une propriété

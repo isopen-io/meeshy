@@ -159,8 +159,29 @@ final class OnboardingServiceTests: XCTestCase {
         XCTAssertEqual(state.suggestions.count, 6)
     }
 
-    func test_stepOrder_isTheSevenCardsInContractOrder() {
-        XCTAssertEqual(OnboardingStepId.allCases, [.languages, .age, .email, .global, .story, .friends, .notifications])
+    func test_stepOrder_isTheEightCardsInDisplayOrder() {
+        XCTAssertEqual(OnboardingStepId.allCases, [.languages, .age, .email, .profile, .global, .story, .friends, .notifications])
+    }
+
+    // MARK: - Profil (#17236)
+
+    func test_decode_profileStep_isAKnownStep() throws {
+        let json = """
+        {"eligible":true,"completedAt":null,"seenSteps":["profile"],"prefilledSteps":["profile"],
+         "globalConversationId":null,"protectedRegime":false,"storyDefaultVisibility":"public","suggestions":[]}
+        """
+        let state = try JSONDecoder().decode(APIOnboardingState.self, from: Data(json.utf8))
+
+        XCTAssertEqual(state.seenSteps, [.profile])
+        XCTAssertEqual(state.prefilledSteps, [.profile])
+    }
+
+    func test_encode_profileStepSkipped_writesTheProfileIdentifier() throws {
+        let data = try JSONEncoder().encode(OnboardingUpdate.step(.profile, .skipped))
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+
+        XCTAssertEqual(object?["step"] as? String, "profile")
+        XCTAssertEqual(object?["outcome"] as? String, "skipped")
     }
 
     // MARK: - Âge (#9929)

@@ -1,8 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// **La touche RETOUR du clavier ENVOIE le message** (directive porteur
-/// 2026-09-05).
+/// **La touche RETOUR du clavier ENVOIE le message**.
 ///
 /// > « Il faut transformer le clavier virtuel qui s'affiche lors de la réponse
 /// > à un message. Le bouton à la ligne doit avoir la couleur primaire et doit
@@ -42,7 +41,7 @@ import SwiftUI
 /// Un collage d'UN seul caractère « \n » reste indiscernable d'une frappe, et
 /// c'est assumé : les deux ont la même intention lisible.
 ///
-/// ## Le saut de ligne : arbitrage porteur du 2026-09-06 (#5326)
+/// ## Le saut de ligne: (#5326)
 ///
 /// Il a été demandé qu'un **appui LONG** sur la touche insère un saut de ligne
 /// là où un appui court envoie. **iOS ne le permet pas** : le clavier logiciel

@@ -81,7 +81,6 @@ class ConversationMenuContentTest {
             ConversationMenuEntry.PIN,
             ConversationMenuEntry.MUTE,
             ConversationMenuEntry.MARK_UNREAD,
-            ConversationMenuEntry.SEARCH,
             ConversationMenuEntry.DETAILS,
             ConversationMenuEntry.FAVORITE,
             ConversationMenuEntry.MOVE,
@@ -94,7 +93,7 @@ class ConversationMenuContentTest {
     @Test
     fun `an entry the model does not offer is not drawn`() {
         render()
-        compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.CALL)).assertDoesNotExist()
+        compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.VIEW_PROFILE)).assertDoesNotExist()
         compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.RENAME)).assertDoesNotExist()
     }
 
@@ -113,7 +112,7 @@ class ConversationMenuContentTest {
         compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.INVITE)).assertIsDisplayed()
         compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.REPORT)).assertIsDisplayed()
         compose.onNodeWithTag(BACK_TEST_TAG).performClick()
-        compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.SEARCH)).assertIsDisplayed()
+        compose.onNodeWithTag(menuEntryTestTag(ConversationMenuEntry.DETAILS)).assertIsDisplayed()
     }
 
     @Test

@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - La constellation (#10053, décision du porteur du 2026-10-11)
+// MARK: - La constellation (#10053)
 //
 // MIROIR de `packages/shared/utils/game/constellation.ts`, rejoué sur les vecteurs partagés (`constellation`,
 // `constellation-key`). Tous les DIX fragments d'étoile collectés (`StarFragmentsTotal`), une étoile s'allume ; chacune

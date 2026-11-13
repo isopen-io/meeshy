@@ -47,7 +47,7 @@ export function VerifyEmailChangePage({
   readonly deps: VerifyEmailChangeDeps;
 }) {
   if (token === null || token === '') return <EmailChangeRefused language={language} message="missing" />;
-  if (!signedIn) return <SignedOutPage language={language} />;
+  if (!signedIn) return <SignedOutPage language={language} fromEmail />;
   return <EmailChangeVerification token={token} language={language} deps={deps} />;
 }
 
@@ -125,7 +125,7 @@ function EmailChangeVerification({
   }
 
   const { failure } = state;
-  if (failure === 'signed-out') return <SignedOutPage language={language} />;
+  if (failure === 'signed-out') return <SignedOutPage language={language} fromEmail />;
   if (failure === 'offline' || failure === 'rate-limited' || failure === 'unavailable') {
     return <ReachFailurePage language={language} failure={failure} onRetry={retry} />;
   }
@@ -140,11 +140,8 @@ function EmailChangeRefused({ language, message }: { readonly language: Interfac
       title={translate(language, 'emailChange.failed.title')}
       body={<LinkText>{translate(language, REFUSAL_COPY[message])}</LinkText>}
     >
-      <ActionLink to="settings" tone="primary">
+      <ActionLink to="settings" tone="secondary">
         {translate(language, 'linkPage.settings')}
-      </ActionLink>
-      <ActionLink to="list" tone="secondary">
-        {translate(language, 'linkPage.home')}
       </ActionLink>
     </LinkPage>
   );

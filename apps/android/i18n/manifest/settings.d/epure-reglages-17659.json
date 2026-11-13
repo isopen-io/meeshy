@@ -1,0 +1,410 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "androidName": "about_tagline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_email_current_label",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_email_new_label",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_email_resend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_email_sent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_error_email_change",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_error_email_resend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "crash_reports_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "crash_reports_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "crash_reports_privacy",
+          "status": "android-only"
+        },
+        {
+          "androidName": "crash_reports_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "data_export_info_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "data_storage_cache_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "data_storage_cache_size",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_last_seen",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_notice_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_notice_code_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_notice_code_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_notice_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "encrypted_devices_retire_changed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "location_precision_footnote",
+          "status": "android-only"
+        },
+        {
+          "androidName": "pack_shop_state_embedded",
+          "status": "android-only"
+        },
+        {
+          "androidName": "privacy_encryption_status_soon",
+          "status": "android-only"
+        },
+        {
+          "androidName": "privacy_encryption_summary",
+          "status": "android-only"
+        },
+        {
+          "androidName": "privacy_read_receipts_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "purge_limitation_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "purge_unattributed_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "purge_unattributed_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_e2ee_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_error_master_incorrect",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_subtitle_change_verify",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_subtitle_confirm_master",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_subtitle_confirm_new",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_subtitle_create_master",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_subtitle_new_master",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_subtitle_remove_master",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_subtitle_unlock_all",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_title_confirm_master",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_title_create_master",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_title_new_master",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_title_remove_master",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_lock_title_verify_master",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_sessions_manage",
+          "status": "android-only"
+        },
+        {
+          "androidName": "security_sessions_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sessions_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sessions_state_error",
+          "status": "android-only"
+        },
+        {
+          "androidName": "sessions_state_offline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_explain_community",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_explain_public",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_circle_notify_intro",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_day_sun",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_interface_lentille_list",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_interface_lentille_list_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_interface_reading_modes",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_interface_riviere_mode",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_interface_riviere_mode_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_languages_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_media_autosave_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_media_autosave_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_media_autosave_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_media_capture_original_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_media_capture_original_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_media_capture_rendered_note",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_media_capture_rendered_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_media_capture_rendered_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_notif_more_options",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_notif_type_contact_activity",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_packs_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_analytics_info",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_analytics_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_calls_non_contacts_info",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_calls_non_contacts_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_calls_non_contacts_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_hide_from_contact_search",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_hide_from_contact_search_info",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_hide_from_contact_search_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_hide_from_contact_search_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_notify_contacts_on_return",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_notify_contacts_on_return_info",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_notify_contacts_on_return_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_notify_contacts_on_return_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_online_status_info",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_online_status_question",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_privacy_online_status_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_security_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_share_links_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_tools_progression_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_transcription_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_voice_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "support_link_email",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_disable_button",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_disable_warning",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_enable_button",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_orientation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_regenerate_warning",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_status_disabled",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

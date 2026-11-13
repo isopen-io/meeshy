@@ -95,7 +95,7 @@ struct ThemedBackButton: View {
                         // VoiceOver reads the count from the button label
                         // (`a11y.back.with_unread`), so the glyph is hidden.
                         .font(.system(size: 12, weight: NotificationBadge.fontWeight, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, MeeshySpacing.sm)

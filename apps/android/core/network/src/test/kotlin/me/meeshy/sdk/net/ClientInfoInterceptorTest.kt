@@ -73,10 +73,10 @@ class ClientInfoInterceptorTest {
     }
 
     @Test
-    fun `aucune capacite n est declaree tant que les ecrans ne sont pas livres`() {
+    fun `seules les capacites dont l ecran est livre sont declarees`() {
         val seen = run(request(), ClientInfoInterceptor(provider()))
 
-        assertThat(seen.header("X-Meeshy-Capabilities")).isNull()
+        assertThat(seen.header("X-Meeshy-Capabilities")).isEqualTo("onboarding-profile")
     }
 
     @Test
@@ -92,7 +92,7 @@ class ClientInfoInterceptorTest {
 
     @Test
     fun `sans capacite declaree l en-tete est omis`() {
-        val seen = run(request(), ClientCapabilitiesInterceptor())
+        val seen = run(request(), ClientCapabilitiesInterceptor(emptyList()))
 
         assertThat(seen.header("X-Meeshy-Capabilities")).isNull()
         assertThat(seen.header("X-Canvas-Caps")).isEqualTo("3")

@@ -69,10 +69,10 @@ nonisolated struct LinkSignInConfirmationContent: Equatable {
 
     private static func message(incomingLabel: String, signedIn current: MeeshyUser?) -> String {
         guard let current, !current.username.isEmpty else {
-            return String(localized: "signInLink.deviceConfirm.message", defaultValue: "Ce lien de connexion n'a pas été demandé depuis cet appareil. Il ouvre le compte \(incomingLabel).\n\nNe continuez que si ce compte vous appartient.", bundle: .main)
+            return String(localized: "signInLink.deviceConfirm.message", defaultValue: "Ce lien n'a pas été demandé depuis cet appareil. Il ouvre \(incomingLabel) : continuez seulement s'il vous appartient.", bundle: .main)
         }
         let currentLabel = AccountReplacementAlert.label(displayName: current.displayName, username: current.username)
-        return String(localized: "signInLink.deviceConfirm.messageReplacing", defaultValue: "Ce lien de connexion n'a pas été demandé depuis cet appareil. Il ouvre le compte \(incomingLabel), à la place de \(currentLabel) qui est ouvert (il restera au sélecteur de comptes).\n\nNe continuez que si ce compte vous appartient.", bundle: .main)
+        return String(localized: "signInLink.deviceConfirm.messageReplacing", defaultValue: "Ce lien n'a pas été demandé depuis cet appareil. Il ouvre \(incomingLabel) à la place de \(currentLabel) (qui reste au sélecteur de comptes) : continuez seulement s'il vous appartient.", bundle: .main)
     }
 }
 

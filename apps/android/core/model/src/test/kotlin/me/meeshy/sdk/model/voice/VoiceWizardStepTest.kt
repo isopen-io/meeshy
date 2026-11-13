@@ -51,6 +51,23 @@ class VoiceWizardStepTest {
     }
 
     @Test
+    fun `the voice cloning limit is today minus eighteen calendar years`() {
+        assertThat(VoiceWizardRules.voiceCloningBirthDateLimit(today)).isEqualTo(LocalDate.of(2008, 11, 3))
+    }
+
+    @Test
+    fun `on a leap day the voice cloning limit falls back to the twenty eighth of February`() {
+        assertThat(VoiceWizardRules.voiceCloningBirthDateLimit(LocalDate.of(2028, 2, 29))).isEqualTo(LocalDate.of(2010, 2, 28))
+    }
+
+    @Test
+    fun `the picker only offers days up to the voice cloning limit`() {
+        assertThat(VoiceWizardRules.isSelectableBirthDate(LocalDate.of(2008, 11, 3), today)).isTrue()
+        assertThat(VoiceWizardRules.isSelectableBirthDate(LocalDate.of(2008, 11, 4), today)).isFalse()
+        assertThat(VoiceWizardRules.isSelectableBirthDate(today, today)).isFalse()
+    }
+
+    @Test
     fun `the default birth date is twenty years back so the picker opens on an adult`() {
         assertThat(VoiceWizardRules.isAdult(VoiceWizardRules.defaultBirthDate(today), today)).isTrue()
     }

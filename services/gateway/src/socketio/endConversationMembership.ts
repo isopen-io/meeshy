@@ -164,7 +164,7 @@ export async function endConversationMembership(
   // Puis la séance « ensemble » (#17022) : elle voyage par les rooms personnelles, pas par
   // celle du fil, mais la porte exige que les deux soient membres — rejugée, la séance du
   // partant s'arrête chez les deux, dite comme un départ. Ne rejette jamais.
-  await cutTogetherWhere({ userId });
+  await cutTogetherWhere({ userId, conversationId });
 
   if (io) {
     const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();

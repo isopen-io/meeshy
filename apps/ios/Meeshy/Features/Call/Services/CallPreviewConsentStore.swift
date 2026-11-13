@@ -9,8 +9,7 @@ struct CallPreviewConsent: Equatable, Codable, Sendable {
     var sendsAudio: Bool
     var sendsVideo: Bool
 
-    /// Un contact jamais appelé : micro coupé, caméra activée (directive
-    /// porteur 2026-09-30).
+    /// Un contact jamais appelé: micro coupé, caméra activée.
     static let initial = CallPreviewConsent(sendsAudio: false, sendsVideo: true)
 }
 

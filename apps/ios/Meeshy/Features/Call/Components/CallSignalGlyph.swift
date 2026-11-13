@@ -136,7 +136,7 @@ struct CallSignalGlyph: View {
 
 // MARK: - Transient Call Signal Glyph
 
-/// Cycle de vie du glyphe signal (retour user 2026-07-04) : INVISIBLE tant que
+/// Cycle de vie du glyphe signal: INVISIBLE tant que
 /// le lien est sain — un appel qui se passe bien n'affiche aucun indicateur.
 /// Il APPARAÎT à la première dégradation (ambre/rouge), suit la qualité en
 /// temps réel, puis — quand le lien redevient vert — RESTE affiché en vert

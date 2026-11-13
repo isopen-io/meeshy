@@ -67,9 +67,9 @@ final class ImageFullscreenAutoLoadWiringTests: XCTestCase {
     func test_imageFullscreen_opensWithoutChrome_andAnyTapTogglesIt() throws {
         let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
         XCTAssertTrue(source.contains("@State private var showControls = false"))
-        let zoom = try XCTUnwrap(source.range(of: ".onTapGesture(count: 2) {"))
+        let zoom = try XCTUnwrap(source.range(of: ", count: 2) {"))
         let suite = source[zoom.upperBound...]
-        XCTAssertTrue(suite.contains(".onTapGesture { toggleControls() }"),
+        XCTAssertTrue(suite.contains("{ toggleControls() }"),
                       "le toucher simple de l'image montre ou cache le chrome")
     }
 }

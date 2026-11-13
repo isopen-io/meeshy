@@ -190,26 +190,26 @@ struct GuestSessionEndedView: View {
             VStack(spacing: MeeshySpacing.xl) {
                 Image(systemName: copy.systemImage)
                     .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .padding(.top, MeeshySpacing.xxxl)
                     .accessibilityHidden(true)
 
                 Text(copy.title)
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
 
                 Text(copy.message)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
                 TextField(String(localized: "guest.ended.newLink.placeholder", defaultValue: "Collez le nouveau lien", bundle: .main), text: $pastedLink)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -223,14 +223,14 @@ struct GuestSessionEndedView: View {
                 if !pastedLink.isEmpty && newLinkIdentifier == nil {
                     Text(String(localized: "guest.ended.newLink.invalid", defaultValue: "Ce n'est pas un lien d'invitation Meeshy", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .multilineTextAlignment(.center)
                 }
 
                 Button(action: joinNewLink) {
                     Text(String(localized: "guest.ended.newLink.join", defaultValue: "Rejoindre par un nouveau lien", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: 50)
                         .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(MeeshyColors.brandGradient))
                         .opacity(newLinkIdentifier == nil ? 0.5 : 1)
@@ -242,7 +242,7 @@ struct GuestSessionEndedView: View {
                 } label: {
                     Text(String(localized: "guest.ended.home", defaultValue: "Retour à l'accueil", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
             }

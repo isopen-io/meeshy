@@ -14,8 +14,6 @@ internal fun ConversationRowActions.perform(
         ConversationMenuEntry.MUTE, ConversationMenuEntry.UNMUTE -> onToggleMute()
         ConversationMenuEntry.MARK_READ -> onMarkRead()
         ConversationMenuEntry.MARK_UNREAD -> onMarkUnread()
-        ConversationMenuEntry.SEARCH -> onSearch()
-        ConversationMenuEntry.CALL -> onCall?.invoke()
         ConversationMenuEntry.DETAILS -> onViewInfo?.invoke()
         ConversationMenuEntry.VIEW_PROFILE -> onViewProfile?.invoke()
         ConversationMenuEntry.RENAME -> onRequestRename()

@@ -31,6 +31,7 @@ public final class SoundLibraryPickerModel: ObservableObject {
     private var nextCursor: Date?
     private var loadedOnce = false
     private var cancellables = Set<AnyCancellable>()
+    private let reloadLane = OrderedEventLane()
 
     public init(service: SoundLibraryServiceProviding,
                 preview: SoundPreviewing = SoundPreviewPlayer()) {
@@ -51,7 +52,8 @@ public final class SoundLibraryPickerModel: ObservableObject {
             .dropFirst()
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .removeDuplicates()
-            .sink { [weak self] _ in Task { @MainActor in await self?.reload() } }
+            .map { _ in () }
+            .relay(through: reloadLane) { [weak self] _ in await self?.reload() }
             .store(in: &cancellables)
 
         // Pas de débounce sur l'onglet : c'est un geste discret, la latence s'y
@@ -59,7 +61,8 @@ public final class SoundLibraryPickerModel: ObservableObject {
         $tab
             .dropFirst()
             .removeDuplicates()
-            .sink { [weak self] _ in Task { @MainActor in await self?.reload() } }
+            .map { _ in () }
+            .relay(through: reloadLane) { [weak self] _ in await self?.reload() }
             .store(in: &cancellables)
 
         // Fin naturelle de piste : la ligne doit repasser en « play » toute

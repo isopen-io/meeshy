@@ -6,7 +6,7 @@ extension StoryEffects {
     /// so `TimelineProject` (which carries the same three arrays but isn't a
     /// `StorySlide`) can call the identical algorithm during live editing —
     /// see `TimelineViewModel.recomputeSlideDuration()`. Pure function, no
-    /// change in behavior versus the code it replaces (design doc 2026-07-18).
+    /// change in behavior versus the code it replaces.
     public static func contentDerivedDuration(
         mediaObjects: [StoryMediaObject]?,
         audioPlayerObjects: [StoryAudioPlayerObject]?,

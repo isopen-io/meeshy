@@ -335,7 +335,7 @@ struct WaooOverlay: View {
 ///
 /// Le motif est celui déjà appliqué à `MeeshyUI.PulseEffect`
 /// (`packages/MeeshySDK/Sources/MeeshyUI/Theme/ViewModifiers.swift`) et à
-/// `ThemedActionButton` (`RootViewComponents.swift`, audit chauffe 2026-08-26) ;
+/// `ThemedActionButton` (`RootViewComponents.swift`);
 /// il n'avait jamais été porté ici.
 ///
 /// `reduceMotion` reste honoré en amont : `plan.animatesPersistent` est déjà

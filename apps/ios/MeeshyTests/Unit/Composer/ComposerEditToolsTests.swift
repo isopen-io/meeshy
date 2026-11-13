@@ -358,7 +358,7 @@ final class ComposerEditToolsTests: XCTestCase {
 
     func test_theTopRow_followsTheLaw_andThePlayback_isAlwaysMountedForAVideo() throws {
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("topRow.opacity(showsTopRow ? 1 : 0)"), "(x) et « Terminé » suivent la loi")
+        XCTAssertTrue(chrome.contains("topRow.opacity(showsTopRow ? chromeRest : 0)"), "(x) et « Terminé » suivent la loi")
         XCTAssertTrue(chrome.contains("ComposerEditTools.showsTopRow(familyOpen: session.openFamily != nil, shownTools: session.shownEditTools)"))
         XCTAssertTrue(chrome.contains("if !finishing, session.offersEditPlayback { editPlayback }"),
                       "lecture et volume ne dépendent ni du chrome ni d'un outil")

@@ -31,10 +31,10 @@ final class JoinFlowViewModel: ObservableObject, JoinFlowModeling {
     #if DEBUG
     /// Vitrine App Store (#8855, DEBUG uniquement) : prévenue quand l'aperçu d'un lien est servi,
     /// pour que la capture attende l'accueil RENDU (#8921). `nil` hors vitrine.
-    nonisolated(unsafe) static var debugOnPreviewShown: (@MainActor @Sendable () -> Void)?
+    static var debugOnPreviewShown: (@MainActor @Sendable () -> Void)?
     /// Vitrine (#9904, DEBUG uniquement) : le même instant, avec le parcours lui-même — la scène y fait le choix
     /// « sans compte » qu'un toucher ferait (`proceedToForm`). `nil` hors vitrine.
-    nonisolated(unsafe) static var debugOnPreviewServed: (@MainActor @Sendable (JoinFlowViewModel) -> Void)?
+    static var debugOnPreviewServed: (@MainActor @Sendable (JoinFlowViewModel) -> Void)?
     #endif
 
     init(

@@ -3,6 +3,8 @@ import { QueryClient } from '@tanstack/react-query';
 
 import type { OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
 
+import type { EntityImageEditProps } from '@/components/entity-image-retouch';
+
 import type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@/lib/api/onboarding';
 
 import { BIRTH_DATE_PATH } from '@/lib/api/birth-date';
@@ -16,6 +18,16 @@ import type { OnboardingScreenDeps } from '@/routes/onboarding';
 
 import { scriptedTransport } from './scripted-transport';
 
+/** La retouche de la capture réduite à « Terminé » — son vrai comportement est
+ * témoigné par `components/entity-image-retouch.test.tsx`. */
+function HarnessRetouch({ file, format, onDone }: EntityImageEditProps) {
+  return (
+    <div data-harness-retouch={format}>
+      <button type="button" data-harness-retouch-done onClick={() => onDone(file)} />
+    </div>
+  );
+}
+
 /**
  * LE BANC DE L'ACCUEIL POST-INSCRIPTION (#7729) — partagé par les témoins
  * montés de `routes/onboarding*.test.tsx`. Il simule la passerelle telle
@@ -27,7 +39,13 @@ import { scriptedTransport } from './scripted-transport';
 
 export const SUGGESTION: OnboardingSuggestion = { id: 'u-aicha', username: 'aicha', displayName: 'Aïcha', avatarUrl: null, languages: ['fr', 'ar'] };
 
-export const served = (overrides: Partial<OnboardingState> = {}): OnboardingState => ({
+/** Un compte dont la photo et la bannière sont déjà posées : la passerelle
+ * pré-coche « Montre-toi » (#17237), que les témoins des AUTRES cartes ne
+ * regardent pas. Ceux de « Montre-toi » partent de `bareServed`. */
+export const served = (overrides: Partial<OnboardingState> = {}): OnboardingState =>
+  bareServed({ ...overrides, prefilledSteps: ['profile', ...(overrides.prefilledSteps ?? [])] });
+
+export const bareServed = (overrides: Partial<OnboardingState> = {}): OnboardingState => ({
   eligible: true,
   completedAt: null,
   seenSteps: [],
@@ -73,6 +91,8 @@ export type HarnessOptions = {
   readonly resend?: boolean;
   /** Ce que rend `loadRecap` ; `'hold'` le laisse en suspens. */
   readonly recap?: Awaited<ReturnType<OnboardingScreenDeps['loadRecap']>> | 'hold';
+  /** Ce que rend le téléversement de « Montre-toi » (#17237) — servi par défaut. */
+  readonly upload?: Awaited<ReturnType<OnboardingScreenDeps['uploadProfileImage']>>;
   /** La réponse de `PUT /me/birth-date` (#9928) — un majeur par défaut. */
   readonly birthDate?: ApiResult<unknown>;
 };
@@ -88,6 +108,7 @@ export function harness(options: HarnessOptions = {}) {
   const friends: string[] = [];
   const visits: { path: string; replace: boolean }[] = [];
   const saves: unknown[] = [];
+  const uploads: string[] = [];
   let resent = 0;
   let asked = 0;
   let score = options.serverScore ?? 0;
@@ -139,6 +160,11 @@ export function harness(options: HarnessOptions = {}) {
       saves.push(patch);
       return 'saved';
     },
+    profileImageEditor: HarnessRetouch,
+    uploadProfileImage: async (kind) => {
+      uploads.push(kind);
+      return options.upload ?? { status: 'saved', url: `https://cdn.test/${kind}.jpg` };
+    },
     notificationsAskable: () => options.askable ?? true,
     askNotifications: async () => {
       asked += 1;
@@ -173,6 +199,7 @@ export function harness(options: HarnessOptions = {}) {
     friends,
     visits,
     saves,
+    uploads,
     resent: () => resent,
     asked: () => asked,
     onboardingReads: () => onboardingReads,

@@ -119,6 +119,7 @@ struct MyStoryCard: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityAddTraits(selectionIndicator == .selected ? .isSelected : [])
             .accessibilityLabel(thumbnailAccessibilityLabel)
+            .accessibilityAction { onOpen() }
     }
 
     /// Le « … » posé SUR la vignette (#16386) : un rond translucide lisible sur
@@ -161,7 +162,7 @@ struct MyStoryCard: View {
             ZStack {
                 Circle().fill(accentColor)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(MeeshyFont.fixedGlyph(11, weight: .bold))
                     .foregroundStyle(.white)
             }
             .frame(width: 22, height: 22)

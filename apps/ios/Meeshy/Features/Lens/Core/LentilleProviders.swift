@@ -213,7 +213,7 @@ nonisolated protocol ReadingModePreferenceStoring: Sendable {
 /// `meeshy_readmode_<scopeKey>_<conversationId>`). Deux défauts en un — la
 /// préférence choisie dans la liste n'était pas celle qu'ouvrait le fil, et la
 /// clé non scopée faisait partager leurs préférences à deux comptes du même
-/// appareil (fuite privacy du 2026-05-26).
+/// appareil.
 ///
 /// L'arbitrage tranche : le stockage Focal est LE stockage. L'implémentation
 /// LOCALE de ce protocole est désormais
@@ -264,29 +264,30 @@ final class LocalLiveCallProvider: ConversationLiveCallProviding, @unchecked Sen
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    private let lock = NSLock()
-    private var liveCalls: [String: ConversationLiveCall] = [:]
-    private var subscribers: [UUID: @Sendable (String, ConversationLiveCall?) -> Void] = [:]
+    nonisolated private struct Registry {
+        var liveCalls: [String: ConversationLiveCall] = [:]
+        var subscribers: [UUID: @Sendable (String, ConversationLiveCall?) -> Void] = [:]
+    }
+
+    private let registry = Locked(uncheckedState: Registry())
 
     init() {}
 
     func liveCallFor(conversationId: String) -> ConversationLiveCall? {
-        lock.lock()
-        defer { lock.unlock() }
-        return liveCalls[conversationId]
+        registry.mutateUnchecked { $0.liveCalls[conversationId] }
     }
 
     /// Enregistre (`liveCall` non nil) ou efface (`nil`) l'état d'appel
     /// connu pour cette conversation, et notifie les abonnés.
     func noteLiveCall(_ liveCall: ConversationLiveCall?, for conversationId: String) {
-        lock.lock()
-        if let liveCall {
-            liveCalls[conversationId] = liveCall
-        } else {
-            liveCalls.removeValue(forKey: conversationId)
+        let callbacks = registry.mutateUnchecked { state in
+            if let liveCall {
+                state.liveCalls[conversationId] = liveCall
+            } else {
+                state.liveCalls.removeValue(forKey: conversationId)
+            }
+            return Array(state.subscribers.values)
         }
-        let callbacks = Array(subscribers.values)
-        lock.unlock()
 
         for callback in callbacks {
             callback(conversationId, liveCall)
@@ -295,15 +296,10 @@ final class LocalLiveCallProvider: ConversationLiveCallProviding, @unchecked Sen
 
     func onChange(_ callback: @escaping @Sendable (String, ConversationLiveCall?) -> Void) -> @Sendable () -> Void {
         let token = UUID()
-        lock.lock()
-        subscribers[token] = callback
-        lock.unlock()
+        registry.mutateUnchecked { $0.subscribers[token] = callback }
 
         return { [weak self] in
-            guard let self else { return }
-            self.lock.lock()
-            self.subscribers.removeValue(forKey: token)
-            self.lock.unlock()
+            self?.registry.mutateUnchecked { $0.subscribers.removeValue(forKey: token) }
         }
     }
 }

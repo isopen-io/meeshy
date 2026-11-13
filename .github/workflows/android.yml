@@ -32,6 +32,8 @@ on:
     paths:
       - 'apps/android/**'
       - '.github/workflows/android.yml'
+      - 'scripts/check-verbosity-native.mjs'
+      - 'scripts/verbosity-native-budgets.json'
       - 'apps/ios/Meeshy/Localizable.xcstrings'
       - 'apps/ios/Meeshy/InfoPlist.xcstrings'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings'
@@ -48,10 +50,15 @@ on:
       # assoupli sans que les cas communs bougent doit faire tourner la CI Android (#13927).
       - 'packages/shared/utils/relation-levels.ts'
       - 'packages/shared/utils/relation-access.ts'
+      - 'packages/shared/types/external-interop-compliance.ts'
       - 'packages/shared/types/relation.ts'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
       - 'packages/design-tokens/**'
+      # Le kit de la planche (K00, #17335) : KitRegistryGuardTest confronte le registre et la table S de la planche
+      # au catalogue — l'un ou l'autre qui change doit rejouer la garde.
+      - '.claude/workflows/meeshy-kit-planche.lots.json'
+      - 'docs/product/composer-vue-finale/planche.html'
   pull_request:
     branches: [main, dev]
     paths:
@@ -73,11 +80,26 @@ on:
       # assoupli sans que les cas communs bougent doit faire tourner la CI Android (#13927).
       - 'packages/shared/utils/relation-levels.ts'
       - 'packages/shared/utils/relation-access.ts'
+      - 'packages/shared/types/external-interop-compliance.ts'
       - 'packages/shared/types/relation.ts'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift'
       - 'packages/MeeshySDK/Sources/MeeshyUI/Theme/DesignTokens.swift'
       - 'packages/design-tokens/**'
+      # Le kit de la planche (K00, #17335) : KitRegistryGuardTest confronte le registre et la table S de la planche
+      # au catalogue — l'un ou l'autre qui change doit rejouer la garde.
+      - '.claude/workflows/meeshy-kit-planche.lots.json'
+      - 'docs/product/composer-vue-finale/planche.html'
   workflow_dispatch:
+    inputs:
+      # Les références d'instantanés du kit (apps/android/feature/kit/src/test/snapshots) s'enregistrent ICI, par la
+      # machine qui les juge, jamais sur un poste (fiche docs/product/kit/K00-Catalogue.md §8). Sur une branche de travail,
+      # le job les commit lui-même (les sessions des conteneurs ne peuvent pas télécharger un artefact) ; sur dev et
+      # main il les publie seulement en artefact.
+      record_snapshots:
+        description: "Enregistrer les références d'instantanés du kit (Roborazzi) et les publier"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: android-${{ github.ref }}
@@ -187,10 +209,33 @@ jobs:
       - name: MeeshyPaletteGenerated.kt is up to date (generate-android-from-ios.mjs --check)
         run: node packages/design-tokens/scripts/generate-android-from-ios.mjs --check
 
+  # Graphe des modules : les arêtes feature -> feature sont celles de l'ADR-033, rien d'autre, et sans cycle.
+  # Pur shell, aucun SDK Android requis.
+  modules:
+    name: Graphe des modules Android
+    if: github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Témoins de la garde
+        run: bash apps/android/scripts/check-feature-edges.test.sh
+
+      - name: Arêtes feature vers feature conformes à l'ADR-033
+        run: bash apps/android/scripts/check-feature-edges.sh
+
+      # #17587 (épure #17584) — le texte que les écrans Android ont à dire,
+      # module par module (values-fr/strings*.xml), sous le même cliquet que
+      # les catalogues iOS. Pur Node, aucun SDK Android requis.
+      - name: Cliquet du texte natif (épure)
+        run: node --test scripts/__tests__/check-verbosity-native.test.mjs && node scripts/check-verbosity-native.mjs
+
   android:
     name: Android (assemble + unit tests)
     needs: i18n
-    if: needs.i18n.outputs.android_touched == 'true'
+    if: needs.i18n.outputs.android_touched == 'true' && !inputs.record_snapshots
     runs-on: ubuntu-latest
     # Measured on the first green runs (2026-08-12): ~8-10 min wall clock for
     # the whole job on a cold Gradle cache — of which assembleDebug is the bulk
@@ -305,6 +350,12 @@ jobs:
       - name: Room schema export matches the committed JSON
         run: ./scripts/check-room-schema.sh --built
 
+      # Le kit de la planche (K00, #17335) : son verdict propre, AVANT la passe générale. Sans cette étape, un échec ailleurs
+      # (Gradle arrête de planifier au premier test rouge) laisse le catalogue, ses gardes et ses instantanés sans verdict.
+      # Les instantanés se COMPARENT ici (mode `verify`), ils ne s'enregistrent que par `record_snapshots`.
+      - name: Kit du catalogue (modèle, gardes, instantanés)
+        run: ./gradlew :sdk-ui:testDebugUnitTest --tests 'me.meeshy.ui.component.kit.*' :feature:kit:testDebugUnitTest --no-daemon
+
       # Un test FIGÉ ne laisse aucune trace : Gradle n'écrit le résultat d'une classe qu'à sa fin, et le délai du job
       # annule tout d'un « The operation was canceled » sans nom (vu le 2026-11-02, #14650, quand les tests de
       # :sdk-core ont recompilé). Passé 15 min — une passe normale en prend 10 à 12 —, le chien de garde vide deux
@@ -369,3 +420,70 @@ jobs:
           path: apps/android/**/build/reports/tests/
           if-no-files-found: ignore
           retention-days: 14
+
+  # Enregistrement des références d'instantanés du kit (K00). Uniquement sur demande (workflow_dispatch).
+  kit-snapshots-record:
+    name: Enregistrer les instantanés du kit
+    if: github.event_name == 'workflow_dispatch' && inputs.record_snapshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: apps/android
+
+    steps:
+      - name: Libérer le disque du runner
+        working-directory: /
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/share/swift /usr/local/share/powershell
+          sudo docker image prune --all --force > /dev/null || true
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # Le mode `record` réécrit les références ; le témoin reste vert. Seuls les témoins d'instantané tournent.
+      - name: Record kit snapshots
+        run: ./gradlew :feature:kit:testDebugUnitTest --tests '*SnapshotTest' -Pmeeshy.kit.snapshots=record --no-daemon
+
+      - name: Publish recorded snapshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-kit-snapshots
+          path: apps/android/feature/kit/src/test/snapshots/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: warn
+
+      - name: Commit recorded snapshots (branche de travail seulement)
+        if: github.ref_name != 'dev' && github.ref_name != 'main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A feature/kit/src/test/snapshots
+          if git diff --cached --quiet; then
+            echo "::notice::aucune référence nouvelle ou modifiée"
+            exit 0
+          fi
+          git commit -m "chore(kit): références d'instantanés Android enregistrées par la CI
+
+          Refs #17335"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin "HEAD:${{ github.ref_name }}"

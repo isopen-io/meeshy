@@ -23,7 +23,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,6 +54,8 @@ import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.AutoDownloadPolicy
 import me.meeshy.sdk.model.MediaKind
 import me.meeshy.sdk.model.composer.capture.CaptureRenderedSaveMode
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoteButton
 import me.meeshy.ui.component.chrome.CollapsibleHeaderPage
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
@@ -76,6 +77,7 @@ fun MediaDownloadScreen(
     viewModel: MediaDownloadViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val noteHost = rememberNoteHost()
 
     MeeshyBackground {
         CollapsibleHeaderPage(
@@ -89,10 +91,10 @@ fun MediaDownloadScreen(
                 modifier = Modifier
                     .fillMaxWidth(),
             ) {
-                InfoBanner()
                 GallerySection(
                     savesToGallery = state.savesMediaToGallery,
                     onSavesToGallery = viewModel::setSaveMediaToGallery,
+                    noteHost = noteHost,
                 )
                 MediaKindSection(
                     title = stringResource(R.string.media_download_images),
@@ -127,6 +129,7 @@ fun MediaDownloadScreen(
                     renderedAutomatic = state.capturePolicy.renderedMode == CaptureRenderedSaveMode.AUTOMATIC,
                     onSavesOriginal = viewModel::setSavesOriginal,
                     onRenderedAutomatic = viewModel::setRenderedAutomatic,
+                    noteHost = noteHost,
                 )
                 OutgoingSection(
                     keepsLocation = state.keepsPhotoLocation,
@@ -135,29 +138,6 @@ fun MediaDownloadScreen(
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
         }
-    }
-}
-
-@Composable
-private fun InfoBanner() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Info,
-            contentDescription = null,
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(MeeshySpacing.sm))
-        Text(
-            text = stringResource(R.string.media_download_info),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
     }
 }
 
@@ -247,6 +227,7 @@ private fun CaptureSaveSection(
     renderedAutomatic: Boolean,
     onSavesOriginal: (Boolean) -> Unit,
     onRenderedAutomatic: (Boolean) -> Unit,
+    noteHost: NoteHost,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -270,62 +251,93 @@ private fun CaptureSaveSection(
         CaptureToggleRow(
             icon = Icons.Filled.Image,
             title = stringResource(R.string.settings_media_capture_original_title),
-            subtitle = stringResource(R.string.settings_media_capture_original_subtitle),
             checked = savesOriginal,
             onCheckedChange = onSavesOriginal,
+            note = MeeshyInfoNote(
+                question = stringResource(R.string.settings_media_capture_original_question),
+                text = stringResource(R.string.settings_media_capture_original_note),
+            ),
+            noteHost = noteHost,
         )
         CaptureToggleRow(
             icon = Icons.Filled.PhotoFilter,
             title = stringResource(R.string.settings_media_capture_rendered_title),
-            subtitle = stringResource(R.string.settings_media_capture_rendered_subtitle),
             checked = renderedAutomatic,
             onCheckedChange = onRenderedAutomatic,
+            note = MeeshyInfoNote(
+                question = stringResource(R.string.settings_media_capture_rendered_question),
+                text = stringResource(R.string.settings_media_capture_rendered_note),
+            ),
+            noteHost = noteHost,
         )
     }
 }
 
 @Composable
-private fun CaptureToggleRow(
+internal fun CaptureToggleRow(
     icon: ImageVector,
     title: String,
-    subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    subtitle: String? = null,
+    note: MeeshyInfoNote? = null,
+    noteHost: NoteHost? = null,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MeeshyTheme.tokens.textSecondary,
-            modifier = Modifier.size(22.dp),
-        )
-        Column(modifier = Modifier.weight(1f)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = MeeshySpacing.lg, top = MeeshySpacing.sm, bottom = MeeshySpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MeeshyTheme.tokens.textSecondary,
+                    modifier = Modifier.size(22.dp),
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MeeshyTheme.tokens.textPrimary,
+                    )
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MeeshyTheme.tokens.textSecondary,
+                        )
+                    }
+                }
+                Switch(checked = checked, onCheckedChange = null)
+            }
+            if (note != null && noteHost != null) {
+                MeeshyInfoNoteButton(note = note, expanded = noteHost.isOpen(note), onToggle = { noteHost.toggle(note) })
+            } else {
+                Spacer(Modifier.width(MeeshySpacing.lg))
+            }
+        }
+        if (note != null && noteHost != null && noteHost.isOpen(note)) {
             Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MeeshyTheme.tokens.textPrimary,
-            )
-            Text(
-                text = subtitle,
+                text = note.text,
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg, bottom = MeeshySpacing.sm),
             )
         }
-        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
 /** « Galerie » (#14640) : la préférence serveur `privacy.saveMediaToGallery`, la même que Réglages › Confidentialité. */
 @Composable
-private fun GallerySection(savesToGallery: Boolean, onSavesToGallery: (Boolean) -> Unit) {
+private fun GallerySection(savesToGallery: Boolean, onSavesToGallery: (Boolean) -> Unit, noteHost: NoteHost) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -351,6 +363,11 @@ private fun GallerySection(savesToGallery: Boolean, onSavesToGallery: (Boolean) 
             subtitle = stringResource(R.string.settings_media_autosave_subtitle),
             checked = savesToGallery,
             onCheckedChange = onSavesToGallery,
+            note = MeeshyInfoNote(
+                question = stringResource(R.string.settings_media_autosave_question),
+                text = stringResource(R.string.settings_media_autosave_note),
+            ),
+            noteHost = noteHost,
         )
     }
 }

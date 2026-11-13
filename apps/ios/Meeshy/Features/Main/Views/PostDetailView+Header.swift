@@ -32,7 +32,7 @@ extension PostDetailView {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(post.author)
                             .font(.subheadline.weight(.bold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                         let reach = PostReachFormatter.components(
                             username: post.authorUsername,
@@ -43,14 +43,14 @@ extension PostDetailView {
                                 if let pseudo = reach.pseudo {
                                     Text(pseudo)
                                         .font(.caption2)
-                                        .foregroundColor(theme.textMuted)
+                                        .foregroundStyle(theme.textMuted)
                                         .lineLimit(1)
                                         .truncationMode(.tail)
                                         .layoutPriority(0)
                                 }
                                 if reach.showsStats {
                                     if reach.pseudo != nil {
-                                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+                                        MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
                                     }
                                     HStack(spacing: MeeshySpacing.xxs) {
                                         ReachMetricLabel(
@@ -59,7 +59,7 @@ extension PostDetailView {
                                             label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
                                             tint: theme.textMuted
                                         )
-                                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
+                                        MetaSeparator().font(.caption2).foregroundStyle(theme.textMuted)
                                         ReachMetricLabel(
                                             icon: "chart.bar.fill",
                                             count: post.impressionCount,

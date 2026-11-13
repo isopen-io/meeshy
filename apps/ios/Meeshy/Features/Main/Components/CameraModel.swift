@@ -15,11 +15,18 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated deinit {
         // Un modèle libéré sans `stop()` ne laisse pas son guet de la scène
         // inscrit au centre de notifications.
-        if let subjectAreaObserver { NotificationCenter.default.removeObserver(subjectAreaObserver) }
-        sessionObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers.releaseNow { observers in
+            if let subjectArea = observers.subjectArea { NotificationCenter.default.removeObserver(subjectArea) }
+            observers.session.forEach { NotificationCenter.default.removeObserver($0) }
+        }
     }
+    private let observers = TeardownBox(CameraNotificationObservers())
+
     /// Le guet de la santé de la session — `CameraModel+Recovery`.
-    nonisolated(unsafe) var sessionObservers: [NSObjectProtocol] = []
+    var sessionObservers: [NSObjectProtocol] {
+        get { var value: [NSObjectProtocol] = []; observers.update { value = $0.session }; return value }
+        set { observers.update { $0.session = newValue } }
+    }
     /// Le rang de la dernière entrée vidéo posée : la couche d'aperçu
     /// ne règle sa connexion qu'à ce changement, jamais à chaque passe.
     @Published private(set) var inputEpoch = 0
@@ -66,6 +73,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// L'entrée audio est ajoutée paresseusement (mode Vidéo), pas au montage
     /// de la session — cf. `enableAudioCaptureIfNeeded()`.
     private var hasAudioInput = false
+    /// La raison de la dernière interruption de la session, `nil` hors interruption (#17433).
+    var interruptionReason: Int?
     private var didAnnounceMicrophoneRefusal = false
 
     /// Les sorties se branchent sur la file de la session (`sessionQueue`) ;
@@ -152,9 +161,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     private var switchGeneration = 0
     var recordingTimer: Timer?
     /// Le guet de la scène après un toucher — `nil` hors session.
-    /// `nonisolated(unsafe)` : la deinit, non isolée, le retire ; il n'est
-    /// écrit que sur le fil principal.
-    nonisolated(unsafe) var subjectAreaObserver: NSObjectProtocol?
+    /// Retiré par la deinit non isolée, via la `TeardownBox`.
+    var subjectAreaObserver: NSObjectProtocol? {
+        get { var value: NSObjectProtocol?; observers.update { value = $0.subjectArea }; return value }
+        set { observers.update { $0.subjectArea = newValue } }
+    }
 
     // Camera-switch-mid-recording: `AVCaptureMovieFileOutput`'s
     // active recording connection breaks when its video input is removed, even
@@ -324,6 +335,28 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
+    /// **Un autre client audio a pris le micro** (#17433) : la session entière s'est
+    /// interrompue, l'objectif avec. Le micro sort, la vidéo repart ; il reviendra à la
+    /// prochaine vidéo par `enableAudioCaptureIfNeeded`.
+    func dropMicrophoneAndResume() {
+        Logger.media.notice("composer capture: microphone taken by another client, video resumes without it")
+        hasAudioInput = false
+        sessionQueue.perform { [weak self] in
+            guard let self else { return }
+            Self.removeAudioInputs(from: self.session)
+        }
+        sessionQueue.resumeIfWanted(session)
+    }
+
+    /// Toute entrée audio sort, qu'elle ait été publiée au fil principal ou non.
+    nonisolated private static func removeAudioInputs(from session: AVCaptureSession) {
+        let audio = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.filter { $0.device.hasMediaType(.audio) }
+        guard !audio.isEmpty else { return }
+        session.beginConfiguration()
+        audio.forEach(session.removeInput)
+        session.commitConfiguration()
+    }
+
     private func disarmMicrophoneForPhoto() {
         guard hasAudioInput else { return }
         hasAudioInput = false
@@ -491,6 +524,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         zoomScale = installe.zoomScale
         zoomFactor = 1
         watchSubjectArea(of: installe.device)
+        watchSystemPressure(of: installe.device)
     }
 
     /// Switches the active camera. While recording, this cannot reconfigure the
@@ -626,6 +660,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// L'objectif en place, tel que la file l'a installé.
     private(set) var activeVideoDevice: AVCaptureDevice?
+    /// Le guet de la pression du système sur cet objectif — `CameraModel+SystemPressure`.
+    var pressureObservation: NSKeyValueObservation?
 
     /// **Le cadrage de l'objectif actif** — publié pour le badge du
     /// viseur en facteur AFFICHÉ, remis à ×1 à chaque changement d'objectif.
@@ -636,6 +672,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     func stop() {
         cancelOpening()
+        // Une photo en vol ne survit pas au viseur : sans ceci, `isTakingPhoto` restait vrai et
+        // le déclencheur du viseur suivant refusait en silence (#17433).
+        isTakingPhoto = false
+        interruptionReason = nil
         #if DEBUG
         fixture?.stop()
         #endif
@@ -646,4 +686,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         sessionQueue.setRunning(false, session)
         handBackRecordingSession()
     }
+}
+
+private nonisolated struct CameraNotificationObservers {
+    var session: [NSObjectProtocol] = []
+    var subjectArea: NSObjectProtocol?
 }

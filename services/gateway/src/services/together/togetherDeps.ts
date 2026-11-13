@@ -6,8 +6,8 @@
  *
  * Les sites UNIQUES qui ferment une porte sans tenir de quoi émettre — la fin d'une
  * appartenance, le retrait d'un message, la désactivation d'un compte (#17022) — passent par
- * {@link cutTogetherWhere}, qui lit le relais du processus : la porte socket le partage dès
- * qu'elle sert (`shareTogetherCuts`), comme le registre de la file de rejeu.
+ * {@link cutTogetherWhere}, qui lit le relais du processus : le gestionnaire de sockets le partage
+ * au démarrage (`shareTogetherCuts`), comme le registre de la file de rejeu.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
@@ -81,11 +81,12 @@ export async function rejudgeTogetherAfter(
   }
 }
 
-type SharedTogether = { readonly prisma: PrismaClient; readonly io: TogetherIo };
+/** `io` est résolu à l'appel : le serveur Socket.IO naît après l'enregistrement des routes. */
+type SharedTogether = { readonly prisma: PrismaClient; readonly io: () => TogetherIo | null | undefined };
 
 let sharedTogether: SharedTogether | undefined;
 
-/** Le relais du processus, posé par la porte socket ; `undefined` le retire (témoins). */
+/** Le relais du processus, posé au démarrage par `MeeshySocketIOHandler.setupSocketIO` ; `undefined` le retire (témoins). */
 export function shareTogetherCuts(shared: SharedTogether | undefined): void {
   sharedTogether = shared;
 }
@@ -105,5 +106,9 @@ export async function cutTogetherWhere(scope: TogetherCutScope): Promise<void> {
       /* le journal ne fait jamais échouer le geste de l'appelant */
     }
   };
-  await rejudgeTogetherAfter({ ...shared, report }, scope);
+  try {
+    await rejudgeTogetherAfter({ prisma: shared.prisma, io: shared.io() ?? undefined, report }, scope);
+  } catch (error) {
+    report(error);
+  }
 }

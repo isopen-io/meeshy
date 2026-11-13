@@ -43,9 +43,9 @@ final class StoryGroupIntroPresenter: ObservableObject {
                 guard !Task.isCancelled, let self, self.isShown, self.intro?.userId == userId else { return }
                 self.intro = identity
             }
-            try? await Task.sleep(for: .seconds(hold))
+            let held = await cancellableSleep(for: .seconds(hold))
             enrich.cancel()
-            guard !Task.isCancelled, self != nil else { return }
+            guard held, self != nil else { return }
             elapsed()
         }
     }

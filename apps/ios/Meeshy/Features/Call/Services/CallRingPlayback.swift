@@ -2,7 +2,7 @@ import MeeshySDK
 import MeeshyUI
 
 /// **Un appel Meeshy entrant BAISSE le son Meeshy pendant qu'il sonne, et
-/// l'ARRÊTE quand on décroche** (#11063, décision porteur h du 2026-10-20).
+/// l'ARRÊTE quand on décroche** (#11063).
 ///
 /// - L'appel entrant sonne ⇒ la vidéo, le vocal, le PiP en cours baissent
 ///   (`RecordingPlaybackDucker`, le même mécanisme que pendant un

@@ -307,6 +307,14 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- Le réveil du talkie d'urgence (#17144) : un push FCM haute priorité `talkie_incoming` le démarre, il pose
+             « X vous parle », rattrape la voix par la socket (`talkie:join`) et la fait sortir. Même type que le Bring
+             (mediaPlayback, déjà déclaré) : aucune nouvelle déclaration de service au premier plan. -->
+        <service
+            android:name=".talkie.TalkieWakeService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <receiver
             android:name=".bring.BringStopReceiver"
             android:exported="false" />

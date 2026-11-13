@@ -127,11 +127,13 @@ class RouteManifestRatchetTest {
          * `BringApi.stop`.
          * 124 : moins `GET|POST /bring/:userId` et `GET|PUT /relations/:userId/settings` (#16617 : faire sonner un ami depuis
          * sa fiche, et bloquer ses Bring depuis la fiche d'un lien), que portent `BringApi` et `RelationsApi`.
-         * 129 : plus les cinq routes de la position du Sang (#13937, derrière un drapeau éteint) — `POST /me/location/blood`,
+         * 125 : plus `POST /conversations/external` (#17117 : ouvrir une conversation chiffrée de bout en bout avec un ami
+         * WhatsApp, derrière un drapeau éteint en production) ; le lot clients du chantier #17007 la portera.
+         * 130 : plus les cinq routes de la position du Sang (#13937, derrière un drapeau éteint) — `POST /me/location/blood`,
          * `DELETE /me/location/history`, `GET /me/location/consultations`, `PUT /me/location/blood-settings` et
          * `GET /relations/:userId/location/history` —, servies par la passerelle ; `sang-position-historique@android` les portera.
          */
-        const val TO_PORT_CEILING = 129
+        const val TO_PORT_CEILING = 130
         val VERB_STATUSES = setOf("hors-perimetre-mobile", "ops-only", "a-porter", "implementee-par-url-serveur")
     }
 

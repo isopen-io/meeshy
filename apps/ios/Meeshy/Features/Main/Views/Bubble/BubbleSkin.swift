@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - La peau des bulles d'une conversation (#10753, spec 2026-10-14 D2, §§ 6, 9)
+// MARK: - La peau des bulles d'une conversation (#10753, §§ 6, 9)
 //
 // Sans accent choisi (« Automatique »), la bulle ENVOYÉE garde l'indigo de marque
 // et son encre blanche. Avec un accent personnel, elle prend cet accent (le même

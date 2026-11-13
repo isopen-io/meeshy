@@ -95,7 +95,7 @@ enum PushPermissionPrompt {
     /// La décision vit ICI et non dans le `body` de `MeeshyApp` : c'est la même
     /// règle que le report, vue de l'autre bout. L'écrire là-haut la séparerait
     /// de sa raison, et ferait grossir un fichier déjà hors budget — ce que la
-    /// directive 2026-08-28 interdit.
+    /// interdit.
     ///
     /// - `.registration` : on REPORTE. L'alerte système tomberait sur un écran
     ///   sans conversation ni contact, et un refus posé là est définitif.

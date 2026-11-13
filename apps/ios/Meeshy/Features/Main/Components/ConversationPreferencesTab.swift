@@ -169,7 +169,6 @@ struct ConversationPreferencesTab: View {
             } label: {
                 // Cette « réaction » EST le favori : le filtre « Favoris » de la
                 // liste lit `userState.reaction != nil` — nommée comme telle
-                // (directive 2026-08-21).
                 settingsRow(icon: "star.fill", iconColor: accentColor, title: String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)) {
                     HStack(spacing: MeeshySpacing.xsPlus) {
                         if let r = viewModel.prefs.reaction, !r.isEmpty {

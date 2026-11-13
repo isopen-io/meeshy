@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-9e6ean` |
+| Branche de travail de la session courante | `claude/practical-fermat-u8t5dq` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -45,7 +45,100 @@ normal.
 | **78w** | 2026-11-01 | `claude/practical-fermat-0tzqfi` | [#14198](https://github.com/isopen-io/meeshy/pull/14198) → `dev` | ✅ mergé |
 | **79w** | 2026-11-02 | `claude/practical-fermat-js1tyc` | → `dev` | ✅ mergé |
 | **80w** | 2026-11-07 | `claude/practical-fermat-k0hf3y` | → `dev` | ✅ mergé |
-| **81w** | 2026-11-08 | `claude/practical-fermat-9e6ean` | → `dev` | ⏳ ouverte |
+| **81w** | 2026-11-08 | `claude/practical-fermat-9e6ean` | → `dev` | ✅ mergé |
+| **82w** | 2026-11-09 | `claude/practical-fermat-jsk76s` | → `dev` | ✅ mergé |
+| **83w** | 2026-11-10 | `claude/practical-fermat-kt6x2g` | → `dev` | ✅ mergé |
+| **84w** | 2026-11-11 | `claude/practical-fermat-y94b4f` | → `dev` | ✅ mergé |
+| **85w** | 2026-11-12 | `claude/practical-fermat-l2dnwf` | → `dev` | ✅ mergé |
+| **86w** | 2026-11-13 | `claude/practical-fermat-u8t5dq` | → `dev` | ⏳ ouverte |
+
+**86w** — cohérence de positionnement / maintenabilité : le bouton d'envoi de marque
+était recopié en **trois jumelles divergentes** — `composer.tsx` (envoi),
+`composer-tray.tsx` (envoi vocal) et `message-edit-composer.tsx` (soumission d'édition) :
+même fond `linear-gradient(135deg, var(--accent), color-mix(…, white))` et même encre
+`text-white`. Les deux premiers sont hors périmètre du gate (`composer*`), le troisième
+est scanné (2 des 10 violations). Source unique désormais : le jeton composé
+`--send-accent-fill` (`styles/app.css`, `:root`, dérivé de `var(--accent)`, voisin des
+`--recording-*`), consommé par `background: var(--send-accent-fill)` ; l'encre passée à
+`text-ios-on-brand` (= `--ios-on-brand` = `#fff`, byte-identique, nommée par son rôle).
+Le CSS n'étant pas scanné, le littéral `white` quitte entièrement la surface au lieu
+d'être exempté. Témoins : `check-design-harmony.test.ts` (describe « le bouton d'envoi »,
+33→36) + `message-edit-composer`/`composer`/`composer-tray`/`-heif`/`declared-tokens`
+(52/52, non-régression). Gate **10 → 8 violations** (−2, exactement
+`message-edit-composer`), **8 → 7 fichiers** ; `tsc` 0. Housekeeping : 85w confirmée
+mergée (`edgeFadeMask` sur `dev`, gate mesuré 10/8 à l'ouverture) ; appariement
+analyses↔plans 1:1 revérifié (45w→85w). Analyse :
+`docs/analyses/uiux/2026-11-13-iteration-86w.md`.
+
+**85w** — cohérence / maintenabilité (famille appel) : le même fondu de bord
+(`linear-gradient(…, #000 8px, #000 calc(100% - 8px), transparent)`, masque de
+LUMINANCE) était écrit en **trois jumelles divergentes** — `RAIL_FADE`
+(`call-control-actions.tsx`), `ROW_EDGE_FADE` (`call-row-keys.ts`), `fade` de
+`stripBox` (`call-grid.tsx`) — 6 des 17 violations du gate. Source unique désormais :
+`edgeFadeMask(axis)` dans `call-row-keys.ts`, exemptée UNE fois à la ligne
+(luminance, hors couleur) ; les trois sites en dérivent, sortie **byte-identique**
+(témoin `call-rails.test.tsx:171` inchangé). Et le verre de la pastille d'appel
+(`call-floating-pill.tsx`, `color-mix(in srgb, white 22%, transparent)`) ramené à
+`var(--color-media-hairline)` — filet blanc 20 %, parité talkie 84w. Témoins :
+`check-design-harmony.test.ts` (describe « la famille appel », 29→33) +
+`call-rails/bubble/row-keys` (31/31). Gate **17 → 10 violations** (−7, exactement
+la famille appel), **12 → 8 fichiers** ; `tsc` 0. Housekeeping : 84w confirmée
+mergée (`talkie-header-band` porte `var(--ios-error-strong)` sur `dev`) ; mesure
+d'ouverture **remontée 13/10 → 17/12** (poche appel neuve sur `dev`) ; appariement
+analyses↔plans 1:1 revérifié (45w→84w). Analyse :
+`docs/analyses/uiux/2026-11-12-iteration-85w.md`.
+
+**84w** — cohérence de thème / maintenabilité : le talkie élargi sur la barre
+d'en-tête (`components/talkie-header-band.tsx`, transposition de
+`TalkieHeaderLiveBar.swift`, #17338) peignait son chrome en **15 littéraux bruts**
+(blanc/noir rgba, `#fff`, `#000`) — **15 des 28 violations du gate (54 %)**, la plus
+grosse poche de chrome du web, apparue sur `dev` APRÈS 83w. Encre, voiles, filets et
+halos ramenés à l'échelle `on-media`/`scrim-soft`/`media-fill`/`media-hairline` (ou
+`color-mix` de `var(--color-on-media)` pour les alphas hors dosage canonique), et le
+rouge d'enregistrement passé de `var(--color-error)` (illisible sur verre sombre en
+thème clair) à `var(--ios-error-strong)` — parité iOS (`errorStrong`) et avec les
+autres chromes d'appel. Seules exemptions, déclarées à la ligne : l'onde en CANVAS
+(hors du DOM) et le masque de luminance (`#000` = opaque). Témoins :
+`check-design-harmony.test.ts` (describe « la barre de talkie élargie », `scanSource`
+→ `[]`, 25→29) + `thread-header-talkie.test.tsx` (voile hors ligne re-jetonné
+`var(--color-scrim-soft)`). Gate **28 → 13 violations** (−15, exactement
+`talkie-header-band.tsx`), **11 → 10 fichiers** ; `tsc` 0. Housekeeping : 83w
+confirmée mergée (`lens-preview-line` dérive de `RAINBOW_SPECTRUM` sur `dev`) ;
+appariement analyses↔plans 1:1 revérifié (45w→83w). Analyse :
+`docs/analyses/uiux/2026-11-11-iteration-84w.md`.
+
+**83w** — cohérence de positionnement / maintenabilité : l'aperçu de liste
+(`components/lens-preview-line.tsx`) peignait le fini « rainbow » d'un message avec
+un dégradé codé en dur (`#f43f5e, #f59e0b, #22c55e, #3b82f6, #a855f7`) — une
+JUMELLE DIVERGENTE du spectre de la maison `RAINBOW_SPECTRUM`
+(`@/lib/effects-playback`, miroir iOS `houseSpectrum`), que la bulle
+(`effects-runner`) et iOS jouent déjà. Même message « rainbow » ⇒ trois
+arcs-en-ciel différents (liste / bulle / iOS), et les 5 dernières hex de la plus
+grosse poche du gate. L'aperçu dérive désormais de `RAINBOW_SPECTRUM`
+(`linear-gradient(90deg, …join)`) — source unique, pas exemption. Témoins :
+`check-design-harmony.test.ts` (describe « le fini arc-en-ciel d'un aperçu »,
+`scanSource` → `[]`, 23→25) + `lens-row-preview.test.tsx` (parité : style ⊇
+`RAINBOW_SPECTRUM`, ⊄ jumelle). Gate **14 → 9 violations** (−5, exactement
+`lens-preview-line.tsx`), **8 → 7 fichiers** ; `tsc` 0. Housekeeping : 82w
+confirmée mergée (`mood-page` tokens sur `dev`) ; appariement analyses↔plans 1:1
+revérifié (45w→82w). Analyse : `docs/analyses/uiux/2026-11-10-iteration-83w.md`.
+
+**82w** — cohérence de thème / maintenabilité : l'écran d'une humeur reçue
+(`components/mood-page.tsx`) peignait son chrome immersif en littéraux bruts —
+`text-white` ×4, `rgb(0 0 0 / …)` ×6, `rgb(255 255 255 / .85)`, `black` ×2, `'white'`
+— soit **13 des 27 violations du gate d'harmonie (48 %)**, la plus grosse poche de
+chrome du produit web. Chacune a pourtant un rôle que la charte nomme : encre sur
+média (`text-on-media`), encre sur aplat de marque (`text-ios-on-brand`), voiles
+(`var(--color-scrim-soft)` / `var(--color-scrim)`), halo blanc (`var(--color-on-media-2)`),
+assombrissement vers le fond média (`var(--color-media-backdrop)`). Les 13 littéraux
+remplacés par leur jeton (aucune couleur de tiers ici — que du chrome, donc aucune
+exemption). Témoins : `check-design-harmony.test.ts` describe « l'écran d'humeur »
+(`scanSource` → `[]`, RED→GREEN, 21→23) + `mood-page.test.tsx` (branche de repli par
+marqueur `data-mood-backdrop-fill`, happy-dom ne parsant pas `color-mix(…, var(…))`).
+Gate **27 → 14 violations** (−13, exactement `mood-page.tsx`), **9 → 8 fichiers** ;
+`tsc` 0. Housekeeping : 81w confirmée mergée (`screen-wait-art` dans `EXEMPT_PATHS`
+sur `dev`) ; appariement analyses↔plans 1:1 revérifié (45w→81w). Analyse :
+`docs/analyses/uiux/2026-11-09-iteration-82w.md`.
 
 **81w** — maintenabilité / cohérence (périmètre du gate d'harmonie) : l'art GÉNÉRÉ
 `components/screen-wait-art.ts` (SVG baké du sticker Mee/Meo « On danse », byte-identique
@@ -124,8 +217,14 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **82w**
-Revue fraîche `apps/web` — voir les pistes 82w+ en pied de
-`docs/analyses/uiux/2026-11-08-iteration-81w.md` (gate d'harmonie enfin lisible à
-22/8 : `mood-page.tsx` (13), `message-menu`/`message-edit-composer`,
-`comment-compose-bar`, letterbox admin ; + axe épuration).
+## Prochaine itération : **87w**
+Revue fraîche `apps/web` — voir les pistes 87w+ en pied de
+`docs/analyses/uiux/2026-11-13-iteration-86w.md` (gate d'harmonie à **8/7** après
+86w : `message-menu` (`, black` ×2, masque de LUMINANCE — candidat exempt motivé ou
+helper de fondu partagé, cf. `edgeFadeMask` 85w), `thread-header-bring`/`thread-header-talkie`
+(`#fff` encre sur média), `comment-compose-bar.tsx` (▶ sur vignette),
+`admin-post-preview` (letterbox `#000`, candidat exempt motivé), `conversation-backdrop`
+(`rgba(`), `rank-blason` (`hsl(`) ; + axe épuration, toujours non entamé).
+**Toujours REMESURER le gate à l'ouverture** : il peut remonter si `dev` reçoit une
+poche neuve entre deux tours (9/7 → 28/11 entre 83w et 84w ; 13/10 → 17/12 entre
+84w et 85w ; 10/8 stable entre 85w et 86w).

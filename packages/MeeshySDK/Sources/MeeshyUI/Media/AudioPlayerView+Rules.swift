@@ -16,7 +16,7 @@ extension AudioPlayerView {
     }
 
     /// Pure resolution of the actual URL `handlePlayTap` hands the playback
-    /// engine. Prisme audio-follow (2026-08-09) — `selectedLanguage` is
+    /// engine. Prisme audio-follow — `selectedLanguage` is
     /// steered to playback whenever `hasExplicitLanguage` is `true`, whether
     /// that came from the automatic Prisme seed in `init` or from an
     /// explicit `switchToLanguage` call. When `false` (no Prisme translation

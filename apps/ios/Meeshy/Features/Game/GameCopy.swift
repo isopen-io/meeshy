@@ -523,7 +523,7 @@ enum GameCopy {
         case .leagueConsentRequired:
             String(localized: "game.error.league_consent_required", defaultValue: "Accepte d’abord de rejoindre la joute publique.", bundle: .main)
         case .leaguePseudonymInvalid:
-            String(localized: "game.error.league_pseudonym_invalid", defaultValue: "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas.", bundle: .main)
+            GameText.leaguePseudonymInvalid
         case .leaguePseudonymTaken:
             String(localized: "game.error.league_pseudonym_taken", defaultValue: "Ce nom de joute est déjà pris.", bundle: .main)
         case .leaguePseudonymForbidden:

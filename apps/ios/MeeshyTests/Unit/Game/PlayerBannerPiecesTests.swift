@@ -14,7 +14,8 @@ final class PlayerBannerPiecesTests: XCTestCase {
                                                                next: GloryStep(rank: .voix, division: .i, division5: .i, minGlory: 2166)),
                                         league: .init(league: .jade, place: 4),
                                         flame: .init(form: .braise, days: 5), trophies: 2,
-                                        dailyMission: .init(done: 1, total: 3), season: .init(number: 1))
+                                        dailyMission: .init(done: 1, total: 3), season: .init(number: 1),
+                                        treasury: .coffre)
 
     func test_everyPieceHasItsOwnSpokenLabel() {
         let texts = PlayerBannerCopy.texts(for: full)
@@ -95,6 +96,22 @@ final class PlayerBannerPiecesTests: XCTestCase {
         XCTAssertLessThanOrEqual(flame.maxY, mission.minY + 0.5, "la Flamme en haut, la mission dessous")
     }
 
+    func test_theTreasuryTier_sitsUnderTheFlame_rightOfTheDream() throws {
+        let screen = mounted(width: 390)
+        let flame = try XCTUnwrap(screen.frame(of: "game.player_banner.flame", borne: 5))
+        let mission = try XCTUnwrap(screen.frame(of: "game.player_banner.mission", borne: 5))
+        let treasury = try XCTUnwrap(screen.frame(of: "game.player_banner.treasury", borne: 5))
+        XCTAssertGreaterThanOrEqual(treasury.minY, flame.maxY - 0.5, "le contenant sous la Flamme")
+        XCTAssertGreaterThanOrEqual(treasury.minX, mission.maxX - 0.5, "à droite du Rêve du jour")
+        XCTAssertEqual(treasury.midY, mission.midY, accuracy: 1, "sur la ligne du Rêve")
+    }
+
+    func test_theTreasuryTier_isSpokenByItsName() {
+        let label = PlayerBannerCopy.texts(for: full).pieceLabels[.treasury]
+        XCTAssertEqual(label, GameText.visitorTreasury(tier: GameCopy.treasuryName(.coffre)))
+        XCTAssertTrue(PlayerBannerCopy.accessibilityLabel(for: full).contains(GameCopy.treasuryName(.coffre)))
+    }
+
     func test_theGloryGauge_closesTheRow_onTheRight() throws {
         let screen = mounted(width: 390)
         let rank = try XCTUnwrap(screen.frame(of: "game.player_banner.rank", borne: 5))
@@ -139,12 +156,12 @@ final class PlayerBannerPiecesTests: XCTestCase {
     }
 
     func test_trophiesAndSeason_leaveTheCompactRow() {
-        XCTAssertEqual(PlayerBannerView.compactPieces, [.level, .sparks, .flame, .meesh, .mission, .league, .rank])
+        XCTAssertEqual(PlayerBannerView.compactPieces, [.level, .sparks, .flame, .meesh, .mission, .treasury, .league, .rank])
     }
 
     func test_theBannerIs48ptTall_likeTheWeb() {
         XCTAssertEqual(PlayerBannerView.minimumHeight, 48)
         XCTAssertEqual(PlayerBannerView.cornerTarget, 24)
-        XCTAssertEqual(PlayerBannerView.middlePieces, [.flame, .meesh, .mission, .league])
+        XCTAssertEqual(PlayerBannerView.middlePieces, [.flame, .meesh, .mission, .treasury, .league])
     }
 }

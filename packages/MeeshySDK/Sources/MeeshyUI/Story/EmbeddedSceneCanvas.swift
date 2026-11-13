@@ -50,7 +50,7 @@ public struct EmbeddedSceneCanvas: View {
     /// pas la CARTE — et sur un fond paysage dans une zone haute, l'écart est
     /// énorme.
     ///
-    /// Mesuré au simulateur le 2026-08-31 : un trait de l'outil dessin
+    /// Mesuré au simulateur : un trait de l'outil dessin
     /// descendait bien SOUS la carte, sur le plateau. Tracé hors du canvas, il
     /// est perdu à la publication — le rendu final ne connaît que la carte.
     ///
@@ -123,10 +123,10 @@ public struct EmbeddedSceneCanvas: View {
     /// sans le cookie laisserait le canvas sur sa version périmée.
     public var loadedImagesVersion: UInt64
     /// Les médias adoptés rendus à leur fichier local (retour porteur
-    /// 2026-09-28 — l'adoption doit être imperceptible).
+    /// L'adoption doit être imperceptible).
     public var localMediaAliases: [String: URL]
     /// L'éditeur d'objet l'opte : le texte en saisie se déplace, se zoome et
-    /// se tourne au doigt (retour porteur 2026-09-28).
+    /// se tourne au doigt.
     public var inlineEditYieldsToManipulation: Bool
     /// La barre collée au clavier et le panneau d'options de l'hôte (#13839, L4).
     public var inlineEditInputLink: StoryInlineEditInputLink?
@@ -181,6 +181,10 @@ public struct EmbeddedSceneCanvas: View {
     /// Le menu d'appui long peint par l'hôte (#8717).
     public var onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)?
     public var editableKinds: Set<StoryCanvasUIView.CanvasItemKind>
+    /// `false` : la scène se peint sans son fond — posée sur l'aperçu de l'objectif (#17432).
+    public var paintsSceneBackground: Bool
+    /// Seuls les touchers qui tombent sur un objet restent au canvas (#17432).
+    public var passesThroughEmptyTouches: Bool
 
     public init(
         slide: Binding<StorySlide>,
@@ -211,9 +215,13 @@ public struct EmbeddedSceneCanvas: View {
         onItemMenuRequested: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil,
         localMediaAliases: [String: URL] = [:],
         inlineEditYieldsToManipulation: Bool = false,
-        inlineEditInputLink: StoryInlineEditInputLink? = nil
+        inlineEditInputLink: StoryInlineEditInputLink? = nil,
+        paintsSceneBackground: Bool = true,
+        passesThroughEmptyTouches: Bool = false
     ) {
         self.inlineEditInputLink = inlineEditInputLink
+        self.paintsSceneBackground = paintsSceneBackground
+        self.passesThroughEmptyTouches = passesThroughEmptyTouches
         self.localMediaAliases = localMediaAliases
         self.inlineEditYieldsToManipulation = inlineEditYieldsToManipulation
         self.timelineBridge = timelineBridge
@@ -295,12 +303,12 @@ public struct EmbeddedSceneCanvas: View {
                 loadedImages: loadedImages,
                 loadedStickerAnimations: loadedStickerAnimations,
                 loadedImagesVersion: loadedImagesVersion,
-                // Rayon compensé : la carte est rendue à sa taille de référence PUIS
-                // réduite (même compensation que `canvasComposerLayer`).
+                // Rayon compensé : rendue à sa taille de référence PUIS réduite (comme `canvasComposerLayer`).
                 canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0,
                 timelineBridge: timelineBridge,
                 localMediaAliases: localMediaAliases,
                 inlineEditYieldsToManipulation: inlineEditYieldsToManipulation,
+                paintsSceneBackground: paintsSceneBackground, passesThroughEmptyTouches: passesThroughEmptyTouches,
                 inlineEditInputLink: inlineEditInputLink
             )
             // **Le canvas cesse de recevoir les touches pendant qu'un calque
@@ -312,7 +320,7 @@ public struct EmbeddedSceneCanvas: View {
             // borné à la carte, et le dessin ne recevait plus rien. Mesuré à
             // l'écran — aucun trait, sur une surface pourtant active.
             .allowsHitTesting(canvasOverlay == nil)
-            // **Le badge de sélection se DIT** (2026-09-02).
+            // **Le badge de sélection se DIT**.
             //
             // Il est peint DANS le canvas UIKit — `StoryComposerCanvasView` le
             // rend en couche, au-dessus de l'objet encadré. Mesuré à l'écran :

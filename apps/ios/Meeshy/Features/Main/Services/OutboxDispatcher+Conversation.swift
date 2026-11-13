@@ -259,7 +259,7 @@ extension OutboxDispatcher {
     /// appel fabrique un `Post` neuf).
     ///
     /// `targetType` voyage TOUJOURS depuis `RepostPostPayload` (jamais
-    /// optionnel) — Loi 5 (« le repost miroite », spec 2026-08-23) :
+    /// optionnel) — Loi 5 (« le repost miroite »):
     /// laisser le serveur retomber sur son défaut `?? PostType.POST`
     /// transformerait silencieusement une source éphémère en post permanent.
     ///

@@ -2,7 +2,7 @@ import SwiftUI
 
 // MARK: - Scroll Motion Visibility
 //
-// Loi d'affichage commune à l'application (directive produit 2026-08-14) :
+// Loi d'affichage commune à l'application :
 // **une vue en mouvement ne montre pas ses boutons d'action.** Pendant qu'une
 // liste défile, les boutons du chrome (appel, recherche, actions de header…)
 // s'effacent ; ils reviennent dès que le mouvement s'arrête. Le contenu, lui,
@@ -69,8 +69,8 @@ public extension EnvironmentValues {
 /// changement d'id — or l'id était l'offset, qui change à CHAQUE frame de
 /// défilement : ~120 créations/annulations de tâche par seconde sur le main
 /// actor, sur les quatre écrans qui montent cette source (liste de
-/// conversations, fil, feed, root), pour débouncer un booléen (audit chauffe
-/// 2026-08-26). `onChange` ne se déclenche pas au montage, donc la garde
+/// conversations, fil, feed, root), pour débouncer un booléen.
+/// `onChange` ne se déclenche pas au montage, donc la garde
 /// `hasMounted` de l'ancienne écriture disparaît avec lui — le montage n'est
 /// toujours pas un mouvement. Toujours aucun `ObservableObject` à démonter
 /// (voir la note de `ScrollOffsetRelay` sur la deinit isolée qui tuait le

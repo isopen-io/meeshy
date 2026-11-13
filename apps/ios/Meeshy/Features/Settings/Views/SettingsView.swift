@@ -38,6 +38,7 @@ struct SettingsView: View {
     @State private var showStats = false
     @State private var showAffiliate = false
     @State private var showVoiceProfileWizard = false
+    @State private var openNoteID: String?
     @State private var showVoiceProfileManage = false
     /// Ouverte par un indicateur (#16418) : sans profil, l'assistant suit.
     @State private var voiceManageOpensWizard = false
@@ -293,17 +294,17 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
                     Text(authManager.currentUser?.displayName ?? String(localized: "settings.my_profile", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text("@\(authManager.currentUser?.username ?? "")")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .padding(MeeshySpacing.lg)
             .background(
@@ -323,7 +324,7 @@ struct SettingsView: View {
                 settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.privacy.a11y", bundle: .main))
@@ -336,7 +337,7 @@ struct SettingsView: View {
                 settingsRow(icon: "shield.fill", title: String(localized: "settings.security.title", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.security.a11y", bundle: .main))
@@ -349,7 +350,7 @@ struct SettingsView: View {
                 settingsRow(icon: "lock.shield", title: String(localized: "settings.blocked_users", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.blocked_users", bundle: .main))
@@ -362,7 +363,7 @@ struct SettingsView: View {
                 settingsRow(icon: "person.crop.circle.badge.minus", title: String(localized: "settings.delete_account", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(MeeshyColors.error.opacity(0.6))
+                        .foregroundStyle(MeeshyColors.error.opacity(0.6))
                 }
             }
             .accessibilityLabel(String(localized: "settings.delete_account", bundle: .main))
@@ -468,7 +469,7 @@ struct SettingsView: View {
                         .foregroundColor(theme.textMuted)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.interface_language",
@@ -510,30 +511,28 @@ struct SettingsView: View {
     /// pourquoi.
     @ViewBuilder
     private var interfaceFeatureRows: some View {
-        settingsRow(icon: "list.bullet.rectangle.fill", title: lentilleListTitle, color: MeeshyColors.trackingAccentHex) {
-            featureToggle(.lentilleList, title: lentilleListTitle, isOn: $lentilleListEnabled)
+        VStack(alignment: .leading, spacing: 0) {
+            settingsRow(icon: "list.bullet.rectangle.fill", title: lentilleListTitle, color: MeeshyColors.trackingAccentHex) {
+                featureToggle(.lentilleList, title: lentilleListTitle, isOn: $lentilleListEnabled)
+            }
+            SettingsRowSentence(text: SettingsOrientation.lentilleList)
         }
 
         VStack(alignment: .leading, spacing: 0) {
-            settingsRow(icon: "text.book.closed.fill", title: readingModesTitle, color: MeeshyColors.indigo400Hex) {
+            settingsRow(icon: "text.book.closed.fill", title: readingModesTitle, color: MeeshyColors.indigo400Hex, note: SettingsInfoNotes.readingModes) {
                 featureToggle(.readingModes, title: readingModesTitle, isOn: $readingModesEnabled)
             }
-            Text(String(localized: "settings.interface.reading_modes.subtitle",
-                        defaultValue: "Désactivé, les conversations s'ouvrent en Script.", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textSecondary)
-                .padding(.horizontal, MeeshySpacing.md + 2)
-                .padding(.bottom, MeeshySpacing.sm + 2)
+            SettingsRowSentence(text: SettingsOrientation.readingModes)
         }
 
-        settingsRow(icon: "water.waves", title: riviereModeTitle, color: MeeshyColors.infoHex) {
-            featureToggle(.riviereMode, title: riviereModeTitle, isOn: $riviereModeEnabled)
+        VStack(alignment: .leading, spacing: 0) {
+            settingsRow(icon: "water.waves", title: riviereModeTitle, color: MeeshyColors.infoHex) {
+                featureToggle(.riviereMode, title: riviereModeTitle, isOn: $riviereModeEnabled)
+            }
+            .disabled(!readingModesEnabled)
+            .opacity(readingModesEnabled ? 1 : 0.45)
+            SettingsRowSentence(text: readingModesEnabled ? SettingsOrientation.riviereMode : SettingsOrientation.riviereUnavailable)
         }
-        .disabled(!readingModesEnabled)
-        .opacity(readingModesEnabled ? 1 : 0.45)
-        .accessibilityHint(readingModesEnabled ? "" : String(localized: "settings.interface.riviere_mode.hint",
-                                                             defaultValue: "Disponible quand le mode de lecture est activé.",
-                                                             bundle: .main))
     }
 
     private func featureToggle(_ flag: LentilleFeatureFlag, title: String, isOn: Binding<Bool>) -> some View {
@@ -551,15 +550,15 @@ struct SettingsView: View {
     }
 
     private var lentilleListTitle: String {
-        String(localized: "settings.interface.lentille_list", defaultValue: "Activer la liste Lentille", bundle: .main)
+        String(localized: "settings.interface.lentille_list", defaultValue: "Liste Lentille", bundle: .main)
     }
 
     private var readingModesTitle: String {
-        String(localized: "settings.interface.reading_modes", defaultValue: "Activer le mode de lecture", bundle: .main)
+        String(localized: "settings.interface.reading_modes", defaultValue: "Mode de lecture", bundle: .main)
     }
 
     private var riviereModeTitle: String {
-        String(localized: "settings.interface.riviere_mode", defaultValue: "Activer le mode Rivière", bundle: .main)
+        String(localized: "settings.interface.riviere_mode", defaultValue: "Mode Rivière", bundle: .main)
     }
 
     // MARK: - Notifications Section
@@ -606,7 +605,7 @@ struct SettingsView: View {
                 settingsRow(icon: "slider.horizontal.3", title: String(localized: "settings.notif.more_options", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.notif.more_options.a11y", bundle: .main))
@@ -625,7 +624,7 @@ struct SettingsView: View {
                 settingsRow(icon: "internaldrive.fill", title: String(localized: "settings.storage", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.storage", bundle: .main))
@@ -638,7 +637,7 @@ struct SettingsView: View {
                 settingsRow(icon: "arrow.down.circle.fill", title: String(localized: "settings.media.download.title", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.media.download.a11y", bundle: .main))
@@ -651,11 +650,11 @@ struct SettingsView: View {
                 settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main))
-            .accessibilityHint(String(localized: "settings.packs.hint", defaultValue: "Installe ou retire des packs de stickers et de cadres du jeu", bundle: .main))
+            SettingsRowSentence(text: SettingsOrientation.packs)
 
             Button {
                 HapticFeedback.light()
@@ -668,7 +667,6 @@ struct SettingsView: View {
                 }
             }
             .accessibilityLabel(String(localized: "settings.packs.mine", defaultValue: "Mes packs", bundle: .main))
-            .accessibilityHint(String(localized: "settings.packs.mine.hint", defaultValue: "Les packs que tu as installés, rangés par catégorie", bundle: .main))
             .accessibilityIdentifier("settings.packs.mine")
 
             Button {
@@ -678,7 +676,7 @@ struct SettingsView: View {
                 settingsRow(icon: "square.and.arrow.up.fill", title: String(localized: "settings.export_data", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.export_data", bundle: .main))
@@ -689,7 +687,7 @@ struct SettingsView: View {
     // MARK: - Voice Profile Section
 
     private var voiceProfileSection: some View {
-        settingsSection(title: String(localized: "settings.section.voice", bundle: .main), icon: "waveform.and.mic", color: MeeshyColors.trackingAccentHex) {
+        settingsSection(title: String(localized: "settings.section.voice", bundle: .main), icon: "waveform.and.mic", color: MeeshyColors.trackingAccentHex, sentence: SettingsOrientation.voice) {
             Button {
                 HapticFeedback.light()
                 voiceManageOpensWizard = false
@@ -698,7 +696,7 @@ struct SettingsView: View {
                 settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", bundle: .main), color: MeeshyColors.trackingAccentHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.voice.manage", bundle: .main))
@@ -711,7 +709,7 @@ struct SettingsView: View {
                 settingsRow(icon: "plus.circle.fill", title: String(localized: "settings.voice.create", bundle: .main), color: MeeshyColors.successHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.voice.create", bundle: .main))
@@ -728,19 +726,19 @@ struct SettingsView: View {
     // MARK: - Transcription Section
 
     private var transcriptionSection: some View {
-        settingsSection(title: String(localized: "settings.section.transcription", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo300Hex) {
-            settingsRow(icon: "mic.fill", title: String(localized: "settings.transcription.mine", defaultValue: "Transcrire mes messages vocaux", bundle: .main), color: MeeshyColors.indigo300Hex) {
+        settingsSection(title: String(localized: "settings.section.transcription", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo300Hex, sentence: SettingsOrientation.transcription) {
+            settingsRow(icon: "mic.fill", title: String(localized: "settings.transcription.mine", defaultValue: "Mes messages vocaux", bundle: .main), color: MeeshyColors.indigo300Hex) {
                 Toggle("", isOn: Binding(
                     get: { prefs.audio.transcriptionEnabled },
                     set: { val in prefs.updateAudio { $0.transcriptionEnabled = val } }
                 ))
                     .labelsHidden()
                     .tint(Color(hex: accentColor))
-                    .accessibilityLabel(String(localized: "settings.transcription.mine", defaultValue: "Transcrire mes messages vocaux", bundle: .main))
+                    .accessibilityLabel(String(localized: "settings.transcription.mine", defaultValue: "Mes messages vocaux", bundle: .main))
                     .accessibilityValue(prefs.audio.transcriptionEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
             }
 
-            settingsRow(icon: "waveform", title: String(localized: "settings.transcription.auto", bundle: .main), color: MeeshyColors.indigo300Hex) {
+            settingsRow(icon: "waveform", title: String(localized: "settings.transcription.auto", bundle: .main), color: MeeshyColors.indigo300Hex, note: SettingsInfoNotes.transcriptionAuto) {
                 Toggle("", isOn: Binding(
                     get: { prefs.audio.autoTranscribeIncoming },
                     set: { val in prefs.updateAudio { $0.autoTranscribeIncoming = val } }
@@ -750,11 +748,6 @@ struct SettingsView: View {
                     .accessibilityLabel(String(localized: "settings.transcription.auto", bundle: .main))
                     .accessibilityValue(prefs.audio.autoTranscribeIncoming ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
             }
-
-            settingsRow(icon: "info.circle", title: String(localized: "settings.transcription.engine", bundle: .main), color: MeeshyColors.neutral500Hex) {
-                EmptyView()
-            }
-            .accessibilityLabel(String(localized: "settings.transcription.engine.a11y", bundle: .main))
         }
     }
 
@@ -769,7 +762,7 @@ struct SettingsView: View {
                 settingsRow(icon: "star.fill", title: String(localized: "settings.tools.starred", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.tools.starred", bundle: .main))
@@ -782,7 +775,7 @@ struct SettingsView: View {
                 settingsRow(icon: "bookmark.fill", title: String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main), color: MeeshyColors.indigo400Hex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main))
@@ -795,7 +788,7 @@ struct SettingsView: View {
                 settingsRow(icon: "chart.bar.fill", title: String(localized: "settings.tools.stats", bundle: .main), color: MeeshyColors.indigo300Hex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.tools.stats", bundle: .main))
@@ -805,14 +798,14 @@ struct SettingsView: View {
                 HapticFeedback.light()
                 router.push(.progression)
             } label: {
-                settingsRow(icon: "trophy.fill", title: String(localized: "settings.tools.progression", defaultValue: "Progression", bundle: .main), color: MeeshyColors.warningHex) {
+                settingsRow(icon: "trophy.fill", title: String(localized: "settings.tools.progression", defaultValue: "Ma Légende", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
-            .accessibilityLabel(String(localized: "settings.tools.progression", defaultValue: "Progression", bundle: .main))
-            .accessibilityHint(String(localized: "settings.tools.progression.hint", defaultValue: "Vos badges, votre niveau et votre série de jours actifs", bundle: .main))
+            .accessibilityLabel(String(localized: "settings.tools.progression", defaultValue: "Ma Légende", bundle: .main))
+            SettingsRowSentence(text: SettingsOrientation.progression)
 
             Button {
                 HapticFeedback.light()
@@ -821,11 +814,11 @@ struct SettingsView: View {
                 settingsRow(icon: "link.badge.plus", title: String(localized: "settings.tools.affiliate", bundle: .main), color: MeeshyColors.successHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.tools.affiliate", bundle: .main))
-            .accessibilityHint(String(localized: "settings.tools.affiliate.hint", bundle: .main))
+            SettingsRowSentence(text: SettingsOrientation.affiliate)
         }
     }
 
@@ -840,7 +833,7 @@ struct SettingsView: View {
                 settingsRow(icon: "lifepreserver.fill", title: String(localized: "settings.help_center", bundle: .main), color: MeeshyColors.successHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.help_center", bundle: .main))
@@ -859,7 +852,7 @@ struct SettingsView: View {
                 settingsRow(icon: "info.circle.fill", title: String(localized: "settings.about.meeshy", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.about.meeshy", bundle: .main))
@@ -872,7 +865,7 @@ struct SettingsView: View {
                 settingsRow(icon: "doc.text.fill", title: String(localized: "settings.terms", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.terms", bundle: .main))
@@ -885,7 +878,7 @@ struct SettingsView: View {
                 settingsRow(icon: "hand.raised.fill", title: String(localized: "settings.privacy_policy", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.privacy_policy", bundle: .main))
@@ -898,7 +891,7 @@ struct SettingsView: View {
                 settingsRow(icon: "checkmark.seal.fill", title: String(localized: "settings.licenses", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .accessibilityLabel(String(localized: "settings.licenses", bundle: .main))
@@ -907,7 +900,7 @@ struct SettingsView: View {
             settingsRow(icon: "sparkles", title: String(localized: "settings.version", bundle: .main), color: MeeshyColors.warningHex) {
                 Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
     }
@@ -929,18 +922,20 @@ struct SettingsView: View {
         title: String,
         icon: String,
         color: String,
+        sentence: String? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        SettingsSectionCard(title: title, icon: icon, color: color, content: content())
+        SettingsSectionCard(title: title, icon: icon, color: color, sentence: sentence, content: content())
     }
 
     private func settingsRow<Trailing: View>(
         icon: String,
         title: String,
         color: String,
+        note: MeeshyInfoNote? = nil,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        SettingsRowLabel(icon: icon, title: title, color: color, trailing: trailing())
+        SettingsRowLabel(icon: icon, title: title, color: color, note: note, openNoteID: $openNoteID, trailing: trailing())
     }
 }
 

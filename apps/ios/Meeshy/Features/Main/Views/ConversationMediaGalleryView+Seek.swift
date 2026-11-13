@@ -113,6 +113,7 @@ struct MediaStageSeekZones: View {
                     .onEnded { onDoubleTap($0.location) }
             )
             .onTapGesture { onSingleTap() }
+            .accessibilityHidden(true)
     }
 }
 

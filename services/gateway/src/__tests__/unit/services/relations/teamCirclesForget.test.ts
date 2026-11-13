@@ -28,7 +28,7 @@ describe('forgetTeamCircles', () => {
     del.mockClear();
     const { fastify, invalidateFriendsCache, findMany } = fastifyWith(async () => [{ id: 'mod-1' }, { id: 'admin-2' }]);
     await forgetTeamCircles(fastify, 'demoted');
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { role: { in: ['BIGBOSS', 'ADMIN', 'MODERATOR'] } } }));
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { role: { in: ['BIGBOSS', 'ADMIN', 'MODERATOR', 'AUDIT', 'ANALYST'] } } }));
     expect(invalidateFriendsCache.mock.calls.map(([id]) => id).sort()).toEqual(['admin-2', 'demoted', 'mod-1']);
     expect(del.mock.calls.map(([key]) => key).sort()).toEqual(
       ['admin-2', 'demoted', 'mod-1'].flatMap((id) => [`feed:circles:${id}`, `feed:friends:${id}`]).sort(),

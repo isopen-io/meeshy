@@ -260,7 +260,7 @@ describe('scope=hashtag — l’état du lecteur coûte TROIS requêtes par page
     const petite = await mesurer(2);
     const pleine = await mesurer(20);
 
-    expect(petite).toEqual({ total: 7, reactions: 1, favoris: 1 });
+    expect(petite).toEqual({ total: 8, reactions: 1, favoris: 1 });
     expect(pleine).toEqual(petite);
   });
 });

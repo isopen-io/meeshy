@@ -337,7 +337,7 @@ class AudioHandler:
                 user_language=request_data.get('userLanguage'),  # Langue utilisateur pour fallback
                 metadata=metadata,
                 target_languages=request_data.get('targetLanguages'),
-                generate_voice_clone=request_data.get('generateVoiceClone', True),
+                generate_voice_clone=request_data.get('generateVoiceClone', False),
                 model_type=request_data.get('modelType', 'medium'),
                 # Voice profile options (pour messages transférés - voix de l'émetteur original)
                 original_sender_id=request_data.get('originalSenderId'),

@@ -74,7 +74,7 @@ struct GameDuoCard: View {
         if let mission = duo.mission {
             Text(GameCopy.missionTitle(templateKey: mission.templateKey, target: mission.partTarget))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(ThemeManager.shared.textPrimary)
+                .foregroundStyle(ThemeManager.shared.textPrimary)
             if let progress = duo.progress {
                 progressLines(mission: mission, progress: progress)
             }
@@ -127,9 +127,7 @@ struct GameDuoCard: View {
     private var idle: some View {
         GameNote(text: idleSentence)
         if duo.status == .none {
-            if model.friends.isEmpty {
-                GameNote(text: GameText.duoNoFriends)
-            } else {
+            if !model.friends.isEmpty {
                 VStack(spacing: MeeshySpacing.sm) {
                     ForEach(Array(model.friends.prefix(Self.friendLimit)), id: \.id) { friend in
                         GameActionButton(

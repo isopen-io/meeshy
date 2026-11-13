@@ -2,16 +2,12 @@
 <resources>
     <string name="security_section_encrypted_devices">Crittografia end-to-end</string>
     <string name="encrypted_devices_title">I miei dispositivi crittografati</string>
-    <string name="encrypted_devices_notice_title">Questo telefono Android non legge ancora le chat crittografate end-to-end</string>
-    <string name="encrypted_devices_notice_body">Non compare ancora in questo elenco e per ora non può mostrare il suo codice né leggere quello di un altro dispositivo. Puoi già rimuovere un dispositivo perso: viene disconnesso e non riceve più i tuoi messaggi crittografati.</string>
     <string name="encrypted_devices_loading">Caricamento dei tuoi dispositivi crittografati</string>
     <string name="encrypted_devices_offline_empty">Sei offline. Connettiti per vedere i tuoi dispositivi crittografati.</string>
     <string name="encrypted_devices_error">Impossibile caricare i tuoi dispositivi crittografati.</string>
     <string name="encrypted_devices_retry">Riprova</string>
     <string name="encrypted_devices_offline">Sei offline. Questo elenco potrebbe non essere aggiornato.</string>
     <string name="encrypted_devices_stale">Impossibile aggiornare questo elenco, potrebbe non essere aggiornato.</string>
-    <string name="encrypted_devices_empty_title">Ancora nessun dispositivo crittografato</string>
-    <string name="encrypted_devices_empty_body">Un dispositivo compare qui non appena Meeshy vi ha configurato la crittografia end-to-end.</string>
     <string name="encrypted_devices_current">Questo dispositivo</string>
     <string name="encrypted_devices_retiring">Rimozione di %1$s in corso</string>
     <string name="encrypted_devices_retire_a11y">Rimuovi %1$s</string>
@@ -31,5 +27,4 @@
     <string name="encrypted_devices_platform_web">Browser web</string>
     <string name="encrypted_devices_platform_unknown">Dispositivo sconosciuto</string>
     <string name="encrypted_devices_enrolled">Aggiunto il %1$s</string>
-    <string name="encrypted_devices_retire_changed">Questo dispositivo è cambiato da quando è stato mostrato l’elenco. L’elenco è stato ricaricato: controllalo prima di rimuovere.</string>
 </resources>

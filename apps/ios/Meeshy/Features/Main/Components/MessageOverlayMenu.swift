@@ -7,6 +7,7 @@ import MeeshyUI
 // MARK: - MessageOverlayMenu
 
 struct MessageOverlayMenu: View {
+    @State private var delayed = DelayedActions()
     let message: Message
     let contactColor: String
     /// Le cadre de la cellule pressée, en coordonnées de FENÊTRE (#11208) :
@@ -49,7 +50,7 @@ struct MessageOverlayMenu: View {
     /// le même état de présentation que le second déclencheur (la feuille de
     /// transfert). Un montage ici en ferait un second contrat d'envoi.
     var onCompose: (() -> Void)? = nil
-    /// **Sélectionner** (#4005, primaire depuis le 2026-08-27) — entre en mode
+    /// **Sélectionner** (#4005) — entre en mode
     /// sélection multiple, sème le message qui a déclenché le longpress.
     var onSelect: (() -> Void)? = nil
     /// **Supprimer le message** (`.deleteMessage`) — l'hôte ouvre la confirmation
@@ -81,7 +82,7 @@ struct MessageOverlayMenu: View {
     /// Ouvre la feuille de détail d'un appel — action `.callDetail`, présente
     /// uniquement pour un message qui porte un `callSummary`. Cette
     /// destination vivait sur l'appui long de la carte d'appel ; l'appui long
-    /// étant rendu au menu du message (directive 2026-08-24), elle entre dans
+    /// étant rendu au menu du message, elle entre dans
     /// le menu plutôt que de disparaître.
     var onShowCallDetail: (() -> Void)? = nil
     /// Ouvre la carte d'export — `true` pour l'« Export rapide » (format par défaut).
@@ -127,7 +128,8 @@ struct MessageOverlayMenu: View {
     private var liveDragTranslation: CGFloat = 0
     /// Le facteur de réduction de l'aperçu GARDÉ au relâchement (#9043).
     /// `nil` tant qu'aucun geste n'a conclu : l'ouverture vaut alors
-    /// `MessageOverlayRevealLaw.restingFactor` (réduit d'office sous VoiceOver).
+    /// `MessageOverlayRevealLaw.restingFactor` (réduit d'office sous VoiceOver
+    /// et en animations réduites).
     @State private var committedReveal: CGFloat?
     /// Haptic d'armement émis une seule fois par geste ; réarmé au release.
     @State private var dragHapticArmed = false
@@ -313,7 +315,7 @@ struct MessageOverlayMenu: View {
             // presque à l'aperçu, distinct du gap barre-réactions → aperçu.
             let nlMenuGap: CGFloat = 6
             let nlSidePadding: CGFloat = 16
-            let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
+            let nlMenuWidth: CGFloat = LongPressPeekWidth.menuWidth(availableWidth: containerW)
             let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
             let nlEmojiWidth: CGFloat = Self.emojiBandWidth(available: containerW - 2 * nlSidePadding)
             let nlAvailTop = safeTop + 12
@@ -354,7 +356,7 @@ struct MessageOverlayMenu: View {
             let reveal = RevealContext(
                 floor: revealFloor, shrinkable: shrinkable,
                 committed: committedReveal
-                    ?? MessageOverlayRevealLaw.restingFactor(floor: revealFloor, assistiveReveal: voiceOverEnabled))
+                    ?? MessageOverlayRevealLaw.restingFactor(floor: revealFloor, assistiveReveal: voiceOverEnabled || reduceMotion))
             let revealSplit = reveal.split(liveDragTranslation)
             let clusterDragOffset = MessageOverlayDragLaw.displayOffset(for: revealSplit.residual)
             let menuRise = MessageOverlayRevealLaw.rise(factor: revealSplit.factor, shrinkableHeight: shrinkable)
@@ -368,7 +370,7 @@ struct MessageOverlayMenu: View {
                 MessageActionsMenu(
                     actions: primaryActions,
                     accentHex: contactColor,
-                    onSelect: { handlePrimaryAction($0) }
+                    onSelect: { handlePrimaryAction($0) }, width: nlMenuWidth
                 )
                 .position(
                     x: nlMenuX,
@@ -593,8 +595,7 @@ struct MessageOverlayMenu: View {
 
     /// La largeur de la bande AVANT l'allongement.
     static let emojiBandReferenceWidth: CGFloat = 280
-    /// **La bande d'emojis s'allonge de ×1,4** (directive porteur 2026-10-01,
-    /// #9043) — la bande, pas les emojis : leur taille ne change pas, la
+    /// **La bande d'emojis s'allonge de ×1,4** (#9043) — la bande, pas les emojis: leur taille ne change pas, la
     /// bande en montre davantage. Bornée à la largeur disponible. Miroir web :
     /// `RAIL_LENGTH_FACTOR`.
     static let emojiBandLengthFactor: CGFloat = 1.4
@@ -609,7 +610,7 @@ struct MessageOverlayMenu: View {
         // garder les deux surfaces visuellement identiques (padding interne,
         // cascade d'entree gauche→droite `WaveTileModifier`).
         //
-        // **Sans capsule** (directive porteur 2026-10-01, #9043 — « enlever le
+        // **Sans capsule** (#9043 — « enlever le
         // cadre comme pour les story ») : la story pose cette MÊME rangée nue
         // sur sa scène (`FullscreenReactionStrip`, `chrome: .none`). Ici le
         // voile est la scène. Seule la bande perd son cadre : le menu du bas
@@ -739,7 +740,7 @@ struct MessageOverlayMenu: View {
                       : .spring(response: 0.32, dampingFraction: 0.86)) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
+        delayed.run(after: .milliseconds(260)) {
             isPresented = false
         }
     }

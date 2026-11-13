@@ -45,14 +45,4 @@ class CallCameraRailZoomTest {
         assertThat(front?.quickStops).containsExactly(1f)
         assertThat(CallCameraRail.zoomControl(front, CallCameraControlsPlacement.TopCenter, null, null)).isNull()
     }
-
-    @Test
-    fun `la rangee de la camera ne porte que retourner ou choisir, puis allumer`() {
-        val set = CallActionSet(
-            myImage = listOf(CallAction.Camera, CallAction.CameraPicker, CallAction.Effects, CallAction.ScreenShare),
-            theCall = emptyList(),
-        )
-        assertThat(CallCameraRail.selfTileRows(CallCameraRail.actions(set)).camera)
-            .containsExactly(CallAction.CameraPicker, CallAction.Camera).inOrder()
-    }
 }

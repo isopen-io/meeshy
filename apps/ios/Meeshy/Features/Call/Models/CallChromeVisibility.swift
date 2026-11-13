@@ -9,6 +9,8 @@ enum CallChromeElement: CaseIterable, Sendable {
     case screenShareBanner
     case captions
     case selfView
+    /// La capsule « Revenir à la grille · Plein écran » de la personne à la une.
+    case featuredCapsule
 }
 
 struct CallChromeVisibility: Equatable, Sendable {
@@ -30,6 +32,8 @@ struct CallChromeVisibility: Equatable, Sendable {
             return !isModeActive
         case .header, .controls, .openPanel, .recordingStatus, .screenShareBanner:
             return isRevealed && !isStageFullScreen && !isModeActive
+        case .featuredCapsule:
+            return isRevealed && !isModeActive
         }
     }
 
@@ -37,8 +41,17 @@ struct CallChromeVisibility: Equatable, Sendable {
         CallChromeVisibility(isRevealed: !isRevealed, isStageFullScreen: isStageFullScreen, isModeActive: isModeActive)
     }
 
-    static func mayToggleByTap(isVideoStage: Bool) -> Bool {
-        isVideoStage
+    /// Loi 11 (#16663, #17945) — un toucher sur la SCÈNE range tout, un autre rend tout. Sous
+    /// VoiceOver les contrôles restent en place.
+    static func mayToggleByTap(isTapStage: Bool, isVoiceOverRunning: Bool) -> Bool {
+        isTapStage && !isVoiceOverRunning
+    }
+
+    /// La scène de la loi 11 : l'image en vidéo, le fond derrière l'avatar d'un duo audio établi
+    /// (#17945). Un groupe sans caméra n'a pas d'image à libérer : ses vignettes répondent au
+    /// toucher. Mêmes vecteurs qu'Android (`isTapStage`) et le web.
+    static func isTapStage(isGroup: Bool, isVideoStage: Bool, isConnected: Bool) -> Bool {
+        isVideoStage || (!isGroup && isConnected)
     }
 
     static func isVideoStage(isGroup: Bool, isLocalVideoEnabled: Bool, isDuoVideoActive: Bool, remoteCamerasOn: Int) -> Bool {

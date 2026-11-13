@@ -15,8 +15,7 @@ import os
 /// avoids by reading `presenceManager` as a plain (unobserved) computed
 /// property. `presenceVersion`'s VALUE is irrelevant — only the CHANGE is
 /// the signal; consumers observe THIS object (`@ObservedObject`) instead of
-/// `PresenceManager`, keeping "Zero Unnecessary Re-render" intact (audit
-/// 2026-07-20, "pastilles de présence jamais rafraîchies sur user:status").
+/// `PresenceManager`, keeping "Zero Unnecessary Re-render" intact ("pastilles de présence jamais rafraîchies sur user:status").
 @MainActor
 final class PresenceRefreshSignal: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -71,13 +70,13 @@ final class PresenceManager: ObservableObject {
     /// L'état de chaque pastille au dernier battement publié (#11412) : le
     /// minuteur ne repeint que si un état a changé depuis.
     private var publishedStates: [String: PresenceState] = [:]
-    nonisolated(unsafe) private var versionBumpTask: Task<Void, Never>?
+    private let versionBumpTask = TaskSlot()
     nonisolated static let versionBumpDebounce: TimeInterval = 0.4
 
     private var cancellables = Set<AnyCancellable>()
     private var restTasks: [String: Task<Void, Never>] = [:]
-    nonisolated(unsafe) private var recalcTimer: Timer?
-    nonisolated(unsafe) private var persistTask: Task<Void, Never>?
+    private let recalcTimer = TeardownBox<Timer?>(nil)
+    private let persistTask = TaskSlot()
 
     private nonisolated static let persistFileName = "presence_map.json"
     private nonisolated static let persistMaxAge: TimeInterval = 24 * 3600 // 24h
@@ -190,7 +189,7 @@ final class PresenceManager: ObservableObject {
         }
         timer.tolerance = 1
         RunLoop.main.add(timer, forMode: .common)
-        recalcTimer = timer
+        recalcTimer.update { $0 = timer }
     }
 
     /// Re-sème la présence depuis une page de conversations (REST). Cette
@@ -199,7 +198,7 @@ final class PresenceManager: ObservableObject {
     /// compris, activité fraîche (`noteActivity`) comprise. Seules les sources
     /// vivantes (`presence:snapshot`, `user:status`, typing:start) remplacent
     /// une présence connue. Jumeau iOS de F10 (web `mergeParticipants(_,
-    /// { presence: 'keep-existing' })`) — chantier confidentialité 2026-08-26.
+    /// { presence: 'keep-existing' })`) — chantier confidentialité.
     func seed(from conversations: [APIConversation], currentUserId: String) {
         let listed = conversations
             .flatMap { $0.participants ?? [] }
@@ -308,7 +307,7 @@ final class PresenceManager: ObservableObject {
     /// juste après ne rende pas au compte suivant la carte du précédent.
     func resetForLogout() {
         presenceMap = [:]
-        persistTask?.cancel()
+        persistTask.cancel()
         persistToDisk()
         clearConversationViewers()
     }
@@ -411,10 +410,9 @@ final class PresenceManager: ObservableObject {
     }
 
     nonisolated deinit {
-        recalcTimer?.invalidate()
-        recalcTimer = nil
-        persistTask?.cancel()
-        versionBumpTask?.cancel()
+        recalcTimer.releaseNow { $0?.invalidate() }
+        persistTask.cancel()
+        versionBumpTask.cancel()
     }
 
     // MARK: - Disk Persistence
@@ -424,11 +422,10 @@ final class PresenceManager: ObservableObject {
     /// immediately after still captures the latest state via
     /// `UIApplication.didEnterBackgroundNotification`.
     private nonisolated func schedulePersist() {
-        persistTask?.cancel()
-        persistTask = Task { @MainActor [weak self] in
+        persistTask.replace(with: Task { @MainActor [weak self] in
             guard await cancellableSleep(for: .seconds(Self.persistDebounce)), !Task.isCancelled, let self else { return }
             self.persistToDisk()
-        }
+        })
     }
 
     private func persistToDisk() {
@@ -446,12 +443,11 @@ final class PresenceManager: ObservableObject {
     /// coalesces into exactly ONE bump instead of one per event. See
     /// `PresenceRefreshSignal`.
     private nonisolated func scheduleVersionBump() {
-        versionBumpTask?.cancel()
-        versionBumpTask = Task { @MainActor [weak self] in
+        versionBumpTask.replace(with: Task { @MainActor [weak self] in
             guard await cancellableSleep(for: .seconds(Self.versionBumpDebounce)), !Task.isCancelled, let self else { return }
             self.publishedStates = Self.resolvedStates(of: self.presenceMap, at: Date())
             self.refreshSignal.bump()
-        }
+        })
     }
 
     private nonisolated static var persistURL: URL {

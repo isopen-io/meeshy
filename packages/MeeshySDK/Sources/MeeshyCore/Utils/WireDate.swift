@@ -13,14 +13,6 @@ import Foundation
 /// retombait sur le rechargement complet.
 public enum WireDate {
 
-    // `ISO8601DateFormatter` est thread-safe une fois configuré (même motif
-    // que `APIClient` et `MessageSocketManager`).
-    nonisolated(unsafe) private static let wholeSecondsFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
     private static let fractionalStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     private static let wholeSecondsStyle = Date.ISO8601FormatStyle()
 
@@ -35,7 +27,7 @@ public enum WireDate {
         let milliseconds = abs(exact - nearest) < 0.001 ? nearest : exact.rounded(.down)
         let seconds = (milliseconds / 1_000).rounded(.down)
         let fraction = Int(milliseconds - seconds * 1_000)
-        let whole = wholeSecondsFormatter.string(from: Date(timeIntervalSince1970: seconds))
+        let whole = wholeSecondsStyle.format(Date(timeIntervalSince1970: seconds))
         return String(whole.dropLast()) + String(format: ".%03dZ", fraction)
     }
 

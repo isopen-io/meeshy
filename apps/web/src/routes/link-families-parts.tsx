@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
 import { Glyph } from '@/components/glyph';
@@ -52,6 +52,7 @@ type FamilySpec = {
   readonly tint: string;
   readonly glyph: ReactNode;
   readonly title: Phrase;
+  /** Ce que la famille FAIT, lisible au repos sous son nom : les liens sont propres à Meeshy (épure, règle 7). */
   readonly description: Phrase;
   readonly open: 'shareLinks' | 'myTrackingLinks' | 'communityLinks' | 'affiliateLinks';
   readonly create: {
@@ -108,7 +109,10 @@ export const LINK_FAMILIES: Readonly<Record<LinkFamily, FamilySpec>> = {
 
 export const HUB_FAMILIES: readonly LinkFamily[] = ['share', 'tracking', 'community', 'affiliate'];
 
-/** Miroir `LinksHubView.linkCard` — la carte ouvre la famille, « + » ouvre la création. */
+/**
+ * Miroir `LinksHubView.linkCard` — la carte ouvre la famille, « + » ouvre la création.
+ * Sous le nom, une phrase dit à quoi sert la famille — visible au repos, jamais derrière un (i).
+ */
 export function LinkFamilyCard({ language, family }: { readonly language: InterfaceLanguage; readonly family: LinkFamily }) {
   const spec = LINK_FAMILIES[family];
   return (
@@ -126,7 +130,7 @@ export function LinkFamilyCard({ language, family }: { readonly language: Interf
           <span data-links-family-title className="text-body font-semibold" style={{ color: INK }}>
             {spec.title(language)}
           </span>
-          <span className="line-clamp-2 text-caption" style={{ color: INK_2 }}>
+          <span data-links-family-description className="text-caption" style={{ color: INK_2 }}>
             {spec.description(language)}
           </span>
         </span>
@@ -344,6 +348,75 @@ export function CopyRowAction({
   );
 }
 
+export type RowMoreItem = {
+  readonly name: string;
+  readonly label: string;
+  readonly glyph: ReactNode;
+  readonly tint: string;
+  readonly onSelect: () => void;
+};
+
+/**
+ * LE RARE DERRIÈRE « PLUS » (épure #17584, règle 6) — au repos, la rangée porte
+ * l'action nominale ; le reste se range ici, atteignable en deux gestes. Le menu
+ * se referme à Échap, à un toucher hors de lui, et après le choix.
+ */
+export function RowMore({ label, items }: { readonly label: string; readonly items: readonly RowMoreItem[] }) {
+  const [open, setOpen] = useState(false);
+  const wrapper = useRef<HTMLSpanElement | null>(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    const closeOutside = (event: Event): void => {
+      if (!(event.target instanceof Node) || wrapper.current?.contains(event.target) !== true) setOpen(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('pointerdown', closeOutside);
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      document.removeEventListener('pointerdown', closeOutside);
+    };
+  }, [open]);
+  return (
+    <span ref={wrapper} className="relative z-[1] shrink-0">
+      <button
+        type="button"
+        data-row-action="more"
+        aria-label={label}
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => setOpen((current) => !current)}
+        className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2`}
+        style={{ color: INK_2, outlineColor: BRAND }}
+      >
+        <Glyph name="dotsThreeVertical" size={18} />
+      </button>
+      {open ? (
+        <span role="group" aria-label={label} className="absolute end-0 top-full z-20 grid min-w-48 overflow-hidden rounded-card py-1" style={{ ...CARD_STYLE, boxShadow: '0 8px 24px color-mix(in srgb, var(--color-media-backdrop) 24%, transparent)' }}>
+          {items.map((item) => (
+            <button
+              key={item.name}
+              type="button"
+              data-row-action={item.name}
+              onClick={() => {
+                setOpen(false);
+                item.onSelect();
+              }}
+              className="flex items-center gap-3 px-3.5 text-start text-body font-medium focus-visible:outline-2 focus-visible:-outline-offset-2"
+              style={{ minHeight: 44, color: item.tint, outlineColor: BRAND }}
+            >
+              <span aria-hidden="true">{item.glyph}</span>
+              {item.label}
+            </button>
+          ))}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 export function FamilySkeleton({ label, rows = 3 }: { readonly label: string; readonly rows?: number }) {
   return (
     <div data-family-skeleton aria-busy="true" aria-label={label} className="grid gap-2">
@@ -357,7 +430,7 @@ export function FamilySkeleton({ label, rows = 3 }: { readonly label: string; re
   );
 }
 
-/** Nommer, promettre, offrir le geste — miroir des `emptyState` d'iOS. */
+/** Nommer, dire ce qu'est le lien, offrir le geste (épure, règle 7) — miroir des `emptyState` d'iOS. */
 export function FamilyEmpty({
   family,
   glyph,
@@ -382,7 +455,7 @@ export function FamilyEmpty({
       <p className="text-thread font-bold" style={{ color: INK }}>
         {title}
       </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
+      <p data-family-empty-subtitle className="text-caption" style={{ color: INK_2 }}>
         {subtitle}
       </p>
       {cta === null ? null : (

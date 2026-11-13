@@ -196,7 +196,7 @@ struct ConversationSearchFieldHost: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { searchTextModel.text = "" }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .scaleEffect(1.0)
             }
             .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche"))

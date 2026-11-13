@@ -6,7 +6,7 @@ import MeeshyUI
 /// (#6696).
 ///
 /// Extrait de `PostDetailView.swift` (2 164 lignes, au-delà du plafond dur de
-/// 1 200) avant de corriger la scène du détail : la directive 2026-08-28
+/// 1 200) avant de corriger la scène du détail: la
 /// interdit d'ajouter à un fichier hors budget, on extrait d'abord. La section
 /// est une responsabilité entière — ce qu'on rend pour chaque type de média, qui
 /// en est l'auteur, et le geste qui ouvre le plein écran partagé.
@@ -124,7 +124,7 @@ extension PostDetailView {
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(String(localized: "a11y.post.media.image", defaultValue: "Image partagée", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.media.open.hint", defaultValue: "Ouvrir en plein écran", bundle: .main))
-
+            .accessibilityAction { openMediaFullscreen(media) }
         case .video:
             let attachment = media.toMessageAttachment()
             VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
@@ -152,7 +152,6 @@ extension PostDetailView {
             }
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-
         case .audio:
             let audioAttachment = media.toMessageAttachment()
             // Le PORTEUR réel de CE média (repost cité si `owner` vient de
@@ -220,7 +219,6 @@ extension PostDetailView {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-
         case .document:
             HStack(spacing: MeeshySpacing.mdPlus) {
                 ZStack {
@@ -229,20 +227,20 @@ extension PostDetailView {
                         .frame(width: 48, height: 56)
                     Image(systemName: "doc.fill")
                         .font(.title3)
-                        .foregroundColor(Color(hex: media.thumbnailColor))
+                        .foregroundStyle(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
                     HStack(spacing: MeeshySpacing.sm) {
                         if let size = media.fileSize {
-                            Text(size).font(.caption).foregroundColor(theme.textMuted)
+                            Text(size).font(.caption).foregroundStyle(theme.textMuted)
                         }
                         if let pages = media.pageCount {
-                            Text("\u{2022}").foregroundColor(theme.textMuted)
-                            Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))").font(.caption).foregroundColor(theme.textMuted)
+                            Text("\u{2022}").foregroundStyle(theme.textMuted)
+                            Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))").font(.caption).foregroundStyle(theme.textMuted)
                         }
                     }
                 }
@@ -256,7 +254,6 @@ extension PostDetailView {
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.document", defaultValue: "Document : %@", bundle: .main), media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main)))
-
         }
     }
 
@@ -299,7 +296,7 @@ extension PostDetailView {
                                     Color.black.opacity(0.5)
                                     Text("+\(count - 4)")
                                         .font(.headline.weight(.bold))
-                                        .foregroundColor(.white)
+                                        .foregroundStyle(Color.white)
                                 }
                             }
                             .contentShape(Rectangle())
@@ -310,6 +307,7 @@ extension PostDetailView {
                                 ? String(format: String(localized: "a11y.post.media.more", defaultValue: "Voir les %d médias", bundle: .main), count)
                                 : String(localized: "a11y.post.media.image", defaultValue: "Image partagée", bundle: .main))
                             .accessibilityHint(String(localized: "a11y.post.media.open.hint", defaultValue: "Ouvrir en plein écran", bundle: .main))
+                            .accessibilityAction { openMediaFullscreen(visualMedia[3]) }
                         }
                     }
                 }
@@ -318,7 +316,6 @@ extension PostDetailView {
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         }
     }
-
     private func detailGridCell(_ media: FeedMedia) -> some View {
         return ZStack {
             ProgressiveCachedImage(
@@ -332,14 +329,13 @@ extension PostDetailView {
             .aspectRatio(contentMode: .fill)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
-
             if media.type == .video {
                 ZStack {
                     Circle().fill(.ultraThinMaterial).frame(width: 36, height: 36)
                     Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: 30, height: 30)
                     Image(systemName: "play.fill")
                         .font(.caption.bold())
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .offset(x: 1)
                 }
                 .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
@@ -353,8 +349,8 @@ extension PostDetailView {
             ? String(localized: "a11y.post.media.video", defaultValue: "Vidéo partagée", bundle: .main)
             : String(localized: "a11y.post.media.image", defaultValue: "Image partagée", bundle: .main))
         .accessibilityHint(String(localized: "a11y.post.media.open.hint", defaultValue: "Ouvrir en plein écran", bundle: .main))
+        .accessibilityAction { openMediaFullscreen(media) }
     }
-
     private func openMediaFullscreen(_ media: FeedMedia) {
         guard media.type == .image || media.type == .video else { return }
         fullscreenMediaId = media.id

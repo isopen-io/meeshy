@@ -51,7 +51,7 @@ struct MediaCaptionTranslationRow: View {
                 } label: {
                     Image(systemName: "translate")
                         .font(MeeshyFont.relative(15, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(minWidth: 32, minHeight: 32)
                         .contentShape(Rectangle())
                 }

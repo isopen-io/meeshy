@@ -48,8 +48,10 @@ nonisolated enum SceneCaption {
     static func resolve(sceneIndex: Int,
                         in document: CanvasV3,
                         post: FeedPost,
-                        carrierFallback: Bool) -> String? {
-        resolveWithOrigin(sceneIndex: sceneIndex, in: document, post: post, carrierFallback: carrierFallback)?.text
+                        carrierFallback: Bool,
+                        preferredLanguages: [String] = []) -> String? {
+        resolveWithOrigin(sceneIndex: sceneIndex, in: document, post: post, carrierFallback: carrierFallback,
+                          preferredLanguages: preferredLanguages)?.text
     }
 
     /// **D'où vient la légende** (#6504). Le texte du POST porte des
@@ -65,7 +67,8 @@ nonisolated enum SceneCaption {
     static func resolveWithOrigin(sceneIndex: Int,
                                   in document: CanvasV3,
                                   post: FeedPost,
-                                  carrierFallback: Bool) -> (text: String, origin: Origin)? {
+                                  carrierFallback: Bool,
+                                  preferredLanguages: [String] = []) -> (text: String, origin: Origin)? {
         guard document.scenes.indices.contains(sceneIndex) else { return nil }
         // Le texte du porteur ne descend PAS jusqu'à la carte des médias quand
         // l'appelant l'interdit : `SocialMediaCaption.map` l'y injecte de
@@ -73,7 +76,8 @@ nonisolated enum SceneCaption {
         // arriverait trop tard pour l'en retirer.
         let porteur = carrierFallback ? post.displayContent : nil
         if let identite = mediaIdentity(sceneIndex: sceneIndex, in: document, post: post),
-           let propre = SocialMediaCaption.map(for: post.media, carrierText: porteur)[identite] {
+           let propre = SocialMediaCaption.map(for: post.media, carrierText: porteur,
+                                                       preferredLanguages: preferredLanguages)[identite] {
             // `map` remplit le seul visuel d'un post avec le texte du porteur :
             // c'est la légende PROPRE du média qui décide de l'origine.
             let ownCaption = post.media.first { $0.id == identite }?.caption?
@@ -88,7 +92,7 @@ nonisolated enum SceneCaption {
     /// qui n'adresse rien, au post.
     ///
     /// **`MeeshyScenePlayer.carrierMediaIdentity` couvre déjà le fond référencé**
-    /// (revue 2026-09-17) : depuis 722635a, il n'a plus de restriction de plan
+    /// depuis 722635a, il n'a plus de restriction de plan
     /// — un fond `plane: bg` à `mediaId`/`postMediaId` (forme servie par la
     /// passerelle, #6894) y est éligible au même titre qu'un média `plane:
     /// content`. Un second appel dédié à ce seul cas (`backgroundMediaReference`)

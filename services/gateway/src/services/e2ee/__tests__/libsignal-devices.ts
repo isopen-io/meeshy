@@ -51,3 +51,20 @@ export const realLibsignal: LibsignalPublicKeyApi = {
     }),
   },
 };
+
+/**
+ * La surface de LECTURE des messages sérialisés de libsignal (#17115), servie par
+ * la VRAIE bibliothèque d'un processus à part : `deserialize` lève sur tout ce que
+ * libsignal ne sait pas lire, comme en production.
+ */
+const deserializer = (type: 2 | 3) => (body: Uint8Array): unknown => {
+  if (execFileSync(process.execPath, [HELPER, 'deserialize', String(type), b64(body)]).toString() !== 'true') {
+    throw new Error('message libsignal illisible');
+  }
+  return {};
+};
+
+export const realLibsignalMessages = {
+  SignalMessage: { deserialize: deserializer(2) },
+  PreKeySignalMessage: { deserialize: deserializer(3) },
+};

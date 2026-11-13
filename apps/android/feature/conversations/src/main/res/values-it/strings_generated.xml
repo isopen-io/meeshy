@@ -28,7 +28,7 @@
     <string name="conversations_action_delete_for_me">Elimina per me</string>
     <string name="conversations_action_favorite">Preferito</string>
     <string name="conversations_action_leave">Esci</string>
-    <string name="conversations_action_lock">Blocca</string>
+    <string name="conversations_action_lock">Blocca con codice</string>
     <string name="conversations_action_mark_read">Segna come letto</string>
     <string name="conversations_action_mentions_only">Solo menzioni</string>
     <string name="conversations_action_more">Altre azioni</string>
@@ -542,5 +542,4 @@
     <string name="share_links_copy_a11y">Copia link</string>
     <string name="sharelinks_detail_language_selected">selezionato</string>
     <string name="sharelinks_list_retry">Riprova</string>
-    <string name="swipe_unlock">Sblocca</string>
 </resources>

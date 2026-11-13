@@ -274,8 +274,12 @@ enum MessageMenuPolicyInput {
         )
     }
 
+    /// La nature de l'avis, que la loi lit pour savoir s'il se CITE (#17441) : appel, arrivée, arrivées
+    /// regroupées — l'avis de capture, lui, ne se cite pas mais se retire.
     private static func noticeKind(of message: Message) -> String? {
         if message.callSummary != nil { return "call" }
+        if message.joinNotice != nil { return "member-joined" }
+        if message.arrivalsNotice != nil { return ArrivalsNoticeMetadata.kind }
         return message.captureNotice != nil ? CaptureNoticeMetadata.kind : nil
     }
 }

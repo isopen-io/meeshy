@@ -81,19 +81,19 @@ struct ContactCardView: View, Equatable {
                         .textCase(.uppercase)
                     Text(displayName)
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(Color.primary)
                         .lineLimit(2)
                     if let phone = model.card?.primaryPhone?.value {
                         Text(phone)
                             .font(.footnote.monospacedDigit())
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color.secondary)
                             .lineLimit(1)
                     }
                 }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.forward")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color.secondary)
                     .opacity(model.card == nil ? 0 : 1)
             }
             .frame(minHeight: MeeshyControlSize.tapTarget)
@@ -117,7 +117,7 @@ struct ContactCardView: View, Equatable {
                 Image(systemName: "person.crop.circle.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
             .frame(width: 36, height: 36)
             .accessibilityHidden(true)
@@ -206,7 +206,7 @@ struct ContactAccountActionRow: View {
     private func stateLabel(_ title: String, icon: String) -> some View {
         Label(title, systemImage: icon)
             .font(.footnote.weight(.semibold))
-            .foregroundColor(.secondary)
+            .foregroundStyle(Color.secondary)
             .lineLimit(2)
             .minimumScaleFactor(0.75)
             .frame(maxWidth: .infinity, minHeight: 44)

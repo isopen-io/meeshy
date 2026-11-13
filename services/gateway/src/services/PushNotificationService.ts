@@ -23,6 +23,8 @@ import {
 import { applyUserPreferences, isCallPushDataType } from './push-delivery-preferences';
 import { pushRoutingClientOf, tokenRoutesPushType } from './push-type-routing';
 import { apnsThreadIdOf } from './notifications/push-thread';
+import { sendViaPushToTalk, type PushToTalkTokenRecord } from './talkie/pushToTalkApns';
+import { apnsReady, pushTransportConfigFromEnv, type PushTransports } from './push-transport-config';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -114,8 +116,8 @@ export interface PushResult {
 export interface SendPushOptions {
   userId: string;
   payload: PushNotificationPayload;
-  // Optional: target specific token types
-  types?: ('apns' | 'fcm' | 'voip')[];
+  // Optional: target specific token types. `pushtotalk` (#17142) is never a default: only the talkie wake asks for it.
+  types?: ('apns' | 'fcm' | 'voip' | 'pushtotalk')[];
   // Optional: target specific platforms
   platforms?: ('ios' | 'android' | 'web')[];
   // Skip the DND-hours/days check in `isPushAllowed` — for call-management
@@ -135,27 +137,7 @@ export interface SendPushOptions {
 // CONFIGURATION
 // ============================================
 
-const config = {
-  // Feature flags
-  enabled: process.env.ENABLE_PUSH_NOTIFICATIONS !== 'false',
-  apnsEnabled: process.env.ENABLE_APNS_PUSH !== 'false',
-  fcmEnabled: process.env.ENABLE_FCM_PUSH !== 'false',
-  voipEnabled: process.env.ENABLE_VOIP_PUSH !== 'false',
-
-  // Firebase
-  firebaseCredentialsPath: process.env.FIREBASE_ADMIN_CREDENTIALS_PATH,
-
-  // APNS
-  apns: {
-    keyId: process.env.APNS_KEY_ID,
-    teamId: process.env.APNS_TEAM_ID,
-    keyPath: process.env.APNS_KEY_PATH,
-    keyContent: process.env.APNS_KEY_CONTENT,
-    bundleId: process.env.APNS_BUNDLE_ID || 'me.meeshy.app',
-    voipBundleId: process.env.APNS_VOIP_BUNDLE_ID || 'me.meeshy.app.voip',
-    environment: (process.env.APNS_ENVIRONMENT || 'development') as 'development' | 'production',
-  },
-};
+const config = pushTransportConfigFromEnv(process.env);
 
 // ============================================
 // TRANSIENT ERROR CLASSIFICATION
@@ -306,7 +288,7 @@ export class PushNotificationService {
     }
 
     // Initialize APNS clients (one per environment)
-    if (config.apnsEnabled && config.apns.keyId && config.apns.teamId) {
+    if (apnsReady(config)) {
       try {
         const apn = await import('@parse/node-apn').catch(() => null);
 
@@ -338,6 +320,12 @@ export class PushNotificationService {
     }
 
     this.initialized = true;
+  }
+
+  /** Les transports qui peuvent RÉELLEMENT partir (#17249) : un client initialisé, pas une variable posée. */
+  async deliveryTransports(): Promise<PushTransports> {
+    await this.initialize();
+    return { apns: config.enabled && !!this.apnsClientProduction && !!this.apnsClientSandbox, fcm: config.enabled && !!this.firebaseMessaging };
   }
 
   /**
@@ -398,9 +386,10 @@ export class PushNotificationService {
       },
     });
 
-    // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`).
+    // #10267 — un type neuf ne part que vers les appareils qui savent l'ouvrir (`push-type-routing.ts`). Un jeton
+    // PushToTalk (#17142) n'est enregistré QUE par un client qui sait le traiter : il porte sa capacité.
     const pushType = effectivePayload.data?.type;
-    const tokens = activeTokens.filter((token) => tokenRoutesPushType(token, pushType));
+    const tokens = activeTokens.filter((token) => token.type === 'pushtotalk' || tokenRoutesPushType(token, pushType));
 
     if (tokens.length === 0) {
       pushLogger.debug('No active tokens found for user', { userId, pushType, excluded: activeTokens.length });
@@ -424,6 +413,8 @@ export class PushNotificationService {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, false);
           } else if (tokenRecord.type === 'voip') {
             result = await this.sendViaAPNS(tokenRecord, effectivePayload, true);
+          } else if (tokenRecord.type === 'pushtotalk') {
+            result = await this.sendViaPushToTalk(tokenRecord, effectivePayload);
           } else {
             result = { success: false, tokenId: tokenRecord.id, error: `Unknown token type: ${tokenRecord.type}` };
           }
@@ -836,6 +827,17 @@ export class PushNotificationService {
       });
       return { success: false, tokenId: tokenRecord.id, error: error.message || 'APNS error' };
     }
+  }
+
+  private sendViaPushToTalk(tokenRecord: PushToTalkTokenRecord, payload: PushNotificationPayload): Promise<PushResult> {
+    return sendViaPushToTalk({
+      hasClient: (env) => !!(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction),
+      send: (env, notification, token, corr) => this.apnsCircuitBreaker.execute(() => performanceLogger.withTiming('push.sendViaPushToTalk',
+        () => this.sendApnsWithRetry(env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction, notification, token, corr), corr)),
+      isTransient: isTransientApnsReason,
+      defaultBundleId: config.apns.bundleId,
+      log: (event, fields) => (event === 'success' ? pushLogger.info : pushLogger.warn).call(pushLogger, `push.sendViaPushToTalk.${event}`, fields),
+    }, tokenRecord, payload);
   }
 
   /**

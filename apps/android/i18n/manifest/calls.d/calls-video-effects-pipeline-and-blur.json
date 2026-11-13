@@ -34,8 +34,32 @@
         },
         {
           "catalog": "app",
+          "iosKey": "video.filter.preset.bright",
+          "androidName": "video_filter_preset_bright",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "video.filter.preset.cool",
           "androidName": "video_filter_preset_cool",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.film",
+          "androidName": "video_filter_preset_film",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.golden",
+          "androidName": "video_filter_preset_golden",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.monochrome",
+          "androidName": "video_filter_preset_monochrome",
           "status": "adopted"
         },
         {
@@ -48,6 +72,24 @@
           "catalog": "app",
           "iosKey": "video.filter.preset.natural",
           "androidName": "video_filter_preset_natural",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.sky",
+          "androidName": "video_filter_preset_sky",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.softNight",
+          "androidName": "video_filter_preset_softNight",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "video.filter.preset.velvet",
+          "androidName": "video_filter_preset_velvet",
           "status": "adopted"
         },
         {

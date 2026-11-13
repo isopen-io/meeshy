@@ -26,8 +26,8 @@ extension StoryCanvasUIView {
     }
 
     /// Sélection utilisateur explicite d'une couche manipulable via les chips
-    /// « Arrière-plan » / « Premier plan » de la bordure gauche (directive
-    /// user 2026-07-14). Pose l'override, recalcule la couche courante et
+    /// « Arrière-plan » / « Premier plan » de la bordure gauche.
+    /// Pose l'override, recalcule la couche courante et
     /// propage au composer (highlight). L'override reste actif tant qu'il est
     /// valide pour le contenu ; sinon `updateManipulationLayer()` retombe sur
     /// l'auto-dérivation.
@@ -112,8 +112,8 @@ extension StoryCanvasUIView {
     /// Règle `.foreground` : SEULS les éléments foreground sont manipulables.
     /// Le fond n'est mouvable QUE via le chip Background (règle produit,
     /// user 2026-07-11 : « le background ne doit être mouvable que si le
-    /// chip background est sélectionné ») — l'ancien fallback bg (spec
-    /// 2026-05-22) rendait n'importe quel raté de hit-test destructeur pour
+    /// chip background est sélectionné ») — l'ancien fallback bg
+    /// rendait n'importe quel raté de hit-test destructeur pour
     /// le cadrage du fond.
     internal func resolveManipulationTarget(at location: CGPoint) -> String? {
         switch currentManipulationLayer {

@@ -84,7 +84,7 @@ extension OutboxDispatcher {
         let legendesServeur = serverKeyedTexts(
             payload.mediaCaptions, idsBySourceIndex: idParIndexSource
         )
-        // **Le même réalignement, sur l'autre texte** (2026-09-05). Deux
+        // **Le même réalignement, sur l'autre texte**. Deux
         // appels à UNE fonction, jamais deux fonctions : la carte des ids
         // (`idParIndexSource`) est la même, et c'est elle qui porte le seul
         // fait délicat — un upload sauté rompt l'alignement, donc l'index
@@ -119,7 +119,7 @@ extension OutboxDispatcher {
             // donc sans son image — suivi ouvert et nommé, jamais masqué par ce
             // correctif.
             // **Le canvas ADOPTE les médias que le post vient de créer**
-            // (#5280, 2026-09-05). Avant cette ligne, il désignait la ligne
+            // (#5280). Avant cette ligne, il désignait la ligne
             // `PostMedia` de la PRÉ-MONTÉE — celle faite au moment où la photo
             // a été posée sur la scène — et le lecteur cherchait un id absent
             // de `post.media` : la scène se peignait VIDE, sur toute la carte.

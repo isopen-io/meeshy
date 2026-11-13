@@ -40,7 +40,12 @@ internal fun SettingsAppearanceSection(
     viewModel: SettingsViewModel,
 ) {
     val tint = MeeshyPalette.Warning
-    SettingsGroup(stringResource(R.string.settings_section_appearance), MeeshyIcons.Palette, tint) {
+    SettingsGroup(
+        stringResource(R.string.settings_section_appearance),
+        MeeshyIcons.Palette,
+        tint,
+        orientation = stringResource(R.string.settings_languages_orientation),
+    ) {
         SettingsRows(rows, tint, separatedBefore = { it.id != SettingsHubRowId.INTERFACE_FEATURES }) { row ->
             when (row.id) {
                 SettingsHubRowId.THEME -> ThemePickerRow(

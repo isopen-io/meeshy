@@ -24,7 +24,7 @@ internal data class CallChromeState(
 
 /**
  * The state of the call chrome (header, pill, panels): which layer is open and whether a tap on
- * the video scene hid it. Every rule is the shared [CallScreenLayer] / [CallChromeVisibility] law;
+ * the stage hid it (the image on video, the background of a duo audio call — law 11, #17945). Every rule is the shared [CallScreenLayer] / [CallChromeVisibility] law;
  * this class only holds the current value. Mirrors the `layer` / `showControls` state of iOS
  * `CallView`.
  */
@@ -33,9 +33,9 @@ internal class CallChromeController(private val clock: () -> Long = System::curr
     private val _state = MutableStateFlow(CallChromeState())
     val state: StateFlow<CallChromeState> = _state.asStateFlow()
 
-    fun visibility(isVideoStage: Boolean, isTouchExplorationOn: Boolean): CallChromeVisibility {
+    fun visibility(isTapStage: Boolean, isTouchExplorationOn: Boolean): CallChromeVisibility {
         val current = _state.value
-        val mayHide = CallChromeVisibility.mayToggleByTap(isVideoStage, isTouchExplorationOn)
+        val mayHide = CallChromeVisibility.mayToggleByTap(isTapStage, isTouchExplorationOn)
         return CallChromeVisibility(
             isRevealed = current.isRevealed || !mayHide,
             isStageFullScreen = current.isStageFullScreen,
@@ -44,15 +44,15 @@ internal class CallChromeController(private val clock: () -> Long = System::curr
     }
 
     /** During the fade-out the hidden chrome is still seen, so it still answers; after it, it does not. */
-    fun acceptsTouches(isVideoStage: Boolean, isTouchExplorationOn: Boolean): Boolean {
+    fun acceptsTouches(isTapStage: Boolean, isTouchExplorationOn: Boolean): Boolean {
         val current = _state.value
-        val visible = visibility(isVideoStage, isTouchExplorationOn).isVisible(CallChromeElement.Controls)
+        val visible = visibility(isTapStage, isTouchExplorationOn).isVisible(CallChromeElement.Controls)
         val hiddenFor = current.hiddenAtMillis?.let { clock() - it } ?: 0L
         return CallChromeVisibility.acceptsTouches(visible, hiddenFor)
     }
 
-    fun onSceneTap(isVideoStage: Boolean, isTouchExplorationOn: Boolean) {
-        if (!CallChromeVisibility.mayToggleByTap(isVideoStage, isTouchExplorationOn)) return
+    fun onSceneTap(isTapStage: Boolean, isTouchExplorationOn: Boolean) {
+        if (!CallChromeVisibility.mayToggleByTap(isTapStage, isTouchExplorationOn)) return
         _state.update { if (it.isRevealed) it.hidden(clock()) else it.revealed() }
     }
 
@@ -73,7 +73,10 @@ internal class CallChromeController(private val clock: () -> Long = System::curr
 
     fun toggleMenu() = update { it.togglingMenu() }
 
-    fun open(panel: CallScreenPanel) = update { it.opening(panel) }
+    /** Opening a panel relights the chrome, as iOS `togglePanel` does: the Journal button also lives in the stowed captions. */
+    fun open(panel: CallScreenPanel) {
+        _state.update { it.revealed().copy(layer = it.layer.opening(panel)) }
+    }
 
     fun backToMenu() = update { it.backToMenu() }
 

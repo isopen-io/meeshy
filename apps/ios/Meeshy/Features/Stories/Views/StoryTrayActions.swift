@@ -56,14 +56,13 @@ nonisolated enum StoryTrayCopy {
 }
 
 nonisolated enum StoryTrayActionResolver {
-    /// SUPERSESSION 2026-08-02 (directive user) : le tap sur l'avatar « Moi »
+    /// SUPERSESSION (directive user): le tap sur l'avatar « Moi »
     /// ouvre la LISTE « Mes stories » — c'est elle qui porte les onglets
     /// Publiées / Brouillons, inaccessibles quand le tap lançait la lecture
-    /// directe (direction du 2026-07-31, elle-même une supersession du
-    /// 2026-07-14). La lecture directe reste offerte par « Voir ma story »
+    /// directe. La lecture directe reste offerte par « Voir ma story »
     /// au menu contextuel.
     ///
-    /// Parité 2026-08-10 : un utilisateur SANS story active mais avec un
+    /// Parité: un utilisateur SANS story active mais avec un
     /// historique entièrement expiré (`hasAnyStory`) tapait droit sur le
     /// composer — aucun chemin ne menait plus vers ses stories passées une
     /// fois toutes expirées. `hasMyStory` (au moins une story ACTIVE) reste

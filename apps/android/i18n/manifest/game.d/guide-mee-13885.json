@@ -468,12 +468,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.guide.more",
-          "androidName": "game_guide_more",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.guide.next_label",
           "androidName": "game_guide_next_label",
           "status": "adopted"

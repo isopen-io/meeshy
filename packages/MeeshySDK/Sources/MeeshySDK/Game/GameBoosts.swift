@@ -22,7 +22,7 @@ public struct PrismHourWindow: Codable, Sendable, Equatable {
 public enum GameBoosts {
     /// Le Vent arrière : ×1,25 sur les étincelles des gestes.
     public static let tailwindFactor = 1.25
-    /// L'écart au record de niveau à partir duquel le Vent arrière souffle (porteur 2026-10-17, #10896).
+    /// L'écart au record de niveau à partir duquel le Vent arrière souffle (#10896).
     public static let tailwindLevelGap = 7
     /// Les missions comptent double pendant l'Heure du Prisme.
     public static let prismHourMultiplier = 2

@@ -30,7 +30,7 @@ struct StoryAuthorIdentityCard: View {
     let presence: UserPresence?
     /// `true` quand l'auteur du groupe est un ami — gate le détail de
     /// présence (« En ligne » / « Actif·ve récemment » / « Absent·e »).
-    /// Directive user 2026-07-13 : le statut « en ligne » est une information
+    /// le statut « en ligne » est une information
     /// réservée aux amis, pas affichée pour un auteur hors contacts.
     let isFriend: Bool
     /// Permet à la face du cube de faire MONTER la carte au doigt (0 → 1 le
@@ -80,8 +80,7 @@ struct StoryAuthorIdentityCard: View {
             case .photo(let banner):
                 // `showsStatusOverlays: false` : en échec/chargement de la
                 // bannière, AUCUN spinner ni bouton Retry ne doit saigner au
-                // centre de l'écran sous l'avatar (IMG_1155/1158, directive
-                // user 2026-07-13) — le fallback reste le gradient/thumbHash.
+                // centre de l'écran sous l'avatar (IMG_1155/1158) — le fallback reste le gradient/thumbHash.
                 CachedAsyncImage(
                     url: banner,
                     thumbHash: intro.bannerThumbHash,

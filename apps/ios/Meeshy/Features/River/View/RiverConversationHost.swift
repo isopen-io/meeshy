@@ -57,7 +57,7 @@ struct RiverConversationHost: View {
     var onReachPresent: (() -> Void)? = nil
 
     @StateObject private var navigation: RiverNavigationController
-    /// Échelle du plan, POSÉE par le pince (retour produit 2026-08-22).
+    /// Échelle du plan, POSÉE par le pince.
     /// Ce n'est pas un `scaleEffect` : c'est la LARGEUR DE COULOIR qui varie
     /// (`RiverMetrics.Lane.width*`, paramètre que §7ter accorde
     /// explicitement à la peau). Le texte garde donc sa taille et sa
@@ -307,8 +307,7 @@ struct RiverConversationHost: View {
 
     // MARK: - Le pince — zoomer, c'est élargir les couloirs
 
-    /// « Le zoom et dézoom en pinch out/in doit être possible » (retour
-    /// produit 2026-08-22).
+    /// « Le zoom et dézoom en pinch out/in doit être possible ».
     ///
     /// `simultaneousGesture` : le pince ne dispute JAMAIS le pan natif du
     /// `ScrollView` — les deux axes restent parcourables pendant et après le

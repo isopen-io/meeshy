@@ -59,7 +59,7 @@ struct ConversationAppearanceSheet: View {
                     if let message = viewModel.errorMessage {
                         Text(message)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                     }
                 }
                 .padding(MeeshySpacing.xl)
@@ -221,7 +221,7 @@ struct ConversationAppearanceSheet: View {
     private func photoStateText(_ text: String) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
     }
 
     private func isSelectedPhoto(_ id: String) -> Bool {
@@ -266,7 +266,7 @@ struct ConversationAppearanceSheet: View {
                 ) {
                     ZStack {
                         Circle().fill(Color(hex: accentColor))
-                        Image(systemName: "wand.and.stars").foregroundColor(.white).accessibilityHidden(true)
+                        Image(systemName: "wand.and.stars").foregroundStyle(Color.white).accessibilityHidden(true)
                     }
                 } action: { viewModel.setAccent(nil) }
 
@@ -313,7 +313,7 @@ struct ConversationAppearanceSheet: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .accessibilityAddTraits(.isHeader)
             content()
         }
@@ -331,7 +331,7 @@ struct ConversationAppearanceSheet: View {
                 .overlay(alignment: .bottomTrailing) {
                     if selected {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(Color(hex: effectiveAccent))
+                            .foregroundStyle(Color(hex: effectiveAccent))
                             .background(Circle().fill(.white))
                             .padding(MeeshySpacing.xs)
                             .accessibilityHidden(true)

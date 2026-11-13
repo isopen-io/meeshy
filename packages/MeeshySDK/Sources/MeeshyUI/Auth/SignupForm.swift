@@ -244,8 +244,8 @@ public struct SignupForm: Equatable {
     /// que le nom affiché et le mot de passe, s'ils ont été tapés, tiennent
     /// leurs bornes (#6441, #6479, #9343).
     ///
-    /// Le numéro est requis par l'ÉCRAN, pas par la passerelle (directive
-    /// porteur 2026-10-04) : le schéma partagé garde `required: ['email']`, et
+    /// Le numéro est requis par l'ÉCRAN, pas par la passerelle:
+    /// le schéma partagé garde `required: ['email']`, et
     /// une inscription par adresse seule — API, anciennes versions publiées —
     /// crée toujours le compte. Rien ici ne dépend du réseau — aucun appel de
     /// disponibilité ne précède l'envoi.

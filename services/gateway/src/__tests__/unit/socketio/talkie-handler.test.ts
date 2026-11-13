@@ -34,6 +34,17 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({ resolveForTarget }),
 }));
 
+const pushState = {
+  transports: { apns: true, fcm: true },
+  results: [] as Array<{ success: boolean; tokenId: string; error?: string }>,
+};
+jest.mock('../../../services/PushNotificationService', () => ({
+  getPushNotificationService: () => ({
+    deliveryTransports: async () => pushState.transports,
+    sendToUser: async () => pushState.results,
+  }),
+}));
+
 type GateDeps = { presenceServed: (viewer: { userId: string; role: string }, targetId: string) => Promise<boolean> };
 type GateVerdict = { ok: true } | { ok: false; code: string; message: string; cause: string };
 const judgeTalkie = jest.fn(async (deps: GateDeps): Promise<GateVerdict> => {
@@ -178,5 +189,175 @@ describe('#17131 — un refus de la porte laisse une ligne de journal', () => {
     await socket.start({ toUserId: TO, codec: 'aac-adts' });
 
     expect(mockLogger.info).not.toHaveBeenCalledWith('[TALKIE_REFUSED]', expect.anything());
+  });
+});
+
+describe('#17249 — un réveil qui ne peut pas partir, ou qui échoue, le dit', () => {
+  const PTT_TOKEN = { id: 'ptt', type: 'pushtotalk', platform: 'ios', appVersion: '1.1.8', bundleId: 'me.meeshy.app', sessionId: 's-ok' };
+  const prisma = {
+    pushToken: { findMany: async () => [PTT_TOKEN], deleteMany: async () => ({ count: 0 }) },
+    userSession: { findMany: async () => [{ id: 's-ok' }] },
+    user: { findUnique: async () => ({ displayName: 'Deux', username: 'talkiedeux', systemLanguage: 'fr' }) },
+    userPreferences: { findUnique: async () => null },
+  };
+  const depsWith = (io: object) =>
+    talkieHandlerDeps({ prisma: prisma as never, io: io as never, socketToUser: new Map([[`sock-${FROM}`, FROM]]), connectedUsers: new Map([[FROM, { isAnonymous: false }]]) });
+  const flush = async () => { for (let i = 0; i < 20; i += 1) await Promise.resolve(); };
+  afterEach(() => { pushState.transports = { apns: true, fcm: true }; pushState.results = []; });
+
+  it('APNs non configuré : le canal de réveil d’un jeton PushToTalk rend la cause, jamais pushtotalk', async () => {
+    pushState.transports = { apns: false, fcm: true };
+    const seen: Array<(userId: string) => Promise<unknown>> = [];
+    judgeTalkie.mockImplementationOnce(async (deps: GateDeps) => {
+      seen.push((deps as GateDeps & { wakeChannel: (userId: string) => Promise<unknown> }).wakeChannel);
+      return { ok: true };
+    });
+    const { io } = fakeIo();
+    const deps = depsWith(io);
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, deps);
+    await socket.start({ toUserId: TO, codec: 'aac-adts' });
+
+    expect(await seen[0](TO)).toEqual({ miss: 'apns-not-configured' });
+    pushState.transports = { apns: true, fcm: true };
+    expect(await seen[0](TO)).toBe('pushtotalk');
+    deps.relay.dispose();
+  });
+
+  it('le refus journalisé porte la cause du réveil manqué', async () => {
+    judgeTalkie.mockResolvedValueOnce({ ok: false, code: 'TALKIE_FALLBACK_VOICE', message: 'Envoie un message vocal', cause: 'not-connected', wakeMiss: 'apns-not-configured' } as never);
+    const { io } = fakeIo();
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, depsWith(io));
+
+    await socket.start({ toUserId: TO, codec: 'aac-adts' });
+
+    expect(mockLogger.info).toHaveBeenCalledWith('[TALKIE_REFUSED]', { code: 'TALKIE_FALLBACK_VOICE', cause: 'not-connected', wakeMiss: 'apns-not-configured', fromUserId: FROM, toUserId: TO });
+  });
+
+  it('un réveil refusé par APNs laisse UNE ligne [TALKIE_WAKE_FAILED] qui nomme la cause', async () => {
+    judgeTalkie.mockResolvedValueOnce({ ok: true, delivery: 'waking', channel: 'pushtotalk' } as never);
+    pushState.results = [{ success: false, tokenId: 'ptt', error: 'BadDeviceToken' }];
+    const { io } = fakeIo();
+    const deps = depsWith(io);
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, deps);
+
+    const ack = await socket.start({ toUserId: TO, codec: 'aac-adts' });
+    await flush();
+
+    const talkieId = (ack.data as { talkieId: string }).talkieId;
+    const failures = mockLogger.warn.mock.calls.filter((call) => call[0] === '[TALKIE_WAKE_FAILED]');
+    expect(failures).toEqual([['[TALKIE_WAKE_FAILED]', { talkieId, fromUserId: FROM, toUserId: TO, phase: 'live', cause: 'BadDeviceToken' }]]);
+    deps.relay.dispose();
+  });
+
+  it('un réveil livré ne journalise aucun échec', async () => {
+    judgeTalkie.mockResolvedValueOnce({ ok: true, delivery: 'waking', channel: 'pushtotalk' } as never);
+    pushState.results = [{ success: true, tokenId: 'ptt' }];
+    const { io } = fakeIo();
+    const deps = depsWith(io);
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, deps);
+
+    await socket.start({ toUserId: TO, codec: 'aac-adts' });
+    await flush();
+
+    expect(mockLogger.warn).not.toHaveBeenCalledWith('[TALKIE_WAKE_FAILED]', expect.anything());
+    deps.relay.dispose();
+  });
+});
+
+describe('#17142 — talkie:join et le réveil', () => {
+  const joinSocket = (id: string) => {
+    const handlers = new Map<string, (...args: unknown[]) => void>();
+    return {
+      id,
+      on: (event: string, listener: (...args: unknown[]) => void) => { handlers.set(event, listener); },
+      emit: (event: string, payload: unknown) => handlers.get(event)?.(payload),
+    };
+  };
+  const flush = async () => { for (let i = 0; i < 10; i += 1) await Promise.resolve(); };
+
+  it('la porte reçoit le canal de réveil du destinataire (wakeChannel)', async () => {
+    const seen: unknown[] = [];
+    judgeTalkie.mockImplementationOnce(async (deps: GateDeps) => { seen.push((deps as GateDeps & { wakeChannel?: unknown }).wakeChannel); return { ok: true }; });
+    const { io } = fakeIo();
+    const deps = depsFor(io, { [FROM]: { isAnonymous: false } });
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, deps);
+    await socket.start({ toUserId: TO, codec: 'aac-adts' });
+
+    expect(typeof seen[0]).toBe('function');
+    deps.relay.dispose();
+  });
+
+  it('un invité ne rejoint rien ; un inscrit rejoint par le relais', async () => {
+    const { io } = fakeIo();
+    const deps = depsFor(io, { [TO]: { isAnonymous: false }, [FROM]: { isAnonymous: true } });
+    const join = jest.spyOn(deps.relay, 'join');
+    const guest = joinSocket(`sock-${FROM}`);
+    const member = joinSocket(`sock-${TO}`);
+    listenTalkie(guest, deps);
+    listenTalkie(member, deps);
+
+    guest.emit('talkie:join', { talkieId: 'a'.repeat(24) });
+    member.emit('talkie:join', { talkieId: 'a'.repeat(24) });
+    await flush();
+
+    expect(join).toHaveBeenCalledTimes(1);
+    expect(join).toHaveBeenCalledWith(`sock-${TO}`, TO, { talkieId: 'a'.repeat(24) });
+  });
+
+  it('une voix inconnue ici est relayée aux autres instances avec l’identité AUTHENTIFIÉE ; celles-ci la rejoignent', async () => {
+    const relayed: unknown[] = [];
+    const listeners = new Map<string, (payload: unknown) => void>();
+    const { io } = fakeIo();
+    const withAdapter = {
+      ...io,
+      serverSideEmit: (event: string, payload: unknown) => { relayed.push({ event, payload }); },
+      on: (event: string, listener: (payload: unknown) => void) => { listeners.set(event, listener); },
+    };
+    const deps = depsFor(withAdapter, { [TO]: { isAnonymous: false } });
+    const member = joinSocket(`sock-${TO}`);
+    listenTalkie(member, deps);
+
+    member.emit('talkie:join', { talkieId: 'a'.repeat(24), userId: FROM });
+    await flush();
+
+    expect(relayed).toEqual([{ event: 'talkie:join-relay', payload: { socketId: `sock-${TO}`, userId: TO, talkieId: 'a'.repeat(24) } }]);
+    const join = jest.spyOn(deps.relay, 'join');
+    listeners.get('talkie:join-relay')?.({ socketId: 'remote-sock', userId: TO, talkieId: 'b'.repeat(24) });
+    listeners.get('talkie:join-relay')?.({ socketId: 'remote-sock', userId: 'pas-un-id', talkieId: 'b'.repeat(24) });
+    expect(join).toHaveBeenCalledTimes(1);
+    expect(join).toHaveBeenCalledWith('remote-sock', TO, { talkieId: 'b'.repeat(24) });
+  });
+});
+
+describe('#13949 — la voix scellée reste ÉTEINTE tant qu’aucun client ne la déchiffre', () => {
+  const sealedStart = { toUserId: TO, codec: 'sealed-aac-adts', sealed: { keyId: 'q7Hk2-_xVb9LmN0pRsT4uW' } };
+  afterEach(() => { delete process.env.TALKIE_SEALED_VOICE_ENABLED; });
+
+  it.each([undefined, '', 'false', '1', 'TRUE'])('TALKIE_SEALED_VOICE_ENABLED=%p : une voix scellée est refusée sans être jugée', async (value) => {
+    if (value !== undefined) process.env.TALKIE_SEALED_VOICE_ENABLED = value;
+    const { io, emissions } = fakeIo();
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, depsFor(io, { [FROM]: { isAnonymous: false } }));
+
+    expect(await socket.start(sealedStart)).toMatchObject({ success: false, code: 'TALKIE_INVALID' });
+    expect(judgeTalkie).not.toHaveBeenCalled();
+    expect(emissions).toEqual([]);
+  });
+
+  it('allumé explicitement (« true »), la voix scellée est jugée par la porte', async () => {
+    process.env.TALKIE_SEALED_VOICE_ENABLED = 'true';
+    const { io } = fakeIo();
+    const deps = depsFor(io, { [FROM]: { isAnonymous: false } });
+    const socket = fakeSocket(`sock-${FROM}`);
+    listenTalkie(socket, deps);
+
+    expect(await socket.start(sealedStart)).toMatchObject({ success: true });
+    expect(judgeTalkie).toHaveBeenCalledTimes(1);
+    deps.relay.dispose();
   });
 });

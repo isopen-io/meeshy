@@ -135,8 +135,7 @@ struct ActiveSessionsView: View {
     private var emptyState: some View {
         AdaptiveContentUnavailableView(
             String(localized: "sessions_empty", defaultValue: "Aucune session active", bundle: .main),
-            systemImage: "laptopcomputer.and.iphone",
-            description: Text(String(localized: "sessions_empty_subtitle", defaultValue: "Vos appareils connectés apparaîtront ici.", bundle: .main))
+            systemImage: "laptopcomputer.and.iphone"
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -149,7 +148,7 @@ struct ActiveSessionsView: View {
             } label: {
                 Text(String(localized: "sessions.retry", defaultValue: "Réessayer", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .frame(minHeight: 44)
             }
@@ -192,6 +191,8 @@ struct ActiveSessionsView: View {
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
+                SettingsSentence(text: String(localized: "sessions.summary", defaultValue: "Vos appareils connectés : déconnectez ceux que vous ne reconnaissez pas.", bundle: .main))
+
                 statusBanner
 
                 if let current = viewModel.currentSession {
@@ -225,7 +226,7 @@ struct ActiveSessionsView: View {
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundColor(theme.textSecondary)
+            .foregroundStyle(theme.textSecondary)
             .textCase(.uppercase)
             .padding(.leading, MeeshySpacing.xs)
             .accessibilityAddTraits(.isHeader)
@@ -248,7 +249,7 @@ struct ActiveSessionsView: View {
     private func banner(systemImage: String, text: String) -> some View {
         Label(text, systemImage: systemImage)
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-            .foregroundColor(theme.textSecondary)
+            .foregroundStyle(theme.textSecondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MeeshySpacing.md)
             .background(
@@ -272,7 +273,7 @@ struct ActiveSessionsView: View {
                 Image(systemName: row.systemImage)
                     // Glyphe décoratif borné par le cadre fixe 32×32 → police figée (86i) ;
                     // l'identité de l'appareil est portée par le titre → masqué du rotor.
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.fixedGlyph(16, weight: .medium))
                     .foregroundColor(tint)
                     .frame(width: 32, height: 32)
                     .background(
@@ -285,13 +286,13 @@ struct ActiveSessionsView: View {
                     HStack(spacing: MeeshySpacing.xsPlus) {
                         Text(row.title)
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
 
                         if row.isCurrent {
-                            Text(String(localized: "sessions_current_badge", defaultValue: "Actuelle", bundle: .main))
+                            Text(String(localized: "sessions_current_badge", defaultValue: "Cet appareil", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundStyle(Color.white)
                                 .padding(.horizontal, MeeshySpacing.xsPlus)
                                 .padding(.vertical, MeeshySpacing.xxs)
                                 .background(Capsule().fill(MeeshyColors.success))
@@ -301,7 +302,7 @@ struct ActiveSessionsView: View {
                     ForEach(details, id: \.self) { line in
                         Text(line)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -333,7 +334,7 @@ struct ActiveSessionsView: View {
         } label: {
             Text(String(localized: "sessions.revoke.button", defaultValue: "Déconnecter", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
@@ -379,15 +380,15 @@ struct ActiveSessionsView: View {
     private var attributionFooter: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(String(localized: "sessions.place.footnote", defaultValue: "Les lieux sont approximatifs : ils sont déduits de l'adresse IP.", bundle: .main))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             if let link = viewModel.attribution.url.flatMap({ URL(string: $0) }) {
                 Link(viewModel.attribution.text, destination: link)
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .frame(minHeight: 44, alignment: .leading)
             } else {
                 Text(viewModel.attribution.text)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))

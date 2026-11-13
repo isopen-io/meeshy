@@ -112,7 +112,7 @@ struct LentilleFocusElectionHost: View {
         )
     }
 
-    // MARK: - Zone morte (liste qui tremblait, 2026-10-16)
+    // MARK: - Zone morte (liste qui tremblait)
 
     /// Avance qu'une rangée doit prendre sur l'élu, en distance au foyer,
     /// pour le détrôner : une demi-rangée.
@@ -125,7 +125,7 @@ struct LentilleFocusElectionHost: View {
     /// demi-bandes. La bascule avant et la bascule arrière tombaient au même
     /// point, et un tremblement d'un point autour de la frontière changeait
     /// l'élu à chaque tick — la magnification sautait d'une rangée à sa voisine
-    /// en boucle, deux états superposés en fondu (vidéo du 2026-10-16). Près du
+    /// en boucle, deux états superposés en fondu. Près du
     /// haut de liste, la rampe de `LentilleFocusBand.centerY` déplace le foyer
     /// avec le contenu : la distance varie deux fois plus vite que le doigt.
     ///

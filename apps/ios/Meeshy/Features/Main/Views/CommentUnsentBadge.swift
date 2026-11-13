@@ -94,10 +94,10 @@ struct CommentUnsentBadge: View {
                         .lineLimit(2)
                     if isInherited {
                         Button(String(localized: "story.mine.failed.resume", defaultValue: "Reprendre", bundle: .main), action: resume)
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundStyle(Color(hex: accentColor))
                     } else {
                         Button(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .main), action: retry)
-                            .foregroundColor(Color(hex: accentColor))
+                            .foregroundStyle(Color(hex: accentColor))
                     }
                     Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), action: discard)
                         .foregroundStyle(MeeshyColors.error)

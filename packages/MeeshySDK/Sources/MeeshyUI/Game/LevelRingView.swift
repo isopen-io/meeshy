@@ -111,7 +111,7 @@ public struct LevelRingView: View {
             Text("\(level)")
                 .font(.system(size: Self.levelTypeSize(forLevel: level) * k * min(max(typeScale, 1), GameTypeScale.maximum),
                               weight: .heavy, design: .rounded))
-                .foregroundColor(inkColor)
+                .foregroundStyle(inkColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .modifier(NumericRoll())
@@ -181,7 +181,7 @@ private struct OutlinedNumeral: View {
                     .foregroundColor(outline)
                     .offset(x: direction.width * outlineWidth, y: direction.height * outlineWidth)
             }
-            Text(text).foregroundColor(fill)
+            Text(text).foregroundStyle(fill)
         }
         .font(.system(size: size, weight: .heavy, design: .rounded))
         .lineLimit(1)

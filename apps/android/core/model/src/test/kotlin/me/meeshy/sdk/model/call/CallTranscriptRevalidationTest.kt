@@ -34,6 +34,18 @@ class CallTranscriptRevalidationTest {
         )
     }
 
+    /** A1.6 — un appel lu à moitié (borne de pages atteinte, page qui ne progresse plus) se montre mais ne se range pas. */
+    @Test
+    fun `a transcript the reading could not finish is shown but never stored as if it were whole`() {
+        val partial = page("bonjour").copy(hasMore = true)
+
+        val refresh = CallTranscriptRevalidation.revalidated(cached, CallTranscriptRemote.Served(partial), project)
+
+        assertThat(refresh).isEqualTo(
+            CallTranscriptRefresh(CallTranscriptState.Ready(listOf(line("bonjour"))), CallTranscriptCacheAction.Keep),
+        )
+    }
+
     @Test
     fun `an empty replay hides the section and removes the copy`() {
         val refresh = CallTranscriptRevalidation.revalidated(cached, CallTranscriptRemote.Served(page()), project)

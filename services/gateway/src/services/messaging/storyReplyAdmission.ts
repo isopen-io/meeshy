@@ -92,7 +92,7 @@ export async function admitStoryReply(
     where: { id: storyReplyToId },
     select: {
       id: true, authorId: true, deletedAt: true,
-      visibility: true, visibilityUserIds: true, expiresAt: true,
+      visibility: true, visibilityUserIds: true, expiresAt: true, communityId: true,
     },
   });
   if (!story || story.deletedAt) {

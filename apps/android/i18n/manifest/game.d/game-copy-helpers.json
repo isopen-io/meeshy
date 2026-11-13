@@ -765,11 +765,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.mint.blocked.debt_plain",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.error.treasury_locked",
           "status": "adopted"
         },
@@ -826,11 +821,6 @@
         {
           "catalog": "app",
           "iosKey": "game.error.league_consent_required",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "game.error.league_pseudonym_invalid",
           "status": "adopted"
         },
         {

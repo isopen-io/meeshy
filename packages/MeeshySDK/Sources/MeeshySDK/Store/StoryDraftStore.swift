@@ -43,26 +43,20 @@ public final class StoryDraftStore: @unchecked Sendable {
     /// d'un échec de publication) et écraseraient sinon leurs fichiers.
     private let mediaRoot: URL
 
-    private let failureLock = NSLock()
-    private var storedFailure: PersistFailure?
+    private let storedFailure: Locked<PersistFailure?>
 
     public var lastPersistFailure: PersistFailure? {
-        failureLock.lock()
-        defer { failureLock.unlock() }
-        return storedFailure
+        storedFailure.read { $0 }
     }
 
     /// À appeler une fois l'échec remonté à l'utilisateur.
     public func clearPersistFailure() {
-        failureLock.lock()
-        defer { failureLock.unlock() }
-        storedFailure = nil
+        storedFailure.mutate { $0 = nil }
     }
 
     private func recordFailure(_ operation: String, message: String) {
-        failureLock.lock()
-        defer { failureLock.unlock() }
-        storedFailure = PersistFailure(operation: operation, message: message, occurredAt: Date())
+        let failure = PersistFailure(operation: operation, message: message, occurredAt: Date())
+        storedFailure.mutate { $0 = failure }
     }
 
     private convenience init() {
@@ -78,7 +72,7 @@ public final class StoryDraftStore: @unchecked Sendable {
     init(storage opened: OpenedDatabaseQueue, mediaDirectory: URL) {
         mediaRoot = mediaDirectory
         storage = opened.queue
-        storedFailure = Self.openFailure(of: opened)
+        storedFailure = Locked(Self.openFailure(of: opened))
         createSchemaOrLog()
     }
 
@@ -702,7 +696,7 @@ public final class StoryDraftStore: @unchecked Sendable {
         return true
     }
 
-    // MARK: - Cycle de vie de publication (2026-08-02)
+    // MARK: - Cycle de vie de publication
 
     private static func metaValue(_ db: Database, draftId: String, key: String) throws -> String? {
         try String.fetchOne(

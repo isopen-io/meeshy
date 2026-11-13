@@ -5,7 +5,7 @@ import MeeshySDK
 /// progress bar (wall clock) and the canvas auto-advance
 /// (`StoryCanvasUIView.displayLinkTick.effectiveDuration`) both use (#13135).
 ///
-/// User spec 2026-05-27: a static slide lasts 6 s (lowered from 12 s after
+/// User: a static slide lasts 6 s (lowered from 12 s after
 /// « stories last too long », Instagram/Snapchat parity); a slide with a
 /// background video or audio lasts as long as its media (looped when shorter
 /// than 6 s), rounded up to whole loop periods so a background clip is NEVER

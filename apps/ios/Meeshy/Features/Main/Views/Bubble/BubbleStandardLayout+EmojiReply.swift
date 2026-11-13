@@ -20,6 +20,7 @@ extension BubbleStandardLayout {
                     .background(bubbleBackground)
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus))
                     .onTapGesture { openQuotedTarget(reply) }
+                    .accessibilityAction(named: Text(String(localized: "a11y.main.quotedReply.open", bundle: .main))) { openQuotedTarget(reply) }
             }
             emojiOnlyContent
         }

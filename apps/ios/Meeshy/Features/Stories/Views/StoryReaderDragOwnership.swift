@@ -199,7 +199,7 @@ nonisolated struct StoryReaderChromeFramesKey: PreferenceKey {
     }
 }
 
-/// **Seule la scène pagine** (directive porteur 2026-10-19). Un glissé né sur
+/// **Seule la scène pagine**. Un glissé né sur
 /// un composant — faire défiler les émojis rapides du composeur — ne devient
 /// jamais l'axe horizontal du lecteur. Le vertical garde ses propres règles
 /// (`StoryComposerGesture`, #8431).

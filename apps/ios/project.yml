@@ -124,6 +124,13 @@ settings:
   # par le compteur CI_BUILD_NUMBER de Xcode Cloud — cf. le bloc
   # CURRENT_PROJECT_VERSION ci-dessus.)
   #
+  # 1.1.8 le 2026-11-13 (#17911) : la 1.1.7 est READY_FOR_DISTRIBUTION, son train est
+  # fermé (ITMS-90186) et tout build qui la porte encore est refusé (ITMS-90062).
+  #
+  # 1.1.7 le 2026-11-09 (#17143, décision porteur) : la prochaine livraison porte le
+  # réveil du talkie en arrière-plan. La passerelle n'envoie la notification de
+  # réveil MEESHY_TALKIE qu'à partir de cette version (plancher iOS 1.1.7).
+  #
   # 1.1.1 le 2026-09-24 (#7851) : la 1.1.0 (build 1831) est READY_FOR_SALE le
   # jour même ; son train est fermé, et le build 1833 portait encore 1.1.0.
   # La coque Capacitor `apps/web/ios` partage le bundle id mais suit la
@@ -146,7 +153,7 @@ settings:
   # pourtant exactement cela ; c'est la CLI qui ne l'atteint pas. Créer la
   # version sur ASC d'abord, puis relancer `version set` pour les fichiers :
   # il constate alors « already reads 1.0.9 » et écrit les trois sites.
-  MARKETING_VERSION: "1.1.6"
+  MARKETING_VERSION: "1.1.8"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
@@ -195,6 +202,11 @@ targets:
       # l’écran de partage unique (`Meeshy/Features/Share/`) pour l’extension de partage, en sens
       # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      # #17442 — l'alarme d'un Bring (essai AlarmKit) : la LOI (`BringAlarmPlan`, Foundation seul) et la couture
+      # (`BringAlarmScheduler`, AlarmKit derrière `canImport` et iOS 26) sont posées par l'app vivante ET par
+      # l'extension de notification, sur la MÊME alarme. Gardes : `BringAlarmPlanTests`, `BringAlarmCoordinatorTests`.
+      - path: MeeshyNotificationExtension/BringAlarmPlan.swift
+      - path: MeeshyNotificationExtension/BringAlarmScheduler.swift
       # #12655 — le miroir des conversations verrouillées par PIN : l'app
       # l'ÉCRIT, l'extension le LIT. Une seule définition tient les deux bouts
       # du fichier. Foundation seul ; garde : `NSELockedConversationMirrorTests`.
@@ -604,6 +616,8 @@ targets:
       - path: MeeshyNotificationExtension/NSEDelivery.swift
       - path: MeeshyNotificationExtension/NSEDeadline.swift
       - path: MeeshyNotificationExtension/NSEEnrichmentPlan.swift
+      # #17255 — la remise en .m4a de la voix ADTS d'un talkie (`NSEEnrichmentPlanTests`).
+      - path: MeeshyNotificationExtension/NSEAdtsRemux.swift
       - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
       - path: MeeshyNotificationExtension/NSELockedConversationMirror.swift
       - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift

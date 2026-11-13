@@ -365,7 +365,7 @@ final class SessionClosedNoticeCopyTests: XCTestCase {
         for reason in SessionRevocationReason.allCases {
             let copy = SessionClosedNoticeCopy(reason: reason)
             XCTAssertFalse(copy.title.isEmpty, "\(reason)")
-            XCTAssertFalse(copy.message.isEmpty, "\(reason)")
+            XCTAssertFalse(copy.message?.isEmpty ?? false, "\(reason) : un message, quand il y en a un, n'est jamais vide")
         }
     }
 

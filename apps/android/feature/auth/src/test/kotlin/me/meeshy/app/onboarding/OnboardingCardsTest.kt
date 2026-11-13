@@ -1,7 +1,12 @@
 package me.meeshy.app.onboarding
 
 import android.content.Context
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -95,6 +100,7 @@ class OnboardingCardsTest {
         )
 
         compose.onNodeWithText(context.getString(R.string.onboarding_story_verify)).assertExists()
+        compose.onAllNodesWithText("Tap the link we emailed you.").assertCountEquals(0)
         compose.onNodeWithTag("onboarding.email.resend").performClick()
         assertThat(resent).isEqualTo(1)
     }
@@ -109,7 +115,7 @@ class OnboardingCardsTest {
         )
 
         compose.onNodeWithText(context.getString(R.string.onboarding_story_sending)).assertExists()
-        compose.onNodeWithText(context.getString(R.string.onboarding_story_sending_detail)).assertExists()
+        compose.onAllNodesWithText("You can keep going — it's posting in the background.").assertCountEquals(0)
         compose.onNodeWithTag("onboarding.story.create").assertDoesNotExist()
         compose.onNodeWithTag("onboarding.later").assertDoesNotExist()
         compose.onNodeWithTag("onboarding.continue").performClick()
@@ -180,6 +186,66 @@ class OnboardingCardsTest {
 
         compose.onNodeWithTag("onboarding.email.resend").performClick()
         assertThat(resent).isEqualTo(1)
+    }
+
+    @Test
+    fun `la carte e-mail dit une fois quoi toucher, sans ligne d'attente`() {
+        show(OnboardingUiState(card = step(OnboardingStepId.EMAIL), accountEmail = "a@b.me"))
+
+        compose.onNodeWithText("Tap the link we sent to confirm your account.").assertExists()
+        compose.onNodeWithText("Sent to a@b.me").assertExists()
+        compose.onAllNodesWithText("We'll move on as soon as your address is confirmed.").assertCountEquals(0)
+    }
+
+    @Test
+    fun `la carte salut ne redit pas que le texte est modifiable`() {
+        show(OnboardingUiState(card = step(OnboardingStepId.GLOBAL), greetingDraft = "Salut"))
+
+        compose.onNodeWithText("Meeshy Global, where everyone hangs out.").assertExists()
+        compose.onAllNodesWithText("Edit it if you like, it's yours.").assertCountEquals(0)
+    }
+
+    @Test
+    fun `la carte story nomme la photo et son audience, sans promesse de modification`() {
+        show(OnboardingUiState(card = step(OnboardingStepId.STORY)))
+
+        compose.onNodeWithText("One pic, one line: a story.").assertExists()
+        compose.onNodeWithText("Visible to your friends").assertExists()
+    }
+
+    @Test
+    fun `la carte age ne montre plus la consigne de geste, le selecteur la porte pour le lecteur d'ecran`() {
+        val gesture = context.getString(R.string.onboarding_age_picker_hint)
+        show(OnboardingUiState(card = step(OnboardingStepId.AGE)))
+
+        compose.onNodeWithText("So we can suggest the right spaces.").assertExists()
+        compose.onAllNodesWithText(gesture).assertCountEquals(0)
+        val state = compose.onNodeWithTag("onboarding.age.picker").fetchSemanticsNode().config
+            .getOrNull(SemanticsProperties.StateDescription)
+        assertThat(state).isEqualTo(gesture)
+    }
+
+    @Test
+    fun `la carte age ne repete pas son titre en legende, le lecteur d'ecran garde le nom du champ`() {
+        show(OnboardingUiState(card = step(OnboardingStepId.AGE)))
+
+        compose.onAllNodesWithText("Date of birth").assertCountEquals(0)
+        compose.onNode(hasContentDescription("Date of birth", substring = true)).assertExists()
+    }
+
+    @Test
+    fun `la carte story porte son propre titre, distinct de la carte profil`() {
+        show(OnboardingUiState(card = step(OnboardingStepId.STORY)))
+
+        compose.onNodeWithText("Your story").assertExists()
+        compose.onAllNodesWithText("Show yourself").assertCountEquals(0)
+    }
+
+    @Test
+    fun `le recapitulatif ne dit plus que rien ne presse`() {
+        show(OnboardingUiState(card = OnboardingCard.Recap, recap = OnboardingRecap(points = 12, level = 1, streakDays = 2, badges = 1)))
+
+        compose.onNodeWithText("Tomorrow, your Flame will have burned for 3 days.").assertExists()
     }
 
     @Test

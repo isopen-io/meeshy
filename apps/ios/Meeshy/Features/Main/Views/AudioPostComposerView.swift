@@ -7,7 +7,7 @@ import MeeshyUI
 
 // MARK: - Audio Post Composer
 
-/// Composer d'un post/réel audio. Depuis 2026-08-13 la CAPTURE passe par la
+/// Composer d'un post/réel audio. Depuis la CAPTURE passe par la
 /// feuille unifiée (`AudioRecorderSheet`, MeeshyUI) — le même composant
 /// que le composer de story — qui apporte aussi les portes « Fichiers » et
 /// « Bibliothèque » : un post/réel peut désormais RÉUTILISER un son de la
@@ -175,7 +175,7 @@ struct AudioPostComposerView: View {
                                     acceptRecording(url: url, mimeType: "audio/mp4")
                                 }
                             )
-                            // Rétréci (directive porteur 2026-09-01) : ce carré
+                            // Rétréci: ce carré
                             // porte UN bouton et un compteur ; la place qu'il
                             // prenait est celle dont le placement et le rognage
                             // ont besoin, plus bas.
@@ -190,7 +190,7 @@ struct AudioPostComposerView: View {
                             )
                         }
                         // **Le placement suit immédiatement le carré du son**
-                        // (directive porteur 2026-09-01) : c'est la décision qui
+                        // c'est la décision qui
                         // dit ce que la publication DEVIENT, et elle se prend en
                         // regardant ce qu'on vient d'enregistrer — pas en bas
                         // d'un écran qu'il faut faire défiler.
@@ -365,8 +365,7 @@ struct AudioPostComposerView: View {
                     )
                 }
 
-                // **« Ajouter », pas « Publier »** (directive porteur
-                // 2026-09-01). Cette feuille ne publie rien : elle remet un son
+                // **« Ajouter », pas « Publier »**. Cette feuille ne publie rien: elle remet un son
                 // au composer, qui publiera plus tard. Un bouton qui dit
                 // « Publier » promet un envoi que le tap ne déclenche pas — et
                 // c'est le genre de promesse qui fait fermer l'app en croyant
@@ -469,7 +468,6 @@ struct AudioPostComposerView: View {
     }
 
     /// **Rapatrier un son de la bibliothèque pour le rendre ROGNABLE**
-    /// (directive porteur 2026-09-01).
     ///
     /// Le rognage se règle à l'oreille : il faut ENTENDRE le segment qu'on
     /// délimite, et une bande dessinée depuis `sound.waveform` sans fichier

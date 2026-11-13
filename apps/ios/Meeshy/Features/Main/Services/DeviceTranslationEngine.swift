@@ -3,7 +3,7 @@ import MeeshySDK
 
 // MARK: - Le moteur qui traduit SUR l'appareil (#9899)
 //
-// Décision porteur du 2026-10-10 : l'appareil de chaque membre traduit les
+// l'appareil de chaque membre traduit les
 // messages reçus vers SA langue, les montre aussitôt, puis les partage aux
 // autres membres. Ce fichier est la FRONTIÈRE de ce que le coordinateur
 // (`DeviceTranslationCoordinator`) demande à un moteur : il ne sait ni quel

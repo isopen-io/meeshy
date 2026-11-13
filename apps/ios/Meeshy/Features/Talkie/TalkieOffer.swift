@@ -8,6 +8,12 @@ nonisolated enum TalkieOfferRule {
         max(link.effectiveLevel, link.toolLevel) >= .close
     }
 
+    /// Quelqu'un peut-il me parler par talkie ? Alors l'appareil tient un canal PushToTalk rejoint : sans lui, iOS
+    /// jette les réveils et la voix n'arrive jamais Meeshy fermé.
+    static func reachable(links: [RelationLink], role: String?) -> Bool {
+        PlatformRole(raw: role)?.isTeam == true || links.contains(where: offers)
+    }
+
     static func mayShowInHeader(encryptionMode: String?) -> Bool {
         encryptionMode != "e2ee"
     }

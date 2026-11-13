@@ -175,7 +175,8 @@ final class CallLiveActivityCoordinator {
             isLocal: false,
             speakerName: named.isEmpty ? (segment.speakerDisplayName ?? "") : named,
             prefersOriginal: false,
-            isRevealed: false
+            isRevealed: false,
+            readerPrism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         )
         return CallActivityLaw.Caption(
             speaker: line.speakerName,

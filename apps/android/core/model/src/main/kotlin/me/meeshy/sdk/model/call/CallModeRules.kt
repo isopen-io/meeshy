@@ -53,6 +53,18 @@ public object CallModeCarouselRule {
 }
 
 /**
+ * #17814 · C1.12 — la barre et le carrousel du Montage montent depuis le bas et y redescendent (transformation et
+ * opacité), sur une couche qui fond. Effets garde le seul fondu de sa couche : la loi 17 l'excepte (« Effets emprunte
+ * au composer », loi 9). « Réduire les animations » ne laisse que le fondu court. Miroir de iOS `CallModeChromeMotion`.
+ */
+public object CallModeChromeMotion {
+    public fun risesFromBottom(mode: CallScreenMode, reduceMotion: Boolean): Boolean = when (mode) {
+        CallScreenMode.Montage -> !reduceMotion
+        CallScreenMode.Effects -> false
+    }
+}
+
+/**
  * L'état du défilement d'un carrousel (iOS `CallModeCarouselMotion`) : qui le fait bouger — le doigt, ou le
  * carrousel qui amène au centre un élément touché — et ce que le repos choisit. Immuable : chaque événement rend
  * le nouvel état.

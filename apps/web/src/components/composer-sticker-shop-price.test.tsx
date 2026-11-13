@@ -66,7 +66,7 @@ const deps = (answer: (request: HttpRequest) => ApiResult<unknown>): { deps: Con
 const mountShop = (shopDeps: ConversationsDeps) =>
   mounter.mount(
     <QueryClientProvider client={appQueryClient}>
-      <PackShop adapter={stickerShopAdapter('fr', shopDeps)} language="fr" hint="" />
+      <PackShop adapter={stickerShopAdapter('fr', shopDeps)} language="fr" />
     </QueryClientProvider>,
   );
 

@@ -6,8 +6,6 @@ import { callBackPromptStore } from '@/lib/calls/call-back-prompt';
 import { CALL_LAYER_Z } from '@/lib/calls/call-presentation';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import { useCallPresentation } from '@/lib/calls/use-call-presentation';
-import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
-import { loadCallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';
 import { callStore } from '@/lib/calls/call-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -20,9 +18,11 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * chunk à part, chargé quand un appel existe.
  */
 /* Avec lui, le catalogue de ses contrôles (#8433, #8438, #8439, #8437) — les
-   ajouter aux catalogues d'interface les porterait au-delà de leur plafond. */
-const loadOverlay = () =>
-  Promise.all([import('./call-overlay'), loadCallControlsCatalog(currentInterfaceLanguage())]).then(([module]) => ({ default: module.CallOverlay }));
+   ajouter aux catalogues d'interface les porterait au-delà de leur plafond.
+   Son CHARGEUR aussi est à la demande (#17650) : la coquille, sur toutes les
+   routes, n'en paie que l'`import()`, jamais le code. */
+const loadCallControlsCatalog = () => import('@/lib/i18n-call-controls-catalog').then((catalog) => catalog.loadCallControlsCatalog(currentInterfaceLanguage()));
+const loadOverlay = () => Promise.all([import('./call-overlay'), loadCallControlsCatalog()]).then(([module]) => ({ default: module.CallOverlay }));
 const CallOverlay = lazy(loadOverlay);
 /* #8046 — la bulle et l'image dans l'image sont des FRÈRES de l'écran, pas
    ses enfants : un chunk chargé par un autre chunk à la demande ne peut
@@ -50,7 +50,7 @@ const CallFeedbackLayer = lazy(() =>
    une demande existe — il survit à l'écran pour dire que le fichier est
    déposé. */
 const CallRecordingLayer = lazy(() =>
-  Promise.all([import('./call-recording-layer'), loadCallRecordingCatalog(currentInterfaceLanguage())]).then(([module]) => module),
+  Promise.all([import('./call-recording-layer'), import('@/lib/i18n-call-recording-catalog').then((catalog) => catalog.loadCallRecordingCatalog(currentInterfaceLanguage()))]).then(([module]) => module),
 );
 
 /* « Appeler » d'un rappel qui attend son geste (#8199) : son chunk, chargé
@@ -85,13 +85,17 @@ const LAYER_STYLE: CSSProperties = {
 
 /* HORS de `#root`, par un portail : la visionneuse de médias et le menu de
    message rendent `#root` INERTE le temps de leur ouverture — un appel monté
-   dedans s'y peignait par-dessus, et aucun de ses boutons ne répondait. */
+   dedans s'y peignait par-dessus, et aucun de ses boutons ne répondait.
+   L'HÔTE DU PLEIN ÉCRAN (U2.9) est le `div` posé dans le `<dialog>` : un `<dialog>` ne peut pas être
+   l'élément plein écran (Fullscreen API), et la scène seule laisserait hors de lui la pilule, ses
+   sous-titres et la carte d'accord. Il n'a pas de boîte à lui — ses enfants sont `fixed` — et ne prend
+   le viewport qu'une fois plein écran. */
 function CallStage({ children }: { readonly children: ReactNode }) {
   const layer = useRef<HTMLDialogElement | null>(null);
   useCallPresentation(layer);
   const stage = (
     <dialog ref={layer} open data-call-stage="" className="backdrop:bg-transparent" style={LAYER_STYLE}>
-      {children}
+      <div data-call-fullscreen-host="">{children}</div>
     </dialog>
   );
   return typeof document === 'undefined' ? stage : createPortal(stage, document.body);

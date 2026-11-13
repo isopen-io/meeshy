@@ -272,22 +272,33 @@ class PrivacyPreferencesTest {
     }
 
     @Test
+    fun visibleToggles_leaveOutEveryRowThatWritesNothing_butKeepThemInTheCatalog() {
+        val shown = PrivacyCategory.entries.flatMap { PrivacyCatalog.visibleToggles(it) }
+        assertThat(shown).containsNoneIn(PrivacyCatalog.comingSoon)
+        assertThat(PrivacyCatalog.visibleToggles(PrivacyCategory.CONTACTS_GROUPS))
+            .containsExactly(PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS)
+        assertThat(PrivacyCatalog.visibleToggles(PrivacyCategory.MEDIA_DATA))
+            .containsExactly(PrivacyToggle.SAVE_MEDIA_TO_GALLERY, PrivacyToggle.ALLOW_ANALYTICS).inOrder()
+        assertThat(PrivacyCatalog.descriptors.map { it.toggle }).containsAtLeastElementsIn(PrivacyCatalog.comingSoon)
+    }
+
+    @Test
     fun saveMediaToGallery_hasARealEffectNow_isWritable_andOffByDefault() {
         assertThat(PrivacyCatalog.isWritable(PrivacyToggle.SAVE_MEDIA_TO_GALLERY)).isTrue()
         assertThat(PrivacyPreferences().saveMediaToGallery).isFalse()
     }
 
     @Test
-    fun infoTopics_coverTheSixIosRows_onlyOnTheirToggle() {
+    fun infoTopics_coverTheFiveRowsWhoseNoteTeachesSomething_onlyOnTheirToggle() {
         val withInfo = PrivacyToggle.entries.filter { PrivacyCatalog.infoTopic(it) != null }
         assertThat(withInfo).containsExactly(
             PrivacyToggle.SHOW_ONLINE_STATUS,
             PrivacyToggle.NOTIFY_CONTACTS_ON_RETURN,
-            PrivacyToggle.SHOW_READ_RECEIPTS,
             PrivacyToggle.HIDE_PROFILE_FROM_SEARCH,
             PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS,
             PrivacyToggle.ALLOW_ANALYTICS,
         )
+        assertThat(PrivacyInfoTopic.entries.map { it.name }).doesNotContain("READ_RECEIPTS")
         assertThat(PrivacyCatalog.infoTopic(PrivacyToggle.ALLOW_ANALYTICS)).isEqualTo(PrivacyInfoTopic.ANALYTICS)
     }
 }

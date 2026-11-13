@@ -106,6 +106,29 @@ public object CallEffectsCompanionRule {
             tile(remote, remote.userId ?: DUO_REMOTE_TILE_ID, isLocal = false),
         )
 
+    /**
+     * L'autre d'un appel à deux, seul accompagnant de mon image (la scène est à moi), tel que le bloc le montre (iOS
+     * `effectsCompanionTiles`) : avec SON identifiant — sa
+     * couleur d'auteur, celle de ses sous-titres et de son liseré ailleurs dans l'appel (loi 4) — et SA photo quand sa
+     * caméra est coupée. Un identifiant vide vaut « inconnu », jamais une couleur.
+     */
+    public fun duoCompanions(
+        peerUserId: String?,
+        peerName: String,
+        peerAvatarUrl: String?,
+        isCameraOn: Boolean,
+        isMuted: Boolean,
+        isPeerCameraOff: Boolean,
+        isPeerMuted: Boolean,
+    ): List<GroupCallStageTile> = layout(
+        duoTiles(
+            CallEffectsDuoPeer(null, "", null, isVideoOn = isCameraOn, isMicMuted = isMuted),
+            CallEffectsDuoPeer(peerUserId.takeUnless { it.isNullOrBlank() }, peerName, peerAvatarUrl, isVideoOn = !isPeerCameraOff, isMicMuted = isPeerMuted),
+        ),
+        featuredId = null,
+        capacity = MAX_COMPANIONS,
+    ).companions
+
     private fun tile(peer: CallEffectsDuoPeer, id: String, isLocal: Boolean): GroupCallStageTile =
         GroupCallStageTile(
             id = id,

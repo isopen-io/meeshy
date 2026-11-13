@@ -16,7 +16,7 @@ struct MediaSaveRequest: Identifiable, Equatable {
     let id: UUID
     let kind: AttachmentKind
     /// Œuvre composée dans Meeshy, ou média seulement transmis — ce qui décide
-    /// de la marque (directive porteur 2026-09-12, cf. `MediaOrigin`).
+    /// de la marque (cf. `MediaOrigin`).
     ///
     /// **Sans valeur par défaut, délibérément.** Seul le point d'entrée sait sur
     /// quelle surface il se trouve ; un défaut le dispenserait de le dire et
@@ -199,7 +199,7 @@ final class MediaSaveCoordinator: ObservableObject {
     }
 
     /// **« Enregistrer » d'une image ou d'une vidéo : directement dans l'album
-    /// Meeshy, sans demander où** (#8307, directive porteur 2026-09-27). Les
+    /// Meeshy, sans demander où** (#8307). Les
     /// documents et l'audio gardent le choix de destination (Fichiers, partage).
     func save(_ request: MediaSaveRequest) {
         guard mayLeave(request.attachmentId) else { return }
@@ -249,7 +249,7 @@ final class MediaSaveCoordinator: ObservableObject {
             }
             // On marque ce que Meeshy a COMPOSÉ — story, scène de post, scène
             // de réel —, jamais ce que l'utilisateur a seulement TRANSMIS
-            // (directive porteur 2026-09-12, cf. `MeeshyMediaSaveBranding`).
+            // (cf. `MeeshyMediaSaveBranding`).
             // Quand marque il y a, elle produit TOUJOURS une copie : `localFile`
             // est très souvent le fichier du cache disque, qui doit rester la
             // copie fidèle de l'original. Un marquage impossible, comme un média

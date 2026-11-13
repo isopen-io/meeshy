@@ -4,6 +4,7 @@ import MeeshyUI
 @testable import Meeshy
 
 /// La vitrine (#8855) capture l'accueil d'un lien une fois son aperçu SERVI (#8921).
+@MainActor
 final class JoinFlowViewModelVitrineTests: XCTestCase {
     override func tearDown() {
         JoinFlowViewModel.debugOnPreviewShown = nil

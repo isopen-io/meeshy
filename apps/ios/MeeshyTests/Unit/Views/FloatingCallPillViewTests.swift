@@ -251,6 +251,20 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    /// L1.3 — même règle, deux surfaces : la bannière réduite d'un appel vidéo
+    /// n'allume pas sa sortie quand le haut-parleur est celui d'office ; elle
+    /// demande son état à `CallOutputButtonRule`, comme la pilule de l'écran.
+    func test_speakerButton_takesItsLitStateFromTheOutputRule_withTheCallKind() throws {
+        let source = AppSourceGuard.stripComments(try pillSource())
+        let body = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private var speakerButton", in: source))
+        XCTAssertEqual(body.components(separatedBy: "isOutputLit(route)").count - 1, 2, "la teinte ET le disque suivent la loi")
+        XCTAssertFalse(body.contains("callManager.isSpeaker || route.routesExternally"),
+                       "la bannière ne recompose pas l'état allumé à côté de la loi")
+        let lit = try XCTUnwrap(DeclarationBodyScanner.body(containing: "private func isOutputLit(", in: source))
+        XCTAssertTrue(lit.contains("CallOutputButtonRule.kind("))
+        XCTAssertTrue(lit.contains("isVideoCall: callManager.isVideoUIActive"))
+    }
+
     func test_pill_neverReimplementsTheRoutePickerOrTheQualitySheet() throws {
         let source = AppSourceGuard.stripComments(try pillSource())
         XCTAssertFalse(source.contains("AVRoutePickerView"),
@@ -755,7 +769,7 @@ final class CallParticipantVisualTests: XCTestCase {
     func test_circularInit_derivesSquareFrameAndHalfRadius() throws {
         let src = try source()
         XCTAssertTrue(
-            src.contains("init(diameter: CGFloat, callManager: CallManager)"),
+            src.contains("init(diameter: CGFloat, ringsInPeerColor: Bool = false, callManager: CallManager)"),
             "The circular convenience initializer must stay so existing call sites " +
             "(pill 44pt, bubble circle tier) keep compiling unchanged."
         )
@@ -789,5 +803,112 @@ final class CallParticipantVisualTests: XCTestCase {
             "The avatar fallback must size itself from the smaller dimension so it never " +
             "stretches out of its circular aspect at a rectangle PiP tier."
         )
+    }
+}
+
+// Libellés d'accessibilité de la pilule d'appel, nommés comme la planche
+// `docs/product/appels-vue-finale.md` (P1.13, P2.5, P2.6, #17417).
+
+// MARK: - CallPillLabelsTests (#17417, planche appels-vue-finale P1.13 P2.5 P2.6)
+
+@MainActor
+final class CallPillLabelsTests: XCTestCase {
+
+    private static let langues = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
+
+    private static let clesDuCatalogue = [
+        "call.control.more.show",
+        "call.control.more.hide",
+        "call.control.camera.on",
+        "call.control.camera.off",
+        "call.control.output.a11y",
+        "call.minimize",
+    ]
+
+    private static func catalogue() throws -> [String: [String: Any]] {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let url = racine.appendingPathComponent("apps/ios/Meeshy/Localizable.xcstrings")
+        let racineJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        return try XCTUnwrap(racineJSON["strings"] as? [String: [String: Any]])
+    }
+
+    private static func valeur(_ chaines: [String: [String: Any]], cle: String, langue: String) throws -> String {
+        let entree = try XCTUnwrap(chaines[cle], "clé absente du catalogue : \(cle)")
+        let localisations = try XCTUnwrap(entree["localizations"] as? [String: Any], "aucune localisation : \(cle)")
+        let loc = try XCTUnwrap(localisations[langue] as? [String: Any], "\(cle) sans \(langue)")
+        let unite = try XCTUnwrap(loc["stringUnit"] as? [String: Any], "\(cle) sans stringUnit \(langue)")
+        return try XCTUnwrap(unite["value"] as? String)
+    }
+
+    // Les tests d'exécution tournent dans la langue du simulateur (en en CI) :
+    // on compare au catalogue dans cette langue, la langue française est gardée
+    // par le test de catalogue ci-dessous.
+    func test_moreLabel_whenExpanded_isTheHideAction() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.moreLabel(isExpanded: true), try Self.valeur(chaines, cle: "call.control.more.hide", langue: "en"))
+    }
+
+    func test_moreLabel_whenCollapsed_isTheShowAction() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.moreLabel(isExpanded: false), try Self.valeur(chaines, cle: "call.control.more.show", langue: "en"))
+    }
+
+    func test_cameraLabel_whenEnabled_isTurnOff() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.cameraLabel(isEnabled: true), try Self.valeur(chaines, cle: "call.control.camera.off", langue: "en"))
+    }
+
+    func test_cameraLabel_whenDisabled_isTurnOn() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.cameraLabel(isEnabled: false), try Self.valeur(chaines, cle: "call.control.camera.on", langue: "en"))
+    }
+
+    // Le bouton Caméra autour de ma vignette est le même bouton que celui de la
+    // pilule (planche, loi 2 : « Gauche = mon image : Caméra… ») : même mot.
+    func test_myImageCameraLabel_isThePillCameraLabel() throws {
+        XCTAssertEqual(CallMyImageCopy.video(isEnabled: true, isPaused: false), CallControlsCopy.cameraLabel(isEnabled: true))
+        XCTAssertEqual(CallMyImageCopy.video(isEnabled: false, isPaused: false), CallControlsCopy.cameraLabel(isEnabled: false))
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let rail = try String(
+            contentsOf: racine.appendingPathComponent("Meeshy/Features/Call/Views/CallView+CameraRail.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(rail.contains("CallControlsCopy.cameraLabel(isEnabled:"), "le rail de ma caméra doit lire le libellé de la pilule")
+        XCTAssertFalse(rail.contains("\"call.control.videoOff\""), "« Désactiver la vidéo » n'est pas le mot de la planche")
+        XCTAssertFalse(rail.contains("\"call.control.videoOn\""), "« Activer la vidéo » n'est pas le mot de la planche")
+    }
+
+    func test_outputLabel_isTheAudioOutput() throws {
+        let chaines = try Self.catalogue()
+        XCTAssertEqual(CallControlsCopy.outputAudioLabel, try Self.valeur(chaines, cle: "call.control.output.a11y", langue: "en"))
+    }
+
+    func test_catalogue_francais_portLesMotsDeLaPlanche() throws {
+        let chaines = try Self.catalogue()
+        let attendu = [
+            "call.control.more.show": "Afficher les actions",
+            "call.control.more.hide": "Masquer les actions",
+            "call.control.camera.on": "Activer la caméra",
+            "call.control.camera.off": "Couper la caméra",
+            "call.control.output.a11y": "Sortie audio",
+            "call.minimize": "Réduire",
+        ]
+        for (cle, mot) in attendu {
+            XCTAssertEqual(try Self.valeur(chaines, cle: cle, langue: "fr"), mot, cle)
+        }
+    }
+
+    func test_catalogue_libellesDesCommandes_existentDansLesSeptLangues() throws {
+        let chaines = try Self.catalogue()
+        for cle in Self.clesDuCatalogue {
+            for langue in Self.langues {
+                XCTAssertFalse(try Self.valeur(chaines, cle: cle, langue: langue).isEmpty, "\(cle) vide en \(langue)")
+            }
+        }
     }
 }

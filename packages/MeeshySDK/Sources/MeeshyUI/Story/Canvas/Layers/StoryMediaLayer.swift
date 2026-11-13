@@ -100,7 +100,7 @@ public final class StoryMediaLayer: CALayer {
     /// `attachPlayer` appelait `play()` inconditionnellement dès que l'URL
     /// était résolue : une vidéo foreground attachée AVANT que la slide soit
     /// prête (« GO » / content-ready) démarrait donc EN AVANCE sur la vidéo de
-    /// fond + l'audio, désynchronisant le démarrage (user 2026-06-24). Le
+    /// fond + l'audio, désynchronisant le démarrage. Le
     /// canvas pose ce drapeau au content-ready, en phase avec la vidéo de fond
     /// et le mixer audio ; il est sticky pour qu'une vidéo attachée APRÈS le GO
     /// (octets arrivés plus tard) démarre immédiatement à son tour.
@@ -365,7 +365,7 @@ public final class StoryMediaLayer: CALayer {
     /// **La taille et le centre qu'un média pose dans le canvas** — la moitié
     /// géométrique de `configure`, isolée pour rester testable seule. Le
     /// mesureur qui la consommait à distance (`StorySceneFootprint`, #6636)
-    /// est parti avec la carte unique (#6904, décision porteur du 2026-09-17).
+    /// est parti avec la carte unique (#6904).
     /// Publique depuis #9495 : le composer y lit le cadre de l'objet qu'il
     /// règle, pour ranger son panneau du côté qui le laisse voir — la même
     /// géométrie que le calque peint, jamais une copie. Le recadrage change les

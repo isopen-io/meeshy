@@ -1,9 +1,9 @@
-Meeshy 1.1.3 — todo se crea en la escena
+Meeshy 1.1.8 — llamadas más bonitas, más claras, en tu idioma.
 
-• Stickers: una sola hoja, en tus chats y también en tus historias, publicaciones y reels; Mee y Meo cobran vida, y una Tienda instala o quita un pack con un toque
-• Editor: toca la herramienta Texto para crear tu escena y edita texto, imágenes, stickers y fondo directamente en ella; un pellizco agranda tu texto sin romper sus líneas
-• Tus fotos y vídeos se editan en la escena antes de enviarlos: recorta una imagen (Original, 1:1, 4:5, 9:16), acorta un vídeo, y la cámara se abre a pantalla completa
-• Barra de redacción más ligera: fototeca y cámara con un toque, e iconos con los colores de tu efecto
-• Llamadas: ve cuándo la otra persona apaga su cámara o su micro, retoma una llamada interrumpida en lugar de perderla, y una llamada en grupo sigue cuando alguien se va; en vídeo, un tono de piel natural y un suavizado ajustable
-• Un enlace de Meeshy abierto sin cuenta muestra la publicación y quién te la compartió; un reel sin texto muestra su leyenda, y editar una publicación conserva su tipo
-• Correcciones y más fluidez
+• Llamadas rediseñadas: cada botón es de cristal (Liquid Glass en iOS 26), quien habla se ilumina con su color y, en horizontal, caben hasta cuatro personas en una fila.
+• Subtítulos: cada frase indica su idioma y despliega su original con un toque. Tras la llamada, el registro se despliega bajo su burbuja en la conversación.
+• Grabación y pantalla compartida: todos ven quién lo pide y quién acepta, la grabación empieza en Audio o en Vídeo, y «Dejar de compartir» siempre está a mano.
+• Creación: pega una imagen para poner el fondo de la escena o un texto para rellenar la leyenda; el visor ofrece primero Texto, Fondo, Galería y Sticker.
+• Más sencillo en todas partes: el registro, los ajustes y el juego dicen cada cosa una sola vez, y los detalles esperan tras una (i).
+
+Y, por supuesto, correcciones y más fluidez en todas partes.

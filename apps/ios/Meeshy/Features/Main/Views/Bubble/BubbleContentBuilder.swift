@@ -69,14 +69,14 @@ extension BubbleContent {
         // `preferredLangCode` quand le message n'a AUCUNE traduction texte :
         // sans lui, le drapeau-toggle d'un vocal traduit restait inerte
         // (`preferredLangCode` nil ⇒ tap sans effet) et affichait la
-        // mauvaise face (user 2026-08-18 : le drapeau doit switcher l'audio).
+        // mauvaise face.
         preferredAudioLangCode: String? = nil,
         currentUserId: String,
         timeString: String? = nil,
         isEditSaving: Bool = false,
         hasEditHistory: Bool = false,
         recipientCount: Int = 1,
-        // 4th axis of the Prisme étendu (2026-05-26) — device locale, gated
+        // 4th axis of the Prisme étendu — device locale, gated
         // identically to `regional`/`custom` in `buildAvailableFlags` (only
         // surfaced when a translation actually exists for it). Default `nil`
         // keeps every existing call site (none of which pass this yet)
@@ -129,23 +129,7 @@ extension BubbleContent {
             ?? message.cachedTimeString
             ?? MessageRecord.computeTimeString(for: message.createdAt)
 
-        // --- Call notice (rich call-summary system message) ---
-        // When a system message carries structured call metadata, resolve the
-        // per-viewer direction now (outgoing iff the current user initiated) so
-        // the leaf view stays primitive. Absent metadata (legacy summaries) →
-        // nil, and the `.system` path falls back to the plain centered notice.
-        if message.messageSource == .system, let summary = message.callSummary {
-            self.callNotice = CallNotice(
-                summary: summary,
-                isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
-                fallbackText: message.content,
-                timeString: resolvedTimeString,
-                timestamp: message.createdAt,
-                recording: CallRecording.from(message.attachments)
-            )
-        } else {
-            self.callNotice = nil
-        }
+        self.callNotice = Self.resolveCallNotice(message: message, currentUserId: currentUserId, timeString: resolvedTimeString)
 
         // --- Avis d'arrivée ---
         // Une arrivée n'est PAS une prise de parole : sans branche dédiée elle
@@ -511,7 +495,7 @@ extension BubbleContent {
         preferredLang: String?,
         regional: String?,
         custom: String?,
-        // 4th axis of the Prisme étendu (2026-05-26) — gated identically to
+        // 4th axis of the Prisme étendu — gated identically to
         // `regional`/`custom`: only surfaced when a translation (text or
         // audio) actually exists for it. Never supplants the first 3 axes.
         deviceLocale: String? = nil,
@@ -607,5 +591,22 @@ extension BubbleContent {
             return .notEmojiOnly
         }
         return EmojiDetector.analyze(message.content)
+    }
+
+    /// Call notice (rich call-summary system message). When a system message carries structured call
+    /// metadata, resolve the per-viewer direction now (outgoing iff the current user initiated) so the leaf
+    /// view stays primitive. Absent metadata (legacy summaries) → nil, and the `.system` path falls back to
+    /// the plain centered notice.
+    static func resolveCallNotice(message: MeeshyMessage, currentUserId: String, timeString: String) -> CallNotice? {
+        guard message.messageSource == .system, let summary = message.callSummary else { return nil }
+        return CallNotice(
+            summary: summary,
+            isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
+            viewerId: currentUserId,
+            fallbackText: message.content,
+            timeString: timeString,
+            timestamp: message.createdAt,
+            recording: CallRecording.from(message.attachments)
+        )
     }
 }
