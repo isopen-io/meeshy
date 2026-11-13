@@ -840,3 +840,20 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gel de la CI des branches de lot (#18048, `CI_DEV_SEUL`) : les runs Swift dispatchés sur la branche ont été annulés
   sans runner. `origin/dev` refusionnée à la main (journal seul), la preuve Swift du lot est la CI de `dev` qui suit la
   fusion, comme le demande la consigne du porteur.
+
+## 2026-11-13 — réveil 27 : deux collègues de l'équipe consentent entre eux sans lien, et le consentement tombe avec le rôle (#16642, #16814)
+
+- Reprise : sept réveils parallèles écrivent `together/`, `sharedLocation/`, la carte web et iOS, les réglages Bring.
+  Aucun n'écrit `routes/relations/settings.ts` ni `relationConsent.ts` : lot réservé sur
+  `claude/cercles-16642-consentement-equipe`. Le travail de #16642, écrit et revu le 2026-11-08 sur
+  `claude/cercles-16642-serveur` sans jamais être proposé, est repris par cherry-pick sur `dev` (trois commits),
+  et #16814 (sa suite de sécurité) s'y ajoute.
+- Lot : PR #17984 vers `dev`. #16642 repris et mis à jour pour la décision du 2026-11-10 (ANALYST et AUDIT
+  consentent comme l'équipe). #16814 : `updateRole`, `updateStatus` (désactivation, bannissement) et `deleteUser`
+  appellent `revokeTeamSharesOf`, qui éteint dans les deux sens ce que le lien réel n'ouvre pas (rituel hors Sang,
+  catégorie d'écoute sous Proche), daté chez chaque émetteur, puis efface l'écoute chez le lecteur qui la voyait.
+- Revue adversariale : un constat à corriger (l'écoute restait affichée 15 min chez l'ex-collègue), corrigé dans le
+  lot avec son témoin rouge ; le reste en suivi #17991 (chemins d'auto-suppression, provenance, dates, concurrence).
+- Gates locaux : 155 suites voisines, 2 857/2 857 vertes ; `tsc` passerelle vert ; contrats shared verts. La CI de PR
+  étant gelée, `ci.yml` est dispatché sur la tête de branche.
+- Prochain lot recommandé : #17991, ou un client pour accorder l'écoute et la position entre collègues (#16864).
