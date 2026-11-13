@@ -466,3 +466,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil 25 : mener #16987 (partage de position : comptes qui partent, ligne de maille, course) à la fusion
+
+- Reprise : #17956 (carte des positions sur le web, #16984) et `claude/cercles-ensemble-conversation-close` (#17147)
+  sont menées par des réveils actifs (poussées dans la dernière demi-heure) ; `claude/cercles-16588-web` aussi. Ce réveil
+  ne les touche pas.
+- Trouvé : la branche `claude/cercles-16987-serveur`, écrite et contre-auditée deux fois le 2026-11-08 (voir #16987),
+  n'avait jamais été proposée et n'avait plus de réveil depuis quatre jours. Ce réveil la reprend.
+- `origin/dev` fusionnée à la main : un conflit dans `AccountPurgeService.ts`, les deux côtés gardés (dev efface les
+  relais externes ouverts par le compte, la branche arrête son partage de position), l'arrêt placé en dernier pour ne
+  pas décaler la déstructuration du résumé de purge.
+- Gates locaux : `tsc --noEmit` passerelle (8 Go de tas) et shared verts ; témoins passerelle du lot et voisins
+  (sharedLocation, rituel, blocage, purge, administration, suppression de compte, maintenance, relations, balayages,
+  gardes et cliquets) 1 689/1 689 ; shared (`shared-location`, `relation-access`) 252/252.
+- Contre-audit adversarial des dernières corrections (b5837a213c, fede6d4463) relancé avant la fusion.
