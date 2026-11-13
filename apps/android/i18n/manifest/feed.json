@@ -559,10 +559,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "status_composer_placeholder",
-          "status": "android-only"
-        },
-        {
           "androidName": "status_composer_emoji_too_long",
           "status": "android-only"
         },

@@ -35,7 +35,6 @@
     </plurals>
     <!-- Mood status bar (Prisme: PT) -->
     <string name="status_composer_republishing">Republicando @%1$s</string>
-    <string name="status_composer_placeholder">Como você está?</string>
     <string name="status_composer_mood_label">Humor %1$s</string>
     <string name="feed_composer_open_placeholder">Compartilhe algo…</string>
     <string name="feed_composer_attach_media">Adicionar foto ou vídeo</string>

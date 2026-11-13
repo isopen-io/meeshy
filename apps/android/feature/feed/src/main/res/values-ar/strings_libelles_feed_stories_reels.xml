@@ -30,7 +30,6 @@
     <string name="post_comments_reply_hint">أضف ردًا…</string>
     <string name="post_comments_hide_replies">إخفاء الردود</string>
     <string name="status_composer_republishing">إعادة نشر @%1$s</string>
-    <string name="status_composer_placeholder">كيف حالك؟</string>
     <string name="status_composer_mood_label">المزاج %1$s</string>
     <string name="feed_composer_open_placeholder">شارك شيئًا…</string>
     <string name="feed_composer_attach_media">إضافة صورة أو فيديو</string>

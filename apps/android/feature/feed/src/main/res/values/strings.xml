@@ -34,7 +34,6 @@
         <item quantity="other">View all %1$d replies</item>
     </plurals>
     <string name="status_composer_republishing">Republishing @%1$s</string>
-    <string name="status_composer_placeholder">How are you doing?</string>
     <string name="status_composer_mood_label">Mood %1$s</string>
     <string name="feed_composer_open_placeholder">Share something…</string>
     <string name="feed_composer_attach_media">Add photo or video</string>

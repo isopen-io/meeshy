@@ -74,13 +74,13 @@ internal fun FeedErrorState(onRetry: () -> Unit, modifier: Modifier = Modifier) 
     )
 }
 
-/** Hors ligne, rien de gardé : un seul état, qui dit pourquoi le fil est vide et quand il se remplira (#14263). */
+/** Hors ligne, rien de gardé : une seule ligne, qui dit quand le fil se remplira (le bandeau dit déjà « Hors ligne ») (#14263). */
 @Composable
 internal fun FeedOfflineEmptyState(onRetry: () -> Unit, modifier: Modifier = Modifier) {
     FeedStatePane(
         icon = { Icon(Icons.Outlined.WifiOff, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary, modifier = Modifier.size(48.dp)) },
-        title = stringResource(R.string.feed_offline_empty_title),
-        subtitle = stringResource(R.string.feed_offline_empty_detail),
+        title = stringResource(R.string.feed_offline_empty_detail),
+        subtitle = null,
         action = {
             OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.feed_retry)) }
         },

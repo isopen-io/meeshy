@@ -429,7 +429,7 @@ private fun TextInput(
             value = field.value,
             onValueChange = field.onValueChange,
             modifier = Modifier.fillMaxWidth().then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
-            placeholder = { Text(stringResource(R.string.status_composer_placeholder)) },
+            placeholder = { Text(stringResource(R.string.status_composer_bare_add)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         )

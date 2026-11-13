@@ -13,7 +13,7 @@
     <string name="story_place_search">Rechercher un lieu</string>
     <string name="story_place_around">Autour de moi</string>
     <string name="story_place_here">Ma position</string>
-    <string name="story_place_denied">Meeshy n\'a pas accès à votre position : aucun lieu alentour n\'est proposé. Vous pouvez chercher un lieu par son nom.</string>
+    <string name="story_place_denied">Position désactivée. Cherchez un lieu par son nom.</string>
     <string name="story_place_pastille_a11y">Lieu : %1$s</string>
     <string name="story_references_with">Avec %1$s</string>
     <string name="story_mention_already">Déjà référencées</string>

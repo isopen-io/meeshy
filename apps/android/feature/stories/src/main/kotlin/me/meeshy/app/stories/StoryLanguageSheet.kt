@@ -161,8 +161,10 @@ internal fun OriginalRow(selected: Boolean, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
         Icon(imageVector = MeeshyIcons.Quote, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
-        Text(text = label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = if (selected) accent else MeeshyTheme.tokens.textPrimary, modifier = Modifier.weight(1f))
-        Text(text = stringResource(R.string.story_language_original_hint), style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 150.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = if (selected) accent else MeeshyTheme.tokens.textPrimary)
+            Text(text = stringResource(R.string.story_language_original_hint), style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textMuted)
+        }
         if (selected) Icon(imageVector = MeeshyIcons.CheckCircleFilled, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
     }
 }

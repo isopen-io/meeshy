@@ -30,7 +30,6 @@
     <string name="post_comments_reply_hint">Aggiungi una risposta…</string>
     <string name="post_comments_hide_replies">Nascondi risposte</string>
     <string name="status_composer_republishing">Ripubblicazione di @%1$s</string>
-    <string name="status_composer_placeholder">Come va?</string>
     <string name="status_composer_mood_label">Umore %1$s</string>
     <string name="feed_composer_open_placeholder">Condividi qualcosa…</string>
     <string name="feed_composer_attach_media">Aggiungi foto o video</string>

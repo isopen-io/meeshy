@@ -13,7 +13,7 @@
     <string name="story_place_search">Ort suchen</string>
     <string name="story_place_around">In meiner Nähe</string>
     <string name="story_place_here">Mein Standort</string>
-    <string name="story_place_denied">Meeshy hat keinen Zugriff auf deinen Standort: Es werden keine Orte in der Nähe vorgeschlagen. Du kannst einen Ort nach Namen suchen.</string>
+    <string name="story_place_denied">Standort deaktiviert. Suche einen Ort nach Namen.</string>
     <string name="story_place_pastille_a11y">Ort: %1$s</string>
     <string name="story_references_with">Mit %1$s</string>
     <string name="story_mention_already">Bereits erwähnt</string>
