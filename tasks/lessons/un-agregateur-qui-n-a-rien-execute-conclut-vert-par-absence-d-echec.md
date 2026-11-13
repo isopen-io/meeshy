@@ -1,4 +1,4 @@
-# Un agrégateur qui n'a rien exécuté conclut VERT par absence d'échec
+## Un agrégateur qui n'a rien exécuté conclut VERT par absence d'échec
 
 *2026-11-13, cycle 153. Trouvé en vérifiant pourquoi un `check_suite.completed`
 annonçait un succès sur une PR dont je savais les dix-sept jobs sautés.*
