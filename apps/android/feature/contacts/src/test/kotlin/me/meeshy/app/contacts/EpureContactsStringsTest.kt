@@ -36,6 +36,7 @@ class EpureContactsStringsTest {
     private fun specifiers(text: String) = Regex("""%(\d+)\$[sd]""").findAll(text).map { it.value }.sorted().toList()
 
     private val removed = listOf(
+        "contacts_requests_received_intent",
         "contacts_requests_empty_received_subtitle",
         "contacts_requests_empty_sent_subtitle",
         "circles_empty_title",
@@ -94,6 +95,19 @@ class EpureContactsStringsTest {
             if (folder != "values-fr") {
                 assertWithMessage("copies du français dans $folder").that(local.filter { (key, text) -> text == french[key] }.keys).isEmpty()
             }
+        }
+    }
+
+    @Test
+    fun `the blood ritual says once that the other let go`() {
+        val expected = mapOf(
+            "values-fr" to "L'autre a lâché. Rien n'a changé.",
+            "values" to "The other let go. Nothing changed.",
+        )
+        expected.forEach { (folder, text) -> assertThat(all(folder)["circles_ritual_lapsed"]).isEqualTo(text) }
+        val fr = all("values-fr")["circles_ritual_lapsed"].orEmpty()
+        folders.filter { it != "values-fr" }.forEach {
+            assertWithMessage("traduit, jamais copié du français : $it").that(all(it)["circles_ritual_lapsed"]).isNotEqualTo(fr)
         }
     }
 }

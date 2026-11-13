@@ -28,11 +28,11 @@
       "labels": 118,
       "words": 313,
       "long": 2,
-      "explanations": 26
+      "explanations": 25
     },
     "android:feature/contacts": {
-      "labels": 144,
-      "words": 706,
+      "labels": 143,
+      "words": 697,
       "long": 10,
       "explanations": 8
     },
@@ -55,10 +55,10 @@
       "explanations": 116
     },
     "android:feature/notifications": {
-      "labels": 63,
-      "words": 157,
+      "labels": 62,
+      "words": 152,
       "long": 0,
-      "explanations": 8
+      "explanations": 7
     },
     "android:feature/profile": {
       "labels": 172,

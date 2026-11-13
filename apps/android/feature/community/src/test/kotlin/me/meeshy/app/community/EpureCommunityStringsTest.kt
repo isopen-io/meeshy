@@ -28,6 +28,9 @@ class EpureCommunityStringsTest {
         }.toMap()
 
     private val removed = listOf(
+        "community_add_channel_empty_hint",
+        "community_load_network_body",
+        "community_load_server_body",
         "community_list_empty_subtitle",
         "community_detail_channels_empty_subtitle",
         "community_detail_posts_empty_subtitle",
@@ -54,5 +57,26 @@ class EpureCommunityStringsTest {
         assertThat(fr["community_members_empty_action"]).isNotEmpty()
         assertThat(fr["community_detail_channels_empty_action"]).isNotEmpty()
         assertThat(fr["community_settings_error_default"]).isEqualTo("Une erreur s'est produite")
+    }
+
+    @Test
+    fun `a failed load says the cause in its title and the retry is the button`() {
+        val fr = all("values-fr")
+        assertThat(fr["community_load_network_title"]).isNotEmpty()
+        assertThat(fr["community_load_server_title"]).isNotEmpty()
+        assertThat(fr["community_load_refused_body"]).isNotEmpty()
+        assertThat(fr["community_common_retry"]).isNotEmpty()
+    }
+
+    @Test
+    fun `the role labels stay for the role menu`() {
+        val fr = all("values-fr")
+        listOf("community_role_creator", "community_role_admin", "community_role_moderator", "community_role_member")
+            .forEach { assertThat(fr[it]).isNotEmpty() }
+    }
+
+    @Test
+    fun `the add-channel empty list keeps its one line`() {
+        assertThat(all("values-fr")["community_add_channel_empty_no_conversations"]).isEqualTo("Aucune conversation disponible")
     }
 }

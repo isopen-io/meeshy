@@ -28,6 +28,7 @@ class EpureNotificationsStringsTest {
         }.toMap()
 
     private val removed = listOf(
+        "notifications_error_subtitle",
         "notifications_empty_subtitle",
         "notifications_empty_category",
     )
@@ -46,5 +47,12 @@ class EpureNotificationsStringsTest {
         listOf("notifications_empty", "notifications_empty_unread", "notifications_empty_messages", "notifications_empty_calls").forEach {
             assertThat(fr[it]).isNotEmpty()
         }
+    }
+
+    @Test
+    fun `the load failure keeps its title and its retry`() {
+        val fr = all("values-fr")
+        assertThat(fr["notifications_error_title"]).isNotEmpty()
+        assertThat(fr["notifications_error_retry"]).isNotEmpty()
     }
 }
