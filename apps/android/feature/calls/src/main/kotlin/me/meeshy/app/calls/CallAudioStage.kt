@@ -1,10 +1,12 @@
 package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -180,4 +183,20 @@ internal fun CallStatusPill(icon: ImageVector, text: String, color: Color) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(12.dp))
         Text(text = text, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, color = color)
     }
+}
+
+/**
+ * #17945 (B), loi 11 — le fond derrière l'avatar d'un duo audio : un toucher y range l'en-tête, la pilule et le journal
+ * (l'avatar regrandit à 120 dp, [CallAudioStageLayout]), un nouveau toucher les rend. Posé SOUS la colonne de l'appel,
+ * comme le toucher de la scène vidéo : un bouton touché répond toujours, seul l'espace libre arrive ici. Muet pour
+ * TalkBack, qui ne range jamais les contrôles (l'écran ne le pose alors pas).
+ */
+@Composable
+internal fun CallAudioSceneTapTarget(onTap: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .fillMaxSize()
+            .pointerInput(onTap) { detectTapGestures(onTap = { onTap() }) }
+            .clearAndSetSemantics { },
+    )
 }

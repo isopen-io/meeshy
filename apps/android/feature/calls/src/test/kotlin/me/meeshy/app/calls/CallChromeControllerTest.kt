@@ -183,4 +183,13 @@ class CallChromeControllerTest {
         assertThat(callIsVideoStage(connected(video = true, cameraOn = false))).isTrue()
         assertThat(callIsVideoStage(connected(video = false, cameraOn = false))).isFalse()
     }
+
+    @Test
+    fun `law 11 (#17945) a duo audio call in progress is a tap stage, a group with no camera on is not`() {
+        val audio = connected(video = false, cameraOn = false)
+        assertThat(callIsTapStage(audio)).isTrue()
+        assertThat(callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 0))).isFalse()
+        assertThat(callIsTapStage(audio, CallGroupVideoStage(remoteCamerasOn = 1))).isTrue()
+        assertThat(callIsTapStage(connected(video = true, cameraOn = false))).isTrue()
+    }
 }
