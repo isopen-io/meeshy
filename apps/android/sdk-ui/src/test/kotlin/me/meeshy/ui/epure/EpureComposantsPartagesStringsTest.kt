@@ -153,4 +153,49 @@ class EpureComposantsPartagesStringsTest {
             assertThat(text(language, "bring_explain")).doesNotContain("iPhone")
         }
     }
+
+    private val stickerHints = listOf("sticker_sheet_intent_humour_noir_hint", "sticker_sheet_intent_quotidien_hint", "sticker_sheet_intent_bonjour_hint")
+
+    @Test
+    fun `les trois pages de stickers les plus bavardes tiennent en une courte phrase`() {
+        assertThat(text("fr", "sticker_sheet_intent_humour_noir_hint")).isEqualTo("Pour rire de tout, même du pire")
+        assertThat(text("fr", "sticker_sheet_intent_quotidien_hint")).isEqualTo("Pour dire ce qu’on fait : café, repas, travail, route")
+        assertThat(text("fr", "sticker_sheet_intent_bonjour_hint")).isEqualTo("Pour saluer, remercier, s’excuser")
+        stickerHints.forEach { key ->
+            folders.keys.forEach { language ->
+                val value = text(language, key)
+                assertWithMessage("$language/$key trop long").that(value.length).isAtMost(75)
+                if (language != "fr" && language != "en") {
+                    assertWithMessage("$language/$key copié du français").that(value).isNotEqualTo(text("fr", key))
+                    assertWithMessage("$language/$key copié de l'anglais").that(value).isNotEqualTo(text("en", key))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `les autres lignes d'intention gardent leur repere`() {
+        listOf("amour", "fete", "soutien", "rale", "coup_de_mou", "surprise").forEach { name ->
+            folders.keys.forEach { language ->
+                assertWithMessage("$language/$name").that(text(language, "sticker_sheet_intent_${name}_hint")).isNotEmpty()
+            }
+        }
+    }
+
+    @Test
+    fun `le nom accessible du i est toujours la question, le repli En savoir plus a disparu des sept langues`() {
+        folders.keys.forEach { language ->
+            assertWithMessage("$language/settings_info_button_label").that(byLanguage.getValue(language).containsKey("settings_info_button_label")).isFalse()
+        }
+    }
+
+    @Test
+    fun `le mode Bulles n'a plus de sous-titre qui repete son titre, les autres modes gardent leur phrase`() {
+        folders.keys.forEach { language ->
+            assertWithMessage("$language/bubbles").that(byLanguage.getValue(language).containsKey("reading_mode_bubbles_subtitle")).isFalse()
+            listOf("focal", "script", "summary", "river").forEach { mode ->
+                assertWithMessage("$language/$mode").that(text(language, "reading_mode_${mode}_subtitle")).isNotEmpty()
+            }
+        }
+    }
 }
