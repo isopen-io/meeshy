@@ -4,6 +4,7 @@ import { decodeAck, decodeInitiated, decodeSessionMembers, decodeSignal, mapServ
 import type { Attachment } from '@/lib/api/types';
 
 import { callNoticeTarget } from './call-notice';
+import { formatCallJournalClock } from './call-journal-clock';
 import { formatCallClock, meshPhase, type CallMember } from './call-store';
 import { bindCallTransport, listenCallEvents, resetCallTransportForTests, setCallEngineWake } from './call-transport';
 import { callLayout, callStatusKey, canRetry, gridColumns, membersInArrival, orderedMembers, statusPills, visibleStatusPills } from './call-view';
@@ -126,6 +127,9 @@ describe('ce que l’écran dit', () => {
   test('horloge d’appel et phase du maillage', () => {
     expect(formatCallClock(65)).toBe('1:05');
     expect(formatCallClock(3_725)).toBe('1:02:05');
+    expect(formatCallJournalClock(4)).toBe('00:04');
+    expect(formatCallJournalClock(65)).toBe('01:05');
+    expect(formatCallJournalClock(3_725)).toBe('1:02:05');
     expect(meshPhase({})).toBeNull();
     expect(meshPhase({ a: member(), b: member({ link: 'reconnecting' }) })).toBe('connected');
     expect(meshPhase({ a: member({ link: 'reconnecting' }) })).toBe('reconnecting');
@@ -162,11 +166,20 @@ describe('la bulle d’appel', () => {
     expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'join' } })).toBeNull();
   });
 
-  test('seul un appel TERMINÉ, identifié et qui a DURÉ offre sa transcription (#8048)', () => {
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', durationSeconds: 272 } })?.transcript).toBe(true);
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', callId: 'k', durationSeconds: 0 } })?.transcript).toBe(false);
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', durationSeconds: 60 } })?.transcript).toBe(false);
-    expect(callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call-live', callId: 'k', durationSeconds: 60 } })?.transcript).toBe(false);
+  test('seul un appel ABOUTI (completed), identifié et qui a DURÉ offre sa transcription (#8048, #17878 A1.1)', () => {
+    const offered = (metadata: Record<string, unknown>) => callNoticeTarget({ conversationId: 'c', metadata })?.transcript;
+    expect(offered({ kind: 'call', outcome: 'completed', callId: 'k', durationSeconds: 272 })).toBe(true);
+    expect(offered({ kind: 'call', outcome: 'completed', callId: 'k', durationSeconds: 0 })).toBe(false);
+    expect(offered({ kind: 'call', outcome: 'completed', durationSeconds: 60 })).toBe(false);
+    expect(offered({ kind: 'call-live', outcome: 'completed', callId: 'k', durationSeconds: 60 })).toBe(false);
+  });
+
+  test('un appel connecté puis interrompu (failed, avec sa durée), manqué ou refusé n’offre pas la transcription (#17878 A1.1)', () => {
+    const offered = (outcome: unknown) => callNoticeTarget({ conversationId: 'c', metadata: { kind: 'call', outcome, callId: 'k', durationSeconds: 90 } })?.transcript;
+    expect(offered('failed')).toBe(false);
+    expect(offered('missed')).toBe(false);
+    expect(offered('rejected')).toBe(false);
+    expect(offered(undefined)).toBe(false);
   });
 
   test('l’enregistrement consenti rattaché à la bulle se réécoute depuis le fil (#8064)', () => {

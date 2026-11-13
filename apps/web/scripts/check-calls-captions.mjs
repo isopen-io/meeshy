@@ -416,7 +416,9 @@ try {
       const open = page.locator(BUBBLE_TOGGLE);
       await open.scrollIntoViewIfNeeded();
       const openSize = await tapSize(open);
-      check(openSize.ok, `${label} : « Transcription » fait au moins ${TAP_FLOOR} (${JSON.stringify(openSize.size)})`);
+      check(openSize.ok, `${label} : « Afficher la transcription » fait au moins ${TAP_FLOOR} (${JSON.stringify(openSize.size)})`);
+      check((await open.textContent()) === 'Afficher la transcription', `${label} : la bascule replié dit « Afficher la transcription » (${JSON.stringify(await open.textContent())})`);
+      check((await page.$('[data-message="st-call"] [data-call-card] [data-call-transcript-toggle]')) !== null, `${label} : la bascule vit DANS la carte de l'appel`);
       check((await open.getAttribute('aria-expanded')) === 'false', `${label} : repliée par défaut`);
       await open.click();
       check(await appears(page, '[data-call-transcript="lines"]'), `${label} : la transcription gravée se déplie`);
@@ -431,10 +433,15 @@ try {
           ]),
         `${label} : le pair traduit par le Prisme, le lecteur tel quel, l'original quand rien ne sert (${JSON.stringify(transcript)})`,
       );
+      const unfolded = await page.$$eval('[data-call-transcript-line] [data-call-transcript-original-line]', (rows) => rows.map((row) => row.textContent ?? ''));
+      check(unfolded.length === 1 && unfolded[0] === 'Original · Hi, can you hear me?', `${label} : sous la phrase traduite, « Original · … » (${JSON.stringify(unfolded)})`);
       await capture(page, `transcription-${width}x${height}`);
       await page.click('[data-call-transcript-original]');
       const originals = await page.$$eval('[data-call-transcript-line] [dir="auto"]', (lines) => lines.map((line) => line.textContent ?? ''));
       check(originals[0] === 'Hi, can you hear me?', `${label} : « Voir l'original » rend ce qui a été dit (${JSON.stringify(originals[0])})`);
+      await open.click();
+      check(await vanishes(page, '[data-call-journal-fold]'), `${label} : replier le journal le retire, après son fondu`);
+      check((await open.getAttribute('aria-expanded')) === 'false', `${label} : le bouton dit qu'il est replié`);
 
       // ------------------------------------------------ 6 bis. la transcription dans la fiche d'un appel fini (#8579)
       await page.goto(`${BASE}/call/call-kwame-video`, { waitUntil: 'load' });

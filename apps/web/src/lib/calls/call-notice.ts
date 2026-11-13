@@ -16,7 +16,7 @@ export type CallNoticeTarget = {
   readonly callId: string | null;
   readonly media: CallMedia;
   readonly live: boolean;
-  /** Un appel TERMINÉ, identifié et qui a duré : sa transcription gravée peut se relire (#8048). */
+  /** Un appel ABOUTI (`completed`), identifié et qui a duré : sa transcription gravée peut se relire (#8048). Interrompu, manqué ou refusé : rien (iOS `BubbleCallJournalOffer`, Android `FocalCallJournalOffer`, #17878 A1.1). */
   readonly transcript: boolean;
   /** L'enregistrement consenti par tous et rattaché à la bulle d'un appel TERMINÉ (#8064) : il se réécoute (ou se revoit, #8437) ici. */
   readonly recording: CallNoticeRecording | null;
@@ -40,7 +40,7 @@ export function callNoticeTarget(message: CallNoticeSource): CallNoticeTarget | 
     callId,
     media: metadata.callType === 'video' ? 'video' : 'audio',
     live: metadata.kind === 'call-live',
-    transcript: metadata.kind === 'call' && callId !== null && typeof metadata.durationSeconds === 'number' && metadata.durationSeconds > 0,
+    transcript: metadata.kind === 'call' && metadata.outcome === 'completed' && callId !== null && typeof metadata.durationSeconds === 'number' && metadata.durationSeconds > 0,
     recording: metadata.kind === 'call' ? recordingOf(message) : null,
   };
 }
