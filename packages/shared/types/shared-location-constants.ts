@@ -32,6 +32,15 @@ export const SHARED_LOCATION_EXACT_MIN_RADIUS_METERS = 10;
 
 export const SHARED_LOCATION_RECIPIENTS_MAX = 50;
 
+/**
+ * Le cercle d'où vient la personne, tel que la loi d'accès vient de le juger pour CE
+ * lecteur (#17013, #17966) : le marqueur de la carte en tire son icône et sa couleur,
+ * et aucun client ne le recalcule. Un partage temporaire s'ouvre dès Ami, donc rien
+ * en dessous ; un cercle absent (serveur antérieur) se dessine en marqueur neutre.
+ */
+export const SHARED_LOCATION_CIRCLES = ['FRIEND', 'CLOSE', 'BLOOD'] as const;
+export type SharedLocationCircle = (typeof SHARED_LOCATION_CIRCLES)[number];
+
 export const SHARED_LOCATION_ERROR_CODES = {
   /** Charge illisible (coordonnées hors bornes, durée inconnue, destinataire en double, champ en trop). */
   INVALID: 'SHARED_LOCATION_INVALID',

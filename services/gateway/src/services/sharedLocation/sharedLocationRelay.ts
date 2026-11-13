@@ -10,7 +10,9 @@
  * son terme. Sinon rien ne part, pas même un effacement : il trahirait un partage.
  *
  * Le niveau, le blocage et l'âge passent par `pairAccessAmong` (site unique de la loi),
- * relus à CHAQUE émission, jamais mis en cache. Chaque émission vise la room
+ * relus à CHAQUE émission, jamais mis en cache. Le cercle servi (#17966) est le niveau
+ * EFFECTIF de ce même verdict : le lecteur apprend de quel cercle vient l'émetteur pour
+ * LUI (ce que `GET /relations/:userId` lui dit déjà), jamais rien de la loi d'un autre. Chaque émission vise la room
  * `user:<destinataire>` avec SA charge.
  *
  * Le partage DANS une conversation (`LocationHandler`, `location:live-*`) est un autre
@@ -23,6 +25,7 @@
  */
 import {
   SHARED_LOCATION_BLUR_RADIUS_METERS,
+  SHARED_LOCATION_CIRCLES,
   SHARED_LOCATION_DEFAULT_PRECISION,
   SHARED_LOCATION_ERROR_CODES,
   SHARED_LOCATION_EXACT_MIN_RADIUS_METERS,
@@ -31,12 +34,14 @@ import {
   sharedLocationUpdatePayloadSchema,
   type SharedLocationAck,
   type SharedLocationChangedEventData,
+  type SharedLocationCircle,
   type SharedLocationErrorCode,
   type SharedLocationPrecision,
   type SharedLocationSnapshot,
   type SharedLocationStopAck,
 } from '@meeshy/shared/types/shared-location';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { RelationLevel } from '@meeshy/shared/types/relation';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
@@ -71,7 +76,20 @@ export type SharedLocationRelayDeps = {
   readonly now: () => number;
 };
 
-export type SharedLocationReaderAccess = 'none' | SharedLocationPrecision;
+/**
+ * Ce qu'UN lecteur reçoit du partage : rien, ou la précision que l'émetteur lui a donnée
+ * et le cercle que la loi vient de juger entre eux. Les deux se comparent ensemble : un
+ * cercle qui change à précision égale se ressert.
+ */
+export type SharedLocationReaderAccess =
+  | 'none'
+  | { readonly precision: SharedLocationPrecision; readonly circle: SharedLocationCircle | null };
+
+const circleOf = (level: RelationLevel | undefined): SharedLocationCircle | null =>
+  SHARED_LOCATION_CIRCLES.find((circle) => circle === level) ?? null;
+
+const sameAccess = (a: SharedLocationReaderAccess, b: SharedLocationReaderAccess): boolean =>
+  a === 'none' || b === 'none' ? a === b : a.precision === b.precision && a.circle === b.circle;
 
 export type SharedLocationBbox = {
   readonly minLongitude: number;
@@ -90,26 +108,26 @@ const round = (value: number): number => Math.round(value * DECIMALS) / DECIMALS
 const snap = (value: number, step: number, bound: number): number =>
   round(Math.min(bound, Math.max(-bound, (Math.floor(value / step) + 0.5) * step)));
 
-/** La projection d'UN destinataire : la position à sa précision, le rayon de son flou, rien d'autre. */
+/** La projection d'UN destinataire : la position à sa précision, le rayon de son flou, son cercle, rien d'autre. */
 export function projectSharedLocation(
   userId: string,
   state: Pick<SharedLocationState, 'position' | 'updatedAt' | 'expiresAt'>,
   access: SharedLocationReaderAccess,
 ): SharedLocationChangedEventData | null {
   if (access === 'none') return null;
-  const times = { updatedAt: state.updatedAt, expiresAt: state.expiresAt };
-  if (access === 'exact') {
+  const tail = { ...(access.circle ? { circle: access.circle } : {}), updatedAt: state.updatedAt, expiresAt: state.expiresAt };
+  if (access.precision === 'exact') {
     const radiusMeters = Math.max(SHARED_LOCATION_EXACT_MIN_RADIUS_METERS, Math.round(state.position.accuracy ?? 0));
-    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...times };
+    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...tail };
   }
-  const step = SHARED_LOCATION_GRID_DEGREES[access];
+  const step = SHARED_LOCATION_GRID_DEGREES[access.precision];
   return {
     userId,
     latitude: snap(state.position.latitude, step, 90),
     longitude: snap(state.position.longitude, step, 180),
-    precision: access,
-    radiusMeters: SHARED_LOCATION_BLUR_RADIUS_METERS[access],
-    ...times,
+    precision: access.precision,
+    radiusMeters: SHARED_LOCATION_BLUR_RADIUS_METERS[access.precision],
+    ...tail,
   };
 }
 
@@ -144,9 +162,11 @@ async function accessOf(
     usableAccounts(deps.prisma, [emitterId, ...candidates]),
   ]);
   return new Map(
-    readerIds.map((id) => {
-      const opened = usable.has(emitterId) && usable.has(id) && law.get(id)?.allowed === true;
-      return [id, opened ? (chosen.get(id.toLowerCase()) ?? 'none') : 'none'];
+    readerIds.map((id): [string, SharedLocationReaderAccess] => {
+      const verdict = law.get(id);
+      const precision = chosen.get(id.toLowerCase());
+      const opened = usable.has(emitterId) && usable.has(id) && verdict?.allowed === true && precision !== undefined;
+      return [id, opened ? { precision, circle: circleOf(verdict.effectiveLevel) } : 'none'];
     }),
   );
 }
@@ -172,7 +192,13 @@ const UNAVAILABLE = failed(SHARED_LOCATION_ERROR_CODES.UNAVAILABLE, 'Position mo
 const recipientIdsOf = (state: SharedLocationState | null): readonly string[] => state?.recipients.map((recipient) => recipient.userId) ?? [];
 
 const sameServed = (a: SharedLocationChangedEventData | null, b: SharedLocationChangedEventData | null): boolean =>
-  a !== null && b !== null && a.latitude === b.latitude && a.longitude === b.longitude && a.precision === b.precision && a.radiusMeters === b.radiusMeters;
+  a !== null &&
+  b !== null &&
+  a.latitude === b.latitude &&
+  a.longitude === b.longitude &&
+  a.precision === b.precision &&
+  a.radiusMeters === b.radiusMeters &&
+  a.circle === b.circle;
 
 /**
  * Sert la projection de `state` à chaque destinataire ouvert ; rend l'accès de chacun et
@@ -356,7 +382,7 @@ export async function captureSharedLocationAccess(
 /**
  * Rejoue la projection d'une paire dans les DEUX sens après un changement de lien ou de
  * blocage. `changed` part vers un destinataire dont l'accès est ouvert et a changé depuis
- * `before` ; `ended` vers un destinataire qui ne voit plus rien et que la session a SERVI
+ * `before` — sa précision OU son cercle ; `ended` vers un destinataire qui ne voit plus rien et que la session a SERVI
  * — lui seul : à qui n'a jamais vu, la fin trahirait un partage. Une session remplacée ou
  * arrêtée pendant le rejeu est réconciliée, comme un geste qui a perdu la course.
  */
@@ -371,7 +397,7 @@ export async function refreshSharedLocationBetween(
     const after = (await accessOf(deps, emitterId, state, [readerId])).get(readerId) ?? 'none';
     const before = params.before?.get(directionKey(emitterId, readerId)) ?? 'none';
     const served = projectSharedLocation(emitterId, state, after);
-    if (served && after !== before) {
+    if (served && !sameAccess(after, before)) {
       await markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now);
       serve(deps.io, readerId, served);
     }
