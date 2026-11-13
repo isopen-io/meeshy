@@ -479,6 +479,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Trouvé en chemin : `dev` tenait à 0,02 Ko du plafond de la première peinture (97,01 Ko en local, 96,98 en CI) ; la
   route neuve le portait à 97,10. Plafond relevé à 98 avec son relevé daté (`budgets.json`), selon la procédure des lots
   précédents — à confirmer par le porteur.
-- PR #17956 vers `dev`.
+- PR #17956 vers `dev`. CI complète (`ci.yml` en `workflow_dispatch`, run 43432690919) : tout est vert sauf la tranche
+  2/3 de la passerelle (et donc la couverture fusionnée et le Verdict), rouge sur `dev` du même témoin
+  (`CallEventsHandler.test.ts` 4650 → 4657, apporté par #17952) ; ouvert en #17986. **Non fusionnée par ce réveil** :
+  la règle de la routine veut une CI verte ; elle fusionnera dès que `dev` sera reverdi (ou sur décision du porteur).
 - Prochain lot recommandé : #16983 (position temporaire sur iOS, émettre + carte), puis #17147 (la porte « ensemble »
   lit la conversation close), puis l'icône de position par cercle (#17013).
