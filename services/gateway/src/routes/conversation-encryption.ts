@@ -50,6 +50,7 @@ import {
 } from '@meeshy/shared/utils/conversation-creation-encryption';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { participantUserRooms } from '../socketio/emitToConversationParticipants';
+import { cutTalkiesOnEndToEnd, talkieCutDepsOf } from '../services/talkie/talkieCut';
 import type { ConversationEncryptionChangedEventData } from '@meeshy/shared/types/socketio-events';
 import {
   ENCRYPTION_ALREADY_ENABLED_CODE,
@@ -230,6 +231,23 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
     sendError(reply, 409, 'The encryption of this conversation has just changed: reload it and try again', {
       code: E2EE_ERROR_CODES.REGIME_CHANGED,
     });
+
+  /**
+   * #14490 — le bout en bout vient d'être écrit : la voix en clair de la paire s'arrête
+   * à l'instant, sans attendre le rejugement du relais. Une coupure qui ne s'écrit pas
+   * ne défait pas la bascule (irréversible, #12949) : le rejugement d'arrière-plan prend le
+   * relais au fragment suivant (au plus `REJUDGE_EVERY_MS` + `REJUDGE_TIMEOUT_MS`).
+   */
+  const cutClearTalkies = async (conversation: RegimeConversation): Promise<void> => {
+    try {
+      await cutTalkiesOnEndToEnd(talkieCutDepsOf(), { userIds: conversation.participants.map((participant) => participant.userId) });
+    } catch (error) {
+      logger.warn('end-to-end enabled but the talkie cut was not written', {
+        conversationId: conversation.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
 
   /**
    * Après une bascule : l'avis système (auteur nommé, #12522) et l'événement
@@ -424,6 +442,10 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         });
         if (!switched) {
           return regimeChanged(reply);
+        }
+
+        if (mode === 'e2ee') {
+          await cutClearTalkies(conversation);
         }
 
         // Create system message to notify members
