@@ -324402,43 +324402,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّرة تمامًا بين الطرفين"
+            "value": "مشفّرة تمامًا بين الطرفين: أجهزة المشاركين وحدها تقرأ الرسائل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende-zu-Ende-verschlüsselt"
+            "value": "Ende-zu-Ende-verschlüsselt: Nur die Geräte der Teilnehmenden können die Nachrichten lesen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encrypted"
+            "value": "End-to-end encrypted: only the participants’ devices can read the messages"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrada de extremo a extremo"
+            "value": "Cifrada de extremo a extremo: solo los dispositivos de los participantes leen los mensajes"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffrée de bout en bout"
+            "value": "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografata end-to-end"
+            "value": "Crittografata end-to-end: solo i dispositivi dei partecipanti leggono i messaggi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografada de ponta a ponta"
+            "value": "Criptografada de ponta a ponta: só os aparelhos dos participantes leem as mensagens"
           }
         }
       }

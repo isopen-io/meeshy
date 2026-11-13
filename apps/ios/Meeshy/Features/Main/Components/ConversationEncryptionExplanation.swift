@@ -21,7 +21,8 @@ enum ConversationEncryptionRegime: Equatable {
     }
 
     /// Une valeur, sans jargon : le régime nommé (la rangée porte déjà le titre
-    /// « Chiffrement » et la fiche l'explique — règle 2 de l'épure, #18078).
+    /// « Chiffrement » — règle 2 de l'épure, #18078). Le bout en bout, propre à
+    /// Meeshy, dit en plus ce qu'il FAIT des messages (règle 7).
     var summary: String {
         switch self {
         case .none:
@@ -35,7 +36,7 @@ enum ConversationEncryptionRegime: Equatable {
                    defaultValue: "Chiffrée sur nos serveurs, avec vérification entre appareils compatibles", bundle: .main)
         case .endToEnd:
             String(localized: "conversation.encryption.summary.endToEnd",
-                   defaultValue: "Chiffrée de bout en bout", bundle: .main)
+                   defaultValue: "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages", bundle: .main)
         }
     }
 }

@@ -84,7 +84,6 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.encryption.note.serverSays.question": "Et si le serveur dit le contraire ?",
         "conversation.encryption.note.serverSays.text": "Même si le serveur la présentait ensuite autrement, votre compte n’y écrit plus sans chiffrement de bout en bout depuis cet appareil.",
         "conversation.encryption.note.whoMayToggle.question": "Qui peut changer de mode ?",
-        "conversation.encryption.summary.endToEnd": "Chiffrée de bout en bout",
         "conversation.encryption.summary.none": "Non chiffrée",
         "conversation.info.block.message": "Plus aucun message de %@ ; débloquable dans les réglages.",
         "conversation.info.leave.message": "Vous ne recevrez plus de messages ; votre historique reste lisible.",
@@ -197,7 +196,6 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.encryption.fact.storedWithoutEncryption",
         "conversation.encryption.mode.e2ee.description",
         "conversation.encryption.mode.hybrid.description",
-        "conversation.encryption.summary.endToEnd",
         "conversation.encryption.summary.none",
         "conversation.info.block.message",
         "conversation.info.leave.message",
@@ -458,7 +456,8 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertEqual(ConversationEncryptionRegime.none.summary, String(localized: "conversation.encryption.summary.none", bundle: .main))
         let app = try Self.catalog(Self.appCatalogPath)
         XCTAssertEqual(app["conversation.encryption.summary.none"]?["fr"], "Non chiffrée")
-        XCTAssertEqual(app["conversation.encryption.summary.endToEnd"]?["fr"], "Chiffrée de bout en bout")
+        XCTAssertEqual(app["conversation.encryption.summary.endToEnd"]?["fr"], "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages",
+                       "le bout en bout est un repère propre à Meeshy : la rangée dit, au repos, qui lit les messages (règle 7)")
     }
 
     // MARK: - Le rare derrière « Plus », toujours atteignable
