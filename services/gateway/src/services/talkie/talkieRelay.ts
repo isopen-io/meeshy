@@ -37,7 +37,10 @@
  * La prise de parole est REJUGÉE en arrière-plan, au plus toutes les
  * `REJUDGE_EVERY_MS`, sur l'arrivée d'un fragment : préférence coupée, appel
  * décroché, Ne pas déranger, conversation passée en chiffrement de bout en bout,
- * lien redescendu, compte désactivé — elle est coupée (`cut`). La coupure d'un
+ * lien redescendu, compte désactivé — elle est coupée (`cut`). Un rejugement qui ne
+ * rend pas dans `REJUDGE_TIMEOUT_MS` coupe aussi (#14490). Le passage d'un tête-à-tête
+ * en bout en bout n'attend pas ce rejugement : la route qui l'écrit pose la coupure
+ * partagée (`cutTalkiesOnEndToEnd`, `talkieCut.ts`). La coupure d'un
  * blocage, elle, vaut dès l'instant où le jugement de l'ouverture a COMMENCÉ :
  * un blocage acquitté pendant ce jugement ferme aussi la session qui en naît.
  *
@@ -94,6 +97,8 @@ import { guardedTimeout } from '../../utils/guarded-timer';
 const DURATION_GRACE_MS = 1_000;
 /** Le rejugement d'arrière-plan d'une prise de parole ouverte. */
 export const REJUDGE_EVERY_MS = 2_000;
+/** Un rejugement qui n'a pas rendu dans ce délai coupe la voix (#14490) : un jugement muet ne la laisse pas filer. */
+export const REJUDGE_TIMEOUT_MS = 2_000;
 /** Tout ce que les voix réveillées de CE processus gardent en mémoire, ensemble. */
 export const TALKIE_WAKING_PROCESS_MAX_BYTES = 32 * 1024 * 1024;
 /** Les voix réveillées qu'un même émetteur garde à la fois : le réveil n'est pas une rafale de pushs. */
@@ -442,6 +447,13 @@ export class TalkieRelay {
     if (session.rejudging || now - session.judgedAt < REJUDGE_EVERY_MS) return;
     session.rejudging = true;
     session.judgedAt = now;
+    const timeout = guardedTimeout({
+      name: 'talkie-rejudge-timeout',
+      run: () => this.close(session.talkieId, 'cut', 'recipient'),
+      afterMs: REJUDGE_TIMEOUT_MS,
+      logger: { error: (message, error) => this.deps.report(message, error) },
+    });
+    timeout.unref?.();
     this.deps
       .judge(session.fromUserId, session.toUserId, session.sealed !== undefined)
       .then(
@@ -454,6 +466,7 @@ export class TalkieRelay {
         },
       )
       .finally(() => {
+        clearTimeout(timeout);
         session.rejudging = false;
       });
   }

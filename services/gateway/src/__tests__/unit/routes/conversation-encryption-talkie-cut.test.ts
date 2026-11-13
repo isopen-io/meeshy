@@ -71,7 +71,7 @@ type Member = { userId: string; role: string; isActive: boolean; user: { role: s
 const member = (userId: string): Member => ({ userId, role: 'member', isActive: true, user: { role: 'USER' } });
 
 function makeWorld(params: { readonly conversation?: MongoDocument; readonly members?: Member[]; readonly others?: DirectDoc[] } = {}) {
-  const members = params.members ?? [member(ALICE), member(BOB)];
+  const members = params.members ?? [{ ...member(ALICE), user: { role: 'ANALYST' } }, member(BOB)];
   const conversation: MongoDocument = { id: CONV_ID, type: 'direct', ...(params.conversation ?? {}) };
   const others = findConversationsIn(params.others ?? []);
   const prisma = {

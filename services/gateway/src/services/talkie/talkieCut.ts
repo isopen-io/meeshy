@@ -60,6 +60,14 @@ export async function readTalkieCut(
   return Number.isFinite(at) ? at : null;
 }
 
+async function cutDirections(deps: TalkieCutDeps, directions: ReadonlyArray<readonly [string, string]>): Promise<void> {
+  const at = String(deps.now());
+  for (const [fromUserId, toUserId] of directions) {
+    deps.relay?.cutPair(fromUserId, toUserId);
+    await deps.cache.set(cutKey(fromUserId, toUserId), at, CUT_TTL_SECONDS);
+  }
+}
+
 export async function cutTalkiesOnBlock(
   deps: TalkieCutDeps,
   params: { readonly blockerId: string; readonly blockedId: string; readonly scope: 'user' | 'talkie' },
@@ -68,9 +76,23 @@ export async function cutTalkiesOnBlock(
   const directions: ReadonlyArray<readonly [string, string]> = scope === 'talkie'
     ? [[blockedId, blockerId]]
     : [[blockedId, blockerId], [blockerId, blockedId]];
-  const at = String(deps.now());
-  for (const [fromUserId, toUserId] of directions) {
-    deps.relay?.cutPair(fromUserId, toUserId);
-    await deps.cache.set(cutKey(fromUserId, toUserId), at, CUT_TTL_SECONDS);
-  }
+  await cutDirections(deps, directions);
+}
+
+/**
+ * Le passage d'un tête-à-tête en chiffrement de bout en bout (#14490) : le talkie y
+ * devient indisponible (`TALKIE_E2EE_CONVERSATION`), et la voix en clair déjà ouverte
+ * s'arrête À L'INSTANT, dans les deux sens, par la même coupure partagée qu'un blocage —
+ * sans attendre le rejugement d'arrière-plan. Une voix scellée ne peut pas être ouverte à
+ * cet instant (un sceau sans paire chiffrée est refusé, et une paire n'a qu'un seul
+ * tête-à-tête chiffré, #12966) : seule une voix en clair est visée. Rien n'est posé hors
+ * d'un tête-à-tête de deux comptes distincts.
+ */
+export async function cutTalkiesOnEndToEnd(
+  deps: TalkieCutDeps,
+  params: { readonly userIds: ReadonlyArray<string | null | undefined> },
+): Promise<void> {
+  const [userId, peerId] = params.userIds;
+  if (params.userIds.length !== 2 || !userId || !peerId || userId.toLowerCase() === peerId.toLowerCase()) return;
+  await cutDirections(deps, [[userId, peerId], [peerId, userId]]);
 }
