@@ -6,7 +6,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.content
 import org.junit.Test
 
 /** Le fil d'« ensemble » vu du transport Android (#17100) — iso `MessageSocketManager+Together.swift`. */
