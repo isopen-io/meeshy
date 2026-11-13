@@ -317,6 +317,7 @@
     <string name="conversation_options_muted">Muet</string>
     <string name="conversation_options_pin">Épingler</string>
     <string name="conversation_options_reaction_none">Aucune</string>
+    <string name="conversation_options_section_actions">Actions</string>
     <string name="conversation_options_section_display">Mon affichage</string>
     <string name="conversation_options_section_notifications">Notifications</string>
     <string name="conversation_options_section_organization">Organisation</string>

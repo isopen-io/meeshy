@@ -310,6 +310,7 @@
     <string name="conversation_options_muted">Stumm</string>
     <string name="conversation_options_pin">Anheften</string>
     <string name="conversation_options_reaction_none">Keine</string>
+    <string name="conversation_options_section_actions">Aktionen</string>
     <string name="conversation_options_section_display">Meine Anzeige</string>
     <string name="conversation_options_section_notifications">Mitteilungen</string>
     <string name="conversation_options_section_organization">Organisation</string>

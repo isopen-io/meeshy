@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="action_more">المزيد</string>
-    <string name="conversation_options_section_actions">المزيد</string>
     <string name="encryption_note_devices_question">كم جهازًا مشفّرًا يمكنني امتلاكه؟</string>
     <string name="encryption_note_switching_question">من يستطيع تغيير الوضع، وماذا يحدث للسجل؟</string>
     <string name="share_content_refused_source">لا يفتح Meeshy مسار ملف. شارك الملف نفسه.</string>

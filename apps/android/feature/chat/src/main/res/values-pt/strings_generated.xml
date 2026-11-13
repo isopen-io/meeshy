@@ -317,6 +317,7 @@
     <string name="conversation_options_muted">Silenciado</string>
     <string name="conversation_options_pin">Fixar</string>
     <string name="conversation_options_reaction_none">Nenhuma</string>
+    <string name="conversation_options_section_actions">Ações</string>
     <string name="conversation_options_section_display">Minha exibição</string>
     <string name="conversation_options_section_notifications">Notificações</string>
     <string name="conversation_options_section_organization">Organização</string>

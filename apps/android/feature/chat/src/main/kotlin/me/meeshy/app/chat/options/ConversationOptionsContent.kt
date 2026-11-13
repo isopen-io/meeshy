@@ -58,8 +58,8 @@ private enum class OptionsDialog { FAVORITE, ARCHIVE, DELETE, OBSOLETE, LEAVE, B
 
 /**
  * Les Options de la fiche Conversation (#13777) : « Partager » et « Quitter » sous
- * l'en-tête (iOS `actionButtons`), puis Mon affichage, Organisation, Notifications et Plus, qui range
- * « Bloquer cet utilisateur » au repos (iOS `ConversationPreferencesTab`, #17697), avec les mêmes
+ * l'en-tête (iOS `actionButtons`), puis Mon affichage, Organisation, Notifications et Actions, qui
+ * descend « Bloquer cet utilisateur » de l'en-tête (iOS `ConversationPreferencesTab`, #17697), avec les mêmes
  * confirmations. [onExit] est appelé une fois la conversation quittée, supprimée ou le pair bloqué.
  */
 @Composable

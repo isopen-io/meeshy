@@ -310,6 +310,7 @@
     <string name="conversation_options_muted">Muted</string>
     <string name="conversation_options_pin">Pin</string>
     <string name="conversation_options_reaction_none">None</string>
+    <string name="conversation_options_section_actions">Actions</string>
     <string name="conversation_options_section_display">My display</string>
     <string name="conversation_options_section_notifications">Notifications</string>
     <string name="conversation_options_section_organization">Organization</string>

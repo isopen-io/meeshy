@@ -338,6 +338,7 @@
     <string name="conversation_options_muted">مكتوم</string>
     <string name="conversation_options_pin">تثبيت</string>
     <string name="conversation_options_reaction_none">لا شيء</string>
+    <string name="conversation_options_section_actions">الإجراءات</string>
     <string name="conversation_options_section_display">عرضي</string>
     <string name="conversation_options_section_notifications">الإشعارات</string>
     <string name="conversation_options_section_organization">التنظيم</string>

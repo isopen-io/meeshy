@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="action_more">Mais</string>
-    <string name="conversation_options_section_actions">Mais</string>
     <string name="encryption_note_devices_question">Quantos aparelhos criptografados posso ter?</string>
     <string name="encryption_note_switching_question">Quem pode mudar o modo e o que acontece com o histórico?</string>
     <string name="share_content_refused_source">O Meeshy não abre um caminho de arquivo. Compartilhe o próprio arquivo.</string>

@@ -9,10 +9,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "conversation_options_section_actions",
-          "status": "android-only"
-        },
-        {
           "androidName": "encryption_note_devices_question",
           "status": "android-only"
         },

@@ -80,15 +80,16 @@ class EpureListeFilStringsTest {
     }
 
     @Test
-    fun `More is the lexicon word without an ellipsis, on the action sheet and on the options card`() {
+    fun `More is the lexicon word without an ellipsis on the action sheet, the open options section keeps the iOS word Actions`() {
         val expected = mapOf(
             "values" to "More", "values-fr" to "Plus", "values-es" to "Más", "values-pt" to "Mais",
             "values-de" to "Mehr", "values-it" to "Altro", "values-ar" to "المزيد",
         )
         expected.forEach { (folder, word) ->
             assertThat(all(folder)["action_more"]).isEqualTo(word)
-            assertThat(all(folder)["conversation_options_section_actions"]).isEqualTo(word)
+            assertThat(all(folder)["conversation_options_section_actions"]).isNotEqualTo(word)
         }
+        assertThat(all("values-fr")["conversation_options_section_actions"]).isEqualTo("Actions")
     }
 
     @Test
