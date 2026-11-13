@@ -61,10 +61,10 @@ class CallEffectLayers private constructor(val bottomToTop: List<CallEffectLayer
         if (choice == null) removing(kind) else adding(CallEffectLayer(kind, choice))
 
     /**
-     * (+) : le premier genre ABSENT de la pile, parmi [among], après [after] et en bouclant ; jamais [after] lui-même ;
-     * aucun quand la pile est pleine.
+     * (+) : le premier genre ABSENT de la pile, parmi [among], après [after] (depuis le début quand il est nul ou hors de
+     * [among]) et en bouclant ; jamais [after] lui-même ; aucun quand la pile est pleine.
      */
-    fun opening(after: CallEffectKind, among: List<CallEffectKind>): CallEffectKind? {
+    fun opening(after: CallEffectKind?, among: List<CallEffectKind>): CallEffectKind? {
         if (isFull) return null
         val start = among.indexOf(after) + 1
         val ordered = among.drop(start) + among.take(start)
@@ -84,6 +84,41 @@ class CallEffectLayers private constructor(val bottomToTop: List<CallEffectLayer
 
         /** La pile des [layers] données : un seul genre à la fois (le premier gagne), trois couches au plus. */
         fun of(layers: List<CallEffectLayer>): CallEffectLayers = CallEffectLayers(layers.distinctBy { it.kind }.take(MAX))
+    }
+}
+
+/**
+ * « Effets, filtres et cadres font partie d'une même famille d'outils » (décision porteur du 2026-11-13, #16979) : UNE
+ * rangée de genres, la même en Effets et en Montage. Visage et Couleur se choisissent sur mon image (Effets), les cadres
+ * au Montage ; un genre n'y figure que si l'appel offre le mode qui le montre. Miroir de `CallEffectsGenreRule` (iOS).
+ */
+object CallEffectsGenreRule {
+    val effectsGenres: List<CallEffectKind> = CallEffectsCategory.entries.map { it.kind }
+    val montageGenres: List<CallEffectKind> = listOf(CallEffectKind.Frame)
+
+    fun row(offersEffects: Boolean, offersFrames: Boolean): List<CallEffectKind> =
+        (if (offersEffects) effectsGenres else emptyList()) + (if (offersFrames) montageGenres else emptyList())
+
+    /**
+     * (+) : un genre ABSENT de la pile, d'abord dans le mode où l'on est, puis dans l'autre. Quand tout ce que la rangée
+     * offre est déjà posé sans remplir la pile, (+) laisse feuilleter l'autre genre du mode, sinon le premier de l'autre
+     * mode : rien de ce qu'il faisait ne se perd. Pile pleine, ou [from] hors de la rangée : rien.
+     */
+    fun adding(from: CallEffectKind, layers: CallEffectLayers, row: List<CallEffectKind>): CallEffectKind? {
+        if (layers.isFull || from !in row) return null
+        val isMontage = from in montageGenres
+        val sameMode = row.filter { (it in montageGenres) == isMontage }
+        val otherMode = row.filter { (it in montageGenres) != isMontage }
+        return layers.opening(from, sameMode)
+            ?: layers.opening(null, otherMode)
+            ?: browsing(from, sameMode)
+            ?: otherMode.firstOrNull()
+    }
+
+    private fun browsing(from: CallEffectKind, genres: List<CallEffectKind>): CallEffectKind? {
+        val index = genres.indexOf(from)
+        if (genres.size < 2 || index < 0) return null
+        return genres[(index + 1) % genres.size]
     }
 }
 
@@ -142,6 +177,9 @@ object CallEffectsBarRule {
 
     /** Annuler un effet referme la liste et rend le menu de base. */
     val afterRemoval: CallEffectsBarMode = CallEffectsBarMode.Base
+
+    /** Toute fonction choisie dans les réglages (« Chaque visage » au Montage) rend le menu de base. */
+    val afterChoice: CallEffectsBarMode = CallEffectsBarMode.Base
 
     /** L'appui long sur (+) ouvre la liste, seulement s'il y a quelque chose à lister. */
     fun afterShowingApplied(from: CallEffectsBarMode, hasLayers: Boolean): CallEffectsBarMode =

@@ -42,23 +42,6 @@ object CallEffectsModeRule {
     fun applying(color: VideoFilterPreset, to: VideoFilterConfig): VideoFilterConfig =
         to.applyingPreset(if (color == VideoFilterPreset.Natural) null else color)
 
-    /**
-     * (+) « Ajouter un autre look » (loi 14, #16979) : la rangée d'un genre ABSENT de la pile, par-dessus ce qu'on a ;
-     * refusé, pile pleine. Quand les deux genres d'Effets sont déjà posés, (+) laisse parcourir l'autre rangée pour en
-     * changer le look. iOS `addingLook(from:layers:)`.
-     */
-    fun addingLook(from: CallEffectsCategory, layers: CallEffectLayers = CallEffectLayers.EMPTY): CallEffectsCategory? =
-        addingKind(from.kind, CallEffectsCategory.entries.map { it.kind }, layers)?.category
-
-    /**
-     * Le genre qu'ouvre (+) depuis [from], parmi [among] : un genre absent de la pile d'abord, sinon l'autre genre offert ;
-     * `null` quand la pile est pleine ou qu'il n'y a pas d'autre genre.
-     */
-    fun addingKind(from: CallEffectKind, among: List<CallEffectKind>, layers: CallEffectLayers): CallEffectKind? {
-        if (layers.isFull) return null
-        return layers.opening(from, among) ?: among.firstOrNull { it != from }
-    }
-
     /** La rangée sur laquelle Effets s'ouvre : celle du premier genre qui manque à la pile, Visage d'abord. */
     fun startingCategory(layers: CallEffectLayers): CallEffectsCategory =
         CallEffectsCategory.entries.firstOrNull { it.kind !in layers } ?: CallEffectsCategory.Face
@@ -122,11 +105,16 @@ data class CallEffectsModeState(
     fun withSmoothing(value: Float): CallEffectsModeState = copy(current = current.withSmoothingIntensity(value))
     fun togglingBlur(): CallEffectsModeState = copy(current = current.withBackgroundBlur(!current.backgroundBlurEnabled))
 
-    /** (+): the row of a genre missing from the stack, the bar back to its base menu; refused with three layers. */
-    fun addingLook(): CallEffectsModeState {
-        val next = CallEffectsModeRule.addingLook(category, layers) ?: return this
-        return copy(category = next, bar = CallEffectsBarRule.afterAddingLook(bar))
-    }
+    /** (+) : le genre que la rangée [row] ouvre depuis celui qu'on montre ([CallEffectsGenreRule.adding]) ; nul pile pleine. */
+    fun addedGenre(row: List<CallEffectKind>): CallEffectKind? = CallEffectsGenreRule.adding(category.kind, layers, row)
+
+    /** Le genre [kind] montré par Effets, la barre revenue au menu de base ; un genre que montre le Montage ne change rien ici. */
+    fun showingAdded(kind: CallEffectKind): CallEffectsModeState =
+        kind.category?.let { copy(category = it, bar = CallEffectsBarRule.afterAddingLook(bar)) } ?: this
+
+    /** (+) quand la rangée ne porte que les genres d'Effets : le genre ouvert, montré ici ; refusé avec trois couches. */
+    fun addingLook(row: List<CallEffectKind> = CallEffectsGenreRule.effectsGenres): CallEffectsModeState =
+        addedGenre(row)?.let(::showingAdded) ?: this
 
     /** Long press on (+): the applied effects, when there are some. */
     fun showingApplied(): CallEffectsModeState = copy(bar = CallEffectsBarRule.afterShowingApplied(bar, hasLayers = !layers.isEmpty))
