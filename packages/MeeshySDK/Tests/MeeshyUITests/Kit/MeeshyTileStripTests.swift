@@ -448,7 +448,7 @@ struct MeeshyTileStripTests {
     // MARK: - Aides
 
     private static let sourceFiles = [
-        "MeeshyTileStrip.swift", "MeeshyTileCell.swift", "MeeshyTileCarousel.swift",
+        "MeeshyTileStrip.swift", "MeeshyTileCell.swift", "MeeshyTileCarousel.swift", "MeeshyTileObservers.swift",
         "MeeshyTileStripRule.swift", "MeeshyTileStripFollow.swift", "MeeshyTileStripGeometry.swift",
         "MeeshyTileRecipe.swift", "MeeshyTileVocabulary.swift",
     ]
