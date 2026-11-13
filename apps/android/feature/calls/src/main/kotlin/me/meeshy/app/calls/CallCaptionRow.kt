@@ -108,7 +108,7 @@ internal fun CallCaptionRow(
         } else {
             CallCaptionInlinePhrase(line, isWaiting = isWaiting, reduceMotion = reduceMotion)
         }
-        CallCaptionOriginalBelow(line.originalBelow, reduceMotion)
+        CallCaptionOriginalBelow(line.originalBelow, reduceMotion, ink = MeeshyMediaChromeColors.ChromeSecondary)
     }
 }
 
@@ -204,9 +204,12 @@ private fun CallCaptionStackedPhrase(line: CallLiveCaptionLine) {
     }
 }
 
-/** « Original · … » under the translation, in secondary ink, indented: it unfolds from the sentence and folds back into it. */
+/**
+ * « Original · … » under the translation, in secondary ink, indented: it unfolds from the sentence and folds back into it.
+ * One piece for the live captions (chrome ink) and the journal after the call (the theme's secondary ink, [ink]).
+ */
 @Composable
-private fun CallCaptionOriginalBelow(original: String?, reduceMotion: Boolean) {
+internal fun CallCaptionOriginalBelow(original: String?, reduceMotion: Boolean, ink: Color) {
     val word = stringResource(R.string.call_captions_original)
     AnimatedContent(
         targetState = original,
@@ -217,7 +220,7 @@ private fun CallCaptionOriginalBelow(original: String?, reduceMotion: Boolean) {
             Text(
                 text = "$word · $shown",
                 style = MaterialTheme.typography.bodySmall,
-                color = MeeshyMediaChromeColors.ChromeSecondary,
+                color = ink,
                 modifier = Modifier.fillMaxWidth().padding(start = MeeshySpacing.md, top = MeeshySpacing.xxs),
             )
         }

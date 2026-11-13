@@ -35,4 +35,25 @@ class CallJournalUnderBubbleGuardTest {
         assertThat(bubble).contains("FocalCallJournalOffer.saysNothingWasKept(")
         assertThat(bubble).contains("audio_fullscreen_transcription_empty")
     }
+
+    @Test
+    fun `sur cache vide la bulle montre une attente sobre, et rend la main quand elle quitte l'ecran`() {
+        val bubble = code("CallJournalUnderBubble.kt")
+
+        assertThat(bubble).contains("FocalCallJournalOffer.showsWaiting(")
+        assertThat(bubble).contains("CircularProgressIndicator")
+        assertThat(bubble).contains("viewModel.release()")
+    }
+
+    /** Rien n'apparaît ni ne disparaît d'un coup : l'attente, le vide et le journal passent en fondu, sans taille animée. */
+    @Test
+    fun `l'attente, le vide et le journal se relaient en fondu, sans animer la taille`() {
+        val bubble = code("CallJournalUnderBubble.kt")
+
+        assertThat(bubble).contains("AnimatedContent(")
+        assertThat(bubble).contains("FocalCallJournalFace.of(")
+        assertThat(bubble).contains(".using(null)")
+        assertThat(bubble).contains("FocalCallJournalMotion.fadeMillis(")
+        assertThat(bubble).doesNotContain("animateContentSize")
+    }
 }

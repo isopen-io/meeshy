@@ -83,7 +83,27 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         wireStubs[endpoint] = Data(json.utf8)
     }
 
+    /// Les pages d'un même chemin, servies DANS L'ORDRE (la dernière se répète) :
+    /// un double indexé par chemin ne sait sinon rendre qu'une réponse par adresse.
+    private let wireSequences = Locked<[String: [Data]]>([:])
+
+    func stubWireSequence(_ endpoint: String, jsons: [String]) {
+        wireSequences.mutate { $0[endpoint] = jsons.map { Data($0.utf8) } }
+    }
+
+    private func nextSequencedWire(_ endpoint: String) -> Data? {
+        wireSequences.mutate { (sequences: inout [String: [Data]]) -> Data? in
+            guard var pages = sequences[endpoint], let first = pages.first else { return nil }
+            if pages.count > 1 { pages.removeFirst() }
+            sequences[endpoint] = pages
+            return first
+        }
+    }
+
     private func stubbed<T: Decodable>(_ endpoint: String, as type: T.Type) async throws -> T {
+        if let wire = nextSequencedWire(endpoint) {
+            return try await APIClient.decodeOffMain(T.self, from: wire)
+        }
         if let wire = wireStubs[endpoint] {
             return try await APIClient.decodeOffMain(T.self, from: wire)
         }
@@ -99,6 +119,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recorded.mutate { $0.removeAll() }
         stubs.removeAll()
         wireStubs.removeAll()
+        wireSequences.mutate { $0.removeAll() }
         errorToThrow = nil
         endpointErrors.removeAll()
         authToken = nil
