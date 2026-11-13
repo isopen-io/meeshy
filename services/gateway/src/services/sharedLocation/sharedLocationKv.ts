@@ -24,8 +24,12 @@ type PointerKeys = { readonly generation: string; readonly pointer: string; read
 
 export type SharedLocationKv = {
   get(key: string): Promise<string | null>;
+  /** Une lecture groupée, dans l'ordre des clés. */
+  mget(keys: readonly string[]): Promise<readonly (string | null)[]>;
   set(key: string, value: string, ttlSeconds: number): Promise<void>;
   del(key: string): Promise<void>;
+  /** Pose un terme à une clé existante, sans toucher sa valeur. */
+  expire(key: string, ttlSeconds: number): Promise<void>;
   /** Pose `session` comme pointeur si la génération vaut `generation` ; rend la session REMPLACÉE (aussi rangée « à retirer »). */
   claim(keys: PointerKeys, args: { readonly generation: string; readonly session: string; readonly ttlSeconds: number }): Promise<{ readonly claimed: boolean; readonly displaced: string | null }>;
   /** Écrit `value` sous `state` si le pointeur désigne encore `session`. */
@@ -75,11 +79,15 @@ const orNull = (value: unknown): string | null => (typeof value === 'string' && 
 export function redisSharedLocationKv(redis: Redis): SharedLocationKv {
   return {
     get: (key) => redis.get(key),
+    mget: async (keys) => (keys.length === 0 ? [] : redis.mget(...keys)),
     set: async (key, value, ttlSeconds) => {
       await redis.set(key, value, 'EX', ttlSeconds);
     },
     del: async (key) => {
       await redis.del(key);
+    },
+    expire: async (key, ttlSeconds) => {
+      await redis.expire(key, ttlSeconds);
     },
     claim: async (keys, args) => {
       const [claimed, displaced] = (await redis.eval(CLAIM, 3, keys.generation, keys.pointer, keys.retiring, args.generation, args.session, String(args.ttlSeconds), String(RETIRING_TTL_SECONDS))) as [number, string];
@@ -112,8 +120,10 @@ export function redisSharedLocationKv(redis: Redis): SharedLocationKv {
 /** Sans Redis, le partage est indisponible : aucune donnée ne se range ailleurs. */
 export const UNAVAILABLE_SHARED_LOCATION_KV: SharedLocationKv = {
   get: () => Promise.reject(new Error('shared location store unavailable')),
+  mget: () => Promise.reject(new Error('shared location store unavailable')),
   set: () => Promise.reject(new Error('shared location store unavailable')),
   del: () => Promise.reject(new Error('shared location store unavailable')),
+  expire: () => Promise.reject(new Error('shared location store unavailable')),
   claim: () => Promise.reject(new Error('shared location store unavailable')),
   setIfCurrent: () => Promise.reject(new Error('shared location store unavailable')),
   advance: () => Promise.reject(new Error('shared location store unavailable')),

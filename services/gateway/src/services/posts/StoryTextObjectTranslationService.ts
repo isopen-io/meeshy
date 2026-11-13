@@ -16,6 +16,7 @@ import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { communityPostAudienceIds } from './communityVisibility';
 import { circleAudienceIds } from './postAudience';
+import { withoutBlockedRecipients } from '../../utils/blocking';
 import {
   composeStoryContentForLanguage,
   isContentDerivedFromTextObjects,
@@ -169,7 +170,12 @@ export class StoryTextObjectTranslationService {
       // in their own composer/preview) AND to viewers who can see the post.
       // Previously only the author was notified, so live viewers stayed on the
       // untranslated text until they refreshed.
-      const recipientIds = await this.resolveBroadcastRecipients(post.authorId, post.visibility, post.visibilityUserIds, post.communityId ?? null);
+      // #17209 — le même filtre de blocage que la diffusion temps réel des publications.
+      const recipientIds = await withoutBlockedRecipients(
+        this.prisma,
+        post.authorId,
+        await this.resolveBroadcastRecipients(post.authorId, post.visibility, post.visibilityUserIds, post.communityId ?? null),
+      );
       if (eventData) {
         for (const userId of recipientIds) {
           this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);

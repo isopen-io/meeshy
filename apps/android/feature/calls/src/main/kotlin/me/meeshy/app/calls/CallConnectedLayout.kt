@@ -76,7 +76,7 @@ internal fun rememberCallTouchExploration(): Boolean {
     return on
 }
 
-/** What the group stage shows of the others' cameras: the chrome hides to a tap only when one of them is on (G1.13). */
+/** What the group stage shows of the others' cameras: one of them on makes it a video stage (G1.13). */
 internal data class CallGroupVideoStage(val remoteCamerasOn: Int) {
     companion object {
         fun of(mesh: GroupCallMeshUi, isPrimaryVideoActive: Boolean): CallGroupVideoStage =
@@ -92,14 +92,13 @@ internal fun callIsVideoStage(state: CallUiState, group: CallGroupVideoStage? = 
     remoteCamerasOn = group?.remoteCamerasOn ?: 0,
 )
 
-/** Law 11 (#17945): the stage a tap stows — the image on video, the background of a duo audio call in progress. */
+/** Law 11 (#17945): the stage a tap stows — the image on video, the background of a call in progress, duo or group. */
 internal fun callIsTapStage(state: CallUiState, group: CallGroupVideoStage? = null): Boolean = CallChromeVisibility.isTapStage(
-    isGroup = group != null,
     isVideoStage = callIsVideoStage(state, group),
     isConnected = state.showsConnectedLayout,
 )
 
-/** Law 11 (#17945): the tap that stows the chrome, on the image or on the background of a duo audio call; null where none stows. */
+/** Law 11 (#17945): the tap that stows the chrome, on the image or on the background of a call in progress; null where none stows. */
 @Composable
 internal fun rememberCallSceneTap(
     chrome: CallChromeController,
@@ -204,8 +203,8 @@ internal fun CallChromeFade(
 
 /**
  * The connected layout (also kept during a reconnection with media established): the peer, the
- * captions, the capability slots and the pill. A tap on the stage (the image on video, the background of a duo audio
- * call — law 11, #17945) hides the header, the pill and the panels in a fade; a tap lights them again; nothing hides
+ * captions, the capability slots and the pill. A tap on the stage (the image on video, the background of a call with
+ * no image, duo or group — law 11, #17945) hides the header, the pill and the panels in a fade; a tap lights them again; nothing hides
  * under TalkBack.
  */
 @Composable

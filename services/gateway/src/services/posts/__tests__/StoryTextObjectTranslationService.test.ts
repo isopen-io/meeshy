@@ -40,6 +40,10 @@ const makeMockPrisma = ({
       return friendRequests;
     }),
   },
+  user: {
+    findMany: jest.fn(async () => []),
+    findUnique: jest.fn(async () => ({ blockedUserIds: [] })),
+  },
   $runCommandRaw: jest.fn(async () => ({ ok: 1 })),
 });
 

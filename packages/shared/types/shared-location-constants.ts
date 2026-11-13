@@ -24,8 +24,19 @@ export const SHARED_LOCATION_DEFAULT_PRECISION: SharedLocationPrecision = 'city'
  */
 export const SHARED_LOCATION_GRID_DEGREES = { neighborhood: 0.01, city: 0.1 } as const;
 
-/** Le rayon du cercle de flou que le lecteur dessine, en mètres (la demi-diagonale de la maille, arrondie). */
-export const SHARED_LOCATION_BLUR_RADIUS_METERS = { neighborhood: 800, city: 8000 } as const;
+/**
+ * La marge au-delà de la ligne de maille avant qu'un lecteur flouté change de maille, en
+ * fraction du pas : le va-et-vient du bruit GPS près d'une ligne ne la révèle pas (#16987).
+ * La maille servie est donc à au plus `0,5 + marge` pas de la position vraie sur chaque axe.
+ */
+export const SHARED_LOCATION_CELL_HOLD_MARGIN = 0.25;
+
+/**
+ * Le rayon du cercle de flou que le lecteur dessine, en mètres : la demi-diagonale de la
+ * maille ÉLARGIE de la marge (0,75 pas par axe, au pire à l'équateur), arrondie au-dessus.
+ * Le cercle contient toujours la position vraie, même quand la maille est retenue (#16987).
+ */
+export const SHARED_LOCATION_BLUR_RADIUS_METERS = { neighborhood: 1200, city: 12000 } as const;
 
 /** La précision exacte ne descend jamais sous ce rayon, même si l'appareil annonce mieux. */
 export const SHARED_LOCATION_EXACT_MIN_RADIUS_METERS = 10;

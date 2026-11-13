@@ -1128,8 +1128,8 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
       view.done();
     }));
 
-  test('en audio, toucher ne cache rien', () => {
-    const view = mount({ members: { 'u-peer': member() } });
+  test('pendant la sonnerie d’un appel audio, toucher ne cache rien (un duo audio JOINT range, #17945)', () => {
+    const view = mount({ phase: { kind: 'outgoing' }, members: { 'u-peer': member() } });
     act(() => (view.find('[data-call-status]') as HTMLElement | null)?.click());
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
     view.done();
