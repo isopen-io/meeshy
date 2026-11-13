@@ -39,12 +39,17 @@ const person = (id: string, overrides: Partial<Person> = {}): Person => ({
 const online = (id: string, overrides: Partial<Person> = {}) => person(id, { isOnline: true, lastActiveAt: NOW, ...overrides });
 const crowd = (count: number, prefix = 'u-off') => Array.from({ length: count }, (_, i) => person(`${prefix}-${i}`));
 
+type OnlineFilter = { OR: readonly [{ isOnline: boolean }, { lastActiveAt: { gte: Date } }] };
+type LivingFilter = { isActive: boolean; AND: readonly unknown[] };
 type MemberWhere = {
   communityId: string;
   isActive: boolean;
   userId: { not: string };
-  user?: { is: { OR: readonly [{ isOnline: boolean }, { lastActiveAt: { gte: Date } }] } };
+  user?: { is: OnlineFilter | LivingFilter };
 };
+
+const isLivingFilter = (filter: OnlineFilter | LivingFilter): filter is LivingFilter => 'AND' in filter;
+const living = (p: Person) => (p.isActive ?? true) && !p.deactivatedAt && !p.deletedAt;
 
 const fakes = (people: readonly Person[], viewerBlocks: readonly string[] = []) => {
   const memberOf = (p: Person, where: MemberWhere) => {
@@ -52,6 +57,7 @@ const fakes = (people: readonly Person[], viewerBlocks: readonly string[] = []) 
     if ((p.memberActive ?? true) !== where.isActive) return false;
     if (p.id === where.userId.not) return false;
     if (!where.user) return true;
+    if (isLivingFilter(where.user.is)) return living(p);
     const since = where.user.is.OR[1].lastActiveAt.gte;
     return p.isOnline || (p.lastActiveAt !== null && p.lastActiveAt >= since);
   };
@@ -82,7 +88,11 @@ const fakes = (people: readonly Person[], viewerBlocks: readonly string[] = []) 
     user: { findMany: userFindMany, findUnique: userFindUnique, findFirst: userFindUnique },
   };
   const getPreferencesForUsers = jest.fn(async (ids: ReadonlyArray<{ id: string }>) =>
-    new Map(ids.map(({ id }) => [id, { showOnlineStatus: people.find((p) => p.id === id)?.showOnlineStatus ?? true }])),
+    new Map(
+      ids
+        .filter(({ id }) => id !== 'u-no-prefs')
+        .map(({ id }) => [id, { showOnlineStatus: people.find((p) => p.id === id)?.showOnlineStatus ?? true }]),
+    ),
   );
   return { prisma, privacy: { getPreferencesForUsers }, findMany, getPreferencesForUsers };
 };
@@ -151,11 +161,21 @@ describe('countOnlineMembers (#18014)', () => {
     expect(value).toBe(1);
   });
 
-  it('exclut un compte bloqué, dans un sens comme dans l’autre', async () => {
-    const { value } = await countFor(
-      [...crowd(10), online('u-blocks-me', { blockedUserIds: [VIEWER] }), online('u-i-block'), online('u-a')],
-      ['u-i-block'],
-    );
+  it('ne dépend pas du lecteur : bloquer la cible ne change pas le compte (sinon bloquer-relire-débloquer serait un oracle)', async () => {
+    const people = [...crowd(10), online('u-target'), online('u-a')];
+    const before = await countFor(people);
+    const afterBlocking = await countFor(people.map((p) => (p.id === 'u-target' ? { ...p, blockedUserIds: [VIEWER] } : p)), ['u-target']);
+    expect(afterBlocking.value).toBe(before.value);
+  });
+
+  it('le plancher ne compte que des comptes vivants : dix comptes désactivés ne le franchissent pas', async () => {
+    const ghosts = crowd(10, 'u-ghost').map((p) => ({ ...p, deactivatedAt: NOW }));
+    const { value } = await countFor([...ghosts, online('u-target')]);
+    expect(value).toBeNull();
+  });
+
+  it('une préférence illisible ne compte pas : fail-closed', async () => {
+    const { value } = await countFor([...crowd(10), online('u-no-prefs'), online('u-a')]);
     expect(value).toBe(1);
   });
 
@@ -170,7 +190,7 @@ describe('countOnlineMembers (#18014)', () => {
     expect(getPreferencesForUsers.mock.calls[0]?.[0]).toEqual([{ id: 'u-a', isAnonymous: false }]);
   });
 
-  it('zéro en ligne rend 0 sans lire ni blocages ni préférences', async () => {
+  it('zéro en ligne rend 0 sans lire les préférences', async () => {
     const { value, getPreferencesForUsers } = await countFor(crowd(12));
     expect(value).toBe(0);
     expect(getPreferencesForUsers).not.toHaveBeenCalled();
