@@ -75200,49 +75200,98 @@
         }
       }
     },
-    "call.transcript.disclaimer": {
+    "call.transcript.disclaimer.endToEnd": {
+      "comment": "Mention du journal d'après l'appel dans une conversation chiffrée de bout en bout : rien ne quitte l'appareil (#17864).",
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النسخ النصي محلي على هذا الجهاز، ولا يُرسل أبدًا إلى خادم Meeshy — وقد يظهر في نسخة احتياطية على iCloud أو Finder لهذا الجهاز. ويشمل كلام محدّثك كما ورد أثناء المكالمة."
+            "value": "النسخ النصي محفوظ على هذا الجهاز فقط: في محادثة مشفّرة من طرف إلى طرف لا يغادره شيء — وقد يظهر في نسخة احتياطية على iCloud أو Finder لهذا الجهاز. ويشمل كلام محدّثك كما ورد أثناء المكالمة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transkription lokal auf diesem Gerät, niemals an den Meeshy-Server gesendet — kann in einem iCloud/Finder-Backup dieses Geräts enthalten sein. Enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners."
+            "value": "Transkription nur auf diesem Gerät gespeichert: In einer Ende-zu-Ende-verschlüsselten Unterhaltung verlässt nichts das Gerät — kann in einem iCloud/Finder-Backup dieses Geräts enthalten sein. Enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcription local to this device, never sent to the Meeshy server — may be included in this device's iCloud/Finder backup. Includes your interlocutor's words as received during the call."
+            "value": "Transcript kept on this device only: in an end-to-end encrypted conversation, nothing leaves it — may be included in this device's iCloud/Finder backup. Includes your interlocutor's words as received during the call."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcripción local en este dispositivo, nunca enviada al servidor de Meeshy — puede incluirse en una copia de seguridad de iCloud/Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada."
+            "value": "Transcripción guardada solo en este dispositivo: en una conversación cifrada de extremo a extremo, nada sale de él — puede incluirse en una copia de seguridad de iCloud/Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcription locale à cet appareil, jamais envoyée au serveur Meeshy — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel."
+            "value": "Transcription gardée sur cet appareil seulement : dans une conversation chiffrée de bout en bout, rien ne le quitte — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trascrizione locale a questo dispositivo, mai inviata al server Meeshy — può comparire in un backup iCloud/Finder di questo dispositivo. Include le parole del tuo interlocutore, così come ricevute durante la chiamata."
+            "value": "Trascrizione conservata solo su questo dispositivo: in una conversazione cifrata end-to-end, nulla lo lascia — può comparire in un backup iCloud/Finder di questo dispositivo. Include le parole del tuo interlocutore, così come ricevute durante la chiamata."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Transcrição local neste aparelho, nunca enviada ao servidor Meeshy — pode estar incluída em um backup iCloud/Finder deste aparelho. Inclui as palavras do seu interlocutor, conforme recebidas durante a chamada."
+            "value": "Transcrição guardada somente neste dispositivo: em uma conversa com criptografia de ponta a ponta, nada sai dele — pode constar em um backup do iCloud/Finder deste dispositivo. Inclui as palavras do seu interlocutor, como recebidas durante a chamada."
+          }
+        }
+      }
+    },
+    "call.transcript.disclaimer.server": {
+      "comment": "Mention du journal d'après l'appel dans une conversation en clair : le serveur garde les phrases finales (#17864).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "النسخ النصي محفوظ على هذا الجهاز، كما يحتفظ خادم Meeshy بالجمل النهائية للمكالمة من أجل هذا السجل — وقد يظهر في نسخة احتياطية على iCloud أو Finder لهذا الجهاز. ويشمل كلام محدّثك كما ورد أثناء المكالمة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transkription auf diesem Gerät gespeichert; der Meeshy-Server speichert für dieses Protokoll außerdem die endgültigen Sätze des Anrufs — kann in einem iCloud/Finder-Backup dieses Geräts enthalten sein. Enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcript kept on this device; the Meeshy server also keeps the call's final sentences for this log — may be included in this device's iCloud/Finder backup. Includes your interlocutor's words as received during the call."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcripción guardada en este dispositivo; el servidor de Meeshy también guarda las frases finales de la llamada para este registro — puede incluirse en una copia de seguridad de iCloud/Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcription gardée sur cet appareil ; le serveur Meeshy garde aussi les phrases finales de l'appel pour ce journal — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trascrizione conservata su questo dispositivo; il server Meeshy conserva anche le frasi finali della chiamata per questo registro — può comparire in un backup iCloud/Finder di questo dispositivo. Include le parole del tuo interlocutore, così come ricevute durante la chiamata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcrição guardada neste dispositivo; o servidor do Meeshy também guarda as frases finais da chamada para este registro — pode constar em um backup do iCloud/Finder deste dispositivo. Inclui as palavras do seu interlocutor, como recebidas durante a chamada."
           }
         }
       }
@@ -75337,6 +75386,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "Você"
+          }
+        }
+      }
+    },
+    "call.card.participants.you": {
+      "comment": "Dernier élément de la ligne des participants de la carte d'appel (« Awa, Karim, Lina et vous »), joint aux noms par ListFormatter (#17864, A1.2).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنت"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "du"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "you"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tú"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vous"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tu"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "você"
           }
         }
       }
