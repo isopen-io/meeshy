@@ -245,6 +245,77 @@ final class CallTranscriptRemoteServiceTests: XCTestCase {
         XCTAssertEqual(transcript.captures?.map(\.id), ["cap-0", "cap-1"], "la passerelle rend toutes les captures à chaque page : on ne les double pas")
     }
 
+    func test_transcript_overlappingPages_concatenateWithoutDuplicates() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [
+            pageJSON(ids: ["a", "b"], hasMore: true, total: 3),
+            pageJSON(ids: ["b", "c"], hasMore: false, total: 3)
+        ])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(transcript.segments.map(\.id), ["a", "b", "c"], "une phrase servie par deux pages ne se lit qu'une fois")
+        XCTAssertEqual(offsets(mock), ["0", "2"], "la page suivante reprend après ce que la passerelle a rendu, doublons compris")
+    }
+
+    func test_transcript_gatewayAlwaysSayingHasMoreWithTheSamePage_stopsAtTheFirstPageWithoutNews() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [pageJSON(ids: ["a", "b"], hasMore: true)])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(transcript.segments.map(\.id), ["a", "b"])
+        XCTAssertEqual(mock.requestCount, 2, "une page qui n'apporte rien de neuf met fin à la lecture, jamais une boucle")
+    }
+
+    func test_transcript_gatewayAlwaysSayingHasMoreWithNewRows_stopsAtThePageCeiling() async throws {
+        let ceiling = CallTranscriptPaging.maxPages
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: (0..<(ceiling + 5)).map { pageJSON(ids: ["p\($0)"], hasMore: true) })
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(mock.requestCount, ceiling, "la lecture est bornée en nombre de pages")
+        XCTAssertEqual(transcript.segments.count, ceiling)
+        XCTAssertEqual(transcript.hasMore, true, "un appel coupé par la borne ne se dit pas complet")
+    }
+
+    func test_transcript_cancelledTask_readsNoPageAndThrowsCancellation() async {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [pageJSON(ids: ["a"], hasMore: true)])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let outcome = await Task { () -> Error? in
+            withUnsafeCurrentTask { $0?.cancel() }
+            do {
+                _ = try await service.transcript(callId: "call-1")
+                return nil
+            } catch {
+                return error
+            }
+        }.value
+
+        XCTAssertTrue(outcome is CancellationError, "la cellule partie, la lecture s'arrête : reçu \(String(describing: outcome))")
+        XCTAssertEqual(mock.requestCount, 0, "aucune page ne se lit pour une cellule qui a disparu")
+    }
+
+    func test_transcript_completeRead_saysItHasNoMore() async throws {
+        let mock = MockAPIClient()
+        mock.stubWireSequence("/calls/call-1/transcript", jsons: [
+            pageJSON(ids: ["a"], hasMore: true, total: 2),
+            pageJSON(ids: ["b"], hasMore: false, total: 2)
+        ])
+        let service = CallTranscriptRemoteService(api: mock)
+
+        let transcript = try await service.transcript(callId: "call-1")
+
+        XCTAssertEqual(transcript.hasMore, false)
+        XCTAssertEqual(transcript.total, 2)
+    }
+
     func test_transcript_aFailingLaterPage_throwsInsteadOfServingATruncatedCall() async {
         let mock = MockAPIClient()
         mock.stubWireSequence("/calls/call-1/transcript", jsons: [
