@@ -15,8 +15,8 @@
     "android:feature/calls": {
       "labels": 519,
       "words": 1801,
-      "long": 15,
-      "explanations": 91
+      "long": 12,
+      "explanations": 90
     },
     "android:feature/chat": {
       "labels": 1136,
@@ -28,13 +28,13 @@
       "labels": 118,
       "words": 313,
       "long": 2,
-      "explanations": 32
+      "explanations": 26
     },
     "android:feature/contacts": {
-      "labels": 160,
-      "words": 775,
-      "long": 11,
-      "explanations": 14
+      "labels": 144,
+      "words": 706,
+      "long": 10,
+      "explanations": 8
     },
     "android:feature/conversations": {
       "labels": 634,
@@ -55,16 +55,16 @@
       "explanations": 116
     },
     "android:feature/notifications": {
-      "labels": 65,
-      "words": 164,
+      "labels": 63,
+      "words": 157,
       "long": 0,
-      "explanations": 9
+      "explanations": 8
     },
     "android:feature/profile": {
-      "labels": 188,
-      "words": 509,
+      "labels": 172,
+      "words": 464,
       "long": 1,
-      "explanations": 18
+      "explanations": 17
     },
     "android:feature/reels": {
       "labels": 55,
