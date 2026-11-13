@@ -76,6 +76,34 @@ final class RelationsServiceTests: XCTestCase {
         XCTAssertEqual(served[1].source, "Spotify")
     }
 
+    func test_sharedLocations_withoutBounds_coversTheWholeMap() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/locations", json: """
+        {"success":true,"data":{"items":[
+          {"userId":"u1","latitude":48.85,"longitude":2.35,"precision":"city","radiusMeters":8000,
+           "updatedAt":"2026-11-13T10:00:00.000Z","expiresAt":"2026-11-13T11:00:00.000Z"}
+        ]}}
+        """)
+
+        let served = try await service.sharedLocations(within: nil)
+
+        XCTAssertEqual(api.lastRequest?.endpoint, "/relations/locations")
+        XCTAssertEqual(api.lastRequest?.method, "GET")
+        XCTAssertNil(api.lastRequest?.queryItems)
+        XCTAssertEqual(served.map(\.userId), ["u1"])
+        XCTAssertEqual(served.first?.precision, .city)
+    }
+
+    func test_sharedLocations_withBounds_sendsTheBboxTheGatewayReads() async throws {
+        let (service, api) = makeSUT()
+        api.stubWire("/relations/locations", json: #"{"success":true,"data":{"items":[]}}"#)
+        let bounds = SharedLocationBounds(minLongitude: 2, minLatitude: 48, maxLongitude: 3, maxLatitude: 49)
+
+        _ = try await service.sharedLocations(within: bounds)
+
+        XCTAssertEqual(api.lastRequest?.queryItems, [URLQueryItem(name: "bbox", value: "2.0,48.0,3.0,49.0")])
+    }
+
     // MARK: - Baisser (#14910)
 
     func test_lower_postsTheTargetLevelAndReadsTheServedLink() async throws {

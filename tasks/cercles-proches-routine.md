@@ -840,3 +840,60 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gel de la CI des branches de lot (#18048, `CI_DEV_SEUL`) : les runs Swift dispatchés sur la branche ont été annulés
   sans runner. `origin/dev` refusionnée à la main (journal seul), la preuve Swift du lot est la CI de `dev` qui suit la
   fusion, comme le demande la consigne du porteur.
+
+## 2026-11-13 — réveil 27 : deux collègues de l'équipe consentent entre eux sans lien, et le consentement tombe avec le rôle (#16642, #16814)
+
+- Reprise : sept réveils parallèles écrivent `together/`, `sharedLocation/`, la carte web et iOS, les réglages Bring.
+  Aucun n'écrit `routes/relations/settings.ts` ni `relationConsent.ts` : lot réservé sur
+  `claude/cercles-16642-consentement-equipe`. Le travail de #16642, écrit et revu le 2026-11-08 sur
+  `claude/cercles-16642-serveur` sans jamais être proposé, est repris par cherry-pick sur `dev` (trois commits),
+  et #16814 (sa suite de sécurité) s'y ajoute.
+- Lot : PR #17984 vers `dev`. #16642 repris et mis à jour pour la décision du 2026-11-10 (ANALYST et AUDIT
+  consentent comme l'équipe). #16814 : `updateRole`, `updateStatus` (désactivation, bannissement) et `deleteUser`
+  appellent `revokeTeamSharesOf`, qui éteint dans les deux sens ce que le lien réel n'ouvre pas (rituel hors Sang,
+  catégorie d'écoute sous Proche), daté chez chaque émetteur, puis efface l'écoute chez le lecteur qui la voyait.
+- Revue adversariale : un constat à corriger (l'écoute restait affichée 15 min chez l'ex-collègue), corrigé dans le
+  lot avec son témoin rouge ; le reste en suivi #17991 (chemins d'auto-suppression, provenance, dates, concurrence).
+- Gates locaux : 155 suites voisines, 2 857/2 857 vertes ; `tsc` passerelle vert ; contrats shared verts. La CI de PR
+  étant gelée, `ci.yml` est dispatché sur la tête de branche.
+- Prochain lot recommandé : #17991, ou un client pour accorder l'écoute et la position entre collègues (#16864).
+
+## 2026-11-13 — réveil 28 bis : la branche orpheline des partages du rituel menée à sa PR (#14924)
+
+- Reprise : 25 PR cercles ouvertes, toutes écrites dans l'heure par des réveils vivants ; ce réveil n'en prend aucune.
+  `claude/cercles-17100-android` (« ensemble » sur Android) écrite à 14:13 : cédée. Trouvée en revanche une branche
+  ORPHELINE, `claude/cercles-14924-serveur`, écrite jusqu'au 2026-11-08 et jamais proposée en PR : ce réveil la reprend.
+- Lot : PR #18013 vers `dev`. `origin/dev` fusionnée à la main (conflit dans `user-management.service.ts` : coupure
+  « ensemble » et oubli des cercles d'équipe gardés à côté du retrait des partages).
+- Revue adversariale : non bloquante. Corrigés dans le lot, témoins vus rouges : la rupture d'une demande acceptée ne
+  rend plus 500 quand le retrait des partages tombe en panne (constat 1) ; l'annulation d'une suppression, par lien de
+  courriel ou par nouvelle demande, éteint les partages avant de rendre le compte (constat 3). Suites : #18015
+  (décision : le blocage éteint-il aussi la catégorie d'écoute ?), #18016 (levée de bannissement en panne, témoin de
+  course moins dépendant de l'implémentation).
+- Gates locaux : 2 368 témoins (me, suppression, annuaire, relations, admin) verts, `tsc` passerelle vert.
+- Prochain lot recommandé : mener à la fusion les PR de la routine ouvertes ; ensuite #18015 si le porteur tranche A.
+
+## 2026-11-13 — réveil 25 : recevoir sur iOS les positions qu'on me partage, couche SDK (#16983)
+
+- Reprise : #17956 (carte web, #16984), #17147 (séance « ensemble » et conversation close) et #17013 (icône par cercle,
+  serveur) sont menés en ce moment par d'autres réveils de la routine (branches poussées dans les minutes précédentes) :
+  ce réveil leur cède et prend #16983, libre.
+- Lot : PR vers `dev`, SDK seulement. `SharedLocation.swift` (lecture Swift de `shared-location.ts`, décodeur borné :
+  un champ en trop n'a pas de place, une coordonnée hors du globe ou une précision inconnue sont refusées),
+  `location:share-changed|ended` routés et publiés (`SharedLocationEvents`), `RelationsService.sharedLocations(within:)`
+  (`GET /relations/locations?bbox=`, l'entrée sort de `PENDING_CLIENT_ENTRIES`), `SharedLocationsLive` (magasin en
+  mémoire, iso du web : montée de précision sans recharger, fin et échéance qui effacent, rattrapage qui fait foi dans
+  son emprise).
+- Gates locaux : catalogue Swift 328/328 conforme, `check_cohesion_budget.sh` et `check_pbxproj_consistency.sh` verts.
+  `check_house_rules.sh` est rouge sur `dev` AVANT ce lot (`unchecked-sendable` 112 → 113, fichiers d'appel et
+  d'onboarding), identique avec et sans le lot. Swift ne compile pas en conteneur : la preuve est `sdk-tests.yml` et
+  `ios.yml` dispatchés sur la PR.
+- Reste de #16983 : la carte de réception (épingles, cercle de flou, VoiceOver) câblée sur `SharedLocationsLive`,
+  puis l'émission (fiche d'un Ami, durée, précision, arrêt) et les chaînes `InfoPlist.strings`.
+- Suite du réveil (17:20–18:10 UTC) : #18004 fusionnée dans `dev` (rouges hérités de `PlayingSoundLoop`), `origin/dev`
+  fusionnée à la main dans la branche (seul conflit : ce journal, entrées des deux côtés gardées). Relecture du porteur,
+  bloquante et juste : une position ancienne rejouée par un rattrapage survivait à `expiresAt` (échéance posée à
+  `now + (expiresAt − updatedAt)`). Correctif `deadline = min(now + durée servie, expiresAt)`, deux témoins (position
+  rejouée bornée à son terme, position rejouée déjà échue jamais affichée). CI de branche coupée par `CI_DEV_SEUL`
+  (#18048, directive du porteur : fusionner les PR ouvertes, seul `dev` tourne) : la preuve Swift est la CI de `dev`.
+  Nouveau rouge hérité de `dev` signalé : #18050 (`try-sleep` 6 → 8, `sleep-nanoseconds` 0 → 2).

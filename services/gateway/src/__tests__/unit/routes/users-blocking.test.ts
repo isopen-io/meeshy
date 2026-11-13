@@ -63,6 +63,7 @@ function makePrisma(overrides: any = {}) {
       update: jest.fn<any>().mockResolvedValue({}),
       ...overrides.user,
     },
+    relationFeatureSetting: { findUnique: jest.fn<any>().mockResolvedValue(null), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     mutationLog: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       create: jest.fn<any>().mockResolvedValue({}),

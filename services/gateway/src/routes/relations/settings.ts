@@ -1,12 +1,14 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   RELATION_RITUAL_SHARES,
+  RELATION_RITUAL_SHARE_WITHDRAWN_AT,
   relationPersonSettingsUpdateSchema,
   type RelationPersonSettings,
   type RelationRitualShare,
 } from '@meeshy/shared/types/relation-person-settings';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { ritualShareWithdrawalOf } from '../../services/relations/ritualShareWithdrawal';
+import { teamMayGrantShares } from '../../services/relations/teamShareGrant';
 import { stopBringsOnBlock } from '../../services/bring/bringService';
 import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { logError } from '../../utils/logger';
@@ -76,10 +78,18 @@ const shareFlags = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [sha
 >;
 
 /**
- * Un partage ne se règle qu'à `false` : `enum` SANS `type`, pour qu'AJV ne coerce pas
- * `"false"`, `null` ou `0` en `false` avant zod (audit #14535 constat 4).
+ * Un partage ne se règle qu'à un booléen : `enum` SANS `type`, pour qu'AJV ne coerce pas
+ * `"false"`, `null` ou `0` en `false` avant zod (audit #14535 constat 4). `true` n'est
+ * accepté par le corps que pour être JUGÉ par la loi (#16642) : il ne s'écrit qu'entre
+ * deux comptes de l'équipe.
  */
-const withdrawalFlags = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, { enum: [false] }]));
+const shareFlagsUpdate = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, { enum: [true, false] }]));
+
+/** L'accord hors rituel (#16642) : le partage allumé, sa date de retrait effacée, et la date du consentement. */
+const shareGrantOf = (granted: readonly RelationRitualShare[], now: Date): Record<string, boolean | Date | null> =>
+  granted.length === 0
+    ? {}
+    : { consentedAt: now, ...Object.fromEntries(granted.flatMap((share) => [[share, true], [RELATION_RITUAL_SHARE_WITHDRAWN_AT[share], null]])) };
 
 const settingsSchema = {
   type: 'object',
@@ -158,11 +168,11 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
     onRequest: [fastify.authenticate],
     preHandler: [appVersionFloorPreHandler, writes.middleware()],
     schema: {
-      description: 'Set what I allow this person: { bringBlocked?, talkieBlocked?, togetherBlocked?, listeningCategoryShared? (granted from Close), listeningTitleShared?, locationShared?, locationHistoryShared?, proximityShared? }. A ritual share can only be withdrawn (false). Unknown settings are refused (400).',
+      description: 'Set what I allow this person: { bringBlocked?, talkieBlocked?, togetherBlocked?, listeningCategoryShared? (granted from Close), listeningTitleShared?, locationShared?, locationHistoryShared?, proximityShared? }. A ritual share can always be withdrawn (false); granting one (true) outside the ritual is accepted only between two team accounts (ANALYST and above), otherwise 400. Unknown settings are refused (400).',
       tags: ['relations'],
       summary: 'Update per-person settings',
       params: userIdParams,
-      body: { type: 'object', minProperties: 1, properties: { bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, togetherBlocked: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...withdrawalFlags } },
+      body: { type: 'object', minProperties: 1, properties: { bringBlocked: { type: 'boolean' }, talkieBlocked: { type: 'boolean' }, togetherBlocked: { type: 'boolean' }, listeningCategoryShared: { type: 'boolean' }, ...shareFlagsUpdate } },
       response: { 200: settingsSchema, ...errorResponses },
       security: [{ bearerAuth: [] }],
     },
@@ -177,6 +187,11 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const userId = otherId.toLowerCase();
       const { bringBlocked, talkieBlocked, togetherBlocked, listeningCategoryShared, ...requested } = parsed.data;
       const now = new Date();
+      const shares = Object.keys(requested) as RelationRitualShare[];
+      const granted = shares.filter((share) => requested[share] === true);
+      const contradictory = granted.includes('listeningTitleShared') && listeningCategoryShared === false;
+      const teamGrant = granted.length > 0 && !contradictory && (await teamMayGrantShares(fastify.prisma, { ownerId, otherId: userId, shares: granted, now }));
+      if (granted.length > 0 && !teamGrant) return sendBadRequest(reply, 'Donnees invalides');
       const current = await readSettings(fastify.prisma, ownerId, userId);
       const blocking = bringBlocked === true || talkieBlocked === true || togetherBlocked === true;
       const granting = listeningCategoryShared === true;
@@ -187,7 +202,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       // Retirer la catégorie retire aussi le titre : on ne garde pas le plus riche des deux partages
       // quand on vient de couper le moindre.
       const withdrawn = [
-        ...(Object.keys(requested) as RelationRitualShare[]),
+        ...shares.filter((share) => requested[share] === false),
         ...(listeningCategoryShared === false ? (['listeningTitleShared'] as const) : []),
       ];
       const categoryWithdrawn = listeningCategoryShared === false && current?.listeningCategoryShared === true;
@@ -195,6 +210,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const ecoute = { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error: unknown) => logError(fastify.log, 'Now playing not refreshed after settings:', error) };
       const ecouteAvant = cutsListening ? await captureNowPlayingBefore(ecoute, { userA: ownerId, userB: userId }) : new Map();
       const data = {
+        ...shareGrantOf(granted, now),
         ...ritualShareWithdrawalOf(current, withdrawn, now),
         ...(categoryWithdrawn ? { listeningCategoryShared: false, listeningCategoryWithdrawnAt: now } : {}),
         ...(granting && close ? { listeningCategoryShared: true, listeningCategoryWithdrawnAt: null } : {}),
@@ -207,7 +223,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       };
 
       // UNE écriture : le retrait (qui n'exige aucun lien), les blocages et l'accord partent ensemble.
-      if ((blocking && linked) || (granting && close)) {
+      if ((blocking && linked) || (granting && close) || teamGrant) {
         await fastify.prisma.relationFeatureSetting.upsert({
           where: { ownerId_otherId: { ownerId, otherId: userId } },
           create: { ownerId, otherId: userId, ...data },
@@ -225,7 +241,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
         await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data });
       }
       // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface chez qui la voyait.
-      if ((granting && close) || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
+      if ((granting && close) || teamGrant || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
       if ((blocking && !linked) || (granting && !close)) return sendNotFound(reply, 'Personne introuvable');
 
       return sendSuccess(reply, servedSettings(userId, await readSettings(fastify.prisma, ownerId, userId)));
