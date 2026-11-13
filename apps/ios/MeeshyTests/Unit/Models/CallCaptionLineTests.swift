@@ -184,10 +184,21 @@ final class CallCaptionLineTests: XCTestCase {
         XCTAssertEqual(a.speakerColorHex, CallSpeakerColor.hex(for: "user-42"))
     }
 
-    func test_speakerColor_onTheThread_isTheAuthorColorAdaptedToTheScheme() {
+    func test_speakerColor_onTheThread_isTheAuthorColorMadeLegibleByTheSmallestStep() {
         let base = DynamicColorGenerator.colorForName("user-42")
-        XCTAssertEqual(CallSpeakerColor.hex(for: "user-42", mode: .light), DynamicColorGenerator.adaptedColor(base, for: .light))
-        XCTAssertEqual(CallSpeakerColor.hex(for: "user-42", mode: .dark), CallSpeakerColor.hex(for: "user-42"))
+        XCTAssertEqual(CallSpeakerColor.hex(for: "user-42", mode: .light), AuthorInk.hex(base, for: .light))
+        XCTAssertEqual(CallSpeakerColor.hex(for: "user-42", mode: .dark), AuthorInk.hex(base, for: .dark))
+    }
+
+    func test_speakerColor_onTheCallScreen_staysTheBrightenedPinnedDarkColor() {
+        let base = DynamicColorGenerator.colorForName("user-42")
+        XCTAssertEqual(CallSpeakerColor.hex(for: "user-42"), DynamicColorGenerator.adaptedColor(base, for: .dark))
+    }
+
+    func test_speakerColor_onTheThread_neverUsesTheFixedCeilingOrFloor() throws {
+        let source = try String(contentsOfFile: #filePath
+            .replacingOccurrences(of: "MeeshyTests/Unit/Models/CallCaptionLineTests.swift", with: "Meeshy/Features/Call/Models/CallCaptionLine.swift"))
+        XCTAssertTrue(source.contains("AuthorInk.hex("))
     }
 
     func test_speakerColor_differsForMostIds() {
