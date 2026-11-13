@@ -89,7 +89,7 @@ import {
   socketTranscriptionActiveSchema,
   socketRequestIceServersSchema,
 } from '../validation/call-schemas';
-import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
+import { getSocketRateLimiter, checkSocketRateLimit, callSignalBudgetId, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import { ZmqTranslationClient } from '../services/zmq-translation';
 import type {
   CallInitiateEvent,
@@ -2793,7 +2793,7 @@ export class CallEventsHandler {
         // signals must never refuse another device's SDP answer.
         const rateLimitPassed = await checkSocketRateLimit(
           socket,
-          `${userId}:${socket.id}`,
+          callSignalBudgetId(userId, socket.id),
           SOCKET_RATE_LIMITS.CALL_SIGNAL,
           this.rateLimiter,
           CALL_EVENTS.ERROR
