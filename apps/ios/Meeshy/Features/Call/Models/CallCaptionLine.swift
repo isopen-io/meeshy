@@ -11,7 +11,8 @@ import MeeshySDK
 /// Hors de l'écran d'appel (journal d'après l'appel, dans un fil clair ou
 /// sombre), la MÊME couleur s'adapte au thème de l'app (#16634,
 /// `docs/product/appels-vue-finale.md` loi 4) : telle quelle si elle tient
-/// 4,5:1 sur la carte, sinon du plus petit pas (`AuthorInk`, #17863).
+/// 4,5:1 sur les fonds du fil, sinon du plus petit pas — la même teinte que
+/// le web (`AuthorInk`, #17863).
 enum CallSpeakerColor {
     static func hex(for userId: String) -> String {
         DynamicColorGenerator.adaptedColor(DynamicColorGenerator.colorForName(userId), for: .dark)
