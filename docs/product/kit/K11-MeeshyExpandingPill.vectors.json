@@ -225,6 +225,58 @@
       "inset": 6
     }
   ],
+  "headerTitle": [
+    {
+      "view": "R7, le titre tient au centre",
+      "width": 342,
+      "start": 40,
+      "end": 40,
+      "gap": 6,
+      "natural": 100,
+      "center": 171,
+      "titleWidth": 250
+    },
+    {
+      "view": "O9 grande police, le compteur large : le titre glisse vers le debut et garde toute la place libre",
+      "width": 342,
+      "start": 40,
+      "end": 140,
+      "gap": 6,
+      "natural": 160,
+      "center": 121,
+      "titleWidth": 150
+    },
+    {
+      "view": "O9, titre trop long pour le centre mais pas pour la place libre : il glisse juste assez",
+      "width": 342,
+      "start": 40,
+      "end": 72,
+      "gap": 6,
+      "natural": 200,
+      "center": 164,
+      "titleWidth": 200
+    },
+    {
+      "view": "O9, le titre tient a marge egale : il reste centre",
+      "width": 342,
+      "start": 40,
+      "end": 72,
+      "gap": 6,
+      "natural": 160,
+      "center": 171,
+      "titleWidth": 186
+    },
+    {
+      "view": "aucune place",
+      "width": 0,
+      "start": 40,
+      "end": 40,
+      "gap": 6,
+      "natural": 100,
+      "center": 0,
+      "titleWidth": 0
+    }
+  ],
   "insets": [
     {
       "showsHeader": true,

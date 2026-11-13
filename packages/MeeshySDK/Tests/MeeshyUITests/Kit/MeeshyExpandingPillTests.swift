@@ -82,6 +82,22 @@ struct MeeshyExpandingPillTests {
         #expect(MeeshyExpandingPillRule.headerTitleInset(start: .nan, end: .infinity, gap: 6) == 6)
     }
 
+    @Test("le titre reste centré tant qu'il tient ; sinon il glisse vers le bord libre, jamais sous un bouton ni sous l'accessoire")
+    func headerTitleSlot_followsTheVectors() throws {
+        for row in try Self.rows("headerTitle") {
+            let slot = MeeshyExpandingPillRule.headerTitleSlot(
+                width: CGFloat(try Self.number(row["width"])),
+                start: CGFloat(try Self.number(row["start"])), end: CGFloat(try Self.number(row["end"])),
+                gap: CGFloat(try Self.number(row["gap"])), natural: CGFloat(try Self.number(row["natural"]))
+            )
+            #expect(slot.center == CGFloat(try Self.number(row["center"])), "\(row)")
+            #expect(slot.width == CGFloat(try Self.number(row["titleWidth"])), "\(row)")
+            #expect(slot.center - slot.width / 2 >= 0, "\(row)")
+        }
+        let wild = MeeshyExpandingPillRule.headerTitleSlot(width: .infinity, start: .nan, end: 40, gap: -3, natural: .nan)
+        #expect(wild.center.isFinite && wild.width.isFinite)
+    }
+
     // MARK: - Marges et hauteur
 
     @Test("10 en haut, 12 sur les côtés, de quoi faire 12 sous le corps avec la rangée ; une confirmation a ses 16")
@@ -369,7 +385,7 @@ struct MeeshyExpandingPillTests {
     func source_headerUsesItsLayout() throws {
         let header = try Self.code("MeeshyExpandingPillHeader.swift")
         #expect(header.contains("MeeshyExpandingPillHeaderLayout(gap: gap)"))
-        #expect(header.contains("MeeshyExpandingPillRule.headerTitleInset(start: start.width, end: end.width, gap: gap)"))
+        #expect(header.contains("MeeshyExpandingPillRule.headerTitleSlot("))
         #expect(header.contains("if slots.reservesEnd"))
         #expect(!header.contains("ZStack"))
     }

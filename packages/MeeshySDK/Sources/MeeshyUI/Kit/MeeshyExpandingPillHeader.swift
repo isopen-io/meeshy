@@ -133,9 +133,10 @@ public struct MeeshyExpandingPillHeader<Trailing: View>: View {
 // MARK: - La disposition de l'en-tête
 
 /// ‹ au bord de début, l'accessoire et ✕ au bord de fin, le titre au centre avec
-/// la MÊME marge des deux côtés : la plus large des deux extrémités, plus l'écart.
-/// Il reste donc centré sans jamais passer sous un bouton ni sous l'accessoire,
-/// quelle que soit sa largeur (un compteur, une bascule Traduit / Original). Les
+/// la MÊME marge des deux côtés tant qu'il y tient ; sinon il glisse vers le bord le
+/// plus libre et prend toute la place entre les deux (`headerTitleSlot`). Il ne
+/// passe donc jamais sous un bouton ni sous l'accessoire (un compteur, une bascule
+/// Traduit / Original), et une grande police ne le réduit pas à une lettre. Les
 /// positions sont comptées depuis le DÉBUT : SwiftUI retourne lui-même une
 /// disposition en RTL.
 struct MeeshyExpandingPillHeaderLayout: Layout {
@@ -154,22 +155,24 @@ struct MeeshyExpandingPillHeaderLayout: Layout {
         subviews[0].place(at: CGPoint(x: bounds.minX, y: midY), anchor: .leading, proposal: ProposedViewSize(measure.start))
         subviews[2].place(at: CGPoint(x: bounds.maxX, y: midY), anchor: .trailing, proposal: ProposedViewSize(measure.end))
         subviews[1].place(
-            at: CGPoint(x: bounds.midX, y: midY), anchor: .center,
-            proposal: ProposedViewSize(width: measure.titleWidth, height: nil)
+            at: CGPoint(x: bounds.minX + measure.title.center, y: midY), anchor: .center,
+            proposal: ProposedViewSize(width: measure.title.width, height: nil)
         )
     }
 
     private func measured(
         subviews: Subviews, width: CGFloat?
-    ) -> (start: CGSize, end: CGSize, titleWidth: CGFloat, width: CGFloat, height: CGFloat) {
+    ) -> (start: CGSize, end: CGSize, title: MeeshyExpandingPillRule.HeaderTitleSlot, width: CGFloat, height: CGFloat) {
         let start = subviews[0].sizeThatFits(.unspecified)
         let end = subviews[2].sizeThatFits(.unspecified)
+        let natural = subviews[1].sizeThatFits(.unspecified).width
         let inset = MeeshyExpandingPillRule.headerTitleInset(start: start.width, end: end.width, gap: gap)
-        let natural = subviews[1].sizeThatFits(.unspecified).width + 2 * inset
-        let total = width.flatMap { $0.isFinite ? $0 : nil } ?? natural
-        let titleWidth = max(total - 2 * inset, 0)
-        let title = subviews[1].sizeThatFits(ProposedViewSize(width: titleWidth, height: nil))
-        return (start, end, titleWidth, total, max(start.height, end.height, title.height))
+        let total = width.flatMap { $0.isFinite ? $0 : nil } ?? natural + 2 * inset
+        let slot = MeeshyExpandingPillRule.headerTitleSlot(
+            width: total, start: start.width, end: end.width, gap: gap, natural: natural
+        )
+        let title = subviews[1].sizeThatFits(ProposedViewSize(width: slot.width, height: nil))
+        return (start, end, slot, total, max(start.height, end.height, title.height))
     }
 }
 
