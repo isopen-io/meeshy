@@ -804,7 +804,7 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
         <HeldSwap value={column.shown ? true : null} shape="end" className="glass-call-prominent absolute z-30 flex flex-col rounded-[28px] p-2 text-on-media" style={JOURNAL_COLUMN_PLACE} data-call-journal-column="" data-call-chrome-keep="">
           {() => (
             <Suspense fallback={null}>
-              <CallJournalInColumn id={CALL_PANEL_ID.journal} callId={call.callId ?? ''} closeGlyph={closeGlyph} language={language} Button={CallButton} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />
+              <CallJournalInColumn id={CALL_PANEL_ID.journal} callId={call.callId ?? ''} language={language} onClose={column.close} captions={call.captions} notes={call.journalNotes ?? []} colorOf={colorOf} startedAt={call.connectedAt} listening={call.captionsMode !== 'off'} onListen={callActions.toggleCaptions} />
             </Suspense>
           )}
         </HeldSwap>

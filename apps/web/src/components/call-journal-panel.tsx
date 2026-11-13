@@ -1,9 +1,8 @@
-import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { memo, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
 import { CallJournalViewSwitch, type JournalView } from '@/components/call-journal-view-switch';
-import type { CallButton } from '@/components/call-glass-button';
-import { CallPanelFrame, type PanelBack } from '@/components/call-panel-frame';
+import { CallPanelFrame, type ColumnPanelHead, type PillPanelHead } from '@/components/call-panel-frame';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { captionLanguageLabel, captionReveal, captionText, revealState, type CallCaption } from '@/lib/calls/call-captions';
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
@@ -45,15 +44,14 @@ const INK_2 = 'var(--color-on-media-3)';
 
 const NEAR_BOTTOM = 24;
 
-type JournalProps = {
+const COLUMN_HEAD: ColumnPanelHead = { fill: true };
+
+type JournalBase = {
   readonly id: string;
   /** L'appel dont c'est le journal : ses phrases dépliées lui survivent fermé, et rien n'en passe à un autre appel (L3.9). */
   readonly callId: string;
-  readonly closeGlyph: ReactNode;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
-  readonly Button: typeof CallButton;
-  readonly back?: PanelBack | undefined;
   readonly captions: readonly CallCaption[];
   readonly notes: readonly CallJournalNote[];
   readonly colorOf: (who: Pick<CallCaption, 'speakerId' | 'speakerName'>) => string;
@@ -62,11 +60,13 @@ type JournalProps = {
   /** Les sous-titres sont coupés : rien ne s'inscrit, et l'état vide propose de les activer. */
   readonly listening: boolean;
   readonly onListen: () => void;
-  /** Posé dans la colonne du grand écran (#16942) : la liste prend toute la hauteur au lieu d'une fenêtre bornée. */
-  readonly fill?: boolean;
-  /** La hauteur de la fenêtre : dans la pilule, la liste en prend une part (`callJournalHeight`, #17343). */
-  readonly windowHeight?: number;
 };
+
+/** Dans la pilule : ‹ et ✕ (le bouton rond et le glyphe remis par l'écran), et la hauteur de la fenêtre, dont la liste prend une part (`callJournalHeight`, #17343). */
+type JournalInPill = Omit<PillPanelHead, 'closeLabel' | 'closeData'> & { readonly fill?: false; readonly windowHeight?: number };
+
+/** Posé dans la colonne du grand écran (#16942) : la liste prend toute la hauteur, et la tête n'a ni ‹ ni ✕ (#17932). */
+type JournalProps = JournalBase & (JournalInPill | ColumnPanelHead);
 
 /** L'heure dans l'appel, au bout (à droite) de la ligne méta ; absente quand le début de l'appel est inconnu. */
 function CallClock({ at, startedAt }: { readonly at: number; readonly startedAt: number | null }) {
@@ -138,7 +138,9 @@ const listSize = (windowHeight: number | undefined): CSSProperties => (windowHei
 
 const atBottom = (list: HTMLElement): boolean => list.scrollHeight - list.scrollTop - list.clientHeight <= NEAR_BOTTOM;
 
-export function CallJournalPanel({ id, callId, closeGlyph, language, onClose, Button, back, captions, notes, colorOf, listening, onListen, startedAt, fill = false, windowHeight }: JournalProps) {
+export function CallJournalPanel(props: JournalProps) {
+  const { id, callId, language, onClose, captions, notes, colorOf, listening, onListen, startedAt } = props;
+  const fill = props.fill === true;
   const list = useRef<HTMLOListElement>(null);
   const stuck = useRef(true);
   const [away, setAway] = useState(false);
@@ -173,12 +175,8 @@ export function CallJournalPanel({ id, callId, closeGlyph, language, onClose, Bu
     <CallPanelFrame
       id={id}
       title={t(language, 'callControls.journal')}
-      closeLabel={t(language, 'callControls.close')}
-      closeGlyph={closeGlyph}
       onClose={onClose}
-      Button={Button}
-      back={back}
-      fill={fill}
+      {...(props.fill === true ? COLUMN_HEAD : { closeLabel: t(language, 'callControls.close'), closeGlyph: props.closeGlyph, Button: props.Button, back: props.back })}
       trailing={<CallJournalViewSwitch language={language} view={view} onChange={setView} />}
       data={{ 'data-call-journal-panel': '' }}
     >
@@ -201,7 +199,7 @@ export function CallJournalPanel({ id, callId, closeGlyph, language, onClose, Bu
             onScroll={onScroll}
             tabIndex={0}
             className={`flex flex-col gap-3 overflow-y-auto overscroll-contain px-3 pb-2 ${fill ? 'min-h-0 flex-1' : ''}`}
-            style={fill ? undefined : listSize(windowHeight)}
+            style={props.fill === true ? undefined : listSize(props.windowHeight)}
             data-call-journal=""
             data-panel-first=""
           >
@@ -230,6 +228,6 @@ export function CallJournalPanel({ id, callId, closeGlyph, language, onClose, Bu
 }
 
 /** Le journal en colonne de verre sur grand écran (#16942, W1 et W2) : la même liste, qui prend toute la hauteur de la colonne que l'écran pose (`call-screen.tsx`, `JOURNAL_COLUMN_PLACE`), pour qu'elle entre et reparte par le bord de fin (W1.20). */
-export function CallJournalInColumn(journal: Omit<JournalProps, 'fill' | 'windowHeight'>) {
+export function CallJournalInColumn(journal: JournalBase) {
   return <CallJournalPanel {...journal} fill />;
 }
