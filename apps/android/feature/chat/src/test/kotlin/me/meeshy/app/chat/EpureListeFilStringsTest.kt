@@ -163,14 +163,19 @@ class EpureListeFilStringsTest {
         assertThat(epure("values-fr")["encryption_fact_hybrid_second_layer"]).contains("seconde couche")
     }
 
+    private val serverReads = mapOf(
+        "values" to "can read your messages", "values-fr" to "peuvent lire vos messages", "values-es" to "pueden leer tus mensajes",
+        "values-pt" to "podem ler suas mensagens", "values-de" to "Nachrichten lesen können", "values-it" to "possono leggere i tuoi messaggi",
+        "values-ar" to "يمكنها قراءة رسائلك",
+    )
+
     @Test
-    fun `the hybrid mode choice is the summary sentence, said as a mode, in every language`() {
-        assertThat(epure("values")["encryption_mode_hybrid_description"]).isEqualTo(all("values")["encryption_summary_hybrid"])
-        assertThat(epure("values-fr")["encryption_mode_hybrid_description"])
-            .isEqualTo("Chiffré sur nos serveurs, avec vérification entre appareils compatibles")
-        folders.forEach { folder ->
-            assertWithMessage(folder).that(epure(folder).getValue("encryption_mode_hybrid_description").length).isAtMost(90)
+    fun `choosing hybrid says, at the moment of choice, that our servers can read the messages`() {
+        serverReads.forEach { (folder, phrase) ->
+            assertWithMessage(folder).that(epure(folder).getValue("encryption_mode_hybrid_description")).contains(phrase)
         }
+        assertThat(epure("values-fr")["encryption_mode_hybrid_description"])
+            .isEqualTo("Chiffré sur nos serveurs, qui peuvent lire vos messages. Textes vérifiés intacts entre appareils compatibles.")
     }
 
     @Test

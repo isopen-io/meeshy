@@ -22,7 +22,7 @@
     <string name="shareLink_detail_requireNickname">Nome utente</string>
     <string name="shareLink_detail_historyRight">Cronologia</string>
     <string name="new_conversation_group_solo_hint">Potrai invitare persone in seguito.</string>
-    <string name="encryption_mode_hybrid_description">Crittografato sui nostri server, con verifica tra dispositivi compatibili</string>
+    <string name="encryption_mode_hybrid_description">Cifrato sui nostri server, che possono leggere i tuoi messaggi. Testi verificati intatti tra dispositivi compatibili.</string>
     <string name="share_link_field_description">Descrizione</string>
     <string name="share_link_field_slug">Indirizzo del link</string>
     <string name="conversations_action_more">Altro</string>

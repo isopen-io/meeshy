@@ -22,7 +22,7 @@
     <string name="shareLink_detail_requireNickname">اسم المستخدم</string>
     <string name="shareLink_detail_historyRight">السجل</string>
     <string name="new_conversation_group_solo_hint">يمكنك دعوة أشخاص لاحقًا.</string>
-    <string name="encryption_mode_hybrid_description">مشفّر على خوادمنا، مع التحقق بين الأجهزة المتوافقة</string>
+    <string name="encryption_mode_hybrid_description">مشفّر على خوادمنا التي يمكنها قراءة رسائلك. ويُتحقَّق من سلامة النصوص بين الأجهزة المتوافقة.</string>
     <string name="share_link_field_description">الوصف</string>
     <string name="share_link_field_slug">عنوان الرابط</string>
     <string name="conversations_action_more">المزيد</string>

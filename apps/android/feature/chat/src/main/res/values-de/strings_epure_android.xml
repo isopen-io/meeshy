@@ -11,7 +11,7 @@
     <string name="encryption_fact_hybrid_second_layer">Zwischen zwei kompatiblen Geräten lässt sich mit einer zweiten Schicht zusätzlich prüfen, dass eine Textnachricht unterwegs nicht verändert wurde; fehlt sie, wird nichts als geprüft dargestellt.</string>
     <string name="encryption_note_second_layer_question">Was prüft die zweite Schicht?</string>
     <string name="encryption_detail_served_gap">Der Server zeigt diese Unterhaltung ohne Ende-zu-Ende-Verschlüsselung an, aber dieses Gerät hat sie Ende-zu-Ende-verschlüsselt gesehen: Hier bleibt sie es.</string>
-    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt, mit Prüfung zwischen kompatiblen Geräten</string>
+    <string name="encryption_mode_hybrid_description">Auf unseren Servern verschlüsselt, die deine Nachrichten lesen können. Zwischen kompatiblen Geräten werden Texte auf Unversehrtheit geprüft.</string>
     <string name="encryption_e2ee_direct_only_here">Auf diesem Telefon gibt es Ende-zu-Ende-Verschlüsselung nur für Unterhaltungen zu zweit.</string>
     <string name="participant_profile_info_email">E-Mail</string>
     <string name="starred_more_options">Mehr</string>

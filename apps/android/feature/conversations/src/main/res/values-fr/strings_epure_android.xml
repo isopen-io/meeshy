@@ -22,7 +22,7 @@
     <string name="shareLink_detail_requireNickname">Pseudo</string>
     <string name="shareLink_detail_historyRight">Historique</string>
     <string name="new_conversation_group_solo_hint">Vous pourrez inviter des personnes plus tard.</string>
-    <string name="encryption_mode_hybrid_description">Chiffré sur nos serveurs, avec vérification entre appareils compatibles</string>
+    <string name="encryption_mode_hybrid_description">Chiffré sur nos serveurs, qui peuvent lire vos messages. Textes vérifiés intacts entre appareils compatibles.</string>
     <string name="share_link_field_description">Description</string>
     <string name="share_link_field_slug">Adresse du lien</string>
     <string name="conversations_action_more">Plus</string>

@@ -11,7 +11,7 @@
     <string name="encryption_fact_hybrid_second_layer">Entre dois aparelhos compatíveis, uma segunda camada permite ainda verificar que uma mensagem de texto não foi alterada no caminho; quando ela falta, nada é apresentado como verificado.</string>
     <string name="encryption_note_second_layer_question">O que a segunda camada verifica?</string>
     <string name="encryption_detail_served_gap">O servidor apresenta esta conversa sem criptografia de ponta a ponta, mas este dispositivo a viu com criptografia de ponta a ponta: aqui ela continua assim.</string>
-    <string name="encryption_mode_hybrid_description">Criptografado em nossos servidores, com verificação entre aparelhos compatíveis</string>
+    <string name="encryption_mode_hybrid_description">Criptografado em nossos servidores, que podem ler suas mensagens. Textos verificados intactos entre aparelhos compatíveis.</string>
     <string name="encryption_e2ee_direct_only_here">Neste telefone, a criptografia de ponta a ponta só existe para conversas a dois.</string>
     <string name="participant_profile_info_email">E-mail</string>
     <string name="starred_more_options">Mais</string>

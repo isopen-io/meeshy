@@ -155,9 +155,9 @@ class EpureListeStringsTest {
         )
         more.forEach { (folder, word) -> assertThat(epure(folder)["conversations_action_more"]).isEqualTo(word) }
         assertThat(epure("values-fr")["encryption_mode_hybrid_description"])
-            .isEqualTo("Chiffré sur nos serveurs, avec vérification entre appareils compatibles")
+            .isEqualTo("Chiffré sur nos serveurs, qui peuvent lire vos messages. Textes vérifiés intacts entre appareils compatibles.")
         assertThat(epure("values")["encryption_mode_hybrid_description"])
-            .isEqualTo("Encrypted on our servers, with verification between compatible devices")
+            .isEqualTo("Encrypted on our servers, which can read your messages. Texts checked intact between compatible devices.")
     }
 
     @Test
