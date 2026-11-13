@@ -1,6 +1,5 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="community_add_channel_empty_hint">Créez d\'abord une conversation pour l\'ajouter ici.</string>
     <string name="community_add_channel_empty_no_conversations">Aucune conversation disponible</string>
     <string name="community_add_channel_empty_no_results">Aucun résultat</string>
     <string name="community_add_channel_move_button">Déplacer</string>
@@ -48,12 +47,10 @@
     <string name="community_list_empty_title">Aucune communauté</string>
     <string name="community_list_search_placeholder">Rechercher...</string>
     <string name="community_list_title">Communautés</string>
-    <string name="community_load_network_body">Vérifiez votre connexion, puis réessayez.</string>
     <string name="community_load_network_title">Impossible de charger cette communauté</string>
     <string name="community_load_refused_back">Retour aux communautés</string>
     <string name="community_load_refused_body">Elle n\'existe pas, ou elle est privée et vous n\'en êtes pas membre.</string>
     <string name="community_load_refused_title">Communauté introuvable</string>
-    <string name="community_load_server_body">Le problème vient de notre côté. Réessayez dans un instant.</string>
     <string name="community_load_server_title">Meeshy n\'a pas pu charger cette communauté</string>
     <string name="community_members_section_creator">Créateurs</string>
     <string name="community_members_section_member">Membres</string>

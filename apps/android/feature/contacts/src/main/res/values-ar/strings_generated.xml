@@ -35,7 +35,6 @@
     <string name="contacts_request_cancel">إلغاء</string>
     <string name="contacts_requests_accept_a11y">قبول طلب %1$s</string>
     <string name="contacts_requests_cancel_a11y">إلغاء الطلب المُرسل إلى %1$s</string>
-    <string name="contacts_requests_received_intent">يرغب في التواصل معك</string>
     <string name="contacts_requests_reject_a11y">رفض طلب %1$s</string>
     <string name="contacts_search_hint">البحث عن جهة اتصال</string>
     <string name="contacts_tab_blocked">المحظورون</string>

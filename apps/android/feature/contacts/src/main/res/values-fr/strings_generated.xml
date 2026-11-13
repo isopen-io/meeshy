@@ -35,7 +35,6 @@
     <string name="contacts_request_cancel">Annuler</string>
     <string name="contacts_requests_accept_a11y">Accepter la demande de %1$s</string>
     <string name="contacts_requests_cancel_a11y">Annuler la demande envoyée à %1$s</string>
-    <string name="contacts_requests_received_intent">Souhaite entrer en contact avec vous</string>
     <string name="contacts_requests_reject_a11y">Refuser la demande de %1$s</string>
     <string name="contacts_search_hint">Rechercher un contact</string>
     <string name="contacts_tab_blocked">Bloqués</string>

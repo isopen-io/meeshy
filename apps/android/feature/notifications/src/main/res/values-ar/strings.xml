@@ -5,7 +5,6 @@
     <string name="notification_banner_preview_hidden">إشعار جديد</string>
     <string name="notifications_unread_prefix">غير مقروء.</string>
     <string name="notifications_error_title">الإشعارات غير متاحة</string>
-    <string name="notifications_error_subtitle">تحقق من اتصالك ثم أعد المحاولة.</string>
     <string name="notifications_error_retry">إعادة المحاولة</string>
     <string name="notifications_loading">جارٍ التحميل…</string>
     <string name="notifications_empty_unread">لا توجد إشعارات غير مقروءة</string>

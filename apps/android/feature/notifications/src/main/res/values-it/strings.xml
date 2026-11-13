@@ -5,7 +5,6 @@
     <string name="notification_banner_preview_hidden">Nuova notifica</string>
     <string name="notifications_unread_prefix">Non letta.</string>
     <string name="notifications_error_title">Notifiche non disponibili</string>
-    <string name="notifications_error_subtitle">Controlla la connessione e riprova.</string>
     <string name="notifications_error_retry">Riprova</string>
     <string name="notifications_loading">Caricamento…</string>
     <string name="notifications_empty_unread">Nessuna notifica non letta</string>

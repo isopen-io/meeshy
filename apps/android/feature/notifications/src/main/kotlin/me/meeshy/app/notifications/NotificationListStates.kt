@@ -97,12 +97,6 @@ internal fun NotificationListErrorState(onRetry: () -> Unit, modifier: Modifier 
             color = MeeshyTheme.tokens.textPrimary,
             textAlign = TextAlign.Center,
         )
-        Text(
-            stringResource(R.string.notifications_error_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textMuted,
-            textAlign = TextAlign.Center,
-        )
         NotificationRetryCapsule(onRetry)
     }
 }

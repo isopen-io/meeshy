@@ -1,6 +1,5 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
-    <string name="community_add_channel_empty_hint">Crea prima una conversazione per aggiungerla qui.</string>
     <string name="community_add_channel_empty_no_conversations">Nessuna conversazione disponibile</string>
     <string name="community_add_channel_empty_no_results">Nessun risultato</string>
     <string name="community_add_channel_move_button">Sposta</string>
@@ -48,12 +47,10 @@
     <string name="community_list_empty_title">Nessuna community</string>
     <string name="community_list_search_placeholder">Cerca...</string>
     <string name="community_list_title">Community</string>
-    <string name="community_load_network_body">Controlla la connessione, poi riprova.</string>
     <string name="community_load_network_title">Impossibile caricare questa community</string>
     <string name="community_load_refused_back">Torna alle community</string>
     <string name="community_load_refused_body">Non esiste, oppure è privata e non ne fai parte.</string>
     <string name="community_load_refused_title">Community non trovata</string>
-    <string name="community_load_server_body">Il problema è nostro. Riprova tra un attimo.</string>
     <string name="community_load_server_title">Meeshy non è riuscito a caricare questa community</string>
     <string name="community_members_section_creator">Creatori</string>
     <string name="community_members_section_member">Membri</string>

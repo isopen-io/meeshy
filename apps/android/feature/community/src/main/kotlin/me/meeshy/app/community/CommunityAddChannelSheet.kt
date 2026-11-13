@@ -97,9 +97,6 @@ fun CommunityAddChannelSheet(
                         stringResource(if (state.query.isEmpty()) R.string.community_add_channel_empty_no_conversations else R.string.community_add_channel_empty_no_results),
                         fontWeight = FontWeight.Medium, color = tokens.textSecondary,
                     )
-                    if (state.query.isEmpty()) {
-                        Text(stringResource(R.string.community_add_channel_empty_hint), fontSize = 14.sp, color = tokens.textMuted, modifier = Modifier.padding(top = 6.dp))
-                    }
                 }
                 else -> LazyColumn(Modifier.fillMaxSize().navigationBarsPadding()) {
                     items(visible, key = { it.id }, contentType = { "candidate" }) { c ->

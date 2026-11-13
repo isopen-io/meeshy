@@ -10,12 +10,6 @@
         },
         {
           "catalog": "ui",
-          "iosKey": "community.addChannel.empty.hint",
-          "androidName": "community_add_channel_empty_hint",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
           "iosKey": "community.addChannel.empty.noConversations",
           "androidName": "community_add_channel_empty_no_conversations",
           "status": "adopted"
@@ -358,12 +352,6 @@
         },
         {
           "catalog": "ui",
-          "iosKey": "community.detail.loadFailed.body",
-          "androidName": "community_load_network_body",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
           "iosKey": "community.detail.loadFailed.title",
           "androidName": "community_load_network_title",
           "status": "adopted"
@@ -384,12 +372,6 @@
           "catalog": "ui",
           "iosKey": "community.detail.refused.title",
           "androidName": "community_load_refused_title",
-          "status": "adopted"
-        },
-        {
-          "catalog": "ui",
-          "iosKey": "community.detail.serverFailed.body",
-          "androidName": "community_load_server_body",
           "status": "adopted"
         },
         {

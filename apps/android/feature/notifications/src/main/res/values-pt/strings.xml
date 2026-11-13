@@ -5,7 +5,6 @@
     <string name="notification_banner_preview_hidden">Nova notificação</string>
     <string name="notifications_unread_prefix">Não lida.</string>
     <string name="notifications_error_title">Notificações indisponíveis</string>
-    <string name="notifications_error_subtitle">Verifique sua conexão e tente novamente.</string>
     <string name="notifications_error_retry">Tentar novamente</string>
     <string name="notifications_loading">Carregando…</string>
     <string name="notifications_empty_unread">Nenhuma notificação não lida</string>

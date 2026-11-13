@@ -79,7 +79,7 @@ internal fun ReceivedRequestRow(
         userId = request.senderId,
         name = name,
         createdAt = request.createdAt,
-        subtitle = request.personalMessage() ?: stringResource(R.string.contacts_requests_received_intent),
+        subtitle = request.personalMessage(),
         level = request.raisedLevel(),
         levelCaption = R.string.circles_requests_incoming,
         onOpenProfile = onOpenProfile,

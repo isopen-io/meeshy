@@ -5,7 +5,6 @@
     <string name="notification_banner_preview_hidden">New notification</string>
     <string name="notifications_unread_prefix">Unread.</string>
     <string name="notifications_error_title">Notifications unavailable</string>
-    <string name="notifications_error_subtitle">Check your connection, then try again.</string>
     <string name="notifications_error_retry">Retry</string>
     <string name="notifications_loading">Loading…</string>
     <string name="notifications_empty_unread">No unread notifications</string>

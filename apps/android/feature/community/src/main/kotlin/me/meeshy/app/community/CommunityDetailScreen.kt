@@ -510,13 +510,13 @@ private fun DetailSkeleton() {
 private fun LoadFailureState(failure: CommunityLoadFailure, onRetry: () -> Unit, onBack: () -> Unit) {
     val (icon, title, body) = when (failure) {
         CommunityLoadFailure.REFUSED -> Triple(MeeshyIcons.Groups, R.string.community_load_refused_title, R.string.community_load_refused_body)
-        CommunityLoadFailure.NETWORK -> Triple(MeeshyIcons.WifiProblem, R.string.community_load_network_title, R.string.community_load_network_body)
-        CommunityLoadFailure.SERVER -> Triple(MeeshyIcons.WarningFilled, R.string.community_load_server_title, R.string.community_load_server_body)
+        CommunityLoadFailure.NETWORK -> Triple(MeeshyIcons.WifiProblem, R.string.community_load_network_title, null)
+        CommunityLoadFailure.SERVER -> Triple(MeeshyIcons.WarningFilled, R.string.community_load_server_title, null)
     }
     MeeshyEmptyState(
         icon = icon,
         title = stringResource(title),
-        subtitle = stringResource(body),
+        subtitle = body?.let { stringResource(it) }.orEmpty(),
         actionLabel = stringResource(if (failure.offersRetry) R.string.community_common_retry else R.string.community_load_refused_back),
         onAction = if (failure.offersRetry) onRetry else onBack,
     )

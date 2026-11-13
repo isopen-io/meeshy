@@ -17,7 +17,6 @@
         {"androidName": "notifications_empty_translations", "status": "android-only"},
         {"androidName": "notifications_empty_unread", "status": "android-only"},
         {"androidName": "notifications_error_retry", "status": "android-only"},
-        {"androidName": "notifications_error_subtitle", "status": "android-only"},
         {"androidName": "notifications_error_title", "status": "android-only"},
         {"androidName": "notifications_footer_mood", "status": "android-only"},
         {"androidName": "notifications_footer_post", "status": "android-only"},

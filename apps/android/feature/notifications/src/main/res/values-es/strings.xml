@@ -5,7 +5,6 @@
     <string name="notification_banner_preview_hidden">Nueva notificación</string>
     <string name="notifications_unread_prefix">Sin leer.</string>
     <string name="notifications_error_title">Notificaciones no disponibles</string>
-    <string name="notifications_error_subtitle">Comprueba tu conexión e inténtalo de nuevo.</string>
     <string name="notifications_error_retry">Reintentar</string>
     <string name="notifications_loading">Cargando…</string>
     <string name="notifications_empty_unread">Ninguna notificación sin leer</string>

@@ -210,12 +210,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "contacts.requests.received.intent",
-          "androidName": "contacts_requests_received_intent",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "contacts.requests.reject-a11y",
           "androidName": "contacts_requests_reject_a11y",
           "status": "adopted"

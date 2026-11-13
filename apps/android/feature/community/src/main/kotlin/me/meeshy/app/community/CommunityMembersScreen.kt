@@ -219,8 +219,6 @@ private fun MemberRowView(row: CommunityMemberRow, onRole: (MemberRole) -> Unit,
     val member = row.member
     val user = member.user
     val name = user?.let { it.displayName ?: it.username }?.takeIf { it.isNotBlank() } ?: stringResource(R.string.community_members_unknown_user)
-    val role = member.communityRole
-    val roleColor = role.communityRoleColor.let { if (it == androidx.compose.ui.graphics.Color.Unspecified) tokens.textMuted else it }
     var menu by remember { mutableStateOf(false) }
     Column(modifier) {
         Row(
@@ -234,13 +232,7 @@ private fun MemberRowView(row: CommunityMemberRow, onRole: (MemberRole) -> Unit,
                 presence = rememberPresence(user?.id, UserPresence.served(user?.isOnline, null)),
                 imageUrl = user?.avatar,
             )
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = tokens.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(role.icon(), null, tint = roleColor, modifier = Modifier.size(12.dp))
-                    Text(role.label(), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = roleColor)
-                }
-            }
+            Text(name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = tokens.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             if (!row.actions.isEmpty) {
                 Box {
                     IconButton(onClick = { menu = true }) {

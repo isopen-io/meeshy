@@ -5,7 +5,6 @@
     <string name="notification_banner_preview_hidden">Neue Benachrichtigung</string>
     <string name="notifications_unread_prefix">Ungelesen.</string>
     <string name="notifications_error_title">Mitteilungen nicht verfügbar</string>
-    <string name="notifications_error_subtitle">Prüfe deine Verbindung und versuche es erneut.</string>
     <string name="notifications_error_retry">Erneut versuchen</string>
     <string name="notifications_loading">Wird geladen…</string>
     <string name="notifications_empty_unread">Keine ungelesenen Benachrichtigungen</string>
