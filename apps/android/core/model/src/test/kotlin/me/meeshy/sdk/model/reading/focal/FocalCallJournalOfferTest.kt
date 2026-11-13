@@ -68,4 +68,11 @@ class FocalCallJournalOfferTest {
             assertThat(FocalCallJournalOffer.showsWaiting(state)).isFalse()
         }
     }
+
+    /** A1.14 — la copie chiffrée de l'appareil en lecture n'est pas une attente du réseau : ni indicateur, ni « vide ». */
+    @Test fun `un journal dont la copie de l'appareil se lit n'affiche ni attente ni vide`() {
+        assertThat(FocalCallJournalOffer.showsWaiting(CallTranscriptState.ReadingCopy)).isFalse()
+        assertThat(FocalCallJournalOffer.saysNothingWasKept(CallTranscriptState.ReadingCopy)).isFalse()
+        assertThat(CallTranscriptState.ReadingCopy.isVisible).isFalse()
+    }
 }

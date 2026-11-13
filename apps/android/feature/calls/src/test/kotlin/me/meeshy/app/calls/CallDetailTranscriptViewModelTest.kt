@@ -9,6 +9,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -154,7 +155,7 @@ class CallDetailTranscriptViewModelTest {
         val viewModel = viewModel()
         viewModel.load(request())
 
-        assertThat(viewModel.state.value.stateFor("call-2")).isEqualTo(CallTranscriptState.Loading)
+        assertThat(viewModel.state.value.stateFor("call-2")).isEqualTo(CallTranscriptState.ReadingCopy)
         assertThat(viewModel.state.value.stateFor("call-1")).isInstanceOf(CallTranscriptState.Ready::class.java)
     }
 
@@ -259,5 +260,47 @@ class CallDetailTranscriptViewModelTest {
 
         assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
         coVerify(exactly = 0) { cache.store(any(), any()) }
+    }
+
+    /** A1.14 — avant toute lecture, rien n'est su de l'appel : la bulle montée n'attend pas encore le réseau. */
+    @Test
+    fun `a journal not yet read is not waiting on the network`() {
+        assertThat(viewModel().state.value.stateFor("call-1")).isEqualTo(CallTranscriptState.ReadingCopy)
+    }
+
+    /**
+     * A1.14 — Cache d'abord : pendant la lecture de la copie chiffrée, le journal n'est pas en attente du réseau, et une
+     * copie trouvée se dessine sans être jamais passée par l'attente — l'indicateur ne peut pas clignoter sur un cache plein.
+     */
+    @Test
+    fun `while the encrypted copy is read nothing waits on the network and a found copy never shows the waiting`() = runTest {
+        val reading = CompletableDeferred<CachedCallTranscript>()
+        coEvery { cache.cached("call-1") } coAnswers { reading.await() }
+        coEvery { records.fullTranscript("call-1") } coAnswers { CompletableDeferred<NetworkResult<CallTranscriptPage>>().await() }
+        val viewModel = viewModel()
+        val seen = mutableListOf<CallTranscriptState>()
+        backgroundScope.launch(dispatcher) { viewModel.state.collect { seen += it.state } }
+
+        viewModel.load(request())
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.ReadingCopy)
+
+        reading.complete(CachedCallTranscript.Copy(page(peerSegment())))
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
+        assertThat(seen).doesNotContain(CallTranscriptState.Loading)
+    }
+
+    /** A1.14 — l'attente ne commence qu'au cache vide : la copie lue n'existe pas, le replay du serveur s'attend. */
+    @Test
+    fun `an empty cache turns the reading into a wait on the replay`() = runTest {
+        val reading = CompletableDeferred<CachedCallTranscript>()
+        coEvery { cache.cached("call-1") } coAnswers { reading.await() }
+        coEvery { records.fullTranscript("call-1") } coAnswers { CompletableDeferred<NetworkResult<CallTranscriptPage>>().await() }
+        val viewModel = viewModel()
+
+        viewModel.load(request())
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.ReadingCopy)
+
+        reading.complete(CachedCallTranscript.None)
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Loading)
     }
 }
