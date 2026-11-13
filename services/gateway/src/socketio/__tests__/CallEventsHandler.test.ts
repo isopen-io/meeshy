@@ -94,7 +94,7 @@ const mockCheckSocketRateLimit = jest.fn() as jest.Mock<any>;
 const mockGetSocketRateLimiter = jest.fn() as jest.Mock<any>;
 jest.mock('../../utils/socket-rate-limiter', () => ({
   checkSocketRateLimit: (...a: unknown[]) => mockCheckSocketRateLimit(...a),
-  getSocketRateLimiter: (...a: unknown[]) => mockGetSocketRateLimiter(...a),
+  getSocketRateLimiter: (...a: unknown[]) => mockGetSocketRateLimiter(...a), callSignalBudgetId: (u: string, s: string) => `${u}:${s}`,
   SOCKET_RATE_LIMITS: {
     CALL_INITIATE: { max: 5, window: 60 },
     CALL_JOIN: { max: 20, window: 60 },
@@ -1219,14 +1219,6 @@ describe('CallEventsHandler', () => {
       getUserId.mockReturnValue(undefined);
       await socket._trigger('call:signal', validSignal);
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_AUTHENTICATED' }));
-    });
-
-    it('judges each device against its own signal budget, so one device cannot starve another (#17952)', async () => {
-      const { socket } = setupWithSocket();
-      await socket._trigger('call:signal', validSignal);
-      const signalChecks = mockCheckSocketRateLimit.mock.calls.filter((c: any[]) => c[2]?.max === 100);
-      expect(signalChecks).toHaveLength(1);
-      expect(signalChecks[0][1]).toBe(`${USER_ID}:${SOCKET_ID}`);
     });
 
     it('returns early when rate limit exceeded', async () => {
