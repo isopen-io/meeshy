@@ -1,5 +1,13 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="circles_locations_footnote">Chacun choisit sa précision et sa durée ; tout s\'efface à l\'échéance.</string>
+    <string name="circles_locations_map">Carte des positions partagées</string>
+    <string name="circles_locations_pin_until">jusqu\'à %1$s</string>
+    <string name="circles_locations_precision_city">À la ville près</string>
+    <string name="circles_locations_precision_exact">Position exacte</string>
+    <string name="circles_locations_precision_neighborhood">Au quartier près</string>
+    <string name="circles_locations_someone">Quelqu\'un</string>
+    <string name="circles_locations_title">Positions partagées avec toi</string>
     <string name="circles_settings_block_talkie">Couper son talkie</string>
     <string name="circles_settings_block_talkie_detail">Sa voix ne sortira plus directement chez vous : elle arrivera en message vocal. Cette personne n’en est pas prévenue.</string>
     <string name="contacts_back">Retour</string>
