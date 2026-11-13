@@ -42,7 +42,7 @@ type InkVectors = {
 
 describe('les vecteurs partagés de la règle de lisibilité (#17879)', () => {
   const shared = JSON.parse(
-    readFileSync(new URL('../../../../../packages/shared/fixtures/author-ink.vectors.json', import.meta.url).pathname, 'utf8'),
+    readFileSync(new URL('../../../../../packages/shared/fixtures/author-ink.vectors.json', import.meta.url), 'utf8'),
   ) as InkVectors;
 
   test('les fonds et l’encre du fichier sont ceux que le fil mesure — un fond qui bouge rougit ici', () => {

@@ -74,6 +74,9 @@ on:
       # L'échelle d'une image clé multiplie celle de l'objet (#14316) : StoryKeyframeScaleVectorTests
       # rejoue ces vecteurs, partagés avec le web et Android.
       - 'packages/shared/fixtures/keyframe-scale.vectors.json'
+      # La lisibilité de la couleur d'auteur (#17879) : AuthorInkSharedVectorTests rejoue ces
+      # vecteurs, générés par la loi TypeScript et partagés avec le web et Android.
+      - 'packages/shared/fixtures/author-ink.vectors.json'
       # Le contrat MeeshyLens v1 (#11270) : LensFormatVectorsTests rejoue ses vecteurs.
       - 'packages/shared/fixtures/lens-v1/**'
       # Les vecteurs croisés libsignal (#17113) : LibsignalCrossPlatformVectorTests les rejoue,
@@ -133,6 +136,9 @@ on:
       # L'échelle d'une image clé multiplie celle de l'objet (#14316) : StoryKeyframeScaleVectorTests
       # rejoue ces vecteurs, partagés avec le web et Android.
       - 'packages/shared/fixtures/keyframe-scale.vectors.json'
+      # La lisibilité de la couleur d'auteur (#17879) : AuthorInkSharedVectorTests rejoue ces
+      # vecteurs, générés par la loi TypeScript et partagés avec le web et Android.
+      - 'packages/shared/fixtures/author-ink.vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
       - 'packages/shared/fixtures/libsignal/**'
       - 'packages/shared/types/external-interop-compliance.ts'
