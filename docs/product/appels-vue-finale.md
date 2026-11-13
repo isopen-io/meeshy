@@ -14,6 +14,7 @@
    - **Les boutons sont en Liquid Glass quand la version d'iOS le permet, en verre dessiné sinon** (directive porteur du 2026-11-09, #17323). Elle supplante « un bouton inactif n'a pas de fond » et « jamais de verre posé sur du verre » ; les captures montrent désormais le disque de verre de chaque bouton.
    - Le Liquid Glass l'emporte : sur iOS 26 et plus, chaque bouton est un verre interactif, avec l'effet au toucher des boutons de l'en-tête de conversation (`ConversationHeaderGlassGlyph`), et les verres voisins se composent dans un même conteneur.
    - Sur iOS 16 à 25, le bouton est le verre dessiné de `adaptiveLiquidGlass`. Android transpose par `MeeshyGlassSurface`.
+   - **Sur fenêtre large, toute pilule a UNE borne : 560 px, centrée sous la scène, en duo comme en groupe** (décision porteur du 2026-11-13, #17935 ; W1, W2). Elle vaut pour la pilule agrandie qui porte les sous-titres, le journal ou les deux rangées du groupe, comme pour la bande du paysage (L3).
    - **La capsule de droite de l'en-tête** (décision porteur du 2026-11-09, #17341) : en vidéo, elle porte le nom que j'ai donné à la personne (sinon son nom d'affichage) et la durée, « Awa · 04:12 » ; l'indicateur réseau n'y apparaît que si la connexion se dégrade. En audio, le nom et la durée sont déjà au centre sous l'avatar : la capsule n'existe que pour l'indicateur réseau, et seulement s'il se dégrade. En groupe, elle porte le nom du groupe, le nombre et la durée.
 2. **(…) fait sortir les actions, et les range.**
    - En duo, deux rails verticaux sortent vers les bords. **Gauche = mon image** : Caméra, Retourner, Effets, Écran ; caméra éteinte, seulement Caméra et Écran, car un contrôle sans effet n'est pas posé (porteur, 2026-11-10). **Droite = l'appel** : Sous-titres, Enregistrer, Ajouter, Journal, Réagir, Capture.
@@ -43,6 +44,7 @@
    - Ma phrase n'est jamais traduite pour moi.
    - La ligne servie descend le **Prisme** du lecteur (`resolvePrismTranslation` / `served`), jamais `translations[0]`.
    - **Les sous-titres vivent DANS la pilule**, au-dessus de sa rangée de base, dans le même verre, en duo comme en groupe (décision porteur du 2026-11-09, #17343). Ouvrir les actions (…) les range ; refermer les actions les rend.
+   - **UNE seule grammaire de bande, en duo comme en groupe** (décision porteur du 2026-11-13, #17933 ; P3, P13, W1, W2) : les phrases à même le verre, DEUX phrases, un filet qui les sépare de la rangée, et « Journal » en bouton au pied de la bande. Il n'y a plus de carte sombre intérieure en groupe, ni de « Journal » en simple texte.
    - **La bande et le journal rangent les phrases dans le MÊME ordre : par début de phrase** (l'heure dans l'appel où la phrase a commencé), la plus ancienne en haut, la plus récente en bas, contre la rangée. Une traduction ou une version finale qui arrive plus tard met la ligne à jour sur place, sans la déplacer : en P3 et P4, la phrase d'Awa reste au-dessus de ma réponse même si sa traduction arrive après (compte rendu famille 1, #17329).
 6. **Toucher une phrase montre son original dessous** ; la retoucher le replie. « Journal » ouvre tout l'appel, DANS la pilule, à la place des sous-titres (#17343).
    - **En appel audio, le journal ouvert RÉDUIT l'avatar** (décision porteur du 2026-11-11, #17529 ; P9b). L'avatar passe de 120 pt à ~56 pt et monte en un en-tête compact, sous l'en-tête de l'appel : l'avatar à gauche, et à côté, sur la même rangée, le nom puis la durée (iOS `CallCompactAudioHeader`). Le journal prend la place libérée ; la personne ne disparaît jamais derrière lui, et son anneau de parole suit l'avatar à sa nouvelle taille.
@@ -53,6 +55,10 @@
    - L'original : pendant l'appel, il se déplie sous la phrase qu'on touche, comme dans la bande ; après l'appel, il est sous chaque traduction (décision porteur du 2026-11-09, #17340).
    - Pendant l'appel, toucher une phrase déplie son original sous elle seule (#17340). La bascule Traduit · Original de la tête du journal fait passer TOUT le journal dans l'autre texte ; elle ne touche pas la bande des sous-titres, qui reste dans la langue du lecteur (Prisme). Après l'appel, l'original se lit sous chaque traduction, et la bascule y inverse les deux lignes (#17862, ci-dessous).
    - Pendant l'appel, il s'ouvre dans la pilule, au-dessus de la rangée de base, et y défile ; ouvrir les actions (…) le range (#17343). Ma vignette garde sa place, en haut à droite, pendant qu'il est ouvert (porteur, 2026-11-10 ; P6). Sur un écran large (web), il se pose en colonne à droite (W1) ; cette colonne ne masque rien et reste ouverte quand on ouvre (…) (porteur, 2026-11-10).
+   - **La colonne du journal sur grand écran (W1)** :
+     - Colonne ouverte, le bouton « Journal », au pied de la bande comme dans le rail, est ACTIF : un disque blanc plein à icône et texte sombres (loi 1). Le retoucher referme la colonne. La colonne ne porte aucun ✕ : sa tête n'a que « Journal » et la bascule Traduit · Original, comme `CallJournalPanel` sur iOS (décision porteur du 2026-11-13, #17932).
+     - Elle entre par le bord de FIN de la fenêtre (le bord gauche en droite à gauche) et y repart à la fermeture ; la scène glisse vers son nouveau centre pendant ce temps (décision porteur du 2026-11-13, #17931). C'est l'exception de la loi 17 pour la colonne : elle ne naît pas de la barre du bas.
+     - Un mode (Effets, Montage) la range avec l'en-tête ; elle revient à la sortie du mode (décision porteur du 2026-11-13, #17934 ; loi 14).
    - Rien n'est tronqué, et une ligne dont la traduction arrive après la fin de la phrase est mise à jour sur place, pas dupliquée. Les règles de fusion sont web `mergeCaption`, iOS `CallTranscriptMergeRules`, Android `CallLiveJournal.merged`.
    - Après l'appel, il se déplie sous la bulle d'appel du fil et dans le détail de l'historique.
    - **Après l'appel, la bascule INVERSE les deux lignes, sur tout l'appel** (décision porteur du 2026-11-13, #17862). C'est la même bascule Traduit · Original que celle du journal vivant (P6).
@@ -106,7 +112,7 @@
       - **Au plus trois couches d'effet s'empilent** (un cadre, un filtre, une déformation…). (+) en ajoute une par-dessus les autres ; avec trois couches, (+) n'en ajoute plus de quatrième, le dit à son étiquette d'accessibilité et garde son appui long.
       - **Un appui long sur (+) montre la liste des effets appliqués**, de la couche du dessus à celle du dessous, chacun avec de quoi l'annuler. En annuler un retire cette couche seule, les autres gardent leur ordre, et la liste se referme : la barre revient à son menu de base, comme après tout choix. Le lecteur d'écran offre la même liste par une action nommée sur (+), sans appui long.
       - La pile est une loi PURE, la même sur les trois plateformes (ajouter, retirer, plafond de trois, ordre) : TS, Swift et Kotlin en sont des miroirs.
-    - Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
+    - Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344). Sur grand écran, la colonne du journal (W1) se range avec lui et revient à la sortie du mode : la scène est entière pour juger l'effet (décision porteur du 2026-11-13, #17934).
 15. **À la une.**
     - Toucher une vignette la met à la une, choix local jamais imposé. Si les contrôles sont cachés, le toucher les rend d'abord.
     - La vignette à la une n'a pas de badge : une capsule en haut à droite offre « Revenir à la grille » et « Plein écran ».
@@ -120,6 +126,7 @@
     - Un élément arrive depuis l'endroit d'où il vient, et repart vers lui.
     - Les rails latéraux entrent par le bord de l'écran et sortent par lui, vers l'extérieur.
     - Ce qui s'ouvre depuis la barre du bas (options, sous-titres, journal, rangées d'actions en groupe) s'ouvre par morphisme : la barre s'allonge et grandit, puis reprend sa forme.
+    - La colonne du journal sur grand écran (W1) vient, elle, du bord de fin de la fenêtre et y repart, la scène glissant vers son nouveau centre (#17931, loi 7).
     - Une rangée qui défile (puces, bandeau de vignettes) n'est jamais coupée net : elle s'efface en fondu à ses deux bords (#17409).
     - Tout ce qui se pose par-dessus l'image suit la même logique. Seule exception : Effets, qui emprunte au composer (loi 9).
     - Dans Effets, les réglages (P8b) arrivent depuis la barre : la bande de looks et les puces partent en fondu, le panneau de verre monte depuis la barre en fondu (≈ 200 ms), la barre se resserre par morphisme ; retoucher « Réglages » les rend par le chemin inverse (loi 14).
@@ -189,7 +196,7 @@ En audio, la personne est au centre et son anneau prend sa couleur, avec son hal
 
 ### Groupe
 
-La grille prend l'écran. Chaque vignette porte le liseré de sa couleur, la mienne comprise, et qui parle s'illumine de sa couleur. Toucher une vignette la met à la une ; la retoucher rend la grille.
+La grille prend l'écran. Chaque vignette porte le liseré de sa couleur, la mienne comprise, et qui parle s'illumine de sa couleur. Toucher une vignette la met à la une ; la retoucher rend la grille. La bande des sous-titres a la grammaire du duo : à même le verre, deux phrases, un filet, « Journal » en bouton (loi 5, #17933).
 
 | P11 · Repos | P12 · (…) touché | P13 · Sous-titres dans le cadre | P14 · À la une |
 |---|---|---|---|
@@ -228,6 +235,9 @@ Les captures A1 et A2 montrent l'état par défaut : la traduction en tête, « 
 ### Grand écran (web)
 
 Sur un écran large, la scène reste centrée et le journal se pose en colonne de verre à droite, au lieu de recouvrir l'image.
+
+- **W1** : colonne ouverte, « Journal » (pied de la bande et rail) est un disque blanc plein ; le retoucher referme la colonne, qui ne porte aucun ✕ (#17932). La colonne entre par le bord de fin et y repart, la scène glissant vers son nouveau centre (#17931) ; en mode Effets ou Montage, elle se range avec l'en-tête (#17934). Loi 7.
+- **W2** : la bande des sous-titres est celle du duo, à même le verre, deux phrases, « Journal » en bouton (#17933) ; la pilule est bornée à 560 px, comme en duo (#17935). Lois 1 et 5.
 
 | W1 · Duo, journal en colonne |
 |---|
