@@ -301753,53 +301753,6 @@
         }
       }
     },
-    "game.fiche.what.question": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ماذا تعني هذه الكلمة بالتفصيل؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Was bedeutet dieses Wort genau?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "What does this word mean, in detail?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Qué significa esta palabra, en detalle?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Que veut dire ce mot, en détail ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Che cosa significa questa parola, nel dettaglio?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O que esta palavra significa, em detalhe?"
-          }
-        }
-      }
-    },
     "game.fiche.where": {
       "extractionState": "manual",
       "localizations": {

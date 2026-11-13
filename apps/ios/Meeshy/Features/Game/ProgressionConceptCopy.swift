@@ -307,7 +307,6 @@ enum ConceptText {
     static var ficheWhat: String { String(localized: "game.fiche.what", defaultValue: "C’est quoi ?", bundle: .main) }
 
     /// Le nom du (i) qui garde la définition détaillée : la QUESTION à laquelle sa note répond.
-    static var ficheWhatQuestion: String { String(localized: "game.fiche.what.question", defaultValue: "Que veut dire ce mot, en détail ?", bundle: .main) }
 
     static var ficheWhere: String { String(localized: "game.fiche.where", defaultValue: "Où j’en suis", bundle: .main) }
 

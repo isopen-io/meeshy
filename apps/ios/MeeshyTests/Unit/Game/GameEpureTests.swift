@@ -82,7 +82,7 @@ final class GameEpureTests: XCTestCase {
         let catalog = try Self.catalog()
         let keys = Array(Self.french.keys) + [
             "game.notebook.when", "game.notebook.when.note", "game.door.notebook.line",
-            "game.rules.step.why", "game.fiche.what.question",
+            "game.rules.step.why",
         ]
         let sameInEveryLanguage: Set<String> = ["game2.settings.notifications.switch"]
         for key in keys {
@@ -285,13 +285,16 @@ final class GameEpureTests: XCTestCase {
         XCTAssertTrue(guideCard.contains("card.copy.means"), "la carte de Mee garde sa phrase « Ça veut dire »")
     }
 
-    func test_conceptSheet_whatIsBehindAnInfoButton_whyAndHowStayVisible() throws {
+    /// Règle 7 : la fiche est LA page qui explique un concept propre au jeu. Sous « C’est quoi ? », la définition se lit
+    /// au repos — `why` ne dit pas ce qu'est un niveau ni ce que fait une renaissance ; la cacher derrière un (i)
+    /// laissait le bloc sans sa seule explication.
+    func test_conceptSheet_whatWhyAndHow_areReadAtRest_noInfoButtonHidesTheDefinition() throws {
         let page = try code("Meeshy/Features/Game/ProgressionConceptPage.swift")
-        XCTAssertTrue(page.contains("MeeshyInfoNote(question: ConceptText.ficheWhatQuestion, text: ConceptText.what(concept))"))
+        XCTAssertTrue(page.contains("sentence(ConceptText.what(concept))"), "la définition se lit sans rien ouvrir")
         XCTAssertTrue(page.contains("sentence(ConceptText.why(concept), strong: true)"))
         XCTAssertTrue(page.contains("sentence(ConceptText.how(concept))"))
-        XCTAssertFalse(page.contains("sentence(ConceptText.what(concept))"), "what n'est plus au repos")
-        XCTAssertTrue(try XCTUnwrap(Self.catalog()["game.fiche.what.question"]?["fr"]).hasSuffix("?"))
+        XCTAssertFalse(page.contains("MeeshyInfoNoted"), "aucun (i) ne cache la définition")
+        XCTAssertNil(try Self.catalog()["game.fiche.what.question"], "la question du (i) retiré n'a plus de lecteur")
     }
 
     // MARK: - Les repères restent lisibles au repos (règle 7)
