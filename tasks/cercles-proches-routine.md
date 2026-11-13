@@ -771,3 +771,33 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   2 043 témoins ; `packages/shared` `api/__tests__` 109/109 et `__tests__/ci` 149/149 ; cliquets de catalogue mort conformes.
 - Prochain lot recommandé : les clients de la position du Sang après les décisions #18023/#18024, sinon les PR ouvertes
   de la routine à mener à la fusion.
+
+## 2026-11-13 — réveil de 14:40 : une prise de parole talkie se localise dans le journal (#17252, volet serveur)
+
+- Reprise : run coupé le 2026-11-10 par une erreur d'API, relancé à 14:40. Les PR de la routine ouvertes (#17956,
+  #17969, #17976, #17979, #17981, #17984, #17994, #17998…) sont toutes écrites dans l'heure par des réveils vivants ;
+  ce réveil n'en prend aucune. #17249 (APNs absent) est déjà livrée côté code (`b90b576e1`) et n'attend que la clé
+  sandbox du porteur. Aucune branche n'écrivait le talkie : lot #17252 réservé sur `claude/cercles-17252-journal`.
+- Lot : `TalkieRelay` journalise `[TALKIE_STARTED]` (mode, codec, scellée ou non), `[TALKIE_RELAYED]` une fois, au
+  premier fragment dont l'émission n'a pas levé (rang, délai depuis l'ouverture) et `[TALKIE_ENDED]` (raison, fragments
+  reçus et relayés, octets, durée, rejointe ou non). Identifiants et compteurs seulement, aucun octet de voix ; un
+  témoin le vérifie. Aucun changement de contrat ni de client.
+- Ouvert en suivi : #18009, l'accusé « entendu » du destinataire et l'état « non reçu » chez l'émetteur (trois clients,
+  capacité annoncée pour ne jamais accuser un ancien client).
+- Gates locaux : 8 suites talkie 198/198 vertes (dont 11 témoins neufs, 8 rouges avant le correctif), 4 suites
+  voisines 38/38, `tsc` passerelle vert.
+- Prochain lot recommandé : #18009 côté passerelle (capacité + délai), ou mener à la fusion les PR ouvertes.
+
+## 2026-11-13 — réveil de 17:15 : mener #18010 (journal du talkie) à la fusion (#17252)
+
+- Reprise : `dev` venait de recevoir d'un coup quinze PR de la routine (17:09–17:14 UTC) ; les dix PR encore ouvertes
+  étaient toutes en conflit sur ce journal. #18010 était la plus ancienne sans écriture (14:47) : ce réveil la mène, les
+  autres restent à leurs réveils.
+- `origin/dev` fusionnée à la main : conflit du journal seul, les entrées des deux côtés gardées ; `talkieRelay.ts`
+  fusionné sans conflit avec la coupure E2EE du talkie (#14490). Gates relancés : suites talkie 185/185, routes talkie
+  et `socketio` 942/942, `tsc` passerelle vert.
+- Gates sur la branche refusionnée (17:35) : talkie + routes talkie + `socketio` 1127/1127, `tsc` passerelle vert.
+- CI : les deux `ci.yml` dispatchés sur la branche ont été annulés — le porteur a gelé la CI des branches de lot le
+  2026-11-13 (#18048, `CI_DEV_SEUL` : seuls `dev`, `main` et `ci/promotion-*` tournent) avec la consigne de fusionner
+  les PR ouvertes et de corriger `dev` en continu. La preuve de ce lot est donc locale (gates ci-dessus, sur la
+  branche refusionnée) et la CI de `dev` qui suit la fusion ; `origin/dev` refusionnée une seconde fois à la main.
