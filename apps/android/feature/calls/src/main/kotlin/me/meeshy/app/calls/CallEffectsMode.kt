@@ -45,7 +45,6 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.BRIGHTNESS_LIMIT
 import me.meeshy.sdk.model.call.CallEffectsCompanionRule
 import me.meeshy.sdk.model.call.CallFaceEffect
-import me.meeshy.sdk.model.call.CaptionsMode
 import me.meeshy.sdk.model.call.SMOOTHING_INTENSITY_MAX
 import me.meeshy.sdk.model.call.SMOOTHING_INTENSITY_MIN
 import me.meeshy.sdk.model.call.VideoFilterPreset
@@ -213,9 +212,7 @@ private fun EffectsControls(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
-        if (state.captions.mode != CaptionsMode.Off) {
-            CallCaptionsBandHost(state = state, hasOwnGlass = true, opensJournal = false, modifier = Modifier.padding(horizontal = MeeshySpacing.lg))
-        }
+        CallModeCaptions(state)
         EffectsLooksOrPanel(mode, reduceMotion, shots, hint, onChange, onRemove)
         EffectsModeBar(mode, row, reduceMotion, onChange, onFinish, onOpenFrames)
     }
