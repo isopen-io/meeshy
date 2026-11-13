@@ -897,3 +897,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   rejouée bornée à son terme, position rejouée déjà échue jamais affichée). CI de branche coupée par `CI_DEV_SEUL`
   (#18048, directive du porteur : fusionner les PR ouvertes, seul `dev` tourne) : la preuve Swift est la CI de `dev`.
   Nouveau rouge hérité de `dev` signalé : #18050 (`try-sleep` 6 → 8, `sleep-nanoseconds` 0 → 2).
+
+## 2026-11-13 — réveil du soir : recevoir sur Android les positions qu'on me partage, couche SDK (#16985)
+
+- Reprise : aucune PR cercles ouverte, toutes les branches `claude/cercles-*` des dernières heures fusionnées dans
+  `dev`. Aucune branche n'écrit les chemins Android de la position : lot réservé sur `claude/cercles-16985-android`.
+- Lot : la couche SDK de RÉCEPTION, iso `SharedLocation.swift` / `SharedLocationsLive.swift` (#16983) et
+  `shared-locations-live.ts` (#16984). `:core:model` : `SharedLocation.kt` (décodeur borné champ par champ, un élément
+  fautif d'un rattrapage écarté sans faire tomber la liste, cercle ADDITIF lu optionnel, emprise `bbox` sans notation
+  scientifique) et `SharedLocationsState.kt` (réduction pure). `location:share-changed|ended` routés par
+  `RelationSocketEventsManager` ; `RelationsApi.sharedLocations` ; `SharedLocationsRepository` (rattrapage à chaque
+  socket accrochée, minuteur d'échéance, vidé à la déconnexion, réponse partie sous un autre compte écartée).
+- `GET /relations/locations` n'était pas « à porter » : le motif `relations/{userId}` le couvrait déjà au cliquet de
+  classement. `TO_PORT_CEILING` ne bouge donc pas.
+- Gates locaux : `jvm-check` (`-PjvmCheckModelOnly`, la dépendance libsignal est refusée par le proxy) 24/24 verts sur
+  `SharedLocationTest` et `SharedLocationsStateTest`, et le témoin de l'échéance vu rouge quand on retire la borne
+  `expiresAt`. `sdk-core` (socket, dépôt) se prouve par `android.yml`.
+- Reste de #16985 : la carte de réception (`TileMapView.kt`, épingles, cercle de flou, TalkBack) câblée sur
+  `SharedLocationsGateway`, puis l'émission depuis la fiche d'un Ami (durée, précision, service au premier plan).
+- Prochain lot recommandé : la carte de réception Android, ou la carte de réception iOS (reste de #16983).
