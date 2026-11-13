@@ -1,9 +1,9 @@
-# Un gate qui REJOUE une table ne garde que les sites qu'il INTERROGE — et le site qu'il oublie est celui qui n'a pas de jumeau déclaré
+## Un gate qui REJOUE une table ne garde que les sites qu'il INTERROGE — et le site qu'il oublie est celui qui n'a pas de jumeau déclaré
 
 *2026-11-13, #18066 (cycle 155). Rouge bloquant de `dev` : TS2366 sur
 `apps/web/src/lib/push/shell-push-runtime.ts`.*
 
-## Ce qui s'est passé
+### Ce qui s'est passé
 
 #18052 a ajouté `{ route: 'community' }` à `NotificationTarget`. Le dépôt a un
 gate écrit exactement pour ça — `scripts/check-push-target-parity.mjs` — dont le
@@ -15,7 +15,7 @@ Ce fichier est l'outil. »
 Le gate est resté **vert**. Le lot a quand même laissé un site derrière :
 `shellPushUrl`, le mappage route → adresse de la coque Capacitor.
 
-## Pourquoi le gate ne pouvait pas le voir
+### Pourquoi le gate ne pouvait pas le voir
 
 Le gate est né d'un **jumeau déclaré** : `public/sw-push.js` est un script
 classique qui ne peut pas importer `href`, donc sa table vit en double, donc un
@@ -29,7 +29,7 @@ précisément ce qui l'a tenu hors du champ de l'outil. **Un gate indexé sur un
 RELATION (« A suit B ») ne balaie pas les sites qui n'ont pas de relation
 déclarée, même quand ils servent la même loi.**
 
-## Ce que `tsc` comble, et ce qu'il ne comble pas
+### Ce que `tsc` comble, et ce qu'il ne comble pas
 
 Le trou était partiellement tenu par le compilateur, et c'est ce qui rend la
 leçon fine. `tsc` attrape un membre d'union **sans `case`** : c'était le TS2366.
@@ -43,14 +43,14 @@ pour interdire.
 > JUSTESSE.** Là où une union énumère des destinations, `tsc` dit « tu as
 > répondu à tous les cas » ; il ne dit pas « tu as répondu juste ».
 
-## Le coût réel, et pourquoi il n'a pas l'air d'un bug
+### Le coût réel, et pourquoi il n'a pas l'air d'un bug
 
 `shellPushUrl` est consommé en `env.navigate(env.urlOf(...))`. Un `switch` non
 exhaustif **rend `undefined`** — il ne lève pas. Le tap est consommé, la
 bannière disparaît, et rien ne s'ouvre. Pas de crash, pas de trace : la loi 4 à
 l'envers, sans symptôme à rapporter.
 
-## La règle à appliquer
+### La règle à appliquer
 
 1. Devant un gate de parité vert, demander **« combien de sites servent cette
    loi ? »**, pas « les deux jumeaux sont-ils d'accord ? ». La réponse se compte
@@ -65,7 +65,7 @@ l'envers, sans symptôme à rapporter.
    (que `tsc` dit déjà), mais « avec un `case` qui ment » — la dérive dont le
    gate protège les deux autres sites, et qui n'était gardée sur aucun.
 
-## Parenté
+### Parenté
 
 Même famille que la leçon 261 (« une énumération de sites porte DEUX
 affirmations : ces sites appliquent la règle, et ce sont les sites où elle

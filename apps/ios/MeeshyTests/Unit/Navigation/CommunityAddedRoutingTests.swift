@@ -39,6 +39,7 @@ final class CommunityAddedRoutingTests: XCTestCase {
         XCTAssertTrue(branch.contains("ctx.communityId"))
     }
 
+    @MainActor
     func test_navContext_carriesTheCommunity_fromThePush() {
         let payload = NotificationPayload(userInfo: ["type": "community_invite", "communityId": "c1"])
         XCTAssertEqual(RootView.NotificationNavContext(from: payload).communityId, "c1")

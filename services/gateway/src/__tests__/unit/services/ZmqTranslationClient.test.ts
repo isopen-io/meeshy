@@ -2443,8 +2443,7 @@ describe('ZmqTranslationClient', () => {
         requests_sent: 100,
         results_received: 95,
         errors_received: 5,
-        pool_full_rejections: 2,
-        translation_skipped: 0,
+        pool_full_rejections: 2, translation_skipped: 0,
         avg_response_time: 150,
         uptime_seconds: 3600,
         memory_usage_mb: 128
