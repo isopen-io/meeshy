@@ -287,8 +287,19 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
     }
 
     func test_toggleLabel_saysSeeOriginal_thenSeeTranslation() {
-        XCTAssertEqual(CallJournalAfterCall.toggleLabel(showsOriginal: false), "Voir l'original")
-        XCTAssertEqual(CallJournalAfterCall.toggleLabel(showsOriginal: true), "Voir la traduction")
+        // Le simulateur de la CI sert la langue de l'appareil : on compare aux clés du catalogue, pas au français.
+        XCTAssertEqual(
+            CallJournalAfterCall.toggleLabel(showsOriginal: false),
+            String(localized: "call.transcript.toggle.showOriginal", defaultValue: "Voir l'original", bundle: .main)
+        )
+        XCTAssertEqual(
+            CallJournalAfterCall.toggleLabel(showsOriginal: true),
+            String(localized: "call.transcript.toggle.showTranslation", defaultValue: "Voir la traduction", bundle: .main)
+        )
+        XCTAssertNotEqual(
+            CallJournalAfterCall.toggleLabel(showsOriginal: false),
+            CallJournalAfterCall.toggleLabel(showsOriginal: true)
+        )
     }
 
     func test_belowLabel_namesWhatTheLineHolds() {
