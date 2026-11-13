@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.call.CallScreenMode
+import me.meeshy.sdk.model.call.effects.CallEffectsStackRule
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
@@ -92,10 +93,11 @@ internal fun CallMontageMode(
     eglContext: EglBase.Context?,
     reduceMotion: Boolean,
     onClose: () -> Unit,
+    onOpenEffects: () -> Unit = {},
 ) {
     CallModeLayer(visible = visible, mode = CallScreenMode.Montage, reduceMotion = reduceMotion) { chrome ->
         CallMontageContent(
-            state, localTrack, remoteTrack, eglContext, reduceMotion, onClose,
+            state, localTrack, remoteTrack, eglContext, reduceMotion, onClose, onOpenEffects,
             pickerModifier = Modifier.align(Alignment.BottomCenter).then(chrome).systemBarsPadding(),
         )
     }
@@ -109,16 +111,25 @@ private fun CallMontageContent(
     eglContext: EglBase.Context?,
     reduceMotion: Boolean,
     onClose: () -> Unit,
+    onOpenEffects: () -> Unit,
     pickerModifier: Modifier,
 ) {
     val frameViewModel: CallLiveFrameViewModel = hiltViewModel()
     val captureViewModel: CallCaptureViewModel = hiltViewModel()
+    val effects = hiltViewModel<CallEffectsViewModel>().effects
     val capture = captureViewModel.controller
+    val layers by effects.layers.collectAsStateWithLifecycle()
+    val config by effects.config.collectAsStateWithLifecycle()
     val frame by frameViewModel.controller.state.collectAsStateWithLifecycle()
     val pick by capture.pick.collectAsStateWithLifecycle()
     val constrained = rememberCallDeviceConstrained()
     val people = remember(state.peerName, frame.remoteSharedName) { frameViewModel.controller.people(state.peerName, frame.remoteSharedName) }
     LaunchedEffect(capture) { capture.open(frame.frameId) }
+    // La pile de trois couches suit ce qui est appliqué : le cadre choisi ici, le filtre et le visage posés par Effets.
+    val frameLayer = CallFrameLayer.chosen(pick, people.size)
+    LaunchedEffect(frameLayer, config) {
+        effects.setLayers(CallEffectsStackRule.layers(effects.layers.value, frameLayer, config))
+    }
     val scene = remember(people, pick, state.isCameraOn, state.isFrontCamera, state.isPeerCameraOff) {
         CallCaptureScene(
             look = CallMontagePickRule.look(pick, people.size),
@@ -148,6 +159,13 @@ private fun CallMontageContent(
         reduceMotion = reduceMotion,
         onClose = onClose,
         modifier = pickerModifier,
+        layers = layers,
+        effectsOffered = state.status == CallStatus.CONNECTED && state.isVideoCall && state.isCameraOn && state.showsConnectedLayout,
+        onRemoveEffect = effects::removeLayer,
+        onOpenEffects = { category ->
+            effects.requestEffectsCategory(category)
+            onOpenEffects()
+        },
     )
 }
 

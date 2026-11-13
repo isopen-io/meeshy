@@ -22,4 +22,11 @@
     <string name="call_effects_percent">%1$d%%</string>
     <string name="call_effects_next">المؤثر التالي</string>
     <string name="call_effects_previous">المؤثر السابق</string>
+    <string name="call_effects_category_frame">إطارات</string>
+    <string name="call_effects_category_landscape">منظر</string>
+    <string name="call_effects_category_voice">صوت</string>
+    <string name="call_effects_applied_title">المؤثرات المطبّقة</string>
+    <string name="call_effects_layer_entry">%1$s · %2$s</string>
+    <string name="call_effects_layer_undo">إلغاء %1$s</string>
+    <string name="call_effects_add_look_full">ثلاثة مؤثرات كحد أقصى: أزل أحدها لإضافة آخر</string>
 </resources>

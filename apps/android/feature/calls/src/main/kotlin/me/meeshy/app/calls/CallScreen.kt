@@ -411,6 +411,7 @@ fun CallScreen(
                 eglContext = viewModel.eglBaseContext,
                 reduceMotion = reduceMotion,
                 onClose = chrome::exitMode,
+                onOpenEffects = { chrome.enter(CallScreenMode.Effects) },
             )
 
             // Le mode « Effets de ma caméra » : mon image en plein écran, telle qu'elle part, sous le choix d'un effet.

@@ -91,6 +91,34 @@
         {
           "androidName": "call_effects_previous",
           "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_category_frame",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_category_landscape",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_category_voice",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_applied_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_layer_entry",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_layer_undo",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_effects_add_look_full",
+          "status": "android-only"
         }
       ]
     }
