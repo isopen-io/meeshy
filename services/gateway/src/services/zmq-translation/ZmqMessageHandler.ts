@@ -16,6 +16,7 @@ import type {
   TranslationErrorEvent,
   TranslationSkippedEvent,
   TranslationSkippedPayload,
+  TranslationErrorPayload,
   AudioProcessCompletedEvent,
   AudioProcessErrorEvent,
   VoiceAPISuccessEvent,
@@ -41,6 +42,14 @@ import { extractAudioBinaryFrames } from './utils/binary-frames';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 // Logger dédié pour ZmqMessageHandler
 const logger = enhancedLogger.child({ module: 'ZmqMessageHandler' });
+
+const nonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== 'object' || value === null) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
 
 
 export interface MessageHandlerStats {
@@ -297,18 +306,21 @@ export class ZmqMessageHandler extends EventEmitter {
   private handleTranslationError(event: TranslationErrorEvent): void {
     this.stats.translationErrors++;
 
-    logger.error(`❌ Erreur traduction: ${event.error} pour ${event.messageId}`);
+    // Les champs viennent du fil : chacun est filtré par type avant d'être
+    // relayé, comme ceux de `translation_skipped` (#18063).
+    const payload: TranslationErrorPayload = {
+      ...(nonEmptyString(event.taskId) ? { taskId: event.taskId } : {}),
+      messageId: typeof event.messageId === 'string' ? event.messageId : '',
+      error: typeof event.error === 'string' ? event.error : 'unknown error',
+      conversationId: typeof event.conversationId === 'string' ? event.conversationId : '',
+      ...(nonEmptyString(event.errorCode) ? { errorCode: event.errorCode } : {}),
+      ...(nonEmptyString(event.targetLanguage) ? { targetLanguage: event.targetLanguage } : {}),
+      metadata: isPlainObject(event.metadata) ? event.metadata : {}
+    };
 
-    // Émettre l'événement d'erreur avec métadonnées
-    this.emit('translationError', {
-      taskId: event.taskId,
-      messageId: event.messageId,
-      error: event.error,
-      conversationId: event.conversationId,
-      ...(event.errorCode ? { errorCode: event.errorCode } : {}),
-      ...(event.targetLanguage ? { targetLanguage: event.targetLanguage } : {}),
-      metadata: event.metadata || {}
-    });
+    logger.error(`❌ Erreur traduction: ${payload.error} pour ${payload.messageId}`);
+
+    this.emit('translationError', payload);
   }
 
   /**
