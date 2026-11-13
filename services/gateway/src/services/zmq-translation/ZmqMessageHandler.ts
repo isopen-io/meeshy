@@ -316,16 +316,15 @@ export class ZmqMessageHandler extends EventEmitter {
    * erreur : le lecteur garde l'original.
    */
   private handleTranslationSkipped(event: TranslationSkippedEvent): void {
-    logger.info(`⏭️ Traduction ignorée (${event.reason}) pour ${event.messageId}`);
-
     const payload: TranslationSkippedPayload = {
       ...(typeof event.taskId === 'string' && event.taskId ? { taskId: event.taskId } : {}),
-      messageId: event.messageId,
-      conversationId: event.conversationId,
-      reason: event.reason,
+      messageId: typeof event.messageId === 'string' ? event.messageId : '',
+      conversationId: typeof event.conversationId === 'string' ? event.conversationId : '',
+      reason: typeof event.reason === 'string' ? event.reason : 'unknown',
       ...(typeof event.length === 'number' ? { length: event.length } : {}),
       ...(typeof event.max_length === 'number' ? { maxLength: event.max_length } : {}),
     };
+    logger.info(`⏭️ Traduction ignorée (${payload.reason}) pour ${payload.messageId}`);
     this.emit('translationSkipped', payload);
   }
 
