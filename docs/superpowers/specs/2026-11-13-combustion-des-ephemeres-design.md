@@ -41,29 +41,47 @@ emporte le tout vers la gauche ou la droite selon le mouvement du téléphone.
    s'éloignent ne se lisent pas en 600 ms. Le fondu « Réduire les animations »
    reste à 250 ms. Les trois plateformes prennent la même valeur.
 2. **Le vent se lit de deux choses, sommées et bornées à ±1** : l'inclinaison
-   latérale (roulis) et l'accélération latérale filtrée de l'appareil. Un
-   téléphone qu'on penche ou qu'on déplace vers la gauche souffle vers la
-   gauche. Au repos et sans capteur (simulateur, bureau, navigateur sans
-   `deviceorientation`), le vent souffle **vers le bord extérieur de la bulle**
-   (vers la droite pour mes messages, vers la gauche pour ceux des autres) :
-   le message quitte l'écran par son côté. La valeur est lue au DÉBUT de la
-   combustion puis suivie pendant son cours ; elle n'est jamais nulle.
+   latérale (roulis, en tours, × 4) et l'accélération latérale filtrée de
+   l'appareil (en g, × 2). Un téléphone qu'on penche ou qu'on déplace vers la
+   gauche souffle vers la gauche ; `+1` = vers la droite de l'écran. **Zone
+   morte** : sous 0,08 en valeur absolue (un téléphone tenu en main n'est
+   jamais à zéro, mais un roulis de quelques degrés n'est pas un geste), et
+   sans capteur (simulateur, bureau, navigateur sans `deviceorientation`), le
+   vent souffle **vers le bord extérieur de la bulle** à 0,35 (vers la droite
+   pour mes messages, vers la gauche pour ceux des autres) : le message quitte
+   l'écran par son côté. Le vent n'est donc jamais nul.
+
+   **Deux grandeurs en sortent, et elles n'ont pas la même vie.** Le SENS DU
+   FRONT (`frontDirection`, ±1) est figé à l'allumage : un vent qui change de
+   signe à mi-combustion ne fait pas renaître des lettres déjà brûlées. La
+   DÉRIVE (`drift`, −1 → 1) est suivie en direct pendant toute la combustion :
+   c'est elle qui couche les flammes et emporte étincelles et cendres.
 3. **UNE loi partagée, trois miroirs** : `packages/shared/utils/ephemeral-burn.ts`
    (source), `EphemeralBurnLaw` Swift (SDK) et Kotlin (`core/model`). Elle rend la
-   durée, le vent effectif (bornes, somme, défaut par côté), et les trois temps
-   de la courbe : ignition (0 → 0,15), propagation (0,15 → 0,8), cendres
-   (0,8 → 1). Les témoins de parité sont les mêmes vecteurs sur les trois.
+   durée, le vent effectif (`wind(roll, lateral, side)` : somme pondérée, zone
+   morte, défaut par côté, bornes), le sens du front (`frontDirection(wind)`),
+   et les trois temps de la courbe : ignition (0 → 0,15), propagation
+   (0,15 → 0,8), cendres (0,8 → 1). Les témoins de parité sont les mêmes
+   vecteurs sur les trois.
 4. **Tout l'effet tient dans UN shader de calque** par plateforme — brûlure des
    lettres, lisière de braise, flammes et étincelles procédurales (hachage par
    particule, sans état CPU) — plutôt qu'un système de particules à côté. Une
    passe GPU, pas de `Canvas` par image, pas de `CAEmitterLayer`. Le shader
-   reçoit `size`, `progress`, `wind`, `seed`, `overhang` et `reduce` (= 0).
+   reçoit `size`, `progress`, `frontDirection`, `drift`, `seed` et `overhang`.
+   **C'est le CALQUE ENTIER qui brûle** — fond de la bulle, matière et texte
+   ensemble — sur les trois plateformes : le bruit fin découpe les lettres
+   parce qu'elles ont des bords, le fond part en nappe. Le web redessine donc
+   dans son canvas le fond de la bulle (rectangle arrondi, couleur et rayon
+   calculés) ET son texte, pas le texte seul.
 5. **Le calque est AGRANDI avant l'effet** (marge transparente de 48 pt en haut,
    24 pt sur les côtés, puis marge négative) pour que flammes et étincelles
    sortent de la bulle sans changer la mise en page.
-6. **Le front part du côté SOUS le vent et avance avec lui** : le vent dit où
-   le feu va. Les cendres et les étincelles dérivent dans le même sens, les
-   flammes s'inclinent.
+6. **Le feu s'allume au bord D'OÙ VIENT le vent et avance AVEC lui** : un vent
+   vers la droite (`+1`) allume le bord gauche et pousse le front vers la
+   droite. Les cendres et les étincelles dérivent dans le même sens, les
+   flammes s'inclinent. (Formulation corrigée après relecture constructeur :
+   « sous le vent » désignait le bord d'arrivée, et un front qui en part ne
+   peut pas avancer avec le vent.)
 7. **Le capteur ne tourne qu'entre la dernière minute d'un éphémère et la fin
    de sa combustion** (iOS : l'état `.imminent` existe déjà ; Android et web :
    même seuil). Jamais en permanence dans un fil.
@@ -74,7 +92,7 @@ emporte le tout vers la gauche ou la droite selon le mouvement du téléphone.
 
 | temps (sur 1,2 s) | ce qui se passe |
 |---|---|
-| 0 → 0,15 | une braise s'allume au bord sous le vent ; les premières lettres rougissent |
+| 0 → 0,15 | une braise s'allume au bord d'où vient le vent ; les premières lettres rougissent |
 | 0,15 → 0,8 | le front traverse la bulle, découpé par un bruit à l'échelle d'une lettre : les lettres partent une à une, lisière noire puis orange puis jaune ; au-dessus du front, des flammes montent et se couchent dans le vent ; des étincelles s'échappent, emportées, et s'éteignent |
 | 0,8 → 1 | ce qui reste tombe en cendres grises qui dérivent et s'effacent ; la ligne se replie (l'hôte) |
 
@@ -92,11 +110,14 @@ rétrécissement + fondu), à la nouvelle durée.
 - `MeeshyUI/Resources/Shaders/EphemeralBurnShaders.metal` : `meeshyEphemeralBurn`
   (`[[stitchable]]`, `SwiftUI::Layer`). Compilé dans `default.metallib` avec les
   shaders du jeu (même ressource).
-- `MeeshyUI/Conversation/EphemeralBurnEffect.swift` : garde l'API ; devient
-  `Animatable` sur `progress` (0 → 1 en `fullDuration` quand `isBurning` passe à
-  vrai) ; iOS 17+ ⇒ `visualEffect { layerEffect(...) }` sur le calque agrandi ;
-  iOS 16 ou Reduce Motion ⇒ chemins actuels. Lit le vent dans l'environnement
-  (`\.ephemeralBurnWind: Double`, défaut `nil` ⇒ loi du côté).
+- `MeeshyUI/Conversation/EphemeralBurnEffect.swift` : garde l'API
+  `ephemeralBurn(isBurning:)` et gagne `ephemeralBurn(isBurning:side:)` (le côté
+  de la bulle, pour le vent par défaut) ; devient `Animatable` sur `progress`
+  (0 → 1 en `fullDuration` quand `isBurning` passe à vrai) ; iOS 17+ ⇒
+  `visualEffect { layerEffect(...) }` sur le calque agrandi ; iOS 16 ou Reduce
+  Motion ⇒ chemins actuels. Lit le vent dans l'environnement
+  (`\.ephemeralBurnWind: Double?`, `nil` ⇒ loi du côté) ; fige
+  `frontDirection` à l'allumage.
 - `EphemeralBurnShaders.precompile()` appelé à l'ouverture d'une conversation
   qui contient un éphémère (iOS 18+ ; sans quoi la première combustion paie la
   compilation).
@@ -125,10 +146,18 @@ rétrécissement + fondu), à la nouvelle durée.
   une projection.
 - `lib/view/ephemeral-burn/` : fragment WebGL2 (même algorithme), moteur
   réutilisé de `lib/game/gl/` (env, raf, visibilité, orientation).
-- Le texte de la bulle est REDESSINÉ dans un canvas 2D (police, couleur et
-  boîtes de ligne lues de `Range.getClientRects()` et des styles calculés) qui
-  devient la texture du shader ; la rangée DOM passe `visibility: hidden` pendant
-  la combustion. Un DOM ne se lit pas en texture autrement sans tainter le canvas.
+- La bulle est REDESSINÉE dans un canvas 2D — son fond (rectangle arrondi,
+  couleur et rayons des styles calculés) puis son texte (police, couleur et
+  boîtes de ligne lues de `Range.getClientRects()`) — qui devient la texture du
+  shader ; la rangée DOM passe `visibility: hidden` pendant la combustion. Un
+  DOM ne se lit pas en texture autrement sans tainter le canvas. Un média
+  d'une autre origine, qui tainterait le canvas, est peint comme un bloc de la
+  couleur du fond : il brûle en nappe.
+- **Jamais de demande d'autorisation** pour le capteur : `deviceorientation`
+  n'est écouté que là où il se sert sans `requestPermission()` (Android
+  Chrome, ou Safari si le jeu l'a déjà obtenue dans la session) ; sinon le vent
+  par défaut. Une combustion survient sans geste de l'utilisateur, et une
+  demande d'autorisation posée à ce moment serait intrusive.
 - Repli : pas de WebGL2 ⇒ les keyframes CSS actuelles, à la nouvelle durée ;
   `prefers-reduced-motion` ⇒ fondu.
 
