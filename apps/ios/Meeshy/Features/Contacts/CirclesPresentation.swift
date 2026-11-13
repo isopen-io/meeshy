@@ -71,7 +71,13 @@ nonisolated enum CirclePersonSetting: String, CaseIterable, Identifiable, Sendab
             )
         case .listening:
             return ListeningShareCopy.detail
-        case .blockBring, .liveLocation:
+        case .blockBring:
+            return String(
+                localized: "circles.settings.blockBring.detail",
+                defaultValue: "Ses Bring n’arriveront plus chez vous. Cette personne n’en est pas prévenue.",
+                bundle: .main
+            )
+        case .liveLocation:
             return nil
         }
     }

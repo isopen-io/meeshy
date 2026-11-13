@@ -65,13 +65,6 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
             Text(viewModel.searchText.isEmpty ? String(localized: "community.addChannel.empty.noConversations", defaultValue: "Aucune conversation disponible", bundle: .module) : String(localized: "community.addChannel.empty.noResults", defaultValue: "Aucun résultat", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium, design: .rounded))
                 .foregroundStyle(theme.textSecondary)
-            if viewModel.searchText.isEmpty {
-                Text(String(localized: "community.addChannel.empty.hint", defaultValue: "Créez d'abord une conversation pour l'ajouter ici.", bundle: .module))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundStyle(theme.textMuted)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, MeeshySpacing.xxxl)
-            }
         }
     }
 

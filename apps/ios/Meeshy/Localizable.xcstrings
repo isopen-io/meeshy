@@ -232005,53 +232005,6 @@
         }
       }
     },
-    "calls.search.empty.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يغطي السجل الأشهر الثلاثة الأخيرة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Protokoll umfasst die letzten drei Monate."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The log covers the last three months."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El registro abarca los últimos tres meses."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le journal couvre les trois derniers mois."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il registro copre gli ultimi tre mesi."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O histórico cobre os últimos três meses."
-          }
-        }
-      }
-    },
     "calls.search.placeholder": {
       "extractionState": "manual",
       "localizations": {
@@ -329281,6 +329234,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bloquear os Bring dessa pessoa"
+          }
+        }
+      }
+    },
+    "circles.settings.blockBring.detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ses Bring n’arriveront plus chez vous. Cette personne n’en est pas prévenue."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Their Brings will no longer reach you. They are not notified."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sus Bring ya no te llegarán. Esta persona no recibe ningún aviso."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ihre Bring erreichen dich nicht mehr. Die Person wird nicht benachrichtigt."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I suoi Bring non ti arriveranno più. Questa persona non viene avvisata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Os Bring dela não vão mais chegar até você. Essa pessoa não é avisada."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لن تصلك نداءات Bring منه بعد الآن. لن يتم إعلام هذا الشخص."
           }
         }
       }
