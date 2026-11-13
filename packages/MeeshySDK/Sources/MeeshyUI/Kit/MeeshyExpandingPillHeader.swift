@@ -14,8 +14,10 @@ public enum MeeshyExpandingPillCopy {
 
 /// **L'en-tête d'une option** (K11) : ‹ Retour · titre · accessoire · ✕ Fermer.
 /// Exposé seul pour les hôtes qui n'ouvrent pas la pilule (une colonne, une
-/// feuille). Un bouton n'existe que si son rappel existe, mais SA PLACE reste
-/// réservée : le titre reste centré. Aucun filet, aucun verre : ‹ et ✕ sont des
+/// feuille). Un bouton n'existe que si son rappel existe ; le titre reste centré,
+/// à égale distance des deux bords, et ne passe jamais sous un bouton ni sous
+/// l'accessoire (`MeeshyExpandingPillHeaderLayout`). Sans ✕, l'accessoire prend le
+/// bord de fin (O9 : « 86 / 1000 »). Aucun filet, aucun verre : ‹ et ✕ sont des
 /// boutons doux de K02, de 40, qui jouent leur haptique par le site unique de K02.
 ///
 /// `Equatable` quand il n'a pas d'accessoire : un hôte qui se re-rend parce que
@@ -61,29 +63,32 @@ public struct MeeshyExpandingPillHeader<Trailing: View>: View {
     private var slot: CGFloat { CGFloat(MeeshyExpandingPillRecipe.headerButtonSize.diameter) }
     private var gap: CGFloat { MeeshyExpandingPillRecipe.headerButtonGap }
 
+    private var slots: MeeshyExpandingPillRule.HeaderSlots {
+        MeeshyExpandingPillRule.headerSlots(
+            hasBack: onBack != nil, hasClose: onClose != nil, hasTrailing: Trailing.self != EmptyView.self
+        )
+    }
+
     public var body: some View {
-        ZStack {
-            Text(verbatim: title)
-                .font(.headline)
-                .foregroundStyle(MeeshyColors.onMedia)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .padding(.horizontal, slot + gap)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityFocused($titleHasFocus)
-                .accessibilitySortPriority(Self.titlePriority)
-            HStack(spacing: gap) {
-                leading
-                Spacer(minLength: 0)
-                trailing
-                    .foregroundStyle(MeeshyExpandingPillRecipe.secondaryInk)
-                    .accessibilitySortPriority(Self.trailingPriority)
-                trailingButton
-            }
+        MeeshyExpandingPillHeaderLayout(gap: gap) {
+            leading
+            titleText
+            end
         }
         .frame(maxWidth: .infinity, minHeight: slot)
         .accessibilityElement(children: .contain)
         .onAppear { if takesFocus { titleHasFocus = true } }
+    }
+
+    private var titleText: some View {
+        Text(verbatim: title)
+            .font(.headline)
+            .foregroundStyle(MeeshyColors.onMedia)
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityFocused($titleHasFocus)
+            .accessibilitySortPriority(Self.titlePriority)
     }
 
     @ViewBuilder
@@ -99,21 +104,75 @@ public struct MeeshyExpandingPillHeader<Trailing: View>: View {
         }
     }
 
+    /// Le bord de fin : l'accessoire puis ✕ ; vide, la place de ✕ est réservée.
     @ViewBuilder
-    private var trailingButton: some View {
-        if let onClose {
-            MeeshyGlassButton(
-                systemImage: "xmark", label: closeLabel, kind: .soft,
-                size: MeeshyExpandingPillRecipe.headerButtonSize, action: onClose
-            )
-            .accessibilitySortPriority(Self.closePriority)
-        } else {
+    private var end: some View {
+        if slots.reservesEnd {
             reservedSlot
+        } else {
+            HStack(spacing: gap) {
+                trailing
+                    .foregroundStyle(MeeshyExpandingPillRecipe.secondaryInk)
+                    .accessibilitySortPriority(Self.trailingPriority)
+                if let onClose {
+                    MeeshyGlassButton(
+                        systemImage: "xmark", label: closeLabel, kind: .soft,
+                        size: MeeshyExpandingPillRecipe.headerButtonSize, action: onClose
+                    )
+                    .accessibilitySortPriority(Self.closePriority)
+                }
+            }
         }
     }
 
     private var reservedSlot: some View {
         Color.clear.frame(width: slot, height: slot).accessibilityHidden(true)
+    }
+}
+
+// MARK: - La disposition de l'en-tête
+
+/// ‹ au bord de début, l'accessoire et ✕ au bord de fin, le titre au centre avec
+/// la MÊME marge des deux côtés tant qu'il y tient ; sinon il glisse vers le bord le
+/// plus libre et prend toute la place entre les deux (`headerTitleSlot`). Il ne
+/// passe donc jamais sous un bouton ni sous l'accessoire (un compteur, une bascule
+/// Traduit / Original), et une grande police ne le réduit pas à une lettre. Les
+/// positions sont comptées depuis le DÉBUT : SwiftUI retourne lui-même une
+/// disposition en RTL.
+struct MeeshyExpandingPillHeaderLayout: Layout {
+    let gap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard subviews.count == 3 else { return .zero }
+        let measure = measured(subviews: subviews, width: proposal.width)
+        return CGSize(width: measure.width, height: measure.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 3 else { return }
+        let measure = measured(subviews: subviews, width: bounds.width)
+        let midY = bounds.midY
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: midY), anchor: .leading, proposal: ProposedViewSize(measure.start))
+        subviews[2].place(at: CGPoint(x: bounds.maxX, y: midY), anchor: .trailing, proposal: ProposedViewSize(measure.end))
+        subviews[1].place(
+            at: CGPoint(x: bounds.minX + measure.title.center, y: midY), anchor: .center,
+            proposal: ProposedViewSize(width: measure.title.width, height: nil)
+        )
+    }
+
+    private func measured(
+        subviews: Subviews, width: CGFloat?
+    ) -> (start: CGSize, end: CGSize, title: MeeshyExpandingPillRule.HeaderTitleSlot, width: CGFloat, height: CGFloat) {
+        let start = subviews[0].sizeThatFits(.unspecified)
+        let end = subviews[2].sizeThatFits(.unspecified)
+        let natural = subviews[1].sizeThatFits(.unspecified).width
+        let inset = MeeshyExpandingPillRule.headerTitleInset(start: start.width, end: end.width, gap: gap)
+        let total = width.flatMap { $0.isFinite ? $0 : nil } ?? natural + 2 * inset
+        let slot = MeeshyExpandingPillRule.headerTitleSlot(
+            width: total, start: start.width, end: end.width, gap: gap, natural: natural
+        )
+        let title = subviews[1].sizeThatFits(ProposedViewSize(width: slot.width, height: nil))
+        return (start, end, slot, total, max(start.height, end.height, title.height))
     }
 }
 
