@@ -24,13 +24,33 @@ export const SHARED_LOCATION_DEFAULT_PRECISION: SharedLocationPrecision = 'city'
  */
 export const SHARED_LOCATION_GRID_DEGREES = { neighborhood: 0.01, city: 0.1 } as const;
 
-/** Le rayon du cercle de flou que le lecteur dessine, en mètres (la demi-diagonale de la maille, arrondie). */
-export const SHARED_LOCATION_BLUR_RADIUS_METERS = { neighborhood: 800, city: 8000 } as const;
+/**
+ * La marge au-delà de la ligne de maille avant qu'un lecteur flouté change de maille, en
+ * fraction du pas : le va-et-vient du bruit GPS près d'une ligne ne la révèle pas (#16987).
+ * La maille servie est donc à au plus `0,5 + marge` pas de la position vraie sur chaque axe.
+ */
+export const SHARED_LOCATION_CELL_HOLD_MARGIN = 0.25;
+
+/**
+ * Le rayon du cercle de flou que le lecteur dessine, en mètres : la demi-diagonale de la
+ * maille ÉLARGIE de la marge (0,75 pas par axe, au pire à l'équateur), arrondie au-dessus.
+ * Le cercle contient toujours la position vraie, même quand la maille est retenue (#16987).
+ */
+export const SHARED_LOCATION_BLUR_RADIUS_METERS = { neighborhood: 1200, city: 12000 } as const;
 
 /** La précision exacte ne descend jamais sous ce rayon, même si l'appareil annonce mieux. */
 export const SHARED_LOCATION_EXACT_MIN_RADIUS_METERS = 10;
 
 export const SHARED_LOCATION_RECIPIENTS_MAX = 50;
+
+/**
+ * Le cercle d'où vient la personne, tel que la loi d'accès vient de le juger pour CE
+ * lecteur (#17013, #17966) : le marqueur de la carte en tire son icône et sa couleur,
+ * et aucun client ne le recalcule. Un partage temporaire s'ouvre dès Ami, donc rien
+ * en dessous ; un cercle absent (serveur antérieur) se dessine en marqueur neutre.
+ */
+export const SHARED_LOCATION_CIRCLES = ['FRIEND', 'CLOSE', 'BLOOD'] as const;
+export type SharedLocationCircle = (typeof SHARED_LOCATION_CIRCLES)[number];
 
 export const SHARED_LOCATION_ERROR_CODES = {
   /** Charge illisible (coordonnées hors bornes, durée inconnue, destinataire en double, champ en trop). */

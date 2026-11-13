@@ -138,6 +138,7 @@
     <string name="chat_forward_search_hint">Buscar una conversación...</string>
     <string name="chat_forward_sent">Reenviado</string>
     <string name="chat_guest_bar_close">Cerrar conversación</string>
+    <string name="chat_header_engagement_legend_hint">Abre Mi Leyenda</string>
     <string name="chat_header_flame_card_hide">Ocultar la llama</string>
     <string name="chat_header_flame_card_hint">Abre la racha de la conversación</string>
     <string name="chat_header_flame_card_open">Ver el juego</string>

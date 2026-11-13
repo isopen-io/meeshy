@@ -98,28 +98,81 @@ struct ConversationEngagementPill: View, Equatable {
 /// `ConversationEngagementStore`, qui ne publie qu'au gré des gestes crédités
 /// du lecteur. `seed` est l'instantané que la conversation affichée porte déjà
 /// (liste, détail, cache) ; le plus récent des deux gagne.
+///
+/// Le toucher fait ce que fait la flamme repliée (#17987,
+/// `ConversationEngagementPillTap`) : la série ouvre la même carte
+/// (`HeaderFlameCard`), le cumul seul mène à « Ma Légende ».
 struct ConversationEngagementBadge: View {
     let conversationId: String
     let seed: ConversationEngagementSnapshot?
     let accentColor: String
+    let onOpenGame: () -> Void
+    let onHideFlame: () -> Void
     @ObservedObject var store: ConversationEngagementStore
+    @State private var isCardOpen = false
 
     init(conversationId: String, seed: ConversationEngagementSnapshot?, accentColor: String,
+         onOpenGame: @escaping () -> Void, onHideFlame: @escaping () -> Void,
          store: ConversationEngagementStore = .shared) {
         self.conversationId = conversationId
         self.seed = seed
         self.accentColor = accentColor
+        self.onOpenGame = onOpenGame
+        self.onHideFlame = onHideFlame
         self.store = store
     }
 
     var body: some View {
         Group {
             if let shown = store.displayed(for: conversationId, seed: seed, at: Date()),
-               let pill = ConversationEngagementPill(snapshot: shown, accentColor: accentColor) {
-                pill.equatable()
+               let pill = ConversationEngagementPill(snapshot: shown, accentColor: accentColor),
+               let tap = ConversationEngagementPillTap.of(shown) {
+                button(pill, tap: tap)
             }
         }
         .task(id: seed) { store.seed(seed) }
+    }
+
+    private func button(_ pill: ConversationEngagementPill, tap: ConversationEngagementPillTap) -> some View {
+        Button {
+            HapticFeedback.light()
+            switch tap {
+            case .flameCard: isCardOpen.toggle()
+            case .legend: onOpenGame()
+            }
+        } label: {
+            pill.equatable()
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(hint(tap))
+        .accessibilityIdentifier("conversation.header.engagement")
+        .anchoredBubble(isPresented: $isCardOpen, compactHeight: 240) {
+            if case .flameCard(let model) = tap {
+                HeaderFlameCard(
+                    model: model,
+                    onOpenGame: {
+                        isCardOpen = false
+                        onOpenGame()
+                    },
+                    onHide: {
+                        isCardOpen = false
+                        onHideFlame()
+                    }
+                )
+            }
+        }
+    }
+
+    private func hint(_ tap: ConversationEngagementPillTap) -> String {
+        switch tap {
+        case .flameCard:
+            return String(localized: "conversation.header.flame.card.hint",
+                          defaultValue: "Ouvre la série de la conversation", bundle: .main)
+        case .legend:
+            return String(localized: "conversation.header.engagement.legend.hint",
+                          defaultValue: "Ouvre Ma Légende", bundle: .main)
+        }
     }
 }
 

@@ -12,9 +12,10 @@ import { logError } from '../../utils/logger';
 import { listRelationLinks } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { bringServiceEnabled } from '../../services/bring/bringPush';
+import { bloodLocationEnabledFor } from '../../services/bloodLocation/bloodLocationFlag';
 import { errorResponses, relationLimiter, relationLinkSchema } from './shared';
 
-const configView = () => ({
+const configView = (viewerId: string) => ({
   levels: RELATION_LEVELS.map((level) => ({
     level,
     labelKey: RELATION_LEVEL_PRESENTATION[level].labelKey,
@@ -24,7 +25,8 @@ const configView = () => ({
   thresholds: thresholdsNow(),
   features: RELATION_FEATURE_MIN_LEVEL,
   // Le service du Bring est-il allumé sur cette passerelle (#13936) ? Éteint ⇒ aucun bouton Bring.
-  services: { bring: bringServiceEnabled() },
+  // La position du Sang est-elle ouverte à CE compte (#13937 : drapeau ET liste blanche) ? Faux ⇒ aucun écran.
+  services: { bring: bringServiceEnabled(), bloodLocation: bloodLocationEnabledFor(viewerId) },
 });
 
 const configSchema = {
@@ -44,7 +46,7 @@ const configSchema = {
     },
     thresholds: { type: 'object', additionalProperties: true },
     features: { type: 'object', additionalProperties: { type: 'string' } },
-    services: { type: 'object', properties: { bring: { type: 'boolean' } } },
+    services: { type: 'object', properties: { bring: { type: 'boolean' }, bloodLocation: { type: 'boolean' } } },
   },
 } as const;
 
@@ -65,7 +67,7 @@ export function registerRelationReads(fastify: FastifyInstance): void {
       response: { 200: { type: 'object', properties: { success: { type: 'boolean' }, data: configSchema } }, ...errorResponses },
       security: [{ bearerAuth: [] }],
     },
-  }, async (_request: FastifyRequest, reply: FastifyReply) => sendSuccess(reply, configView()));
+  }, async (request: FastifyRequest, reply: FastifyReply) => sendSuccess(reply, configView(request.user!.userId)));
 
   fastify.get('/', {
     onRequest: [fastify.authenticate],

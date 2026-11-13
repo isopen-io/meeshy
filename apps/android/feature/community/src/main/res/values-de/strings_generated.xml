@@ -51,6 +51,13 @@
     <string name="community_list_empty_title">Keine Community</string>
     <string name="community_list_search_placeholder">Suchen...</string>
     <string name="community_list_title">Communities</string>
+    <string name="community_load_network_body">Prüfe deine Verbindung und versuche es erneut.</string>
+    <string name="community_load_network_title">Diese Community konnte nicht geladen werden</string>
+    <string name="community_load_refused_back">Zurück zu den Communities</string>
+    <string name="community_load_refused_body">Sie existiert nicht, oder sie ist privat und du bist kein Mitglied.</string>
+    <string name="community_load_refused_title">Community nicht gefunden</string>
+    <string name="community_load_server_body">Das Problem liegt bei uns. Versuche es gleich noch einmal.</string>
+    <string name="community_load_server_title">Meeshy konnte diese Community nicht laden</string>
     <string name="community_members_section_creator">Ersteller</string>
     <string name="community_members_section_member">Mitglieder</string>
     <string name="community_members_section_moderator">Moderatoren</string>
