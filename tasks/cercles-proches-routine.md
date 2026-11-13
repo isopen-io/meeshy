@@ -480,3 +480,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   l'autre) et #17971 (une communauté désactivée coupe-t-elle ses séances « ensemble »).
 - Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
   Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
+
+## 2026-11-13 — réveil 28 : la branche orpheline des partages du rituel menée à sa PR (#14924)
+
+- Reprise : 25 PR cercles ouvertes, toutes écrites dans l'heure par des réveils vivants ; ce réveil n'en prend aucune.
+  `claude/cercles-17100-android` (« ensemble » sur Android) écrite à 14:13 : cédée. Trouvée en revanche une branche
+  ORPHELINE, `claude/cercles-14924-serveur`, écrite jusqu'au 2026-11-08 et jamais proposée en PR : ce réveil la reprend.
+- Lot : PR #18013 vers `dev`. `origin/dev` fusionnée à la main (conflit dans `user-management.service.ts` : coupure
+  « ensemble » et oubli des cercles d'équipe gardés à côté du retrait des partages).
+- Revue adversariale : non bloquante. Corrigés dans le lot, témoins vus rouges : la rupture d'une demande acceptée ne
+  rend plus 500 quand le retrait des partages tombe en panne (constat 1) ; l'annulation d'une suppression, par lien de
+  courriel ou par nouvelle demande, éteint les partages avant de rendre le compte (constat 3). Suites : #18015
+  (décision : le blocage éteint-il aussi la catégorie d'écoute ?), #18016 (levée de bannissement en panne, témoin de
+  course moins dépendant de l'implémentation).
+- Gates locaux : 2 368 témoins (me, suppression, annuaire, relations, admin) verts, `tsc` passerelle vert.
+- Prochain lot recommandé : mener à la fusion les PR de la routine ouvertes ; ensuite #18015 si le porteur tranche A.
