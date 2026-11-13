@@ -1,5 +1,10 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -241,13 +246,16 @@ private fun TranscriptDeletion(onDelete: () -> Unit) {
 
 @Composable
 private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean, reduceMotion: Boolean) {
-    val text = line.text(showOriginal)
-    val original = line.originalBelow(showsOriginalInstead = showOriginal)
-    val originalWord = stringResource(R.string.call_captions_original)
-    val spoken = listOfNotNull(line.speakerName, line.elapsedLabel).joinToString(", ") + " : " + text +
-        (original?.let { ". $originalWord : $it" } ?: "")
+    val secondary = line.secondary(showOriginal)
+    val spoken = CallTranscriptRowAccessibility.label(
+        line = line,
+        showOriginal = showOriginal,
+        originalWord = stringResource(R.string.call_captions_original),
+        translatedWord = stringResource(R.string.call_captions_translated),
+    )
     val scheme = authorScheme()
     val speakerColor = hexColor(CallSpeakerColor.hex(line.speakerId.ifBlank { line.speakerName }, scheme), MeeshyTheme.tokens.textPrimary)
+    val fadeMillis = fadeMillis(reduceMotion)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -273,10 +281,16 @@ private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean, reduc
                 )
             }
         }
-        val textColor = CallSpeakerColor.textHex(line.speakerId.ifBlank { line.speakerName }, servesTranslation = line.showsTranslation(showOriginal), mode = scheme)
-            ?.let { hexColor(it, MeeshyTheme.tokens.textPrimary) } ?: MeeshyTheme.tokens.textPrimary
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = textColor)
-        CallCaptionOriginalBelow(original, reduceMotion, ink = MeeshyTheme.tokens.textSecondary)
+        AnimatedContent(
+            targetState = line.servesTranslation && showOriginal,
+            transitionSpec = { fadeIn(tween(fadeMillis)) togetherWith fadeOut(tween(fadeMillis)) },
+            label = "transcript-leading",
+        ) { original ->
+            val textColor = CallSpeakerColor.textHex(line.speakerId.ifBlank { line.speakerName }, servesTranslation = line.showsTranslation(original), mode = scheme)
+                ?.let { hexColor(it, MeeshyTheme.tokens.textPrimary) } ?: MeeshyTheme.tokens.textPrimary
+            Text(line.text(original), style = MaterialTheme.typography.bodyMedium, color = textColor)
+        }
+        CallCaptionSecondaryBelow(secondary, reduceMotion, ink = MeeshyTheme.tokens.textSecondary)
     }
 }
 
