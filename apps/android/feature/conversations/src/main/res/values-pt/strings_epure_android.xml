@@ -25,7 +25,6 @@
     <string name="encryption_mode_hybrid_description">Criptografado em nossos servidores, que podem ler suas mensagens. Textos verificados intactos entre aparelhos compatíveis.</string>
     <string name="share_link_field_description">Descrição</string>
     <string name="share_link_field_slug">Endereço do link</string>
-    <string name="conversations_action_more">Mais</string>
     <string name="links_hub_share_title">Compartilhamento</string>
     <string name="links_hub_tracking_title">Rastreamento</string>
     <string name="links_hub_affiliate_title">Indicação</string>

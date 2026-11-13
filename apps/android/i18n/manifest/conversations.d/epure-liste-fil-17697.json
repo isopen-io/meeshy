@@ -105,10 +105,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "conversations_action_more",
-          "status": "android-only"
-        },
-        {
           "androidName": "links_hub_share_title",
           "status": "android-only"
         },

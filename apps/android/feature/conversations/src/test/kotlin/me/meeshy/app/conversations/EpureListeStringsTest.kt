@@ -42,6 +42,7 @@ class EpureListeStringsTest {
         "share_link_access_email_subtitle", "share_link_access_birthday_subtitle",
         "new_conversation_contacts_empty_subtitle", "share_link_picker_empty_body",
         "links_affiliate_empty_subtitle", "links_tracking_empty_subtitle", "share_link_created_subtitle",
+        "conversations_action_more",
     )
 
     /** Mots que le lexique écrit pareil en français et en anglais : ce n'est pas une recopie. */
@@ -148,12 +149,7 @@ class EpureListeStringsTest {
     }
 
     @Test
-    fun `the conversation list More action and the hybrid choice are the short sentences`() {
-        val more = mapOf(
-            "values" to "More", "values-fr" to "Plus", "values-es" to "Más", "values-pt" to "Mais",
-            "values-de" to "Mehr", "values-it" to "Altro", "values-ar" to "المزيد",
-        )
-        more.forEach { (folder, word) -> assertThat(epure(folder)["conversations_action_more"]).isEqualTo(word) }
+    fun `the hybrid choice says our servers can read the messages`() {
         assertThat(epure("values-fr")["encryption_mode_hybrid_description"])
             .isEqualTo("Chiffré sur nos serveurs, qui peuvent lire vos messages. Textes vérifiés intacts entre appareils compatibles.")
         assertThat(epure("values")["encryption_mode_hybrid_description"])
