@@ -142,14 +142,63 @@ final class CallPillTextTests: XCTestCase {
     // MARK: - Une seule largeur pour le verre
 
     func test_width_aPillThatCarriesText_andTheStowedGlass_shareOneCap() {
-        XCTAssertEqual(CallPillWidth.maxWidth(for: .captions), 560)
-        XCTAssertEqual(CallPillWidth.maxWidth(for: .journal), 560)
-        XCTAssertEqual(CallPillWidth.maxWidth(for: .captionsAlone), 560)
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .captions, unfoldsAbove: false), 560)
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .journal, unfoldsAbove: true), 560)
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .captionsAlone, unfoldsAbove: false), 560)
     }
 
     func test_width_theRestingPill_keepsItsPortraitCap() {
-        XCTAssertEqual(CallPillWidth.maxWidth(for: .none), 440)
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .none, unfoldsAbove: false), 440)
         XCTAssertEqual(CallRailsLayout.pillMaxWidth, 440)
+    }
+
+    /// #17935 — UNE borne pour toute pilule agrandie sur fenêtre large, duo comme groupe :
+    /// les deux rangées légendées du groupe, ou une option ouverte dans la pilule, ont la
+    /// borne du verre qui porte du texte (560), plus les 440 de la pilule au repos.
+    func test_width_theGroupRowsUnfolded_shareTheTextCap() {
+        XCTAssertEqual(CallPillWidth.maxWidth(for: .none, unfoldsAbove: true), 560)
+    }
+
+    /// Les vecteurs de la loi, les mêmes pour les miroirs web et Android :
+    /// (texte, quelque chose déplié au-dessus de la rangée de base) → plafond.
+    func test_width_followsTheVectors() {
+        let vectors: [(CallPillText, Bool, CGFloat)] = [
+            (.none, false, 440),
+            (.none, true, 560),
+            (.captions, false, 560),
+            (.journal, true, 560),
+            (.captionsAlone, false, 560),
+        ]
+        for (content, unfoldsAbove, expected) in vectors {
+            XCTAssertEqual(CallPillWidth.maxWidth(for: content, unfoldsAbove: unfoldsAbove), expected, "\(content) · \(unfoldsAbove)")
+        }
+    }
+
+    /// La pilule lit sa borne de ce qu'elle déplie VRAIMENT au-dessus de sa rangée :
+    /// le même prédicat que celui qui dessine les rangées ou l'option.
+    func test_pill_readsItsCap_fromWhatItUnfolds() throws {
+        let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        XCTAssertTrue(pill.contains("let unfoldsAbove = text.hasBaseRow && disposition.unfoldsPill(for: layer)"))
+        XCTAssertTrue(pill.contains("if unfoldsAbove {"), "Les rangées et l'option se dessinent sous le prédicat de la borne")
+        XCTAssertTrue(pill.contains(".frame(maxWidth: CallPillWidth.maxWidth(for: text, unfoldsAbove: unfoldsAbove))"))
+    }
+
+    /// #17933 — UNE grammaire de bande, en duo comme en groupe : la même bande, à même le verre
+    /// de la pilule, deux phrases, un filet, « Journal » en bouton ; aucune carte intérieure
+    /// propre au groupe, aucune jumelle.
+    func test_groupCaptionsBand_isTheDuoBand() throws {
+        let views = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallCaptionsViews.swift"))
+        XCTAssertEqual(AppSourceGuard.occurrences(ofIdentifier: "CallCaptionsBand", in: views), 1, "Une seule bande de sous-titres")
+        XCTAssertFalse(views.contains("isGroup"), "La bande ne connaît pas le groupe")
+        XCTAssertTrue(views.contains("private func journalButton("), "« Journal » est un bouton au pied de la bande")
+        let transcript = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Transcript.swift"))
+        let band = try XCTUnwrap(transcript.range(of: "func captionsBand(hasOwnGlass: Bool"))
+        let body = String(transcript[band.upperBound...].prefix(600))
+        XCTAssertTrue(body.contains("band.items.suffix(2)"), "Deux phrases, en duo comme en groupe")
+        XCTAssertFalse(body.contains("isGroupStage"), "Aucune bande propre au groupe")
+        let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        XCTAssertTrue(pill.contains("captionsBand(hasOwnGlass: false)"), "À même le verre de la pilule, sans carte intérieure")
+        XCTAssertTrue(pill.contains("if text.hasBaseRow { pillHairline }"), "Un filet sépare la bande de la rangée")
     }
 
     // MARK: - La hauteur du journal
