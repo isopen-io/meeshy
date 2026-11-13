@@ -102,7 +102,7 @@ enum ConceptText {
         case .level: String(localized: "game.concept.level.tip.2", defaultValue: "Garde ta Flamme allumée : elle nourrit tes rêves.", bundle: .main)
         case .points: String(localized: "game.concept.points.tip.2", defaultValue: "Déclenche un élan pour multiplier tes étincelles.", bundle: .main)
         case .meesh: String(localized: "game.concept.meesh.tip.2", defaultValue: "Dépense-les pour veiller sur ta Flamme ou changer un acte de ton rêve.", bundle: .main)
-        case .glory: String(localized: "game.concept.glory.tip.2", defaultValue: "Porte ta lumière plus haut que jamais et accomplis des hauts faits.", bundle: .main)
+        case .glory: String(localized: "game.concept.glory.tip.2", defaultValue: "Gravis un cercle de joute, achève un voyage : ta gloire grandit aussi.", bundle: .main)
         case .flame: String(localized: "game.concept.flame.tip.2", defaultValue: "Garde une Veilleuse pour les jours sans.", bundle: .main)
         case .missions: String(localized: "game.concept.missions.tip.2", defaultValue: "Un acte ne te plaît pas ? Change-le, une fois par jour.", bundle: .main)
         case .league: String(localized: "game.concept.league.tip.2", defaultValue: "Vise les premières places avant dimanche soir.", bundle: .main)

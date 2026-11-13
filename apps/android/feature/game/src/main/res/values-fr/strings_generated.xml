@@ -412,7 +412,7 @@
     <string name="game_concept_flame_what">Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant, de la Braise au Soleil.</string>
     <string name="game_concept_glory_name">Le Rang</string>
     <string name="game_concept_glory_tip_1">Frappe une Meesh : chaque frappe fait grandir ta gloire.</string>
-    <string name="game_concept_glory_tip_2">Porte ta lumière plus haut que jamais et accomplis des hauts faits.</string>
+    <string name="game_concept_glory_tip_2">Gravis un cercle de joute, achève un voyage : ta gloire grandit aussi.</string>
     <string name="game_concept_glory_use">Ton rang se montre sur ton blason et sur ton profil. Il ouvre aussi ta lumière : jusqu’au niveau 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.</string>
     <string name="game_concept_glory_what">Ta gloire grandit et ne recule jamais. Elle te donne ton rang, parmi onze : de Murmure à Légende, puis le Mythe.</string>
     <string name="game_concept_guide_hint">Ouvre le message de Mee en entier</string>

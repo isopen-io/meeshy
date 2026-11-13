@@ -29,7 +29,7 @@ const de = {
   'game.concept.glory.why': 'Dein Ruhm gibt dir deinen Namen, und dieser Name weicht nie zurück.',
   'game.concept.glory.how': 'Prägungen, neue Level und Heldentaten lassen deinen Ruhm wachsen.',
   'game.concept.glory.tip.1': 'Präge eine Meesh: Jede Prägung lässt deinen Ruhm wachsen.',
-  'game.concept.glory.tip.2': 'Trag dein Licht höher als je zuvor und vollbringe Heldentaten.',
+  'game.concept.glory.tip.2': 'Erklimm einen Kreis des Turniers, vollende eine Reise: Auch dein Ruhm wächst.',
   'game.concept.flame.name': 'Die Flamme',
   'game.concept.flame.why': 'Deine Flamme erzählt deine Tage am Stück, und sie nährt deine Träume.',
   'game.concept.flame.how': 'Sie wächst um einen Tag für jeden Tag, an dem du eine Aktion ausführst.',

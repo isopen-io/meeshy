@@ -29,7 +29,7 @@ const pt = {
   'game.concept.glory.why': 'Sua glória dá o seu nome, e esse nome nunca recua.',
   'game.concept.glory.how': 'Cunhagens, novos níveis e façanhas fazem a sua glória crescer.',
   'game.concept.glory.tip.1': 'Cunhe uma Meesh: cada cunhagem faz a sua glória crescer.',
-  'game.concept.glory.tip.2': 'Leve sua luz mais alto do que nunca e cumpra façanhas.',
+  'game.concept.glory.tip.2': 'Suba um círculo de torneio, complete uma viagem: sua glória também cresce.',
   'game.concept.flame.name': 'A Chama',
   'game.concept.flame.why': 'Sua Chama mostra os seus dias seguidos, e ela alimenta seus sonhos.',
   'game.concept.flame.how': 'Ela cresce um dia a cada dia em que você faz um gesto.',

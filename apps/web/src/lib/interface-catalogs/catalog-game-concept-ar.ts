@@ -29,7 +29,7 @@ const ar = {
   'game.concept.glory.why': 'مجدك يمنحك اسمك، وهذا الاسم لا يتراجع أبدًا.',
   'game.concept.glory.how': 'السكّ والمستويات الجديدة والمآثر تُنمّي مجدك.',
   'game.concept.glory.tip.1': 'سُكّ Meesh: كل سكّ يُنمّي مجدك.',
-  'game.concept.glory.tip.2': 'احمل نورك أعلى من أي وقت مضى وحقّق المآثر.',
+  'game.concept.glory.tip.2': 'ارتقِ إلى حلقة مبارزة أعلى، وأتمّ رحلة: مجدك ينمو أيضًا.',
   'game.concept.flame.name': 'اللهب',
   'game.concept.flame.why': 'لهبك يروي أيامك المتتالية، ويغذّي أحلامك.',
   'game.concept.flame.how': 'ينمو يومًا عن كل يوم تقوم فيه بإجراء.',

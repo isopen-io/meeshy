@@ -29,7 +29,7 @@ const es = {
   'game.concept.glory.why': 'Tu gloria te da tu nombre, y ese nombre nunca retrocede.',
   'game.concept.glory.how': 'Acuñaciones, nuevos niveles y hazañas hacen crecer tu gloria.',
   'game.concept.glory.tip.1': 'Acuña una Meesh: cada acuñación hace crecer tu gloria.',
-  'game.concept.glory.tip.2': 'Lleva tu luz más alto que nunca y logra hazañas.',
+  'game.concept.glory.tip.2': 'Sube un círculo de justa, termina un viaje: tu gloria también crece.',
   'game.concept.flame.name': 'La Llama',
   'game.concept.flame.why': 'Tu Llama dice tus días seguidos, y alimenta tus sueños.',
   'game.concept.flame.how': 'Crece un día por cada día en que haces un gesto.',

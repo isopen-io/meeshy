@@ -27,7 +27,7 @@ const fr = {
   'game.concept.glory.why': 'Ta gloire te donne ton nom, et ce nom ne recule jamais.',
   'game.concept.glory.how': 'Frappes, nouveaux niveaux et hauts faits font grandir ta gloire.',
   'game.concept.glory.tip.1': 'Frappe une Meesh : chaque frappe fait grandir ta gloire.',
-  'game.concept.glory.tip.2': 'Porte ta lumière plus haut que jamais et accomplis des hauts faits.',
+  'game.concept.glory.tip.2': 'Gravis un cercle de joute, achève un voyage : ta gloire grandit aussi.',
   'game.concept.flame.name': 'La Flamme',
   'game.concept.flame.why': 'Ta Flamme dit tes jours d’affilée, et elle nourrit tes rêves.',
   'game.concept.flame.how': 'Elle grandit d’un jour à chaque jour où tu fais un geste.',

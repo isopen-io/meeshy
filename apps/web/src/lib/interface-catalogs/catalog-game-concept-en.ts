@@ -29,7 +29,7 @@ const en = {
   'game.concept.glory.why': 'Your glory gives you your name, and that name never goes back.',
   'game.concept.glory.how': 'Mints, new levels and great deeds make your glory grow.',
   'game.concept.glory.tip.1': 'Mint a Meesh: every mint makes your glory grow.',
-  'game.concept.glory.tip.2': 'Carry your light higher than ever and perform great deeds.',
+  'game.concept.glory.tip.2': 'Climb a joust circle, complete a journey: your glory grows too.',
   'game.concept.flame.name': 'The Flame',
   'game.concept.flame.why': 'Your Flame tells your days in a row, and it feeds your dreams.',
   'game.concept.flame.how': 'It grows by one day for each day you make a move.',

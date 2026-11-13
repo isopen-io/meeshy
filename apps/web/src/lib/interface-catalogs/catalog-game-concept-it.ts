@@ -29,7 +29,7 @@ const it = {
   'game.concept.glory.why': 'La tua gloria ti dà il tuo nome, e quel nome non arretra mai.',
   'game.concept.glory.how': 'Coni, nuovi livelli e imprese fanno crescere la tua gloria.',
   'game.concept.glory.tip.1': 'Conia una Meesh: ogni conio fa crescere la tua gloria.',
-  'game.concept.glory.tip.2': 'Porta la tua luce più in alto che mai e compi imprese.',
+  'game.concept.glory.tip.2': 'Sali un cerchio del torneo, completa un viaggio: anche la tua gloria cresce.',
   'game.concept.flame.name': 'La Fiamma',
   'game.concept.flame.why': 'La tua Fiamma racconta i tuoi giorni di fila, e nutre i tuoi sogni.',
   'game.concept.flame.how': 'Cresce di un giorno per ogni giorno in cui fai un gesto.',

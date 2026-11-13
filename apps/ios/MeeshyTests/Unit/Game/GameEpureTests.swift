@@ -179,6 +179,25 @@ final class GameEpureTests: XCTestCase {
         }
     }
 
+    /// Le glossaire disait tout ce qui fait grandir la gloire ; réduit à sa première phrase, il a emporté la joute et le
+    /// voyage, que la fiche du Rang ne disait pas. La fiche les dit désormais, dans les sept langues.
+    func test_rankConcept_saysTheJoustAndTheJourneyGrowGlory_inEveryLanguage() throws {
+        let catalog = try Self.catalog()
+        let how = try XCTUnwrap(catalog["game.concept.glory.how"])
+        let tip = try XCTUnwrap(catalog["game.concept.glory.tip.2"])
+        let joustAndJourney: [String: (String, String)] = [
+            "fr": ("joute", "voyage"), "en": ("joust", "journey"), "es": ("justa", "viaje"), "pt-BR": ("torneio", "viagem"),
+            "de": ("Turniers", "Reise"), "it": ("torneo", "viaggio"), "ar": ("مبارزة", "رحلة"),
+        ]
+        for (language, words) in joustAndJourney {
+            let page = (how[language] ?? "") + " " + (tip[language] ?? "")
+            XCTAssertTrue(page.contains(words.0) && page.contains(words.1), "\(language) : la joute ou le voyage manque à « \(page) »")
+        }
+        XCTAssertTrue(try XCTUnwrap(tip["fr"]).contains("achève un voyage"))
+        let copy = try code("Meeshy/Features/Game/ProgressionConceptCopy.swift")
+        XCTAssertTrue(copy.contains("Gravis un cercle de joute, achève un voyage"))
+    }
+
     func test_catalog_theConsequences_andTheLandmarks_stayVisible() throws {
         let catalog = try Self.catalog()
         XCTAssertTrue(try XCTUnwrap(catalog["game2.settings.hidden.body"]?["fr"]).contains("te retire de la joute publique"), "la conséquence de « Jeu masqué »")
