@@ -2,6 +2,98 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// #16979 — Effets, filtres et cadres : UNE famille d'outils. L'hôte se pose au-dessus des deux
+/// modes et garde son identité quand on passe de l'un à l'autre : il dit à chacun la rangée de
+/// genres de la loi pure, et retient le genre d'Effets demandé depuis le Montage (« Couleur »
+/// touché au Montage ouvre Effets sur Couleur, pas sur Visage).
+struct CallEffectsFamilyHost<Effects: View, Montage: View>: View {
+    let mode: CallScreenMode
+    let offersEffects: Bool
+    let offersFrames: Bool
+    @ViewBuilder let effects: (CallEffectsFamily) -> Effects
+    @ViewBuilder let montage: (CallEffectsFamily) -> Montage
+
+    @State private var entry: CallEffectsCategory = .face
+
+    var body: some View {
+        let family = CallEffectsFamily(
+            genres: CallEffectsGenreRule.row(offersEffects: offersEffects || mode == .effects, offersFrames: offersFrames || mode == .montage),
+            entry: entry,
+            request: { entry = $0 }
+        )
+        switch mode {
+        case .effects: effects(family)
+        case .montage: montage(family)
+        }
+    }
+}
+
+/// Ce que l'hôte de la famille dit à un mode : la rangée de genres, le genre d'Effets où entrer,
+/// et de quoi demander un genre d'Effets avant d'y passer.
+struct CallEffectsFamily {
+    let genres: [CallEffectKind]
+    let entry: CallEffectsCategory
+    let request: (CallEffectsCategory) -> Void
+}
+
+/// #16979 · P8 · C1 — LA rangée de genres de la barre, la même en Effets et en Montage : Visage ·
+/// Couleur · Cadres. Le genre affiché est pressé ; toucher un autre genre le montre, dans le mode
+/// qui le porte. En grand texte, la rangée défile, effacée en fondu à ses deux bords.
+struct CallEffectsGenreChips: View {
+    let genres: [CallEffectKind]
+    let selected: CallEffectKind
+    let onSelect: (CallEffectKind) -> Void
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            row
+            ScrollView(.horizontal, showsIndicators: false) { row }
+                .mask { ScrollEdgeFadeMask(axis: .horizontal, start: true, end: true) }
+        }
+        .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Candidat de `ViewThatFits`, mesuré sur le rendu asynchrone d'iOS 26 : les entrées se
+    /// construisent ici, dans le `body`, et le `ForEach` ne fait que les relire (#9135, #9456).
+    private var row: some View {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            ForEach(genres.map { AsyncRenderRow(id: $0, content: entry($0)) }, content: asyncRenderRowContent)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func entry(_ genre: CallEffectKind) -> some View {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            if genre != genres.first {
+                Text(verbatim: "·")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.strong))
+                    .accessibilityHidden(true)
+            }
+            chip(genre)
+        }
+    }
+
+    private func chip(_ genre: CallEffectKind) -> some View {
+        let isSelected = genre == selected
+        return Button {
+            guard !isSelected else { return }
+            onSelect(genre)
+        } label: {
+            Text(CallModeCopy.genreName(genre))
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(.white.opacity(isSelected ? 1 : 0.55))
+                .lineLimit(1)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+    }
+}
+
 /// P8 · P8b · C1 — la barre d'Effets, LA barre de la famille d'outils (Effets, filtres, cadres :
 /// Effets et Montage la partagent, #16979) : UN verre d'une pièce (l'atome partagé de la pilule),
 /// qui parle la langue du composer. En haut, la rangée de puces des looks et son filet ; en bas, la
@@ -12,6 +104,8 @@ import MeeshyUI
 struct CallEffectsBar<Looks: View>: View {
     let mode: CallEffectsBarMode
     let layers: CallEffectLayers
+    /// Ce que Réglages ouvre : la luminosité et le flou en Effets, « Chaque visage » au Montage.
+    var settingsHint: String = CallModeCopy.settingsHint
     let onBack: () -> Void
     let onSettings: () -> Void
     let onAddLook: () -> Void
@@ -64,7 +158,7 @@ struct CallEffectsBar<Looks: View>: View {
                 kind: mode == .settings ? .active : .normal,
                 label: CallModeCopy.settings,
                 caption: CallModeCopy.settings,
-                hint: CallModeCopy.settingsHint,
+                hint: settingsHint,
                 toggleState: mode == .settings,
                 diameter: Self.diameter,
                 action: onSettings

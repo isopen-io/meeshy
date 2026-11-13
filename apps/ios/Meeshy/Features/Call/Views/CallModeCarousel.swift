@@ -89,6 +89,12 @@ enum CallModeCopy {
         }
     }
 
+    /// #16979 — le mot d'un genre dans LA rangée de la famille : celui d'Effets, « Cadres » au Montage.
+    static func genreName(_ genre: CallEffectKind) -> String {
+        if let category = CallEffectsCategory(kind: genre) { return categoryName(category) }
+        return genre == .frame ? framesChip : CallEffectsCopy.layerKindName(genre)
+    }
+
     static func title(_ mode: CallScreenMode) -> String {
         switch mode {
         case .effects: return effectsTitle

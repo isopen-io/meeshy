@@ -88,6 +88,37 @@ nonisolated struct CallEffectLayers: Equatable, Sendable {
     }
 }
 
+/// #16979 — « effets, filtres et cadres font partie d'une même famille d'outils » : UNE rangée de
+/// genres, la même en Effets et en Montage. Visage et Couleur se choisissent sur mon image (Effets),
+/// les cadres sur le Montage ; un genre n'y figure que si l'appel offre le mode qui le montre.
+nonisolated enum CallEffectsGenreRule {
+    static let effectsGenres: [CallEffectKind] = CallEffectsCategory.allCases.map(\.kind)
+    static let montageGenres: [CallEffectKind] = [.frame]
+
+    static func row(offersEffects: Bool, offersFrames: Bool) -> [CallEffectKind] {
+        (offersEffects ? effectsGenres : []) + (offersFrames ? montageGenres : [])
+    }
+
+    /// (+) : un genre ABSENT de la pile, d'abord dans le mode où l'on est, puis dans l'autre. Quand
+    /// tout ce que la rangée offre est déjà posé sans remplir la pile, (+) laisse feuilleter l'autre
+    /// genre du mode, sinon le premier de l'autre mode : rien de ce qu'il faisait ne se perd.
+    static func adding(from current: CallEffectKind, layers: CallEffectLayers, row: [CallEffectKind]) -> CallEffectKind? {
+        guard !layers.isFull, row.contains(current) else { return nil }
+        let isMontage = montageGenres.contains(current)
+        let sameMode = row.filter { montageGenres.contains($0) == isMontage }
+        let otherMode = row.filter { montageGenres.contains($0) != isMontage }
+        return layers.opening(after: current, among: sameMode)
+            ?? layers.opening(after: nil, among: otherMode)
+            ?? browsing(after: current, among: sameMode)
+            ?? otherMode.first
+    }
+
+    private static func browsing(after current: CallEffectKind, among genres: [CallEffectKind]) -> CallEffectKind? {
+        guard genres.count > 1, let index = genres.firstIndex(of: current) else { return nil }
+        return genres[(index + 1) % genres.count]
+    }
+}
+
 /// Ce que la pile et la configuration de l'appel se disent : la configuration vidéo est la
 /// vérité des filtres et des visages, l'appel (ou le Montage) celle du cadre ; la pile en garde
 /// l'ORDRE d'empilement.

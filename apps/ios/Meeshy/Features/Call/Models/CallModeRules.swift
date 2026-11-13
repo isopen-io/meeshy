@@ -125,7 +125,7 @@ nonisolated struct CallModeCarouselMotion<Item: Equatable> {
     }
 }
 
-enum CallEffectsCategory: String, CaseIterable, Sendable {
+nonisolated enum CallEffectsCategory: String, CaseIterable, Sendable {
     case face
     case color
 
@@ -155,25 +155,6 @@ enum CallEffectsModeRule {
 
     static func applying(color preset: VideoFilterPreset, to config: VideoFilterConfig) -> VideoFilterConfig {
         config.applyingPreset(preset == .natural ? nil : preset)
-    }
-
-    /// P8b · loi 14 · #16979 — « (+) Ajouter un autre look » : le genre ABSENT de la pile que le
-    /// toucher ouvre. Pile pleine, il n'ajoute plus (`nil`). Quand les deux genres d'Effets sont déjà
-    /// posés, il laisse feuilleter l'autre genre : rien de ce que le (+) faisait ne se perd.
-    static func addingLook(from category: CallEffectsCategory, layers: CallEffectLayers) -> CallEffectsCategory? {
-        guard !layers.isFull else { return nil }
-        let kinds = CallEffectsCategory.allCases.map(\.kind)
-        if let open = layers.opening(after: category.kind, among: kinds), let next = CallEffectsCategory(kind: open) {
-            return next
-        }
-        return other(than: category)
-    }
-
-    private static func other(than category: CallEffectsCategory) -> CallEffectsCategory {
-        switch category {
-        case .face: return .color
-        case .color: return .face
-        }
     }
 }
 

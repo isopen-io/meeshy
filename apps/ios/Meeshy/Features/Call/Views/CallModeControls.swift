@@ -12,10 +12,15 @@ struct CallEffectsModeControls: View {
     var capturesMyImage = true
     /// #17901 — le cadre gardé en direct est une couche de la pile, et s'y annule.
     var hold: CallLiveFrameHold = .unavailable
+    /// #16979 — LA rangée de genres de la famille, et le genre d'Effets où entrer.
+    var genres: [CallEffectKind] = CallEffectsGenreRule.effectsGenres
+    var entry: CallEffectsCategory = .face
+    /// « Cadres » touché, ou (+) quand il ne reste que les cadres à poser : le Montage.
+    var onOpenFrames: () -> Void = {}
     let onExit: () -> Void
 
     @State private var config = VideoFilterConfig()
-    @State private var category: CallEffectsCategory = .face
+    @State private var picked: CallEffectsCategory? = nil
     @State private var barMode: CallEffectsBarMode = .base
     @State private var layers = CallEffectLayers()
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
@@ -32,7 +37,7 @@ struct CallEffectsModeControls: View {
                 onSettings: toggleSettings,
                 onAddLook: addLook,
                 onShowApplied: showApplied,
-                looks: { categoryPicker }
+                looks: { CallEffectsGenreChips(genres: genres, selected: category.kind, onSelect: selectGenre) }
             )
             .padding(.horizontal, MeeshySpacing.lg)
         }
@@ -90,16 +95,28 @@ struct CallEffectsModeControls: View {
         HapticFeedback.light()
     }
 
-    /// (+) ouvre les looks d'un genre absent de la pile ; pile pleine, il n'ajoute plus.
+    private var category: CallEffectsCategory { picked ?? entry }
+
+    /// (+) ouvre les looks d'un genre absent de la pile, ou les cadres du Montage quand Visage et
+    /// Couleur sont posés ; pile pleine, il n'ajoute plus.
     private func addLook() {
-        guard let next = CallEffectsModeRule.addingLook(from: category, layers: layers) else {
+        guard let next = CallEffectsGenreRule.adding(from: category.kind, layers: layers, row: genres) else {
             HapticFeedback.warning()
             return
         }
+        guard let look = CallEffectsCategory(kind: next) else { return onOpenFrames() }
         withAnimation(settingsAnimation) {
             barMode = CallEffectsBarRule.afterAddingLook(from: barMode)
-            category = next
+            picked = look
         }
+        HapticFeedback.light()
+    }
+
+    /// Un genre de la rangée : Visage ou Couleur ici, « Cadres » dans le Montage (le passage de
+    /// mode porte son propre retour haptique).
+    private func selectGenre(_ genre: CallEffectKind) {
+        guard let look = CallEffectsCategory(kind: genre) else { return onOpenFrames() }
+        withAnimation(settingsAnimation) { picked = look }
         HapticFeedback.light()
     }
 
@@ -129,33 +146,6 @@ struct CallEffectsModeControls: View {
     private var settingsPanelTransition: AnyTransition {
         AnyTransition.opacity
             .combined(with: .offset(y: CallEffectsSettingsMotion.panelRise(reduceMotion: reduceMotion)))
-    }
-
-    private var categoryPicker: some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            ForEach(CallEffectsCategory.allCases, id: \.self) { item in
-                if item != CallEffectsCategory.allCases.first {
-                    Text(verbatim: "·")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white.opacity(MeeshyOpacity.strong))
-                        .accessibilityHidden(true)
-                }
-                Button {
-                    withAnimation(settingsAnimation) { category = item }
-                    HapticFeedback.light()
-                } label: {
-                    Text(CallModeCopy.categoryName(item))
-                        .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white.opacity(category == item ? 1 : 0.55))
-                        .padding(.horizontal, MeeshySpacing.sm)
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(category == item ? [.isButton, .isSelected] : [.isButton])
-            }
-        }
-        .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
     }
 
     @ViewBuilder
@@ -340,8 +330,9 @@ struct CallMontageModeControls: View {
     var textsProvider: any CallFrameTextsProviding = CallFrameTextsResolver.shared
     /// #9287 — l'interrupteur qui garde le cadre choisi pendant tout l'appel.
     var hold: CallLiveFrameHold = .unavailable
-    /// (+) ouvre les looks d'Effets ; `nil` quand l'appel ne les offre pas.
-    var onOpenEffects: (() -> Void)? = nil
+    /// #16979 — LA rangée de genres de la famille ; « Visage » et « Couleur » s'ouvrent dans Effets.
+    var genres: [CallEffectKind] = CallEffectsGenreRule.montageGenres
+    var onOpenEffects: (CallEffectsCategory) -> Void = { _ in }
     let onExit: () -> Void
 
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
@@ -359,11 +350,12 @@ struct CallMontageModeControls: View {
             CallEffectsBar(
                 mode: barMode,
                 layers: layers,
+                settingsHint: CallModeCopy.montageSettingsHint,
                 onBack: goBack,
                 onSettings: toggleSettings,
                 onAddLook: addLook,
                 onShowApplied: showApplied,
-                looks: { framesChip }
+                looks: { CallEffectsGenreChips(genres: genres, selected: .frame, onSelect: openGenre) }
             )
             .padding(.horizontal, MeeshySpacing.lg)
         }
@@ -403,19 +395,6 @@ struct CallMontageModeControls: View {
             .combined(with: .offset(y: CallEffectsSettingsMotion.panelRise(reduceMotion: reduceMotion)))
     }
 
-    /// C1 — la puce « Cadres » est pressée : le carrousel des cadres prend la place de la bande de looks.
-    private var framesChip: some View {
-        Text(CallModeCopy.framesChip)
-            .font(.footnote.weight(.semibold))
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, MeeshySpacing.sm)
-            .frame(minHeight: MeeshyControlSize.tapTarget)
-            .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(CallModeCopy.framesChip)
-            .accessibilityAddTraits([.isButton, .isSelected])
-    }
-
     /// ‹ revient à l'appel : ce qui a été touché s'est appliqué tout de suite.
     private func goBack() {
         HapticFeedback.light()
@@ -427,11 +406,21 @@ struct CallMontageModeControls: View {
         HapticFeedback.light()
     }
 
-    /// (+) ouvre les looks d'Effets, par-dessus le cadre ; pile pleine, il n'ajoute plus.
+    /// (+) ouvre, dans Effets, un genre absent de la pile, par-dessus le cadre ; pile pleine, ou
+    /// Effets non offert, il n'ajoute plus.
     private func addLook() {
-        guard !layers.isFull, let onOpenEffects else { return HapticFeedback.warning() }
-        HapticFeedback.light()
-        onOpenEffects()
+        guard let next = CallEffectsGenreRule.adding(from: .frame, layers: layers, row: genres) else {
+            return HapticFeedback.warning()
+        }
+        openGenre(next)
+    }
+
+    /// C1 — « Cadres » est pressée : le carrousel des cadres prend la place de la bande de looks.
+    /// « Visage » ou « Couleur » ouvre Effets sur ce genre ; le passage de mode porte son retour
+    /// haptique.
+    private func openGenre(_ genre: CallEffectKind) {
+        guard let look = CallEffectsCategory(kind: genre) else { return }
+        onOpenEffects(look)
     }
 
     private func showApplied() {
