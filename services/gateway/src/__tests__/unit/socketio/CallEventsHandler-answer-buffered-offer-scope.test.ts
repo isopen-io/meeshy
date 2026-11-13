@@ -56,7 +56,6 @@ jest.mock('../../../middleware/validation', () => ({
 
 const mockCheckRateLimit = jest.fn<any>().mockResolvedValue(true);
 jest.mock('../../../utils/socket-rate-limiter', () => ({
-  callSignalBudgetId: (userId: string, socketId: string) => `${userId}:${socketId}`,
   SocketRateLimiter: jest.fn().mockImplementation(() => ({
     checkLimit: mockCheckRateLimit,
     destroy: jest.fn(),

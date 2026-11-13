@@ -12,7 +12,9 @@
  * Le niveau, le blocage et l'âge passent par `pairAccessAmong` (site unique de la loi),
  * relus à CHAQUE émission — et une fois encore APRÈS l'envoi, pour qu'un changement
  * de lien écrit pendant l'éventail ne laisse pas un point derrière sa fin —, jamais mis
- * en cache. Chaque émission vise la room
+ * en cache. Le cercle servi (#17966) est le niveau EFFECTIF de ce même verdict : le
+ * lecteur apprend de quel cercle vient l'émetteur pour LUI (ce que `GET /relations/:userId`
+ * lui dit déjà), jamais rien de la loi d'un autre. Chaque émission vise la room
  * `user:<destinataire>` avec SA charge.
  *
  * Le partage DANS une conversation (`LocationHandler`, `location:live-*`) est un autre
@@ -26,6 +28,7 @@
 import {
   SHARED_LOCATION_BLUR_RADIUS_METERS,
   SHARED_LOCATION_CELL_HOLD_MARGIN,
+  SHARED_LOCATION_CIRCLES,
   SHARED_LOCATION_DEFAULT_PRECISION,
   SHARED_LOCATION_ERROR_CODES,
   SHARED_LOCATION_EXACT_MIN_RADIUS_METERS,
@@ -34,12 +37,14 @@ import {
   sharedLocationUpdatePayloadSchema,
   type SharedLocationAck,
   type SharedLocationChangedEventData,
+  type SharedLocationCircle,
   type SharedLocationErrorCode,
   type SharedLocationPrecision,
   type SharedLocationSnapshot,
   type SharedLocationStopAck,
 } from '@meeshy/shared/types/shared-location';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { RelationLevel } from '@meeshy/shared/types/relation';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { comptesAuMoins } from '../friendship';
 import { pairAccessAmong, type PairAccessDb } from '../relations/pairAccess';
@@ -79,7 +84,20 @@ export type SharedLocationRelayDeps = {
   readonly now: () => number;
 };
 
-export type SharedLocationReaderAccess = 'none' | SharedLocationPrecision;
+/**
+ * Ce qu'UN lecteur reçoit du partage : rien, ou la précision que l'émetteur lui a donnée
+ * et le cercle que la loi vient de juger entre eux (#17966). Les deux se comparent
+ * ensemble : un cercle qui change à précision égale se ressert.
+ */
+export type SharedLocationReaderAccess =
+  | 'none'
+  | { readonly precision: SharedLocationPrecision; readonly circle: SharedLocationCircle | null };
+
+const circleOf = (level: RelationLevel | undefined): SharedLocationCircle | null =>
+  SHARED_LOCATION_CIRCLES.find((circle) => circle === level) ?? null;
+
+const sameAccess = (a: SharedLocationReaderAccess, b: SharedLocationReaderAccess): boolean =>
+  a === 'none' || b === 'none' ? a === b : a.precision === b.precision && a.circle === b.circle;
 
 export type SharedLocationBbox = {
   readonly minLongitude: number;
@@ -123,8 +141,8 @@ const withHeldCells = (current: SharedLocationState, position: SharedLocationSta
   });
 
 /**
- * La projection d'UN destinataire : la position à sa précision, le rayon de son flou, rien
- * d'autre. Un lecteur flouté reçoit la maille que `state` retient pour lui (`readerId`) et
+ * La projection d'UN destinataire : la position à sa précision, le rayon de son flou, son
+ * cercle, rien d'autre. Un lecteur flouté reçoit la maille que `state` retient pour lui (`readerId`) et
  * une heure arrondie.
  */
 export function projectSharedLocation(
@@ -134,18 +152,20 @@ export function projectSharedLocation(
   readerId?: string,
 ): SharedLocationChangedEventData | null {
   if (access === 'none') return null;
-  if (access === 'exact') {
+  const circle = access.circle ? { circle: access.circle } : {};
+  if (access.precision === 'exact') {
     const radiusMeters = Math.max(SHARED_LOCATION_EXACT_MIN_RADIUS_METERS, Math.round(state.position.accuracy ?? 0));
-    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, updatedAt: state.updatedAt, expiresAt: state.expiresAt };
+    return { userId, latitude: round(state.position.latitude), longitude: round(state.position.longitude), precision: 'exact', radiusMeters, ...circle, updatedAt: state.updatedAt, expiresAt: state.expiresAt };
   }
   const held = readerId === undefined ? undefined : state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())?.cell;
-  const cell = held ?? cellOf(state.position, SHARED_LOCATION_GRID_DEGREES[access]);
+  const cell = held ?? cellOf(state.position, SHARED_LOCATION_GRID_DEGREES[access.precision]);
   return {
     userId,
     latitude: cell.latitude,
     longitude: cell.longitude,
-    precision: access,
-    radiusMeters: SHARED_LOCATION_BLUR_RADIUS_METERS[access],
+    precision: access.precision,
+    radiusMeters: SHARED_LOCATION_BLUR_RADIUS_METERS[access.precision],
+    ...circle,
     updatedAt: roundedClock(state.updatedAt),
     expiresAt: state.expiresAt,
   };
@@ -182,9 +202,11 @@ async function accessOf(
     usableAccounts(deps.prisma, [emitterId, ...candidates]),
   ]);
   return new Map(
-    readerIds.map((id) => {
-      const opened = usable.has(emitterId) && usable.has(id) && law.get(id)?.allowed === true;
-      return [id, opened ? (chosen.get(id.toLowerCase()) ?? 'none') : 'none'];
+    readerIds.map((id): [string, SharedLocationReaderAccess] => {
+      const verdict = law.get(id);
+      const precision = chosen.get(id.toLowerCase());
+      const opened = usable.has(emitterId) && usable.has(id) && verdict?.allowed === true && precision !== undefined;
+      return [id, opened ? { precision, circle: circleOf(verdict.effectiveLevel) } : 'none'];
     }),
   );
 }
@@ -210,7 +232,13 @@ const UNAVAILABLE = failed(SHARED_LOCATION_ERROR_CODES.UNAVAILABLE, 'Position mo
 const recipientIdsOf = (state: SharedLocationState | null): readonly string[] => state?.recipients.map((recipient) => recipient.userId) ?? [];
 
 const sameServed = (a: SharedLocationChangedEventData | null, b: SharedLocationChangedEventData | null): boolean =>
-  a !== null && b !== null && a.latitude === b.latitude && a.longitude === b.longitude && a.precision === b.precision && a.radiusMeters === b.radiusMeters;
+  a !== null &&
+  b !== null &&
+  a.latitude === b.latitude &&
+  a.longitude === b.longitude &&
+  a.precision === b.precision &&
+  a.radiusMeters === b.radiusMeters &&
+  a.circle === b.circle;
 
 /**
  * Sert la projection de `state` à chaque destinataire ouvert ; rend l'accès de chacun et
@@ -449,7 +477,7 @@ export async function refreshSharedLocationBetween(
     const after = (await accessOf(deps, emitterId, state, [readerId])).get(readerId) ?? 'none';
     const before = params.before?.get(directionKey(emitterId, readerId)) ?? 'none';
     const served = projectSharedLocation(emitterId, state, after, readerId);
-    if (served && after !== before) {
+    if (served && !sameAccess(after, before)) {
       await markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now);
       serve(deps.io, readerId, served);
       await revokedSince(deps, emitterId, state, [readerId]);
@@ -517,13 +545,14 @@ export async function sharedLocationSnapshotFor(
 
   const allowed = await snapshotAllowed(deps, readerId, addressed.map(([emitterId]) => emitterId), now);
   const opened = addressed.flatMap(([emitterId, state]) => {
-    const chosen = state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())?.precision ?? 'none';
-    const projection = projectSharedLocation(emitterId, state, allowed.has(emitterId) ? chosen : 'none', readerId);
+    const precision = state.recipients.find((recipient) => recipient.userId.toLowerCase() === readerId.toLowerCase())?.precision;
+    const circle = allowed.get(emitterId);
+    const projection = projectSharedLocation(emitterId, state, precision && circle !== undefined ? { precision, circle } : 'none', readerId);
     return projection ? [{ emitterId, state, projection }] : [];
   });
   const seenBefore = await Promise.all(opened.map(async ({ emitterId, state }) => (await sharedLocationSeenAmong(deps.cache, emitterId, state.sessionId, [readerId])).length > 0));
   await Promise.all(opened.map(({ emitterId, state }) => markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now)));
-  const confirmed = opened.length > 0 ? await snapshotAllowed(deps, readerId, opened.map(({ emitterId }) => emitterId), now) : new Set<string>();
+  const confirmed: ReadonlyMap<string, SharedLocationCircle | null> = opened.length > 0 ? await snapshotAllowed(deps, readerId, opened.map(({ emitterId }) => emitterId), now) : new Map();
   const lost = opened.filter(({ emitterId }) => !confirmed.has(emitterId));
   lost.filter((entry) => seenBefore[opened.indexOf(entry)]).forEach(({ emitterId }) => unserve(deps.io, readerId, emitterId));
   await Promise.all(lost.map(({ emitterId, state }) => unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, [readerId])));
@@ -540,11 +569,21 @@ export async function sharedLocationSnapshotFor(
  * réponse HTTP ne la contredit pas ; une baisse écrite après la relecture le trouve noté.
  * Un lecteur qui avait déjà reçu le point en direct et que la relecture retire reçoit la
  * fin : la baisse ne le trouvera plus parmi les servis. Qui n'avait rien vu n'apprend rien.
+ * Rend, pour chaque émetteur ouvert, le cercle que la loi vient de juger (#17966).
  */
-async function snapshotAllowed(deps: SharedLocationRelayDeps, readerId: string, emitterIds: readonly string[], now: number): Promise<ReadonlySet<string>> {
+async function snapshotAllowed(
+  deps: SharedLocationRelayDeps,
+  readerId: string,
+  emitterIds: readonly string[],
+  now: number,
+): Promise<ReadonlyMap<string, SharedLocationCircle | null>> {
   const [law, usable] = await Promise.all([
     pairAccessAmong(deps.prisma, { feature: 'location.temporary', subjectId: readerId, otherIds: emitterIds, subjectIs: 'viewer', now: new Date(now), consentOf: () => 'granted' }),
     usableAccounts(deps.prisma, [readerId, ...emitterIds]),
   ]);
-  return new Set(emitterIds.filter((emitterId) => usable.has(readerId) && usable.has(emitterId) && law.get(emitterId)?.allowed === true));
+  return new Map(
+    emitterIds
+      .filter((emitterId) => usable.has(readerId) && usable.has(emitterId) && law.get(emitterId)?.allowed === true)
+      .map((emitterId) => [emitterId, circleOf(law.get(emitterId)?.effectiveLevel)] as const),
+  );
 }

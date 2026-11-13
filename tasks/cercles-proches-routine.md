@@ -508,6 +508,27 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
   Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
 
+## 2026-11-13 — réveil 25 : une séance « ensemble » s'arrête dans une conversation close (#17147)
+
+- Reprise : aucune PR de la routine ouverte ; #17148 fusionnée le 2026-11-09. #17956 (carte des positions sur le web,
+  `claude/cercles-16984-web`) est tenue par un autre réveil, active : ce réveil ne la touche pas. Aucune branche n'écrit
+  `services/together/` : lot #17147 réservé sur `claude/cercles-ensemble-conversation-close`.
+- Lot : la porte `judgeTogether` lit désormais la conversation (ouverte : `isActive`, ni `closedAt`, ni `deletedAt`,
+  lue en JS car `closedAt: null` ne retient pas un champ absent sous MongoDB) ; une ligne absente refuse. La clôture
+  coupe : `announceConversationClosed`, point de convergence des cinq chemins de clôture, appelle
+  `cutTogetherWhere({ conversationId })` (détaché, `.catch` posé). Refus indistinct, fin dite `left` aux deux.
+- Gates locaux : témoins rouges prouvés (6 dans `togetherRelay.test.ts`, 1 dans `announceConversationClosed.test.ts`),
+  puis 443 suites voisines (together, socketio, conversations, relations, directory, attachments, admin, security,
+  balayage des promesses détachées) 6 806/6 806 vertes ; `tsc` passerelle vert.
+- Revue adversariale : fusionnable, un défaut moyen corrigé dans le lot — l'archivage admin (`isActive: false` sans
+  `closed`) ne passe pas par `announceConversationClosed` ; la route souveraine appelle désormais `cutTogetherWhere`
+  après l'écriture (témoin de route). Assumé : `obsoleteConversation` rejuge deux fois (sans effet). Hors lot, en
+  suivi : la désactivation d'une communauté ne touche pas ses conversations (#17971).
+- CI : `dev` était rouge sur six suites d'appel depuis #17952 (doubles partiels de `socket-rate-limiter` sans
+  `callSignalBudgetId`, 22 témoins `SIGNAL_FAILED`) ; corrigé dans ce lot en prolongeant `jest.requireActual`.
+- Prochain lot recommandé : « ensemble » sur Android (#17100), sinon la préférence de réception d'« ensemble » (#17023),
+  puis la position temporaire iOS (#16983) et l'icône par cercle (#17013) quand #17956 aura fusionné.
+
 ## 2026-11-13 — réveil 28 : « ensemble » sur Android, couche cœur (#17100)
 
 - Reprise : neuf PR de la routine (#17956, #17967, #17969, #17973, #17976, #17979, #17981, #17984, #17985) étaient
@@ -694,6 +715,62 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   la règle de la routine veut une CI verte ; elle fusionnera dès que `dev` sera reverdi (ou sur décision du porteur).
 - Prochain lot recommandé : #16983 (position temporaire sur iOS, émettre + carte), puis #17147 (la porte « ensemble »
   lit la conversation close), puis l'icône de position par cercle (#17013).
+## 2026-11-13 — réveil repris (14:20) : l'écoute d'un Proche sur l'avatar de la liste web (#16733)
+
+- Reprise : onze branches de la routine écrites dans les 45 dernières minutes par des réveils vivants (#17100 Android,
+  #16984 web, #16983 iOS, #17013, #17023, #16987…) ; ce réveil n'en touche aucune. Le volet WEB de #16733 (la rangée
+  d'un direct dans la liste) n'était écrit par personne : branche `claude/cercles-16733-web` réservée avant écriture.
+- Lot : `LensRow` lit l'écoute servie du pair (`useListeningBand`, la clé de l'en-tête du fil) et la pose sur l'avatar
+  de 44 px, iso `ConversationRowAvatar` (iOS, #17083) ; un groupe n'en porte jamais ; le lien principal de la rangée la
+  dit au lecteur d'écran (`listening.spoken`, une fois), le bandeau restant décoratif. Aucun libellé neuf.
+- Gates locaux : `lens-row-listening.test.tsx` 5/5 (rouge avant le correctif sur 3 cas) ; rangée, focale, avatar et
+  écoute 492/492 ; `tsc --noEmit` vert ; `vite build` et `measure-weight` verts.
+- Ce qui reste de #16733 : décision #17085 (écoute sur une conversation verrouillée par PIN), recette appareil.
+- En chemin : la tranche 2/3 de la passerelle était rouge sur `dev` (six suites `CallEventsHandler-*` moquaient
+  `socket-rate-limiter` sans `callSignalBudgetId`, ajouté par dda1585572) ; corrigé dans ce lot, 2282/2282.
+- Prochain lot recommandé : mener à la fusion les PR ouvertes ; « ensemble » sur Android (#17100) est tenu par le
+  réveil 28.
+
+## 2026-11-13 — réveil 26 : la position partagée dit de quel cercle vient la personne (#17966 ⊂ #17013)
+
+- Reprise : #17956 (carte web des positions, #16984) est menée par un réveil actif (commits de 13:13 à 13:19) ;
+  #17147 (« ensemble » dans une conversation close) a été réservée à 13:34 par un autre réveil
+  (`claude/cercles-ensemble-conversation-close`). Ce réveil n'avait rien écrit : il cède les deux.
+- Lot choisi : la tranche SERVEUR de l'icône de position par cercle (#17013), petite, prouvable en conteneur, et
+  préalable aux trois marqueurs. Issue #17966 ouverte sous #17013 (milestone #215).
+- Livré dans la PR : `location:share-changed` et `GET /relations/locations` portent `circle` (`FRIEND` · `CLOSE` ·
+  `BLOOD`), le niveau effectif du verdict qui ouvre `location.temporary` pour CE lecteur ; l'accès d'un lecteur est
+  `{précision, cercle}`, donc une montée ou une baisse de cercle à précision égale ressert la position ; le schéma
+  du rattrapage déclare le champ (enum) et retire toujours tout voisin. Champ additif : un ancien client l'ignore.
+- Décision écrite dans la PR : entre deux comptes de l'équipe, la loi rend le niveau Sang (#16623) ; le marqueur
+  le montre donc en Sang, comme les autres outils de cercle.
+- Ce qui reste de #17013 : les marqueurs web (après la fusion de #17956), iOS (#16983) et Android (#16985).
+- Prochain lot recommandé : la position temporaire sur iOS (#16983), qui dessinera directement le marqueur du cercle ;
+  sinon « ensemble » sur Android (#17100).
+- Le 2026-11-13 à 17:17, la passe de fusion a signalé un conflit de fond avec #17976 (maille retenue par
+  destinataire, heure arrondie, rayons 1200/12000) : `dev` fusionnée à la main dans la branche, le cercle reposé
+  sur la forme de `dev` (projection, `snapshotAllowed` rend désormais le cercle par émetteur), les témoins du cercle
+  déplacés dans `sharedLocationRelay.cercle.test.ts` pour tenir le budget de taille.
+
+## 2026-11-13 — réveil 29 : la position du Sang, socle serveur, menée vers `dev` (#13937)
+
+- Reprise : run interrompu le 2026-11-10 par une erreur d'API, repris à 15:09. Quinze PR de la routine étaient vivantes
+  (poussées dans l'heure et demie) : ce réveil n'en a doublé aucune. La branche `claude/cercles-13937-serveur`
+  (historique scellé, fantôme, journal, proximité, derrière un drapeau éteint) était écrite et auditée depuis le
+  2026-11-09, sans PR et sans session pour la suivre : reprise.
+- Fait : `origin/dev` fusionnée à la main (trois conflits : purge du compte, manifeste des routes régénéré à 809,
+  plafond Android « à porter » 125 → 130 en gardant les deux histoires) ; catalogues TS, Swift et Kotlin régénérés ; les
+  cinq routes déclarées « en attente de leur client » dans les deux cliquets de catalogue mort. PR #18019 (brouillon).
+- Contre-audit adversarial : non bloquant. Corrigé dans le lot en TDD : un point téléporté servait d'ancre au point voisin
+  (le verrou de vitesse se contournait), un effacement rendait vraisemblable n'importe quel point (un point sans ancre
+  n'est plus jamais évalué), le fantôme se devinait au temps de réponse. Les témoins négatifs de proximité reçoivent une
+  ancre : sans elle, la nouvelle règle les aurait rendus verts sans rien prouver.
+- Ouverts : #18023 et #18024 (décisions du porteur : points antérieurs à l'accord, capacité de sondage résiduelle de la
+  proximité), #18025 (relire son fantôme et ses rayons, plafond atomique du journal, porte du drapeau, prérequis staging).
+- Gates locaux : `tsc` passerelle vert ; position du Sang, routes `me`, purge 1 745/1 745 ; ciblé plus large 151 suites,
+  2 043 témoins ; `packages/shared` `api/__tests__` 109/109 et `__tests__/ci` 149/149 ; cliquets de catalogue mort conformes.
+- Prochain lot recommandé : les clients de la position du Sang après les décisions #18023/#18024, sinon les PR ouvertes
+  de la routine à mener à la fusion.
 
 ## 2026-11-13 — réveil de 14:40 : une prise de parole talkie se localise dans le journal (#17252, volet serveur)
 
@@ -719,3 +796,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main : conflit du journal seul, les entrées des deux côtés gardées ; `talkieRelay.ts`
   fusionné sans conflit avec la coupure E2EE du talkie (#14490). Gates relancés : suites talkie 185/185, routes talkie
   et `socketio` 942/942, `tsc` passerelle vert.
+- Gates sur la branche refusionnée (17:35) : talkie + routes talkie + `socketio` 1127/1127, `tsc` passerelle vert.
+- CI : les deux `ci.yml` dispatchés sur la branche ont été annulés — le porteur a gelé la CI des branches de lot le
+  2026-11-13 (#18048, `CI_DEV_SEUL` : seuls `dev`, `main` et `ci/promotion-*` tournent) avec la consigne de fusionner
+  les PR ouvertes et de corriger `dev` en continu. La preuve de ce lot est donc locale (gates ci-dessus, sur la
+  branche refusionnée) et la CI de `dev` qui suit la fusion ; `origin/dev` refusionnée une seconde fois à la main.
