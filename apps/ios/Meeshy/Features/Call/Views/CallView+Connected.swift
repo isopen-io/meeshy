@@ -117,8 +117,7 @@ extension CallView {
                     // En audio aussi, glisser vers le bas quitte le plein
                     // écran. Les sous-titres vivent dans la pilule (#17343) :
                     // aucun panneau ne remplace l'avatar ; le journal le resserre.
-                    // Le fond est la scène (loi 11, #17945) : un toucher range
-                    // en-tête, pilule et journal, et l'avatar reprend 120 pt.
+                    // Le fond est la scène (loi 11, #17945) : l'avatar reprend 120 pt.
                     VStack(spacing: MeeshySpacing.md) {
                         if pillText.compactsAudioLayout {
                             CallCompactAudioHeader(avatar: callAvatarPair(size: 56), name: peerDisplayName,
@@ -133,7 +132,7 @@ extension CallView {
                         }
                     }
                     .contentShape(Rectangle())
-                    .onTapGesture { tapAudioBackground() }
+                    .onTapGesture { if exposesTheTapToggle { toggleControls() } }
                     .simultaneousGesture(swipeDownToLeaveGesture)
                 } else {
                     Spacer()
@@ -267,17 +266,14 @@ extension CallView {
             .accessibilityHidden(true)
     }
 
-    /// La bascule au toucher existe sur toute scène, vidéo ou audio (#17945), mais pas sous
-    /// VoiceOver, où les contrôles restent en place.
+    /// La bascule au toucher existe sur la scène de la loi 11 (vidéo, duo audio établi), mais pas
+    /// sous VoiceOver, où les contrôles restent en place.
     private var exposesTheTapToggle: Bool {
-        CallChromeVisibility.mayToggleByTap(isVoiceOverRunning: UIAccessibility.isVoiceOverRunning)
+        CallChromeVisibility.mayToggleByTap(isTapStage: isTapStage, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning)
     }
 
-    /// #17945 — en duo audio, le fond derrière l'avatar est la scène : son toucher range ou rend
-    /// en-tête, pilule et journal. L'avatar et le nom restent des éléments VoiceOver à part.
-    func tapAudioBackground() {
-        guard exposesTheTapToggle else { return }
-        toggleControls()
+    private var isTapStage: Bool {
+        CallChromeVisibility.isTapStage(isGroup: isGroupStage, isVideoStage: isVideoStage, isConnected: showsConnectedLayout)
     }
 
     /// La porte UNIQUE par laquelle un contrôle dit qu'il est touché
@@ -293,6 +289,7 @@ extension CallView {
         if CallCameraRail.consumesTapElsewhere(isFoldedMenuOpen: isCameraMenuUnfolded) {
             return tapCameraMenu(.elsewhere)
         }
+        guard isTapStage else { return }
         withAnimation(CallChromeStow.animation(reduceMotion: reduceMotion)) { showControls.toggle() }
     }
 
