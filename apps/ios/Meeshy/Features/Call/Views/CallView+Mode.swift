@@ -61,13 +61,11 @@ extension CallView {
         )
     }
 
-    @ViewBuilder
     private func modeControls(_ mode: CallScreenMode) -> some View {
-        switch mode {
-        case .effects:
-            CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, capturesMyImage: CallPreConnectEffectsRule.capturesMyImage(showsConnectedLayout: showsConnectedLayout), onExit: exitMode)
-        case .montage:
-            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, call: montageCallContext, hold: liveFrameHold, onExit: exitMode)
+        CallEffectsFamilyHost(mode: mode, offersEffects: currentActionSet.contains(.effects), offersFrames: currentActionSet.contains(.capture)) { family in
+            CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, capturesMyImage: CallPreConnectEffectsRule.capturesMyImage(showsConnectedLayout: showsConnectedLayout), hold: liveFrameHold, genres: family.genres, entry: family.entry, onOpenFrames: { enterMode(.montage) }, onExit: exitMode)
+        } montage: { family in
+            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, call: montageCallContext, filters: callManager.videoFilters, hold: liveFrameHold, genres: family.genres, onOpenEffects: { family.request($0); enterMode(.effects) }, onExit: exitMode)
         }
     }
 
