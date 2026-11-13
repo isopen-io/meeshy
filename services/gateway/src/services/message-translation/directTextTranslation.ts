@@ -1,5 +1,6 @@
 import type { EventEmitter } from 'events';
 import type { TranslationRequest, TranslationResult } from '../zmq-translation';
+import type { TranslationSkippedPayload } from '../zmq-translation/types';
 import { UntranslatableRequestError } from '../zmq-translation/ZmqRequestSender';
 import { translationTargetId } from '../zmq-translation/utils/zmq-helpers';
 import type { TranslationStats } from './TranslationStats';
@@ -29,6 +30,8 @@ export type DirectTextTranslationInput = {
 
 class UnsupportedPairRefusal extends Error {}
 
+class TooLongRefusal extends Error {}
+
 /**
  * Une paire que NLLB-200 ne sert pas (#3659) rend l'ORIGINAL dans sa langue
  * (règle 1 du Prisme), sous la forme du « rien à traduire » que
@@ -46,7 +49,7 @@ export const untranslatedResult = (text: string, sourceLanguage: string): Transl
 });
 
 /**
- * `zmqClient` est un singleton partagé : les TROIS listeners se détachent sur
+ * `zmqClient` est un singleton partagé : les QUATRE listeners se détachent sur
  * CHAQUE issue (succès, erreur, refus terminal, ET timeout) par un unique
  * `cleanup()` — un listener fui par requête expirée finissait en
  * MaxListenersExceededWarning et en closures périmées.
@@ -58,6 +61,7 @@ const awaitResponse = (zmqClient: DirectTranslationClient, taskId: string): Prom
       zmqClient.removeListener('translationCompleted', handleResponse);
       zmqClient.removeListener('translationError', handleError);
       zmqClient.removeListener('translationUnsupported', handleUnsupported);
+      zmqClient.removeListener('translationSkipped', handleSkipped);
     };
 
     const timeout = guardedTimeout({ name: 'translation-response-timeout', afterMs: RESPONSE_TIMEOUT_MS, logger, run: () => {
@@ -83,13 +87,26 @@ const awaitResponse = (zmqClient: DirectTranslationClient, taskId: string): Prom
       reject(new UnsupportedPairRefusal());
     };
 
+    const handleSkipped = (data: Pick<TranslationSkippedPayload, 'taskId'>) => {
+      if (data.taskId !== taskId) return;
+      cleanup();
+      reject(new TooLongRefusal());
+    };
+
     zmqClient.on('translationCompleted', handleResponse);
     zmqClient.on('translationError', handleError);
     zmqClient.on('translationUnsupported', handleUnsupported);
+    zmqClient.on('translationSkipped', handleSkipped);
   });
 
-const isUnsupportedPair = (error: unknown): boolean =>
-  error instanceof UntranslatableRequestError || error instanceof UnsupportedPairRefusal;
+/**
+ * Une paire non servie (#3659) et un texte plus long que `MAX_TRANSLATION_LENGTH`
+ * (#18041) ne seront jamais traduits : l'original, sans erreur comptée.
+ */
+const servesOriginal = (error: unknown): boolean =>
+  error instanceof UntranslatableRequestError ||
+  error instanceof UnsupportedPairRefusal ||
+  error instanceof TooLongRefusal;
 
 export async function translateTextDirectly(
   deps: DirectTextTranslationDeps,
@@ -110,7 +127,7 @@ export async function translateTextDirectly(
     deps.stats.incrementRequestsSent();
     return await awaitResponse(deps.zmqClient, taskId);
   } catch (error) {
-    if (isUnsupportedPair(error)) return untranslatedResult(text, sourceLanguage);
+    if (servesOriginal(error)) return untranslatedResult(text, sourceLanguage);
 
     logger.error(`❌ [REST] Erreur traduction directe: ${error}`);
     deps.stats.incrementErrors();
