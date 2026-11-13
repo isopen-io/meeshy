@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { recordBloodLocation } from '../../../../services/bloodLocation/bloodLocationService';
+import { eraseBloodLocationHistory, recordBloodLocation } from '../../../../services/bloodLocation/bloodLocationService';
 import { ADULT_BIRTH, type CircleLink } from '../../../helpers/messaging-circle-world';
 import {
   A_300_M,
@@ -58,6 +58,7 @@ describe('un point téléporté ne sert pas la proximité', () => {
     await recordBloodLocation(w.deps, MOI, A_300_M);
     w.avancer(SECONDE);
 
+    w.poser(SANG, PARIS, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, SANG, PARIS);
 
     expect(w.emissions).toEqual([]);
@@ -77,10 +78,44 @@ describe('un point téléporté ne sert pas la proximité', () => {
   });
 });
 
+const LYON = { latitude: 45.76, longitude: 4.83, accuracy: 5 };
+const PRES_DE_PARIS = { latitude: 48.859, longitude: 2.3522, accuracy: 5 };
+
+describe('la vitesse se juge depuis une ancre que l\'appelant ne fabrique pas (contre-audit)', () => {
+  it('un point téléporté ne sert pas d\'ancre : le point voisin qui le suit d\'une seconde n\'est pas évalué', async () => {
+    const w = bloodWorldAvecConsentements();
+    w.poser(SANG, PARIS);
+    await recordBloodLocation(w.deps, MOI, LYON);
+    w.avancer(16 * MINUTE);
+    w.poser(SANG, PARIS);
+    await recordBloodLocation(w.deps, MOI, PRES_DE_PARIS);
+    w.avancer(SECONDE);
+
+    await recordBloodLocation(w.deps, MOI, A_300_M);
+
+    expect(w.vers(MOI, SERVER_EVENTS.BLOOD_PROXIMITY)).toEqual([]);
+  });
+
+  it('effacer son historique puis poser un point ne l\'évalue pas : un point sans ancre n\'est jamais évalué', async () => {
+    const w = bloodWorldAvecConsentements();
+    w.poser(SANG, PARIS);
+    await recordBloodLocation(w.deps, MOI, LYON);
+    w.avancer(16 * MINUTE);
+    w.poser(SANG, PARIS);
+    await eraseBloodLocationHistory(w.deps, MOI);
+
+    await recordBloodLocation(w.deps, MOI, A_300_M);
+
+    expect(w.vers(MOI, SERVER_EVENTS.BLOOD_PROXIMITY)).toEqual([]);
+  });
+});
+
 describe('un essai raté coûte : la paire n\'est évaluée qu\'une fois par quart d\'heure', () => {
   it('raté à 5 km, puis arrivé à 300 m deux minutes plus tard à une vitesse possible : rien avant le quart d\'heure, l\'alerte après', async () => {
     const w = bloodWorldAvecConsentements();
     w.poser(SANG, PARIS);
+    await recordBloodLocation(w.deps, MOI, A_5_KM);
+    w.avancer(20 * MINUTE);
     await recordBloodLocation(w.deps, MOI, A_5_KM);
     w.avancer(2 * MINUTE);
 
@@ -106,6 +141,8 @@ describe('un compte n\'évalue que soixante paires par heure', () => {
 
   it('au-delà de soixante évaluations dans l\'heure, la soixante et unième paire n\'est pas évaluée ; l\'heure suivante, si', async () => {
     const w = monde();
+    await recordBloodLocation(w.deps, MOI, PARIS);
+    w.avancer(MINUTE);
     lointains.forEach((id) => w.poser(id, A_5_KM));
     await recordBloodLocation(w.deps, MOI, PARIS);
     expect(w.emissions).toEqual([]);
@@ -125,6 +162,7 @@ describe('un compte n\'évalue que soixante paires par heure', () => {
   it('un compteur en panne : aucune évaluation, et l\'enregistrement réussit quand même', async () => {
     const w = monde({ counterDown: true });
     w.poser(proche, A_300_M);
+    w.poser(MOI, PARIS, w.horloge() - MINUTE);
     await expect(recordBloodLocation(w.deps, MOI, PARIS)).resolves.toEqual({ recorded: true });
     expect(w.emissions).toEqual([]);
   });

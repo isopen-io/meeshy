@@ -277,6 +277,8 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
 
   it('deux Sangs qui se partagent la proximité, à 300 m : les deux reçoivent l\'alerte, sans coordonnée', async () => {
     const w = proxi();
+    await recordBloodLocation(w.deps, MOI, A_300_M);
+    w.avancer(MINUTE);
     await recordBloodLocation(w.deps, SANG, PARIS);
     await recordBloodLocation(w.deps, MOI, A_300_M);
 
@@ -290,6 +292,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
   it('une seule alerte par paire toutes les 2 h, puis de nouveau', async () => {
     const w = proxi();
     await recordBloodLocation(w.deps, SANG, PARIS);
+    w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
     w.avancer(30 * MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
@@ -304,6 +307,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
   it('rien si l\'un des deux ne partage pas la proximité', async () => {
     const w = bloodLocationWorld({ consents: [[SANG, MOI, TOUT_PARTAGE], [MOI, SANG, { proximityShared: false }]] });
     await recordBloodLocation(w.deps, SANG, PARIS);
+    w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
     expect(w.emissions).toEqual([]);
   });
@@ -312,12 +316,14 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     const global = proxi();
     await updateBloodLocationSettings(global.deps, SANG, { ghost: true });
     await recordBloodLocation(global.deps, SANG, PARIS);
+    global.poser(MOI, A_300_M, global.horloge() - MINUTE);
     await recordBloodLocation(global.deps, MOI, A_300_M);
     expect(global.emissions).toEqual([]);
 
     const cible = proxi();
     await recordBloodLocation(cible.deps, SANG, PARIS);
     await updateBloodLocationSettings(cible.deps, SANG, { ghost: true, userId: MOI });
+    cible.poser(MOI, A_300_M, cible.horloge() - MINUTE);
     await recordBloodLocation(cible.deps, MOI, A_300_M);
     expect(cible.emissions).toEqual([]);
   });
@@ -325,6 +331,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
   it('rien au-delà du rayon réglé, et un rayon réglé plus large déclenche à l\'évaluation suivante de la paire', async () => {
     const w = proxi();
     await recordBloodLocation(w.deps, SANG, A_5_KM);
+    w.poser(MOI, PARIS, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, PARIS);
     expect(w.emissions).toEqual([]);
 
@@ -339,6 +346,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
     const w = proxi();
     await recordBloodLocation(w.deps, SANG, PARIS);
     w.avancer(90 * MINUTE);
+    w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
     expect(w.emissions).toEqual([]);
   });
@@ -346,12 +354,15 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
   it('un magasin de cadence en panne : aucune alerte, et l\'enregistrement réussit quand même', async () => {
     const w = bloodWorldAvecConsentements({ cooldownDown: true });
     await recordBloodLocation(w.deps, SANG, PARIS);
+    w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await expect(recordBloodLocation(w.deps, MOI, A_300_M)).resolves.toEqual({ recorded: true });
     expect(w.emissions).toEqual([]);
   });
 
   it('un retrait de la proximité coupe l\'alerte suivante : le consentement est relu en base à chaque émission', async () => {
     const w = proxi();
+    await recordBloodLocation(w.deps, MOI, A_300_M);
+    w.avancer(MINUTE);
     await recordBloodLocation(w.deps, SANG, PARIS);
     await recordBloodLocation(w.deps, MOI, A_300_M);
     expect(w.vers(SANG, SERVER_EVENTS.BLOOD_PROXIMITY)).toHaveLength(1);
@@ -368,6 +379,7 @@ describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', 
   it('un Proche ou un Ami voisin ne reçoit jamais d\'alerte', async () => {
     const w = bloodLocationWorld({ consents: [[PROCHE, MOI, TOUT_PARTAGE], [MOI, PROCHE, TOUT_PARTAGE]] });
     await recordBloodLocation(w.deps, PROCHE, PARIS);
+    w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
     expect(w.emissions).toEqual([]);
   });
@@ -378,6 +390,7 @@ describe('le drapeau vaut pour les DEUX comptes — hors liste blanche, rien ne 
     const w = bloodWorldAvecConsentements({ horsDrapeau: [SANG] });
     await recordBloodLocation(w.deps, SANG, PARIS);
 
+    w.poser(MOI, A_300_M, w.horloge() - MINUTE);
     await recordBloodLocation(w.deps, MOI, A_300_M);
 
     expect(w.emissions).toEqual([]);

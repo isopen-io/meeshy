@@ -7,13 +7,14 @@
  *   ceux-là même après la levée du fantôme.
  * - **Lire** l'historique d'un autre : la loi d'accès (`location.history`, niveau Sang, blocage, âge,
  *   équipe) ET le consentement de l'émetteur, relu en base à chaque appel. Le fantôme rend la même
- *   réponse vide qu'un compte sans historique ; la consultation est notée dans les deux cas. Un
- *   émetteur hors drapeau rend aussi la réponse vide, sans journal : la fonction n'existe pas pour lui.
+ *   réponse vide qu'un compte sans historique, après le même travail (les points sont lus puis tus) ;
+ *   la consultation est notée dans les deux cas. Un émetteur hors drapeau rend aussi la réponse vide, sans journal : la fonction n'existe pas pour lui.
  * - **Journal** : lisible du seul observé ; `excessive` quand un même observateur dépasse 20 lectures
  *   en 24 h. Au-delà, ses lectures ne s'ajoutent plus, elles datent sa dernière ligne ; et chaque
  *   observateur des 30 jours y figure, quel que soit le volume des autres.
  * - **Proximité** : `bloodProximity.ts`, déclenchée à l'enregistrement, jamais bloquante — et jamais
- *   pour un point arrivé à une vitesse impossible depuis le précédent (rangé, marqué dans le scellé).
+ *   pour un point arrivé à une vitesse impossible depuis le dernier point vraisemblable (rangé, marqué
+ *   dans le scellé), ni pour un point sans ancre (premier point, ou premier après un effacement).
  */
 import {
   BLOOD_CONSULTATION_EXCESS_PER_DAY,
@@ -50,19 +51,27 @@ async function inGlobalGhost(deps: BloodLocationDeps, ownerId: string): Promise<
   return row?.locationGhostAt != null;
 }
 
-/** Le dernier point rangé du compte, quel qu'il soit : la vitesse se juge depuis lui. */
-async function lastPointOf(deps: BloodLocationDeps, ownerId: string): Promise<{ latitude: number; longitude: number; at: number } | null> {
-  const row = await deps.prisma.bloodLocationPoint.findFirst({ where: { ownerId }, orderBy: { recordedAt: 'desc' }, select: { sealed: true, recordedAt: true } });
-  const point = row ? openPoint(ownerId, row.sealed) : null;
-  return point && row ? { latitude: point.latitude, longitude: point.longitude, at: row.recordedAt.getTime() } : null;
+const ANCHOR_SCAN = 50;
+
+/**
+ * L'ancre de la vitesse : le dernier point VRAISEMBLABLE du compte. Un point téléporté est rangé mais
+ * n'ancre rien, sans quoi un appelant poserait son ancre où il veut puis un point voisin d'une seconde.
+ */
+async function anchorOf(deps: BloodLocationDeps, ownerId: string): Promise<{ latitude: number; longitude: number; at: number } | null> {
+  const rows = await deps.prisma.bloodLocationPoint.findMany({ where: { ownerId }, orderBy: { recordedAt: 'desc' }, take: ANCHOR_SCAN, select: { sealed: true, recordedAt: true } });
+  const anchors = rows.flatMap((row) => {
+    const point = openPoint(ownerId, row.sealed);
+    return point && point.implausible !== true ? [{ latitude: point.latitude, longitude: point.longitude, at: row.recordedAt.getTime() }] : [];
+  });
+  return anchors[0] ?? null;
 }
 
 export async function recordBloodLocation(deps: BloodLocationDeps, ownerId: string, input: unknown): Promise<{ readonly recorded: boolean }> {
   const parsed = bloodLocationPayloadSchema.safeParse(input);
   if (!parsed.success || (await inGlobalGhost(deps, ownerId))) return { recorded: false };
-  const [hidden, previous] = await Promise.all([ghostedBy(deps, ownerId), lastPointOf(deps, ownerId)]);
+  const [hidden, anchor] = await Promise.all([ghostedBy(deps, ownerId), anchorOf(deps, ownerId)]);
   const now = deps.now();
-  const plausible = isPlausibleMove(previous, parsed.data, now);
+  const plausible = isPlausibleMove(anchor, parsed.data, now);
   await deps.prisma.bloodLocationPoint.create({
     data: {
       ownerId,
@@ -71,7 +80,7 @@ export async function recordBloodLocation(deps: BloodLocationDeps, ownerId: stri
       expiresAt: new Date(now + HISTORY_MS),
     },
   });
-  if (plausible) await alertBloodProximity(deps, ownerId, parsed.data, hidden).catch((error: unknown) => deps.report?.(error));
+  if (plausible && anchor) await alertBloodProximity(deps, ownerId, parsed.data, hidden).catch((error: unknown) => deps.report?.(error));
   return { recorded: true };
 }
 
@@ -147,9 +156,8 @@ export async function readBloodLocationHistory(
   if (refusal) return refusal;
   if (!deps.enabledFor(ownerId)) return { kind: 'ok', items: [] };
   await noteConsultation(deps, ownerId, viewerId);
-  const [global, targeted] = await Promise.all([inGlobalGhost(deps, ownerId), ghostedBy(deps, ownerId)]);
-  if (global || targeted.has(viewerId)) return { kind: 'ok', items: [] };
-  return { kind: 'ok', items: await pointsOf(deps, ownerId, viewerId, params) };
+  const [global, targeted, items] = await Promise.all([inGlobalGhost(deps, ownerId), ghostedBy(deps, ownerId), pointsOf(deps, ownerId, viewerId, params)]);
+  return { kind: 'ok', items: global || targeted.has(viewerId) ? [] : items };
 }
 
 export async function eraseBloodLocationHistory(deps: BloodLocationDeps, ownerId: string): Promise<{ readonly erased: number }> {
