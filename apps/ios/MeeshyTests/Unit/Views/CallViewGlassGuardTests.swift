@@ -280,7 +280,7 @@ final class CallViewGlassGuardTests: XCTestCase {
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
         )
         let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
-        XCTAssertTrue(effects.contains("if showsSettings {"), "Réglages REMPLACE la bande de looks (P8b)")
+        XCTAssertTrue(effects.contains("case .settings:"), "Réglages REMPLACE la bande de looks (P8b)")
         XCTAssertTrue(effects.contains("settingsPanel"), "Le panneau prend la place de la bande, au-dessus de la barre")
         XCTAssertTrue(effects.contains("switch category {"), "Un seul carrousel, Visage OU Couleur")
         XCTAssertEqual(effects.components(separatedBy: "CallEffectsBar(").count - 1, 1, "Une seule barre de verre : ‹ · Réglages · (+)")
@@ -288,13 +288,18 @@ final class CallViewGlassGuardTests: XCTestCase {
         XCTAssertFalse(effects.contains("validate"), "Le look touché s'applique tout de suite : aucun « Valider »")
         let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
         XCTAssertEqual(montage.components(separatedBy: "CallModeCarousel(").count - 1, 1)
-        XCTAssertEqual(montage.components(separatedBy: "CallModeActionBar(").count - 1, 1)
+        XCTAssertEqual(montage.components(separatedBy: "CallEffectsBar(").count - 1, 1, "Le Montage prend la barre d'Effets : ‹ · Réglages · (+) (#16979, #17901)")
+        XCTAssertFalse(montage.contains("CallModeActionBar("), "Le Montage ne porte plus Quitter · Cadre · Valider")
+        XCTAssertFalse(montage.contains("CallModeCopy.quit"), "Aucun « Quitter » : ‹ revient à l'appel")
+        XCTAssertFalse(montage.contains("validate"), "Ce qui est touché s'applique aussitôt : aucun « Valider »")
         let carousel = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeCarousel.swift")
         )
         XCTAssertTrue(carousel.contains(".scrollTargetBehavior(.viewAligned(limitBehavior: .never))"), "Le carrousel s'accroche")
         XCTAssertTrue(carousel.contains(".scrollPosition(id: $centred, anchor: .center)"), "L'élément choisi se pose au centre")
         XCTAssertTrue(carousel.contains(".accessibilityAdjustableAction"), "VoiceOver choisit d'un balayage vertical")
+        XCTAssertFalse(carousel.contains("struct CallModeActionBar"), "La barre Quitter est sortie : sans appelant, elle ne reste pas (#17901)")
+        XCTAssertFalse(carousel.contains("struct CallModeOption"), "Le cadre gardé est une puce, plus une option de la barre Quitter")
     }
 
     /// P8b.4 · P8b.6 · P8b.8 — la barre d'Effets est UN verre d'une pièce (l'atome partagé) :
@@ -303,32 +308,67 @@ final class CallViewGlassGuardTests: XCTestCase {
     /// d'elle, à la place de la bande de looks, qui monte depuis la barre en fondu et y
     /// redescend. « Réduire les animations » en fait un fondu court, jamais un retrait net.
     func test_effectsBar_isOneGlassPiece_andSettingsRiseInTheirOwnGlassAboveIt() throws {
-        let bar = try block(
-            "struct CallEffectsBar<Looks: View>: View {",
-            until: "private struct CallModeShotActions",
-            in: AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeCarousel.swift"))
-        )
+        let barFile = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift"))
+        let bar = try block("struct CallEffectsBar<Looks: View>: View {", until: "struct CallEffectsAddButton", in: barFile)
         XCTAssertTrue(bar.contains(".callControlsGlass(in:"), "Le verre est l'atome partagé, d'une pièce")
         XCTAssertTrue(bar.contains("AdaptiveGlassContainer("))
         XCTAssertTrue(bar.contains("symbol: \"chevron.backward\""), "‹ Retour à l'appel")
         XCTAssertTrue(bar.contains("symbol: \"gearshape\""), "Réglages porte l'engrenage, pas le glyphe d'Effets")
-        XCTAssertTrue(bar.contains("symbol: \"plus\""), "(+) Ajouter un autre look")
-        XCTAssertTrue(bar.contains("showsSettings ? .active : .normal"), "Réglages ouvert = disque blanc")
-        XCTAssertTrue(bar.contains("if !showsSettings {"), "Réglages ouvert, la barre perd sa rangée de puces et se resserre")
+        XCTAssertTrue(bar.contains("CallEffectsAddButton("), "(+) Ajouter un autre look, qui porte aussi l'appui long")
+        XCTAssertTrue(bar.contains("mode == .settings ? .active : .normal"), "Réglages ouvert = disque blanc")
+        XCTAssertTrue(bar.contains("if CallEffectsBarRule.showsLooks(mode) {"), "Réglages ouvert, la barre perd sa rangée de puces et se resserre")
         XCTAssertTrue(bar.contains(".transition(.opacity)"), "Les puces partent en fondu")
         XCTAssertFalse(bar.contains("settings()"), "Le panneau n'est plus DANS la barre : c'est un verre séparé")
         XCTAssertFalse(bar.contains("slider.horizontal.3"))
+        XCTAssertTrue(barFile.contains("struct CallEffectsPanel<Content: View>: View {"), "Un seul verre séparé, pour les réglages et pour la liste")
+        let panel = try block("struct CallEffectsPanel<Content: View>: View {", until: "struct CallEffectsAppliedPanel", in: barFile)
+        XCTAssertTrue(panel.contains(".callChromeGlass(in:"), "Le panneau est son propre verre, l'atome partagé d'un groupe sans bouton de verre")
         let controls = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift")
         )
         let effects = try block("struct CallEffectsModeControls: View {", until: "struct CallMontageModeControls: View {", in: controls)
         XCTAssertFalse(effects.contains("settings: {"), "La barre ne reçoit plus le panneau")
-        XCTAssertTrue(effects.contains(".callChromeGlass(in:"), "Le panneau est son propre verre, l'atome partagé d'un groupe sans bouton de verre")
+        XCTAssertTrue(effects.contains("CallEffectsPanel {"), "Le panneau de réglages est le verre séparé partagé")
         XCTAssertTrue(effects.contains(".combined(with: .offset(y: CallEffectsSettingsMotion.panelRise(reduceMotion: reduceMotion)))"), "Le panneau monte depuis la barre, en fondu")
         XCTAssertTrue(effects.contains("CallEffectsSettingsMotion.duration(reduceMotion: reduceMotion)"), "Réduire les animations = fondu court")
         XCTAssertFalse(effects.contains("reduceMotion ? nil"), "Réduire les animations ne supprime plus l'animation")
         XCTAssertTrue(effects.contains("Text(CallEffectsCopy.brightness)"), "« Luminosité » est un titre visible")
         XCTAssertTrue(effects.contains("Toggle(isOn: blurBinding)"), "« Flou du fond » est une ligne titrée à interrupteur")
+    }
+
+    /// #16979 · #17901 — (+) porte l'appui long qui liste les effets appliqués ; VoiceOver, qui ne
+    /// voit pas l'appui long, a la même liste par une action nommée. Pile pleine, (+) le dit à son
+    /// étiquette et garde l'appui long. Annuler un effet referme la liste et rend le menu de base.
+    func test_plusButton_listsTheAppliedEffects_byLongPress_andByANamedAction() throws {
+        let barFile = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallEffectsBar.swift"))
+        let add = try block("struct CallEffectsAddButton: View {", until: "struct CallEffectsPanel<Content: View>: View {", in: barFile)
+        XCTAssertTrue(add.contains(".onLongPressGesture(minimumDuration: CallModeGestureRule.longPressDuration"), "L'appui long sur (+) liste les effets")
+        XCTAssertTrue(add.contains(".accessibilityActions {"), "VoiceOver : la liste par une action nommée")
+        XCTAssertTrue(add.contains("Button(CallEffectsCopy.appliedTitle, action: onShowApplied)"), "L'action porte le titre de la liste")
+        XCTAssertTrue(add.contains("CallModeCopy.addLookFull"), "Pile pleine : l'étiquette le dit")
+        XCTAssertTrue(add.contains("MeeshyControlSize.tapTarget"), "Cible de 44 pt")
+        let list = try block("struct CallEffectsAppliedPanel: View {", until: "private struct CallEffectsAppliedRow", in: barFile)
+        XCTAssertTrue(list.contains("layers.listed"), "La liste va de la couche du dessus à celle du dessous")
+        XCTAssertTrue(list.contains("CallEffectsPanel {"), "La liste est le verre séparé, comme les réglages")
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        for host in ["struct CallEffectsModeControls: View {", "struct CallMontageModeControls: View {"] {
+            let end = host.contains("Effects") ? "struct CallMontageModeControls: View {" : "struct CallMontageStage: View {"
+            let code = try block(host, until: end, in: controls)
+            XCTAssertTrue(code.contains("CallEffectLayers"), "\(host) consomme la loi pure : une règle, pas deux")
+            XCTAssertTrue(code.contains("CallEffectsAppliedPanel("), "\(host) montre la liste des effets appliqués")
+            XCTAssertTrue(code.contains("CallEffectsBarRule.afterRemoval"), "\(host) : annuler referme la liste et rend le menu de base")
+        }
+    }
+
+    /// #17901 — « Chaque visage » n'a pas de place dessinée sur C1 : il reste atteignable, dans ce
+    /// que « Réglages » ouvre en Montage. Le cadre gardé reste une option, pressée en blanc.
+    func test_montage_keepsEveryFace_underSettings_andTheFrameHoldAsAnOption() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallModeControls.swift"))
+        let montage = try block("struct CallMontageModeControls: View {", until: "struct CallMontageStage: View {", in: controls)
+        XCTAssertTrue(montage.contains("capture.captureFaces()"), "« Chaque visage » reste atteignable")
+        XCTAssertTrue(montage.contains("CallCaptureCopy.faces"))
+        XCTAssertTrue(montage.contains("CallFrameHoldChip("), "L'option « Cadre » reste, au-dessus des ambiances")
+        XCTAssertTrue(montage.contains("hold.toggle("), "Retirer la couche cadre gardée passe par le même chemin que décocher « Cadre »")
     }
 
     /// #8625 — aucun déclencheur : deux tapes sur le style choisi prennent la

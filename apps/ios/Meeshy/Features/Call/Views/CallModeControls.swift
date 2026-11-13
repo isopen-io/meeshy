@@ -10,35 +10,35 @@ struct CallEffectsModeControls: View {
     /// OPUS-4 — faux avant la connexion : ni photo ni film de mon image, et
     /// la capture ne s'arme pas.
     var capturesMyImage = true
+    /// #17901 — le cadre gardé en direct est une couche de la pile, et s'y annule.
+    var hold: CallLiveFrameHold = .unavailable
     let onExit: () -> Void
 
     @State private var config = VideoFilterConfig()
     @State private var category: CallEffectsCategory = .face
-    @State private var showsSettings = false
+    @State private var barMode: CallEffectsBarMode = .base
+    @State private var layers = CallEffectLayers()
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: MeeshySpacing.mdPlus) {
-            if showsSettings {
-                settingsPanel
-                    .transition(settingsPanelTransition)
-            } else {
-                carousel
-                    .transition(.opacity)
-            }
+            panelOrCarousel
             CallEffectsBar(
-                showsSettings: showsSettings,
+                mode: barMode,
+                layers: layers,
                 onBack: goBack,
                 onSettings: toggleSettings,
                 onAddLook: addLook,
+                onShowApplied: showApplied,
                 looks: { categoryPicker }
             )
             .padding(.horizontal, MeeshySpacing.lg)
         }
         .onAppear {
             config = callManager.videoFilters.config
+            layers = CallEffectsStackRule.layers(layers, frame: hold.heldFrameId, config: config)
         }
         .task(id: CallEffectsCaptureKey(source: CallCaptureSourceKey(subjects: subjects, tracks: tracks), isArmed: capturesMyImage)) {
             guard capturesMyImage else { return }
@@ -54,6 +54,28 @@ struct CallEffectsModeControls: View {
         }
         .adaptiveOnChange(of: config) { _, newConfig in
             callManager.videoFilters.config = newConfig
+            layers = CallEffectsStackRule.layers(layers, frame: hold.heldFrameId, config: newConfig)
+        }
+        .adaptiveOnChange(of: hold.heldFrameId) { _, held in
+            layers = CallEffectsStackRule.layers(layers, frame: held, config: config)
+        }
+        .adaptiveOnChange(of: layers.isEmpty) { _, isEmpty in
+            barMode = CallEffectsBarRule.reconciled(barMode, hasLayers: !isEmpty)
+        }
+    }
+
+    @ViewBuilder
+    private var panelOrCarousel: some View {
+        switch barMode {
+        case .settings:
+            settingsPanel
+                .transition(settingsPanelTransition)
+        case .applied:
+            CallEffectsAppliedPanel(layers: layers, onRemove: remove)
+                .transition(settingsPanelTransition)
+        case .base:
+            carousel
+                .transition(.opacity)
         }
     }
 
@@ -64,15 +86,37 @@ struct CallEffectsModeControls: View {
     }
 
     private func toggleSettings() {
-        withAnimation(settingsAnimation) { showsSettings.toggle() }
+        withAnimation(settingsAnimation) { barMode = CallEffectsBarRule.afterSettings(from: barMode) }
         HapticFeedback.light()
     }
 
+    /// (+) ouvre les looks d'un genre absent de la pile ; pile pleine, il n'ajoute plus.
     private func addLook() {
-        withAnimation(settingsAnimation) {
-            showsSettings = false
-            category = CallEffectsModeRule.addingLook(from: category)
+        guard let next = CallEffectsModeRule.addingLook(from: category, layers: layers) else {
+            HapticFeedback.warning()
+            return
         }
+        withAnimation(settingsAnimation) {
+            barMode = CallEffectsBarRule.afterAddingLook(from: barMode)
+            category = next
+        }
+        HapticFeedback.light()
+    }
+
+    /// Appui long sur (+) : la liste des effets appliqués.
+    private func showApplied() {
+        withAnimation(settingsAnimation) {
+            barMode = CallEffectsBarRule.afterShowingApplied(from: barMode, hasLayers: !layers.isEmpty)
+        }
+    }
+
+    /// Annuler un effet de la liste : cette couche seule tombe, la liste se referme et la barre
+    /// revient à son menu de base. Le cadre gardé se retire par le geste qui le garde.
+    private func remove(_ kind: CallEffectKind) {
+        config = CallEffectsStackRule.removing(kind, from: config)
+        if kind == .frame, let held = hold.heldFrameId { hold.toggle(held) }
+        layers = layers.removing(kind)
+        withAnimation(settingsAnimation) { barMode = CallEffectsBarRule.afterRemoval }
         HapticFeedback.light()
     }
 
@@ -182,14 +226,20 @@ struct CallEffectsModeControls: View {
     private var faceBinding: Binding<CallFaceEffect> {
         Binding(
             get: { config.activeFaceEffect },
-            set: { config = config.selectingFaceEffect($0) }
+            set: { effect in
+                guard effect == .none || layers.allows(.face) else { return HapticFeedback.warning() }
+                config = config.selectingFaceEffect(effect)
+            }
         )
     }
 
     private var colorBinding: Binding<VideoFilterPreset> {
         Binding(
             get: { CallEffectsModeRule.colorSelection(of: config) },
-            set: { config = CallEffectsModeRule.applying(color: $0, to: config) }
+            set: { preset in
+                guard preset == .natural || layers.allows(.color) else { return HapticFeedback.warning() }
+                config = CallEffectsModeRule.applying(color: preset, to: config)
+            }
         )
     }
 
@@ -236,24 +286,14 @@ struct CallEffectsModeControls: View {
         }
     }
 
-    private static var settingsPanelShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
-    }
-
     /// P8b — un verre SÉPARÉ, posé au-dessus de la barre à la place de la bande de looks :
     /// Luminosité, un titre et son curseur ; Flou du fond, une ligne titrée à interrupteur.
     private var settingsPanel: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
+        CallEffectsPanel {
             smoothingRow
             brightnessRow
             blurRow
         }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .callChromeGlass(in: Self.settingsPanelShape)
-        .accessibilityElement(children: .contain)
-        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private var brightnessRow: some View {
@@ -295,21 +335,186 @@ struct CallMontageModeControls: View {
     let tracks: [String: Any]
     /// #8743 — la conversation de l'appel, pour le nom du groupe et l'accent d'un cadre.
     let call: CallFrameCallContext
+    /// #17901 — les filtres et le visage de mon image : l'autre moitié de la pile d'effets.
+    let filters: VideoFilterPipeline
     var textsProvider: any CallFrameTextsProviding = CallFrameTextsResolver.shared
     /// #9287 — l'interrupteur qui garde le cadre choisi pendant tout l'appel.
     var hold: CallLiveFrameHold = .unavailable
+    /// (+) ouvre les looks d'Effets ; `nil` quand l'appel ne les offre pas.
+    var onOpenEffects: (() -> Void)? = nil
     let onExit: () -> Void
 
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @State private var barMode: CallEffectsBarMode = .base
+    @State private var layers = CallEffectLayers()
 
     private static let thumbnailSize = CGSize(width: 48, height: 85)
 
     var body: some View {
         let people = subjects.count
+        VStack(spacing: MeeshySpacing.mdPlus) {
+            panelOrCarousel(people: people)
+            CallEffectsBar(
+                mode: barMode,
+                layers: layers,
+                onBack: goBack,
+                onSettings: toggleSettings,
+                onAddLook: addLook,
+                onShowApplied: showApplied,
+                looks: { framesChip }
+            )
+            .padding(.horizontal, MeeshySpacing.lg)
+        }
+        .task(id: CallCaptureSourceKey(subjects: subjects, tracks: tracks)) {
+            capture.start(subjects: subjects, tracks: tracks)
+        }
+        .onAppear {
+            if let held = hold.heldFrameId { capture.select(choice: .frame(held)) }
+            layers = CallEffectsStackRule.layers(layers, frame: chosenFrameId(people: people), config: filters.config)
+        }
+        .adaptiveOnChange(of: chosenFrameId(people: people)) { _, id in
+            layers = CallEffectsStackRule.layers(layers, frame: id, config: filters.config)
+        }
+        .adaptiveOnChange(of: layers.isEmpty) { _, isEmpty in
+            barMode = CallEffectsBarRule.reconciled(barMode, hasLayers: !isEmpty)
+        }
+        .task(id: call) {
+            capture.setFrameTexts(textsProvider.immediateTexts(for: call))
+            let resolved = await textsProvider.texts(for: call)
+            guard !Task.isCancelled else { return }
+            capture.setFrameTexts(resolved)
+        }
+        .onDisappear {
+            hasSeenGestureHint = true
+            capture.stop()
+        }
+    }
+
+    // MARK: - La barre d'Effets
+
+    private var settingsAnimation: Animation {
+        .easeInOut(duration: CallEffectsSettingsMotion.duration(reduceMotion: reduceMotion))
+    }
+
+    private var panelTransition: AnyTransition {
+        AnyTransition.opacity
+            .combined(with: .offset(y: CallEffectsSettingsMotion.panelRise(reduceMotion: reduceMotion)))
+    }
+
+    /// C1 — la puce « Cadres » est pressée : le carrousel des cadres prend la place de la bande de looks.
+    private var framesChip: some View {
+        Text(CallModeCopy.framesChip)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
+            .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(CallModeCopy.framesChip)
+            .accessibilityAddTraits([.isButton, .isSelected])
+    }
+
+    /// ‹ revient à l'appel : ce qui a été touché s'est appliqué tout de suite.
+    private func goBack() {
+        HapticFeedback.light()
+        onExit()
+    }
+
+    private func toggleSettings() {
+        withAnimation(settingsAnimation) { barMode = CallEffectsBarRule.afterSettings(from: barMode) }
+        HapticFeedback.light()
+    }
+
+    /// (+) ouvre les looks d'Effets, par-dessus le cadre ; pile pleine, il n'ajoute plus.
+    private func addLook() {
+        guard !layers.isFull, let onOpenEffects else { return HapticFeedback.warning() }
+        HapticFeedback.light()
+        onOpenEffects()
+    }
+
+    private func showApplied() {
+        withAnimation(settingsAnimation) {
+            barMode = CallEffectsBarRule.afterShowingApplied(from: barMode, hasLayers: !layers.isEmpty)
+        }
+    }
+
+    /// Annuler un effet de la liste : cette couche seule tombe, la liste se referme et la barre
+    /// revient à son menu de base. Retirer le cadre qu'on garde en direct le relâche par le même
+    /// chemin que décocher « Cadre » : l'autre le voit tomber.
+    private func remove(_ kind: CallEffectKind) {
+        switch kind {
+        case .frame:
+            capture.select(choice: CallMontageFrameRule.fallback)
+            if let held = hold.heldFrameId { hold.toggle(held) }
+        case .color, .face:
+            filters.config = CallEffectsStackRule.removing(kind, from: filters.config)
+        case .landscape, .voice:
+            break
+        }
+        layers = layers.removing(kind)
+        withAnimation(settingsAnimation) { barMode = CallEffectsBarRule.afterRemoval }
+        HapticFeedback.light()
+    }
+
+    /// « Chaque visage » n'a pas de place dessinée sur C1 : il vit dans ce que « Réglages » ouvre.
+    private func captureFaces() {
+        HapticFeedback.light()
+        withAnimation(settingsAnimation) { barMode = CallEffectsBarRule.afterChoice }
+        Task { await capture.captureFaces() }
+    }
+
+    private func chosenFrameId(people: Int) -> String? {
+        guard case .frame(let id) = CallMontageFrameRule.reconcile(capture.choice, people: people) else { return nil }
+        return id
+    }
+
+    @ViewBuilder
+    private func panelOrCarousel(people: Int) -> some View {
+        switch barMode {
+        case .base:
+            carousel(people: people)
+                .transition(.opacity)
+        case .settings:
+            settingsPanel
+                .transition(panelTransition)
+        case .applied:
+            CallEffectsAppliedPanel(layers: layers, onRemove: remove)
+                .transition(panelTransition)
+        }
+    }
+
+    private var settingsPanel: some View {
+        CallEffectsPanel {
+            Button(action: captureFaces) {
+                HStack(spacing: MeeshySpacing.md) {
+                    Image(systemName: "person.crop.square")
+                        .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
+                        .accessibilityHidden(true)
+                    Text(CallCaptureCopy.faces)
+                        .font(.footnote.weight(.semibold))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Color.white)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(CallPressButtonStyle())
+            .disabled(capture.status == .working || capture.isRecording)
+            .accessibilityLabel(CallCaptureCopy.faces)
+            .accessibilityHint(CallCaptureCopy.facesHint)
+        }
+    }
+
+    // MARK: - Les cadres
+
+    private func carousel(people: Int) -> some View {
         let selection = CallMontageFrameRule.reconcile(capture.choice, people: people)
         let chip = CallMontageFrameRule.chip(of: selection)
         let scope = CallMontageFrameRule.scope(of: selection, people: people, requested: capture.requestedFrameScope)
-        VStack(spacing: MeeshySpacing.mdPlus) {
+        return VStack(spacing: MeeshySpacing.mdPlus) {
+            if let held = holdChip(for: selection) { held }
             CallFrameMoodChips(
                 chips: CallMontageFrameRule.chips(forPeople: people, scope: scope),
                 selected: chip,
@@ -335,39 +540,6 @@ struct CallMontageModeControls: View {
             .accessibilityAction(named: CallFrameCopy.nextDeclination) { stepDeclination(1, people: people) }
             .accessibilityAction(named: CallFrameCopy.previousDeclination) { stepDeclination(-1, people: people) }
             .id(CallMontageCarouselKey(chip: chip, people: people, scope: scope))
-            CallModeActionBar(
-                exitHint: CallModeCopy.quitMontageHint,
-                onExit: onExit,
-                options: holdOptions(for: selection) + [
-                    CallModeOption(
-                        id: "faces",
-                        symbol: "person.crop.square",
-                        label: CallCaptureCopy.faces,
-                        caption: CallCaptureCopy.faces,
-                        hint: CallCaptureCopy.facesHint,
-                        isEnabled: capture.status != .working && !capture.isRecording
-                    ) {
-                        Task { await capture.captureFaces() }
-                    }
-                ]
-            )
-        }
-        .task(id: CallCaptureSourceKey(subjects: subjects, tracks: tracks)) {
-            capture.start(subjects: subjects, tracks: tracks)
-        }
-        .onAppear {
-            guard let held = hold.heldFrameId else { return }
-            capture.select(choice: .frame(held))
-        }
-        .task(id: call) {
-            capture.setFrameTexts(textsProvider.immediateTexts(for: call))
-            let resolved = await textsProvider.texts(for: call)
-            guard !Task.isCancelled else { return }
-            capture.setFrameTexts(resolved)
-        }
-        .onDisappear {
-            hasSeenGestureHint = true
-            capture.stop()
         }
     }
 
@@ -380,24 +552,13 @@ struct CallMontageModeControls: View {
         }
     }
 
-    /// Le cadre affiché se garde pendant l'appel d'un toucher sur l'icône « Cadre » ; rien ne
+    /// Le cadre affiché se garde pendant l'appel d'un toucher sur la puce « Cadre » (C1) ; rien ne
     /// s'offre sur un montage classique ni hors d'un duo vidéo.
-    private func holdOptions(for selection: CallMontageChoice) -> [CallModeOption] {
-        guard case .frame(let id) = selection, CallLiveFrameRule.mayHold(frameId: id, isOffered: hold.isOffered) else { return [] }
-        let isHeld = hold.heldFrameId == id
-        return [
-            CallModeOption(
-                id: "hold-frame",
-                symbol: "photo.artframe",
-                label: CallLiveFrameCopy.label,
-                caption: CallLiveFrameCopy.caption,
-                hint: CallLiveFrameCopy.hint,
-                isOn: isHeld,
-                isEnabled: !capture.isRecording
-            ) {
-                hold.toggle(id)
-            }
-        ]
+    private func holdChip(for selection: CallMontageChoice) -> CallFrameHoldChip? {
+        guard case .frame(let id) = selection, CallLiveFrameRule.mayHold(frameId: id, isOffered: hold.isOffered) else { return nil }
+        return CallFrameHoldChip(isOn: hold.heldFrameId == id, isEnabled: !capture.isRecording) {
+            hold.toggle(id)
+        }
     }
 
     private func thumbnail(_ item: CallMontageChoice) -> CGImage? {
