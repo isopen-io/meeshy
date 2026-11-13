@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { JournalNoteSentence, noteDirection } from '@/components/call-journal-note';
+import { THREAD_SECONDARY_INK, UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -119,9 +120,12 @@ export function CallTranscriptLines({ lines, notes = [], language, original, onT
                 <span className="tabular-nums">{formatCallJournalClock(line.offsetMs / 1000)}</span>
               </span>
               {!original && line.translated ? (
-                <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={line.language || undefined} data-call-transcript-text="translated">
-                  {line.text}
-                </span>
+                <>
+                  <span className="author-ink block text-[13.5px]" style={ink} dir="auto" lang={line.language || undefined} data-call-transcript-text="translated">
+                    {line.text}
+                  </span>
+                  <UnfoldedOriginal open original={line.original} from={undefined} language={language} marker="data-call-transcript-original-line" ink={THREAD_SECONDARY_INK} />
+                </>
               ) : (
                 <span className="block text-[13.5px]" style={{ color: 'var(--color-ios-ink)' }} dir="auto" data-call-transcript-text="original">
                   {line.original}
