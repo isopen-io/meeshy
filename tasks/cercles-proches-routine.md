@@ -466,3 +466,9 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil 26 : couper les invitations « ensemble » d'une personne ou de tous, et borner leurs rafales (#17023)
+
+- Reprise : #17148 fusionnée le 2026-11-09. Lots vivants d'autres réveils, non touchés : #16984 (carte web, PR #17956),
+  #17147 (conversation close) et #17013 (cercle de la position), réservés à 13:34 et 13:36. Lot #17023 réservé sur
+  `claude/cercles-17023-ensemble-reception` avant toute écriture.
