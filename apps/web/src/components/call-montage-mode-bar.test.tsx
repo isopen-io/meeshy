@@ -239,6 +239,14 @@ describe('CallMontageMode — la barre d’Effets', () => {
     view.done();
   });
 
+  test('les puces Visage et Couleur sont touchables au Montage et ouvrent Effets sur leur genre', async () => {
+    const view = await mount();
+    await view.press('[data-call-effects-category="color"]');
+    await view.press('[data-call-effects-category="face"]');
+    expect(view.adds).toEqual(['color', 'face']);
+    view.done();
+  });
+
   test('retirer la couche « cadre » retire aussi le cadre gardé en direct, par le chemin de « Cadre » (loi 16)', async () => {
     const { hold, toggled } = holdOf('jovial.direct.duo');
     const view = await mount({ hold });

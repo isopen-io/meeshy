@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject, type WheelEvent } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type ButtonHTMLAttributes, type KeyboardEvent, type PointerEvent, type ReactNode, type RefObject, type WheelEvent } from 'react';
 
 import { CAPTURE_HOLD_MS, captureIntent, keyIntent, PRESS_SLOP_PX, tapGesture, type LastTap, type PressGesture } from '@/lib/calls/call-capture-gesture';
 import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
@@ -417,7 +417,7 @@ type BarProps = {
 
 const SIDE_SHAPE = 'grid size-12 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none';
 
-export const SIDE = `${SIDE_SHAPE} text-on-media`;
+const SIDE = `${SIDE_SHAPE} text-on-media`;
 
 /** La largeur de la barre de verre, et du panneau qui la surmonte : celle de la pilule de l'appel, un liseré de chaque côté. */
 export const GLASS_WIDTH = 'w-[calc(100%-2rem)] max-w-[560px]';
@@ -472,11 +472,16 @@ type OptionProps = {
   /** Une légende sous le disque (Réglages, P8b). */
   readonly caption?: string;
   readonly data?: Readonly<Record<`data-${string}`, string>>;
+  /** Un disque atténué : l'action est refusée, mais l'option reste atteignable (appui long de (+) à trois couches). */
+  readonly dimmed?: boolean;
+  /** Gestes de plus que la tape : appui long, menu contextuel, clavier. */
+  readonly extra?: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type' | 'className' | 'onClick'>;
 };
 
 /** Une option discrète de la barre : un rond de verre, pressé (disque blanc, glyphe indigo) ou non. */
-export function ModeOption({ label, glyph, onPress, pressed, hint, caption, data = {} }: OptionProps) {
-  const disc = pressed === true ? `bg-on-media text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`;
+export function ModeOption({ label, glyph, onPress, pressed, hint, caption, data = {}, dimmed, extra }: OptionProps) {
+  const base = pressed === true ? `bg-on-media text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`;
+  const disc = dimmed === true ? `${base} opacity-60` : base;
   return (
     <button
       type="button"
@@ -484,6 +489,7 @@ export function ModeOption({ label, glyph, onPress, pressed, hint, caption, data
       title={hint ?? label}
       {...(hint === undefined ? {} : { 'aria-description': hint })}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
+      {...extra}
       onClick={onPress}
       className={caption === undefined ? disc : 'flex min-h-11 touch-manipulation flex-col items-center gap-0.5 text-on-media'}
       {...data}

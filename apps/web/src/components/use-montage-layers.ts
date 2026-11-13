@@ -1,5 +1,5 @@
 import { frameDisplayName } from '@meeshy/shared/types/frame-name';
-import { canAdd, isFull, nextGenre, removeLayer, type EffectGenre, type EffectLayer, type EffectStack } from '@/lib/calls/call-effect-layers';
+import { addingGenre, canAdd, genreRow, isFull, removeLayer, type EffectGenre, type EffectLayer, type EffectStack } from '@/lib/calls/call-effect-layers';
 import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
 import type { CaptureFrame } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
@@ -40,6 +40,7 @@ export function useMontageLayers({ language, effects, frame, frames, hold, apply
   const frameLayer = frame?.id ?? hold?.heldFrameId ?? null;
   const stack = useEffectLayers([...effectsApplied(effects), ...(frameLayer === null ? [] : [{ genre: 'frame' as const, choice: frameLayer }])], OWNED);
   const crowded = isFull(stack);
+  const row = onAddLook === undefined ? genreRow(false, true) : genreRow(true, true);
   const refuse = (): void => say(words.full);
 
   /** À trois couches, un cadre de plus n'entre pas : le choix est refusé et dit ; changer le cadre déjà posé reste permis. */
@@ -56,7 +57,7 @@ export function useMontageLayers({ language, effects, frame, frames, hold, apply
       refuse();
       return;
     }
-    const target = nextGenre(stack, ['face', 'color']);
+    const target = addingGenre('frame', stack, row);
     if (target === 'face' || target === 'color') onAddLook?.(target);
   };
 

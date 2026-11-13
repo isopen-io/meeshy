@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { addLayer, canAdd, isFull, listLayers, MAX_EFFECT_LAYERS, nextGenre, removeLayer, syncLayers, type EffectLayer, type EffectStack } from './call-effect-layers';
+import { addingGenre, addLayer, canAdd, genreRow, isFull, listLayers, MAX_EFFECT_LAYERS, removeLayer, syncLayers, type EffectGenre, type EffectLayer, type EffectStack } from './call-effect-layers';
 
 /**
  * LA PILE DE TROIS COUCHES (#17903, décision porteur du 2026-11-13 sur #16979) — Effets, filtres et
@@ -66,13 +66,6 @@ describe('la pile — les cas qui entourent les vecteurs', () => {
     expect(listLayers([])).toEqual([]);
   });
 
-  test('(+) ouvre le premier genre offert qui manque à la pile ; pleine, aucun', () => {
-    expect(nextGenre([face], ['face', 'color'])).toBe('color');
-    expect(nextGenre([face, filterA], ['face', 'color'])).toBeNull();
-    expect(nextGenre([], ['face', 'color'])).toBe('face');
-    expect(nextGenre([frame, filterA, face], ['face', 'color', 'landscape'])).toBeNull();
-  });
-
   test('la pile n’est jamais mutée', () => {
     const stack: EffectStack = Object.freeze([frame, filterA]);
     expect(() => addLayer(stack, face)).not.toThrow();
@@ -103,4 +96,39 @@ describe('syncLayers — la pile suit ce qui est réellement appliqué', () => {
     const stack: EffectStack = [filterA, face];
     expect(syncLayers(stack, [face, filterA], ['face', 'color'])).toBe(stack);
   });
+});
+
+/** #17915 — les vecteurs de `CallEffectsGenreRule`, recopiés tels quels d'iOS (`CallEffectLayersTests`) dans Kotlin et ici. */
+describe('la rangée de genres et (+), vecteurs communs (#17915)', () => {
+  const full = genreRow(true, true);
+  const effectsOnly = genreRow(true, false);
+  const filter: EffectLayer = { genre: 'color', choice: 'golden' };
+  const visage: EffectLayer = { genre: 'face', choice: 'toad' };
+  const cadre: EffectLayer = { genre: 'frame', choice: 'neon' };
+
+  test('la rangée suit les modes offerts : famille complète, Effets seul, Montage seul, rien', () => {
+    expect(full).toEqual(['face', 'color', 'frame']);
+    expect(effectsOnly).toEqual(['face', 'color']);
+    expect(genreRow(false, true)).toEqual(['frame']);
+    expect(genreRow(false, false)).toEqual([]);
+  });
+
+  const rows: ReadonlyArray<readonly [string, EffectGenre, EffectStack, readonly EffectGenre[], EffectGenre | null]> = [
+    ['visage · [visage] · complète', 'face', [visage], full, 'color'],
+    ['couleur · [filtre] · complète', 'color', [filter], full, 'face'],
+    ['visage · [filtre, visage] · complète', 'face', [filter, visage], full, 'frame'],
+    ['visage · [filtre, visage] · Effets seul', 'face', [filter, visage], effectsOnly, 'color'],
+    ['cadre · [cadre] · complète', 'frame', [cadre], full, 'face'],
+    ['cadre · [cadre, visage] · complète', 'frame', [cadre, visage], full, 'color'],
+    ['cadre · [filtre, visage] · complète', 'frame', [filter, visage], full, 'face'],
+    ['cadre · [cadre] · [cadre]', 'frame', [cadre], ['frame'], null],
+    ['visage · pile pleine · complète', 'face', [cadre, filter, visage], full, null],
+    ['cadre · pile pleine · complète', 'frame', [cadre, filter, visage], full, null],
+  ];
+
+  for (const [name, current, stack, row, expected] of rows) {
+    test(`(+) ${name}`, () => {
+      expect(addingGenre(current, stack, row)).toBe(expected);
+    });
+  }
 });

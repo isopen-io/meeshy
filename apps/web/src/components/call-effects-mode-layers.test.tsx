@@ -43,10 +43,11 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const mount = (options: { readonly effects?: VideoEffects; readonly heldFrameId?: string | null } = {}) => {
+  const mount = (options: { readonly effects?: VideoEffects; readonly heldFrameId?: string | null; readonly frames?: boolean } = {}) => {
     videoEffectsStore.setState({ effects: options.effects ?? NO_EFFECTS });
     const applied: Array<Partial<VideoEffects>> = [];
     const toggled: string[] = [];
+    const opened: string[] = [];
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -59,6 +60,7 @@ describe('CallEffectsMode — la pile de trois couches', () => {
           preview={<video data-testid="self-preview" />}
           selfVideo={() => host.querySelector<HTMLVideoElement>('[data-testid="self-preview"]')}
           onExit={() => undefined}
+          {...(options.frames === true ? { onOpenFrames: () => void opened.push('frames') } : {})}
           apply={(patch) => {
             applied.push(patch);
             videoEffectsStore.setState((state) => ({ effects: { ...state.effects, ...patch } }));
@@ -80,7 +82,7 @@ describe('CallEffectsMode — la pile de trois couches', () => {
       act(() => root.unmount());
       host.remove();
     };
-    return { find, all, press, hold, genres, applied, toggled, done };
+    return { find, all, press, hold, genres, applied, toggled, opened, done };
   };
 
   test('l’appui long sur (+) liste les effets appliqués, du dessus au dessous ; rien d’appliqué, rien à lister', async () => {
@@ -167,6 +169,15 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     await full.hold('[data-call-effects-add-look]');
     expect(full.genres()).toEqual(['face', 'landscape', 'voice']);
     full.done();
+  });
+
+  test('la rangée des genres est Visage · Couleur · Cadres ; (+) passe aux Cadres quand Visage et Couleur sont posés, et « Cadres » touché ouvre le Montage', async () => {
+    const view = mount({ frames: true, effects: { ...NO_EFFECTS, faceEffect: 'toad', preset: 'warm' } });
+    expect(view.find('[data-call-effects-category="face"]')).not.toBeNull();
+    expect(view.find('[data-call-effects-category="color"]')).not.toBeNull();
+    await view.press('[data-call-effects-add-look]');
+    expect(view.opened).toEqual(['frames']);
+    view.done();
   });
 
   test('à trois couches, un filtre d’un genre absent est refusé, et on le dit ; remplacer un genre présent reste permis', async () => {

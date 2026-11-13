@@ -10,7 +10,7 @@ import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import { CallModeBar, GLASS_WIDTH, ModeOption, SIDE } from './call-mode-carousel';
+import { CallModeBar, GLASS_WIDTH, ModeOption } from './call-mode-carousel';
 
 /**
  * **LA BARRE D'EFFETS, UNE POUR LES DEUX MODES** (#17903, décision porteur du 2026-11-13 sur #16979 ; P8, C1) —
@@ -25,6 +25,8 @@ import { CallModeBar, GLASS_WIDTH, ModeOption, SIDE } from './call-mode-carousel
  *
  * Chunk partagé par les deux modes, qui n'importe rien de l'écran d'appel.
  */
+
+const PANEL = `glass-call flex ${GLASS_WIDTH} flex-col rounded-[24px]`;
 
 export type TextOf = <K extends CallStudioCatalogKey>(key: K, ...params: TranslateCallStudioArgs<K>) => string;
 
@@ -152,7 +154,7 @@ function EffectLayersList({ open, stack, label, onUndo, text }: ListProps) {
   if (!presence.mounted) return null;
   const layers = listLayers(stack);
   return (
-    <div ref={presence.ref} role="group" aria-label={text.title} {...(open ? {} : { 'aria-hidden': true })} className={`glass-call absolute bottom-full mb-2 flex ${GLASS_WIDTH} flex-col rounded-[24px] p-2 ${open ? '' : 'pointer-events-none'}`} data-call-effect-layers="">
+    <div ref={presence.ref} role="group" aria-label={text.title} {...(open ? {} : { 'aria-hidden': true })} className={`${PANEL} absolute bottom-full mb-2 p-2 ${open ? '' : 'pointer-events-none'}`} data-call-effect-layers="">
       {layers.length === 0 ? (
         <p className="flex min-h-11 items-center px-3 text-mini font-semibold text-on-media-3">{text.none}</p>
       ) : (
@@ -213,30 +215,29 @@ function AddLookButton({ label, hint, full, onAdd, onList }: AddProps) {
     onList();
   };
   return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-description={hint}
-      aria-keyshortcuts="Shift+Enter"
-      aria-disabled={full ? true : undefined}
-      title={label}
-      onClick={press}
-      onPointerDown={start}
-      onPointerUp={clear}
-      onPointerCancel={clear}
-      onPointerLeave={clear}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        clear();
-        fired.current = false;
-        onList();
+    <ModeOption
+      label={label}
+      hint={hint}
+      glyph={plus}
+      dimmed={full}
+      onPress={press}
+      data={{ 'data-call-effects-add-look': '' }}
+      extra={{
+        'aria-keyshortcuts': 'Shift+Enter',
+        'aria-disabled': full ? true : undefined,
+        onPointerDown: start,
+        onPointerUp: clear,
+        onPointerCancel: clear,
+        onPointerLeave: clear,
+        onKeyDown,
+        onContextMenu: (event) => {
+          event.preventDefault();
+          clear();
+          fired.current = false;
+          onList();
+        },
       }}
-      onKeyDown={onKeyDown}
-      className={`glass-call touch-manipulation select-none [-webkit-touch-callout:none] ${SIDE} ${full ? 'opacity-60' : ''}`}
-      data-call-effects-add-look=""
-    >
-      {plus}
-    </button>
+    />
   );
 }
 
@@ -337,7 +338,7 @@ export function EffectsSettings({ language, effects, colorAvailable, blurAvailab
 /** Le verre de Réglages, tel que les deux modes le posent au-dessus de leur barre. */
 export function SettingsGlass({ presence, open, language, effects, colorAvailable, blurAvailable, apply }: SettingsProps & { readonly presence: { readonly ref: RefObject<HTMLDivElement | null> }; readonly open: boolean }) {
   return (
-    <div ref={presence.ref} role="group" aria-label={translateCallStudio(language, 'callStudio.effects.settings')} className={`glass-call flex ${GLASS_WIDTH} flex-col gap-1 rounded-[24px] px-4 py-3 ${open ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
+    <div ref={presence.ref} role="group" aria-label={translateCallStudio(language, 'callStudio.effects.settings')} className={`${PANEL} gap-1 px-4 py-3 ${open ? '' : 'pointer-events-none'}`} style={STACKED} data-call-effects-settings="">
       <EffectsSettings language={language} effects={effects} colorAvailable={colorAvailable} blurAvailable={blurAvailable} apply={apply} />
     </div>
   );

@@ -6,9 +6,9 @@ import type { ActiveCall } from '@/lib/calls/call-store';
 import { callAudioOf, hasVideo } from '@/lib/calls/call-view';
 import { captureStill, filmedTrack, type ClipEnv } from '@/lib/calls/call-capture-live';
 import type { CaptureFile, SaveOutcome } from '@/lib/calls/call-capture-save';
-import { canAdd, isFull, nextGenre, NO_CHOICE, removeLayer, type EffectGenre } from '@/lib/calls/call-effect-layers';
+import { addingGenre, canAdd, genreRow, isFull, NO_CHOICE, removeLayer, type EffectGenre } from '@/lib/calls/call-effect-layers';
 import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
-import { addingLook, type EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
+import type { EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { onRowWheel } from '@/lib/calls/call-row-keys';
 import { useEffectLayers } from '@/lib/calls/use-effect-layers';
 import { useSwapPresence } from '@/lib/calls/use-mode-motion';
@@ -251,6 +251,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const heldFrame = hold?.heldFrameId ?? null;
   const stack = useEffectLayers([...effectsApplied(effects), ...(heldFrame === null ? [] : [{ genre: 'frame' as const, choice: heldFrame }])], OWNED);
   const full = isFull(stack);
+  const row = genreRow(true, onOpenFrames !== undefined);
   const list = useLayersList();
   const controls = useRef<HTMLDivElement>(null);
   const rider = useRef<HTMLDivElement>(null);
@@ -314,8 +315,9 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
       refuse();
       return;
     }
-    const target = nextGenre(stack, ['face', 'color']);
-    setCategory(target !== null && (target === 'face' || target === 'color') && target !== category ? target : addingLook(category));
+    const target = addingGenre(category, stack, row);
+    if (target === 'frame') onOpenFrames?.();
+    else if (target === 'face' || target === 'color') setCategory(target);
   };
   const undo = (genre: EffectGenre): void => {
     list.hide();
@@ -326,11 +328,8 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
       setEffectLayers(removeLayer(stack, genre));
     }
   };
-  const entries = [
-    { id: 'face', label: t('callStudio.mode.face') },
-    { id: 'color', label: t('callStudio.effects.color') },
-    ...(onOpenFrames === undefined ? [] : [{ id: 'frames', label: words.frames }]),
-  ];
+  const labelOf = (genre: EffectGenre): string => (genre === 'face' ? t('callStudio.mode.face') : genre === 'color' ? t('callStudio.effects.color') : words.frames);
+  const entries = row.map((genre) => ({ id: genre === 'frame' ? 'frames' : genre, label: labelOf(genre) }));
   const pick = (id: string): void => {
     list.hide();
     if (id === 'frames') onOpenFrames?.();
