@@ -2,9 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 
 import { callActions } from '@/lib/calls/call-actions';
 import { callJournalMemory } from '@/lib/calls/call-journal-memory';
-import { LEAVING } from '@/lib/calls/call-pill-motion';
 import { callIdentityOf, type CallNoticeTarget } from '@/lib/calls/call-notice';
-import { useJournalFold } from '@/lib/calls/use-journal-fold';
 import { callsAvailable } from '@/lib/calls/calls-availability';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -26,7 +24,10 @@ import { SystemNoticeTime } from './system-notice-time';
  * `role="status"` NON POSÉ, comme toute rangée système ; le conteneur porte `aria-label`, le titre est
  * `aria-hidden` — la bascule et le journal, eux, restent lisibles et atteignables.
  */
-const CallTranscriptPanel = lazy(() => import('./call-transcript-panel').then((module) => ({ default: module.CallTranscriptPanel })));
+/** Le journal ET son fondu se chargent au toucher, ensemble (le doigt qui se pose les demande déjà) : la carte du fil n'importe rien de l'appel. */
+const loadJournal = () => Promise.all([import('./call-journal-fold'), import('./call-transcript-panel')]).then(([fold]) => fold);
+
+const CallJournalFold = lazy(() => loadJournal().then((module) => ({ default: module.CallJournalFold })));
 
 type CallRow = Extract<SystemRow, { readonly kind: 'call' }>;
 
@@ -57,11 +58,12 @@ function CallCard({ row, target, language }: { readonly row: CallRow; readonly t
   const callId = target !== null && target.transcript ? target.callId : null;
   const [open, setOpen] = useState(() => callId !== null && callJournalMemory.isOpen(callId));
   const [restored] = useState(open);
-  const fold = useJournalFold<HTMLDivElement>(open, restored);
+  const [engaged, setEngaged] = useState(open);
   const transcriptId = callId === null ? undefined : `call-transcript-${callId}`;
   const toggle = () => {
     if (callId === null) return;
     callJournalMemory.setOpen(callId, !open);
+    setEngaged(true);
     setOpen(!open);
   };
   return (
@@ -81,17 +83,16 @@ function CallCard({ row, target, language }: { readonly row: CallRow; readonly t
           aria-expanded={open}
           aria-controls={open ? transcriptId : undefined}
           onClick={toggle}
+          onPointerDown={() => void loadJournal()}
           className="call-notice-toggle min-h-11 self-start rounded-full px-4 text-[13px] font-semibold"
         >
           {translate(language, open ? 'callTranscript.hide' : 'callTranscript.show')}
         </button>
       ) : null}
-      {fold.mounted && callId !== null ? (
-        <div ref={fold.ref} id={transcriptId} className="flex w-full" data-call-journal-fold="" {...(open ? {} : LEAVING)}>
-          <Suspense fallback={null}>
-            <CallTranscriptPanel callId={callId} language={language} original={callJournalMemory.isOriginal(callId)} onOriginalChange={(original) => callJournalMemory.setOriginal(callId, original)} />
-          </Suspense>
-        </div>
+      {engaged && callId !== null && transcriptId !== undefined ? (
+        <Suspense fallback={null}>
+          <CallJournalFold id={transcriptId} callId={callId} open={open} restored={restored} language={language} original={callJournalMemory.isOriginal(callId)} onOriginalChange={(original) => callJournalMemory.setOriginal(callId, original)} />
+        </Suspense>
       ) : null}
     </div>
   );

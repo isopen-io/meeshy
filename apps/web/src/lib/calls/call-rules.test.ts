@@ -4,7 +4,8 @@ import { decodeAck, decodeInitiated, decodeSessionMembers, decodeSignal, mapServ
 import type { Attachment } from '@/lib/api/types';
 
 import { callNoticeTarget } from './call-notice';
-import { formatCallClock, formatCallJournalClock, meshPhase, type CallMember } from './call-store';
+import { formatCallJournalClock } from './call-journal-clock';
+import { formatCallClock, meshPhase, type CallMember } from './call-store';
 import { bindCallTransport, listenCallEvents, resetCallTransportForTests, setCallEngineWake } from './call-transport';
 import { callLayout, callStatusKey, canRetry, gridColumns, membersInArrival, orderedMembers, statusPills, visibleStatusPills } from './call-view';
 

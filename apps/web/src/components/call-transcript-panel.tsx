@@ -9,7 +9,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import { formatCallJournalClock } from '@/lib/calls/call-store';
+import { formatCallJournalClock } from '@/lib/calls/call-journal-clock';
 import { callTranscriptQueryKey, loadCallTranscript, transcriptEntries, transcriptLines, transcriptNotes, type TranscriptLine, type TranscriptNote } from '@/lib/calls/call-transcript';
 import { suspendForCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -40,9 +40,7 @@ const muted = { color: 'var(--color-ios-ink-2)' } as const;
 
 /**
  * Le journal DANS sa bulle ou dans la fiche d'un appel : rend « Voir l'original » dans l'état que sa bulle a
- * retenu (`original`, `onOriginalChange` : la mémoire `call-journal-memory.ts` est celle de la carte, hors de
- * ce chunk — A1.17). Son fondu glissé est celui de la carte (`useJournalFold`) : il commence au toucher, sans
- * attendre ce chunk.
+ * retenu (`original`, `onOriginalChange` : la mémoire `call-journal-memory.ts` est celle de la carte — A1.17).
  */
 export function CallTranscriptPanel({ callId, language, original: initial = false, onOriginalChange }: { readonly callId: string; readonly language: InterfaceLanguage; readonly original?: boolean; readonly onOriginalChange?: (original: boolean) => void }) {
   suspendForCallControlsCatalog(language);

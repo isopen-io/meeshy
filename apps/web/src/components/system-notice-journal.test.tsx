@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
@@ -56,6 +57,12 @@ afterEach(() => {
 
 const settle = (ms = 60) => act(async () => void (await new Promise((resolve) => setTimeout(resolve, ms))));
 
+/** Le journal et son fondu arrivent avec leur chunk et le catalogue des contrôles d'appel, chargés au toucher. */
+const unfolded = async (find: (selector: string) => HTMLElement | null) => {
+  for (let attempt = 0; attempt < 100 && find('[data-call-journal-fold]') === null; attempt += 1) await settle(20);
+  await settle();
+};
+
 const mount = (reducedMotion = false) => {
   Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: reducedMotion }) });
   const host = document.createElement('div');
@@ -94,7 +101,7 @@ describe('le journal s’ouvre et se ferme en fondu glissé (A1.4)', () => {
   test('il arrive en fondu et en glissement, transformation et opacité seules', async () => {
     const view = mount();
     view.toggle();
-    await settle();
+    await unfolded(view.find);
     expect(view.find('[data-call-journal-fold]')).not.toBeNull();
     const arrival = runs.find((run) => run.target === view.find('[data-call-journal-fold]'));
     expect(arrival?.duration).toBe(200);
@@ -106,7 +113,7 @@ describe('le journal s’ouvre et se ferme en fondu glissé (A1.4)', () => {
   test('sous « Réduire les animations », un fondu court de 150 ms, sans déplacement', async () => {
     const view = mount(true);
     view.toggle();
-    await settle();
+    await unfolded(view.find);
     const arrival = runs.find((run) => run.target === view.find('[data-call-journal-fold]'));
     expect(arrival?.duration).toBe(150);
     expect(Object.keys(arrival?.frames[0] ?? {})).toEqual(['opacity']);
@@ -115,7 +122,7 @@ describe('le journal s’ouvre et se ferme en fondu glissé (A1.4)', () => {
   test('il repart par le même chemin, resté monté le temps de son départ', async () => {
     const view = mount();
     view.toggle();
-    await settle();
+    await unfolded(view.find);
     runs.length = 0;
     view.toggle();
     const fold = view.find('[data-call-journal-fold]');
@@ -133,7 +140,7 @@ describe('le journal reste déplié au défilement du fil virtualisé (A1.17)', 
   test('la rangée démontée puis remontée retrouve son journal déplié, sans rejouer l’arrivée', async () => {
     const view = mount();
     view.toggle();
-    await settle();
+    await unfolded(view.find);
     view.leave();
     runs.length = 0;
     view.render();
@@ -146,11 +153,40 @@ describe('le journal reste déplié au défilement du fil virtualisé (A1.17)', 
   test('un journal replié reste replié', async () => {
     const view = mount();
     view.toggle();
-    await settle();
+    await unfolded(view.find);
     view.toggle();
     await settle(260);
     view.leave();
     view.render();
     expect(view.find('[data-call-transcript-toggle]')?.getAttribute('aria-expanded')).toBe('false');
+  });
+});
+
+describe('la carte reste légère, le journal et son fondu se chargent à la demande (A1.4, première peinture)', () => {
+  const card = readFileSync(new URL('./call-notice-card.tsx', import.meta.url), 'utf8');
+  const staticSources = [...card.matchAll(/^import[^;]*?from\s+'([^']+)'/gm)].map((match) => match[1]);
+
+  test('la carte n’importe statiquement ni le fondu ni le journal : la table de préchargement du fil n’y gagne aucun chunk', () => {
+    expect(staticSources.filter((source) => /use-journal-fold|use-rail-presence|call-pill-motion|call-transcript-panel|call-journal-fold/.test(source ?? ''))).toEqual([]);
+  });
+
+  test('le fondu du journal a son chunk, atteint par import() seulement, et le journal garde le sien (budget call_transcript_panel)', () => {
+    const fold = readFileSync(new URL('./call-journal-fold.tsx', import.meta.url), 'utf8');
+    expect(card).toMatch(/import\('\.\/call-journal-fold'\)/);
+    expect(card).toMatch(/import\('\.\/call-transcript-panel'\)/);
+    expect(fold).toMatch(/from '@\/lib\/calls\/use-journal-fold'/);
+    expect(fold).toMatch(/import\('\.\/call-transcript-panel'\)/);
+    expect(fold).not.toMatch(/^import[^;]*from '\.\/call-transcript-panel'/m);
+  });
+
+  test('l’heure du journal (00:04) vit avec le journal, jamais dans le magasin d’appel que charge la première peinture', () => {
+    expect(readFileSync(new URL('../lib/calls/call-store.ts', import.meta.url), 'utf8')).not.toContain('formatCallJournalClock');
+    expect(readFileSync(new URL('../lib/calls/call-journal-clock.ts', import.meta.url), 'utf8')).toContain('export function formatCallJournalClock');
+  });
+
+  test('« Original · … » ne tire pas les moteurs de la pilule dans le journal : l’écran d’appel ne s’en découpe pas un chunk de plus', () => {
+    const exit = readFileSync(new URL('../lib/calls/call-pill-text-exit.ts', import.meta.url), 'utf8');
+    expect(exit).not.toMatch(/from '\.\/use-pill-motion'/);
+    expect(exit).toMatch(/export \{ LEAVING as PILL_TEXT_LEAVING \} from '\.\/call-pill-motion'/);
   });
 });
