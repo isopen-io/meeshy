@@ -36,6 +36,22 @@ class CallAudioStageLayoutTest {
         assertThat(pill(layer = journal, revealed = false).compactsAudioLayout).isFalse()
     }
 
+    /** #17945 (B) : en duo audio, le toucher sur le fond range le journal avec la pilule ; l'avatar regrandit à 120, et revient au second toucher. */
+    @Test
+    fun `a tap on the background of a duo audio call stows the journal and grows the avatar back to 120 (#17945)`() {
+        val tapStage = CallChromeVisibility.isTapStage(isGroup = false, isVideoStage = false, isConnected = true)
+        val stowed = CallChromeVisibility(isRevealed = true).toggled()
+        assertThat(CallChromeVisibility.mayToggleByTap(isTapStage = tapStage)).isTrue()
+        assertThat(stowed.isVisible(CallChromeElement.Header)).isFalse()
+        assertThat(stowed.isVisible(CallChromeElement.Controls)).isFalse()
+        val hidden = pill(captions = false, layer = journal, revealed = stowed.isVisible(CallChromeElement.Controls))
+        assertThat(CallAudioStageLayout.avatarDp(CallAudioStageLayout.compacts(hidden, isVideoStage = false))).isEqualTo(120f)
+        val back = stowed.toggled()
+        val shown = pill(captions = false, layer = journal, revealed = back.isVisible(CallChromeElement.Controls))
+        assertThat(shown).isEqualTo(CallPillText.Journal)
+        assertThat(CallAudioStageLayout.avatarDp(CallAudioStageLayout.compacts(shown, isVideoStage = false))).isEqualTo(56f)
+    }
+
     @Test
     fun `the compact header is an audio layout, never a video one`() {
         assertThat(CallAudioStageLayout.compacts(pill(layer = journal), isVideoStage = false)).isTrue()
