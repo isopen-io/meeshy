@@ -186,13 +186,14 @@ internal fun CallStatusPill(icon: ImageVector, text: String, color: Color) {
 }
 
 /**
- * #17945 (B), loi 11 — le fond derrière l'avatar d'un duo audio : un toucher y range l'en-tête, la pilule et le journal
- * (l'avatar regrandit à 120 dp, [CallAudioStageLayout]), un nouveau toucher les rend. Posé SOUS la colonne de l'appel,
- * comme le toucher de la scène vidéo : un bouton touché répond toujours, seul l'espace libre arrive ici. Muet pour
- * TalkBack, qui ne range jamais les contrôles (l'écran ne le pose alors pas).
+ * #17945 (B) et son extension, loi 11 — le fond de la scène : derrière l'avatar d'un duo audio (l'avatar regrandit à
+ * 120 dp, [CallAudioStageLayout]) et autour de la grille d'un groupe, caméras allumées ou non. Un toucher y range
+ * l'en-tête, la pilule et le journal, un nouveau toucher les rend. Posé SOUS la colonne de l'appel, comme le toucher de la
+ * scène vidéo : un bouton ou une vignette touchés répondent toujours, seul l'espace libre arrive ici. Muet pour TalkBack,
+ * qui ne range jamais les contrôles (l'écran ne le pose alors pas).
  */
 @Composable
-internal fun CallAudioSceneTapTarget(onTap: () -> Unit, modifier: Modifier = Modifier) {
+internal fun CallSceneBackgroundTapTarget(onTap: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier
             .fillMaxSize()

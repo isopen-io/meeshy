@@ -72,7 +72,7 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
             XCTAssertFalse(unit.contains(minuterie), "Le masquage minuté est revenu : \(minuterie)")
         }
         let toggle = try block("func toggleControls() {", until: "\n    }\n", in: unit)
-        XCTAssertTrue(toggle.contains("guard exposesTheTapToggle else { return }"), "#17945 — la scène de la loi 11, jamais sous VoiceOver")
+        XCTAssertTrue(toggle.contains("guard isTapStage else { return }"), "#17945 — la scène de la loi 11 : vidéo, duo audio, groupe sans caméra")
         XCTAssertFalse(toggle.contains("mayToggleByTap(isVideoStage:"))
         XCTAssertTrue(toggle.contains("showControls.toggle()"))
     }
