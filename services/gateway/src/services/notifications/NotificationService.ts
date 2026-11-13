@@ -91,6 +91,7 @@ import {
   EMPTY_PRISM_SOURCE,
   UNKNOWN_BANNER_SOURCE,
   MESSAGE_CONTENT_BASIS,
+  servedMessageDeadline,
   truncateMessage,
 } from './notification-preview';
 import type { FanoutDependencies } from './fanout/dependencies';
@@ -342,6 +343,10 @@ export class NotificationService {
         messageType: message?.messageType ?? null,
         ephemeralDuration: message?.ephemeralDuration ?? null,
         effectFlags: message?.effectFlags ?? null,
+        // #18030 — la colonne entrait déjà par `MESSAGE_LIVENESS_SELECT` et ne
+        // ressortait pas : seul le VERDICT en sortait. Elle ressort désormais,
+        // pour que l'échéance servie se relise CHEZ ELLE.
+        expiresAt: message?.expiresAt instanceof Date ? message.expiresAt : null,
         // #17195 — ce que la base dit de la protection, pour le second verrou.
         // Une ligne ABSENTE rend `null`, qui se lit « protégé » : l'arbitrage
         // INVERSE de la vivacité juste en dessous, et les deux sont justes —
@@ -1661,12 +1666,16 @@ export class NotificationService {
     /** Identité d'acteur déjà résolue — cf. `NotificationActorProfile`. */
     senderProfile?: NotificationActorProfile;
     /**
-     * Échéance du message qui mentionne, reportée sur la notification : elle ne
-     * doit pas survivre au message. Fournie par l'appelant plutôt que relue
-     * ici — l'éventail la tient déjà (`FanOutMessage.expiresAt`), et
-     * `Message.expiresAt` est écrit à l'insertion et jamais modifié ensuite,
-     * donc sa copie ne peut pas dériver. Absente : aucune échéance, le
-     * comportement de toujours.
+     * Échéance du message qui mentionne, telle que l'éventail la CROYAIT à
+     * l'envoi (`FanOutMessage.expiresAt`) — une des deux moitiés de ce qui est
+     * servi, jamais le dernier mot.
+     *
+     * #18030 — l'exemption qui vivait ici (« `Message.expiresAt` est écrit à
+     * l'insertion et jamais modifié ensuite, donc sa copie ne peut pas
+     * dériver ») est mesurée FAUSSE : quatre écrivains post-insertion, dont
+     * trois ne font que RAPPROCHER l'échéance. Elle est donc confrontée à la
+     * relecture VIVANTE par `servedMessageDeadline`, qui dit l'arbitrage.
+     * Absente : seule la base décide, et son silence vaut « aucune échéance ».
      */
     messageExpiresAt?: Date | null;
     /**
@@ -1769,7 +1778,9 @@ export class NotificationService {
       content: bannerBody,
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
-      expiresAt: params.messageExpiresAt ?? undefined,
+      // #18030 — la plus PROCHE des deux : la bannière ne survit pas au message
+      // qu'elle annonce, et un `null` d'un côté ne retire rien à l'autre.
+      expiresAt: servedMessageDeadline(prismSource.expiresAt, params.messageExpiresAt),
 
       actor: {
         id: params.mentionerUserId,
@@ -2416,7 +2427,10 @@ export class NotificationService {
           }),
       this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
-        select: { title: true, type: true, encryptionMode: true },
+        // #18029 — `avatar` : la colonne manquait ICI, et c'est ce qui privait
+        // la bannière d'une RÉPONSE du repli de groupe que ses deux jumelles
+        // servent. Un témoin de rendu ne pouvait pas le voir.
+        select: { title: true, type: true, avatar: true, encryptionMode: true },
       }),
       this.resolveRecipientPrism(params.recipientUserId),
       this.loadMessagePrismSource(params.messageId),
@@ -2461,7 +2475,8 @@ export class NotificationService {
       content: bannerBody,
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
-      expiresAt: params.messageExpiresAt ?? undefined,
+      // #18030 — cf. `createMentionNotification` : la plus PROCHE des deux.
+      expiresAt: servedMessageDeadline(prismSource.expiresAt, params.messageExpiresAt),
 
       actor: {
         id: params.replierUserId,
@@ -2475,6 +2490,12 @@ export class NotificationService {
         conversationTitle: conversation?.title,
         // #14669 — le régime QUALIFIE la bannière, sur les trois éventails.
         ...conversationRegimeField(conversation?.encryptionMode),
+        // #18029 — le repli de GROUPE de l'avatar iOS
+        // (`SocketNotificationEvent+Toast.swift`), que le message simple et la
+        // mention servaient déjà. Il ne compose AUCUNE chaîne : c'est ce qui
+        // l'a tenu hors de la convergence des corps (cycle 125 bis) et hors de
+        // celle de ce qui les qualifie (cycle 126).
+        conversationAvatar: conversation?.avatar ?? undefined,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
         originalMessageId: params.originalMessageId,

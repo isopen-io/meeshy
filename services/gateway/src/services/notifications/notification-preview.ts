@@ -58,6 +58,21 @@ export type MessageBannerSource = MessagePrismSource & {
    */
   readonly ephemeralDuration: number | null;
   readonly effectFlags: number | null;
+  /**
+   * #18030 — l'échéance telle que la BASE la porte À CET INSTANT, et non telle
+   * que l'appelant la croyait à l'envoi.
+   *
+   * Elle sort d'ici pour la même raison que l'horloge ci-dessus : la colonne
+   * entrait DÉJÀ dans la requête (`MESSAGE_LIVENESS_SELECT`, cycle 127) et n'en
+   * ressortait pas — seul le VERDICT de vivacité en sortait. Zéro requête de
+   * plus.
+   *
+   * `null` dit DEUX choses que seul `liveness` sépare : « le message n'a pas
+   * d'échéance » et « je n'ai pas pu lire ». C'est pourquoi l'arbitrage est
+   * chez `servedMessageDeadline`, qui ne RETIRE jamais — un `null` ne peut que
+   * laisser gagner la valeur d'en face.
+   */
+  readonly expiresAt: Date | null;
   readonly liveness: MessageLiveness;
   /**
    * #17195 — ce que la BASE dit de la protection du message, pour le SECOND
@@ -113,6 +128,9 @@ export const UNKNOWN_BANNER_SOURCE: MessageBannerSource = {
   messageType: null,
   ephemeralDuration: null,
   effectFlags: null,
+  // #18030 — une panne de lecture ne prononce ni « pas d'échéance » ni une
+  // échéance : elle laisse gagner celle de l'appelant.
+  expiresAt: null,
   // Fail-CLOSED : une relecture en échec ne prononce pas « ordinaire ».
   protection: null,
   liveness: 'unknown',
@@ -562,4 +580,45 @@ export function mediaSummaryString(lang: string, mediaType?: 'image' | 'video' |
       : mediaType === 'audio' ? 'attachment.audio'
         : null;
   return key ? notificationString(lang, key) : '';
+}
+
+/**
+ * L'échéance qu'une bannière SERT, entre ce que la base dit et ce que
+ * l'appelant croyait savoir (#18030).
+ *
+ * ─── POURQUOI UN ARBITRAGE, ET PAS « LA BASE GAGNE » ────────────────────────
+ *
+ * Les deux valeurs répondent à la même question à deux INSTANTS, et chacune
+ * peut être la seule à savoir quelque chose :
+ *
+ *   - la base RAPPROCHE après l'insertion — `ephemeralCountdown` (démarrage du
+ *     décompte à la réception), `consumeAfterReadMessages` (« RAPPROCHER
+ *     seulement », son propre commentaire) et `captureNoticeRetention`
+ *     (rétention raccourcie d'un message capturé). La copie de l'appelant est
+ *     alors périmée dans le seul sens qui compte : plus TARDIVE que la réalité,
+ *     donc une ligne `Notification` — qui porte le corps servi et l'enveloppe —
+ *     survivrait au message qu'elle annonce ;
+ *   - l'appelant, lui, tient une échéance que la base n'a PAS encore écrite :
+ *     sur le cas nominal d'un éphémère, le décompte ne démarre qu'à la
+ *     réception et l'éventail court avant. « La base gagne » retirerait là
+ *     l'échéance d'un message autodestructible.
+ *
+ * D'où la règle, qui est celle que ces modules s'appliquent déjà à eux-mêmes :
+ * **la plus PROCHE des deux valeurs non nulles gagne, et un `null` ne retire
+ * jamais rien.** Une notification qui s'efface trop tôt ne retire qu'une
+ * bannière ; une notification qui survit laisse un texte en base.
+ *
+ * Le doc-comment que ce helper remplace affirmait l'inverse — « `expiresAt` est
+ * écrit à l'insertion et jamais modifié ensuite, donc sa copie ne peut pas
+ * dériver ». Mesuré faux sur quatre écrivains ; cf. la règle du cycle 127, *un
+ * doc-comment qui EXEMPTE une unité d'une règle que sa voisine applique se
+ * vérifie comme une affirmation*.
+ */
+export function servedMessageDeadline(
+  live: Date | null | undefined,
+  claimed: Date | null | undefined
+): Date | undefined {
+  const candidates = [live, claimed].filter((d): d is Date => d instanceof Date);
+  if (candidates.length === 0) return undefined;
+  return candidates.reduce((earliest, d) => (d.getTime() < earliest.getTime() ? d : earliest));
 }
