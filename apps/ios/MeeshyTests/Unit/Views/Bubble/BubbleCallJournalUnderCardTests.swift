@@ -249,25 +249,64 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
         )
     }
 
-    // A1.8 / A2.3 : l'original est sous CHAQUE traduction, dépliée d'office.
+    // A1.8 / A2.3 / loi 7 (#17862, #17895) : la bascule INVERSE les deux lignes, rien ne disparaît.
 
-    func test_originalBelow_aTranslatedSentence_carriesItsOriginal() {
-        XCTAssertEqual(CallJournalAfterCall.originalBelow(segment(), showsOriginalInstead: false), "Hi!")
+    func test_lines_translatedSentence_onTheTranslation_leadsWithTranslation_originalBelow() {
+        let lines = CallJournalAfterCall.lines(for: segment(), showsOriginal: false)
+        XCTAssertEqual(lines.primary, "Salut !")
+        XCTAssertTrue(lines.primaryIsTranslation, "La traduction en tête est à la couleur d'auteur.")
+        XCTAssertEqual(lines.below, CallJournalLines.Below(kind: .original, text: "Hi!"))
     }
 
-    func test_originalBelow_myOwnSentence_hasNone() {
-        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(isLocal: true, translated: nil), showsOriginalInstead: false))
-        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(isLocal: true), showsOriginalInstead: false),
-                     "Ma phrase n'est jamais traduite pour moi.")
+    func test_lines_translatedSentence_onTheOriginal_leadsWithOriginal_translationBelow() {
+        let lines = CallJournalAfterCall.lines(for: segment(), showsOriginal: true)
+        XCTAssertEqual(lines.primary, "Hi!")
+        XCTAssertFalse(lines.primaryIsTranslation, "L'original en tête est à l'encre du thème.")
+        XCTAssertEqual(lines.below, CallJournalLines.Below(kind: .translated, text: "Salut !"),
+                       "La traduction passe dessous au lieu de disparaître.")
     }
 
-    func test_originalBelow_aSentenceWithoutTranslation_hasNone() {
-        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(translated: nil, translatedLanguage: nil), showsOriginalInstead: false))
-        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(translated: "  "), showsOriginalInstead: false))
+    func test_lines_myOwnSentence_staysAlone_inBothStates() {
+        for showsOriginal in [false, true] {
+            let lines = CallJournalAfterCall.lines(for: segment(isLocal: true), showsOriginal: showsOriginal)
+            XCTAssertEqual(lines, CallJournalLines(primary: "Hi!", primaryIsTranslation: false, below: nil),
+                           "Ma phrase n'est jamais traduite pour moi.")
+        }
     }
 
-    func test_originalBelow_whenTheToggleAlreadyShowsTheOriginal_isNotRepeated() {
-        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(), showsOriginalInstead: true))
+    func test_lines_aSentenceWithoutTranslation_staysAlone_inBothStates() {
+        for showsOriginal in [false, true] {
+            XCTAssertEqual(
+                CallJournalAfterCall.lines(for: segment(translated: nil, translatedLanguage: nil), showsOriginal: showsOriginal),
+                CallJournalLines(primary: "Hi!", primaryIsTranslation: false, below: nil))
+            XCTAssertEqual(
+                CallJournalAfterCall.lines(for: segment(translated: "  "), showsOriginal: showsOriginal),
+                CallJournalLines(primary: "Hi!", primaryIsTranslation: false, below: nil),
+                "Une traduction blanche n'est pas une traduction.")
+        }
+    }
+
+    func test_toggleLabel_saysSeeOriginal_thenSeeTranslation() {
+        XCTAssertEqual(CallJournalAfterCall.toggleLabel(showsOriginal: false), "Voir l'original")
+        XCTAssertEqual(CallJournalAfterCall.toggleLabel(showsOriginal: true), "Voir la traduction")
+    }
+
+    func test_belowLabel_namesWhatTheLineHolds() {
+        XCTAssertEqual(CallJournalLineKind.original.label, CallCaptionsCopy.original)
+        XCTAssertEqual(CallJournalLineKind.translated.label, CallCaptionsCopy.translated)
+    }
+
+    func test_spokenLabel_readsThePrimaryLine_thenTranslatedOrOriginal() {
+        let byDefault = CallJournalAfterCall.lines(for: segment(), showsOriginal: false)
+        XCTAssertEqual(
+            CallJournalAfterCall.spokenLabel(name: "Awa", elapsed: "0:04", lines: byDefault),
+            "Awa, 0:04 : Salut !. \(CallCaptionsCopy.original) : Hi!")
+        let inverted = CallJournalAfterCall.lines(for: segment(), showsOriginal: true)
+        XCTAssertEqual(
+            CallJournalAfterCall.spokenLabel(name: "Awa", elapsed: "0:04", lines: inverted),
+            "Awa, 0:04 : Hi!. \(CallCaptionsCopy.translated) : Salut !")
+        let alone = CallJournalAfterCall.lines(for: segment(isLocal: true), showsOriginal: true)
+        XCTAssertEqual(CallJournalAfterCall.spokenLabel(name: "Vous", elapsed: "0:04", lines: alone), "Vous, 0:04 : Hi!")
     }
 
     // A1.15 : la bascule n'existe que si une phrase sert une traduction.
@@ -328,9 +367,33 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
     func test_transcriptSection_unfoldsTheOriginalWithTheSharedLine_inSecondaryInk() throws {
         let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
         XCTAssertTrue(section.contains("CallOriginalBelowText("), "La ligne du journal vivant, jamais un jumeau.")
+        XCTAssertTrue(section.contains("kind: below.kind"), "Une seule pièce dit « Original · » comme « Traduit · ».")
         XCTAssertTrue(section.contains("theme.textSecondary"))
         let live = try source("Meeshy/Features/Call/Views/CallCaptionsViews.swift")
         XCTAssertTrue(live.contains("CallOriginalBelowText("), "Le journal vivant et celui d'après l'appel posent la même ligne.")
+    }
+
+    func test_transcriptSection_footLabelsComeFromTheLaw_andTheFlipFades() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertTrue(section.contains("CallJournalAfterCall.toggleLabel(showsOriginal: showOriginalText)"))
+        XCTAssertFalse(section.contains("CallCaptionsCopy.showOriginalHint"), "Ces deux clés restent l'indice de la phrase vivante.")
+        XCTAssertFalse(section.contains("CallCaptionsCopy.showTranslatedHint"))
+        XCTAssertTrue(section.contains(".contentTransition(.opacity)"), "Le changement d'état se fait en fondu.")
+        XCTAssertTrue(section.contains("MeeshyMotion.shouldReduce("), "Réduire les animations : aucun déplacement.")
+        XCTAssertTrue(section.contains(".accessibilityAddTraits(showOriginalText ? .isSelected : [])"), "Lecteur d'écran : l'état pressé.")
+        XCTAssertTrue(section.contains(".meeshyTapTarget()"), "Cible 44 pt.")
+    }
+
+    func test_catalog_footLabels_existInSevenLanguages() throws {
+        let catalog = try source("Meeshy/Localizable.xcstrings")
+        for key in ["call.transcript.toggle.showOriginal", "call.transcript.toggle.showTranslation"] {
+            let data = try XCTUnwrap(catalog.data(using: .utf8))
+            let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], "\(key) absente")
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
+            XCTAssertEqual(Set(localizations.keys), ["ar", "de", "en", "es", "fr", "it", "pt-BR"], key)
+        }
     }
 
     func test_transcriptSection_namesMeYou_atReplayAndInTheRows() throws {
