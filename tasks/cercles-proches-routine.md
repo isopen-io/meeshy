@@ -480,3 +480,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   l'autre) et #17971 (une communauté désactivée coupe-t-elle ses séances « ensemble »).
 - Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
   Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
+
+## 2026-11-13 — réveil de 14:34 : la purge et l'export des cercles lisent par index (#14529)
+
+- Reprise : run précédent coupé (erreur d'API). Les onze PR « cercles » ouvertes ont toutes été écrites dans l'heure par
+  des réveils vivants : ce réveil n'en prend aucune (« celui qui n'a rien écrit cède »). #14677 (Bring neutre) cédé
+  aussi : #18000 écrit `bringDay.ts` / `resetsAt`. #14678 (copie de talkie à 30 jours) laissé : la copie est créée par
+  les trois clients, et la poser en éphémère change sa bannière — à instruire comme un lot client, pas en un réveil.
+- Lot : #14529, serveur seul. `@@index([otherId])` sur `RelationFeatureSetting`, `@@index([userHighId, day])` sur
+  `PairInteractionDay` (le préfixe sert la purge, `day` la fenêtre de `loadProgressByPartner`) ; la branche basse est
+  déjà servie par l'unique. Migration `2026-11-13-circle-pair-reverse-indexes.mongodb.js`, additive et idempotente,
+  témoin qui exécute le fichier et confronte `schema.prisma`.
+- Reste : jouer la migration sur staging et relever l'`explain()` avant/après (critère de preuve de l'issue) ; la
+  production attend le feu vert du porteur.
+- Prochain lot recommandé : mener les PR ouvertes ; puis « ensemble » sur Android (#17100, PR #17998 en cours).
