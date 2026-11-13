@@ -1,5 +1,5 @@
 /**
- * #16642 — deux comptes de l'ÉQUIPE (MODERATOR, ADMIN, BIGBOSS) consentent, puis retirent, le
+ * #16642 — deux comptes de l'ÉQUIPE (ANALYST et au-dessus, décision porteur du 2026-11-10) consentent, puis retirent, le
  * titre écouté et la position entre eux, SANS lien (`UserRelation`) : le consentement ne
  * s'accordait qu'au rituel du Sang, qui exige un vrai lien. Les doubles lisent l'ÉTAT stocké ;
  * le consentement se relit par `relationConsentOf`, le site unique que les relais consultent.
@@ -44,7 +44,7 @@ beforeEach(() => freezeClock(NOW));
 afterEach(() => thawClock());
 
 describe('#16642 — consentir au titre et à la position entre collègues, sans lien', () => {
-  it.each([['MODERATOR', 'ADMIN'], ['ADMIN', 'BIGBOSS'], ['BIGBOSS', 'MODERATOR']])(
+  it.each([['MODERATOR', 'ADMIN'], ['ADMIN', 'BIGBOSS'], ['BIGBOSS', 'MODERATOR'], ['ANALYST', 'ADMIN'], ['ADMIN', 'AUDIT'], ['ANALYST', 'AUDIT']])(
     '%s consent à %s : les quatre partages sont servis, lus par la loi du consentement, et aucun lien ne naît',
     async (moi, autre) => {
       const app = await appli(equipe(moi, autre));
@@ -119,8 +119,7 @@ describe('#16642 — tout ce qui n\'est pas deux collègues utilisables est refu
     ['deux utilisateurs ordinaires au Sang', { liens: [lien('BLOOD', 'BLOOD')] }],
     ['un modérateur face à un utilisateur ordinaire', { personnes: { [MOI]: { role: 'MODERATOR' } } }],
     ['un utilisateur ordinaire face à un administrateur', { personnes: { [AUTRE]: { role: 'ADMIN' } } }],
-    ['un analyste', equipe('ANALYST', 'ADMIN')],
-    ['un auditeur', equipe('ADMIN', 'AUDIT')],
+    ['un agent face à un administrateur', equipe('AGENT', 'ADMIN')],
     ['un rôle inconnu', equipe('ADMIN', 'SUPERADMIN')],
     ['un blocage que j\'ai posé', { personnes: { [MOI]: { role: 'MODERATOR', blockedUserIds: [AUTRE] }, [AUTRE]: { role: 'ADMIN' } } }],
     ['un blocage', equipe('MODERATOR', 'ADMIN', { blockedUserIds: [MOI] })],

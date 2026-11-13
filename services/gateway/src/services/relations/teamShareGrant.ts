@@ -3,7 +3,7 @@
  *
  * Le titre écouté et la position exigent un consentement de l'émetteur, que le rituel du
  * Sang (`bloodRitual.ts`) recueille — et qui exige un vrai lien. Entre deux comptes de
- * l'équipe (MODERATOR, ADMIN, BIGBOSS), la loi ouvre ces outils sans lien (#16623) mais
+ * l'équipe (ANALYST et au-dessus, décision porteur du 2026-11-10), la loi ouvre ces outils sans lien (#16623) mais
  * « ouvert, si consenti » n'avait aucun chemin pour consentir. Ce module dit si
  * `PUT /relations/:userId/settings` peut ENREGISTRER l'accord de `ownerId` à `otherId`.
  *

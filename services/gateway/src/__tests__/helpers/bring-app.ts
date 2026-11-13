@@ -124,6 +124,13 @@ export async function buildBringApp(
         reglages.set(key, next);
         return next;
       }),
+      // Honore l'égalité de colonne et un `OR` de telles égalités, les seules formes que la passerelle écrit ici.
+      findMany: jest.fn(async (args: { where: Record<string, unknown> & { OR?: ReadonlyArray<Record<string, unknown>> } }) => {
+        const { OR, ...egalites } = args.where;
+        const egal = (row: Record<string, unknown>, conditions: Record<string, unknown>) =>
+          Object.entries(conditions).every(([colonne, valeur]) => row[colonne] === valeur);
+        return [...reglages.values()].filter((row) => egal(row, egalites) && (OR === undefined || OR.some((branche) => egal(row, branche))));
+      }),
       updateMany: jest.fn(async (args: { where: { ownerId: string; otherId: string }; data: Record<string, unknown> }) => {
         const key = cleDe(args.where.ownerId, args.where.otherId);
         const row = reglages.get(key);

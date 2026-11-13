@@ -166,7 +166,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
     onRequest: [fastify.authenticate],
     preHandler: [appVersionFloorPreHandler, writes.middleware()],
     schema: {
-      description: 'Set what I allow this person: { bringBlocked?, talkieBlocked?, listeningCategoryShared? (granted from Close), listeningTitleShared?, locationShared?, locationHistoryShared?, proximityShared? }. A ritual share can always be withdrawn (false); granting one (true) outside the ritual is accepted only between two team accounts (MODERATOR, ADMIN, BIGBOSS), otherwise 400. Unknown settings are refused (400).',
+      description: 'Set what I allow this person: { bringBlocked?, talkieBlocked?, listeningCategoryShared? (granted from Close), listeningTitleShared?, locationShared?, locationHistoryShared?, proximityShared? }. A ritual share can always be withdrawn (false); granting one (true) outside the ritual is accepted only between two team accounts (ANALYST and above), otherwise 400. Unknown settings are refused (400).',
       tags: ['relations'],
       summary: 'Update per-person settings',
       params: userIdParams,
@@ -189,7 +189,6 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       const granted = shares.filter((share) => requested[share] === true);
       const contradictory = granted.includes('listeningTitleShared') && listeningCategoryShared === false;
       const teamGrant = granted.length > 0 && !contradictory && (await teamMayGrantShares(fastify.prisma, { ownerId, otherId: userId, shares: granted, now }));
-      
       if (granted.length > 0 && !teamGrant) return sendBadRequest(reply, 'Donnees invalides');
       const current = await readSettings(fastify.prisma, ownerId, userId);
       const blocking = bringBlocked === true || talkieBlocked === true;
