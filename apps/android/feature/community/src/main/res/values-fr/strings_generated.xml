@@ -42,9 +42,16 @@
     <string name="community_detail_leave_confirm_message">Vous ne pourrez plus accéder aux channels de cette communauté.</string>
     <string name="community_detail_leave_confirm_title">Quitter la communauté ?</string>
     <string name="community_detail_leave_label">Quitter la communauté</string>
+    <string name="community_detail_load_failed_body">Vérifiez votre connexion, puis réessayez.</string>
+    <string name="community_detail_load_failed_title">Impossible de charger cette communauté</string>
     <string name="community_detail_menu_leave">Quitter</string>
     <string name="community_detail_menu_settings">Réglages</string>
     <string name="community_detail_posts_empty_action">Créer un post</string>
+    <string name="community_detail_refused_back">Retour aux communautés</string>
+    <string name="community_detail_refused_body">Elle n\'existe pas, ou elle est privée et vous n\'en êtes pas membre.</string>
+    <string name="community_detail_refused_title">Communauté introuvable</string>
+    <string name="community_detail_server_failed_body">Le problème vient de notre côté. Réessayez dans un instant.</string>
+    <string name="community_detail_server_failed_title">Meeshy n\'a pas pu charger cette communauté</string>
     <string name="community_list_create_accessibility_label">Créer une communauté</string>
     <string name="community_list_empty_create_button">Créer une communauté</string>
     <string name="community_list_empty_subtitle">Rejoins ou crée une communauté pour collaborer</string>

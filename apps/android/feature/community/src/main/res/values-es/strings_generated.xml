@@ -42,9 +42,16 @@
     <string name="community_detail_leave_confirm_message">Ya no tendrás acceso a los canales de esta comunidad.</string>
     <string name="community_detail_leave_confirm_title">¿Salir de la comunidad?</string>
     <string name="community_detail_leave_label">Salir de la comunidad</string>
+    <string name="community_detail_load_failed_body">Comprueba tu conexión y vuelve a intentarlo.</string>
+    <string name="community_detail_load_failed_title">No se pudo cargar esta comunidad</string>
     <string name="community_detail_menu_leave">Salir</string>
     <string name="community_detail_menu_settings">Ajustes</string>
     <string name="community_detail_posts_empty_action">Crear una publicación</string>
+    <string name="community_detail_refused_back">Volver a las comunidades</string>
+    <string name="community_detail_refused_body">No existe, o es privada y no eres miembro.</string>
+    <string name="community_detail_refused_title">Comunidad no encontrada</string>
+    <string name="community_detail_server_failed_body">El problema es nuestro. Vuelve a intentarlo en un momento.</string>
+    <string name="community_detail_server_failed_title">Meeshy no pudo cargar esta comunidad</string>
     <string name="community_list_create_accessibility_label">Crear una comunidad</string>
     <string name="community_list_empty_create_button">Crear una comunidad</string>
     <string name="community_list_empty_subtitle">Únete o crea una comunidad</string>

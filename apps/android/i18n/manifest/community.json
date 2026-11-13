@@ -286,6 +286,18 @@
         },
         {
           "catalog": "ui",
+          "iosKey": "community.detail.loadFailed.body",
+          "androidName": "community_detail_load_failed_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.loadFailed.title",
+          "androidName": "community_detail_load_failed_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
           "iosKey": "community.detail.menu.leave",
           "androidName": "community_detail_menu_leave",
           "status": "adopted"
@@ -309,6 +321,36 @@
         {
           "androidName": "community_detail_posts_empty_title",
           "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.refused.back",
+          "androidName": "community_detail_refused_back",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.refused.body",
+          "androidName": "community_detail_refused_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.refused.title",
+          "androidName": "community_detail_refused_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.serverFailed.body",
+          "androidName": "community_detail_server_failed_body",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.detail.serverFailed.title",
+          "androidName": "community_detail_server_failed_title",
+          "status": "adopted"
         },
         {
           "androidName": "community_detail_stats_channels",
