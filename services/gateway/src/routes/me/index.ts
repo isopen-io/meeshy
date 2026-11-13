@@ -15,6 +15,7 @@ import { deleteAccountRoutes } from './delete-account';
 import { dataExportRoutes } from './export';
 import { securityEventsRoutes } from './security-events';
 import profileDecorRoutes from './profile-decor';
+import bloodLocationMeRoutes from './blood-location';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { handleGetMe, meRouteSharedOptions } from './get-me';
 
@@ -26,6 +27,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
   await fastify.register(securityEventsRoutes);
   // #10632 : équiper un contour d'avatar et une bannière de design possédés.
   await fastify.register(profileDecorRoutes);
+  // #13937 : la position du Sang, derrière le drapeau serveur.
+  await fastify.register(bloodLocationMeRoutes);
 
   // Future routes can be added here:
   // await fastify.register(profileRoutes);

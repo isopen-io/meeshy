@@ -927,7 +927,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
 
           // Les cercles (#14400) : une table par liste ; mes passages et mes dates de retrait voyagent en JSON dans leur cellule.
           const relations = exportData.relations as Record<string, Record<string, unknown>[]> | undefined;
-          for (const childKey of ['links', 'interactionDays', 'consents'] as const) {
+          for (const childKey of ['links', 'interactionDays', 'consents', 'bloodLocationPoints', 'bloodLocationConsultations'] as const) {
             const flat = (relations?.[childKey] ?? []).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, value !== null && typeof value === 'object' ? JSON.stringify(value) : value])));
             if (flat.length > 0) csvSections[`relations.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
           }

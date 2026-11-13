@@ -751,3 +751,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   destinataire, heure arrondie, rayons 1200/12000) : `dev` fusionnée à la main dans la branche, le cercle reposé
   sur la forme de `dev` (projection, `snapshotAllowed` rend désormais le cercle par émetteur), les témoins du cercle
   déplacés dans `sharedLocationRelay.cercle.test.ts` pour tenir le budget de taille.
+
+## 2026-11-13 — réveil 29 : la position du Sang, socle serveur, menée vers `dev` (#13937)
+
+- Reprise : run interrompu le 2026-11-10 par une erreur d'API, repris à 15:09. Quinze PR de la routine étaient vivantes
+  (poussées dans l'heure et demie) : ce réveil n'en a doublé aucune. La branche `claude/cercles-13937-serveur`
+  (historique scellé, fantôme, journal, proximité, derrière un drapeau éteint) était écrite et auditée depuis le
+  2026-11-09, sans PR et sans session pour la suivre : reprise.
+- Fait : `origin/dev` fusionnée à la main (trois conflits : purge du compte, manifeste des routes régénéré à 809,
+  plafond Android « à porter » 125 → 130 en gardant les deux histoires) ; catalogues TS, Swift et Kotlin régénérés ; les
+  cinq routes déclarées « en attente de leur client » dans les deux cliquets de catalogue mort. PR #18019 (brouillon).
+- Contre-audit adversarial : non bloquant. Corrigé dans le lot en TDD : un point téléporté servait d'ancre au point voisin
+  (le verrou de vitesse se contournait), un effacement rendait vraisemblable n'importe quel point (un point sans ancre
+  n'est plus jamais évalué), le fantôme se devinait au temps de réponse. Les témoins négatifs de proximité reçoivent une
+  ancre : sans elle, la nouvelle règle les aurait rendus verts sans rien prouver.
+- Ouverts : #18023 et #18024 (décisions du porteur : points antérieurs à l'accord, capacité de sondage résiduelle de la
+  proximité), #18025 (relire son fantôme et ses rayons, plafond atomique du journal, porte du drapeau, prérequis staging).
+- Gates locaux : `tsc` passerelle vert ; position du Sang, routes `me`, purge 1 745/1 745 ; ciblé plus large 151 suites,
+  2 043 témoins ; `packages/shared` `api/__tests__` 109/109 et `__tests__/ci` 149/149 ; cliquets de catalogue mort conformes.
+- Prochain lot recommandé : les clients de la position du Sang après les décisions #18023/#18024, sinon les PR ouvertes
+  de la routine à mener à la fusion.
