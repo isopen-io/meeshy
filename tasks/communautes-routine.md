@@ -294,3 +294,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Rouge de dev laissé à son lot : `gateway-test-file-size-budget` (`ZmqTranslationClient.test.ts` 2476 → 2477, #18042).
 - Pas de revue adversariale : resserrement d'une porte sur une loi existante (`mayReturnToSalon`, revue avec #16703), ni nouvelle permission ni migration.
 - Prochain lot recommandé : #16712 (salon sans créateur, décision à prendre sur la lecture la plus probable) ou #18061 dès que la CI des branches revient ; #16739, #16893, #16669 et #18028 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 33 (23:40 UTC)
+
+- Début du run : une seule PR de la routine ouverte, #18028 (« N en ligne »), retenue par le porteur pour décision : non touchée. CI des branches toujours coupée (`CI_DEV_SEUL`, #18048) : preuve locale, puis CI de `dev`.
+- Lot : #16712 (passerelle, sécurité). Lecture retenue des deux options de l'issue : « les accès des invités restants sont coupés », sans donner à quiconque un rang qu'il n'a pas reçu. Quand le créateur d'un salon d'une communauté privée ou désactivée sort sans héritier INSCRIT (`creatorSuccession` rend `close`), tous les liens de partage du salon passent inactifs et marqués (`guestRevocationPendingAt`) PENDANT la requête — `guestAccessEnd` refuse dès cet instant chaque invité — puis leurs invités sont révoqués en arrière-plan par `runWithRetries` (`socketio/closeShareLinkRevokingGuests.ts`, désormais exporté : 1 min, 5 min, puis balayage horaire). Le salon reste actif (la clôture reste un geste du créateur). Salon avec héritier, simple départ, communauté publique : inchangés.
+- Témoins : quatre dans `community-salon-exit.test.ts`, deux rouges avant le correctif. Gates : gateway `src/__tests__/unit` + `src/__tests__/security`, `route-manifest`, `src/socketio`, `src/routes/__tests__`, `src/utils` et les suites racine — vertes ; `tsc --noEmit` vert.
+- Revue adversariale : aucun bloquant. Suivi ouvert #18104 (une fermeture de liens qui lève n'est reprise par rien ; mesurer les invités sans lien en staging).
+- Prochain lot recommandé : #18104, puis #18061 dès que la CI des branches revient ; #16739, #16893, #16669 et #18028 attendent une décision ; #14227 / #16696 demandent une session de staging.
