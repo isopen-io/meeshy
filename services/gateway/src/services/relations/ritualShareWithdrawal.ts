@@ -14,7 +14,7 @@
  * servirait, et dater la baisse qu'on lui a tue (RG-07, audit #14910).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { compareRelationLevel, type RelationLevel } from '@meeshy/shared/types/relation';
+import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
 import { niveauEffectif, type RelationLevelDb } from '../friendship';
 import {
   RELATION_RITUAL_SHARES,
@@ -104,7 +104,7 @@ type ShareRow = { readonly ownerId: string; readonly otherId: string; readonly l
 
 const revocationOf = (row: ShareRow, level: RelationLevel, now: Date): Record<string, boolean | Date> => ({
   ...(level === 'BLOOD' ? {} : ritualShareWithdrawalOf(row, RELATION_RITUAL_SHARES, now)),
-  ...(compareRelationLevel(level, 'CLOSE') < 0 && row.listeningCategoryShared === true
+  ...(relationLevelIfAtLeast(level, 'CLOSE') === null && row.listeningCategoryShared === true
     ? { listeningCategoryShared: false, listeningCategoryWithdrawnAt: now }
     : {}),
 });
