@@ -22,6 +22,7 @@ import {
   refreshNowPlayingBetween,
   type NowPlayingRelayDeps,
 } from '../../../../services/nowPlaying/nowPlayingRelay';
+import { revokeTeamSharesOf } from '../../../../services/relations/teamShareGrant';
 import { ADULT_BIRTH, messagingWorld, table, type CircleLink, type Row } from '../../../helpers/messaging-circle-world';
 
 const EMETTEUR = '6200000000000000000000e1';
@@ -336,6 +337,22 @@ describe('#16642 — un collègue de l\'équipe à qui l\'écoute est consentie 
 
     expect(rattrape.items.map((i) => [i.userId, i.title])).toEqual([[EMETTEUR, ECOUTE.title]]);
     expect(m.vers(COLLEGUE).map((e) => e.event)).toEqual([SERVER_EVENTS.NOW_PLAYING_CLEARED]);
+  });
+
+  it.each<[string, string]>([
+    ['l\'émetteur', EMETTEUR],
+    ['le lecteur', COLLEGUE],
+  ])('#16814 — %s quitte l\'équipe : l\'écoute s\'efface aussitôt chez le collègue qui la voyait, et ne lui revient plus', async (_label, partant) => {
+    const m = monde({ roles: EQUIPE, accords: accordsEquipe() });
+    await publishNowPlaying(m.deps, EMETTEUR, ECOUTE);
+    m.emissions.length = 0;
+    await m.world.prisma.user.updateMany({ where: { id: partant }, data: { role: 'USER' } });
+    await revokeTeamSharesOf(m.deps.prisma as never, { userId: partant, now: new Date(T0), nowPlaying: m.deps });
+    const rattrape = await nowPlayingSnapshotFor(m.deps, COLLEGUE);
+
+    expect(m.vers(COLLEGUE).map((e) => [e.event, e.data.userId])).toEqual([[SERVER_EVENTS.NOW_PLAYING_CLEARED, EMETTEUR]]);
+    expect(m.vers(SANG)).toEqual([]);
+    expect(rattrape.items).toEqual([]);
   });
 
   it('un consentement retiré ne sert plus rien au collègue', async () => {

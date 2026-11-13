@@ -21,6 +21,12 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { RelationRitualShare } from '@meeshy/shared/types/relation-person-settings';
 import { pairAccessAmong, type PairAccessDb } from './pairAccess';
 import { withdrawSharesTheLinkDoesNotOpen, type SharesBeyondLinkDb } from './ritualShareWithdrawal';
+import {
+  nowPlayingDirectionKey,
+  refreshNowPlayingBetween,
+  type NowPlayingReaderAccess,
+  type NowPlayingRelayDeps,
+} from '../nowPlaying/nowPlayingRelay';
 import { RITUAL_SHARE_FEATURE } from './relationConsent';
 import { ACCOUNT_STATE_SELECT, isUsableTeamAccount } from './usableAccount';
 
@@ -62,15 +68,24 @@ export async function teamMayGrantShares(
  * sans cela, la loi refusait bien aujourd'hui, mais un lien Sang créé plus tard rendait lisible
  * ce que le rituel n'avait jamais recueilli. Ce que le LIEN réel ouvre survit : les partages du
  * rituel au Sang, la catégorie d'écoute dès Proche. Un compte qui reste de l'équipe ne perd rien.
+ * Avec `nowPlaying`, l'écoute qu'un lecteur voyait par cet accord s'efface chez lui tout de suite
+ * (`now-playing:cleared`), au lieu d'y rester jusqu'à son expiration (15 min) — revue du 2026-11-13.
  * Une lecture qui échoue LÈVE : l'appelant journalise, et la loi continue de refuser.
  */
 export type TeamShareRevocationDb = SharesBeyondLinkDb & Pick<PrismaClient, 'user'>;
 
 export async function revokeTeamSharesOf(
   prisma: TeamShareRevocationDb,
-  params: { readonly userId: string; readonly now: Date },
+  params: { readonly userId: string; readonly now: Date; readonly nowPlaying?: NowPlayingRelayDeps },
 ): Promise<void> {
   const account = await prisma.user.findUnique({ where: { id: params.userId }, select: { role: true, ...ACCOUNT_STATE_SELECT } });
   if (isUsableTeamAccount(account)) return;
-  await withdrawSharesTheLinkDoesNotOpen(prisma, { userId: params.userId, at: params.now });
+  const cuts = await withdrawSharesTheLinkDoesNotOpen(prisma, { userId: params.userId, at: params.now });
+  const nowPlaying = params.nowPlaying;
+  if (!nowPlaying) return;
+  const before = new Map<string, NowPlayingReaderAccess>(cuts.map((cut) => [nowPlayingDirectionKey(cut.emitterId, cut.readerId), cut.listening]));
+  const pairs = [...new Map(cuts.map((cut) => [[cut.emitterId, cut.readerId].sort().join(':'), cut])).values()];
+  for (const cut of pairs) {
+    await refreshNowPlayingBetween(nowPlaying, { userA: cut.emitterId, userB: cut.readerId, before });
+  }
 }

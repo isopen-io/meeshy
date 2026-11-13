@@ -62,6 +62,8 @@ import { replyIdentifierTaken } from '../../services/admin/admin-identifier-take
 import { sendZodRefusal } from '../../utils/identity-name-floor';
 import { forgetTeamCircles } from '../../services/relations/relationCaches';
 import { revokeTeamSharesOf } from '../../services/relations/teamShareGrant';
+import { nowPlayingRelayDepsOf } from '../../services/nowPlaying/nowPlayingDeps';
+import { relationIoOf } from '../../socketio/relationEvents';
 
 const userConversationSortSchema = z.object({
   sortBy: z.enum(['lastMessageAt', 'createdAt']).default('lastMessageAt'),
@@ -160,7 +162,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
     notifyPasswordReset: passwordResetNotifier(emailService),
     forgetTeamCircles: (userId) => forgetTeamCircles(fastify, userId),
-    revokeTeamShares: (userId) => revokeTeamSharesOf(fastify.prisma, { userId, now: new Date() }),
+    revokeTeamShares: (userId) =>
+      revokeTeamSharesOf(fastify.prisma, { userId, now: new Date(), nowPlaying: nowPlayingRelayDepsOf({ prisma: fastify.prisma, io: relationIoOf(fastify) }) }),
   });
   const userAuditService = new UserAuditService(fastify.prisma);
   const banService = new BanService(fastify.prisma, userManagementService);

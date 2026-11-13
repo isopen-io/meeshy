@@ -88,6 +88,9 @@ export async function withdrawListeningCategoryBetween(
   ]);
 }
 
+/** Un sens dont l'accord d'écoute vient de s'éteindre : ce que le lecteur voyait avant, pour l'effacer chez lui. */
+export type ListeningCut = { readonly emitterId: string; readonly readerId: string; readonly listening: 'title' | 'category' };
+
 export type SharesBeyondLinkDb = RelationLevelDb & Pick<PrismaClient, 'relationFeatureSetting'>;
 
 const SHARE_ROW_SELECT = {
@@ -110,21 +113,25 @@ const revocationOf = (row: ShareRow, level: RelationLevel, now: Date): Record<st
  * Les partages de `userId`, dans les DEUX sens, que le LIEN réel n'ouvre pas (#16814) :
  * ceux du rituel hors Sang, la catégorie d'écoute sous Proche. Ils s'éteignent datés chez
  * chaque émetteur — c'est la fin d'un accord donné hors rituel entre collègues de l'équipe,
- * que seul l'appelant (`revokeTeamSharesOf`) sait reconnaître. Aucune ligne n'est créée.
+ * que seul l'appelant (`revokeTeamSharesOf`) sait reconnaître. Aucune ligne n'est créée. Rend
+ * les sens dont l'écoute s'est éteinte, pour que l'appelant l'efface chez le lecteur.
  */
 export async function withdrawSharesTheLinkDoesNotOpen(
   prisma: SharesBeyondLinkDb,
   params: { readonly userId: string; readonly at: Date },
-): Promise<void> {
+): Promise<readonly ListeningCut[]> {
   const rows = (await prisma.relationFeatureSetting.findMany({
     where: { OR: [{ ownerId: params.userId }, { otherId: params.userId }] },
     select: SHARE_ROW_SELECT,
   })) as unknown as readonly ShareRow[];
-  await Promise.all(
-    rows.map(async (row) => {
+  const cuts = await Promise.all(
+    rows.map(async (row): Promise<ListeningCut | null> => {
       const data = revocationOf(row, await niveauEffectif(prisma, row.ownerId, row.otherId), params.at);
-      if (Object.keys(data).length === 0) return;
+      if (Object.keys(data).length === 0) return null;
       await prisma.relationFeatureSetting.updateMany({ where: { ownerId: row.ownerId, otherId: row.otherId }, data });
+      const listening = 'listeningTitleShared' in data ? 'title' : 'listeningCategoryShared' in data ? 'category' : null;
+      return listening === null ? null : { emitterId: row.ownerId, readerId: row.otherId, listening };
     }),
   );
+  return cuts.filter((cut): cut is ListeningCut => cut !== null);
 }

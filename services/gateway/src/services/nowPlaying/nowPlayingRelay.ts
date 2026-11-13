@@ -210,7 +210,9 @@ export async function clearNowPlayingOf(deps: NowPlayingRelayDeps, emitterId: st
 export type NowPlayingPairAccess = ReadonlyMap<string, NowPlayingReaderAccess>;
 
 const directions = (userA: string, userB: string) => [[userA, userB], [userB, userA]] as const;
-const directionKey = (emitterId: string, readerId: string): string => `${emitterId}>${readerId}`;
+/** La clé d'un sens dans {@link NowPlayingPairAccess} : pour qui compose un `before` sans capture. */
+export const nowPlayingDirectionKey = (emitterId: string, readerId: string): string => `${emitterId}>${readerId}`;
+const directionKey = nowPlayingDirectionKey;
 
 /**
  * Ce que chaque sens de la paire voit MAINTENANT. À capturer AVANT une baisse, un blocage
