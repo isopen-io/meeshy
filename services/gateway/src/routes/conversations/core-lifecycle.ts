@@ -419,7 +419,7 @@ export function registerCreateConversationRoute(
       // #14490 — un tête-à-tête né `e2ee` fait passer la PAIRE en bout en bout pour la
       // porte du talkie : sa voix en clair déjà ouverte s'arrête à l'instant.
       if (type === 'direct' && regime.mode === 'e2ee') {
-        await cutTalkiesOnEndToEnd(talkieCutDepsOf(), { userIds: [userId, ...uniqueParticipantIds] })
+        await Promise.resolve().then(() => cutTalkiesOnEndToEnd(talkieCutDepsOf(), { userIds: [userId, ...uniqueParticipantIds] }))
           .catch((error: unknown) => logger.warn('end-to-end direct created but the talkie cut was not written', { conversationId: conversation.id, error: String(error) }));
       }
 

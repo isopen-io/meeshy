@@ -120,6 +120,8 @@ public enum SocketEvent: String, CaseIterable, Sendable {
     case locationLiveStopped = "location:live-stopped"
     case locationLiveUpdate = "location:live-update"
     case locationLiveUpdated = "location:live-updated"
+    case locationShareChanged = "location:share-changed"
+    case locationShareEnded = "location:share-ended"
     case mediaCaptionTranslationUpdated = "media:caption-translation-updated"
     case mentionCreated = "mention:created"
     case messageAttachmentUpdated = "message:attachment-updated"
