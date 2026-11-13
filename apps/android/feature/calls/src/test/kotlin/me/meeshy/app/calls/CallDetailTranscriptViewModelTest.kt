@@ -331,4 +331,18 @@ class CallDetailTranscriptViewModelTest {
         assertThat(dismissed).isTrue()
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
     }
+
+    /** A1.6 — un journal lu jusqu'au bout ne se relit pas quand sa bulle revient : seule une lecture interrompue reprend. */
+    @Test
+    fun `a journal read to the end is not read again when its bubble comes back`() = runTest {
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
+        val viewModel = viewModel()
+        viewModel.load(request())
+
+        viewModel.release()
+        viewModel.load(request())
+
+        coVerify(exactly = 1) { records.fullTranscript("call-1") }
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
+    }
 }
