@@ -268,6 +268,8 @@
     <string name="call_transcript_participant">Participant</string>
     <string name="call_transcript_show_original">Afficher le texte original</string>
     <string name="call_transcript_show_translated">Afficher la traduction</string>
+    <string name="call_transcript_toggle_show_original">Voir l\'original</string>
+    <string name="call_transcript_toggle_show_translation">Voir la traduction</string>
     <string name="call_unknown_peer">Inconnu</string>
     <string name="call_video_hold_blocked">Vidéo indisponible pendant la mise en attente de l\'appel</string>
     <string name="call_video_permission_denied">Caméra : accès refusé — toucher pour ouvrir les Paramètres</string>
