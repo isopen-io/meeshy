@@ -1,4 +1,4 @@
-# Une ligne ABSENTE et une lecture qui LÈVE ne s'arbitrent pas pareil
+## Une ligne ABSENTE et une lecture qui LÈVE ne s'arbitrent pas pareil
 
 *Cycle 154 (2026-11-13), #17140 — `services/gateway/src/services/historyFloor.ts`.*
 
@@ -30,7 +30,7 @@ C'est la forme du cycle 127 (« un verdict de garde a TROIS états : `live`,
 là-bas une ligne absente valait `unknown` parce que c'est une LIVRAISON qui
 était en jeu ; ici elle vaut refus parce que c'est un SECRET.
 
-## Deux corollaires, mesurés dans le même lot
+### Deux corollaires, mesurés dans le même lot
 
 **1. Un fail-OPEN qui ne se produit jamais par accident a des FABRIQUES, et
 elles se cherchent.** Le doc-comment donnait le cas pour résiduel (« supprimé

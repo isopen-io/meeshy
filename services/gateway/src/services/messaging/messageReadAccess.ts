@@ -29,10 +29,17 @@
  * conversation (#9899) : tout ce qui précède le verdict ne dépend que du
  * lecteur, donc se lit une fois ; seul le verdict se rejoue par message.
  *
- * Un lien de partage INTROUVABLE ne ferme ni ne borne : c'est la posture du
- * fil (`shareLinkReadGate.ts`, `historyFloor.ts`), et #3734 retire l'invité
- * d'un lien retiré par un autre chemin. Diverger ici refuserait un transfert à
- * quelqu'un à qui le fil sert le message.
+ * Un lien de partage INTROUVABLE ne FERME pas — c'est la posture du fil
+ * (`shareLinkReadGate.ts`), et #3734 retire l'invité d'un lien retiré par un
+ * autre chemin. Diverger ici refuserait un transfert à quelqu'un à qui le fil
+ * sert le message.
+ *
+ * **Il BORNE, en revanche, depuis #17140**, et cette unité n'a rien à y faire :
+ * elle appelle `loadHistoryFloor`, donc elle hérite du plancher. La phrase
+ * d'avant disait « ne ferme ni ne borne » et nommait `historyFloor.ts` — vraie
+ * à sa date, fausse depuis, et elle aurait fait recroire une posture renversée.
+ * FERMER (403) et BORNER (une lecture rétrécie) sont deux questions, tenues
+ * par deux modules.
  *
  * Le masquage personnel n'a PAS de posture par défaut. Pour le favori c'est
  * une courtoisie, et illisible elle sert (décision #7377). Pour un envoi qui

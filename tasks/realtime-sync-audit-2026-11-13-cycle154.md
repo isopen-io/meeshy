@@ -104,19 +104,23 @@ commentaire qui exige l'alignement était au-dessus.
 > commentaire jurait de l'avoir.
 
 **Un seul correctif couvre 26 fichiers de production** — ceux qui APPELLENT un
-résolveur de plancher, commentaires exclus, mesurés sur l'arbre fusionné : fil,
+résolveur de plancher, commentaires exclus, mesurés sur l'arbre fusionné (39
+l'importent) : fil,
 `/sync`, recherche globale, favoris, épinglés, fils de discussion, accusés,
 pièces jointes, aperçu poussé, statistiques, mentions, tableau de bord. C'est
 ce que vaut la source unique.
 
-> **Ce compte a d'abord été publié à 35, et il était faux dans ce journal même**
-> — le relevé comptait les fichiers qui MENTIONNENT `historyFloor`, doc-comments
-> compris (`participantRights.ts` en est un : il la cite, il ne l'appelle pas).
-> 56 fichiers la mentionnent, 36 l'importent, **26 l'appellent**, et seul le
-> dernier chiffre soutient la phrase « un seul correctif les couvre ». Règle du
-> cycle 93, appliquée à soi-même deux heures après l'avoir citée : **un compte
-> est une AFFIRMATION, il se compte avec le prédicat exact de la phrase qu'il
-> sert.**
+> **Ce compte a été publié faux DEUX fois dans ce journal même.** D'abord à 35
+> — le relevé comptait les fichiers qui MENTIONNENT `historyFloor`,
+> doc-comments compris (`participantRights.ts` en est un : il la cite, il ne
+> l'appelle pas). Puis « 36 l'importent », que l'audit adversarial a remesuré à
+> **39** : le motif de grep ne couvrait ni le suffixe `.js` ni toutes les formes
+> de chemin. Les chiffres justes, mesurés avec le prédicat de la phrase :
+> **39 importent, 26 appellent**, et seul le second soutient « un seul correctif
+> les couvre ». Règle du cycle 93, appliquée à soi-même deux fois dans le même
+> document : **un compte est une AFFIRMATION, il se compte avec le prédicat
+> exact de la phrase qu'il sert, et une correction de compte se mesure comme le
+> compte qu'elle corrige.**
 
 ## Ce que le lot a trouvé en se faisant relire par ses propres témoins
 
@@ -205,6 +209,89 @@ message cachait donc sa cause. L'échec de spawn est désormais nommé.
 > **Un message d'échec qui cache sa cause coûte plus cher que pas de message** :
 > il envoie chercher dans le code au lieu de l'environnement. Celui-ci a coûté
 > une mesure sur arbre propre pour être écarté.
+
+## Ce que l'audit adversarial a rendu — BLOQUANT, et il avait raison
+
+Il a rendu **BLOQUANT**, sur un défaut que le lot ne voyait pas et qui est plus
+large que celui qu'il ferme. Tout est corrigé DANS ce lot, sauf deux constats
+ouverts en issues.
+
+### C1 — partager le PRÉDICAT sans partager l'OPÉRANDE
+
+Le lot faisait appeler `linkGrantsHistory` aux deux sites, et les deux lui
+passaient **un champ différent** :
+
+| site | l'id qu'il lit |
+|---|---|
+| `historyFloorFor` | la COLONNE `Participant.shareLinkId` |
+| la fiche de participant | la COPIE `anonymousSession.shareLinkId` |
+
+**Les deux champs coexistent en base, et le dépôt a déjà la loi qui les
+réunit** : `guestShareLinkId()` (`shareLinkReadGate.ts`) — la colonne d'abord,
+la copie en repli. Ni l'un ni l'autre ne l'appelait.
+
+Ce que ça coûtait, et ce n'est pas une hypothèse :
+
+- `scripts/migrations/migrate-to-participant-model.ts` n'écrit **QUE la copie
+  embarquée** — aucune colonne ;
+- `ExpiredShareLinksCleanupService.shareLinkIdsHeldByActiveGuests` **PAGINE**
+  exactement cette forme (`OR: [{ shareLinkId: null }, { shareLinkId: { isSet:
+  false } }]`), donc la production l'attend ;
+- et le fixture de mon propre témoin de fiche (`anonymousRow`) a cette forme.
+
+Pour une telle ligne, `settleBeforeLink` se réglait au rang « aucun lien
+emprunté » ⇒ **AUCUN plancher, même quand le lien EXISTE et ferme
+l'historique**. Avant le lot, les deux sites rendaient `true` sur tout `null` et
+s'accordaient donc **par accident** ; le lot les aurait fait diverger sur la
+seule forme qu'une ligne migrée porte — un hôte lisant « ce visiteur ne voit pas
+l'historique » pendant que le fil le lui sert en entier.
+
+> **Deux sites qui appellent la même fonction sur deux champs différents
+> n'appliquent pas la même règle.** Une source unique se mesure sur son
+> opérande autant que sur son corps — et c'est l'audit, pas le lot, qui l'a vu,
+> parce que le lot regardait la fonction qu'il venait d'extraire.
+
+Corrigé : les deux sites passent par `guestShareLinkId`, et
+`HISTORY_FLOOR_PARTICIPANT_SELECT` demande `anonymousSession.shareLinkId`
+(coût : zéro requête, `AnonymousSession` étant un type COMPOSITE, déjà dans le
+document lu). Sept témoins, deux mutations attrapées.
+
+### C2 — un témoin dont l'intitulé affirmait plus que son corps
+
+En rabotant `messages-routes.test.ts` pour le cliquet de taille, j'ai retiré
+l'assertion `expect(reply.status).not.toHaveBeenCalledWith(403)` **en gardant
+l'intitulé qui la promet** (« et toujours pas de 403 ») et le commentaire qui
+dit « sa SECONDE moitié est inchangée ». Le journal et la leçon le répétaient.
+
+> **Un cliquet de taille justifie de raboter une PROSE, jamais une ASSERTION.**
+> L'assertion est restaurée ; le budget se règle sur le commentaire.
+
+### C3 — la jumelle d'affirmation périmée que le lot avait manquée
+
+Le lot se félicitait d'avoir relevé la copie périmée chez `resolveEntryRights`.
+Il en restait deux, dont une qui PRESCRIT : `messageReadAccess.ts` affirmait
+« un lien INTROUVABLE **ne ferme ni ne borne** : c'est la posture du fil
+(`shareLinkReadGate.ts`, **`historyFloor.ts`**) ». Faux depuis ce lot, et le
+code au-dessous est juste — c'est le commentaire qui ferait recroire. Les deux
+sont corrigées, et elles séparent désormais ce que ce lot a appris : **FERMER
+(403) et BORNER (une lecture rétrécie) sont deux questions, tenues par deux
+modules.**
+
+### Ce que l'audit a CONFIRMÉ
+
+« Ne retire rien à une participation moderne » (vérifié ligne à ligne, rejoin
+compris, rattrapages et migration World Wide inclus) ; les deux fabriques ;
+aucun site ne réimplémente la descente ; les témoins TOMBENT (mutation « retour
+au `?? true` » ⇒ **10 rouges sur 4 suites**) ; zone d'impact verte.
+
+### Ce qu'il laisse en issues
+
+- **#18057** — figer `permissions.canViewHistory` AVANT de supprimer la ligne du
+  lien, dans les deux fabriques : la cause plutôt que le symptôme. Sans cela, un
+  inscrit legacy à qui un lien ouvrait l'historique le perd à l'expiration de ce
+  lien, définitivement et sans recours automatique.
+- **#18058** — les RÉACTIONS d'un message ne sont pas planchéisées, et le 404
+  d'accusé sous le plancher.
 
 ## Ce que ce cycle laisse ouvert
 

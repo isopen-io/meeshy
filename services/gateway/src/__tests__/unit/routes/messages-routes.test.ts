@@ -3451,8 +3451,10 @@ describe('GET /conversations/:id/messages — deep branch coverage pass 2', () =
     prisma.conversationShareLink.findFirst.mockResolvedValue(null);
     prisma.message.findMany.mockResolvedValue([]);
     prisma.message.count.mockResolvedValue(0);
-    await getMessagesHandler()(makeRequest(), makeReply());
+    const reply = makeReply();
+    await getMessagesHandler()(makeRequest(), reply);
     expect(prisma.message.findMany.mock.calls[0][0].where.createdAt).toEqual({ gte: joinedAt });
+    expect(reply.status).not.toHaveBeenCalledWith(403);
   });
 
   it('around mode with historyStartDate: applies gte to beforeFilter (line 575 true)', async () => {

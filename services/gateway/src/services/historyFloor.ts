@@ -51,6 +51,7 @@ import { hasMinimumMemberRole } from '@meeshy/shared/types/role-types';
 import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
 import { logger } from '../utils/logger';
 import type { ParticipantRightsOverride } from './participantRights';
+import { guestShareLinkId } from './shareLinkReadGate';
 
 /**
  * Ce qu'il faut d'une ligne `Participant` pour répondre à la question. Tout est
@@ -64,7 +65,25 @@ export type HistoryFloorJoin = {
   /** Octroi par DATE d'un administrateur — voir `Participant.historyVisibleFrom`. */
   readonly historyVisibleFrom?: Date | null;
   readonly permissions?: ParticipantRightsOverride | null;
-  readonly anonymousSession?: { readonly rights?: ParticipantRightsOverride | null } | null;
+  /**
+   * La session embarquée d'un invité. Elle porte DEUX choses pour cette
+   * question : le droit figé (`rights`) et — depuis #17140 — la COPIE de l'id
+   * du lien emprunté.
+   *
+   * **Les deux champs d'id coexistent en base**, et le dépôt en a déjà la loi :
+   * `guestShareLinkId()` (`shareLinkReadGate.ts`) = la colonne d'abord, la
+   * copie embarquée en repli. Ce module ne lisait que la COLONNE, si bien
+   * qu'une ligne migrée (`scripts/migrations/migrate-to-participant-model.ts`,
+   * qui n'écrit QUE la copie) se réglait au rang « aucun lien » ⇒ **aucun
+   * plancher, même quand le lien EXISTE et ferme l'historique**. Que cette
+   * forme vive en production n'est pas une hypothèse :
+   * `ExpiredShareLinksCleanupService.shareLinkIdsHeldByActiveGuests` la PAGINE
+   * (`OR: [{ shareLinkId: null }, { shareLinkId: { isSet: false } }]`).
+   */
+  readonly anonymousSession?: {
+    readonly rights?: ParticipantRightsOverride | null;
+    readonly shareLinkId?: string | null;
+  } | null;
   /**
    * Le rôle PLATEFORME du compte (`User.role`) — distinct de `role`, le rang
    * DANS cette conversation. Décisions porteur (2026-08-27, #3892 ; 2026-10-24,
@@ -90,8 +109,11 @@ export type ShareLinkHistoryGrant = { readonly allowViewHistory: boolean } | nul
  * copie : c'est la projection trop étroite, pas l'appel manquant, qui rend une
  * règle inapplicable en aval sans qu'aucun témoin ne rougisse.
  *
- * `anonymousSession` est réduit à `rights` : le reste de la session (hash du
- * jeton, IP, empreinte) n'entre pas dans la question. `user` est réduit à
+ * `anonymousSession` est réduit à `rights` + `shareLinkId` (#17140) : le reste
+ * de la session (hash du jeton, IP, empreinte) n'entre pas dans la question.
+ * L'id embarqué y entre parce que la colonne peut être absente — cf.
+ * `HistoryFloorJoin.anonymousSession`. Zéro requête de plus : `AnonymousSession`
+ * est un type COMPOSITE, donc déjà dans le document lu. `user` est réduit à
  * `role` — le rôle PLATEFORME, pour le bypass privilégié (#3892, #11217) ; `null`
  * pour un participant sans compte, jamais chargé pour rien d'autre.
  */
@@ -101,7 +123,7 @@ export const HISTORY_FLOOR_PARTICIPANT_SELECT = {
   shareLinkId: true,
   historyVisibleFrom: true,
   permissions: true,
-  anonymousSession: { select: { rights: true } },
+  anonymousSession: { select: { rights: true, shareLinkId: true } },
   user: { select: { role: true } },
 } as const;
 
@@ -128,7 +150,7 @@ function settleBeforeLink(join: HistoryFloorJoin): FloorVerdict {
   const granted = join.anonymousSession?.rights?.canViewHistory ?? join.permissions?.canViewHistory;
   if (typeof granted === 'boolean') return { kind: 'settled', floor: granted ? null : join.joinedAt };
 
-  if (!join.shareLinkId) return { kind: 'settled', floor: null };
+  if (!guestShareLinkId(join)) return { kind: 'settled', floor: null };
   return { kind: 'link-decides' };
 }
 
@@ -169,6 +191,15 @@ function settleBeforeLink(join: HistoryFloorJoin): FloorVerdict {
  * Ce qu'un `shareLinkId` orphelin PROUVE est exactement ceci : la participation
  * DÉCLARE être entrée par un lien, et on ne sait plus rien de ce que ce lien
  * accordait. Une porte de confidentialité échoue en montrant MOINS.
+ *
+ * **L'id se prend par `guestShareLinkId()`, jamais par une colonne seule.**
+ * L'audit adversarial de ce lot a trouvé là le défaut le plus large : partager
+ * le PRÉDICAT sans partager l'OPÉRANDE. Ce module lisait `Participant.shareLinkId`
+ * quand la fiche de participant lisait `anonymousSession.shareLinkId` — avant
+ * le lot les deux rendaient `true` sur tout `null`, donc ils s'accordaient par
+ * ACCIDENT ; le lot les aurait fait diverger sur la seule forme qu'une ligne
+ * migrée porte. Deux sites qui appellent la même fonction sur deux champs
+ * différents n'appliquent pas la même règle.
  */
 export function linkGrantsHistory(
   shareLinkId: string | null | undefined,
@@ -187,7 +218,7 @@ export function linkGrantsHistory(
 export function historyFloorFor(join: HistoryFloorJoin, link: ShareLinkHistoryGrant): Date | null {
   const verdict = settleBeforeLink(join);
   if (verdict.kind === 'settled') return verdict.floor;
-  return linkGrantsHistory(join.shareLinkId, link) ? null : join.joinedAt;
+  return linkGrantsHistory(guestShareLinkId(join), link) ? null : join.joinedAt;
 }
 
 /**
@@ -205,9 +236,10 @@ export async function loadHistoryFloor(
   const verdict = settleBeforeLink(join);
   if (verdict.kind === 'settled') return verdict.floor;
 
-  const known = options.link && options.link.id === join.shareLinkId ? options.link : null;
+  const linkId = guestShareLinkId(join) as string;
+  const known = options.link && options.link.id === linkId ? options.link : null;
   const link = known ?? await prisma.conversationShareLink.findUnique({
-    where: { id: join.shareLinkId as string },
+    where: { id: linkId },
     select: { allowViewHistory: true },
   });
   return historyFloorFor(join, link);
@@ -235,7 +267,7 @@ function linkIdsDeciding(
   verdicts: readonly FloorVerdict[],
 ): readonly string[] {
   return [...new Set(
-    joins.flatMap((join, index) => (verdicts[index].kind === 'link-decides' ? [join.shareLinkId as string] : [])),
+    joins.flatMap((join, index) => (verdicts[index].kind === 'link-decides' ? [guestShareLinkId(join) as string] : [])),
   )];
 }
 
@@ -259,7 +291,7 @@ function alignFloors(
   return joins.map((join, index) => {
     const verdict = verdicts[index];
     if (verdict.kind === 'settled') return verdict.floor;
-    return historyFloorFor(join, byId.get(join.shareLinkId as string) ?? null);
+    return historyFloorFor(join, byId.get(guestShareLinkId(join) as string) ?? null);
   });
 }
 

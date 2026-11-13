@@ -292,6 +292,66 @@ describe('historyFloorFor — (iv) le lien de partage, quand rien n’est figé'
  * APPLIQUE. Elle le retapait (`shareLink?.allowViewHistory ?? true`), et le
  * retapage confondait les deux raisons d'avoir `null` en face.
  */
+/**
+ * #17140 (audit adversarial) — **le prédicat partagé ne suffit pas : l'OPÉRANDE
+ * doit l'être aussi.**
+ *
+ * `Participant.shareLinkId` et `anonymousSession.shareLinkId` coexistent en
+ * base — la migration vers le modèle Participant n'écrit QUE la seconde, et
+ * `ExpiredShareLinksCleanupService.shareLinkIdsHeldByActiveGuests` PAGINE les
+ * lignes qui n'ont que celle-là. Ce module ne lisait que la colonne : une ligne
+ * migrée se réglait au rang « aucun lien emprunté » ⇒ AUCUN plancher, même
+ * quand le lien EXISTE et ferme l'historique. La loi est `guestShareLinkId()`.
+ */
+describe('historyFloorFor — l’id du lien se prend sur les DEUX champs (#17140)', () => {
+  const migre = (over: Partial<HistoryFloorParticipation> = {}): HistoryFloorParticipation => ({
+    conversationId: 'c1',
+    joinedAt: JOINED,
+    shareLinkId: null,
+    anonymousSession: { shareLinkId: 'sl-1' },
+    ...over,
+  });
+
+  it('BORNE une ligne migrée dont le lien ferme l’historique — la colonne est absente, pas le lien', () => {
+    expect(historyFloorFor(migre(), { allowViewHistory: false })).toEqual(JOINED);
+  });
+
+  it('n’ouvre rien de plus quand ce lien-là est INTROUVABLE', () => {
+    expect(historyFloorFor(migre(), null)).toEqual(JOINED);
+  });
+
+  it('et ouvre quand ce lien-là accorde', () => {
+    expect(historyFloorFor(migre(), { allowViewHistory: true })).toBeNull();
+  });
+
+  it('la COLONNE prime sur la copie embarquée — même précédence que `guestShareLinkId`', async () => {
+    const prisma = prismaWith([{ id: 'sl-colonne', allowViewHistory: false }]);
+    const floor = await loadHistoryFloor(prisma, {
+      joinedAt: JOINED,
+      shareLinkId: 'sl-colonne',
+      anonymousSession: { shareLinkId: 'sl-embarque' },
+    });
+    expect(floor).toEqual(JOINED);
+    expect((prisma as any).conversationShareLink.findUnique.mock.calls[0][0].where.id).toBe('sl-colonne');
+  });
+
+  it('le chargeur ALIGNÉ interroge l’id embarqué quand la colonne manque', async () => {
+    const prisma = prismaWith([{ id: 'sl-1', allowViewHistory: false }]);
+    expect(await loadHistoryFloorsFor(prisma, [migre()])).toEqual([JOINED]);
+    expect((prisma as any).conversationShareLink.findMany.mock.calls[0][0].where).toEqual({ id: { in: ['sl-1'] } });
+  });
+
+  it('et la PROJECTION demande les deux — une loi qu’aucun `select` ne ramène n’est appliquée nulle part', () => {
+    expect(HISTORY_FLOOR_PARTICIPANT_SELECT.anonymousSession).toEqual({
+      select: { rights: true, shareLinkId: true },
+    });
+  });
+
+  it('une ligne SANS aucun des deux reste au rang legacy — rien ne borne', () => {
+    expect(historyFloorFor(migre({ anonymousSession: { shareLinkId: null } }), null)).toBeNull();
+  });
+});
+
 describe('linkGrantsHistory — « aucun lien » et « lien disparu » ne sont pas la même réponse', () => {
   it('accorde quand la participation n’a emprunté AUCUN lien — rien ne borne qui n’est entré par rien', () => {
     expect(linkGrantsHistory(null, null)).toBe(true);

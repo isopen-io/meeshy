@@ -19,6 +19,7 @@ import {
   resolveEntryRights,
 } from '../../services/participantRights';
 import { linkGrantsHistory } from '../../services/historyFloor';
+import { guestShareLinkId } from '../../services/shareLinkReadGate';
 import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -497,9 +498,14 @@ export function registerParticipantReadRoutes(
       const profile = participant.anonymousSession?.profile;
       const isAnonymous = participant.type === 'anonymous';
 
-      const shareLink = participant.anonymousSession?.shareLinkId
+      // #17140 — l'id du lien se prend par `guestShareLinkId` : la COLONNE
+      // d'abord, la copie embarquée en repli. Lire la seule copie embarquée
+      // faisait sauter la lecture du lien pour toute ligne qui ne porte que la
+      // colonne, et divergeait du plancher, qui lisait la seule colonne.
+      const guestLinkId = guestShareLinkId(participant);
+      const shareLink = guestLinkId
         ? await prisma.conversationShareLink.findUnique({
-            where: { id: participant.anonymousSession.shareLinkId },
+            where: { id: guestLinkId },
             select: {
               name: true,
               isActive: true,
@@ -550,7 +556,7 @@ export function registerParticipantReadRoutes(
             resolveEntryRights(
               participant,
               null,
-              linkGrantsHistory(participant.anonymousSession?.shareLinkId, shareLink),
+              linkGrantsHistory(guestLinkId, shareLink),
             ),
             viewerHostsTheRoom,
           )
