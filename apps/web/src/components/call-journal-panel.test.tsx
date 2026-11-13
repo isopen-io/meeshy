@@ -248,9 +248,9 @@ describe('CallJournalPanel', () => {
     view.done();
   });
 
-  test('loi 7 — rien de traduit, pas de bascule : il n’y a qu’une version à lire', () => {
+  test('loi 7 — la bascule Traduit · Original est toujours à droite de la tête, même quand rien n’est traduit (W1.9)', () => {
     const view = mount([caption({ id: 'raw', original: 'Same', translated: null, pair: null })]);
-    expect(view.find('[data-call-journal-view]')).toBeNull();
+    expect(view.find('[data-call-journal-view]')).not.toBeNull();
     view.done();
   });
 

@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
@@ -51,9 +52,14 @@ import org.robolectric.annotation.Config
  * pressée, ni « Quitter » ni « Valider ». (+) ouvre Effets sur un genre absent de la pile, trois couches au plus ; son appui
  * long liste les effets appliqués pour en annuler un, et annuler referme la liste. Retirer la couche « cadre » retire aussi
  * le cadre gardé en direct, par le chemin de « Cadre ».
+ *
+ * Le Montage est posé dans un écran de téléphone réel (360 × 800 dp), comme les autres témoins de l'appel : dans la fenêtre
+ * Robolectric par défaut (320 × 470 dp), un cadre choisi ajoute l'option « Cadre » au-dessus des ambiances et la barre
+ * peut sortir de la zone touchable — l'appui long sur (+) s'y perd alors sans bruit. (+) doit donc être AFFICHÉ avant
+ * d'être pressé.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(sdk = [34], qualifiers = "w360dp-h800dp")
 class CallMontageEffectsBarTest {
     @get:Rule val rule = createComposeRule()
 
@@ -287,8 +293,9 @@ class CallMontageEffectsBarTest {
         val outcome = Outcome().apply { layers  = stack(CallEffectLayer(CallEffectKind.Frame, chosen!!)) }
         show(outcome, controller, capture)
 
-        rule.onNodeWithContentDescription("Add another look").performTouchInput { longClick() }
+        rule.onNodeWithContentDescription("Add another look").assertIsDisplayed().performTouchInput { longClick() }
         rule.waitForIdle()
+        rule.onNodeWithText("Applied effects").assertExists()
         rule.onNode(hasContentDescription("Cancel Frame · ", substring = true)).performClick()
         rule.waitForIdle()
 

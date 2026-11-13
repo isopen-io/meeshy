@@ -13,11 +13,14 @@ import androidx.compose.ui.test.performTouchInput
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallFaceEffect
 import me.meeshy.sdk.model.call.VideoFilterConfig
+import me.meeshy.sdk.model.call.VideoFilterPreset
 import me.meeshy.sdk.model.call.effects.CallEffectKind
 import me.meeshy.sdk.model.call.effects.CallEffectLayer
 import me.meeshy.sdk.model.call.effects.CallEffectLayers
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
+import me.meeshy.sdk.model.call.effects.CallEffectsModeRule
 import me.meeshy.sdk.model.call.effects.CallEffectsModeState
+import me.meeshy.sdk.model.call.selectingFaceEffect
 import me.meeshy.sdk.model.call.effects.category
 import me.meeshy.sdk.model.call.effects.kind
 import me.meeshy.ui.theme.MeeshyTheme
@@ -59,8 +62,12 @@ class CallEffectsSettingsBarTest {
         }
     }
 
+    /**
+     * Trois couches RÉELLEMENT appliquées : la pile suit la configuration (`CallEffectsStackRule`, comme iOS), donc le
+     * filtre et l'effet de visage vivent dans la configuration, pas seulement dans la pile donnée à l'ouverture.
+     */
     private fun full() = CallEffectsModeState.opening(
-        VideoFilterConfig(),
+        CallEffectsModeRule.applying(VideoFilterPreset.Golden, VideoFilterConfig().selectingFaceEffect(CallFaceEffect.Toad)),
         CallEffectLayers.of(
             listOf(
                 CallEffectLayer(CallEffectKind.Frame, "frame-1"),
@@ -142,6 +149,7 @@ class CallEffectsSettingsBarTest {
     @Test
     fun `avec trois couches (+) n'ajoute plus, le dit a son etiquette et garde son appui long (#16979)`() {
         var last = full()
+        assertThat(last.layers.isFull).isTrue()
         host(last) { last = it }
 
         rule.onNodeWithContentDescription("Add another look").assertDoesNotExist()
@@ -159,6 +167,7 @@ class CallEffectsSettingsBarTest {
     fun `la liste va de la couche du dessus a celle du dessous, annuler en retire une seule`() {
         val removed = mutableListOf<CallEffectKind>()
         val layers = full().layers
+        assertThat(layers.listed.map { it.kind }).containsExactly(CallEffectKind.Face, CallEffectKind.Color, CallEffectKind.Frame).inOrder()
         rule.setContent { MeeshyTheme { EffectsAppliedPanel(layers) { removed += it } } }
 
         rule.onNodeWithText("Applied effects").assertExists()
