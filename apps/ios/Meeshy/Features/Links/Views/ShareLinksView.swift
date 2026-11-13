@@ -31,6 +31,12 @@ struct ShareLinksView: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: MeeshySpacing.xl) {
+                        Text(String(localized: "share.links.intro", defaultValue: "Un lien invite dans une conversation : vous fixez ce que les invités peuvent faire et jusqu’à quand.", bundle: .main))
+                            .font(.footnote)
+                            .foregroundStyle(theme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, MeeshySpacing.lg)
                         if let stats = viewModel.stats {
                             shareLinkStatsOverview(stats)
                                 .padding(.horizontal, MeeshySpacing.lg)
@@ -169,7 +175,7 @@ struct ShareLinksView: View {
         EmptyStateView(
             icon: "link.badge.plus",
             title: String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main),
-            subtitle: String(localized: "share.links.empty.subtitle", defaultValue: "Créez un lien pour inviter des personnes dans une conversation", bundle: .main),
+            subtitle: "",
             accentColor: MeeshyColors.shareAccentHex,
             compact: true
         )
@@ -182,11 +188,15 @@ struct ShareLinksView: View {
         String(localized: "share.links.joined_count", defaultValue: "\(count) rejoints", bundle: .main)
     }
 
+    private func createdOnLabel(_ link: MyShareLink) -> String {
+        String(format: String(localized: "share.links.createdOn", defaultValue: "Créé le %@", bundle: .main), ShareLinkDateFormat.day(link.createdAt))
+    }
+
     private func rowAccessibilityLabel(_ link: MyShareLink) -> String {
         let status = link.isActive
             ? String(localized: "share.links.status.active", defaultValue: "Actif", bundle: .main)
             : String(localized: "share.links.status.inactive", defaultValue: "Inactif", bundle: .main)
-        var parts = [link.displayName, status, joinedCountLabel(link.currentUses)]
+        var parts = [link.displayName, status, createdOnLabel(link), joinedCountLabel(link.currentUses)]
         if let conv = link.conversationTitle { parts.append(conv) }
         if let expiry = ShareLinkDetailCopy.rowExpiry(link.expiresAt) { parts.append(expiry) }
         return parts.joined(separator: ", ")
@@ -223,6 +233,10 @@ struct ShareLinksView: View {
                             .lineLimit(1)
                     }
                 }
+                Text(createdOnLabel(link))
+                    .font(.caption)
+                    .foregroundStyle(theme.textMuted)
+                    .lineLimit(1)
                 if let expiry = ShareLinkDetailCopy.rowExpiry(link.expiresAt) {
                     Text(expiry)
                         .font(.caption)

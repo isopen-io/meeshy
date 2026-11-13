@@ -42,7 +42,7 @@ struct ConversationVoiceConsentAlert: ViewModifier {
             }
         } message: {
             Text(String(localized: "conversation.voiceConsent.message",
-                        defaultValue: "Autorisez la définition de votre profil vocal pour que vos messages vocaux soient transcrits et traduits automatiquement dans la langue de chaque destinataire — y compris avec votre voix.",
+                        defaultValue: "Autorisez votre profil vocal : vos vocaux seront traduits avec votre voix.",
                         bundle: .main))
         }
     }

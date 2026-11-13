@@ -31368,43 +31368,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بلغ حسابك الحد الأقصى من الأجهزة المشفّرة: أزل جهازًا للكتابة من هذا الجهاز."
+            "value": "عدد كبير من الأجهزة المشفّرة: أزل جهازًا للكتابة من هنا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Konto hat die maximale Anzahl verschlüsselter Geräte erreicht: Entferne eines, um von diesem Gerät zu schreiben."
+            "value": "Zu viele verschlüsselte Geräte: Entferne eines, um von hier zu schreiben."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your account has reached the maximum number of encrypted devices: remove one to write from this device."
+            "value": "Too many encrypted devices: remove one to write from here."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu cuenta alcanzó el número máximo de dispositivos cifrados: elimina uno para escribir desde este."
+            "value": "Demasiados dispositivos cifrados: retira uno para escribir desde aquí."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre compte a atteint le nombre maximal d’appareils chiffrés : retirez-en un pour écrire depuis celui-ci."
+            "value": "Trop d’appareils chiffrés : retirez-en un pour écrire d’ici."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo account ha raggiunto il numero massimo di dispositivi crittografati: rimuovine uno per scrivere da questo."
+            "value": "Troppi dispositivi crittografati: rimuovine uno per scrivere da qui."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sua conta atingiu o número máximo de dispositivos criptografados: remova um para escrever deste."
+            "value": "Aparelhos criptografados demais: remova um para escrever daqui."
           }
         }
       }
@@ -31415,43 +31415,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يجب على جهة الاتصال تحديث Meeshy لتلقي الرسائل المشفّرة: لم تُرسل الرسالة."
+            "value": "يجب على مراسلك تحديث Meeshy: الرسالة لم تُرسل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Kontakt muss Meeshy aktualisieren, um verschlüsselte Nachrichten zu empfangen: Die Nachricht wurde nicht gesendet."
+            "value": "Dein Gegenüber muss Meeshy aktualisieren: Nachricht nicht gesendet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your contact needs to update Meeshy to receive encrypted messages: the message wasn’t sent."
+            "value": "Your contact needs to update Meeshy: message not sent."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu contacto debe actualizar Meeshy para recibir mensajes cifrados: el mensaje no se envió."
+            "value": "Tu contacto debe actualizar Meeshy: mensaje no enviado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre correspondant doit mettre à jour Meeshy pour recevoir des messages chiffrés : le message n’est pas parti."
+            "value": "Votre correspondant doit mettre Meeshy à jour : message non parti."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo contatto deve aggiornare Meeshy per ricevere messaggi crittografati: il messaggio non è stato inviato."
+            "value": "Il tuo interlocutore deve aggiornare Meeshy: messaggio non inviato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu contato precisa atualizar o Meeshy para receber mensagens criptografadas: a mensagem não foi enviada."
+            "value": "Seu contato precisa atualizar o Meeshy: mensagem não enviada."
           }
         }
       }
@@ -106687,43 +106687,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يُوقَف التشفير التام بين الطرفين أبدًا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم."
+            "value": "لا يُوقَف التشفير التام بين الطرفين أبدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen."
+            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encryption can never be turned off. You can always open another conversation, without end-to-end encryption, with the same people."
+            "value": "End-to-end encryption can never be turned off."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El cifrado de extremo a extremo nunca se desactiva. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas."
+            "value": "El cifrado de extremo a extremo nunca se desactiva."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes."
+            "value": "Le chiffrement de bout en bout ne se désactive jamais."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La crittografia end-to-end non si disattiva mai. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone."
+            "value": "La crittografia end-to-end non si disattiva mai."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A criptografia de ponta a ponta nunca é desativada. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas."
+            "value": "A criptografia de ponta a ponta nunca é desativada."
           }
         }
       }
@@ -107909,43 +107909,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محادثة أُنشئت قبل التشفير المنهجي: رسائلها غير مشفّرة."
+            "value": "أُنشئت قبل التشفير المنهجي."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unterhaltung vor der systematischen Verschlüsselung erstellt: Ihre Nachrichten sind nicht verschlüsselt."
+            "value": "Vor der systematischen Verschlüsselung erstellt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation created before systematic encryption: its messages are not encrypted."
+            "value": "Created before encryption became universal."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversación creada antes del cifrado sistemático: sus mensajes no están cifrados."
+            "value": "Creada antes del cifrado sistemático."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés."
+            "value": "Créée avant le chiffrement systématique."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversazione creata prima della crittografia sistematica: i suoi messaggi non sono crittografati."
+            "value": "Creata prima della crittografia sistematica."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversa criada antes da criptografia sistemática: suas mensagens não são criptografadas."
+            "value": "Criada antes da criptografia sistemática."
           }
         }
       }
@@ -108426,43 +108426,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أجهزتك وأجهزة المشاركين وحدها تقرأ الرسائل. تتم الترجمة على جهازك."
+            "value": "تقرأ أجهزة المشاركين فقط؛ الترجمة على الجهاز."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur deine Geräte und die der Teilnehmenden lesen die Nachrichten. Die Übersetzung erfolgt auf deinem Gerät."
+            "value": "Nur die Geräte der Teilnehmer lesen mit; Übersetzung auf dem Gerät."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only your devices and those of the participants read the messages. Translation happens on your device."
+            "value": "Only participants’ devices read; translation on the device."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo tus dispositivos y los de los participantes leen los mensajes. La traducción se hace en tu dispositivo."
+            "value": "Solo leen los dispositivos de los participantes; traducción en el dispositivo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seuls vos appareils et ceux des participants lisent les messages. La traduction se fait sur votre appareil."
+            "value": "Seuls les appareils des participants lisent ; traduction sur l’appareil."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo i tuoi dispositivi e quelli dei partecipanti leggono i messaggi. La traduzione avviene sul tuo dispositivo."
+            "value": "Leggono solo i dispositivi dei partecipanti; traduzione sul dispositivo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Só os seus aparelhos e os dos participantes leem as mensagens. A tradução acontece no seu aparelho."
+            "value": "Só os aparelhos dos participantes leem; tradução no aparelho."
           }
         }
       }
@@ -108520,43 +108520,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّر على خوادمنا؛ وبين الأجهزة المتوافقة، تتيح طبقة ثانية التحقق من أن الرسالة النصية لم تُعدَّل في الطريق."
+            "value": "مشفّر على خوادمنا؛ تُتحقَّق السلامة بين الأجهزة المتوافقة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf unseren Servern verschlüsselt; zwischen kompatiblen Geräten lässt sich mit einer zweiten Schicht prüfen, dass eine Textnachricht unterwegs nicht verändert wurde."
+            "value": "Auf unseren Servern verschlüsselt; Integrität zwischen kompatiblen Geräten geprüft."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted on our servers; between compatible devices, a second layer lets you check that a text message was not altered on the way."
+            "value": "Encrypted on our servers; integrity checked between compatible devices."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrado en nuestros servidores; entre dispositivos compatibles, una segunda capa permite comprobar que un mensaje de texto no se modificó por el camino."
+            "value": "Cifrado en nuestros servidores; integridad verificada entre dispositivos compatibles."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin."
+            "value": "Chiffré sur nos serveurs ; intégrité vérifiée entre appareils compatibles."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografato sui nostri server; tra dispositivi compatibili, un secondo livello permette di verificare che un messaggio di testo non sia stato modificato lungo il percorso."
+            "value": "Crittografato sui nostri server; integrità verificata tra dispositivi compatibili."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografado em nossos servidores; entre aparelhos compatíveis, uma segunda camada permite verificar que uma mensagem de texto não foi alterada no caminho."
+            "value": "Criptografado em nossos servidores; integridade verificada entre aparelhos compatíveis."
           }
         }
       }
@@ -108614,43 +108614,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُشفَّر رسائلك على خوادمنا. تعمل الترجمة والتفريغ النصي والبحث."
+            "value": "مشفّر على خوادمنا ويمكنها قراءته: تعمل الترجمة والبحث."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Nachrichten werden auf unseren Servern verschlüsselt. Übersetzung, Transkription und Suche funktionieren."
+            "value": "Auf unseren Servern verschlüsselt, für sie lesbar: Übersetzung und Suche funktionieren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your messages are encrypted on our servers. Translation, transcription and search work."
+            "value": "Encrypted on our servers, readable by them: translation and search work."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tus mensajes se cifran en nuestros servidores. La traducción, la transcripción y la búsqueda funcionan."
+            "value": "Cifrado en nuestros servidores, legible por ellos: la traducción y la búsqueda funcionan."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent."
+            "value": "Chiffré sur nos serveurs, lisible par eux : traduction et recherche fonctionnent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I tuoi messaggi sono crittografati sui nostri server. Traduzione, trascrizione e ricerca funzionano."
+            "value": "Crittografato sui nostri server, leggibile da loro: traduzione e ricerca funzionano."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Suas mensagens são criptografadas em nossos servidores. Tradução, transcrição e busca funcionam."
+            "value": "Criptografado em nossos servidores, legível por eles: tradução e busca funcionam."
           }
         }
       }
@@ -109554,43 +109554,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لن تتلقى بعد الآن رسائل من %@. يمكنك إلغاء الحظر من الإعدادات."
+            "value": "لا رسائل بعد الآن من %@؛ يمكن إلغاء الحظر من الإعدادات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du erhältst keine Nachrichten mehr von %@. Du kannst die Blockierung in den Einstellungen aufheben."
+            "value": "Keine Nachrichten mehr von %@; entsperrbar in den Einstellungen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You'll no longer receive messages from %@. You can unblock them in Settings."
+            "value": "No more messages from %@; you can unblock in settings."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ya no recibirás mensajes de %@. Podrás desbloquearlo en los ajustes."
+            "value": "No más mensajes de %@; puedes desbloquear en los ajustes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous ne recevrez plus de messages de %@. Vous pourrez le débloquer dans les réglages."
+            "value": "Plus aucun message de %@ ; débloquable dans les réglages."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non riceverai più messaggi da %@. Potrai sbloccarlo nelle impostazioni."
+            "value": "Niente più messaggi da %@; sbloccabile nelle impostazioni."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você não receberá mais mensagens de %@. Você poderá desbloquear nas configurações."
+            "value": "Sem mais mensagens de %@; desbloqueie nas configurações."
           }
         }
       }
@@ -109883,43 +109883,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لن تتلقى رسائل بعد الآن. سيظل سجلّك قابلًا للقراءة."
+            "value": "لن تتلقى رسائل بعد الآن؛ يبقى سجلك مقروءًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du erhältst keine Nachrichten mehr. Dein Verlauf bleibt lesbar."
+            "value": "Du erhältst keine Nachrichten mehr; dein Verlauf bleibt lesbar."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You'll no longer receive messages. Your history stays readable."
+            "value": "You will no longer receive messages; your history stays readable."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ya no recibirás mensajes. Tu historial seguirá siendo legible."
+            "value": "Ya no recibirás mensajes; tu historial seguirá siendo legible."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous ne recevrez plus de messages. Votre historique restera lisible."
+            "value": "Vous ne recevrez plus de messages ; votre historique reste lisible."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non riceverai più messaggi. La tua cronologia resterà leggibile."
+            "value": "Non riceverai più messaggi; la cronologia resta leggibile."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você não receberá mais mensagens. Seu histórico continuará legível."
+            "value": "Você não receberá mais mensagens; seu histórico continua legível."
           }
         }
       }
@@ -110870,43 +110870,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حدّد رمز PIN رئيسيًا في الإعدادات لقفل المحادثات."
+            "value": "حدّده في الإعدادات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lege in den Einstellungen eine Master-PIN fest, um Unterhaltungen zu sperren."
+            "value": "Lege sie in den Einstellungen fest."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Set a master PIN in settings to lock conversations."
+            "value": "Set it in settings."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Configura un PIN principal en los ajustes para bloquear conversaciones."
+            "value": "Configúralo en los ajustes."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Définissez un code PIN principal dans les réglages pour verrouiller des conversations."
+            "value": "Définissez-le dans les réglages."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Imposta un PIN principale nelle impostazioni per bloccare le conversazioni."
+            "value": "Impostalo nelle impostazioni."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Defina um PIN principal nas configurações para bloquear conversas."
+            "value": "Defina-o nas configurações."
           }
         }
       }
@@ -111818,53 +111818,6 @@
         }
       }
     },
-    "conversation.lock.subtitle.enableBiometric": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أدخل رمز PIN الرئيسي للسماح بالفتح بالقياسات الحيوية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Geben Sie Ihre Master-PIN ein, um die biometrische Entsperrung zu erlauben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enter your master PIN to allow biometric unlock"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Introduce tu PIN maestro para permitir el desbloqueo biométrico"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Saisissez votre master PIN pour autoriser le déverrouillage biométrique"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inserisci il PIN principale per consentire lo sblocco biometrico"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Digite seu PIN mestre para permitir o desbloqueio biométrico"
-          }
-        }
-      }
-    },
     "search.posts.opens": {
       "extractionState": "manual",
       "localizations": {
@@ -112335,53 +112288,6 @@
         }
       }
     },
-    "conversation.lock.subtitle.confirmNewMasterPin": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أكّد رمز PIN الرئيسي الجديد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bestätigen Sie Ihre neue Master-PIN"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Confirm your new master PIN"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Confirma tu nuevo PIN maestro"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Confirmez votre nouveau master PIN"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conferma il tuo nuovo PIN principale"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Confirme seu novo PIN mestre"
-          }
-        }
-      }
-    },
     "conversation.lock.subtitle.confirmRemoval": {
       "extractionState": "manual",
       "localizations": {
@@ -112566,100 +112472,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Digite seu PIN mestre atual"
-          }
-        }
-      }
-    },
-    "conversation.lock.subtitle.reenterMasterPin": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أدخل رمز PIN الرئيسي مرة أخرى للتأكيد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Geben Sie Ihre Master-PIN erneut ein, um zu bestätigen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Re-enter your master PIN to confirm"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vuelve a introducir tu PIN maestro para confirmar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Saisissez à nouveau votre master PIN pour confirmer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inserisci di nuovo il PIN principale per confermare"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Digite novamente seu PIN mestre para confirmar"
-          }
-        }
-      }
-    },
-    "conversation.lock.subtitle.unlockAll": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أدخل رمز PIN الرئيسي لإلغاء قفل جميع المحادثات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Geben Sie Ihre Master-PIN ein, um alle Konversationen zu entsperren"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enter your master PIN to unlock all conversations"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Introduce tu PIN maestro para desbloquear todas las conversaciones"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Saisissez votre master PIN pour déverrouiller toutes les conversations"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inserisci il PIN principale per sbloccare tutte le conversazioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Digite seu PIN mestre para desbloquear todas as conversas"
           }
         }
       }
@@ -114235,43 +114047,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ستتم إزالة هذه المحادثة من قائمتك. لن يتأثر الأعضاء الآخرون."
+            "value": "تُزال نهائيًا من قائمتك؛ ولا يتأثر الأعضاء الآخرون."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Unterhaltung wird aus deiner Liste entfernt. Andere Mitglieder sind nicht betroffen."
+            "value": "Dauerhaft aus deiner Liste entfernt; die anderen Mitglieder sind nicht betroffen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This conversation will be removed from your list. Other members will not be affected."
+            "value": "Removed from your list for good; other members are not affected."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta conversación se quitará de tu lista. Los demás miembros no se verán afectados."
+            "value": "Se elimina definitivamente de tu lista; los demás miembros no se ven afectados."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette conversation sera retirée de votre liste. Les autres membres ne seront pas affectés."
+            "value": "Retirée définitivement de votre liste ; les autres membres ne sont pas affectés."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa conversazione sarà rimossa dal tuo elenco. Gli altri membri non saranno interessati."
+            "value": "Rimossa definitivamente dalla tua lista; gli altri membri non sono interessati."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta conversa será removida da sua lista. Os outros membros não serão afetados."
+            "value": "Removida definitivamente da sua lista; os outros membros não são afetados."
           }
         }
       }
@@ -114413,53 +114225,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sair do grupo"
-          }
-        }
-      }
-    },
-    "conversation.prefs.leave.message": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لن تتلقى رسائل بعد الآن. سيبقى سجلّك قابلًا للقراءة."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Du erhältst keine Nachrichten mehr. Dein Verlauf bleibt lesbar."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You will no longer receive messages. Your history will remain readable."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dejarás de recibir mensajes. Tu historial seguirá siendo legible."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vous ne recevrez plus de messages. Votre historique restera consultable."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Non riceverai più messaggi. La tua cronologia resterà leggibile."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Você não receberá mais mensagens. Seu histórico continuará legível."
           }
         }
       }
@@ -114695,53 +114460,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nenhuma"
-          }
-        }
-      }
-    },
-    "conversation.prefs.section.actions": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الإجراءات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aktionen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Actions"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Acciones"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Actions"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Azioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ações"
           }
         }
       }
@@ -115880,43 +115598,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محادثة مشفرة: لا يمكن إرسال المرفقات والمواقع والملصقات بعد."
+            "value": "مشفّرة: لا مرفقات ولا مواقع ولا ملصقات بعد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verschlüsselte Unterhaltung: Anhänge, Orte und Sticker können noch nicht gesendet werden."
+            "value": "Verschlüsselt: noch keine Anhänge, Orte oder Sticker."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted conversation: attachments, places and stickers can’t be sent yet."
+            "value": "Encrypted: no attachments, places or stickers yet."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversación cifrada: aún no se pueden enviar adjuntos, ubicaciones ni stickers."
+            "value": "Cifrada: aún sin adjuntos, ubicaciones ni stickers."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation chiffrée : pièces jointes, lieux et stickers ne peuvent pas encore être envoyés."
+            "value": "Chiffrée : pas encore de pièces jointes, lieux ni stickers."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversazione crittografata: allegati, luoghi e sticker non possono ancora essere inviati."
+            "value": "Crittografata: ancora niente allegati, luoghi né sticker."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversa criptografada: anexos, locais e figurinhas ainda não podem ser enviados."
+            "value": "Criptografada: ainda sem anexos, locais nem figurinhas."
           }
         }
       }
@@ -117007,43 +116725,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الحذف للجميع متاح لمدة ساعتين بعد الإرسال."
+            "value": "للجميع: حتى ساعتين بعد الإرسال."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "„Für alle löschen“ ist 2 Std. nach dem Senden möglich."
+            "value": "Für alle: bis 2 Std. nach dem Senden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Delete for everyone is available for 2 h after sending."
+            "value": "For everyone: up to 2 h after sending."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eliminar para todos está disponible durante 2 h después del envío."
+            "value": "Para todos: hasta 2 h después del envío."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La suppression pour tout le monde est disponible pendant 2 h après l'envoi."
+            "value": "Pour tout le monde : jusqu’à 2 h après l’envoi."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "L'eliminazione per tutti è disponibile per 2 ore dopo l'invio."
+            "value": "Per tutti: fino a 2 h dopo l’invio."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apagar para todos fica disponível por 2 h após o envio."
+            "value": "Para todos: até 2 h após o envio."
           }
         }
       }
@@ -118008,43 +117726,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسمح بإنشاء بصمتك الصوتية ليتم تفريغ رسائلك الصوتية وترجمتها تلقائيًا إلى لغة كل مستلم — بصوتك أيضًا."
+            "value": "اسمح بملفك الصوتي: ستُترجم رسائلك الصوتية بصوتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erlaube die Erstellung deines Sprachprofils, damit deine Sprachnachrichten automatisch transkribiert und in die Sprache jedes Empfängers übersetzt werden — auch mit deiner Stimme."
+            "value": "Erlaube dein Stimmprofil: Deine Sprachnachrichten werden mit deiner Stimme übersetzt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow your voice profile to be created so your voice messages are automatically transcribed and translated into each recipient's language — in your own voice too."
+            "value": "Allow your voice profile: your voice messages will be translated in your own voice."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Permite crear tu perfil de voz para que tus mensajes de voz se transcriban y traduzcan automáticamente al idioma de cada destinatario, incluso con tu voz."
+            "value": "Autoriza tu perfil de voz: tus audios se traducirán con tu voz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autorisez la définition de votre profil vocal pour que vos messages vocaux soient transcrits et traduits automatiquement dans la langue de chaque destinataire — y compris avec votre voix."
+            "value": "Autorisez votre profil vocal : vos vocaux seront traduits avec votre voix."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Consenti la creazione del tuo profilo vocale affinché i tuoi messaggi vocali vengano trascritti e tradotti automaticamente nella lingua di ogni destinatario — anche con la tua voce."
+            "value": "Autorizza il tuo profilo vocale: i tuoi vocali saranno tradotti con la tua voce."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Permita a criação do seu perfil de voz para que suas mensagens de voz sejam transcritas e traduzidas automaticamente no idioma de cada destinatário — inclusive com a sua voz."
+            "value": "Autorize seu perfil de voz: seus áudios serão traduzidos com a sua voz."
           }
         }
       }
@@ -160797,43 +160515,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لم يسلّم هذا التطبيق سوى مسار ملف، ولا يفتحه Meeshy. شارك الملف نفسه، أو احفظه أولًا في الصور أو الملفات."
+            "value": "سلّم هذا التطبيق مسار ملف فقط: شارك الملف نفسه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese App hat nur einen Dateipfad übergeben, den Meeshy nicht öffnet. Teile die Datei selbst oder sichere sie zuerst in Fotos oder Dateien."
+            "value": "Diese App hat nur einen Dateipfad übergeben: Teile die Datei selbst."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This app only handed over a file path, which Meeshy does not open. Share the file itself, or save it to Photos or Files first."
+            "value": "This app only handed over a file path: share the file itself."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta app solo entregó una ruta de archivo, que Meeshy no abre. Comparte el archivo en sí, o guárdalo antes en Fotos o Archivos."
+            "value": "Esta app solo entregó una ruta de archivo: comparte el archivo en sí."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette app n’a remis qu’un chemin de fichier, que Meeshy n’ouvre pas. Partagez le fichier lui-même, ou enregistrez-le d’abord dans Photos ou Fichiers."
+            "value": "Cette app n’a remis qu’un chemin de fichier : partagez le fichier lui-même."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa app ha passato solo un percorso di file, che Meeshy non apre. Condividi il file stesso, oppure salvalo prima in Foto o File."
+            "value": "Questa app ha consegnato solo un percorso di file: condividi il file stesso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este app entregou apenas um caminho de arquivo, que o Meeshy não abre. Compartilhe o próprio arquivo ou salve-o antes em Fotos ou Arquivos."
+            "value": "Este app só entregou um caminho de arquivo: compartilhe o próprio arquivo."
           }
         }
       }
@@ -160985,43 +160703,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشاركتك محفوظة. إنها بانتظارك في Meeshy، أو في الاستوديو إن أردت نشرها."
+            "value": "مشاركتك محفوظة: تنتظرك في Meeshy."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Freigabe bleibt erhalten. Sie wartet in Meeshy auf dich – oder im Studio, wenn du sie veröffentlichen möchtest."
+            "value": "Dein Beitrag ist gespeichert: Er wartet in Meeshy auf dich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your share is kept. It’s waiting for you in Meeshy, or in the studio if you want to publish it."
+            "value": "Your share is saved: it is waiting for you in Meeshy."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu contenido se guarda. Te espera en Meeshy, o en el estudio si quieres publicarlo."
+            "value": "Tu contenido compartido está guardado: te espera en Meeshy."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre partage est gardé. Il vous attend dans Meeshy, ou dans le studio si vous voulez le publier."
+            "value": "Votre partage est gardé : il vous attend dans Meeshy."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La tua condivisione è conservata. Ti aspetta in Meeshy, o nello studio se vuoi pubblicarla."
+            "value": "La tua condivisione è salvata: ti aspetta in Meeshy."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu compartilhamento fica guardado. Ele espera por você no Meeshy, ou no estúdio se quiser publicá-lo."
+            "value": "Seu compartilhamento está guardado: ele espera por você no Meeshy."
           }
         }
       }
@@ -187285,89 +187003,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الحساب مطلوب"
+            "value": "حساب Meeshy"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Konto erforderlich"
+            "value": "Meeshy-Konto"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Account required"
+            "value": "Meeshy account"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cuenta obligatoria"
+            "value": "Cuenta Meeshy"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compte requis"
+            "value": "Compte Meeshy"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Account obbligatorio"
+            "value": "Account Meeshy"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conta obrigatória"
-          }
-        }
-      }
-    },
-    "share.link.create.access.account_required.subtitle": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا يمكن الانضمام إلا لأعضاء Meeshy"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nur Meeshy-Mitglieder können beitreten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Only Meeshy members can join"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solo los miembros de Meeshy pueden unirse"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seuls les membres Meeshy peuvent rejoindre"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solo i membri di Meeshy possono partecipare"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Só membros do Meeshy podem entrar"
+            "value": "Conta Meeshy"
           }
         }
       }
@@ -187377,89 +187049,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تاريخ الميلاد مطلوب"
+            "value": "تاريخ الميلاد"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Geburtsdatum erforderlich"
+            "value": "Geburtsdatum"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Date of birth required"
+            "value": "Date of birth"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fecha de nacimiento obligatoria"
+            "value": "Fecha de nacimiento"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Date de naissance requise"
+            "value": "Date de naissance"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Data di nascita obbligatoria"
+            "value": "Data di nascita"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Data de nascimento obrigatória"
-          }
-        }
-      }
-    },
-    "share.link.create.access.birthday_required.subtitle": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يتيح التحقّق من العمر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ermöglicht die Altersprüfung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enables age verification"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Permite la verificación de edad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Permet le contrôle d'âge"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Consente la verifica dell'età"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Permite a verificação de idade"
+            "value": "Data de nascimento"
           }
         }
       }
@@ -187469,89 +187095,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "البريد الإلكتروني مطلوب"
+            "value": "البريد الإلكتروني"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "E-Mail erforderlich"
+            "value": "E-Mail"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email required"
+            "value": "Email"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Correo obligatorio"
+            "value": "Correo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email requis"
+            "value": "E-mail"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Email obbligatoria"
+            "value": "E-mail"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "E-mail obrigatório"
-          }
-        }
-      }
-    },
-    "share.link.create.access.email_required.subtitle": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "على الزائر تقديم بريده الإلكتروني"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Besucher muss seine E-Mail angeben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The visitor must provide their email"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El visitante debe facilitar su correo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le visiteur doit fournir son email"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il visitatore deve fornire la sua email"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O visitante precisa informar seu e-mail"
+            "value": "E-mail"
           }
         }
       }
@@ -187561,89 +187141,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاسم المستعار مطلوب"
+            "value": "اسم المستخدم"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Spitzname erforderlich"
+            "value": "Benutzername"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nickname required"
+            "value": "Username"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apodo obligatorio"
+            "value": "Usuario"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pseudonyme requis"
+            "value": "Pseudo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nickname obbligatorio"
+            "value": "Nome utente"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apelido obrigatório"
-          }
-        }
-      }
-    },
-    "share.link.create.access.nickname_required.subtitle": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "على الزائر اختيار اسم مستعار"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Besucher muss einen Spitznamen wählen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The visitor must choose a nickname"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El visitante debe elegir un apodo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le visiteur doit choisir un pseudo"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il visitatore deve scegliere un nickname"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O visitante precisa escolher um apelido"
+            "value": "Usuário"
           }
         }
       }
@@ -188118,43 +187652,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الوصف (اختياري)"
+            "value": "الوصف"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Beschreibung (optional)"
+            "value": "Beschreibung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Description (optional)"
+            "value": "Description"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Descripción (opcional)"
+            "value": "Descripción"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Description (optionnel)"
+            "value": "Description"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Descrizione (facoltativa)"
+            "value": "Descrizione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Descrição (opcional)"
+            "value": "Descrição"
           }
         }
       }
@@ -188164,43 +187698,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مثال: انضم إلى مجموعتنا…"
+            "value": "اختياري"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "z. B. Tritt unserer Gruppe bei…"
+            "value": "Optional"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "e.g. Join our group…"
+            "value": "Optional"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "ej.: Únete a nuestro grupo…"
+            "value": "Opcional"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "ex: Rejoins notre groupe…"
+            "value": "Optionnel"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "es.: Unisciti al nostro gruppo…"
+            "value": "Facoltativo"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "ex.: Entre no nosso grupo…"
+            "value": "Opcional"
           }
         }
       }
@@ -188595,89 +188129,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إرسال الملفات"
+            "value": "الملفات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dateien senden"
+            "value": "Dateien"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Send files"
+            "value": "Files"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviar archivos"
+            "value": "Archivos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envoyer des fichiers"
+            "value": "Fichiers"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inviare file"
+            "value": "File"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviar arquivos"
-          }
-        }
-      }
-    },
-    "share.link.create.permission.send_files.subtitle": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكن للضيوف إرسال المستندات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gäste können Dokumente senden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Guests can send documents"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los invitados pueden enviar documentos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les invités peuvent envoyer des documents"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gli ospiti possono inviare documenti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os convidados podem enviar documentos"
+            "value": "Arquivos"
           }
         }
       }
@@ -188687,89 +188175,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إرسال الصور"
+            "value": "الصور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bilder senden"
+            "value": "Bilder"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Send images"
+            "value": "Images"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviar imágenes"
+            "value": "Imágenes"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envoyer des images"
+            "value": "Images"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inviare immagini"
+            "value": "Immagini"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviar imagens"
-          }
-        }
-      }
-    },
-    "share.link.create.permission.send_images.subtitle": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكن للضيوف مشاركة الصور"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gäste können Fotos teilen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Guests can share photos"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los invitados pueden compartir fotos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les invités peuvent partager des photos"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gli ospiti possono condividere foto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os convidados podem compartilhar fotos"
+            "value": "Imagens"
           }
         }
       }
@@ -188779,89 +188221,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إرسال الرسائل"
+            "value": "الرسائل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nachrichten senden"
+            "value": "Nachrichten"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Send messages"
+            "value": "Messages"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviar mensajes"
+            "value": "Mensajes"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envoyer des messages"
+            "value": "Messages"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inviare messaggi"
+            "value": "Messaggi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enviar mensagens"
-          }
-        }
-      }
-    },
-    "share.link.create.permission.send_messages.subtitle": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يمكن للضيوف الكتابة في المحادثة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gäste können in der Unterhaltung schreiben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Guests can write in the conversation"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los invitados pueden escribir en la conversación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les invités peuvent écrire dans la conversation"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gli ospiti possono scrivere nella conversazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os convidados podem escrever na conversa"
+            "value": "Mensagens"
           }
         }
       }
@@ -188871,135 +188267,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عرض السجل"
+            "value": "السجل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verlauf ansehen"
+            "value": "Verlauf"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "View history"
+            "value": "History"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ver el historial"
+            "value": "Historial"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir l'historique"
+            "value": "Historique"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vedere la cronologia"
+            "value": "Cronologia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ver o histórico"
-          }
-        }
-      }
-    },
-    "share.link.create.permission.view_history.subtitle": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يرى الضيوف الرسائل السابقة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gäste sehen frühere Nachrichten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Guests see previous messages"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los invitados ven los mensajes anteriores"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les invités voient les messages précédents"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gli ospiti vedono i messaggi precedenti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Os convidados veem as mensagens anteriores"
-          }
-        }
-      }
-    },
-    "share.link.create.picker.empty.description": {
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أنشئ مجموعة أو مجتمعًا لمشاركة رابط دعوة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erstellen Sie eine Gruppe oder Community, um einen Einladungslink zu teilen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create a group or a community to share an invite link"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cree un grupo o una comunidad para compartir un enlace de invitación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Créez un groupe ou une communauté pour partager un lien d'invitation"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un gruppo o una comunità per condividere un link d'invito"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crie um grupo ou uma comunidade para compartilhar um link de convite"
+            "value": "Histórico"
           }
         }
       }
@@ -189009,43 +188313,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لم يتم العثور على أي مجموعة"
+            "value": "لا توجد مجموعة: أنشئ واحدة لمشاركة رابط."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keine Gruppe gefunden"
+            "value": "Keine Gruppe: Erstelle eine, um einen Link zu teilen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No group found"
+            "value": "No group: create one to share a link."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se encontró ningún grupo"
+            "value": "Ningún grupo: crea uno para compartir un enlace."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun groupe trouvé"
+            "value": "Aucun groupe : créez-en un pour partager un lien."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessun gruppo trovato"
+            "value": "Nessun gruppo: creane uno per condividere un link."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhum grupo encontrado"
+            "value": "Nenhum grupo: crie um para compartilhar um link."
           }
         }
       }
@@ -189285,43 +188589,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "وصول الضيوف"
+            "value": "اطلب من الضيوف"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gastzugang"
+            "value": "Von Gästen verlangen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Guest access"
+            "value": "Ask guests"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acceso de invitados"
+            "value": "Pedir a los invitados"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accès invités"
+            "value": "Demander aux invités"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accesso degli ospiti"
+            "value": "Chiedi agli ospiti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acesso de convidados"
+            "value": "Pedir aos convidados"
           }
         }
       }
@@ -189561,43 +188865,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الصلاحيات"
+            "value": "السماح"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Berechtigungen"
+            "value": "Erlauben"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Permissions"
+            "value": "Allow"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Permisos"
+            "value": "Permitir"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Permissions"
+            "value": "Autoriser"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autorizzazioni"
+            "value": "Consenti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Permissões"
+            "value": "Permitir"
           }
         }
       }
@@ -189876,53 +189180,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Criar um link de compartilhamento"
-          }
-        }
-      }
-    },
-    "share.links.empty.subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "أنشئ رابطًا لدعوة أشخاص إلى محادثة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erstelle einen Link, um Personen in eine Unterhaltung einzuladen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create a link to invite people into a conversation"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un enlace para invitar a personas a una conversación"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Créez un lien pour inviter des personnes dans une conversation"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un link per invitare persone in una conversazione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crie um link para convidar pessoas para uma conversa"
           }
         }
       }
@@ -215088,43 +214345,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أنشئ ملفًا صوتيًا لتحتفظ رسائلك المترجمة بصوتك الطبيعي."
+            "value": "ستحتفظ رسائلك الصوتية المترجمة بصوتك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erstellen Sie ein Sprachprofil, damit Ihre übersetzten Nachrichten Ihre natürliche Stimme behalten."
+            "value": "Deine übersetzten Sprachnachrichten behalten deine Stimme."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Create a voice profile so your translated messages keep your natural voice."
+            "value": "Your translated voice messages will keep your voice."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crea un perfil de voz para que tus mensajes traducidos conserven tu voz natural."
+            "value": "Tus audios traducidos conservarán tu voz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Créez un profil vocal pour que vos messages traduits conservent votre voix naturelle."
+            "value": "Vos vocaux traduits garderont votre voix."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crea un profilo vocale affinché i tuoi messaggi tradotti conservino la tua voce naturale."
+            "value": "I tuoi vocali tradotti manterranno la tua voce."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crie um perfil de voz para que suas mensagens traduzidas mantenham sua voz natural."
+            "value": "Seus áudios traduzidos manterão sua voz."
           }
         }
       }
@@ -216018,53 +215275,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Analisando"
-          }
-        }
-      }
-    },
-    "voice.profile.status.ready.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ملفك الصوتي جاهز للاستخدام"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ihr Sprachprofil ist einsatzbereit"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your voice profile is ready to use"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tu perfil de voz está listo para usar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Votre profil vocal est prêt à l'emploi"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il tuo profilo vocale è pronto all'uso"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seu perfil de voz está pronto para uso"
           }
         }
       }
@@ -217015,43 +216225,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سجّل صوتك لتفعيل استنساخ الصوت المخصّص. ستحتفظ رسائلك الصوتية المترجمة بصوتك الطبيعي."
+            "value": "سجّل صوتك لتفعيل استنساخ الصوت."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nimm deine Stimme auf, um das persönliche Voice-Cloning zu aktivieren. Deine übersetzten Sprachnachrichten behalten deine natürliche Stimme."
+            "value": "Nimm deine Stimme auf, um das Klonen der Stimme zu aktivieren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record your voice to enable personal voice cloning. Your translated voice messages will keep your natural voice."
+            "value": "Record your voice to enable voice cloning."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Graba tu voz para activar la clonación de voz personalizada. Tus mensajes de voz traducidos conservarán tu voz natural."
+            "value": "Graba tu voz para activar la clonación de voz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle."
+            "value": "Enregistrez votre voix pour activer le clonage vocal."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Registra la tua voce per attivare la clonazione vocale personalizzata. I tuoi messaggi vocali tradotti manterranno la tua voce naturale."
+            "value": "Registra la tua voce per attivare la clonazione vocale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Grave sua voz para ativar a clonagem de voz personalizada. Suas mensagens de voz traduzidas manterão sua voz natural."
+            "value": "Grave sua voz para ativar a clonagem de voz."
           }
         }
       }
@@ -319866,43 +319076,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تختفي بعد القراءة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها."
+            "value": "مؤقت: يبقى في المحادثة حتى يختفي."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sie verschwindet nach dem Lesen: Sie kann nicht weitergeleitet, gesichert oder geteilt werden."
+            "value": "Flüchtig: Sie bleibt in der Unterhaltung, bis sie verschwindet."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "It disappears after reading: it can’t be forwarded, saved or shared."
+            "value": "Ephemeral: it stays in the conversation until it disappears."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Desaparece tras leerse: no se reenvía, no se guarda ni se comparte."
+            "value": "Efímero: se queda en la conversación hasta que desaparece."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il disparaît après lecture : il ne se transfère, ne s’enregistre et ne se partage pas."
+            "value": "Éphémère : il reste dans la conversation jusqu’à sa disparition."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scompare dopo la lettura: non si inoltra, non si salva e non si condivide."
+            "value": "Effimero: resta nella conversazione finché non scompare."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ela desaparece após a leitura: não pode ser encaminhada, salva nem compartilhada."
+            "value": "Efêmero: fica na conversa até desaparecer."
           }
         }
       }
@@ -320054,43 +319264,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنها للعرض مرة واحدة: لا يمكن إعادة توجيهها أو حفظها أو مشاركتها. تبقى في المحادثة حتى تُشاهَد."
+            "value": "للعرض مرة واحدة: تبقى في المحادثة حتى تُشاهَد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sie ist einmalig ansehbar: Sie kann nicht weitergeleitet, gesichert oder geteilt werden. Sie bleibt im Chat, bis sie gesehen wurde."
+            "value": "Einmalig ansehbar: Sie bleibt im Chat, bis sie gesehen wurde."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "It’s view-once: it can’t be forwarded, saved or shared. It stays in the conversation until it’s seen."
+            "value": "View-once: it stays in the conversation until it’s seen."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Es de visualización única: no se reenvía, no se guarda ni se comparte. Se queda en la conversación hasta que se vea."
+            "value": "De visualización única: se queda en la conversación hasta que se vea."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il est à vue unique : il ne se transfère, ne s’enregistre et ne se partage pas. Il reste dans la conversation, le temps d’être vu."
+            "value": "À vue unique : il reste dans la conversation, le temps d’être vu."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "È a visualizzazione singola: non si inoltra, non si salva e non si condivide. Resta nella conversazione finché non viene vista."
+            "value": "A visualizzazione singola: resta nella conversazione finché non viene vista."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "É de visualização única: não pode ser encaminhada, salva nem compartilhada. Fica na conversa até ser vista."
+            "value": "De visualização única: fica na conversa até ser vista."
           }
         }
       }
@@ -321558,43 +320768,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "غير متصل. سيُرسَل ما لم يُرسَل عند عودة الشبكة، حتى لو أغلقت Meeshy."
+            "value": "غير متصل: سيُستأنف الإرسال عند عودة الشبكة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline. Was noch nicht gesendet wurde, geht raus, sobald das Netz zurück ist – auch wenn du Meeshy schließt."
+            "value": "Offline: Das Senden wird fortgesetzt, sobald das Netz wieder da ist."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline. What hasn’t been sent will go when the network is back, even if you close Meeshy."
+            "value": "Offline: sending will resume when the network is back."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sin conexión. Lo que no se ha enviado saldrá cuando vuelva la red, aunque cierres Meeshy."
+            "value": "Sin conexión: el envío se reanudará al volver la red."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hors ligne. Ce qui n’est pas parti partira au retour du réseau, même si vous fermez Meeshy."
+            "value": "Hors ligne : l’envoi repartira au retour du réseau."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline. Ciò che non è partito partirà al ritorno della rete, anche se chiudi Meeshy."
+            "value": "Offline: l’invio ripartirà al ritorno della rete."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline. O que não foi enviado sairá quando a rede voltar, mesmo se você fechar o Meeshy."
+            "value": "Sem conexão: o envio recomeçará quando a rede voltar."
           }
         }
       }
@@ -324298,43 +323508,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّرة من طرف إلى طرف: تُترجم هذه المحادثة على جهازك، وليس عبر الخادم أبدًا."
+            "value": "مشفّرة تمامًا بين الطرفين: تُترجم على جهازك، وليس عبر الخادم أبدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende-zu-Ende-verschlüsselt: Diese Unterhaltung wird auf deinem Gerät übersetzt, nie vom Server."
+            "value": "Ende-zu-Ende-verschlüsselt: auf deinem Gerät übersetzt, nie vom Server."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encrypted: this conversation is translated on your device, never by the server."
+            "value": "End-to-end encrypted: translated on your device, never by the server."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrada de extremo a extremo: esta conversación se traduce en tu dispositivo, nunca en el servidor."
+            "value": "Cifrada de extremo a extremo: traducida en tu dispositivo, nunca por el servidor."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffrée de bout en bout : cette conversation se traduit sur votre appareil, jamais par le serveur."
+            "value": "Chiffrée de bout en bout : traduite sur votre appareil, jamais par le serveur."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografata end-to-end: questa conversazione viene tradotta sul tuo dispositivo, mai dal server."
+            "value": "Crittografata end-to-end: tradotta sul tuo dispositivo, mai dal server."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografada de ponta a ponta: esta conversa é traduzida no seu dispositivo, nunca pelo servidor."
+            "value": "Criptografada de ponta a ponta: traduzida no seu aparelho, nunca pelo servidor."
           }
         }
       }
@@ -324440,43 +323650,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يُوقَف التشفير التام بين الطرفين أبدًا، ولا التشفير على خوادمنا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم."
+            "value": "لا يُوقَف التشفير أبدًا، لا التام بين الطرفين ولا على خوادمنا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten, die Verschlüsselung auf unseren Servern auch nicht. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen."
+            "value": "Die Verschlüsselung lässt sich nie ausschalten, weder Ende-zu-Ende noch auf unseren Servern."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encryption can never be turned off, and neither can encryption on our servers. You can always open another conversation, without end-to-end encryption, with the same people."
+            "value": "Encryption can never be turned off, end-to-end or on our servers."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El cifrado de extremo a extremo nunca se desactiva, ni tampoco el cifrado en nuestros servidores. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas."
+            "value": "El cifrado nunca se desactiva, ni de extremo a extremo ni en nuestros servidores."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffrement de bout en bout ne se désactive jamais, le chiffrement sur nos serveurs non plus. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes."
+            "value": "Le chiffrement ne se désactive jamais, de bout en bout comme sur nos serveurs."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La crittografia end-to-end non si disattiva mai, e nemmeno quella sui nostri server. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone."
+            "value": "La crittografia non si disattiva mai, né end-to-end né sui nostri server."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A criptografia de ponta a ponta nunca é desativada, nem a criptografia em nossos servidores. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas."
+            "value": "A criptografia nunca é desativada, nem de ponta a ponta nem em nossos servidores."
           }
         }
       }
@@ -324487,43 +323697,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يعرض الخادم هذه المحادثة دون تشفير تام بين الطرفين، لكن هذا الجهاز رآها مشفّرة تمامًا بين الطرفين: تبقى كذلك هنا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم."
+            "value": "رُئيت هنا مشفّرة تمامًا بين الطرفين: تبقى كذلك مهما عرض الخادم."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Server zeigt diese Unterhaltung ohne Ende-zu-Ende-Verschlüsselung an, aber dieses Gerät hat sie Ende-zu-Ende-verschlüsselt gesehen: Hier bleibt sie es. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen."
+            "value": "Hier Ende-zu-Ende-verschlüsselt gesehen: Sie bleibt es, was auch immer der Server anzeigt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The server presents this conversation without end-to-end encryption, but this device has seen it end-to-end encrypted: it stays so here. You can always open another conversation, without end-to-end encryption, with the same people."
+            "value": "Seen end-to-end encrypted here: it stays so, whatever the server presents."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El servidor presenta esta conversación sin cifrado de extremo a extremo, pero este dispositivo la ha visto cifrada de extremo a extremo: aquí sigue así. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas."
+            "value": "Vista cifrada de extremo a extremo aquí: lo sigue siendo, diga lo que diga el servidor."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le serveur présente cette conversation sans chiffrement de bout en bout, mais cet appareil l’a vue chiffrée de bout en bout : elle le reste ici. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes."
+            "value": "Vue chiffrée de bout en bout ici : elle le reste, quoi que présente le serveur."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il server presenta questa conversazione senza crittografia end-to-end, ma questo dispositivo l’ha vista crittografata end-to-end: qui resta tale. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone."
+            "value": "Vista qui crittografata end-to-end: resta tale, qualunque cosa presenti il server."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O servidor apresenta esta conversa sem criptografia de ponta a ponta, mas este dispositivo a viu com criptografia de ponta a ponta: aqui ela continua assim. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas."
+            "value": "Vista com criptografia de ponta a ponta aqui: continua assim, seja o que for que o servidor apresente."
           }
         }
       }
@@ -324628,43 +323838,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّر فتح المحادثة دون تشفير تام بين الطرفين. حاول مجددًا."
+            "value": "تعذّر الفتح. أعد المحاولة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Unterhaltung ohne Ende-zu-Ende-Verschlüsselung konnte nicht geöffnet werden. Versuche es erneut."
+            "value": "Öffnen nicht möglich. Versuche es erneut."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The conversation without end-to-end encryption couldn’t be opened. Try again."
+            "value": "Could not open. Try again."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo abrir la conversación sin cifrado de extremo a extremo. Inténtalo de nuevo."
+            "value": "No se pudo abrir. Inténtalo de nuevo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La conversation sans chiffrement de bout en bout n’a pas pu être ouverte. Réessayez."
+            "value": "Ouverture impossible. Réessayez."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile aprire la conversazione senza crittografia end-to-end. Riprova."
+            "value": "Impossibile aprire. Riprova."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível abrir a conversa sem criptografia de ponta a ponta. Tente novamente."
+            "value": "Não foi possível abrir. Tente novamente."
           }
         }
       }
@@ -324675,43 +323885,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يعرض الخادم هذه المحادثة الثنائية بالفعل دون تشفير تام بين الطرفين: أعده أولًا هنا، ثم افتح بجانبها المحادثة دون تشفير تام بين الطرفين."
+            "value": "أعد التشفير هنا أولًا، ثم افتح المحادثة الأخرى."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Server zeigt diesen Einzelchat bereits ohne Ende-zu-Ende-Verschlüsselung an: Stelle sie hier zuerst wieder her und öffne dann daneben die Unterhaltung ohne Ende-zu-Ende-Verschlüsselung."
+            "value": "Stelle zuerst die Verschlüsselung hier wieder her, öffne dann die andere Unterhaltung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The server already presents this one-to-one chat without end-to-end encryption: first restore it here, then open the conversation without end-to-end encryption alongside."
+            "value": "First restore encryption here, then open the other conversation."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El servidor ya presenta este chat individual sin cifrado de extremo a extremo: primero restablécelo aquí y luego abre al lado la conversación sin cifrado de extremo a extremo."
+            "value": "Primero restablece el cifrado aquí y luego abre la otra conversación."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le serveur présente déjà ce tête-à-tête sans chiffrement de bout en bout : rétablissez-le d’abord ici, puis ouvrez à côté la conversation sans chiffrement de bout en bout."
+            "value": "Rétablissez d’abord le chiffrement ici, puis ouvrez l’autre conversation."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il server presenta già questa chat individuale senza crittografia end-to-end: ripristinala prima qui, poi apri accanto la conversazione senza crittografia end-to-end."
+            "value": "Ripristina prima la crittografia qui, poi apri l’altra conversazione."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O servidor já apresenta esta conversa individual sem criptografia de ponta a ponta: primeiro restaure-a aqui e depois abra ao lado a conversa sem criptografia de ponta a ponta."
+            "value": "Primeiro restabeleça a criptografia aqui e depois abra a outra conversa."
           }
         }
       }
@@ -324722,43 +323932,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أنت غير متصل: أعد الاتصال لفتح المحادثة دون تشفير تام بين الطرفين."
+            "value": "غير متصل: أعد الاتصال لفتحها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Offline: Verbinde dich erneut, um die Unterhaltung ohne Ende-zu-Ende-Verschlüsselung zu öffnen."
+            "value": "Offline: Verbinde dich erneut, um sie zu öffnen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You’re offline: reconnect to open the conversation without end-to-end encryption."
+            "value": "Offline: reconnect to open it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sin conexión: vuelve a conectarte para abrir la conversación sin cifrado de extremo a extremo."
+            "value": "Sin conexión: vuelve a conectarte para abrirla."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hors connexion : reconnectez-vous pour ouvrir la conversation sans chiffrement de bout en bout."
+            "value": "Hors connexion : reconnectez-vous pour l’ouvrir."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sei offline: riconnettiti per aprire la conversazione senza crittografia end-to-end."
+            "value": "Offline: riconnettiti per aprirla."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sem conexão: reconecte-se para abrir a conversa sem criptografia de ponta a ponta."
+            "value": "Sem conexão: reconecte-se para abri-la."
           }
         }
       }
@@ -324863,43 +324073,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لديك بالفعل محادثة مشفّرة تمامًا بين الطرفين مع هذا الشخص: افتحها للدردشة فيها. تبقى هذه المحادثة مشفّرة على خوادمنا."
+            "value": "توجد بالفعل محادثة مشفّرة تمامًا بين الطرفين مع هذا الشخص: افتحها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du hast mit dieser Person bereits eine Ende-zu-Ende-verschlüsselte Unterhaltung: Öffne sie, um dort zu schreiben. Diese hier bleibt auf unseren Servern verschlüsselt."
+            "value": "Mit dieser Person gibt es bereits eine Ende-zu-Ende-verschlüsselte Unterhaltung: Öffne sie."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You already have an end-to-end encrypted conversation with this person: open it to chat there. This one stays encrypted on our servers."
+            "value": "An end-to-end encrypted conversation already exists with this person: open it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ya tienes una conversación cifrada de extremo a extremo con esta persona: ábrela para chatear allí. Esta sigue cifrada en nuestros servidores."
+            "value": "Ya existe una conversación cifrada de extremo a extremo con esta persona: ábrela."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous avez déjà une conversation chiffrée de bout en bout avec cette personne : ouvrez-la pour y échanger. Celle-ci reste chiffrée sur nos serveurs."
+            "value": "Une conversation chiffrée de bout en bout existe déjà avec cette personne : ouvrez-la."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hai già una conversazione crittografata end-to-end con questa persona: aprila per scrivere lì. Questa resta crittografata sui nostri server."
+            "value": "Esiste già una conversazione crittografata end-to-end con questa persona: aprila."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você já tem uma conversa criptografada de ponta a ponta com esta pessoa: abra-a para conversar lá. Esta continua criptografada em nossos servidores."
+            "value": "Já existe uma conversa com criptografia de ponta a ponta com esta pessoa: abra-a."
           }
         }
       }
@@ -325004,43 +324214,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تغيّر تشفير هذه المحادثة للتو: لم تُرسل الرسالة. انقر لإعادة إرسالها وفق الإعداد الجديد."
+            "value": "تغيّر التشفير: الرسالة لم تُرسل. اضغط لإعادة الإرسال."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Verschlüsselung dieser Unterhaltung hat sich gerade geändert: Die Nachricht wurde nicht gesendet. Tippe, um sie mit der neuen Einstellung erneut zu senden."
+            "value": "Die Verschlüsselung hat sich geändert: Nachricht nicht gesendet. Tippe, um sie erneut zu senden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This conversation’s encryption just changed: the message wasn’t sent. Tap to resend it with the new setting."
+            "value": "Encryption changed: message not sent. Tap to resend."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El cifrado de esta conversación acaba de cambiar: el mensaje no se envió. Toca para reenviarlo con el nuevo ajuste."
+            "value": "El cifrado cambió: mensaje no enviado. Toca para reenviarlo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffrement de cette conversation vient de changer : le message n’est pas parti. Touchez pour le renvoyer selon le nouveau réglage."
+            "value": "Le chiffrement a changé : message non parti. Touchez pour le renvoyer."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La crittografia di questa conversazione è appena cambiata: il messaggio non è stato inviato. Tocca per reinviarlo con la nuova impostazione."
+            "value": "La crittografia è cambiata: messaggio non inviato. Tocca per reinviarlo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A criptografia desta conversa acabou de mudar: a mensagem não foi enviada. Toque para reenviá-la com a nova configuração."
+            "value": "A criptografia mudou: mensagem não enviada. Toque para reenviar."
           }
         }
       }
@@ -325051,43 +324261,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذه المحادثة مشفّرة من طرف إلى طرف، لكن الخادم يعرضها بلا تشفير: لم تُرسل الرسالة. راجع بطاقة التشفير."
+            "value": "الخادم دون تشفير: الرسالة لم تُرسل. راجع بطاقة التشفير."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Unterhaltung ist Ende-zu-Ende-verschlüsselt, aber der Server zeigt sie ohne Verschlüsselung an: Die Nachricht wurde nicht gesendet. Siehe die Seite „Verschlüsselung“."
+            "value": "Server ohne Verschlüsselung: Nachricht nicht gesendet. Siehe das Blatt Verschlüsselung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This conversation is end-to-end encrypted, but the server presents it without encryption: the message wasn’t sent. See the Encryption sheet."
+            "value": "Server without encryption: message not sent. See the Encryption sheet."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta conversación está cifrada de extremo a extremo, pero el servidor la presenta sin cifrado: el mensaje no se envió. Consulta la ficha Cifrado."
+            "value": "Servidor sin cifrado: mensaje no enviado. Consulta la ficha Cifrado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette conversation est chiffrée de bout en bout, mais le serveur la présente sans chiffrement : le message n’est pas parti. Voir la fiche Chiffrement."
+            "value": "Serveur sans chiffrement : message non parti. Voir la fiche Chiffrement."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa conversazione è crittografata end-to-end, ma il server la presenta senza crittografia: il messaggio non è stato inviato. Vedi la scheda Crittografia."
+            "value": "Server senza crittografia: messaggio non inviato. Vedi la scheda Crittografia."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta conversa tem criptografia de ponta a ponta, mas o servidor a apresenta sem criptografia: a mensagem não foi enviada. Veja a ficha Criptografia."
+            "value": "Servidor sem criptografia: mensagem não enviada. Veja a ficha Criptografia."
           }
         }
       }
@@ -325098,43 +324308,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محادثة مشفّرة: لم تُرسل الرسالة. افتح المحادثة وانقر عليها لإرسالها مشفّرة."
+            "value": "الرسالة المشفّرة لم تُرسل: افتح المحادثة واضغط عليها لإرسالها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verschlüsselte Unterhaltung: Die Nachricht wurde nicht gesendet. Öffne die Unterhaltung und tippe sie an, um sie verschlüsselt zu senden."
+            "value": "Verschlüsselte Nachricht nicht gesendet: Öffne die Unterhaltung und tippe sie an, um sie zu senden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted conversation: the message wasn’t sent. Open the conversation and tap it to send it encrypted."
+            "value": "Encrypted message not sent: open the conversation and tap it to send."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversación cifrada: el mensaje no se envió. Abre la conversación y tócalo para enviarlo cifrado."
+            "value": "Mensaje cifrado no enviado: abre la conversación y tócalo para enviarlo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation chiffrée : le message n’est pas parti. Ouvrez la conversation et touchez-le pour l’envoyer chiffré."
+            "value": "Message chiffré non parti : ouvrez la conversation et touchez-le pour l’envoyer."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversazione crittografata: il messaggio non è stato inviato. Apri la conversazione e toccalo per inviarlo crittografato."
+            "value": "Messaggio crittografato non inviato: apri la conversazione e toccalo per inviarlo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversa criptografada: a mensagem não foi enviada. Abra a conversa e toque nela para enviá-la criptografada."
+            "value": "Mensagem criptografada não enviada: abra a conversa e toque nela para enviar."
           }
         }
       }
@@ -325145,43 +324355,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محادثة مشفّرة: لم تُرسل الرسالة وتعذّر الاحتفاظ بها على هذا الجهاز. افتح المحادثة لكتابتها من جديد."
+            "value": "الرسالة المشفّرة لم تُحفظ: افتح المحادثة لإعادة كتابتها."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verschlüsselte Unterhaltung: Die Nachricht wurde nicht gesendet und konnte auf diesem Gerät nicht gespeichert werden. Öffne die Unterhaltung, um sie erneut zu schreiben."
+            "value": "Verschlüsselte Nachricht nicht gespeichert: Öffne die Unterhaltung, um sie neu zu schreiben."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encrypted conversation: the message wasn’t sent and couldn’t be kept on this device. Open the conversation to write it again."
+            "value": "Encrypted message not kept: open the conversation to rewrite it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversación cifrada: el mensaje no se envió y no se pudo guardar en este dispositivo. Abre la conversación para escribirlo de nuevo."
+            "value": "Mensaje cifrado no guardado: abre la conversación para reescribirlo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation chiffrée : le message n’est pas parti et n’a pas pu être gardé sur cet appareil. Ouvrez la conversation pour l’écrire à nouveau."
+            "value": "Message chiffré non gardé : ouvrez la conversation pour le réécrire."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversazione crittografata: il messaggio non è stato inviato e non è stato possibile conservarlo su questo dispositivo. Apri la conversazione per scriverlo di nuovo."
+            "value": "Messaggio crittografato non conservato: apri la conversazione per riscriverlo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversa criptografada: a mensagem não foi enviada e não pôde ser guardada neste dispositivo. Abra a conversa para escrevê-la novamente."
+            "value": "Mensagem criptografada não guardada: abra a conversa para reescrevê-la."
           }
         }
       }
@@ -325239,43 +324449,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "محادثة أُنشئت قبل التشفير المنهجي: رسائلها غير مشفّرة"
+            "value": "غير مشفّرة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unterhaltung vor der systematischen Verschlüsselung erstellt: Ihre Nachrichten sind nicht verschlüsselt"
+            "value": "Nicht verschlüsselt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation created before systematic encryption: its messages are not encrypted"
+            "value": "Not encrypted"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversación creada antes del cifrado sistemático: sus mensajes no están cifrados"
+            "value": "No cifrada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés"
+            "value": "Non chiffrée"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversazione creata prima della crittografia sistematica: i suoi messaggi non sono crittografati"
+            "value": "Non crittografata"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Conversa criada antes da criptografia sistemática: suas mensagens não são criptografadas"
+            "value": "Não criptografada"
           }
         }
       }
@@ -325380,43 +324590,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشفّرة تمامًا بين الطرفين: أجهزة المشاركين وحدها تقرأ الرسائل"
+            "value": "مشفّرة تمامًا بين الطرفين"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende-zu-Ende-verschlüsselt: Nur die Geräte der Teilnehmenden können die Nachrichten lesen"
+            "value": "Ende-zu-Ende-verschlüsselt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encrypted: only the participants’ devices can read the messages"
+            "value": "End-to-end encrypted"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cifrada de extremo a extremo: solo los dispositivos de los participantes leen los mensajes"
+            "value": "Cifrada de extremo a extremo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages"
+            "value": "Chiffrée de bout en bout"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Crittografata end-to-end: solo i dispositivi dei partecipanti leggono i messaggi"
+            "value": "Crittografata end-to-end"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Criptografada de ponta a ponta: só os aparelhos dos participantes leem as mensagens"
+            "value": "Criptografada de ponta a ponta"
           }
         }
       }
@@ -325803,43 +325013,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أُنشئت هذه المحادثة قبل التشفير المنهجي: تُخزَّن رسائلها دون تشفير."
+            "value": "تُخزَّن رسائلها دون تشفير."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Unterhaltung wurde vor der systematischen Verschlüsselung erstellt: Ihre Nachrichten werden unverschlüsselt gespeichert."
+            "value": "Ihre Nachrichten werden unverschlüsselt gespeichert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This conversation was created before systematic encryption: its messages are stored unencrypted."
+            "value": "Its messages are stored without encryption."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta conversación se creó antes del cifrado sistemático: sus mensajes se guardan sin cifrar."
+            "value": "Sus mensajes se almacenan sin cifrado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette conversation a été créée avant le chiffrement systématique : ses messages sont stockés sans chiffrement."
+            "value": "Ses messages sont stockés sans chiffrement."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa conversazione è stata creata prima della crittografia sistematica: i suoi messaggi sono archiviati senza crittografia."
+            "value": "I suoi messaggi sono archiviati senza crittografia."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta conversa foi criada antes da criptografia sistemática: suas mensagens são armazenadas sem criptografia."
+            "value": "Suas mensagens são armazenadas sem criptografia."
           }
         }
       }
@@ -325897,43 +325107,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يشفّر الوضع الهجين رسائلك على خوادمنا، التي يمكنها قراءتها من أجل الترجمة والبحث: هذا ليس تشفيرًا من طرف إلى طرف. وبين جهازين متوافقين، تتيح طبقة ثانية أيضًا التحقق من أن الرسالة النصية لم تُعدَّل في الطريق؛ وعند غيابها، لا يُعرض أي شيء على أنه موثَّق."
+            "value": "الوضع الهجين ليس تشفيرًا تامًا بين الطرفين: تقرأ خوادمنا الرسائل من أجل الترجمة والبحث."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Hybridmodus verschlüsselt deine Nachrichten auf unseren Servern, die sie für Übersetzung und Suche lesen können: Das ist keine Ende-zu-Ende-Verschlüsselung. Zwischen zwei kompatiblen Geräten lässt sich mit einer zweiten Schicht zusätzlich prüfen, dass eine Textnachricht unterwegs nicht verändert wurde; fehlt sie, wird nichts als geprüft dargestellt."
+            "value": "Der Hybridmodus ist nicht Ende-zu-Ende: Unsere Server lesen die Nachrichten für Übersetzung und Suche."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hybrid mode encrypts your messages on our servers, which can read them for translation and search: it is not end-to-end encryption. Between two compatible devices, a second layer also lets you check that a text message was not altered on the way; when it is missing, nothing is presented as verified."
+            "value": "Hybrid mode is not end-to-end: our servers read messages for translation and search."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El modo híbrido cifra tus mensajes en nuestros servidores, que pueden leerlos para la traducción y la búsqueda: no es cifrado de extremo a extremo. Entre dos dispositivos compatibles, una segunda capa permite además comprobar que un mensaje de texto no se modificó por el camino; cuando falta, nada se presenta como verificado."
+            "value": "El modo híbrido no es de extremo a extremo: nuestros servidores leen los mensajes para la traducción y la búsqueda."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le mode hybride chiffre vos messages sur nos serveurs, qui peuvent les lire pour la traduction et la recherche : ce n’est pas le chiffrement de bout en bout. Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; quand elle manque, rien n’est présenté comme vérifié."
+            "value": "Le mode hybride n’est pas du bout en bout : nos serveurs lisent les messages pour la traduction et la recherche."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La modalità ibrida crittografa i tuoi messaggi sui nostri server, che possono leggerli per la traduzione e la ricerca: non è la crittografia end-to-end. Tra due dispositivi compatibili, un secondo livello permette inoltre di verificare che un messaggio di testo non sia stato modificato lungo il percorso; quando manca, nulla viene presentato come verificato."
+            "value": "La modalità ibrida non è end-to-end: i nostri server leggono i messaggi per traduzione e ricerca."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O modo híbrido criptografa suas mensagens em nossos servidores, que podem lê-las para tradução e busca: não é criptografia de ponta a ponta. Entre dois aparelhos compatíveis, uma segunda camada permite ainda verificar que uma mensagem de texto não foi alterada no caminho; quando ela falta, nada é apresentado como verificado."
+            "value": "O modo híbrido não é de ponta a ponta: nossos servidores leem as mensagens para tradução e busca."
           }
         }
       }
@@ -326878,96 +326088,49 @@
         }
       }
     },
-    "conversation.encryption.fact.endToEndIsFinal": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "بعد تفعيله، لا يمكن إيقاف التشفير التام بين الطرفين."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einmal eingeschaltet, lässt sich die Ende-zu-Ende-Verschlüsselung nicht mehr ausschalten."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Once turned on, end-to-end encryption can’t be turned off."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una vez activado, el cifrado de extremo a extremo ya no se puede desactivar."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Une fois activé, le chiffrement de bout en bout ne se désactive plus."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Una volta attivata, la crittografia end-to-end non si può più disattivare."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Depois de ativada, a criptografia de ponta a ponta não pode mais ser desativada."
-          }
-        }
-      }
-    },
     "conversation.encryption.fact.endToEndNeverTurnedOff": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يُوقَف التشفير التام بين الطرفين أبدًا. يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم."
+            "value": "لا يُوقَف التشفير التام بين الطرفين أبدًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten. Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen."
+            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encryption can never be turned off. You can always open another conversation, without end-to-end encryption, with the same people."
+            "value": "End-to-end encryption can never be turned off."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El cifrado de extremo a extremo nunca se desactiva. Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas."
+            "value": "El cifrado de extremo a extremo nunca se desactiva."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes."
+            "value": "Le chiffrement de bout en bout ne se désactive jamais."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La crittografia end-to-end non si disattiva mai. Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone."
+            "value": "La crittografia end-to-end non si disattiva mai."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A criptografia de ponta a ponta nunca é desativada. Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas."
+            "value": "A criptografia de ponta a ponta nunca é desativada."
           }
         }
       }
@@ -326978,43 +326141,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يُوقَف التشفير التام بين الطرفين أبدًا: تبقى هذه المحادثة الثنائية مشفّرة. يمكنك دائمًا أن تفتح بجانبها محادثة أخرى، دون تشفير تام بين الطرفين، مع هذا الشخص: كلتاهما في القائمة، وهذه مميّزة بقفل."
+            "value": "لا يُوقَف التشفير التام بين الطرفين أبدًا: تبقى هذه المحادثة الثنائية مشفّرة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten: Dieser Einzelchat bleibt verschlüsselt. Du kannst daneben jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit dieser Person öffnen: Beide stehen in der Liste, diese mit einem Schloss markiert."
+            "value": "Die Ende-zu-Ende-Verschlüsselung lässt sich nie ausschalten: Dieser Einzelchat bleibt verschlüsselt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end encryption can never be turned off: this one-to-one chat stays encrypted. You can always open another conversation alongside, without end-to-end encryption, with this person: both are in the list, this one marked with a padlock."
+            "value": "End-to-end encryption can never be turned off: this one-to-one chat stays encrypted."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El cifrado de extremo a extremo nunca se desactiva: este chat individual sigue cifrado. Siempre podrás abrir al lado otra conversación, sin cifrado de extremo a extremo, con esta persona: las dos están en la lista, esta marcada con un candado."
+            "value": "El cifrado de extremo a extremo nunca se desactiva: este chat individual sigue cifrado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste. Vous pourrez toujours ouvrir à côté une autre conversation, sans chiffrement de bout en bout, avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas."
+            "value": "Le chiffrement de bout en bout ne se désactive jamais : ce tête-à-tête le reste."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La crittografia end-to-end non si disattiva mai: questa chat individuale resta crittografata. Potrai sempre aprire accanto un’altra conversazione, senza crittografia end-to-end, con questa persona: entrambe sono nell’elenco, questa segnata da un lucchetto."
+            "value": "La crittografia end-to-end non si disattiva mai: questa chat individuale resta crittografata."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A criptografia de ponta a ponta nunca é desativada: esta conversa individual continua criptografada. Você sempre poderá abrir ao lado outra conversa, sem criptografia de ponta a ponta, com esta pessoa: as duas estão na lista, esta marcada com um cadeado."
+            "value": "A criptografia de ponta a ponta nunca é desativada: esta conversa individual continua criptografada."
           }
         }
       }
@@ -327025,43 +326188,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "على هذا الجهاز، بمجرد رؤية هذه المحادثة مشفّرة تمامًا بين الطرفين، لا يكتب حسابك فيها أبدًا دون تشفير تام بين الطرفين، حتى لو عرضها الخادم لاحقًا بشكل مختلف."
+            "value": "بعد أن تُرى مشفّرة تمامًا بين الطرفين، لا يُكتب فيها هنا أبدًا بنص واضح."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Auf diesem Gerät schreibt dein Konto, sobald diese Unterhaltung Ende-zu-Ende-verschlüsselt gesehen wurde, nie wieder ohne Ende-zu-Ende-Verschlüsselung darin, selbst wenn der Server sie später anders darstellt."
+            "value": "Einmal Ende-zu-Ende-verschlüsselt gesehen, wird hier nie wieder im Klartext geschrieben."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On this device, once this conversation has been seen end-to-end encrypted, your account never writes in it without end-to-end encryption again, even if the server later presented it otherwise."
+            "value": "Once seen end-to-end encrypted, it is never written in plain text here again."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En este dispositivo, una vez vista esta conversación cifrada de extremo a extremo, tu cuenta ya nunca escribe en ella sin cifrado de extremo a extremo, aunque el servidor la presentara después de otro modo."
+            "value": "Vista cifrada de extremo a extremo, ya nunca se escribe en claro aquí."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sur cet appareil, une fois cette conversation vue chiffrée de bout en bout, votre compte n’y écrit plus jamais sans chiffrement de bout en bout, même si le serveur la présentait ensuite autrement."
+            "value": "Vue chiffrée de bout en bout, elle ne s’écrit plus jamais en clair ici."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Su questo dispositivo, una volta vista questa conversazione crittografata end-to-end, il tuo account non vi scrive mai più senza crittografia end-to-end, anche se il server la presentasse poi diversamente."
+            "value": "Vista crittografata end-to-end, qui non si scrive mai più in chiaro."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neste aparelho, depois que esta conversa foi vista com criptografia de ponta a ponta, sua conta nunca mais escreve nela sem criptografia de ponta a ponta, mesmo que o servidor a apresente depois de outra forma."
+            "value": "Vista com criptografia de ponta a ponta, nunca mais é escrita em texto claro aqui."
           }
         }
       }
@@ -332336,43 +331499,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا يمكن إلا لمستلم طلب رسالة لم يُقبل بعدُ جعل هذه المحادثة متقادمة."
+            "value": "لا يمكن إلا لمستلم الطلب جعلها متقادمة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur der Empfänger einer nicht angenommenen Nachrichtenanfrage kann diese Unterhaltung als veraltet markieren."
+            "value": "Nur der Empfänger der Anfrage kann sie als veraltet markieren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Only the recipient of a message request that hasn't been accepted can make this conversation obsolete."
+            "value": "Only the recipient of the request can make it obsolete."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo el destinatario de una solicitud de mensaje no aceptada puede volver obsoleta esta conversación."
+            "value": "Solo el destinatario de la solicitud puede volverla obsoleta."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seul le destinataire d'une demande de message non acceptée peut rendre cette conversation obsolète."
+            "value": "Seul le destinataire de la demande peut la rendre obsolète."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo il destinatario di una richiesta di messaggio non accettata può rendere obsoleta questa conversazione."
+            "value": "Solo il destinatario della richiesta può renderla obsoleta."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Somente o destinatário de uma solicitação de mensagem não aceita pode tornar esta conversa obsoleta."
+            "value": "Somente o destinatário da solicitação pode torná-la obsoleta."
           }
         }
       }
@@ -332524,43 +331687,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يمكنك إنشاؤها بمفردك، لتدقيق أو لجمع الآراء، ثم دعوة الآخرين لاحقًا."
+            "value": "يمكنك إنشاؤها بمفردك والدعوة لاحقًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du kannst sie allein erstellen, für ein Audit oder um Meinungen zu sammeln, und später einladen."
+            "value": "Du kannst sie allein erstellen und später einladen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "You can create it on your own, for an audit or to gather feedback, and invite people later."
+            "value": "You can create it alone and invite people later."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Puedes crearlo solo, para una auditoría o para recoger opiniones, e invitar más tarde."
+            "value": "Puedes crearlo solo e invitar más tarde."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vous pouvez le créer seul, pour un audit ou pour recueillir des avis, et inviter plus tard."
+            "value": "Vous pouvez le créer seul et inviter plus tard."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Puoi crearlo da solo, per un audit o per raccogliere pareri, e invitare più tardi."
+            "value": "Puoi crearlo da solo e invitare più tardi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Você pode criá-lo sozinho, para uma auditoria ou para coletar opiniões, e convidar depois."
+            "value": "Você pode criá-lo sozinho e convidar depois."
           }
         }
       }
@@ -335203,43 +334366,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اضغط مطولًا وتحدّث: يخرج صوتك مباشرةً لدى %@ دون الحاجة إلى الرد."
+            "value": "جهاز لاسلكي للطوارئ لأقرب الناس إليك: اضغط مطولًا وتحدّث، يخرج صوتك لدى %@ دون الحاجة إلى الرد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gedrückt halten und sprechen: Deine Stimme ist bei %@ sofort zu hören, ohne Abheben."
+            "value": "Notfall-Walkie-Talkie für deine Allernächsten: Gedrückt halten und sprechen, deine Stimme ist bei %@ ohne Abheben zu hören."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hold and talk: your voice plays directly on %@’s side, no need to pick up."
+            "value": "Emergency walkie-talkie, for your closest people: hold and talk, your voice plays on %@’s side without them picking up."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mantén pulsado y habla: tu voz suena directamente en el lado de %@, sin descolgar."
+            "value": "Walkie-talkie de urgencia, para tus más cercanos: mantén pulsado y habla, tu voz suena en el lado de %@ sin descolgar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Maintenez et parlez : votre voix sort directement chez %@, sans décrocher."
+            "value": "Talkie d’urgence, pour vos très proches : maintenez et parlez, votre voix sort chez %@ sans décrocher."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tieni premuto e parla: la tua voce esce direttamente da %@, senza rispondere."
+            "value": "Walkie-talkie d’emergenza, per i tuoi più vicini: tieni premuto e parla, la tua voce esce da %@ senza rispondere."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Segure e fale: sua voz sai diretamente do lado de %@, sem atender."
+            "value": "Walkie-talkie de emergência, para seus mais próximos: segure e fale, sua voz sai do lado de %@ sem atender."
           }
         }
       }
@@ -335526,53 +334689,6 @@
         }
       }
     },
-    "talkie.send.voiceCopy": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا الشخص غير متاح للوصول في حالات الطوارئ. ستُنشأ رسالة وتُرسل في أحدث محادثة لك معه."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese Person ist für einen Notfallzugang nicht erreichbar. Eine Nachricht wird erstellt und in eurer letzten Unterhaltung gesendet."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This person isn’t available for emergency access. A message will be created and sent in your most recent conversation with them."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta persona no está disponible para un acceso de urgencia. Se creará un mensaje y se enviará en tu conversación más reciente con ella."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questa persona non è disponibile per un accesso d’emergenza. Verrà creato un messaggio e inviato nella vostra conversazione più recente."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Essa pessoa não está disponível para um acesso de emergência. Uma mensagem será criada e enviada na sua conversa mais recente com ela."
-          }
-        }
-      }
-    },
     "talkie.send.waking": {
       "extractionState": "manual",
       "localizations": {
@@ -335673,43 +334789,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "متاح للمقرّبين جدًا منك. استخدمه فقط في حالات الطوارئ القصوى: يُسمع صوتك لديهم حتى لو كان Meeshy في الخلفية."
+            "value": "يخرج صوتك حتى لو كان Meeshy في الخلفية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Für deine engsten Vertrauten. Nur im äußersten Notfall verwenden: Deine Stimme ist bei ihnen zu hören, auch wenn Meeshy im Hintergrund ist."
+            "value": "Deine Stimme ist auch zu hören, wenn Meeshy im Hintergrund läuft."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Available for your very closest people. Use it only in an extreme emergency: your voice plays on their phone even when Meeshy is in the background."
+            "value": "Your voice plays even if Meeshy is in the background."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Disponible para tus personas más cercanas. Úsalo solo en caso de extrema urgencia: tu voz suena en su teléfono aunque Meeshy esté en segundo plano."
+            "value": "Tu voz suena aunque Meeshy esté en segundo plano."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Disponible pour vos très proches. À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan."
+            "value": "Votre voix sort même si Meeshy est en arrière-plan."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Disponibile per le persone a te più vicine. Da usare solo in caso di estrema urgenza: la tua voce esce dal loro telefono anche se Meeshy è in background."
+            "value": "La tua voce esce anche se Meeshy è in background."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Disponível para as pessoas mais próximas. Use apenas em caso de extrema urgência: sua voz sai no telefone delas mesmo com o Meeshy em segundo plano."
+            "value": "Sua voz sai mesmo que o Meeshy esteja em segundo plano."
           }
         }
       }
@@ -335720,43 +334836,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "حول جهاز اللاسلكي للطوارئ"
+            "value": "متى أستخدم جهاز اللاسلكي؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Über das Notfall-Walkie-Talkie"
+            "value": "Wann das Walkie-Talkie nutzen?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "About the emergency walkie-talkie"
+            "value": "When to use the walkie-talkie?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acerca del walkie-talkie de urgencia"
+            "value": "¿Cuándo usar el walkie-talkie?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "À propos du talkie d’urgence"
+            "value": "Quand utiliser le talkie ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Informazioni sul walkie-talkie d’emergenza"
+            "value": "Quando usare il walkie-talkie?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sobre o walkie-talkie de emergência"
+            "value": "Quando usar o walkie-talkie?"
           }
         }
       }
@@ -335767,43 +334883,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جهاز اللاسلكي غير مشفّر تشفيرًا تامًا بين الطرفين: يبقى مغلقًا مع محادثة مشفّرة."
+            "value": "لا جهاز لاسلكي في محادثة مشفّرة: فهو غير مشفّر تشفيرًا تامًا بين الطرفين."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Walkie-Talkie ist nicht Ende-zu-Ende-verschlüsselt: Bei einer verschlüsselten Unterhaltung bleibt es geschlossen."
+            "value": "Kein Walkie-Talkie in einer verschlüsselten Unterhaltung: Es ist nicht Ende-zu-Ende-verschlüsselt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The walkie-talkie is not end-to-end encrypted: it stays closed with an encrypted conversation."
+            "value": "No walkie-talkie in an encrypted conversation: it is not end-to-end encrypted."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El walkie-talkie no está cifrado de extremo a extremo: sigue cerrado con una conversación cifrada."
+            "value": "Sin walkie-talkie en una conversación cifrada: no lo está de extremo a extremo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le talkie n’est pas chiffré de bout en bout : il reste fermé avec une conversation chiffrée."
+            "value": "Pas de talkie dans une conversation chiffrée : il ne l’est pas de bout en bout."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il walkie-talkie non è cifrato end-to-end: resta chiuso con una conversazione cifrata."
+            "value": "Niente walkie-talkie in una conversazione crittografata: non è end-to-end."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "O walkie-talkie não é criptografado de ponta a ponta: fica fechado com uma conversa criptografada."
+            "value": "Sem walkie-talkie em uma conversa criptografada: ele não é de ponta a ponta."
           }
         }
       }
@@ -338192,6 +337308,711 @@
           "stringUnit": {
             "state": "translated",
             "value": "até %@"
+          }
+        }
+      }
+    },
+    "share.link.create.access.birthday_required.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لماذا نطلب تاريخ الميلاد؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum das Geburtsdatum abfragen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Why ask for the date of birth?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Por qué pedir la fecha de nacimiento?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pourquoi demander la date de naissance ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perché chiedere la data di nascita?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por que pedir a data de nascimento?"
+          }
+        }
+      }
+    },
+    "share.links.createdOn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أُنشئ في %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstellt am %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Created on %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creado el %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créé le %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creato il %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criado em %@"
+          }
+        }
+      }
+    },
+    "share.links.intro": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الرابط يدعو إلى محادثة: أنت تحدد ما يمكن للضيوف فعله وحتى متى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Link lädt in eine Unterhaltung ein: Du legst fest, was Gäste tun dürfen und bis wann."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A link invites people into a conversation: you set what guests can do and until when."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un enlace invita a una conversación: tú decides qué pueden hacer los invitados y hasta cuándo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un lien invite dans une conversation : vous fixez ce que les invités peuvent faire et jusqu’à quand."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un link invita in una conversazione: stabilisci cosa possono fare gli ospiti e fino a quando."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um link convida para uma conversa: você define o que os convidados podem fazer e até quando."
+          }
+        }
+      }
+    },
+    "conversation.encryption.note.revert.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا لو أردت العودة دون تشفير؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Und wenn ich ohne Verschlüsselung zurück will?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What if I want to go back without encryption?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Y si quiero volver sin cifrado?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Et si je veux revenir sans chiffrement ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E se voglio tornare senza cifratura?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E se eu quiser voltar sem criptografia?"
+          }
+        }
+      }
+    },
+    "conversation.encryption.note.serverSays.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا لو قال الخادم عكس ذلك؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Und wenn der Server etwas anderes sagt?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What if the server says otherwise?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Y si el servidor dice lo contrario?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Et si le serveur dit le contraire ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E se il server dice il contrario?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E se o servidor disser o contrário?"
+          }
+        }
+      }
+    },
+    "conversation.encryption.note.serverSays.text": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حتى لو عرضها الخادم لاحقًا بشكل مختلف، لن يكتب حسابك فيها من هذا الجهاز دون تشفير تام بين الطرفين."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selbst wenn der Server sie später anders darstellt, schreibt dein Konto von diesem Gerät aus nie wieder ohne Ende-zu-Ende-Verschlüsselung darin."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Even if the server later presented it otherwise, your account no longer writes in it without end-to-end encryption from this device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aunque el servidor la presentara después de otro modo, tu cuenta ya no escribe en ella sin cifrado de extremo a extremo desde este dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Même si le serveur la présentait ensuite autrement, votre compte n’y écrit plus sans chiffrement de bout en bout depuis cet appareil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anche se il server la presentasse poi diversamente, il tuo account non vi scrive più senza crittografia end-to-end da questo dispositivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesmo que o servidor a apresente depois de outra forma, sua conta não escreve mais nela sem criptografia de ponta a ponta a partir deste aparelho."
+          }
+        }
+      }
+    },
+    "conversation.encryption.note.hybridLayer.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا تتحقق منه الطبقة الثانية؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was prüft die zweite Schicht?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does the second layer check?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué comprueba la segunda capa?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que vérifie la seconde couche ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa verifica il secondo livello?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que a segunda camada verifica?"
+          }
+        }
+      }
+    },
+    "conversation.encryption.note.devices.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يحدث لجهاز تمت إزالته أو أُعيد تثبيته؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was passiert mit einem entfernten oder neu installierten Gerät?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What happens to a removed or reinstalled device?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué pasa con un dispositivo retirado o reinstalado?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que devient un appareil retiré ou réinstallé ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa succede a un dispositivo rimosso o reinstallato?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que acontece com um aparelho removido ou reinstalado?"
+          }
+        }
+      }
+    },
+    "conversation.encryption.note.whoMayToggle.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من يستطيع تغيير الوضع؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wer kann den Modus ändern?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Who can change the mode?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Quién puede cambiar el modo?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qui peut changer de mode ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chi può cambiare modalità?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quem pode mudar o modo?"
+          }
+        }
+      }
+    },
+    "conversation.prefs.more": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المزيد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mehr"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altro"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais"
+          }
+        }
+      }
+    },
+    "conversation.lock.subtitle.enterMasterPin": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أدخل رمز PIN الرئيسي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib deine Master-PIN ein"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter your master PIN"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce tu PIN maestro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saisissez votre master PIN"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci il PIN principale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digite seu PIN mestre"
+          }
+        }
+      }
+    },
+    "conversation.encryption.note.revert.text": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكنك دائمًا فتح محادثة أخرى، دون تشفير تام بين الطرفين، مع الأشخاص أنفسهم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit denselben Personen öffnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can always open another conversation, without end-to-end encryption, with the same people."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siempre podrás abrir otra conversación, sin cifrado de extremo a extremo, con las mismas personas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potrai sempre aprire un’altra conversazione, senza crittografia end-to-end, con le stesse persone."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você sempre poderá abrir outra conversa, sem criptografia de ponta a ponta, com as mesmas pessoas."
+          }
+        }
+      }
+    },
+    "conversation.encryption.note.revertDirect.text": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يمكنك دائمًا أن تفتح بجانبها محادثة أخرى، دون تشفير تام بين الطرفين، مع هذا الشخص: كلتاهما في القائمة، وهذه مميّزة بقفل."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du kannst daneben jederzeit eine andere Unterhaltung ohne Ende-zu-Ende-Verschlüsselung mit dieser Person öffnen: Beide stehen in der Liste, diese mit einem Schloss markiert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can always open another conversation alongside, without end-to-end encryption, with this person: both are in the list, this one marked with a padlock."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siempre podrás abrir al lado otra conversación, sin cifrado de extremo a extremo, con esta persona: las dos están en la lista, esta marcada con un candado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pourrez toujours ouvrir à côté une autre conversation, sans chiffrement de bout en bout, avec cette personne : les deux sont dans la liste, celle-ci marquée d’un cadenas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Potrai sempre aprire accanto un’altra conversazione, senza crittografia end-to-end, con questa persona: entrambe sono nell’elenco, questa segnata da un lucchetto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você sempre poderá abrir ao lado outra conversa, sem criptografia de ponta a ponta, com esta pessoa: as duas estão na lista, esta marcada com um cadeado."
+          }
+        }
+      }
+    },
+    "conversation.encryption.note.hybridLayer.text": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "وبين جهازين متوافقين، تتيح طبقة ثانية أيضًا التحقق من أن الرسالة النصية لم تُعدَّل في الطريق؛ وعند غيابها، لا يُعرض أي شيء على أنه موثَّق."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwischen zwei kompatiblen Geräten lässt sich mit einer zweiten Schicht zusätzlich prüfen, dass eine Textnachricht unterwegs nicht verändert wurde; fehlt sie, wird nichts als geprüft dargestellt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Between two compatible devices, a second layer also lets you check that a text message was not altered on the way; when it is missing, nothing is presented as verified."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre dos dispositivos compatibles, una segunda capa permite además comprobar que un mensaje de texto no se modificó por el camino; cuando falta, nada se presenta como verificado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre deux appareils compatibles, une seconde couche permet en plus de vérifier qu’un message texte n’a pas été modifié en chemin ; quand elle manque, rien n’est présenté comme vérifié."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tra due dispositivi compatibili, un secondo livello permette inoltre di verificare che un messaggio di testo non sia stato modificato lungo il percorso; quando manca, nulla viene presentato come verificato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entre dois aparelhos compatíveis, uma segunda camada permite ainda verificar que uma mensagem de texto não foi alterada no caminho; quando ela falta, nada é apresentado como verificado."
+          }
+        }
+      }
+    },
+    "share.link.create.access.birthday_required.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتيح التحقّق من العمر"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ermöglicht die Altersprüfung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enables age verification"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite la verificación de edad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permet le contrôle d'âge"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consente la verifica dell'età"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permite a verificação de idade"
           }
         }
       }

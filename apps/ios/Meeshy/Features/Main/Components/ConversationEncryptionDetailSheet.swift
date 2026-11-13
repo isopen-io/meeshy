@@ -28,6 +28,8 @@ struct ConversationEncryptionDetailSheet: View {
     @State private var isOpeningPair = false
     /// Cet appareil a vu la conversation chiffrée de bout en bout : elle le reste (#12949).
     @State private var remembersEndToEnd = false
+    /// Un seul (i) ouvert par fiche (épure #18078).
+    @State private var openNoteID: String?
 
     private var mayToggle: Bool { isDirect && !remembersEndToEnd && (status?.canToggleEncryption ?? fallbackMayToggle) }
 
@@ -83,16 +85,16 @@ struct ConversationEncryptionDetailSheet: View {
                     if explanation.regime == .endToEnd, let peer { readableDirectSection(peer) }
                     pairEndToEndSection
                     if offersModeSwitch, let mode { modeSwitchSection(from: mode) }
-                    ConversationEncryptionExplanationSections(explanation: explanation)
+                    ConversationEncryptionExplanationSections(explanation: explanation, openNoteID: $openNoteID)
                 case .activation:
                     inactiveStateSection
                     pairEndToEndSection
-                    ConversationEncryptionExplanationSections(explanation: explanation)
+                    ConversationEncryptionExplanationSections(explanation: explanation, openNoteID: $openNoteID)
                     enableStateSections
                 case .inactiveReadOnly:
                     inactiveStateSection
                     pairEndToEndSection
-                    ConversationEncryptionExplanationSections(explanation: explanation)
+                    ConversationEncryptionExplanationSections(explanation: explanation, openNoteID: $openNoteID)
                 }
 
                 if let errorMessage {
@@ -129,7 +131,7 @@ struct ConversationEncryptionDetailSheet: View {
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
             } message: { _ in
                 Text(String(localized: "conversation.encryption.create.footer",
-                            defaultValue: "Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.",
+                            defaultValue: "Le chiffrement de bout en bout ne se désactive jamais.",
                             bundle: .main))
             }
         }
@@ -226,10 +228,9 @@ struct ConversationEncryptionDetailSheet: View {
                         defaultValue: "Changer de mode",
                         bundle: .main))
         } footer: {
-            Text(String(localized: "conversation.encryption.create.footer",
-                        defaultValue: "Le chiffrement de bout en bout ne se désactive jamais. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.",
-                        bundle: .main))
-                .font(.caption)
+            finalFooter(String(localized: "conversation.encryption.create.footer",
+                               defaultValue: "Le chiffrement de bout en bout ne se désactive jamais.",
+                               bundle: .main))
         }
     }
 
@@ -281,7 +282,7 @@ struct ConversationEncryptionDetailSheet: View {
     private func openReadableDirect(with peer: ConversationEncryptionPeer) async {
         guard isOnline() else {
             errorMessage = String(localized: "conversation.encryption.detail.plaintextDirectOffline",
-                                  defaultValue: "Hors connexion : reconnectez-vous pour ouvrir la conversation sans chiffrement de bout en bout.",
+                                  defaultValue: "Hors connexion : reconnectez-vous pour l’ouvrir.",
                                   bundle: .main)
             return
         }
@@ -321,10 +322,10 @@ struct ConversationEncryptionDetailSheet: View {
     private func failOpeningReadableDirect(servedGap: Bool = false) {
         errorMessage = servedGap
             ? String(localized: "conversation.encryption.detail.plaintextDirectServedGap",
-                     defaultValue: "Le serveur présente déjà ce tête-à-tête sans chiffrement de bout en bout : rétablissez-le d’abord ici, puis ouvrez à côté la conversation sans chiffrement de bout en bout.",
+                     defaultValue: "Rétablissez d’abord le chiffrement ici, puis ouvrez l’autre conversation.",
                      bundle: .main)
             : String(localized: "conversation.encryption.detail.plaintextDirectFailed",
-                     defaultValue: "La conversation sans chiffrement de bout en bout n’a pas pu être ouverte. Réessayez.",
+                     defaultValue: "Ouverture impossible. Réessayez.",
                      bundle: .main)
         HapticFeedback.error()
     }
@@ -333,10 +334,12 @@ struct ConversationEncryptionDetailSheet: View {
 
     private func servedGapSection(_ gap: ConversationEncryptionServedGap) -> some View {
         Section {
-            Text(String(localized: "conversation.encryption.detail.servedGap",
-                        defaultValue: "Le serveur présente cette conversation sans chiffrement de bout en bout, mais cet appareil l’a vue chiffrée de bout en bout : elle le reste ici. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.",
-                        bundle: .main))
-                .font(.subheadline)
+            MeeshyInfoNoted(note: ConversationEncryptionRevertNote.note(), openNoteID: $openNoteID) {
+                Text(String(localized: "conversation.encryption.detail.servedGap",
+                            defaultValue: "Vue chiffrée de bout en bout ici : elle le reste, quoi que présente le serveur.",
+                            bundle: .main))
+                    .font(.subheadline)
+            }
             if gap == .restorable {
                 Button {
                     selectedMode = .e2ee
@@ -370,7 +373,7 @@ struct ConversationEncryptionDetailSheet: View {
                                 bundle: .main))
                         .font(.headline)
                     Text(String(localized: "conversation.encryption.detail.inactiveSubtitle",
-                                defaultValue: "Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés.",
+                                defaultValue: "Créée avant le chiffrement systématique.",
                                 bundle: .main))
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -405,10 +408,9 @@ struct ConversationEncryptionDetailSheet: View {
                         defaultValue: "Mode",
                         bundle: .main))
         } footer: {
-            Text(String(localized: "conversation.encryption.detail.activationFooterFinal",
-                        defaultValue: "Le chiffrement de bout en bout ne se désactive jamais, le chiffrement sur nos serveurs non plus. Vous pourrez toujours ouvrir une autre conversation, sans chiffrement de bout en bout, avec les mêmes personnes.",
-                        bundle: .main))
-                .font(.caption)
+            finalFooter(String(localized: "conversation.encryption.detail.activationFooterFinal",
+                               defaultValue: "Le chiffrement ne se désactive jamais, de bout en bout comme sur nos serveurs.",
+                               bundle: .main))
         }
 
         Section {
@@ -442,6 +444,14 @@ struct ConversationEncryptionDetailSheet: View {
     }
 
     // MARK: - Helpers
+
+    /// Le pied « ne se désactive jamais » : la phrase d'état reste entière et visible, le reste derrière un (i).
+    private func finalFooter(_ text: String) -> some View {
+        MeeshyInfoNoted(note: ConversationEncryptionRevertNote.note(), openNoteID: $openNoteID) {
+            Text(text)
+                .font(.caption)
+        }
+    }
 
     /// En bout en bout, la traduction n'est pas absente : elle se fait sur l'appareil (#12880).
     private func translationLabel(_ status: ConversationEncryptionStatus) -> String {
@@ -497,7 +507,7 @@ struct ConversationEncryptionDetailSheet: View {
         } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.directAlreadyEndToEnd {
             await loadStatus()
             errorMessage = String(localized: "conversation.encryption.detail.directAlreadyEndToEnd",
-                                  defaultValue: "Vous avez déjà une conversation chiffrée de bout en bout avec cette personne : ouvrez-la pour y échanger. Celle-ci reste chiffrée sur nos serveurs.",
+                                  defaultValue: "Une conversation chiffrée de bout en bout existe déjà avec cette personne : ouvrez-la.",
                                   bundle: .main)
             HapticFeedback.error()
         } catch let error as MeeshyError where error.e2eeCode == E2EEErrorCode.directNotAPair {

@@ -43,7 +43,7 @@ enum ShareSheetCopy {
         case .overBudget(let uncopied):
             return String(format: String(localized: "share.sheet.content.over-budget", defaultValue: "Fichiers non copiés : %1$d. Un partage emporte au plus %2$d fichiers et %3$@.", bundle: .meeshyShare), uncopied, ShareLimits.maxFiles, limitSize(ShareLimits.maxTotalBytes))
         case .refusedSource:
-            return String(localized: "share.sheet.content.refused-source", defaultValue: "Cette app n’a remis qu’un chemin de fichier, que Meeshy n’ouvre pas. Partagez le fichier lui-même, ou enregistrez-le d’abord dans Photos ou Fichiers.", bundle: .meeshyShare)
+            return String(localized: "share.sheet.content.refused-source", defaultValue: "Cette app n’a remis qu’un chemin de fichier : partagez le fichier lui-même.", bundle: .meeshyShare)
         }
     }
     static var overLimit: String { String(localized: "share.sheet.content.over-limit", defaultValue: "dépasse la limite", bundle: .meeshyShare) }
@@ -65,9 +65,9 @@ enum ShareSheetCopy {
     static func blockedBody(_ reason: ShareWithdrawReason) -> String {
         switch reason {
         case .viewOnce:
-            return String(localized: "share.sheet.blocked.view-once", defaultValue: "Il est à vue unique : il ne se transfère, ne s’enregistre et ne se partage pas. Il reste dans la conversation, le temps d’être vu.", bundle: .meeshyShare)
+            return String(localized: "share.sheet.blocked.view-once", defaultValue: "À vue unique : il reste dans la conversation, le temps d’être vu.", bundle: .meeshyShare)
         case .afterRead:
-            return String(localized: "share.sheet.blocked.after-read", defaultValue: "Il disparaît après lecture : il ne se transfère, ne s’enregistre et ne se partage pas.", bundle: .meeshyShare)
+            return String(localized: "share.sheet.blocked.after-read", defaultValue: "Éphémère : il reste dans la conversation jusqu’à sa disparition.", bundle: .meeshyShare)
         case .unavailable:
             return String(localized: "share.sheet.blocked.unavailable", defaultValue: "Ce contenu n’est plus disponible.", bundle: .meeshyShare)
         }
@@ -90,7 +90,7 @@ enum ShareSheetCopy {
     static var sendWithMeeshy: String { String(localized: "share.sheet.title.extension", defaultValue: "Envoyer avec Meeshy", bundle: .meeshyShare) }
     static var signInTitle: String { String(localized: "share.sheet.sign-in.title", defaultValue: "Connectez-vous pour envoyer", bundle: .meeshyShare) }
     static var signInBody: String {
-        String(localized: "share.sheet.sign-in.body", defaultValue: "Votre partage est gardé. Il vous attend dans Meeshy, ou dans le studio si vous voulez le publier.", bundle: .meeshyShare)
+        String(localized: "share.sheet.sign-in.body", defaultValue: "Votre partage est gardé : il vous attend dans Meeshy.", bundle: .meeshyShare)
     }
     static var openMeeshy: String { String(localized: "share.sheet.sign-in.open", defaultValue: "Ouvrir Meeshy", bundle: .meeshyShare) }
     static var studio: String { String(localized: "share.sheet.studio", defaultValue: "Modifier dans le studio", bundle: .meeshyShare) }
@@ -188,7 +188,7 @@ enum ShareSheetCopy {
     static var retry: String { String(localized: "share.sheet.status.retry", defaultValue: "Réessayer", bundle: .meeshyShare) }
     static var retryAll: String { String(localized: "share.sheet.status.retry-all", defaultValue: "Tout réessayer", bundle: .meeshyShare) }
     static var offline: String {
-        String(localized: "share.sheet.offline", defaultValue: "Hors ligne. Ce qui n’est pas parti partira au retour du réseau, même si vous fermez Meeshy.", bundle: .meeshyShare)
+        String(localized: "share.sheet.offline", defaultValue: "Hors ligne : l’envoi repartira au retour du réseau.", bundle: .meeshyShare)
     }
     static func sentTo(_ name: String) -> String {
         String(format: String(localized: "share.sheet.toast.sent-to", defaultValue: "Envoyé à %@", bundle: .meeshyShare), name)

@@ -17231,43 +17231,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ستختفي هذه المحادثة نهائيًا من قائمتك. ولن يتأثر بقية الأعضاء."
+            "value": "تُزال نهائيًا من قائمتك؛ ولا يتأثر الأعضاء الآخرون."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Diese Unterhaltung verschwindet dauerhaft aus deiner Liste. Andere Mitglieder sind nicht betroffen."
+            "state": "translated",
+            "value": "Dauerhaft aus deiner Liste entfernt; die anderen Mitglieder sind nicht betroffen."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "This conversation will permanently disappear from your list. Other members won't be affected."
+            "state": "translated",
+            "value": "Removed from your list for good; other members are not affected."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta conversación desaparecerá definitivamente de tu lista. Los demás miembros no se verán afectados."
+            "state": "translated",
+            "value": "Se elimina definitivamente de tu lista; los demás miembros no se ven afectados."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Cette conversation disparaîtra définitivement de votre liste. Les autres membres ne seront pas affectés."
+            "state": "translated",
+            "value": "Retirée définitivement de votre liste ; les autres membres ne sont pas affectés."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa conversazione sparirà definitivamente dal tuo elenco. Gli altri membri non saranno interessati."
+            "value": "Rimossa definitivamente dalla tua lista; gli altri membri non sono interessati."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Esta conversa desaparecerá definitivamente da sua lista. Os outros membros não serão afetados."
+            "state": "translated",
+            "value": "Removida definitivamente da sua lista; os outros membros não são afetados."
           }
         }
       }
@@ -17654,43 +17654,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لن تتلقّى رسائل بعد الآن. وسيبقى سجلّك قابلًا للقراءة."
+            "value": "لن تتلقى رسائل بعد الآن؛ يبقى سجلك مقروءًا."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Sie haben keinen Zugriff mehr auf die Nachrichten."
+            "state": "translated",
+            "value": "Du erhältst keine Nachrichten mehr; dein Verlauf bleibt lesbar."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "You will no longer have access to the messages of this conversation."
+            "state": "translated",
+            "value": "You will no longer receive messages; your history stays readable."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Ya no tendrás acceso a los mensajes de esta conversación."
+            "state": "translated",
+            "value": "Ya no recibirás mensajes; tu historial seguirá siendo legible."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Vous ne recevrez plus de messages. Votre historique restera lisible."
+            "state": "translated",
+            "value": "Vous ne recevrez plus de messages ; votre historique reste lisible."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Non riceverai più messaggi. La tua cronologia resterà leggibile."
+            "value": "Non riceverai più messaggi; la cronologia resta leggibile."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Você não terá mais acesso às mensagens desta conversa."
+            "state": "translated",
+            "value": "Você não receberá mais mensagens; seu histórico continua legível."
           }
         }
       }
@@ -18312,43 +18312,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُترجَم الرسائل تلقائيًا"
+            "value": "يقرأ كل شخص الرسائل بلغته."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Nachrichten werden automatisch übersetzt"
+            "state": "translated",
+            "value": "Jeder liest die Nachrichten in seiner Sprache."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Messages are translated automatically"
+            "state": "translated",
+            "value": "Everyone reads messages in their own language."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Los mensajes se traducen automáticamente"
+            "state": "translated",
+            "value": "Cada persona lee los mensajes en su idioma."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Les messages sont traduits automatiquement"
+            "state": "translated",
+            "value": "Chacun lit les messages dans sa langue."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I messaggi vengono tradotti automaticamente"
+            "value": "Ognuno legge i messaggi nella propria lingua."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "As mensagens são traduzidas automaticamente"
+            "state": "translated",
+            "value": "Cada pessoa lê as mensagens no seu idioma."
           }
         }
       }
@@ -18725,53 +18725,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aparência"
-          }
-        }
-      }
-    },
-    "conversation.settings.section.danger": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "منطقة الخطر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Gefahrenzone"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Danger zone"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Zona de peligro"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Zone dangereuse"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zona pericolosa"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Zona de perigo"
           }
         }
       }
@@ -86564,6 +86517,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volume"
+          }
+        }
+      }
+    },
+    "conversation.settings.more": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المزيد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mehr"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Más"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Altro"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mais"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.slowMode.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مهلة بين رسالتين من العضو نفسه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Pause zwischen zwei Nachrichten desselben Mitglieds."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A delay between two messages from the same member."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una pausa entre dos mensajes de un mismo miembro."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un délai entre deux messages d’un même membre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un intervallo tra due messaggi dello stesso membro."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um intervalo entre duas mensagens do mesmo membro."
           }
         }
       }

@@ -28,7 +28,7 @@ final class VoiceProfileFrenchTypographyTests: XCTestCase {
         "voice.profile.create": "Créer un profil vocal",
         "voice.profile.createdAt": "Créé le",
         "voice.profile.deleteAlert.message": "Cette action est irréversible. Toutes vos données vocales seront supprimées conformément au RGPD.",
-        "voice.profile.empty.description": "Créez un profil vocal pour que vos messages traduits conservent votre voix naturelle.",
+        "voice.profile.empty.description": "Vos vocaux traduits garderont votre voix.",
         "voice.profile.lastUsed": "Dernière utilisation",
         "voice.profile.quality": "Qualité",
         "voice.profile.samples": "Échantillons",
@@ -37,7 +37,6 @@ final class VoiceProfileFrenchTypographyTests: XCTestCase {
         "voice.profile.status.failed.description": "L'analyse a échoué, veuillez réessayer",
         "voice.profile.status.failed.label": "Échec",
         "voice.profile.status.processing.description": "L'IA analyse vos échantillons vocaux",
-        "voice.profile.status.ready.description": "Votre profil vocal est prêt à l'emploi",
         "voice.profile.totalDuration": "Durée totale",
         "voice.profile.voiceSamples": "Échantillons vocaux",
     ]

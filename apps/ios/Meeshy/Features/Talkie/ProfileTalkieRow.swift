@@ -94,7 +94,7 @@ struct ProfileTalkieRow: View {
 /// Les phrases du talkie émis, une clé par sens (sept langues dans `Localizable.xcstrings`, adoptées du catalogue web).
 enum ProfileTalkieWording {
     static func explain(name: String) -> String {
-        String(format: String(localized: "talkie.send.explain", defaultValue: "Maintenez et parlez : votre voix sort directement chez %@, sans décrocher.", bundle: .main), name)
+        String(format: String(localized: "talkie.send.explain", defaultValue: "Talkie d’urgence, pour vos très proches : maintenez et parlez, votre voix sort chez %@ sans décrocher.", bundle: .main), name)
     }
 
     static var hold: String { String(localized: "talkie.send.hold", defaultValue: "Maintenir pour parler", bundle: .main) }
@@ -139,15 +139,11 @@ enum ProfileTalkieWording {
     static func notice(_ outcome: TalkieSendOutcome) -> String {
         switch outcome {
         case .voice:
-            String(
-                localized: "talkie.send.voiceCopy",
-                defaultValue: "L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui.",
-                bundle: .main
-            )
+            String(localized: "talkie.header.announce.recorded", defaultValue: "Le talkie ne passe pas : votre voix part en message vocal", bundle: .main)
         case .notAllowed:
             String(localized: "talkie.send.voice", defaultValue: "Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.", bundle: .main)
         case .e2ee:
-            String(localized: "talkie.send.e2ee", defaultValue: "Le talkie n’est pas chiffré de bout en bout : il reste fermé avec une conversation chiffrée.", bundle: .main)
+            String(localized: "talkie.send.e2ee", defaultValue: "Pas de talkie dans une conversation chiffrée : il ne l’est pas de bout en bout.", bundle: .main)
         case .rateLimited:
             String(localized: "talkie.send.rateLimited", defaultValue: "Trop de prises de parole : réessayez dans un instant.", bundle: .main)
         case .offline:

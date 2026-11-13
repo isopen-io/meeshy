@@ -418,7 +418,7 @@ nonisolated extension EndToEndSendRefusal {
                    defaultValue: "Cette conversation chiffrée n’accepte pas encore d’envoi depuis cet appareil.", bundle: .main)
         case .contentUnsealable:
             String(localized: "conversation.send.e2ee.contentUnsealable",
-                   defaultValue: "Conversation chiffrée : pièces jointes, lieux et stickers ne peuvent pas encore être envoyés.", bundle: .main)
+                   defaultValue: "Chiffrée : pas encore de pièces jointes, lieux ni stickers.", bundle: .main)
         case .outboxUnsealable:
             String(localized: "conversation.send.e2ee.outboxUnsealable",
                    defaultValue: "Message chiffré non envoyé : réessayez une fois connecté.", bundle: .main)
@@ -436,22 +436,22 @@ nonisolated extension EndToEndSendRefusal {
                    defaultValue: "L’envoi chiffré n’est pas encore pris en charge : le message n’est pas parti.", bundle: .main)
         case .recipientWithoutEncryptedDevice:
             String(localized: "conversation.send.e2ee.recipientWithoutEncryptedDevice",
-                   defaultValue: "Votre correspondant doit mettre à jour Meeshy pour recevoir des messages chiffrés : le message n’est pas parti.", bundle: .main)
+                   defaultValue: "Votre correspondant doit mettre Meeshy à jour : message non parti.", bundle: .main)
         case .regimeChanged:
             String(localized: "conversation.send.e2ee.regimeChanged",
-                   defaultValue: "Le chiffrement de cette conversation vient de changer : le message n’est pas parti. Touchez pour le renvoyer selon le nouveau réglage.", bundle: .main)
+                   defaultValue: "Le chiffrement a changé : message non parti. Touchez pour le renvoyer.", bundle: .main)
         case .deviceLimitReached:
             String(localized: "conversation.send.e2ee.deviceLimitReached",
-                   defaultValue: "Votre compte a atteint le nombre maximal d’appareils chiffrés : retirez-en un pour écrire depuis celui-ci.", bundle: .main)
+                   defaultValue: "Trop d’appareils chiffrés : retirez-en un pour écrire d’ici.", bundle: .main)
         case .servedWithoutEndToEnd:
             String(localized: "conversation.send.e2ee.servedWithoutEndToEnd",
-                   defaultValue: "Cette conversation est chiffrée de bout en bout, mais le serveur la présente sans chiffrement : le message n’est pas parti. Voir la fiche Chiffrement.", bundle: .main)
+                   defaultValue: "Serveur sans chiffrement : message non parti. Voir la fiche Chiffrement.", bundle: .main)
         case .sealedOnlyInConversation:
             String(localized: "conversation.send.e2ee.sealedOnlyInConversation",
-                   defaultValue: "Conversation chiffrée : le message n’est pas parti. Ouvrez la conversation et touchez-le pour l’envoyer chiffré.", bundle: .main)
+                   defaultValue: "Message chiffré non parti : ouvrez la conversation et touchez-le pour l’envoyer.", bundle: .main)
         case .unkeptOutsideConversation:
             String(localized: "conversation.send.e2ee.unkeptOutsideConversation",
-                   defaultValue: "Conversation chiffrée : le message n’est pas parti et n’a pas pu être gardé sur cet appareil. Ouvrez la conversation pour l’écrire à nouveau.", bundle: .main)
+                   defaultValue: "Message chiffré non gardé : ouvrez la conversation pour le réécrire.", bundle: .main)
         }
     }
 }

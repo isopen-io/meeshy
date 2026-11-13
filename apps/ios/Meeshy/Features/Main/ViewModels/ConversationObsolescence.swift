@@ -40,7 +40,7 @@ struct ConversationObsolescence {
             case .pendingRequest:
                 return String(
                     localized: "conversation.obsolete.refused_pending_request",
-                    defaultValue: "Seul le destinataire d'une demande de message non acceptée peut rendre cette conversation obsolète.",
+                    defaultValue: "Seul le destinataire de la demande peut la rendre obsolète.",
                     bundle: .main
                 )
             case .other:

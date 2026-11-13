@@ -231,7 +231,7 @@ struct NewConversationView: View {
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundStyle(theme.textPrimary)
                     if groupRequested && selectedUsers.isEmpty {
-                        Text(String(localized: "conversation.new.group.solo-hint", defaultValue: "Vous pouvez le créer seul, pour un audit ou pour recueillir des avis, et inviter plus tard.", bundle: .main))
+                        Text(String(localized: "conversation.new.group.solo-hint", defaultValue: "Vous pouvez le créer seul et inviter plus tard.", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                             .foregroundStyle(theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)

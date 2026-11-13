@@ -21,6 +21,8 @@ struct ConversationPreferencesTab: View {
     @State private var showLeaveConfirm: Bool = false
     @State private var showDeleteConfirm: Bool = false
     @State private var showObsoleteConfirm: Bool = false
+    /// Les gestes rares (archiver, quitter, supprimer, rendre obsolète) sont rangés derrière « Plus » (épure #18078, règle 6).
+    @State private var showMoreActions: Bool = false
     @State private var showEmojiPicker: Bool = false
     @State private var showAppearanceSheet: Bool = false
     @State private var customNameLocal: String = ""
@@ -91,7 +93,7 @@ struct ConversationPreferencesTab: View {
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.prefs.leave.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera consultable.", bundle: .main))
+            Text(String(localized: "conversation.info.leave.message", defaultValue: "Vous ne recevrez plus de messages ; votre historique reste lisible.", bundle: .main))
         }
         .confirmationDialog(String(localized: "conversation.prefs.delete.title", defaultValue: "Supprimer pour moi", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
@@ -99,7 +101,7 @@ struct ConversationPreferencesTab: View {
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.prefs.delete.message", defaultValue: "Cette conversation sera retirée de votre liste. Les autres membres ne seront pas affectés.", bundle: .main))
+            Text(String(localized: "conversation.prefs.delete.message", defaultValue: "Retirée définitivement de votre liste ; les autres membres ne sont pas affectés.", bundle: .main))
         }
         .confirmationDialog(ConversationObsolescence.confirmationTitle, isPresented: $showObsoleteConfirm, titleVisibility: .visible) {
             Button(ConversationMenuEntry.obsolete.label, role: .destructive) { makeObsolete() }
@@ -328,7 +330,35 @@ struct ConversationPreferencesTab: View {
     }
 
     private var actionsSection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.actions", defaultValue: "Actions", bundle: .main), icon: "ellipsis.circle.fill", color: MeeshyColors.neutral500Hex) {
+        settingsCard(color: MeeshyColors.neutral500Hex) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showMoreActions.toggle() }
+            } label: {
+                settingsRow(
+                    icon: "ellipsis.circle.fill",
+                    iconColor: MeeshyColors.neutral500Hex,
+                    title: String(localized: "conversation.prefs.more", defaultValue: "Plus", bundle: .main)
+                ) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                        .rotationEffect(.degrees(showMoreActions ? 90 : 0))
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("conversation-prefs-more")
+
+            if showMoreActions {
+                Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
+                moreActions
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var moreActions: some View {
             Button {
                 showArchiveConfirm = true
             } label: {
@@ -378,7 +408,6 @@ struct ConversationPreferencesTab: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("conversation-prefs-make-obsolete")
             }
-        }
     }
 
     /// Optimiste par la liste : la ligne part au geste, la feuille se referme ;
@@ -423,18 +452,22 @@ struct ConversationPreferencesTab: View {
             }
             .padding(.leading, MeeshySpacing.xs)
 
-            VStack(spacing: 0) {
-                content()
-            }
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(theme.surfaceGradient(tint: color))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .stroke(theme.border(tint: color), lineWidth: 1)
-                    )
-            )
+            settingsCard(color: color, content: content)
         }
+    }
+
+    private func settingsCard<Content: View>(color: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            content()
+        }
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                .fill(theme.surfaceGradient(tint: color))
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(theme.border(tint: color), lineWidth: 1)
+                )
+        )
     }
 
     @ViewBuilder

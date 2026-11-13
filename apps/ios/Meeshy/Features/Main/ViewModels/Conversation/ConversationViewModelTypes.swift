@@ -55,7 +55,7 @@ enum ServerTranslationAdmission {
     static var refusalMessage: String {
         String(
             localized: "message.translation.e2ee.serverRefused",
-            defaultValue: "Chiffrée de bout en bout : cette conversation se traduit sur votre appareil, jamais par le serveur.",
+            defaultValue: "Chiffrée de bout en bout : traduite sur votre appareil, jamais par le serveur.",
             bundle: .main
         )
     }

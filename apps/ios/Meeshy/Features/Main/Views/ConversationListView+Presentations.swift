@@ -141,7 +141,7 @@ struct ConversationListModalPresentations: ViewModifier {
                 }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
             } message: { _ in
-                Text(String(localized: "conversation.info.leave.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .main))
+                Text(String(localized: "conversation.info.leave.message", defaultValue: "Vous ne recevrez plus de messages ; votre historique reste lisible.", bundle: .main))
             }
             .modifier(ConversationObsoleteConfirmation(target: $sheetTargets.obsoleteTarget, list: conversationViewModel))
             .sheet(item: $sheetTargets.reportTarget) { conversation in

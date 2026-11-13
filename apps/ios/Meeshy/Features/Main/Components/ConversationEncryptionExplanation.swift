@@ -20,13 +20,13 @@ enum ConversationEncryptionRegime: Equatable {
         }
     }
 
-    /// Une phrase, sans jargon : le régime et ce qu'il fait des messages
-    /// (directive porteur — jamais qui détient une clé).
+    /// Une valeur, sans jargon : le régime nommé (la rangée porte déjà le titre
+    /// « Chiffrement » et la fiche l'explique — règle 2 de l'épure, #18078).
     var summary: String {
         switch self {
         case .none:
             String(localized: "conversation.encryption.summary.none",
-                   defaultValue: "Conversation créée avant le chiffrement systématique : ses messages ne sont pas chiffrés", bundle: .main)
+                   defaultValue: "Non chiffrée", bundle: .main)
         case .server:
             String(localized: "conversation.encryption.summary.server",
                    defaultValue: "Chiffrée sur nos serveurs", bundle: .main)
@@ -35,7 +35,7 @@ enum ConversationEncryptionRegime: Equatable {
                    defaultValue: "Chiffrée sur nos serveurs, avec vérification entre appareils compatibles", bundle: .main)
         case .endToEnd:
             String(localized: "conversation.encryption.summary.endToEnd",
-                   defaultValue: "Chiffrée de bout en bout : seuls les appareils des participants lisent les messages", bundle: .main)
+                   defaultValue: "Chiffrée de bout en bout", bundle: .main)
         }
     }
 }
@@ -71,8 +71,18 @@ struct ConversationEncryptionExplanation: Equatable {
         case noServerTranscription, noNotificationPreview, noSearch, noEdit, noForward, noOfflineSending
         case notYetAttachments, notYetDecryptedNotifications, notYetGroups, groupSendingUnavailable, notYetSafetyNumbers
         case oneKeyPerDevice, deviceLimit, restoredDeviceIsNew
-        case whoMayToggle, switchKeepsHistory, switchIsShownInThread, endToEndIsFinal
+        case whoMayToggle, switchKeepsHistory, switchIsShownInThread
         case endToEndNeverTurnedOff, endToEndNeverTurnedOffDirect, serverCannotTurnItOff
+    }
+
+    /// Les faits que le (i) d'un fait porte à sa place : le détail SECONDAIRE
+    /// (épure #18078, règle 1), jamais l'unique explication d'une fonction.
+    static func noteFacts(of fact: Fact) -> [Fact] {
+        switch fact {
+        case .oneKeyPerDevice: [.deviceLimit, .restoredDeviceIsNew]
+        case .switchKeepsHistory: [.whoMayToggle, .switchIsShownInThread]
+        default: []
+        }
     }
 
     struct Section: Equatable {
@@ -102,7 +112,7 @@ struct ConversationEncryptionExplanation: Equatable {
         }
     }
 
-    private static let switchingFacts: [Fact] = [.whoMayToggle, .switchKeepsHistory, .switchIsShownInThread, .endToEndIsFinal]
+    private static let switchingFacts: [Fact] = [.switchKeepsHistory]
 
     private static func readable(whoReads: [Fact]) -> [Section] {
         [
@@ -120,7 +130,7 @@ struct ConversationEncryptionExplanation: Equatable {
             Section(topic: .notYet, facts: [.notYetAttachments, .notYetDecryptedNotifications]
                 + (isDirect ? [.notYetGroups] : [.notYetGroups, .groupSendingUnavailable])
                 + [.notYetSafetyNumbers]),
-            Section(topic: .devices, facts: [.oneKeyPerDevice, .deviceLimit, .restoredDeviceIsNew]),
+            Section(topic: .devices, facts: [.oneKeyPerDevice]),
             Section(topic: .permanence, facts: [isDirect ? .endToEndNeverTurnedOffDirect : .endToEndNeverTurnedOff, .serverCannotTurnItOff]),
         ]
     }

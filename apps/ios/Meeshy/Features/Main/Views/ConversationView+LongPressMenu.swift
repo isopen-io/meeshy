@@ -200,8 +200,8 @@ extension ConversationView {
                     }
                 }
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { overlayState.deleteConfirmMessageId = nil }
-            } message: { _ in
-                Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
+            } message: { msgId in
+                Text(MessageDeleteConfirmation.hint(offered: MessageMenuContext.make(messageId: msgId, viewModel: viewModel, authority: menuAuthority).canDeleteForEveryone))
             }
             // #4024 — même contrat que la confirmation ci-dessus, sur la
             // SÉLECTION entière plutôt qu'un seul message : "pour tous"
@@ -226,7 +226,7 @@ extension ConversationView {
                 }
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
             } message: {
-                Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
+                Text(MessageDeleteConfirmation.hint(offered: selectionAllowsDeleteForAll))
             }
     }
 }
@@ -234,6 +234,11 @@ extension ConversationView {
 /// Le titre de la confirmation de suppression (#11533) : une sélection de
 /// plusieurs messages dit combien partent, comme la feuille de retrait (#11520).
 enum MessageDeleteConfirmation {
+    /// Le délai de « pour tout le monde » ne se dit que lorsque le bouton est proposé (épure #18078, règle 1).
+    static func hint(offered: Bool) -> String {
+        offered ? String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main) : ""
+    }
+
     static func titleKey(count: Int) -> String {
         count > 1 ? "conversation.view.delete_messages.title" : "conversation.view.delete_message.title"
     }

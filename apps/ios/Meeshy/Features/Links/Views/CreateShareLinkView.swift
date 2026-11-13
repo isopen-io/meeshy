@@ -15,6 +15,7 @@ struct CreateShareLinkView: View {
     @Environment(\.dismiss) private var dismiss
 
     // Conversation
+    @State private var openNoteID: String?
     @State private var selectedConversation: Conversation? = nil
     @State private var showConversationPicker = false
 
@@ -137,7 +138,7 @@ struct CreateShareLinkView: View {
             VStack(spacing: 0) {
                 formTextField(String(localized: "share.link.create.field.name", defaultValue: "Nom du lien", bundle: .main), placeholder: String(localized: "share.link.create.field.name.placeholder", defaultValue: "ex: Partage Twitter", bundle: .main), text: $linkName)
                 divider
-                formTextField(String(localized: "share.link.create.field.description", defaultValue: "Description (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.description.placeholder", defaultValue: "ex: Rejoins notre groupe…", bundle: .main), text: $linkDescription)
+                formTextField(String(localized: "share.link.create.field.description", defaultValue: "Description", bundle: .main), placeholder: String(localized: "share.link.create.field.description.placeholder", defaultValue: "Optionnel", bundle: .main), text: $linkDescription)
                 divider
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     formTextField(String(localized: "share.link.create.field.slug", defaultValue: "Slug URL (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.slug.placeholder", defaultValue: "ex: mon-groupe-2025", bundle: .main), text: $customSlug)
@@ -156,20 +157,18 @@ struct CreateShareLinkView: View {
     // MARK: - Section: Accès invités
 
     private var accessSection: some View {
-        formSection(title: String(localized: "share.link.create.section.access", defaultValue: "Accès invités", bundle: .main), icon: "person.badge.key.fill",
+        formSection(title: String(localized: "share.link.create.section.access", defaultValue: "Demander aux invités", bundle: .main), icon: "person.badge.key.fill",
                     subtitle: String(localized: "share.link.create.section.access.subtitle", defaultValue: "Ce que les visiteurs doivent fournir pour rejoindre", bundle: .main)) {
             VStack(spacing: 0) {
                 ruleToggle(
-                    String(localized: "share.link.create.access.account_required", defaultValue: "Compte requis", bundle: .main),
-                    subtitle: String(localized: "share.link.create.access.account_required.subtitle", defaultValue: "Seuls les membres Meeshy peuvent rejoindre", bundle: .main),
+                    String(localized: "share.link.create.access.account_required", defaultValue: "Compte Meeshy", bundle: .main),
                     icon: "person.fill.checkmark",
                     iconColor: MeeshyColors.shareAccentHex,
                     isOn: $requireAccount
                 )
                 divider
                 ruleToggle(
-                    String(localized: "share.link.create.access.nickname_required", defaultValue: "Pseudonyme requis", bundle: .main),
-                    subtitle: String(localized: "share.link.create.access.nickname_required.subtitle", defaultValue: "Le visiteur doit choisir un pseudo", bundle: .main),
+                    String(localized: "share.link.create.access.nickname_required", defaultValue: "Pseudo", bundle: .main),
                     icon: "person.fill",
                     iconColor: MeeshyColors.trackingAccentHex,
                     isOn: $requireNickname
@@ -178,8 +177,7 @@ struct CreateShareLinkView: View {
                 .opacity(requireAccount ? 0.4 : 1)
                 divider
                 ruleToggle(
-                    String(localized: "share.link.create.access.email_required", defaultValue: "Email requis", bundle: .main),
-                    subtitle: String(localized: "share.link.create.access.email_required.subtitle", defaultValue: "Le visiteur doit fournir son email", bundle: .main),
+                    String(localized: "share.link.create.access.email_required", defaultValue: "E-mail", bundle: .main),
                     icon: "envelope.fill",
                     iconColor: MeeshyColors.communityAccentHex,
                     isOn: $requireEmail
@@ -188,8 +186,11 @@ struct CreateShareLinkView: View {
                 .opacity(requireAccount ? 0.4 : 1)
                 divider
                 ruleToggle(
-                    String(localized: "share.link.create.access.birthday_required", defaultValue: "Date de naissance requise", bundle: .main),
-                    subtitle: String(localized: "share.link.create.access.birthday_required.subtitle", defaultValue: "Permet le contrôle d'âge", bundle: .main),
+                    String(localized: "share.link.create.access.birthday_required", defaultValue: "Date de naissance", bundle: .main),
+                    note: MeeshyInfoNote(
+                        question: String(localized: "share.link.create.access.birthday_required.question", defaultValue: "Pourquoi demander la date de naissance ?", bundle: .main),
+                        text: String(localized: "share.link.create.access.birthday_required.note", defaultValue: "Permet le contrôle d'âge", bundle: .main)
+                    ),
                     icon: "calendar",
                     iconColor: MeeshyColors.warningHex,
                     isOn: $requireBirthday
@@ -203,36 +204,32 @@ struct CreateShareLinkView: View {
     // MARK: - Section: Permissions
 
     private var permissionsSection: some View {
-        formSection(title: String(localized: "share.link.create.section.permissions", defaultValue: "Permissions", bundle: .main), icon: "slider.horizontal.3",
+        formSection(title: String(localized: "share.link.create.section.permissions", defaultValue: "Autoriser", bundle: .main), icon: "slider.horizontal.3",
                     subtitle: String(localized: "share.link.create.section.permissions.subtitle", defaultValue: "Ce que les invités anonymes peuvent faire", bundle: .main)) {
             VStack(spacing: 0) {
                 ruleToggle(
-                    String(localized: "share.link.create.permission.send_messages", defaultValue: "Envoyer des messages", bundle: .main),
-                    subtitle: String(localized: "share.link.create.permission.send_messages.subtitle", defaultValue: "Les invités peuvent écrire dans la conversation", bundle: .main),
+                    String(localized: "share.link.create.permission.send_messages", defaultValue: "Messages", bundle: .main),
                     icon: "bubble.left.fill",
                     iconColor: MeeshyColors.shareAccentHex,
                     isOn: $allowAnonymousMessages
                 )
                 divider
                 ruleToggle(
-                    String(localized: "share.link.create.permission.send_images", defaultValue: "Envoyer des images", bundle: .main),
-                    subtitle: String(localized: "share.link.create.permission.send_images.subtitle", defaultValue: "Les invités peuvent partager des photos", bundle: .main),
+                    String(localized: "share.link.create.permission.send_images", defaultValue: "Images", bundle: .main),
                     icon: "photo.fill",
                     iconColor: MeeshyColors.indigo300Hex,
                     isOn: $allowAnonymousImages
                 )
                 divider
                 ruleToggle(
-                    String(localized: "share.link.create.permission.send_files", defaultValue: "Envoyer des fichiers", bundle: .main),
-                    subtitle: String(localized: "share.link.create.permission.send_files.subtitle", defaultValue: "Les invités peuvent envoyer des documents", bundle: .main),
+                    String(localized: "share.link.create.permission.send_files", defaultValue: "Fichiers", bundle: .main),
                     icon: "paperclip",
                     iconColor: MeeshyColors.trackingAccentHex,
                     isOn: $allowAnonymousFiles
                 )
                 divider
                 ruleToggle(
-                    String(localized: "share.link.create.permission.view_history", defaultValue: "Voir l'historique", bundle: .main),
-                    subtitle: String(localized: "share.link.create.permission.view_history.subtitle", defaultValue: "Les invités voient les messages précédents", bundle: .main),
+                    String(localized: "share.link.create.permission.view_history", defaultValue: "Historique", bundle: .main),
                     icon: "clock.fill",
                     iconColor: MeeshyColors.communityAccentHex,
                     isOn: $allowViewHistory
@@ -441,7 +438,7 @@ struct CreateShareLinkView: View {
 
     private func ruleToggle(
         _ title: String,
-        subtitle: String,
+        note: MeeshyInfoNote? = nil,
         icon: String,
         iconColor: String,
         isOn: Binding<Bool>
@@ -449,13 +446,10 @@ struct CreateShareLinkView: View {
         HStack(spacing: MeeshySpacing.md) {
             iconBadge(icon, color: iconColor)
             Toggle(isOn: isOn) {
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textSecondary) {
                     Text(title)
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(theme.textPrimary)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(theme.textSecondary)
                 }
             }
             .tint(accent)
@@ -592,9 +586,8 @@ private struct ConversationPickerSheet: View {
                     }
                     if filtered.isEmpty {
                         AdaptiveContentUnavailableView(
-                            String(localized: "share.link.create.picker.empty.title", defaultValue: "Aucun groupe trouvé", bundle: .main),
-                            systemImage: "bubble.left.and.bubble.right",
-                            description: Text(String(localized: "share.link.create.picker.empty.description", defaultValue: "Créez un groupe ou une communauté pour partager un lien d'invitation", bundle: .main))
+                            String(localized: "share.link.create.picker.empty.title", defaultValue: "Aucun groupe : créez-en un pour partager un lien.", bundle: .main),
+                            systemImage: "bubble.left.and.bubble.right"
                         )
                     }
                 }

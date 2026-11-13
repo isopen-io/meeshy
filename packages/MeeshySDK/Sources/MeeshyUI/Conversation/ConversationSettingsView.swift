@@ -13,6 +13,8 @@ public struct ConversationSettingsView: View {
     @State private var avatarItem: PhotosPickerItem? = nil
     @State private var bannerItem: PhotosPickerItem? = nil
     @State private var showDeleteForMeAlert = false
+    /// Les gestes rares (supprimer, quitter) sont rangés derrière « Plus » (épure #18078, règle 6).
+    @State private var showMoreActions = false
 
     public var onUpdated: ((MeeshyConversation) -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
@@ -71,7 +73,7 @@ public struct ConversationSettingsView: View {
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.settings.leave.confirm.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .module))
+            Text(String(localized: "conversation.settings.leave.confirm.message", defaultValue: "Vous ne recevrez plus de messages ; votre historique reste lisible.", bundle: .module))
         }
         .alert(String(localized: "conversation.settings.deleteForMe.confirm.title", defaultValue: "Supprimer pour moi ?", bundle: .module), isPresented: $showDeleteForMeAlert) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module), role: .cancel) {}
@@ -85,7 +87,7 @@ public struct ConversationSettingsView: View {
                 }
             }
         } message: {
-            Text(String(localized: "conversation.settings.deleteForMe.confirm.message", defaultValue: "Cette conversation disparaîtra définitivement de votre liste. Les autres membres ne seront pas affectés.", bundle: .module))
+            Text(String(localized: "conversation.settings.deleteForMe.confirm.message", defaultValue: "Retirée définitivement de votre liste ; les autres membres ne sont pas affectés.", bundle: .module))
         }
         .alert(String(localized: "conversation.settings.delete.confirm.title", defaultValue: "Supprimer la conversation", bundle: .module), isPresented: $viewModel.showDeleteConversation) {
             Button(String(localized: "conversation.settings.delete.button", defaultValue: "Supprimer", bundle: .module), role: .destructive) {
@@ -314,7 +316,10 @@ public struct ConversationSettingsView: View {
                 .background(theme.backgroundSecondary.opacity(0.5))
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
-                settingsField(label: String(localized: "conversation.settings.permissions.slowMode", defaultValue: "Mode lent", bundle: .module)) {
+                settingsField(
+                    label: String(localized: "conversation.settings.permissions.slowMode", defaultValue: "Mode lent", bundle: .module),
+                    caption: String(localized: "conversation.settings.permissions.slowMode.subtitle", defaultValue: "Un délai entre deux messages d’un même membre.", bundle: .module)
+                ) {
                     Picker("", selection: $viewModel.slowModeSeconds) {
                         Text(String(localized: "conversation.settings.permissions.slowMode.off", defaultValue: "Désactivé", bundle: .module)).tag(0)
                         Text("10s").tag(10)
@@ -330,7 +335,7 @@ public struct ConversationSettingsView: View {
                         Text(String(localized: "conversation.settings.permissions.autoTranslate", defaultValue: "Traduction automatique", bundle: .module))
                             .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
                             .foregroundStyle(theme.textPrimary)
-                        Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Les messages sont traduits automatiquement", bundle: .module))
+                        Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Chacun lit les messages dans sa langue.", bundle: .module))
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
                             .foregroundStyle(theme.textMuted)
                     }
@@ -532,8 +537,34 @@ public struct ConversationSettingsView: View {
 
     private var dangerSection: some View {
         VStack(spacing: MeeshySpacing.md) {
-            sectionHeader(String(localized: "conversation.settings.section.danger", defaultValue: "Zone dangereuse", bundle: .module))
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showMoreActions.toggle() }
+            } label: {
+                HStack {
+                    Text(String(localized: "conversation.settings.more", defaultValue: "Plus", bundle: .module))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.textMuted)
+                    Spacer()
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                        .foregroundStyle(theme.textMuted)
+                        .rotationEffect(.degrees(showMoreActions ? 90 : 0))
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
 
+            if showMoreActions {
+                moreActions
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var moreActions: some View {
             Button(role: .destructive) {
                 showDeleteForMeAlert = true
             } label: {
@@ -580,7 +611,6 @@ public struct ConversationSettingsView: View {
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                 }
             }
-        }
     }
 
     // MARK: - Helpers
@@ -593,11 +623,16 @@ public struct ConversationSettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func settingsField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
+    private func settingsField<Content: View>(label: String, caption: String? = nil, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))
                 .foregroundStyle(theme.textSecondary)
+            if let caption {
+                Text(caption)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
+                    .foregroundStyle(theme.textMuted)
+            }
             content()
                 .textFieldStyle(.plain)
                 .padding(MeeshySpacing.md)

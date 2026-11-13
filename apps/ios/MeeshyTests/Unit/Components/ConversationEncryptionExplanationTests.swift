@@ -60,8 +60,9 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
             XCTAssertTrue(facts.contains(notYet), "\(notYet)")
         }
         XCTAssertTrue(facts.contains(.oneKeyPerDevice))
-        XCTAssertTrue(facts.contains(.deviceLimit))
-        XCTAssertTrue(facts.contains(.restoredDeviceIsNew))
+        XCTAssertFalse(facts.contains(.deviceLimit), "la limite d'appareils passe derrière le (i) de « Vos appareils » (#18078)")
+        XCTAssertFalse(facts.contains(.restoredDeviceIsNew), "un appareil réinstallé passe derrière le même (i) (#18078)")
+        XCTAssertEqual(ConversationEncryptionExplanation.noteFacts(of: .oneKeyPerDevice), [.deviceLimit, .restoredDeviceIsNew])
         XCTAssertFalse(facts.contains(.everyServerFeature))
     }
 
@@ -76,10 +77,10 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
     func test_chaqueMode_ditQuiPeutActiver_etCeQuiEstDefinitif() {
         for mode in [nil, "server", "hybrid"] {
             let facts = facts(mode)
-            XCTAssertTrue(facts.contains(.whoMayToggle), "\(String(describing: mode))")
             XCTAssertTrue(facts.contains(.switchKeepsHistory), "\(String(describing: mode))")
-            XCTAssertTrue(facts.contains(.switchIsShownInThread), "\(String(describing: mode))")
-            XCTAssertTrue(facts.contains(.endToEndIsFinal), "\(String(describing: mode))")
+            XCTAssertFalse(facts.contains(.whoMayToggle), "qui peut basculer passe derrière un (i) (#18078)")
+            XCTAssertFalse(facts.contains(.switchIsShownInThread), "l'avis dans le fil passe derrière le même (i) (#18078)")
+            XCTAssertEqual(ConversationEncryptionExplanation.noteFacts(of: .switchKeepsHistory), [.whoMayToggle, .switchIsShownInThread], "\(String(describing: mode))")
         }
         XCTAssertEqual(facts("e2ee", isDirect: true).suffix(2), [.endToEndNeverTurnedOffDirect, .serverCannotTurnItOff])
         XCTAssertEqual(facts("e2ee", isDirect: false).suffix(2), [.endToEndNeverTurnedOff, .serverCannotTurnItOff])
@@ -95,12 +96,6 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
 
     func test_irreversible_unGroupeChiffre_ditDeCreerUneNouvelleConversation() {
         XCTAssertTrue(facts("e2ee", isDirect: false).contains(.endToEndNeverTurnedOff))
-    }
-
-    func test_irreversible_avantDActiver_laFicheDitQueLeBoutEnBoutEstDefinitif() {
-        for mode in [nil, "server", "hybrid"] {
-            XCTAssertTrue(facts(mode).contains(.endToEndIsFinal), "\(String(describing: mode))")
-        }
     }
 
     /// Aucun texte en dur : chaque fait et chaque titre se lit dans le catalogue,

@@ -89,11 +89,13 @@ struct ConversationLockSheet: View {
                 .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text(subtitleText)
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, MeeshySpacing.xxxl)
+            if let subtitleText {
+                Text(subtitleText)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(theme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, MeeshySpacing.xxxl)
+            }
         }
     }
 
@@ -249,15 +251,16 @@ struct ConversationLockSheet: View {
         }
     }
 
-    private var subtitleText: String {
+    /// Un sous-titre qui répète le titre n'existe pas (épure #18078, règle 2) : « Confirmer le master PIN » se suffit.
+    private var subtitleText: String? {
         switch mode {
         case .setupMasterPin:
             if step == 0 { return String(localized: "conversation.lock.subtitle.chooseMasterPin", defaultValue: "Choisissez un master PIN à 6 chiffres pour sécuriser vos verrous", bundle: .main) }
-            return String(localized: "conversation.lock.subtitle.reenterMasterPin", defaultValue: "Saisissez à nouveau votre master PIN pour confirmer", bundle: .main)
+            return nil
         case .changeMasterPin:
             if step == 0 { return String(localized: "conversation.lock.subtitle.enterCurrentMasterPin", defaultValue: "Saisissez votre master PIN actuel", bundle: .main) }
             if step == 1 { return String(localized: "conversation.lock.subtitle.chooseNewMasterPin", defaultValue: "Choisissez un nouveau master PIN à 6 chiffres", bundle: .main) }
-            return String(localized: "conversation.lock.subtitle.confirmNewMasterPin", defaultValue: "Confirmez votre nouveau master PIN", bundle: .main)
+            return nil
         case .removeMasterPin:
             return String(localized: "conversation.lock.subtitle.confirmRemoval", defaultValue: "Saisissez votre master PIN pour confirmer la suppression", bundle: .main)
         case .lockConversation:
@@ -271,9 +274,9 @@ struct ConversationLockSheet: View {
         case .openConversation:
             return String(format: String(localized: "conversation.lock.subtitle.enterCodeToOpen", defaultValue: "Saisissez le code pour accéder à %@", bundle: .main), conversationName)
         case .unlockAll:
-            return String(localized: "conversation.lock.subtitle.unlockAll", defaultValue: "Saisissez votre master PIN pour déverrouiller toutes les conversations", bundle: .main)
+            return String(localized: "conversation.lock.subtitle.enterMasterPin", defaultValue: "Saisissez votre master PIN", bundle: .main)
         case .enableBiometricUnlock:
-            return String(localized: "conversation.lock.subtitle.enableBiometric", defaultValue: "Saisissez votre master PIN pour autoriser le déverrouillage biométrique", bundle: .main)
+            return String(localized: "conversation.lock.subtitle.enterMasterPin", defaultValue: "Saisissez votre master PIN", bundle: .main)
         }
     }
 

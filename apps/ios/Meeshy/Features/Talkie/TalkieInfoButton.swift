@@ -55,12 +55,12 @@ enum TalkieInfoWording {
     static var text: String {
         String(
             localized: "talkie.info.text",
-            defaultValue: "Disponible pour vos très proches. À utiliser en cas d’extrême urgence : votre voix sort chez eux même si Meeshy est en arrière-plan.",
+            defaultValue: "Votre voix sort même si Meeshy est en arrière-plan.",
             bundle: .main
         )
     }
 
     static var a11y: String {
-        String(localized: "talkie.info.a11y", defaultValue: "À propos du talkie d’urgence", bundle: .main)
+        String(localized: "talkie.info.a11y", defaultValue: "Quand utiliser le talkie ?", bundle: .main)
     }
 }

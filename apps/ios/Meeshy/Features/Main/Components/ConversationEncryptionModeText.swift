@@ -21,15 +21,15 @@ extension ConversationCreationEncryption.Mode {
         switch self {
         case .server:
             String(localized: "conversation.encryption.mode.server.description",
-                   defaultValue: "Vos messages sont chiffrés sur nos serveurs. Traduction, transcription et recherche fonctionnent.",
+                   defaultValue: "Chiffré sur nos serveurs, lisible par eux : traduction et recherche fonctionnent.",
                    bundle: .main)
         case .hybrid:
             String(localized: "conversation.encryption.mode.hybrid.description",
-                   defaultValue: "Chiffré sur nos serveurs ; entre appareils compatibles, une seconde couche permet de vérifier qu’un message texte n’a pas été modifié en chemin.",
+                   defaultValue: "Chiffré sur nos serveurs ; intégrité vérifiée entre appareils compatibles.",
                    bundle: .main)
         case .e2ee:
             String(localized: "conversation.encryption.mode.e2ee.description",
-                   defaultValue: "Seuls vos appareils et ceux des participants lisent les messages. La traduction se fait sur votre appareil.",
+                   defaultValue: "Seuls les appareils des participants lisent ; traduction sur l’appareil.",
                    bundle: .main)
         }
     }
