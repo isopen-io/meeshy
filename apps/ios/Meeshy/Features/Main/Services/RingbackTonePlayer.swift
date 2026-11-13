@@ -143,10 +143,10 @@ struct BackgroundCallSoundLoopStarter: CallSoundLoopStarting {
     }
 }
 
-private final class PlayingSoundLoop: CallSoundLoop, @unchecked Sendable {
-    private let player: AVAudioPlayer
+private final class PlayingSoundLoop: CallSoundLoop {
+    private let player: OSAllocatedUnfairLock<AVAudioPlayer>
 
-    private init(player: AVAudioPlayer) { self.player = player }
+    private init(player: AVAudioPlayer) { self.player = OSAllocatedUnfairLock(uncheckedState: player) }
 
     static func start(url: URL, volume: Float) -> PlayingSoundLoop? {
         let logger = MeeshyLog.logger(.callSounds)
@@ -168,7 +168,7 @@ private final class PlayingSoundLoop: CallSoundLoop, @unchecked Sendable {
         }
     }
 
-    func stop() { player.stop() }
+    func stop() { player.withLockUnchecked { $0.stop() } }
 }
 
 /// Sans CallKit pour activer la session pendant la sonnerie (Mac, ou appel au
