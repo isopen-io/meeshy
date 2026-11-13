@@ -493,3 +493,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   La preuve Android complète est `android.yml` sur la PR.
 - Reste pour fermer #17100 : émetteur socket et flux d'événements (`sdk-core`), lecteur Media3 piloté par la loi,
   bandeau d'invitation, ligne de la fiche d'un Proche, libellés `together.*`.
+
+## 2026-11-13 — réveil : un Bring refusé ne dit plus le blocage (#14677, volet refus)
+
+- Reprise : 14 PR « cercles » ouvertes, toutes tenues par des branches vivantes (mises à jour dans l'heure) ; ce réveil
+  n'en touche aucune. Lot libre pris : #14677, branche `claude/cercles-14677-bring-neutre`.
+- Lot : le blocage par personne et la coupure globale se servent désormais en `403 BRING_NOT_ALLOWED`, la réponse
+  exacte d'un niveau insuffisant (même statut, même corps, même disponibilité). Le nom `BRING_UNAVAILABLE` proposé par
+  l'issue n'a pas été pris : il désigne déjà le compteur injoignable (503, « réessayer » chez les clients).
+  `BRING_BLOCKED` reste dans le contrat, plus servi ; les clients web, iOS et Android le lisaient déjà comme « parti ».
+  Décision du 2026-11-02 (point 2) et spec § Bring amendées.
+- Reste de #14677 : retirer `resetsAt` de la disponibilité servie à l'expéditeur. Non fait : #18000 (#14473) corrige au
+  même moment l'heure « de nouveau à » que le client affiche depuis `resetsAt` — les deux issues se contredisent, à
+  trancher par le porteur.
+- Prochain lot recommandé : une issue libre du jalon 2 (#14685/#14686, retrait d'un partage du Sang), ou finir les PR
+  ouvertes dont la branche s'est arrêtée.
