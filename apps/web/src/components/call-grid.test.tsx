@@ -198,6 +198,14 @@ describe('CallGrid — la grille suit l’orientation (P11.1, GroupCallGridLayou
     expect(columnsOf(grid({ members: peers(3), landscape: false, compact: true }))).toBe(2);
   });
 
+  test('la fenêtre qui franchit la hauteur compacte fait GLISSER chaque case de 2 × 2 à la rangée de quatre, jamais sauter (FACTURE, P14.10)', () => {
+    const keys: string[] = [];
+    const kit = { ...CALL_GRID_KIT, useStageFlip: (_root: unknown, key: string) => void keys.push(key) };
+    [false, true].forEach((compact) => grid({ kit, members: peers(3), landscape: true, compact }));
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).not.toBe(keys[1]);
+  });
+
   test('sur grand écran la grille est bornée en largeur et centrée, marges égales (W2.1, planche W2)', () => {
     expect(grid({ members: peers(3) })).toMatch(/class="relative grid min-h-\[140px\][^"]*max-w-\[1064px\][^"]*mx-auto/);
   });

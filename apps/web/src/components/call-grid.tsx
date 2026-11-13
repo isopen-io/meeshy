@@ -350,7 +350,7 @@ export function CallGrid({ kit, members, remoteStreams, self, selfZoom = null, c
   const shown = useRef<{ readonly screen: boolean; readonly full: boolean } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const fullscreen = immersive;
-  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}`);
+  kit.useStageFlip(root, `${view === null ? 'grid' : `${view.featured?.userId ?? SELF}:${view.screen}`}|${fullscreen}|${landscape}|${compact}`);
   const mine = selfSubject(kit, self, language);
   const peer = (member: CallMember) => peerSubject(kit, member, remoteStreams[member.userId], language);
   const tile = (subject: Subject, onPress: (() => void) | null, label: string, portrait: number) => ({ kit, subject, held: held.current, onPress, label, portrait, press });
