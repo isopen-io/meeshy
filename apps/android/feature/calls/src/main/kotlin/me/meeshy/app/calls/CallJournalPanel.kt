@@ -51,8 +51,6 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.CallSpeakerColor
@@ -82,16 +80,16 @@ internal fun CallJournalPanel(
     /** #16665 — the dated captures of the call, in the journal at their time (loi 13). */
     captures: List<CallLiveCapture> = emptyList(),
     peerName: String = "",
-    /** W2.6 — who is who in the call: each sentence carries the name of its author (the call screen's own state). */
-    callViewModel: CallViewModel = hiltViewModel(),
+    /** W2.6 — who is who in the call, by speaker id (`CallUiState.participantNames`): each sentence carries its author's name. */
+    participantNames: Map<String, String> = emptyMap(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val view by viewModel.journalView.collectAsStateWithLifecycle()
     val labels = rememberCaptionLabels()
-    val names by remember(callViewModel) { callViewModel.state.map { it.participantNames }.distinctUntilChanged() }
-        .collectAsStateWithLifecycle(initialValue = callViewModel.state.value.participantNames)
     val lines = rememberStableLines(
-        remember(state.journal, view, state.callStartedAtMs, labels, names) { viewModel.journalLines(state, view, labels, names) },
+        remember(state.journal, view, state.callStartedAtMs, labels, participantNames) {
+            viewModel.journalLines(state, view, labels, participantNames)
+        },
     )
     val toggle = remember(viewModel) { { key: String -> viewModel.toggleJournalReveal(key) } }
     val title = stringResource(R.string.call_captions_journal_title)
