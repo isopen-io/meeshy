@@ -114,6 +114,25 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertEqual(sut.persistedSegmentsForTesting.count, 300)
     }
 
+    /// A1.6 — le journal gravé en fin d'appel suit l'heure où chaque phrase a COMMENCÉ, pas l'ordre
+    /// où elles ont été finalisées.
+    func test_persistedSegments_finalizedOutOfStartOrder_areKeptInStartOrder() {
+        let (sut, _) = makeSUT()
+        sut.receiveTranslatedSegment(makeSegment(text: "B", speakerId: "remote-user", isFinal: true, capturedAt: Date(timeIntervalSince1970: 50)))
+        sut.receiveTranslatedSegment(makeSegment(text: "A", speakerId: "remote-user-2", isFinal: true, capturedAt: Date(timeIntervalSince1970: 10)))
+
+        XCTAssertEqual(sut.persistedSegmentsForTesting.map(\.text), ["A", "B"])
+    }
+
+    func test_persistedSegments_aLongSentenceFinalizedLast_keepsItsStartPlace() {
+        let (sut, _) = makeSUT()
+        sut.receivePeerEntry(makeSegment(wireId: "long", text: "début", speakerId: "remote-user", isFinal: false, capturedAt: Date(timeIntervalSince1970: 10)))
+        sut.receivePeerEntry(makeSegment(wireId: "short", text: "court", speakerId: "remote-user-2", isFinal: true, capturedAt: Date(timeIntervalSince1970: 20)))
+        sut.receivePeerEntry(makeSegment(wireId: "long", text: "début et fin", speakerId: "remote-user", isFinal: true, capturedAt: Date(timeIntervalSince1970: 30)))
+
+        XCTAssertEqual(sut.persistedSegmentsForTesting.map(\.text), ["début et fin", "court"], "la phrase finalisée en dernier se range à son DÉBUT, pas à sa fin")
+    }
+
     func test_displayedSegments_arrivingOutOfOrder_staysInCaptureOrder() {
         let (sut, _) = makeSUT()
         [3, 1, 2].forEach { i in
