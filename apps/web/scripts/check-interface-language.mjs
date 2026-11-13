@@ -12,7 +12,7 @@
  *  1. `<html lang>` est la langue résolue (stockage → navigateur → `fr`) ;
  *  2. le titre, la bannière et son sous-titre, et le retour de l'écran sont
  *     dans cette langue ;
- *  3. le bouton du menu, l'échelle et ses six barreaux s'annoncent dans cette
+ *  3. le bouton du menu, l'échelle et ses sept barreaux (« Ma Légende » en tête depuis #17769) s'annoncent dans cette
  *     langue ;
  *  4. UN SEUL catalogue a été téléchargé, celui de la langue résolue — le
  *     chargement paresseux par langue est une mesure, pas une promesse ;
@@ -63,7 +63,7 @@ const GERMAN = {
   ladder: 'Meeshy-Navigation',
   /* Le barreau « Découvrir » DIT le compte des demandes reçues (#6321) : les
      fixtures en servent trois. */
-  rungs: ['Meine Links', 'Mitteilungen, 3 ungelesen', 'Anrufe', 'Entdecken, 3 Anfragen erhalten', 'Communitys', 'Einstellungen'],
+  rungs: ['Meine Legende', 'Meine Links', 'Mitteilungen, 3 ungelesen', 'Anrufe', 'Entdecken, 3 Anfragen erhalten', 'Communitys', 'Einstellungen'],
 };
 
 const ARABIC = {
@@ -73,7 +73,7 @@ const ARABIC = {
   back: 'العودة إلى المحادثات',
   menu: 'القائمة، 3 إشعارات غير مقروءة',
   ladder: 'التنقل في Meeshy',
-  rungs: ['روابطي', 'الإشعارات، 3 غير مقروءة', 'المكالمات', 'اكتشاف، 3 طلبات واردة', 'المجتمعات', 'الإعدادات'],
+  rungs: ['أسطورتي', 'روابطي', 'الإشعارات، 3 غير مقروءة', 'المكالمات', 'اكتشاف، 3 طلبات واردة', 'المجتمعات', 'الإعدادات'],
 };
 
 const FRENCH = {
@@ -83,7 +83,7 @@ const FRENCH = {
   back: 'Revenir aux conversations',
   menu: 'Menu, 3 notifications non lues',
   ladder: 'Navigation Meeshy',
-  rungs: ['Mes liens', 'Notifications, 3 non lues', 'Appels', 'Découvrir, 3 demandes reçues', 'Communautés', 'Réglages'],
+  rungs: ['Ma Légende', 'Mes liens', 'Notifications, 3 non lues', 'Appels', 'Découvrir, 3 demandes reçues', 'Communautés', 'Réglages'],
 };
 
 const CASES = [
@@ -166,7 +166,7 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
   await page.locator('[role="menu"]').waitFor({ state: 'visible', timeout: 5_000 });
   expect((await page.locator('[role="menu"]').getAttribute('aria-label')) === want.ladder, `${tag} : l'échelle s'annonce « ${want.ladder} »`);
   const rungs = await page.locator('[role="menuitem"]').evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
-  expect(JSON.stringify(rungs) === JSON.stringify(want.rungs), `${tag} : les six barreaux dans la langue (obtenu ${JSON.stringify(rungs)})`);
+  expect(JSON.stringify(rungs) === JSON.stringify(want.rungs), `${tag} : les sept barreaux dans la langue (obtenu ${JSON.stringify(rungs)})`);
 
   if (CAPTURES) await page.screenshot({ path: join(CAPTURES, `interface-${want.lang}-${locale}-${viewport.width}-${scheme}-menu.png`) });
 

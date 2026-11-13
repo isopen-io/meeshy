@@ -126,6 +126,12 @@ struct BubbleCallNoticeView: View, Equatable {
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundStyle(ThemeManager.shared.textPrimary)
                         .lineLimit(1)
+                    if let participants = participantsLine {
+                        Text(participants)
+                            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                            .foregroundStyle(ThemeManager.shared.textSecondary)
+                            .lineLimit(1)
+                    }
                     if let liveSubtitle = presentation.liveSubtitle {
                         liveRow(subtitle: liveSubtitle)
                     } else {
@@ -275,8 +281,14 @@ struct BubbleCallNoticeView: View, Equatable {
 
     // MARK: - Accessibility
 
+    /// « Awa, Karim, Lina et vous » sous le titre, quand la passerelle a servi les noms.
+    private var participantsLine: String? {
+        summary.participantsLine(viewerId: notice.viewerId, youLabel: String(localized: "call.card.participants.you", defaultValue: "vous", bundle: .main))
+    }
+
     private var accessibilityLabel: Text {
         var parts: [String] = [title, directionWord, notice.timeString]
+        if let participants = participantsLine { parts.insert(participants, at: 1) }
         if let duration = durationLabel { parts.append(duration) }
         if let data = summary.dataSpentLabel { parts.append(data) }
         return Text(parts.joined(separator: ", "))

@@ -64,6 +64,26 @@ export function captionText(caption: CallCaption, mode: CaptionsMode): string {
   return mode === 'translated' && !caption.mine && caption.translated !== null ? caption.translated : caption.original;
 }
 
+/**
+ * Une phrase se révèle d'un toucher, dans les DEUX réglages (miroir d'iOS `CallCaptionLine.make`, L3.9) :
+ * dès qu'elle a une traduction distincte de son original (jamais ma parole, jamais réglage éteint).
+ * Traduit : l'original se déplie SOUS la traduction. Original : la révéler montre sa traduction à la
+ * place de l'original, avec son étiquette « EN → FR ». `mode` est celui sous lequel LIRE cette ligne.
+ */
+export function captionReveal(caption: CallCaption, mode: CaptionsMode, revealed: boolean): { readonly canReveal: boolean; readonly mode: CaptionsMode; readonly originalBelow: boolean } {
+  const canReveal = mode !== 'off' && !caption.mine && caption.translated !== null && caption.translated !== caption.original;
+  if (!canReveal) return { canReveal, mode, originalBelow: false };
+  if (mode === 'original') return { canReveal, mode: revealed ? 'translated' : 'original', originalBelow: false };
+  return { canReveal, mode, originalBelow: revealed };
+}
+
+/**
+ * Ce que le lecteur d'écran dit d'une phrase touchable : en réglage traduit, l'original se DÉPLIE
+ * dessous (`aria-expanded`) ; en réglage « Original », la phrase CHANGE de langue sur place, rien
+ * ne se déplie — c'est un bouton pressé (`aria-pressed`).
+ */
+export const revealState = (mode: CaptionsMode, revealed: boolean): { readonly 'aria-expanded': boolean } | { readonly 'aria-pressed': boolean } => (mode === 'original' ? { 'aria-pressed': revealed } : { 'aria-expanded': revealed });
+
 const languageCode = (tag: string): string => (tag.split('-')[0] ?? tag).toUpperCase();
 
 const sameLanguage = (a: string, b: string): boolean => languageCode(a) === languageCode(b);

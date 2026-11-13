@@ -150,7 +150,7 @@ const ptShellLabels = {
   'list.quick.mood.hint': 'Um emoji diz como você está, sem escrever uma mensagem.',
   'list.header.share': 'Criar um link de compartilhamento',
   'list.header.new': 'Nova conversa',
-  'list.header.progression': 'Progresso — medalhas, nível e sequência',
+  'list.header.progression': 'Minha Lenda — medalhas, nível e Chama',
   'list.footer.exhausted': 'Todas as conversas foram carregadas',
   'list.footer.loadingMore': 'Carregando mais',
   'list.footer.failed': 'Não foi possível carregar mais',

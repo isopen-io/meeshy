@@ -2,7 +2,7 @@ import type { GameConceptCatalog } from '@/lib/i18n-game-catalog';
 
 /** LES CONCEPTS DE « PROGRESSION » (#9542, #9563) — ce que disent la première page et les fiches (`game.concept.*`, `game.fiche.*`, `game.fact.*`). Chargé avec les routes de Progression, jamais avec le bandeau ni le carnet des règles. Mêmes clés et mêmes paramètres que le français. */
 const es = {
-  'game.progression.title': 'Progreso',
+  'game.progression.title': 'Mi Leyenda',
   'game.concept.why_label': 'Para qué sirve',
   'game.concept.how_label': 'Cómo funciona',
   'game.fiche.what': '¿Qué es?',

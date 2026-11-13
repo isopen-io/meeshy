@@ -265,9 +265,11 @@ struct CallSelfTileStow: ViewModifier {
 
 /// P16.8 · R1.6 · R3.10 — ma vignette descend sous la pile des bandeaux (partage, enregistrement,
 /// capture) quand elle grandit et remonte quand elle rétrécit, dans le même mouvement qu'elle.
+/// L1.5 — quand la fenêtre change de forme, elle se couche ou se relève dans le même mouvement que sa place.
 /// Réduire les animations : elle se pose sans mouvement. Seule la pile anime la place : un glisser ou un coin choisi garde son ressort.
 struct CallSelfTilePlacement: ViewModifier {
     let position: CGPoint
+    let isLandscape: Bool
     let clearance: CGFloat
     let reduceMotion: Bool
 
@@ -275,5 +277,6 @@ struct CallSelfTilePlacement: ViewModifier {
         content
             .position(position)
             .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: clearance)
+            .animation(reduceMotion ? nil : CallChromeStow.animation(reduceMotion: false), value: isLandscape)
     }
 }

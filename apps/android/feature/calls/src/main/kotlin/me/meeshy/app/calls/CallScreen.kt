@@ -179,6 +179,9 @@ fun CallScreen(
     // R1.5 : ma vignette descend sous la pile entière des bandeaux (partage, enregistrement, capture), à leur hauteur mesurée.
     val bannerHeights = remember { CallTopBannerHeights() }
     val selfTileClearance = rememberSelfTileBannerClearance(bannerHeights, state.isPeerScreenCapturing && !inPip, reduceMotion)
+    val groupGridClearance = rememberGroupGridBannerClearance(
+        bannerHeights, state.isPeerScreenSharing, state.isPeerScreenCapturing && !inPip, chromeState.isStageFullScreen, reduceMotion,
+    )
 
     // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
     // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
@@ -186,8 +189,10 @@ fun CallScreen(
         CompositionLocalProvider(
             LocalCallLiveSeconds provides liveSeconds,
             LocalCallGlassTone provides glassTone,
+            LocalCallGlassToneProgress provides rememberCallGlassToneProgress(glassTone, reduceMotion),
             LocalCallSelfTileBannerClearance provides selfTileClearance,
             LocalCallTopBannerHeights provides bannerHeights,
+            LocalCallGroupGridClearance provides groupGridClearance,
         ) {
         Box(
             modifier = Modifier

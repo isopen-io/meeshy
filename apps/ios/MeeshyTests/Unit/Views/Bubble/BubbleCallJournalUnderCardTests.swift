@@ -158,11 +158,11 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
 
     // MARK: - La feuille garde sa mise en page
 
-    func test_transcriptSection_translationToggle_is44pt_withoutGrowingTheHeader() throws {
+    func test_transcriptSection_translationToggle_is44pt_withoutGrowingTheFooter() throws {
         let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
         XCTAssertTrue(section.contains(".meeshyTapTarget()"))
-        XCTAssertTrue(section.contains(".padding(-MeeshyTapTarget.inset(forVisualSide:"),
-                      "La cible de 44 pt déborde sans pousser l'en-tête de la feuille ni décaler le glyphe.")
+        XCTAssertTrue(section.contains("-MeeshyTapTarget.inset(forVisualSide:"),
+                      "La cible de 44 pt déborde sans pousser le pied de la feuille.")
     }
 
     // MARK: - Câblage : la bulle, la carte, la feuille
@@ -234,5 +234,137 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
         for line in lines {
             XCTAssertTrue(line.contains("@MainActor"), "Type de fonction async sans @MainActor (#8182) : \(line)")
         }
+    }
+
+    // MARK: - Lot carte d'appel et journal d'après l'appel (#17864) — A1.2 · A1.8 · A1.11 · A1.15 · A2.3
+
+    private func segment(
+        name: String = "Awa", isLocal: Bool = false, text: String = "Hi!",
+        translated: String? = "Salut !", translatedLanguage: String? = "fr"
+    ) -> CallTranscriptSegment {
+        CallTranscriptSegment(
+            speakerId: isLocal ? "me" : "u2", speakerName: name, isLocal: isLocal, text: text,
+            translatedText: translated, translatedLanguage: translatedLanguage, language: "en",
+            capturedAt: Date(timeIntervalSince1970: 4)
+        )
+    }
+
+    // A1.8 / A2.3 : l'original est sous CHAQUE traduction, dépliée d'office.
+
+    func test_originalBelow_aTranslatedSentence_carriesItsOriginal() {
+        XCTAssertEqual(CallJournalAfterCall.originalBelow(segment(), showsOriginalInstead: false), "Hi!")
+    }
+
+    func test_originalBelow_myOwnSentence_hasNone() {
+        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(isLocal: true, translated: nil), showsOriginalInstead: false))
+        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(isLocal: true), showsOriginalInstead: false),
+                     "Ma phrase n'est jamais traduite pour moi.")
+    }
+
+    func test_originalBelow_aSentenceWithoutTranslation_hasNone() {
+        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(translated: nil, translatedLanguage: nil), showsOriginalInstead: false))
+        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(translated: "  "), showsOriginalInstead: false))
+    }
+
+    func test_originalBelow_whenTheToggleAlreadyShowsTheOriginal_isNotRepeated() {
+        XCTAssertNil(CallJournalAfterCall.originalBelow(segment(), showsOriginalInstead: true))
+    }
+
+    // A1.15 : la bascule n'existe que si une phrase sert une traduction.
+
+    func test_offersOriginalToggle_onlyWhenASentenceIsServedTranslated() {
+        XCTAssertTrue(CallJournalAfterCall.offersOriginalToggle([segment(isLocal: true, translated: nil), segment()]))
+        XCTAssertFalse(CallJournalAfterCall.offersOriginalToggle([segment(isLocal: true, translated: nil)]))
+        XCTAssertFalse(CallJournalAfterCall.offersOriginalToggle([segment(translated: nil, translatedLanguage: nil)]))
+        XCTAssertFalse(CallJournalAfterCall.offersOriginalToggle([]))
+    }
+
+    // A1.11 : mes lignes disent « Vous », celles des autres gardent leur nom.
+
+    func test_authorName_mine_isYou_whateverNameWasEngraved() {
+        XCTAssertEqual(CallJournalAfterCall.authorName(speakerName: "Charles Dupont", isMine: true, you: "Vous"), "Vous")
+        XCTAssertEqual(CallJournalAfterCall.authorName(speakerName: "", isMine: true, you: "Vous"), "Vous")
+        XCTAssertEqual(CallJournalAfterCall.authorName(speakerName: "Awa", isMine: false, you: "Vous"), "Awa")
+    }
+
+    func test_authorName_capture_isMineWhenTheUserIdMatches() {
+        XCTAssertTrue(CallJournalAfterCall.isMine(userId: "me", localUserId: "me"))
+        XCTAssertFalse(CallJournalAfterCall.isMine(userId: "u2", localUserId: "me"))
+        XCTAssertFalse(CallJournalAfterCall.isMine(userId: "", localUserId: ""), "Un identifiant vide n'est la ligne de personne.")
+    }
+
+    // Sécurité : la mention dit vrai selon le régime de la conversation.
+
+    func test_retentionNotice_endToEnd_saysNothingLeavesTheDevice() {
+        XCTAssertEqual(CallJournalAfterCall.retentionNotice(for: .endToEnd), .deviceOnly)
+    }
+
+    func test_retentionNotice_readableConversation_admitsTheServerKeepsFinalSentences() {
+        XCTAssertEqual(CallJournalAfterCall.retentionNotice(for: .open), .serverKeepsFinalSentences)
+    }
+
+    func test_retentionNotice_unresolvedRegime_claimsNothing() {
+        XCTAssertEqual(CallJournalAfterCall.retentionNotice(for: .unresolved), .hidden)
+    }
+
+    func test_transcriptSection_noLongerPromisesNeverSent_whateverTheRegime() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertFalse(section.contains("\"call.transcript.disclaimer\""), "La mention d'avant promettait « jamais envoyée au serveur » à tous.")
+        XCTAssertTrue(section.contains("call.transcript.disclaimer.endToEnd"))
+        XCTAssertTrue(section.contains("call.transcript.disclaimer.server"))
+    }
+
+    // Disposition : l'original sous la traduction, la bascule au pied, « Vous », la ligne des participants.
+
+    func test_transcriptSection_togglesAtTheFootOfTheJournal_notInTheHeader() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertFalse(section.contains("character.bubble.fill"), "Plus d'icône en tête de section.")
+        guard let journal = section.range(of: "ForEach(Array(journal.enumerated())"),
+              let toggle = section.range(of: "originalToggle") else { return XCTFail("bascule absente") }
+        XCTAssertLessThan(journal.lowerBound, toggle.lowerBound, "La bascule est au pied du journal.")
+        XCTAssertTrue(section.contains("CallJournalAfterCall.offersOriginalToggle("), "Sans phrase traduite, pas de bascule.")
+    }
+
+    func test_transcriptSection_unfoldsTheOriginalWithTheSharedLine_inSecondaryInk() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertTrue(section.contains("CallOriginalBelowText("), "La ligne du journal vivant, jamais un jumeau.")
+        XCTAssertTrue(section.contains("theme.textSecondary"))
+        let live = try source("Meeshy/Features/Call/Views/CallCaptionsViews.swift")
+        XCTAssertTrue(live.contains("CallOriginalBelowText("), "Le journal vivant et celui d'après l'appel posent la même ligne.")
+    }
+
+    func test_transcriptSection_namesMeYou_atReplayAndInTheRows() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertTrue(section.contains("CallJournalAfterCall.authorName("))
+        XCTAssertFalse(section.contains("localUser?.displayName ?? localUser?.username"), "Le replay ne grave plus mon nom d'affichage.")
+    }
+
+    func test_card_showsTheParticipantsLine_underTheTitle() throws {
+        let view = try notice()
+        XCTAssertTrue(view.contains("summary.participantsLine(viewerId: notice.viewerId"),
+                      "Le lecteur se retire de la liste par son identifiant, jamais par son nom.")
+        guard let title = view.range(of: "Text(title)"), let line = view.range(of: "participantsLine") else {
+            return XCTFail("ligne des participants absente")
+        }
+        XCTAssertLessThan(title.lowerBound, line.lowerBound, "Sous le titre.")
+    }
+
+    // Le thème recolore le journal ouvert : la cellule est égale par primitives (la bascule ne se redessine pas
+    // quand le thème change), donc le journal lit la palette de l'ENVIRONNEMENT, qui l'invalide directement.
+
+    func test_transcriptSection_readsThePaletteOfTheEnvironment_notTheUnobservedSingleton() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertTrue(section.contains("@ResolvedThemePalette private var theme"))
+        XCTAssertFalse(section.contains("ThemeManager.shared"), "Lu sans être observé : un journal ouvert gardait l'ancien thème.")
+    }
+
+    func test_journalUnderCard_saysNothingKept_inThePaletteOfTheEnvironment_andStaysEqualByPrimitives() throws {
+        let view = try source("Meeshy/Features/Main/Views/Bubble/BubbleCallJournalUnderCard.swift")
+        XCTAssertTrue(view.contains("@ResolvedThemePalette private var theme"))
+        XCTAssertFalse(view.contains("ThemeManager.shared"))
+        XCTAssertTrue(
+            view.contains("lhs.callId == rhs.callId && lhs.accentHex == rhs.accentHex && lhs.alignsTrailing == rhs.alignsTrailing"),
+            "La cellule reste égale par primitives."
+        )
     }
 }

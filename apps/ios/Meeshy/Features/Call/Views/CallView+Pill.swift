@@ -232,7 +232,7 @@ extension CallView {
                 // basculement de haut-parleur y serait un contrôle inerte.
                 if !isOnMac {
                     CallOutputPillButton(
-                        isSpeaker: callManager.isSpeaker,
+                        isSpeaker: callManager.isSpeaker, isVideoCall: callManager.isVideoUIActive,
                         caption: captioned ? String(localized: "call.control.output.caption", defaultValue: "Sortie", bundle: .main) : nil,
                         diameter: Self.pillGlyphDiameter,
                         onToggleSpeaker: { callManager.toggleSpeaker() }

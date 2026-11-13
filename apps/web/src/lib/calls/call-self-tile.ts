@@ -23,12 +23,26 @@ const SIZES: Readonly<Record<SelfTileScale, TileSize>> = {
   3: { width: 168, height: 240 },
 };
 
+/**
+ * **L1.5 — DANS UNE FENÊTRE PLUS LARGE QUE HAUTE, MA VIGNETTE SE COUCHE** (`CallSelfTileScale.isLandscape` d'iOS,
+ * `CallSelfTileLaw.isLandscape` d'Android) : 130 × 96 au palier x2, les deux autres à la même proportion (x1.3 en
+ * largeur, ratio 96/130). La forme se lit sur la fenêtre, jamais sur l'appareil : redimensionner un navigateur la couche
+ * comme tourner un téléphone.
+ */
+const LANDSCAPE_SIZES: Readonly<Record<SelfTileScale, TileSize>> = {
+  1: { width: 93, height: 69 },
+  2: { width: 130, height: 96 },
+  3: { width: 195, height: 144 },
+};
+
+export const isLandscapeWindow = (viewport: TileSize): boolean => viewport.width > viewport.height;
+
 const MAX_WIDTH = 0.45;
 
 const MAX_HEIGHT = 0.4;
 
 export function selfTileSize(scale: SelfTileScale, viewport: TileSize): TileSize {
-  const size = SIZES[scale];
+  const size = (isLandscapeWindow(viewport) ? LANDSCAPE_SIZES : SIZES)[scale];
   const fit = Math.min(1, (viewport.width * MAX_WIDTH) / size.width, (viewport.height * MAX_HEIGHT) / size.height);
   return { width: Math.round(size.width * fit), height: Math.round(size.height * fit) };
 }
@@ -80,6 +94,15 @@ export const SELF_TILE_TOP = 128;
 
 export const SELF_TILE_BOTTOM = 176;
 
+/** Couchée, les coins se tiennent à la hauteur d'iOS et d'Android (`TOP_CLEARANCE_DP` 60, `BOTTOM_CLEARANCE_DP` 130) : l'écran manque de hauteur, et les coins bas ne retombent plus sur les hauts. */
+export const SELF_TILE_TOP_LANDSCAPE = 60;
+
+export const SELF_TILE_BOTTOM_LANDSCAPE = 130;
+
+/** Ce que ma vignette laisse libre sous la zone sûre, en haut et en bas, selon la forme de la fenêtre — ce que la pile des bandeaux AJOUTE au-dessus est `selfTileClearance` (`call-top-banners.ts`). */
+export const selfTileCornerInsets = (viewport: TileSize): { readonly top: number; readonly bottom: number } =>
+  isLandscapeWindow(viewport) ? { top: SELF_TILE_TOP_LANDSCAPE, bottom: SELF_TILE_BOTTOM_LANDSCAPE } : { top: SELF_TILE_TOP, bottom: SELF_TILE_BOTTOM };
+
 const DRAG_THRESHOLD = 8;
 
 export type TileBox = TileSize & { readonly x: number; readonly y: number };
@@ -124,9 +147,10 @@ const onLeft = (corner: SelfTileCorner): boolean => corner.endsWith('left');
 type BoxInput = { readonly corner: SelfTileCorner; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number };
 
 export function selfTileBox({ corner, size, viewport, topInset = 0 }: BoxInput): TileBox {
-  const top = SELF_TILE_TOP + topInset;
+  const clearance = selfTileCornerInsets(viewport);
+  const top = clearance.top + topInset;
   const x = onLeft(corner) ? SELF_TILE_MARGIN : viewport.width - SELF_TILE_MARGIN - size.width;
-  const y = onTop(corner) ? top : Math.max(top, viewport.height - SELF_TILE_BOTTOM - size.height);
+  const y = onTop(corner) ? top : Math.max(top, viewport.height - clearance.bottom - size.height);
   return { x, y, width: size.width, height: size.height };
 }
 

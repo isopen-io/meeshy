@@ -102,6 +102,7 @@ struct BubbleCallJournalUnderCard: View, Equatable {
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    @ResolvedThemePalette private var theme
     private var reduceMotion: Bool {
         MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
     }
@@ -162,7 +163,7 @@ struct BubbleCallJournalUnderCard: View, Equatable {
         if BubbleCallJournalOffer.saysNothingWasKept(phase) {
             Text(String(localized: "audio.fullscreen.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundStyle(ThemeManager.shared.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.sm)
         } else if let transcript {

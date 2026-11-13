@@ -4,11 +4,13 @@ import {
   cornerAfterArrow,
   DEFAULT_SELF_CORNER,
   DEFAULT_SELF_TILE,
+  isLandscapeWindow,
   isTileDrag,
   nearestSelfCorner,
   scaleAfterPinch,
   scaleAfterWheel,
   selfTileBox,
+  selfTileCornerInsets,
   selfTileCornerFor,
   selfTileCounterScaled,
   selfTileOrigin,
@@ -42,7 +44,7 @@ describe('selfTileSize', () => {
     expect(small.width).toBeLessThanOrEqual(144);
     expect(small.height).toBeLessThanOrEqual(227);
     expect(small).toEqual({ width: 144, height: 206 });
-    expect(selfTileSize(3, { width: 900, height: 400 })).toEqual({ width: 112, height: 160 });
+    expect(selfTileSize(3, { width: 300, height: 400 })).toEqual({ width: 112, height: 160 });
   });
 });
 
@@ -110,8 +112,10 @@ describe('selfTileBox — les quatre coins de repos', () => {
   });
 
   test('un écran trop court : le coin bas ne remonte jamais au-dessus du coin haut', () => {
-    const short = { width: 700, height: 360 };
+    const short = { width: 300, height: 360 };
     expect(selfTileBox({ corner: 'bottom-right', size, viewport: short }).y).toBe(128);
+    const landscapeShort = { width: 700, height: 200 };
+    expect(selfTileBox({ corner: 'bottom-right', size: selfTileSize(2, landscapeShort), viewport: landscapeShort }).y).toBe(60);
   });
 });
 
@@ -197,5 +201,41 @@ describe('ma vignette se range par une échelle ancrée à son coin (G1.11)', ()
     expect(selfTileCounterScaled(12, 1)).toBe(12);
     expect(selfTileCounterScaled(2, 0)).toBe(2);
     expect(selfTileCounterScaled(2, Number.NaN)).toBe(2);
+  });
+});
+
+describe('L1.5 — dans une fenêtre plus large que haute, ma vignette se couche (130 × 96) à sa hauteur de coin', () => {
+  const landscape = { width: 844, height: 390 };
+
+  test('la fenêtre est couchée quand elle est plus large que haute — jamais carrée', () => {
+    expect(isLandscapeWindow(landscape)).toBe(true);
+    expect(isLandscapeWindow(phone)).toBe(false);
+    expect(isLandscapeWindow({ width: 600, height: 600 })).toBe(false);
+  });
+
+  test('x2 couché fait 130 × 96, x1 et x3 le suivent à la même proportion ; le portrait ne change pas', () => {
+    expect(selfTileSize(2, landscape)).toEqual({ width: 130, height: 96 });
+    expect(selfTileSize(1, landscape)).toEqual({ width: 93, height: 69 });
+    expect(selfTileSize(3, landscape)).toEqual({ width: 195, height: 144 });
+    expect(selfTileSize(2, phone)).toEqual({ width: 112, height: 160 });
+  });
+
+  test('couchée, elle ne dépasse toujours pas 40 % de la hauteur de l’écran', () => {
+    const short = selfTileSize(3, { width: 640, height: 300 });
+    expect(short.height).toBeLessThanOrEqual(120);
+    expect(short.width / short.height).toBeCloseTo(130 / 96, 1);
+  });
+
+  test('sa hauteur de coin : 60 sous le haut, 130 au-dessus du bas (iOS, Android) ; portrait 128 et 176', () => {
+    expect(selfTileCornerInsets(landscape)).toEqual({ top: 60, bottom: 130 });
+    expect(selfTileCornerInsets(phone)).toEqual({ top: 128, bottom: 176 });
+  });
+
+  test('les quatre coins couchés sont quatre places distinctes — les coins bas ne retombent plus sur les hauts', () => {
+    const size = selfTileSize(2, landscape);
+    expect(selfTileBox({ corner: 'top-right', size, viewport: landscape })).toEqual({ x: 844 - 16 - 130, y: 60, width: 130, height: 96 });
+    expect(selfTileBox({ corner: 'top-left', size, viewport: landscape, topInset: 56 })).toEqual({ x: 16, y: 116, width: 130, height: 96 });
+    expect(selfTileBox({ corner: 'bottom-left', size, viewport: landscape })).toEqual({ x: 16, y: 390 - 130 - 96, width: 130, height: 96 });
+    expect(selfTileBox({ corner: 'bottom-right', size, viewport: landscape }).y).toBeGreaterThan(60);
   });
 });

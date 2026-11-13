@@ -191,8 +191,8 @@ private struct MeeshyChipTraits: ViewModifier {
 
     private var traits: AccessibilityTraits {
         var result: AccessibilityTraits = []
-        if state.isSelected { result.insert(.isSelected) }
-        if #available(iOS 17.0, *), state.role == .toggle { result.insert(.isToggle) }
+        if state.isSelected { result.formUnion(.isSelected) }
+        if #available(iOS 17.0, *), state.role == .toggle { result.formUnion(.isToggle) }
         return result
     }
 }

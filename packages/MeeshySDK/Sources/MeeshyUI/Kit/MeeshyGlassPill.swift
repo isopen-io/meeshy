@@ -29,6 +29,7 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
     private let buttons: (MeeshyGlassButtonSize) -> Buttons
     private let primary: Primary
     private let above: Above
+    private let aboveIsShown: Bool
 
     @State private var rowIsEmpty = false
 
@@ -44,7 +45,33 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
         @ViewBuilder primary: () -> Primary,
         @ViewBuilder above: () -> Above
     ) {
+        self.init(
+            label: label, presence: presence, layout: layout, tone: tone, showsDivider: showsDivider,
+            expandedMaxWidth: expandedMaxWidth, onRevive: onRevive, aboveIsShown: true,
+            buttons: buttons, primary: primary, above: above
+        )
+    }
+
+    /// **L'init de K11.** Le TYPE de `above` dit s'il y a un dessus ; un dessus
+    /// conditionnel (`if option`) a toujours le même type, donc la pilule au repos
+    /// serait `dense` et étirée à 560. `aboveIsShown` dit, à l'exécution, si ce
+    /// dessus est montré : faux, la pilule est celle du repos, serrée, `regular`.
+    /// Interne : l'API publique de K10 ne change pas.
+    init(
+        label: String,
+        presence: MeeshyGlassPillPresence,
+        layout: MeeshyGlassPillLayout,
+        tone: MeeshyGlassTone?,
+        showsDivider: Bool,
+        expandedMaxWidth: CGFloat,
+        onRevive: (() -> Void)?,
+        aboveIsShown: Bool,
+        @ViewBuilder buttons: @escaping (MeeshyGlassButtonSize) -> Buttons,
+        @ViewBuilder primary: () -> Primary,
+        @ViewBuilder above: () -> Above
+    ) {
         assert(!label.isEmpty, "MeeshyGlassPill : le nom du groupe est obligatoire et non vide")
+        self.aboveIsShown = aboveIsShown
         self.label = label
         self.presence = presence
         self.layout = layout
@@ -60,17 +87,19 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
     // MARK: Contenu
 
     /// Aucun verre sans rien à porter (loi 13).
-    static var hasContent: Bool { hasButtons || hasPrimary || hasAbove }
+    static var hasContent: Bool { hasButtons || hasPrimary || hasAboveSlot }
     private static var hasButtons: Bool { Buttons.self != EmptyView.self }
     private static var hasPrimary: Bool { Primary.self != EmptyView.self }
-    private static var hasAbove: Bool { Above.self != EmptyView.self }
+    private static var hasAboveSlot: Bool { Above.self != EmptyView.self }
+    /// Un dessus compte s'il est déclaré (le type) ET montré (`aboveIsShown`).
+    private var hasAbove: Bool { Self.hasAboveSlot && aboveIsShown }
 
     public var body: some View {
         if Self.hasContent {
             toned(sized(content))
                 .modifier(MeeshyGlassPillMorph(
                     tone: tone,
-                    density: Self.hasAbove ? .dense : .regular,
+                    density: hasAbove ? .dense : .regular,
                     showsRow: presence.showsRow,
                     drawsGlass: drawsGlass
                 ))
@@ -86,7 +115,7 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
     /// est mesurée, car un `ForEach` vide n'est pas un `EmptyView`.
     private var drawsGlass: Bool {
         MeeshyGlassPillRecipe.carriesGlass(
-            hasButtons: Self.hasButtons, hasPrimary: Self.hasPrimary, hasAbove: Self.hasAbove,
+            hasButtons: Self.hasButtons, hasPrimary: Self.hasPrimary, hasAbove: hasAbove,
             showsRow: presence.showsRow, rowMeasuresEmpty: rowIsEmpty
         )
     }
@@ -116,7 +145,7 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
     }
 
     private var widthCap: CGFloat? {
-        if Self.hasAbove { return expandedMaxWidth }
+        if hasAbove { return expandedMaxWidth }
         if case .spread(let maxWidth) = layout { return maxWidth }
         return nil
     }
@@ -134,7 +163,7 @@ public struct MeeshyGlassPill<Buttons: View, Primary: View, Above: View>: View {
 
     @ViewBuilder
     private var divider: some View {
-        if showsDivider, Self.hasAbove, presence.showsRow {
+        if showsDivider, hasAbove, presence.showsRow {
             Rectangle()
                 .fill(MeeshyColors.onMedia.opacity(MeeshyGlassPillRecipe.dividerOpacity))
                 .frame(height: MeeshyGlassPillRecipe.dividerHeight)

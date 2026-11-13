@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
@@ -24,6 +25,8 @@ internal enum class RootMenuBadge { UNREAD_NOTIFICATIONS, PENDING_FRIEND_REQUEST
  * la destination Communautes n'est pas montee (`communitiesAvailable = false`).
  */
 internal enum class RootMenuLadderEntry(val labelKey: String, val colorHex: String, val badge: RootMenuBadge?) {
+    /** Le jeu (#17769) : la Progression, en tete, orange de la Flamme ; iOS `.game`. */
+    GAME("menu_game", "#F97316", null),
     LINKS("menu_my_links", "#F8B500", null),
     NOTIFICATIONS("menu_notifications", "#FF6B6B", RootMenuBadge.UNREAD_NOTIFICATIONS),
     CALLS("tab_calls", "#6366F1", null),
@@ -43,6 +46,7 @@ internal enum class RootMenuLadderEntry(val labelKey: String, val colorHex: Stri
 
 /** L'icone du barreau — pendant Material des SF Symbols de `RootMenuLadderEntry.icon` iOS. */
 internal fun RootMenuLadderEntry.icon(): ImageVector = when (this) {
+    RootMenuLadderEntry.GAME -> Icons.Filled.EmojiEvents
     RootMenuLadderEntry.LINKS -> Icons.Filled.AddLink
     RootMenuLadderEntry.NOTIFICATIONS -> Icons.Filled.Notifications
     RootMenuLadderEntry.CALLS -> Icons.Filled.Call
@@ -62,8 +66,12 @@ internal val FeedButtonIcon: ImageVector get() = Icons.Filled.AutoAwesomeMotion
 internal const val COMMUNITIES_AVAILABLE: Boolean = true
 
 /** L'ordre de l'echelle : Mes liens, Notifications, Appels, Decouvrir, Communautes (ou Contacts), Reglages. */
-internal fun rootMenuLadderEntries(communitiesAvailable: Boolean = COMMUNITIES_AVAILABLE): List<RootMenuLadderEntry> =
-    listOf(
+internal fun rootMenuLadderEntries(
+    communitiesAvailable: Boolean = COMMUNITIES_AVAILABLE,
+    gameHidden: Boolean = false,
+): List<RootMenuLadderEntry> =
+    listOfNotNull(
+        RootMenuLadderEntry.GAME.takeUnless { gameHidden },
         RootMenuLadderEntry.LINKS,
         RootMenuLadderEntry.NOTIFICATIONS,
         RootMenuLadderEntry.CALLS,

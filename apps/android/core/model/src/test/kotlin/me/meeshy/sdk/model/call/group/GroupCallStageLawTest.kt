@@ -20,6 +20,18 @@ class GroupCallStageLawTest {
     }
 
     @Test
+    fun `L4,1 - four people fit on one row in landscape and stay 2 by 2 standing`() {
+        assertThat(GroupCallGridLayout.layout(4, isLandscape = true)).isEqualTo(GroupCallGridLayout(4, 1))
+        assertThat(GroupCallGridLayout.layout(4, isLandscape = false)).isEqualTo(GroupCallGridLayout(2, 2))
+    }
+
+    @Test
+    fun `three people keep the 2 by 2 grid in both orientations, like iOS`() {
+        assertThat(GroupCallGridLayout.layout(3, isLandscape = true)).isEqualTo(GroupCallGridLayout(2, 2))
+        assertThat(GroupCallGridLayout.layout(5, isLandscape = true)).isEqualTo(GroupCallGridLayout(3, 2))
+    }
+
+    @Test
     fun `the duo screen stays while only the primary is there`() {
         assertThat(GroupCallStageLaw.isShown(isMeshActive = true, roster = primaryOnly)).isFalse()
         assertThat(GroupCallStageLaw.isShown(isMeshActive = true, roster = trio)).isTrue()

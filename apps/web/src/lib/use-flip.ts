@@ -1,12 +1,19 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 
-import { flipKeyframes, type FlipPoint } from '@/lib/view/flip';
+import { flipKeyframes, type FlipBox, type FlipPoint } from '@/lib/view/flip';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-const pointOf = (element: HTMLElement | null): FlipPoint | null => {
+const pointOf = (element: HTMLElement | null): FlipBox | null => {
   if (element === null) return null;
   const rect = element.getBoundingClientRect();
-  return { x: rect.left, y: rect.top };
+  return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+};
+
+/** La propriété `scale` de l'élément (ma vignette rangée, G1.11) : la transformation jouée se compose sous elle. */
+const carriedOf = (element: HTMLElement): FlipPoint | undefined => {
+  const values = getComputedStyle(element).scale.trim().split(/\s+/).map((value) => (value.endsWith('%') ? Number.parseFloat(value) / 100 : Number.parseFloat(value)));
+  const [x, y = x] = values;
+  return x === undefined || !Number.isFinite(x) || y === undefined || !Number.isFinite(y) ? undefined : { x, y };
 };
 
 /**
@@ -21,7 +28,8 @@ const pointOf = (element: HTMLElement | null): FlipPoint | null => {
  * joue (le mouvement en cours s'interrompt, le doigt a la main), et le lâcher,
  * qui change la clé, repart de là où le doigt l'a laissé. Le mouvement est la
  * loi pure `flipKeyframes` — `transform` et `opacity`, rien d'autre — et
- * « réduire le mouvement » rend la bascule sèche.
+ * « réduire le mouvement » rend la bascule sèche, ou, pour un changement de
+ * taille, un fondu de `reducedDuration`.
  */
 export function useFlip(
   ref: RefObject<HTMLElement | null>,
@@ -31,10 +39,22 @@ export function useFlip(
     easing,
     fadeFrom,
     held = false,
-  }: { readonly key: string | null; readonly duration: number; readonly easing: string; readonly fadeFrom?: number; readonly held?: boolean },
+    origin,
+    reducedDuration = duration,
+  }: {
+    readonly key: string | null;
+    readonly duration: number;
+    readonly easing: string;
+    readonly fadeFrom?: number;
+    readonly held?: boolean;
+    /** Déclarée, la boîte joue aussi son changement de taille, en échelle autour de cette ancre (fractions de sa taille). */
+    readonly origin?: FlipPoint;
+    /** La durée du fondu qui remplace le mouvement sous « réduire les animations ». Défaut : `duration`. */
+    readonly reducedDuration?: number;
+  },
 ): void {
   const committed = useRef<string | null>(null);
-  const first = useRef<FlipPoint | null>(null);
+  const first = useRef<FlipBox | null>(null);
   const running = useRef<Animation | null>(null);
 
   if (key !== committed.current) first.current = key === null || committed.current === null ? null : pointOf(ref.current);
@@ -51,8 +71,10 @@ export function useFlip(
     if (held || typeof element.animate !== 'function') return;
     const last = pointOf(element);
     if (last === null) return;
-    const frames = flipKeyframes({ first: from, last, reducedMotion: prefersReducedMotion(), ...(fadeFrom === undefined ? {} : { fadeFrom }) });
+    const reducedMotion = prefersReducedMotion();
+    const carried = carriedOf(element);
+    const frames = flipKeyframes({ first: from, last, reducedMotion, ...(fadeFrom === undefined ? {} : { fadeFrom }), ...(origin === undefined ? {} : { origin }), ...(carried === undefined ? {} : { carried }) });
     if (frames === null) return;
-    running.current = element.animate([...frames], { duration, easing });
+    running.current = element.animate([...frames], { duration: reducedMotion ? reducedDuration : duration, easing });
   }, [key]);
 }

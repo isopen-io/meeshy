@@ -119,13 +119,15 @@ export class GloryService {
    * À appeler HORS transaction : sur MongoDB une violation d'unicité avorte la
    * transaction qui la subit. Dans une transaction (la frappe), l'appelant
    * a déjà tranché l'idempotence et écrit la ligne lui-même.
+   *
+   * `announce: false` : un rattrapage (#17779) — les niveaux que le rang ouvre se paient, rien ne s'annonce.
    */
-  async credit(entry: GloryCredit): Promise<boolean> {
+  async credit(entry: GloryCredit, options: LevelProgressOptions = {}): Promise<boolean> {
     const written = await this.writeLine(entry);
     if (!written || entry.delta <= 0) return written;
     await this.claimMythicSeat(entry.userId);
     // Les lignes de niveau ouvrent les niveaux en fin de passage (`creditLevelProgress`), une fois pour toutes.
-    if (entry.reason !== 'level') await this.openLevelsIfRankRose(entry.userId, entry.delta);
+    if (entry.reason !== 'level') await this.openLevelsIfRankRose(entry.userId, entry.delta, options);
     return true;
   }
 

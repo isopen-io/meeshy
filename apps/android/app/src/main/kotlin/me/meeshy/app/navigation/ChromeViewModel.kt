@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.game.GameDevicePrefsStore
+import me.meeshy.sdk.game.InMemoryGameDevicePrefsStore
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.notification.NotificationRepository
@@ -49,6 +51,7 @@ class ChromeViewModel @Inject constructor(
     messageSocketManager: MessageSocketManager,
     private val config: MeeshyConfig,
     private val unreadBadge: UnreadBadgeCoordinator,
+    private val gamePrefs: GameDevicePrefsStore = InMemoryGameDevicePrefsStore(),
 ) : ViewModel() {
 
     val currentUser: StateFlow<MeeshyUser?> = sessionRepository.currentUser
@@ -64,6 +67,11 @@ class ChromeViewModel @Inject constructor(
     val unreadMessages: StateFlow<Int> = unreadBadge.state
         .map { it.total }
         .stateIn(viewModelScope, SharingStarted.Eagerly, unreadBadge.state.value.total)
+
+    /** « Jeu masque » : le barreau du jeu quitte l'echelle (#17769), comme le bandeau quitte l'ecran. */
+    val gameHidden: StateFlow<Boolean> = gamePrefs.prefs
+        .map { it.hidden }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, gamePrefs.current().hidden)
 
     val pendingFriendRequests: StateFlow<Int> = friendshipCache.version
         .map { friendshipCache.pendingReceivedCount }

@@ -605,4 +605,25 @@ final class CallViewGlassGuardTests: XCTestCase {
             XCTAssertFalse(unit.contains(".meeshyGlass("), "le verre sous le voile se réutilise, il ne se recopie pas")
         }
     }
+
+    /// L1.3 — le bouton « Sortie » de la pilule demande son état à la loi pure,
+    /// avec la nature de l'appel ; la vue ne recompose plus `isSpeaker ? .active`.
+    func test_outputPillButton_takesItsKindFromThePureRule() throws {
+        let controls = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallDeviceControls.swift"))
+        let button = try XCTUnwrap(DeclarationBodyScanner.body(containing: "struct CallOutputPillButton: View", in: controls))
+        XCTAssertTrue(button.contains("CallOutputButtonRule.kind("))
+        XCTAssertTrue(button.contains("isVideoCall"))
+        XCTAssertFalse(button.contains("isSpeaker || route.routesExternally ? .active : .normal"))
+        let pill = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Pill.swift"))
+        XCTAssertTrue(pill.contains("isVideoCall: callManager.isVideoUIActive"))
+    }
+
+    /// L2.7 — un rail trop long pour la hauteur défile ET s'efface en fondu à ses
+    /// deux bords (le masque de l'appel, axe vertical), au lieu d'être coupé net.
+    func test_actionRail_thatScrolls_fadesAtItsTwoEdges() throws {
+        let rails = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Call/Views/CallView+Rails.swift"))
+        let rail = try block("private func actionRail(", until: "private struct CallRailStow", in: rails)
+        XCTAssertTrue(rail.contains("ScrollView(.vertical, showsIndicators: false)"))
+        XCTAssertTrue(rail.contains(".mask { ScrollEdgeFadeMask(axis: .vertical, start: true, end: true) }"))
+    }
 }
