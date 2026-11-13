@@ -189,8 +189,17 @@ describe('CallGrid — la grille suit l’orientation (P11.1, GroupCallGridLayou
     expect([1, 2, 3, 4, 5].map((count) => columnsOf(grid({ members: peers(count) })))).toEqual([1, 2, 2, 2, 2]);
   });
 
-  test('paysage (L4.1) : deux tuiles se côtoient, trois personnes (quatre tuiles avec moi) tiennent sur une seule rangée, cinq et six font 3 colonnes × 2 rangées', () => {
-    expect([1, 2, 3, 4, 5].map((count) => columnsOf(grid({ members: peers(count), landscape: true })))).toEqual([2, 2, 4, 3, 3]);
+  test('paysage sans hauteur compacte (W2.1, fenêtre de bureau) : quatre tuiles restent 2 × 2, cinq et six font 3 colonnes', () => {
+    expect([1, 2, 3, 4, 5].map((count) => columnsOf(grid({ members: peers(count), landscape: true })))).toEqual([2, 2, 2, 3, 3]);
+  });
+
+  test('paysage de hauteur compacte (L4.1, téléphone couché) : trois personnes (quatre tuiles avec moi) tiennent sur une seule rangée', () => {
+    expect([1, 2, 3, 4, 5].map((count) => columnsOf(grid({ members: peers(count), landscape: true, compact: true })))).toEqual([2, 2, 4, 3, 3]);
+    expect(columnsOf(grid({ members: peers(3), landscape: false, compact: true }))).toBe(2);
+  });
+
+  test('sur grand écran la grille est bornée en largeur et centrée, marges égales (W2.1, planche W2)', () => {
+    expect(grid({ members: peers(3) })).toMatch(/class="relative grid min-h-\[140px\][^"]*max-w-\[1064px\][^"]*mx-auto/);
   });
 
   test('la grille garde 140 de haut au moins, et chaque case se partage la hauteur à parts égales (P12.7)', () => {
