@@ -23,7 +23,9 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 
 const row: SystemRow = { kind: 'call', callType: 'video', text: 'Appel vidéo · 12:40' };
 
-const target: CallNoticeTarget = { conversationId: 'c-journal', callId: 'call-journal-1', media: 'video', live: false, transcript: true, recording: null };
+const callId = 'call-journal-1';
+
+const target: CallNoticeTarget = { conversationId: 'c-journal', callId, media: 'video', live: false, transcript: true, recording: null };
 
 const runs: { readonly target: Element; readonly frames: readonly Keyframe[]; readonly duration: number; readonly fill: string | undefined }[] = [];
 const saved: { animate?: PropertyDescriptor | undefined; media?: PropertyDescriptor | undefined } = {};
@@ -54,7 +56,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   act(() => mounted.splice(0).forEach((root) => root.unmount()));
-  appQueryClient.removeQueries({ queryKey: callTranscriptQueryKey(target.callId) });
+  appQueryClient.removeQueries({ queryKey: callTranscriptQueryKey(callId) });
   const restore = (target: object, key: string, descriptor: PropertyDescriptor | undefined) => (descriptor === undefined ? Reflect.deleteProperty(target, key) : Object.defineProperty(target, key, descriptor));
   restore(HTMLElement.prototype, 'animate', saved.animate);
   restore(window, 'matchMedia', saved.media);
