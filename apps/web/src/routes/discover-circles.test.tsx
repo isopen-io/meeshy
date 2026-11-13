@@ -160,7 +160,7 @@ describe('la fiche d’un lien', () => {
   test('dès Proche, « Couper son talkie » (#16638) et « Ce que j’écoute » (#16831) sont ACTIFS à côté du Bring', async () => {
     await mount(<CircleLinkSheet language="fr" link={link({ effectiveLevel: 'CLOSE' })} person={ada} now={NOW} onClose={noop} />);
     const active = [...document.querySelectorAll<HTMLInputElement>('[data-circle-setting]')].filter((s) => !s.disabled);
-    expect(active.map((s) => s.getAttribute('data-circle-setting'))).toEqual(['circles.settings.blockBring', 'circles.settings.blockTalkie', 'circles.settings.listening']);
+    expect(active.map((s) => s.getAttribute('data-circle-setting'))).toEqual(['circles.settings.blockBring', 'circles.settings.blockTalkie', 'circles.settings.blockTogether', 'circles.settings.listening']);
     const upcoming = [...document.querySelectorAll<HTMLInputElement>('[data-circle-setting]')].filter((s) => s.disabled);
     expect(upcoming.map((s) => s.getAttribute('data-circle-setting'))).toEqual(['circles.settings.location']);
   });

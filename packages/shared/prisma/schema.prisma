@@ -2235,6 +2235,9 @@ model RelationFeatureSetting {
   /// préférence de réception, active par défaut (spec `talkieDirect @default(true)`,
   /// écrite en date nullable — aucun couple booléen + horodatage).
   talkieBlockedAt       DateTime?
+  /// Non nul = `ownerId` a coupé les invitations « regarder ou écouter ensemble » de `otherId`
+  /// (#17023) : préférence de réception, active par défaut ; la séance déjà rejointe continue.
+  togetherBlockedAt     DateTime?
   consentedAt           DateTime @default(now())
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt

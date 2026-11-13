@@ -5,7 +5,8 @@
  * Deux familles :
  * - des préférences de RÉCEPTION, actives par défaut (#14407) : `bringBlocked`
  *   (#13936) coupe le Bring de cette personne vers moi, `talkieBlocked` (#13935) la
- *   réception directe de son talkie (sa voix arrive alors en message vocal) ;
+ *   réception directe de son talkie (sa voix arrive alors en message vocal), `togetherBlocked`
+ *   (#17023) ses invitations à regarder ou écouter ensemble ;
  * - les partages consentis au rituel du Sang (#14401) : ils s'accordent au rituel
  *   seulement, et se RETIRENT ici, un par un, sans quitter le Sang (RGPD art. 7(3)) ;
  * - la catégorie de mon écoute (#13934, #16686) : un consentement de l'ÉMETTEUR,
@@ -33,6 +34,8 @@ export const relationPersonSettingsSchema = z.object({
   userId: z.string(),
   bringBlocked: z.boolean(),
   talkieBlocked: z.boolean(),
+  /** Absent d'un serveur antérieur à #17023 : lu `false`. */
+  togetherBlocked: z.boolean().optional(),
   /** Absent d'un serveur antérieur à #16686 : lu `false`. */
   listeningCategoryShared: z.boolean().optional(),
   listeningTitleShared: z.boolean(),
@@ -43,7 +46,7 @@ export const relationPersonSettingsSchema = z.object({
 export type RelationPersonSettings = z.infer<typeof relationPersonSettingsSchema>;
 
 /**
- * Un réglage au moins. `bringBlocked` et `talkieBlocked` se posent dans les deux sens ;
+ * Un réglage au moins. `bringBlocked`, `talkieBlocked` et `togetherBlocked` se posent dans les deux sens ;
  * un partage du rituel ne se règle qu'à `false` (le retrait) : l'accorder hors du
  * rituel est refusé.
  */
@@ -51,6 +54,7 @@ export const relationPersonSettingsUpdateSchema = z
   .object({
     bringBlocked: z.boolean().optional(),
     talkieBlocked: z.boolean().optional(),
+    togetherBlocked: z.boolean().optional(),
     listeningCategoryShared: z.boolean().optional(),
     listeningTitleShared: z.literal(false).optional(),
     locationShared: z.literal(false).optional(),
