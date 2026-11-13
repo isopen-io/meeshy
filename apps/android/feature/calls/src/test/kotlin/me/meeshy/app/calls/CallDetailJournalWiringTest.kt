@@ -37,9 +37,22 @@ class CallDetailJournalWiringTest {
     fun `A1_8 et A2_3 - l'original se deplie sous chaque traduction a l'encre secondaire du theme`() {
         val sections = code("CallDetailSections.kt")
 
-        assertThat(sections).contains("line.originalBelow(showsOriginalInstead = showOriginal)")
-        assertThat(sections).contains("CallCaptionOriginalBelow(original, reduceMotion, ink = MeeshyTheme.tokens.textSecondary)")
+        assertThat(sections).contains("line.secondary(showOriginal)")
+        assertThat(sections).doesNotContain("originalBelow")
+        assertThat(sections).contains("CallCaptionSecondaryBelow(secondary, reduceMotion, ink = MeeshyTheme.tokens.textSecondary)")
         assertThat(code("CallCaptionRow.kt")).contains("ink = MeeshyMediaChromeColors.ChromeSecondary")
+    }
+
+    @Test
+    fun `#17896 - la bascule inverse les deux lignes en fondu, elle ne remplace plus rien`() {
+        val sections = code("CallDetailSections.kt")
+        val below = code("CallCaptionRow.kt")
+
+        assertThat(sections).contains("CallTranscriptRowAccessibility.label(line, showOriginal")
+        assertThat(sections).contains("AnimatedContent(")
+        assertThat(sections).contains("transitionSpec = { fadeIn(tween(fadeMillis)) togetherWith fadeOut(tween(fadeMillis)) }")
+        assertThat(below).contains("CallTranscriptSecondaryKind.TRANSLATED -> R.string.call_captions_translated")
+        assertThat(below).contains("CallTranscriptSecondaryKind.ORIGINAL -> R.string.call_captions_original")
     }
 
     @Test

@@ -234,33 +234,61 @@ class CallTranscriptReplayTest {
     // --- « Original · … » under each translation (A1.8, A2.3) -------------------------------
 
     @Test
-    fun `a translated sentence unfolds its original below`() {
+    fun `a translated sentence leads with its translation and unfolds Original below by default`() {
         val line = lines(page(segment(text = "Nos vemos mañana", language = "es", translations = listOf(fr("On se voit demain"))))).single()
 
         assertThat(line.servesTranslation).isTrue()
-        assertThat(line.originalBelow(showsOriginalInstead = false)).isEqualTo("Nos vemos mañana")
+        assertThat(line.text(showOriginal = false)).isEqualTo("On se voit demain")
+        assertThat(line.secondary(showOriginal = false))
+            .isEqualTo(CallTranscriptSecondary(CallTranscriptSecondaryKind.ORIGINAL, "Nos vemos mañana"))
     }
 
     @Test
-    fun `the original is not repeated below when the toggle already shows it instead`() {
+    fun `Voir l'original INVERTS the two lines, the translation drops below as Traduit instead of disappearing (#17862)`() {
         val line = lines(page(segment(text = "Nos vemos mañana", language = "es", translations = listOf(fr("On se voit demain"))))).single()
 
-        assertThat(line.originalBelow(showsOriginalInstead = true)).isNull()
+        assertThat(line.text(showOriginal = true)).isEqualTo("Nos vemos mañana")
+        assertThat(line.showsTranslation(showOriginal = true)).isFalse()
+        assertThat(line.secondary(showOriginal = true))
+            .isEqualTo(CallTranscriptSecondary(CallTranscriptSecondaryKind.TRANSLATED, "On se voit demain"))
     }
 
     @Test
-    fun `an untranslated sentence has no original below`() {
+    fun `Voir la traduction gives back the default state, the switch is its own inverse`() {
+        val line = lines(page(segment(text = "Nos vemos mañana", language = "es", translations = listOf(fr("On se voit demain"))))).single()
+
+        assertThat(line.text(showOriginal = false)).isEqualTo("On se voit demain")
+        assertThat(line.secondary(showOriginal = false)?.kind).isEqualTo(CallTranscriptSecondaryKind.ORIGINAL)
+    }
+
+    @Test
+    fun `an untranslated sentence stays alone in both states`() {
         val line = lines(page(segment(text = "Salut", language = "fr"))).single()
 
         assertThat(line.servesTranslation).isFalse()
-        assertThat(line.originalBelow(showsOriginalInstead = false)).isNull()
+        assertThat(line.text(showOriginal = false)).isEqualTo("Salut")
+        assertThat(line.text(showOriginal = true)).isEqualTo("Salut")
+        assertThat(line.secondary(showOriginal = false)).isNull()
+        assertThat(line.secondary(showOriginal = true)).isNull()
     }
 
     @Test
-    fun `the reader's own sentence never has an original below`() {
+    fun `the reader's own sentence stays alone in both states`() {
         val line = lines(page(segment(speakerId = "me", translations = listOf(fr("Bonjour"))))).single()
 
-        assertThat(line.originalBelow(showsOriginalInstead = false)).isNull()
+        assertThat(line.secondary(showOriginal = false)).isNull()
+        assertThat(line.secondary(showOriginal = true)).isNull()
+    }
+
+    @Test
+    fun `a capture stays alone in both states`() {
+        val capture = CallTranscriptLine(
+            speakerName = "Awa", isLocal = false, elapsedLabel = null, original = "", translated = null,
+            translatedLanguage = null, captureKind = CallCaptureKind.SCREENSHOT,
+        )
+
+        assertThat(capture.secondary(showOriginal = false)).isNull()
+        assertThat(capture.secondary(showOriginal = true)).isNull()
     }
 
     @Test
