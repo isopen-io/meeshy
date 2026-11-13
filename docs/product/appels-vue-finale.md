@@ -99,14 +99,21 @@
     - Effets est un mode plein écran qui parle la langue du composer (directive porteur du 2026-11-10, #17409) : ‹ · Réglages · (+). Réglages porte un engrenage et sa légende « Réglages », pour ne pas se confondre avec le glyphe d'Effets ; il ouvre P8b, où il passe en disque blanc.
     - **P8b, l'arrivée des réglages** (famille 2, 2026-11-11) : le panneau Luminosité · Flou du fond est un VERRE SÉPARÉ, posé au-dessus de la barre, à la place de la bande de looks. La barre perd sa rangée de puces (Filtres · Cadres · Visage…) et se resserre par morphisme sur ‹ · Réglages · (+). Les looks et les puces partent en fondu pendant que le panneau monte depuis la barre en fondu, en ≈ 200 ms (transformation et opacité) ; « Réduire les animations » ne garde que le fondu. Retoucher « Réglages » rend la bande de looks et ses puces par le chemin inverse. Les sous-titres restent au-dessus de tout, dans un verre sans rangée (loi 11), et le bandeau des autres reste comme en P8.
     - Le look touché s'applique tout de suite, sans « Valider » ; ‹ revient à l'appel ; (+) ajoute un look par-dessus le précédent, pour les cumuler ; « Aucun » rend mon image d'origine. Le choix se fait dans les looks du composer (loi 9).
-    - Montage garde Quitter · Réglages · Valider tant que le porteur ne l'a pas aligné ; « Quitter » rend mon image d'avant. Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
+    - **Effets, filtres et cadres sont UNE famille d'outils, avec la même barre et la même navigation, Montage compris** (décision porteur du 2026-11-13, #16979 ; P8, C1). Elle supplante la barre Quitter · Cadre · Valider du Montage.
+      - La barre est partout `‹ · Réglages · (+)`, sous les puces qui trient les looks. En Montage, la puce « Cadres » est pressée et le carrousel des cadres prend la place de la bande de looks.
+      - **La validation est automatique** : il n'y a de « Valider » nulle part. Ce qui est touché s'applique aussitôt, et ‹ revient à l'appel en gardant les effets appliqués.
+      - **Après le choix d'une fonction, la barre revient à son menu de base** : un look, un cadre ou un réglage choisi, ce que la fonction avait ouvert se referme par le chemin inverse (loi 17) et la barre retrouve ses puces et `‹ · Réglages · (+)`.
+      - **Au plus trois couches d'effet s'empilent** (un cadre, un filtre, une déformation…). (+) en ajoute une par-dessus les autres ; avec trois couches, (+) n'en ajoute plus de quatrième, le dit à son étiquette d'accessibilité et garde son appui long.
+      - **Un appui long sur (+) montre la liste des effets appliqués**, de la couche du dessus à celle du dessous, chacun avec de quoi l'annuler. En annuler un retire cette couche seule, les autres gardent leur ordre ; la liste vide se referme. Le lecteur d'écran offre la même liste par une action nommée sur (+), sans appui long.
+      - La pile est une loi PURE, la même sur les trois plateformes (ajouter, retirer, plafond de trois, ordre) : TS, Swift et Kotlin en sont des miroirs.
+    - Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
 15. **À la une.**
     - Toucher une vignette la met à la une, choix local jamais imposé. Si les contrôles sont cachés, le toucher les rend d'abord.
     - La vignette à la une n'a pas de badge : une capsule en haut à droite offre « Revenir à la grille » et « Plein écran ».
     - Le bandeau des autres est en bas en portrait, en colonne en paysage.
     - Pincer zoome sur un écran partagé jusqu'à 4×, deux tapes reviennent à 1×.
 16. **Cadres en direct, en duo vidéo.**
-    - Je choisis un cadre dans Montage (ambiances, carrousel, déclinaisons par balayage vertical, option « Cadre »). Il s'applique chez moi et se PROPOSE à l'autre (« Non merci » · « Appliquer »).
+    - Je choisis un cadre dans Montage (ambiances, carrousel, déclinaisons par balayage vertical, option « Cadre »), dont la barre est celle d'Effets, `‹ · Réglages · (+)`, sans « Valider » (loi 14, #16979). Il s'applique chez moi et se PROPOSE à l'autre (« Non merci » · « Appliquer »).
     - Le proposeur apprend la réponse en une capsule.
     - Le cadre tombe si l'appel passe à trois.
 17. **Rien n'apparaît ni ne disparaît d'un coup** (directive porteur du 2026-11-10, #17406).
@@ -140,6 +147,8 @@
 |---|---|---|---|
 | ![G1](appels-vue-finale/vues/G1.png) | ![G2](appels-vue-finale/vues/G2.png) | ![G3](appels-vue-finale/vues/G3.png) | ![G4](appels-vue-finale/vues/G4.png) |
 
+Dans Effets (P8, P8b) comme dans Montage (C1), la barre est `‹ · Réglages · (+)` : ce qui est touché s'applique, la barre revient à son menu de base après chaque choix, (+) empile jusqu'à trois couches et son appui long liste les effets appliqués pour en retirer un (loi 14, #16979).
+
 | P8b · Effets : réglages |
 |---|
 | ![P8b](appels-vue-finale/vues/P8b.png) |
@@ -157,6 +166,8 @@
 | ![S1](appels-vue-finale/vues/S1.png) | ![S2](appels-vue-finale/vues/S2.png) |
 
 ### Cadres en direct
+
+C1 a la barre d'Effets (P8) : les puces, « Cadres » pressée, puis `‹ · Réglages · (+)`. Le cadre touché s'applique aussitôt, l'option « Cadre » le garde pour les deux et le propose ; un appui long sur (+) liste les effets appliqués, trois au plus, pour en retirer un (loi 14, #16979).
 
 | C1 · Choisir un cadre | C2 · La proposition chez l'autre | C3 · Cadre appliqué |
 |---|---|---|
@@ -254,7 +265,7 @@ Ce tableau est un compte rendu daté. Les lignes du chantier #17329 (Liquid Glas
 | P8b : panneau Luminosité · Flou du fond en verre séparé au-dessus de la barre ‹ · Réglages · (+) qui se resserre, engrenage légendé (lois 14, 17) | à faire, #17580 ouverte, aucune PR au relevé | fusionné, #17553 (#17552 fermée) | fusionné, #17565 (#17564 fermée) |
 | Partage lancé ⇒ appel réduit en capsule (loi 12) | livré (#16664) | livré (#16664) | livré (#16664) ; vignette vidéo flottante de P18, #16953 |
 | Capture visible chez tous et gardée au journal (loi 13) | livré (#16709) : capsule R1, ligne datée au journal vivant, au bandeau et au journal d'après l'appel ; en disposition audio la capsule reste dans la rangée d'alertes | livré (#16709) : capsule R1 en audio comme en vidéo, ligne au journal vivant et d'après l'appel | en partie (#16709) : sorte de capture sur le fil et lignes au journal d'après l'appel ; capsule R1 en direct et détection locale, #16981 |
-| Cadres en direct (loi 16) | livré dans le code pour l'appel à deux (#16943) ; groupe, #12313 ; disparition de ma vignette en C3 à trancher, #16974 ; disposition de la barre C1, #16979 ; pas de suspension au mouvement ni à la chauffe | livré ; clés `call.liveFrame.*` sans traduction pt | le cadre tombe quand l'appel passe à trois (#16952) ; à vérifier sur capture |
+| Cadres en direct (loi 16) | livré dans le code pour l'appel à deux (#16943) ; groupe, #12313 ; disparition de ma vignette en C3 à trancher, #16974 ; barre C1 `‹ · Réglages · (+)`, pile de trois couches et appui long sur (+), tranchés le 2026-11-13 (#16979), à porter sur les trois plateformes ; pas de suspension au mouvement ni à la chauffe | livré ; clés `call.liveFrame.*` sans traduction pt | le cadre tombe quand l'appel passe à trois (#16952) ; à vérifier sur capture |
 | Journal en colonne sur grand écran (W1, W2) | livré dans le code (#16942) ; marges latérales de W2 plus étroites que la référence | sans objet (iPad : à trancher) | sans objet (tablette : #15640) |
 | Vidéo entrante avec aperçu et « Sans vidéo » (P17) | livré dans le code (#16944) ; ordre de l'en-tête, #16978 | livré dans le code (#16945, ouverte jusqu'à la CI et la capture au simulateur) ; style de « Activer le son » à trancher (#8627) | « Sans vidéo » livré dans le code (#16952) ; barre micro et caméra et aperçu de ma caméra, #16949 |
 | Médaillon de la caméra de qui partage (P15, L5) | à vérifier | à vérifier | reporté, demande une seconde piste vidéo, #8404 |
