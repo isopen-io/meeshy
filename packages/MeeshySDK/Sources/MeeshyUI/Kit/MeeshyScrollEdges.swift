@@ -101,12 +101,6 @@ public struct MeeshyScrollEdgeMask: View, Equatable {
     }
 }
 
-/// Le nom de l'espace de coordonnées du défilement : une bande qui mesure son
-/// contenu depuis l'intérieur (la plage visible, le décalage) le lit ici.
-public nonisolated enum MeeshyFadingScrollSpace {
-    public static let name = "meeshy.fading-scroll"
-}
-
 /// **Un défilement qui s'estompe là où il reste du contenu.** Il mesure deux
 /// booléens (`MeeshyScrollEdges`) qui ne changent qu'au seuil : défiler ne
 /// redessine rien d'autre que le masque. Jamais de barre de défilement.
@@ -119,7 +113,7 @@ public struct MeeshyFadingScrollView<Content: View>: View {
     @State private var edges: MeeshyScrollEdges = .none
     @Environment(\.layoutDirection) private var layoutDirection
 
-    private static var space: String { MeeshyFadingScrollSpace.name }
+    private static var space: String { "meeshy.fading-scroll" }
 
     public init(axis: Axis = .horizontal, fade: CGFloat = MeeshyChipRecipe.edgeFade, @ViewBuilder content: () -> Content) {
         self.axis = axis

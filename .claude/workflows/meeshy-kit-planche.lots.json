@@ -686,8 +686,7 @@
    "modele_ios": "sonnet",
    "modele_android": "sonnet",
    "depend": [
-    "K00",
-    "K04"
+    "K00"
    ],
    "modele_web": "sonnet",
    "cible_web": "apps/web/src/components/kit/meeshy-tile-strip.tsx",
@@ -924,8 +923,7 @@
     "K10",
     "K11",
     "K12",
-    "K14",
-    "K19"
+    "K14"
    ],
    "plateformes": [
     "ios",
@@ -988,8 +986,7 @@
     "K14",
     "K15",
     "K20",
-    "K24",
-    "K19"
+    "K24"
    ],
    "plateformes": [
     "ios",
@@ -1050,8 +1047,7 @@
     "K15",
     "K17",
     "K21",
-    "I2",
-    "K19"
+    "I2"
    ],
    "plateformes": [
     "ios",
@@ -1148,8 +1144,7 @@
     "K25",
     "K16",
     "K21",
-    "I2",
-    "K19"
+    "I2"
    ],
    "plateformes": [
     "ios",
@@ -1198,8 +1193,7 @@
     "K22",
     "K11",
     "K16",
-    "I2",
-    "K19"
+    "I2"
    ],
    "plateformes": [
     "ios",
