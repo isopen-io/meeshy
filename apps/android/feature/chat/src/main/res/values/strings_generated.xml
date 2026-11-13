@@ -134,6 +134,7 @@
     <string name="chat_forward_search_hint">Search a conversation...</string>
     <string name="chat_forward_sent">Forwarded</string>
     <string name="chat_guest_bar_close">Close conversation</string>
+    <string name="chat_header_engagement_legend_hint">Opens My Legend</string>
     <string name="chat_header_flame_card_hide">Hide the flame</string>
     <string name="chat_header_flame_card_hint">Opens the conversation streak</string>
     <string name="chat_header_flame_card_open">Open the game</string>

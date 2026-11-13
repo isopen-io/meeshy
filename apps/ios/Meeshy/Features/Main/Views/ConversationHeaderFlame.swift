@@ -473,6 +473,22 @@ struct HeaderFlameCardModel: Equatable {
     }
 }
 
+/// Ce que fait le toucher sur la pastille de l'en-tête DÉPLIÉ (#17987) : une
+/// série en cours ouvre LA MÊME carte que la flamme repliée ; le cumul seul,
+/// sans flamme donc sans carte, mène à « Ma Légende » ; sans point, rien. Le
+/// miroir de `EngagementPill interactive` (web) et de `EngagementPillTap`
+/// (Android).
+enum ConversationEngagementPillTap: Equatable {
+    case flameCard(HeaderFlameCardModel)
+    case legend
+
+    static func of(_ snapshot: ConversationEngagementSnapshot?) -> ConversationEngagementPillTap? {
+        guard ConversationPointsForm.of(snapshot) != nil else { return nil }
+        guard let card = HeaderFlameCardModel.make(snapshot) else { return .legend }
+        return .flameCard(card)
+    }
+}
+
 /// La carte : la série en grand, « Aujourd'hui +N », « Ici depuis le début N »,
 /// puis « Voir le jeu » (la Progression, comme depuis le Profil) et « Masquer
 /// la flamme » — le masquage qu'assurait le premier toucher jusqu'ici.
