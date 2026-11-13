@@ -1,4 +1,4 @@
-import { type RefObject, useEffect, useLayoutEffect } from 'react';
+import { type RefObject, useLayoutEffect } from 'react';
 import { createStore } from 'zustand/vanilla';
 
 /**
@@ -12,15 +12,19 @@ import { createStore } from 'zustand/vanilla';
  * - `recordingCard` : la couche le publie, la pile des bandeaux le lit. La hauteur MESURÉE de la carte
  *   d'accord (0 : pas de carte) — la case qu'elle tient dans la pile en dépend, pour que la capture et
  *   le cadre en direct soient repoussés sous elle au lieu de passer dessous ;
- * - `journalReserve` : l'écran le publie, la couche le lit. La place que la colonne du journal prend au bord
+ * - `journalReserve` : l'écran le publie, la couche et le pied des sous-titres le lisent (#17932). La place que la colonne du journal prend au bord
  *   de fin (0 : pas de colonne) — la carte d'accord, la capsule et l'avis se centrent sur la scène qu'elle
  *   laisse, pas sur la fenêtre (W1.4, W1.21).
  */
 export const callChromeStore = createStore<{ readonly stowed: boolean; readonly recordingCard: number; readonly journalReserve: number }>(() => ({ stowed: false, recordingCard: 0, journalReserve: 0 }));
 
-/** Publie l'état du chrome tant que l'écran d'appel vit ; il le rend quand il part. */
+/**
+ * Publie l'état du chrome tant que l'écran d'appel vit ; il le rend quand il part. AVANT la peinture :
+ * ce que la couche d'enregistrement centre et le « Journal » actif des sous-titres (#17932) changent dans
+ * l'image même où la colonne s'ouvre.
+ */
 export function usePublishChrome(stowed: boolean, journalReserve = 0): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     callChromeStore.setState({ stowed, journalReserve });
     return () => callChromeStore.setState({ stowed: false, journalReserve: 0 });
   }, [stowed, journalReserve]);

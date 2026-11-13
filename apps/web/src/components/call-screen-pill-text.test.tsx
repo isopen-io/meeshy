@@ -501,3 +501,75 @@ describe('au clavier', () => {
     view.done();
   });
 });
+
+/**
+ * #17933 (décision porteur du 2026-11-13, A) — UNE grammaire de bande, en duo comme en
+ * groupe (P13, W2) : les phrases à même le verre de la pilule, DEUX phrases, un filet
+ * qui les sépare de la rangée, « Journal » en bouton à leur pied. Pas de carte sombre
+ * intérieure, pas de « Journal » en simple texte : le groupe monte le MÊME composant que
+ * le duo (`CallCaptionsSlot`), jamais une jumelle.
+ */
+describe('#17933 — en groupe, la bande des sous-titres est celle du duo', () => {
+  const spoke = (id: string, speakerId: string, speakerName: string, at: number) => ({ id, speakerId, speakerName, original: `Line ${at}`, translated: `Ligne ${at}`, pair: { from: 'en', to: 'fr' }, isFinal: true, at, mine: false });
+  const talk = [spoke('g-1', 'u-awa', 'Awa', 1), spoke('g-2', 'u-karim', 'Karim', 2), spoke('g-3', 'u-lina', 'Lina', 3)];
+
+  for (const [shape, overrides] of [
+    ['en duo', { captions: talk }],
+    ['en groupe', { ...group, captions: talk }],
+  ] as const) {
+    test(`${shape} : deux phrases à même le verre, un filet, « Journal » en bouton — aucune carte intérieure`, async () => {
+      const view = mount(overrides);
+      await view.settle();
+      const band = view.find('[data-call-control-pill] [data-call-pill-text="captions"]');
+      const panel = band?.querySelector('[data-call-captions-panel]');
+      expect(panel?.getAttribute('data-call-captions-surface')).toBe('inset');
+      expect([...(panel?.querySelectorAll('[data-call-caption-line]') ?? [])].map((line) => line.getAttribute('data-call-caption-line'))).toEqual(['g-2', 'g-3']);
+      expect(band?.lastElementChild?.tagName).toBe('HR');
+      const journal = panel?.querySelector('[data-call-captions-journal]');
+      expect(journal?.tagName).toBe('BUTTON');
+      expect(journal?.textContent).toBe('Journal');
+      expect(panel?.querySelector('.rounded-card, .glass-call, .glass-call-prominent')).toBeNull();
+      expect(panel?.className).not.toContain('glass-call');
+      view.done();
+    });
+  }
+});
+
+/**
+ * #17935 (décision porteur du 2026-11-13, A) — une seule borne de 560 px pour toute
+ * pilule, duo comme groupe. En groupe, (…) ouvert sur les sous-titres ne resserre plus
+ * le verre de 560 px à une autre largeur : les rangées arrivent dans la même borne, et
+ * les sous-titres qui repartent (560 px, `call-motion.css`) n'y débordent plus.
+ */
+describe('#17935 — la pilule qui grandit garde la borne de la pilule qui porte du texte', () => {
+  const BOUND = 'w-[min(calc(100%-1.5rem),560px)]';
+
+  test('en groupe, (…) ouvert : les deux rangées dans la borne de 560 px, comme les sous-titres avant elles', async () => {
+    const view = mount(group);
+    await view.settle();
+    const pill = view.find('[data-call-control-pill]');
+    expect(pill?.className.split(' ')).toContain(BOUND);
+    view.press('[data-call-more]');
+    await view.settle();
+    expect(pill?.getAttribute('data-call-control-pill')).toBe('grown');
+    expect(pill?.className.split(' ')).toContain(BOUND);
+    await outlast();
+    expect(pill?.className.split(' ')).toContain(BOUND);
+    expect(pill?.className).not.toContain('26rem');
+    view.done();
+  });
+
+  test('en duo, un panneau ouvert dans la pilule (Réagir) prend la même borne', async () => {
+    const view = mount({ captionsMode: 'off' });
+    await view.settle();
+    expect(view.find('[data-call-control-pill]')?.className.split(' ')).toContain('w-fit');
+    view.press('[data-call-more]');
+    await view.settle();
+    view.press('[data-call-control="react"]');
+    await view.settle();
+    const pill = view.find('[data-call-control-pill]');
+    expect(pill?.getAttribute('data-call-control-pill')).toBe('grown');
+    expect(pill?.className.split(' ')).toContain(BOUND);
+    view.done();
+  });
+});

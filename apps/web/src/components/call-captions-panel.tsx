@@ -1,10 +1,12 @@
 import { memo, useEffect, useState } from 'react';
+import { useStore } from 'zustand/react';
 
 import { JournalNoteCaption, noteDirection } from '@/components/call-journal-note';
 import { UnfoldedOriginal } from '@/components/call-unfolded-original';
 import { TypingDots } from '@/components/typing-dots';
 import { CAPTIONS_OVERLAY_LINES, captionLanguageLabel, captionReveal, captionText, isAwaitingTranslation, revealState, type CallCaption, type CaptionsMode } from '@/lib/calls/call-captions';
 import { useCaptionReveals } from '@/lib/calls/call-captions-unfold-store';
+import { callChromeStore } from '@/lib/calls/call-chrome-store';
 import { callCaptionsFooter, callCaptionsFooterLabel, captionFooterLine, EVENT_FOOTER_LINE } from '@/lib/calls/call-captions-footer';
 import { overlayEntries, type CallJournalNote } from '@/lib/calls/call-journal-notes';
 import { CAPTIONS_EXIT, PILL_TEXT_EXIT, PILL_TEXT_LEAVING } from '@/lib/calls/call-pill-text-exit';
@@ -22,7 +24,9 @@ import '@/styles/call-captions.css';
  * lignes dites (`CallTranscriptionOverlay` d'iOS), puis un PIED : à gauche la
  * paire de langues de la dernière phrase traduite et comment voir l'original
  * (« EN → FR · toucher = original »), à droite le bouton « Journal » (#17346),
- * qui ouvre tout l'appel à leur place. Ils vivent DANS la pilule, au-dessus de
+ * qui ouvre tout l'appel à leur place — ou, sur grand écran, la colonne : il y
+ * reste ACTIF, disque blanc plein, et le retoucher la referme (#17932). En duo
+ * comme en groupe, la même bande : deux phrases, un filet, ce bouton (#17933). Ils vivent DANS la pilule, au-dessus de
  * sa rangée de base, dans le même verre (`surface="inset"` : le verre est celui
  * de la pilule, jamais un verre sur du verre) ; `(…)` les range, refermer les
  * actions les rend. Ils ne prennent un verre à eux (`surface="glass"`) que
@@ -94,6 +98,9 @@ function useWaitingClock(deadlines: readonly (number | null)[]): number {
 const INK = 'var(--color-on-media)';
 
 const INK_2 = 'var(--color-on-media-3)';
+
+/** « Journal » actif : la tenue `active` du bouton d'appel (`call-glass-button.tsx`), un disque blanc plein à encre sombre (loi 1). */
+const JOURNAL_ON = { background: INK, color: 'var(--ios-indigo-950)' };
 
 const NOTE_KEY = { listening: 'callCaptions.listening', unsupported: 'callCaptions.unsupported', denied: 'callCaptions.denied', sealed: 'callCaptions.sealed' } as const;
 
@@ -209,6 +216,8 @@ export function CallCaptionsSlot({ slot, shown, ...panel }: Omit<PanelProps, 'su
 }
 
 export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', onOpenJournal }: PanelProps) {
+  /* La colonne du journal est ouverte (W1) quand l'écran lui réserve le bord de fin : « Journal » est alors actif, et le retoucher la referme (#17932). */
+  const journalOpen = useStore(callChromeStore, (chrome) => chrome.journalReserve > 0);
   const { revealed, toggle } = useCaptionReveals(call.callId ?? '', 'band');
   const mode = call.captionsMode;
   const lines = overlayEntries(call.captions, call.journalNotes ?? [], CAPTIONS_OVERLAY_LINES);
@@ -251,7 +260,7 @@ export function CallCaptionsPanel({ call, language, colorOf, surface = 'glass', 
             {note === null ? null : <span data-call-captions-note={call.transcription}>{translate(language, note)}</span>}
           </div>
           {onOpenJournal === undefined ? null : (
-            <button type="button" onClick={onOpenJournal} className="glass-call-disc min-h-11 shrink-0 rounded-full px-4 font-semibold transition-transform active:scale-95 motion-reduce:transition-none" style={{ color: INK }} data-call-captions-journal="">
+            <button type="button" aria-pressed={journalOpen} onClick={onOpenJournal} className={`${journalOpen ? '' : 'glass-call-disc '}min-h-11 shrink-0 rounded-full px-4 font-semibold transition-transform active:scale-95 motion-reduce:transition-none`} style={journalOpen ? JOURNAL_ON : { color: INK }} data-call-captions-journal="">
               {translateCallControls(language, 'callControls.journal')}
             </button>
           )}
