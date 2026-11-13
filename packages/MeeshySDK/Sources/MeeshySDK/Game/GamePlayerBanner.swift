@@ -132,12 +132,16 @@ public struct GamePlayerBanner: Equatable, Sendable {
     public let season: Season?
     /// Le contenant de l'Héritage (Bourse → Réserve, #17437) — `nil` sans Meesh gardée.
     public let treasury: TreasuryTierKey?
+    /// L'Offrande prête et la Flamme à risque, lues du bloc servi (#17796) — jamais une pièce : un signal que le
+    /// bandeau et le menu posent sur ce qu'ils montrent déjà.
+    public let attention: GameAttention
 
     public init(level: Int, tier: LevelTierKey, progress: Double, prestige: Int = 0, score: Int, nextLevel: Int?, pointsToNext: Int?,
                 levelCap: Int? = nil, meeshes: Int? = nil, rank: Rank? = nil, league: League? = nil, flame: Flame? = nil,
                 trophies: Int? = nil, dailyMission: DailyMission? = nil, season: Season? = nil,
-                treasury: TreasuryTierKey? = nil) {
+                treasury: TreasuryTierKey? = nil, attention: GameAttention = .none) {
         self.treasury = treasury
+        self.attention = attention
         self.trophies = trophies
         self.dailyMission = dailyMission
         self.season = season
@@ -194,6 +198,7 @@ public struct GamePlayerBanner: Equatable, Sendable {
         self.dailyMission = missions.unlocked && !missions.items.isEmpty
             ? DailyMission(done: missions.items.filter(\.isCompleted).count, total: missions.items.count) : nil
         self.season = game.season.map { Season(number: $0.number) }
+        self.attention = GameAttention.of(game, hidden: false)
     }
 
     /// Les pièces qui existent, dans l'ordre du bandeau : le niveau, les étincelles, puis le reste.
