@@ -324073,43 +324073,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الخادم دون تشفير: الرسالة لم تُرسل. راجع بطاقة التشفير."
+            "value": "يعرضها الخادم دون تشفير: الرسالة لم تُرسل. راجع بطاقة التشفير."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Server ohne Verschlüsselung: Nachricht nicht gesendet. Siehe das Blatt Verschlüsselung."
+            "value": "Der Server zeigt sie unverschlüsselt: Nachricht nicht gesendet. Siehe das Blatt Verschlüsselung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Server without encryption: message not sent. See the Encryption sheet."
+            "value": "The server shows it unencrypted: message not sent. See the Encryption sheet."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Servidor sin cifrado: mensaje no enviado. Consulta la ficha Cifrado."
+            "value": "El servidor la muestra sin cifrar: mensaje no enviado. Consulta la ficha Cifrado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Serveur sans chiffrement : message non parti. Voir la fiche Chiffrement."
+            "value": "Le serveur la dit non chiffrée : message non parti. Voir la fiche Chiffrement."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Server senza crittografia: messaggio non inviato. Vedi la scheda Crittografia."
+            "value": "Il server la mostra non crittografata: messaggio non inviato. Vedi la scheda Crittografia."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Servidor sem criptografia: mensagem não enviada. Veja a ficha Criptografia."
+            "value": "O servidor a mostra sem criptografia: mensagem não enviada. Veja a ficha Criptografia."
           }
         }
       }

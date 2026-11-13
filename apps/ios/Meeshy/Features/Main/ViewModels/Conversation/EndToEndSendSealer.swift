@@ -445,7 +445,7 @@ nonisolated extension EndToEndSendRefusal {
                    defaultValue: "Trop d’appareils chiffrés : retirez-en un pour écrire d’ici.", bundle: .main)
         case .servedWithoutEndToEnd:
             String(localized: "conversation.send.e2ee.servedWithoutEndToEnd",
-                   defaultValue: "Serveur sans chiffrement : message non parti. Voir la fiche Chiffrement.", bundle: .main)
+                   defaultValue: "Le serveur la dit non chiffrée : message non parti. Voir la fiche Chiffrement.", bundle: .main)
         case .sealedOnlyInConversation:
             String(localized: "conversation.send.e2ee.sealedOnlyInConversation",
                    defaultValue: "Message chiffré non parti : ouvrez la conversation et touchez-le pour l’envoyer.", bundle: .main)
