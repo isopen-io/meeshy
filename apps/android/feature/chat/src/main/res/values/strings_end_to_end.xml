@@ -2,4 +2,5 @@
 <resources>
     <string name="chat_composer_end_to_end">This conversation is end-to-end encrypted: write in it from the Meeshy app on iPhone</string>
     <string name="chat_menu_e2ee_signals_notice">React, pin and delete for everyone: from the Meeshy app on iPhone.</string>
+    <string name="chat_menu_e2ee_signals_notice_alone">End-to-end encrypted: reacting, pinning and deleting for everyone are done from the Meeshy app on iPhone.</string>
 </resources>

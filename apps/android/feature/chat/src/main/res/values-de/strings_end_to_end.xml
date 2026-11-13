@@ -2,4 +2,5 @@
 <resources>
     <string name="chat_composer_end_to_end">Diese Unterhaltung ist Ende-zu-Ende-verschlüsselt: Schreibe darin über die Meeshy-App auf dem iPhone</string>
     <string name="chat_menu_e2ee_signals_notice">Reagieren, Anheften und Für alle löschen: über die Meeshy-App auf dem iPhone.</string>
+    <string name="chat_menu_e2ee_signals_notice_alone">Ende-zu-Ende-verschlüsselt: Reagieren, Anheften und Für alle löschen gehen über die Meeshy-App auf dem iPhone.</string>
 </resources>

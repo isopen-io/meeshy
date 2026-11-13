@@ -2,4 +2,5 @@
 <resources>
     <string name="chat_composer_end_to_end">Cette conversation est chiffrée de bout en bout : écrivez-y depuis l’application Meeshy sur iPhone</string>
     <string name="chat_menu_e2ee_signals_notice">Réagir, épingler et supprimer pour tous : depuis l’application Meeshy sur iPhone.</string>
+    <string name="chat_menu_e2ee_signals_notice_alone">Chiffrée de bout en bout : réagir, épingler et supprimer pour tous se font depuis l’application Meeshy sur iPhone.</string>
 </resources>
