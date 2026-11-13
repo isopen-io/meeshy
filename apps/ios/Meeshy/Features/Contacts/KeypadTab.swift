@@ -105,29 +105,22 @@ struct KeypadTab: View {
         case .loaded:
             // A search actually ran and returned nothing.
             hintMessage(
-                title: String(localized: "keypad.no-match.title", defaultValue: "Aucun contact trouvé", bundle: .main),
-                subtitle: String(localized: "keypad.no-match.subtitle", defaultValue: "Vérifiez le numéro ou le nom saisi.", bundle: .main)
+                title: String(localized: "keypad.no-match.title", defaultValue: "Aucun contact trouvé", bundle: .main)
             )
         default:
             // Idle / too-short / error: prompt without falsely claiming a
             // completed search found nothing.
             hintMessage(
-                title: String(localized: "keypad.prompt.title", defaultValue: "Composez un numéro ou un nom", bundle: .main),
-                subtitle: String(localized: "keypad.prompt.subtitle", defaultValue: "Trouvez une personne par numéro de téléphone ou par nom.", bundle: .main)
+                title: String(localized: "keypad.prompt.title", defaultValue: "Composez un numéro ou un nom", bundle: .main)
             )
         }
     }
 
-    private func hintMessage(title: String, subtitle: String) -> some View {
+    private func hintMessage(title: String) -> some View {
         VStack(spacing: MeeshySpacing.xsPlus) {
             Text(title)
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(theme.textPrimary)
-            Text(subtitle)
-                .font(.footnote)
-                .foregroundStyle(theme.textMuted)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
         }
         .padding(.top, MeeshySpacing.xxl)
     }

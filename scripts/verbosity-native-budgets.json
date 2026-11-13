@@ -15,7 +15,7 @@
     "android:feature/calls": {
       "labels": 519,
       "words": 1801,
-      "long": 15,
+      "long": 12,
       "explanations": 91
     },
     "android:feature/chat": {
@@ -115,10 +115,10 @@
       "explanations": 31
     },
     "ios:Meeshy/about": {
-      "labels": 45,
+      "labels": 44,
       "words": 177,
       "long": 2,
-      "explanations": 14
+      "explanations": 13
     },
     "ios:Meeshy/accessibility": {
       "labels": 37,
@@ -231,7 +231,7 @@
     "ios:Meeshy/call": {
       "labels": 444,
       "words": 1664,
-      "long": 11,
+      "long": 10,
       "explanations": 87
     },
     "ios:Meeshy/calls": {
@@ -367,10 +367,10 @@
       "explanations": 2
     },
     "ios:Meeshy/conversations": {
-      "labels": 24,
-      "words": 92,
+      "labels": 22,
+      "words": 78,
       "long": 0,
-      "explanations": 3
+      "explanations": 1
     },
     "ios:Meeshy/conversationType": {
       "labels": 8,
@@ -506,8 +506,8 @@
     },
     "ios:Meeshy/game": {
       "labels": 963,
-      "words": 7030,
-      "long": 111,
+      "words": 6991,
+      "long": 109,
       "explanations": 105
     },
     "ios:Meeshy/game2": {
@@ -541,10 +541,10 @@
       "explanations": 0
     },
     "ios:Meeshy/keypad": {
-      "labels": 10,
-      "words": 43,
+      "labels": 8,
+      "words": 26,
       "long": 0,
-      "explanations": 3
+      "explanations": 1
     },
     "ios:Meeshy/language-picker": {
       "labels": 3,
@@ -703,10 +703,10 @@
       "explanations": 2
     },
     "ios:Meeshy/notifications": {
-      "labels": 24,
-      "words": 71,
+      "labels": 23,
+      "words": 66,
       "long": 0,
-      "explanations": 1
+      "explanations": 0
     },
     "ios:Meeshy/offline": {
       "labels": 1,
@@ -758,14 +758,14 @@
     },
     "ios:Meeshy/profile": {
       "labels": 73,
-      "words": 202,
+      "words": 200,
       "long": 0,
-      "explanations": 8
+      "explanations": 7
     },
     "ios:Meeshy/progression": {
       "labels": 118,
-      "words": 576,
-      "long": 2,
+      "words": 557,
+      "long": 1,
       "explanations": 4
     },
     "ios:Meeshy/protection": {
@@ -891,8 +891,8 @@
     "ios:Meeshy/settings": {
       "labels": 233,
       "words": 984,
-      "long": 14,
-      "explanations": 45
+      "long": 12,
+      "explanations": 40
     },
     "ios:Meeshy/share": {
       "labels": 151,
@@ -955,10 +955,10 @@
       "explanations": 0
     },
     "ios:Meeshy/story": {
-      "labels": 189,
-      "words": 789,
+      "labels": 188,
+      "words": 780,
       "long": 8,
-      "explanations": 19
+      "explanations": 18
     },
     "ios:Meeshy/streak": {
       "labels": 3,

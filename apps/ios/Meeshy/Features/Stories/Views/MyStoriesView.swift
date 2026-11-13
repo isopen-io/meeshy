@@ -340,9 +340,7 @@ struct MyStoriesView: View {
         ) {
             EmptyStateView(
                 icon: "rectangle.stack.badge.xmark",
-                title: String(localized: "story.mine.empty.title", defaultValue: "Aucune story envoyée"),
-                subtitle: String(localized: "story.mine.empty.subtitle",
-                                 defaultValue: "Vos stories publiées apparaîtront ici tant qu'elles sont actives.")
+                title: String(localized: "story.mine.empty.title", defaultValue: "Aucune story envoyée")
             )
         } else {
             publishedGrid

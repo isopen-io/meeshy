@@ -250,13 +250,13 @@ struct ProgressionNotice: View {
         case .empty:
             return String(
                 localized: "progression.empty",
-                defaultValue: "Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste.",
+                defaultValue: "Aucune activité pour l’instant.",
                 bundle: .main
             )
         case .offline(let hasSnapshot):
             return hasSnapshot
                 ? String(localized: "progression.offline", defaultValue: "Hors ligne — progression telle qu’à la dernière ouverture", bundle: .main)
-                : String(localized: "progression.offline.empty", defaultValue: "Hors ligne — aucune progression en mémoire. Elle s’affichera à la reconnexion.", bundle: .main)
+                : String(localized: "progression.offline.empty", defaultValue: "Hors ligne — aucune progression en mémoire", bundle: .main)
         case .error(let message):
             return message
         }
