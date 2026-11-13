@@ -466,3 +466,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil : « Recevoir des Bring » se règle sur le web (#16588)
+
+- Reprise : deux autres réveils sont actifs — #17956 (carte des positions sur le web, #16984) et la branche
+  `claude/cercles-ensemble-conversation-close` (#17147), toutes deux poussées dans le quart d'heure. Ce réveil n'y touche
+  pas (« celui qui n'a rien écrit cède ») et prend un lot web court, sans chemin commun.
+- Lot : PR #17981 vers `dev`. Le port des réglages lit `notification.bringEnabled` (optionnel : absent = reçu), le rend
+  après écriture seulement s'il est servi, l'écrit sous `notification` ; rangée « Recevoir des Bring » + explication
+  dans Réglages › Notifications, optimiste avec retour arrière, sept langues (tranche `contact-discovery`).
+- Gates locaux : 11 témoins rouges sans l'implémentation, puis verts ; `tsc` web vert ; `bun test` web 31 652 verts,
+  1 rouge hors lot (`act-leak-guard`, bun 1.4.4 local) ; `vite build` vert ; poids 96,97 Ko avant le premier pixel.
+- Ce qui reste du Bring : interrupteur global sur iOS (#16609) et sur Android (à ouvrir quand #16617 aura fusionné),
+  Critical Alerts (#14112, #17475–#17477), #16619, décisions #14409 et #14450.
+- Prochain lot recommandé : #16609 (le même interrupteur sur iOS), sinon l'icône de position par cercle (#17013) une fois
+  #17956 fusionnée.
