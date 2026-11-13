@@ -37,10 +37,10 @@
       "explanations": 14
     },
     "android:feature/conversations": {
-      "labels": 632,
-      "words": 1819,
+      "labels": 634,
+      "words": 1850,
       "long": 10,
-      "explanations": 146
+      "explanations": 149
     },
     "android:feature/feed": {
       "labels": 341,

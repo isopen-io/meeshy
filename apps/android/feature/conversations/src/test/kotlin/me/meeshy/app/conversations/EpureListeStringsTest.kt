@@ -35,13 +35,13 @@ class EpureListeStringsTest {
 
     private val removed = listOf(
         "conversations_empty_subtitle", "conversations_no_results_subtitle", "empty_states_search_try_other_terms",
-        "global_search_no_results_hint", "global_search_failed_hint", "my_share_links_empty_subtitle", "links_hub_banner_title",
+        "global_search_no_results_hint", "global_search_failed_hint", "links_hub_banner_title",
         "share_link_permission_messages_subtitle", "share_link_permission_images_subtitle",
         "share_link_permission_files_subtitle", "share_link_permission_history_subtitle",
         "share_link_access_account_subtitle", "share_link_access_nickname_subtitle",
         "share_link_access_email_subtitle", "share_link_access_birthday_subtitle",
         "new_conversation_contacts_empty_subtitle", "share_link_picker_empty_body",
-        "links_affiliate_empty_subtitle", "links_tracking_empty_subtitle", "share_link_created_subtitle",
+        "share_link_created_subtitle",
         "conversations_action_more",
     )
 
@@ -146,6 +146,17 @@ class EpureListeStringsTest {
             assertThat(epure(folder)["share_link_field_description"]).isEqualTo(pair.first)
             assertThat(epure(folder)["share_link_field_slug"]).isEqualTo(pair.second)
         }
+    }
+
+    @Test
+    fun `an empty list of share, tracking or referral links still says, at rest, what such a link is for`() {
+        folders.forEach { folder ->
+            val strings = all(folder)
+            listOf("my_share_links_empty_subtitle", "links_tracking_empty_subtitle", "links_affiliate_empty_subtitle").forEach { key ->
+                assertWithMessage("$folder:$key").that(strings[key].orEmpty()).isNotEmpty()
+            }
+        }
+        assertThat(all("values-fr")["links_tracking_empty_subtitle"]).isEqualTo("Créez un lien pour suivre vos clics et campagnes")
     }
 
     @Test

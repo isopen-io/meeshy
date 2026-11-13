@@ -224,6 +224,7 @@
     <string name="links_affiliate_create_name_label">اسم الرابط</string>
     <string name="links_affiliate_create_name_placeholder">مثال: دعوة تويتر</string>
     <string name="links_affiliate_create_title">رابط جديد</string>
+    <string name="links_affiliate_empty_subtitle">أنشئ رابطًا لدعوة أصدقائك</string>
     <string name="links_affiliate_empty_title">لا توجد روابط إحالة</string>
     <string name="links_affiliate_section_my_links">روابطي</string>
     <string name="links_affiliate_stat_clicks">النقرات</string>
@@ -321,6 +322,7 @@
     <string name="links_tracking_detail_stats_unique_clicks">النقرات الفريدة</string>
     <string name="links_tracking_detail_unknown">غير معروف</string>
     <string name="links_tracking_detail_utm_title">إعداد UTM</string>
+    <string name="links_tracking_empty_subtitle">أنشئ رابطًا لتتبُّع نقراتك وحملاتك</string>
     <string name="links_tracking_empty_title">لا توجد روابط تتبُّع</string>
     <plurals name="links_tracking_row_clicks">
         <item quantity="zero">%1$d نقرات</item>
@@ -347,6 +349,7 @@
     <string name="my_share_links_back">رجوع</string>
     <string name="my_share_links_copied">تم نسخ الرابط</string>
     <string name="my_share_links_copy">نسخ الرابط</string>
+    <string name="my_share_links_empty_subtitle">أنشئ رابطًا لدعوة أشخاص إلى محادثة</string>
     <string name="my_share_links_empty_title">لا توجد روابط مشاركة</string>
     <string name="my_share_links_expired">منتهٍ</string>
     <string name="my_share_links_expiry_24h">24 ساعة</string>

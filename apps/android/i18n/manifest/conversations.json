@@ -828,6 +828,12 @@
         },
         {
           "catalog": "app",
+          "iosKey": "share.links.empty.subtitle",
+          "androidName": "my_share_links_empty_subtitle",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "voice.profile.status.expired.label",
           "androidName": "my_share_links_expired",
           "status": "adopted"

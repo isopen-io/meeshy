@@ -221,6 +221,7 @@
     <string name="links_affiliate_create_name_label">Nombre del enlace</string>
     <string name="links_affiliate_create_name_placeholder">Ej.: Invitación de Twitter</string>
     <string name="links_affiliate_create_title">Nuevo enlace</string>
+    <string name="links_affiliate_empty_subtitle">Crea un enlace para invitar a tus amigos</string>
     <string name="links_affiliate_empty_title">Sin enlaces de recomendación</string>
     <string name="links_affiliate_section_my_links">MIS ENLACES</string>
     <string name="links_affiliate_stat_clicks">Clics</string>
@@ -309,6 +310,7 @@
     <string name="links_tracking_detail_stats_unique_clicks">Clics únicos</string>
     <string name="links_tracking_detail_unknown">Desconocido</string>
     <string name="links_tracking_detail_utm_title">CONFIGURACIÓN UTM</string>
+    <string name="links_tracking_empty_subtitle">Crea un enlace para seguir tus clics y campañas</string>
     <string name="links_tracking_empty_title">Sin enlaces de seguimiento</string>
     <plurals name="links_tracking_row_clicks">
         <item quantity="one">%1$d clic</item>
@@ -329,6 +331,7 @@
     <string name="my_share_links_back">Atrás</string>
     <string name="my_share_links_copied">Enlace copiado</string>
     <string name="my_share_links_copy">Copiar el enlace</string>
+    <string name="my_share_links_empty_subtitle">Crea un enlace para invitar a personas a una conversación</string>
     <string name="my_share_links_empty_title">Sin enlaces para compartir</string>
     <string name="my_share_links_expired">Caducado</string>
     <string name="my_share_links_expiry_24h">24 horas</string>

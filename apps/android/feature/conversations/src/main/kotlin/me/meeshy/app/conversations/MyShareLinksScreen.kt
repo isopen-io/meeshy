@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -181,6 +182,13 @@ private fun EmptyLinks() {
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = MeeshyTheme.tokens.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.my_share_links_empty_subtitle),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textSecondary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = MeeshySpacing.sm),
         )
     }
 }

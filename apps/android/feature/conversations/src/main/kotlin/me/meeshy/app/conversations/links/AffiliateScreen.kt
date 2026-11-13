@@ -104,6 +104,7 @@ fun AffiliateScreen(
                 LinkEmptyState(
                     MeeshyIcons.Link,
                     stringResource(R.string.links_affiliate_empty_title),
+                    stringResource(R.string.links_affiliate_empty_subtitle),
                     accent = accent,
                 )
             }
