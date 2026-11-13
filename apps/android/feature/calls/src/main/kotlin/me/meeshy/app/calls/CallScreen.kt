@@ -232,9 +232,10 @@ fun CallScreen(
                     peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
                     peerSpeech = peerSpeech,
                 )
-            } else if (!groupShown && !duo.videoStage && chromeState.layer.activeMode == null) {
-                // #17945 : en duo audio, le fond derrière l'avatar prend le toucher qui range l'en-tête, la pilule et le journal.
-                sceneTap?.let { CallAudioSceneTapTarget(onTap = it) }
+            } else if ((groupShown || !duo.videoStage) && chromeState.layer.activeMode == null) {
+                // #17945 : le fond (derrière l'avatar d'un duo audio, autour de la grille d'un groupe, caméras allumées ou non)
+                // prend le toucher qui range l'en-tête, la pilule et le journal — et, rangés, les rend (iOS `stageRevealTarget`).
+                sceneTap?.let { CallSceneBackgroundTapTarget(onTap = it) }
             }
 
             // L'aperçu avant décroché : la vidéo de l'appelant derrière la sonnerie, jusqu'au vrai lien.

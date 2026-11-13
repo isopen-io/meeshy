@@ -47,11 +47,11 @@ struct CallChromeVisibility: Equatable, Sendable {
         isTapStage && !isVoiceOverRunning
     }
 
-    /// La scène de la loi 11 : l'image en vidéo, le fond derrière l'avatar d'un duo audio établi
-    /// (#17945). Un groupe sans caméra n'a pas d'image à libérer : ses vignettes répondent au
-    /// toucher. Mêmes vecteurs qu'Android (`isTapStage`) et le web.
-    static func isTapStage(isGroup: Bool, isVideoStage: Bool, isConnected: Bool) -> Bool {
-        isVideoStage || (!isGroup && isConnected)
+    /// La scène de la loi 11 : l'image en vidéo, et le fond d'un appel établi sans image — derrière
+    /// l'avatar d'un duo audio, autour des vignettes d'un groupe sans aucune caméra (#17945 et son
+    /// extension). Mêmes vecteurs qu'Android (`isTapStage`) et le web.
+    static func isTapStage(isVideoStage: Bool, isConnected: Bool) -> Bool {
+        isVideoStage || isConnected
     }
 
     static func isVideoStage(isGroup: Bool, isLocalVideoEnabled: Bool, isDuoVideoActive: Bool, remoteCamerasOn: Int) -> Bool {

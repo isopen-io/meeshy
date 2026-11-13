@@ -49,6 +49,7 @@ import { eraseExternalPeerOnClose } from '../../services/external-conversation/e
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
+import { cutTalkiesOnEndToEnd, talkieCutDepsOf } from '../../services/talkie/talkieCut';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
@@ -414,6 +415,13 @@ export function registerCreateConversationRoute(
           }
         }
       });
+
+      // #14490 — un tête-à-tête né `e2ee` fait passer la PAIRE en bout en bout pour la
+      // porte du talkie : sa voix en clair déjà ouverte s'arrête à l'instant.
+      if (type === 'direct' && regime.mode === 'e2ee') {
+        await cutTalkiesOnEndToEnd(talkieCutDepsOf(), { userIds: [userId, ...uniqueParticipantIds] })
+          .catch((error: unknown) => logger.warn('end-to-end direct created but the talkie cut was not written', { conversationId: conversation.id, error: String(error) }));
+      }
 
       // Succès « cercles » (#5759) — APRÈS l'ACK métier. Créer un cercle, c'est
       // aussi le rejoindre : les deux familles (`create.count`, `join.*`) sont

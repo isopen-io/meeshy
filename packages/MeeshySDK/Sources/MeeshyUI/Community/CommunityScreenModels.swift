@@ -96,6 +96,10 @@ public protocol CommunitySettingsModeling: ObservableObject {
     var errorMessage: String? { get }
     var showDeleteConfirm: Bool { get set }
     var showLeaveConfirm: Bool { get set }
+    /// Passer de publique à privée fait sortir de ses conversations les anciens membres et les comptes
+    /// qui ne peuvent pas y entrer, sans retour (#16723) : l'écran le dit avant d'enregistrer (#16787).
+    var needsPrivacyConfirmation: Bool { get }
+    var showPrivacyConfirm: Bool { get set }
     var isCreator: Bool { get }
     var hasChanges: Bool { get }
 
