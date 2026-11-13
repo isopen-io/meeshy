@@ -466,3 +466,11 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil 27 : deux collègues de l'équipe consentent entre eux sans lien, et le consentement tombe avec le rôle (#16642, #16814)
+
+- Reprise : sept réveils parallèles écrivent `together/`, `sharedLocation/`, la carte web et iOS, les réglages Bring.
+  Aucun n'écrit `routes/relations/settings.ts` ni `relationConsent.ts` : lot réservé sur
+  `claude/cercles-16642-consentement-equipe`. Le travail de #16642, écrit et revu le 2026-11-08 sur
+  `claude/cercles-16642-serveur` sans jamais être proposé, est repris par cherry-pick sur `dev` (trois commits),
+  et #16814 (sa suite de sécurité) s'y ajoute.
