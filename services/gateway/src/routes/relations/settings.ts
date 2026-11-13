@@ -234,7 +234,7 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
             .catch((error: unknown) => logError(fastify.log, 'Bring not stopped after Bring block:', error));
         }
         if (talkieBlocked === true) {
-          await cutTalkiesOnBlock(talkieCutDepsOf(), { blockerId: ownerId, blockedId: userId, scope: 'talkie' })
+          await Promise.resolve().then(() => cutTalkiesOnBlock(talkieCutDepsOf(), { blockerId: ownerId, blockedId: userId, scope: 'talkie' }))
             .catch((error: unknown) => logError(fastify.log, 'Talkie not cut after talkie block:', error));
         }
       } else if (Object.keys(data).length > 0) {
