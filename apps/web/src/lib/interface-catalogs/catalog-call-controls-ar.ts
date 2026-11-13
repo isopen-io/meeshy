@@ -93,6 +93,17 @@ const ar = {
   'callControls.liveFrame.answer.declined.anonymous': 'يحتفظ الطرف الآخر بعرضه',
   'callControls.liveFrame.notProposed': 'تم تطبيق الإطار لديك، لكن تعذّر اقتراحه',
   'callControls.liveFrame.surface': 'إطار {frame} حول الفيديوهين',
+  'callControls.mode.frames': 'الإطارات',
+  'callControls.layers.title': 'التأثيرات المطبّقة',
+  'callControls.layers.undo': 'إلغاء {name}',
+  'callControls.layers.none': 'لا يوجد تأثير مطبّق',
+  'callControls.layers.full': 'ثلاثة تأثيرات كحدّ أقصى: أزل واحدًا لإضافة آخر',
+  'callControls.layers.hint': 'اضغط مطولًا أو Shift + Enter: التأثيرات المطبّقة',
+  'callControls.layers.genre.frame': 'إطار',
+  'callControls.layers.genre.color': 'لون',
+  'callControls.layers.genre.face': 'وجه',
+  'callControls.layers.genre.landscape': 'منظر طبيعي',
+  'callControls.layers.genre.voice': 'صوت',
 } satisfies CallControlsCatalog;
 
 export default ar;

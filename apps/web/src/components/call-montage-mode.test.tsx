@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { CaptureEnv, CaptureFile, SaveOutcome } from '@/lib/calls/call-capture';
 import type { ClipEnv } from '@/lib/calls/call-capture-live';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -50,6 +51,7 @@ describe('CallMontageMode', () => {
 
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
+    await loadCallControlsCatalog('fr');
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });

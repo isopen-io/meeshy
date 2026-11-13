@@ -6,6 +6,7 @@ import { listLayers, type EffectGenre, type EffectLayer, type EffectStack } from
 import { useSwapPresence } from '@/lib/calls/use-mode-motion';
 import { FACE_EFFECTS, setVideoEffects, VIDEO_PRESET_CATALOG, type VideoEffects } from '@/lib/calls/video-effects';
 import { translateCallStudio, type CallStudioCatalogKey, type TranslateCallStudioArgs } from '@/lib/i18n-call-studio-catalog';
+import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -26,6 +27,27 @@ import { CallModeBar, GLASS_WIDTH, ModeOption, SIDE } from './call-mode-carousel
  */
 
 export type TextOf = <K extends CallStudioCatalogKey>(key: K, ...params: TranslateCallStudioArgs<K>) => string;
+
+/** Les mots de la pile d'effets : au catalogue des contrôles d'appel, chargé avec l'écran d'appel (le catalogue du studio est à son plafond). */
+export type LayersText = {
+  readonly frames: string;
+  readonly title: string;
+  readonly none: string;
+  readonly full: string;
+  readonly hint: string;
+  readonly undo: (name: string) => string;
+  readonly genre: (genre: EffectGenre) => string;
+};
+
+export const layersTextOf = (language: InterfaceLanguage): LayersText => ({
+  frames: translateCallControls(language, 'callControls.mode.frames'),
+  title: translateCallControls(language, 'callControls.layers.title'),
+  none: translateCallControls(language, 'callControls.layers.none'),
+  full: translateCallControls(language, 'callControls.layers.full'),
+  hint: translateCallControls(language, 'callControls.layers.hint'),
+  undo: (name) => translateCallControls(language, 'callControls.layers.undo', { name }),
+  genre: (genre) => translateCallControls(language, `callControls.layers.genre.${genre}`),
+});
 
 export const textOf = (language: InterfaceLanguage): TextOf => (key, ...params) => translateCallStudio(language, key, ...params);
 
@@ -96,8 +118,8 @@ function EffectsCategories({ entries, pressed, onPick, label }: CategoriesProps)
 }
 
 /** Une couche telle que la liste la dit : son genre, et ce qu'on y a choisi quand ce mode le sait nommer. */
-export const appliedLabel = (t: TextOf, layer: EffectLayer, choiceName: (layer: EffectLayer) => string | undefined): string => {
-  const genre = t(`callStudio.layers.genre.${layer.genre}`);
+export const appliedLabel = (text: LayersText, layer: EffectLayer, choiceName: (layer: EffectLayer) => string | undefined): string => {
+  const genre = text.genre(layer.genre);
   const choice = choiceName(layer);
   return choice === undefined ? genre : `${genre} · ${choice}`;
 };
@@ -121,25 +143,25 @@ type ListProps = {
   readonly stack: EffectStack;
   readonly label: (layer: EffectLayer) => string;
   readonly onUndo: (genre: EffectGenre) => void;
-  readonly t: TextOf;
+  readonly text: LayersText;
 };
 
 /** Les effets appliqués, du dessus au dessous : en annuler un le retire, et referme la liste. */
-function EffectLayersList({ open, stack, label, onUndo, t }: ListProps) {
+function EffectLayersList({ open, stack, label, onUndo, text }: ListProps) {
   const presence = useSwapPresence<HTMLDivElement>(open);
   if (!presence.mounted) return null;
   const layers = listLayers(stack);
   return (
-    <div ref={presence.ref} role="group" aria-label={t('callStudio.layers.title')} {...(open ? {} : { 'aria-hidden': true })} className={`glass-call absolute bottom-full mb-2 flex ${GLASS_WIDTH} flex-col rounded-[24px] p-2 ${open ? '' : 'pointer-events-none'}`} data-call-effect-layers="">
+    <div ref={presence.ref} role="group" aria-label={text.title} {...(open ? {} : { 'aria-hidden': true })} className={`glass-call absolute bottom-full mb-2 flex ${GLASS_WIDTH} flex-col rounded-[24px] p-2 ${open ? '' : 'pointer-events-none'}`} data-call-effect-layers="">
       {layers.length === 0 ? (
-        <p className="flex min-h-11 items-center px-3 text-mini font-semibold text-on-media-3">{t('callStudio.layers.none')}</p>
+        <p className="flex min-h-11 items-center px-3 text-mini font-semibold text-on-media-3">{text.none}</p>
       ) : (
         <ul className="flex flex-col">
           {layers.map((layer) => {
             const name = label(layer);
             return (
               <li key={layer.genre} data-call-effect-layer={layer.genre}>
-                <button type="button" aria-label={t('callStudio.layers.undo', { name })} onClick={() => onUndo(layer.genre)} className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 rounded-full px-3 text-mini font-semibold text-on-media" data-call-effect-layer-undo={layer.genre}>
+                <button type="button" aria-label={text.undo(name)} onClick={() => onUndo(layer.genre)} className="flex min-h-11 w-full touch-manipulation items-center justify-between gap-3 rounded-full px-3 text-mini font-semibold text-on-media" data-call-effect-layer-undo={layer.genre}>
                   <span>{name}</span>
                   {undo}
                 </button>
@@ -239,9 +261,10 @@ type BarProps = {
 /** La barre de verre, la même en Effets et en Montage. */
 export function EffectsBar({ language, categories, settings, add, stack, full, list, onBack, rider, chips }: BarProps) {
   const t = textOf(language);
+  const text = layersTextOf(language);
   return (
     <div className="relative flex w-full flex-col items-center">
-      <EffectLayersList open={list.open} stack={stack} label={list.label} onUndo={list.onUndo} t={t} />
+      <EffectLayersList open={list.open} stack={stack} label={list.label} onUndo={list.onUndo} text={text} />
       <CallModeBar
         glass
         rider={rider}
@@ -254,7 +277,7 @@ export function EffectsBar({ language, categories, settings, add, stack, full, l
         }
         quit={{ label: t('callStudio.mode.backEffects'), glyph: chevron, onPress: onBack, data: { 'data-call-mode-quit': '' } }}
         center={settings === null ? null : <ModeOption label={t('callStudio.mode.settingsLabel')} glyph={gear} caption={t('callStudio.effects.settings')} pressed={settings.open} onPress={settings.onToggle} data={{ 'data-call-effects-settings-toggle': '' }} />}
-        options={add === null ? null : <AddLookButton label={t(full ? 'callStudio.layers.full' : 'callStudio.mode.addLook')} hint={t('callStudio.layers.hint')} full={full} onAdd={add.onAdd} onList={list.onOpen} />}
+        options={add === null ? null : <AddLookButton label={full ? text.full : t('callStudio.mode.addLook')} hint={text.hint} full={full} onAdd={add.onAdd} onList={list.onOpen} />}
       />
     </div>
   );

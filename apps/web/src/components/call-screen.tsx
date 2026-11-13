@@ -16,7 +16,6 @@ import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
 import type { EffectsCategory } from '@/lib/calls/call-effects-mode-rule';
 import { once, preloadedView } from '@/lib/calls/preloaded-view';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
@@ -385,8 +384,6 @@ export function CallScreen({ call, motion, canShare = browserCanShare(), initial
   const [layer, setLayer] = useState<CallScreenLayer>(initiallyExpanded ? { kind: 'menu' } : IDLE);
   const [selfFull, setSelfFull] = useState(false);
   const [looksStart, setLooksStart] = useState<EffectsCategory>('face');
-  /* La pile d'effets (#17903) est celle de CET appel : elle part avec l'écran. */
-  useEffect(() => () => setEffectLayers([]), []);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [audible, setAudible] = useState(false);
   const focusNext = useRef<string | null>(null);

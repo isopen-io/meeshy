@@ -93,6 +93,17 @@ const es = {
   'callControls.liveFrame.answer.declined.anonymous': 'La otra persona mantiene su vista',
   'callControls.liveFrame.notProposed': 'El marco se aplica en tu pantalla, pero no se pudo proponer',
   'callControls.liveFrame.surface': 'Marco {frame} alrededor de los dos vídeos',
+  'callControls.mode.frames': 'Marcos',
+  'callControls.layers.title': 'Efectos aplicados',
+  'callControls.layers.undo': 'Deshacer {name}',
+  'callControls.layers.none': 'Ningún efecto aplicado',
+  'callControls.layers.full': 'Tres efectos como máximo: quita uno para añadir otro',
+  'callControls.layers.hint': 'Pulsación larga o Mayús + Intro: efectos aplicados',
+  'callControls.layers.genre.frame': 'Marco',
+  'callControls.layers.genre.color': 'Color',
+  'callControls.layers.genre.face': 'Rostro',
+  'callControls.layers.genre.landscape': 'Paisaje',
+  'callControls.layers.genre.voice': 'Voz',
 } satisfies CallControlsCatalog;
 
 export default es;

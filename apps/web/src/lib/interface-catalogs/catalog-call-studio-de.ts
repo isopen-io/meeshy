@@ -51,7 +51,6 @@ const de = {
   'callStudio.preset.sky': 'Himmel',
   'callStudio.preset.monochrome': 'Schwarzweiß',
   'callStudio.mode.montage': 'Anruf festhalten',
-  'callStudio.mode.quit': 'Beenden',
   'callStudio.mode.backEffects': 'Zurück zum Anruf',
   'callStudio.mode.addLook': 'Weiteren Look hinzufügen',
   'callStudio.mode.face': 'Gesicht',
@@ -93,17 +92,6 @@ const de = {
   'callStudio.liveFrame.hold': 'Live-Rahmen',
   'callStudio.liveFrame.short': 'Rahmen',
   'callStudio.liveFrame.hint': 'Behält diesen Rahmen während des ganzen Anrufs um beide Videos und schlägt ihn deinem Gegenüber vor',
-  'callStudio.mode.frames': 'Rahmen',
-  'callStudio.layers.title': 'Angewendete Effekte',
-  'callStudio.layers.undo': '{name} rückgängig machen',
-  'callStudio.layers.none': 'Kein Effekt angewendet',
-  'callStudio.layers.full': 'Höchstens drei Effekte: Entferne einen, um einen weiteren hinzuzufügen',
-  'callStudio.layers.hint': 'Lange drücken oder Umschalt + Eingabe: angewendete Effekte',
-  'callStudio.layers.genre.frame': 'Rahmen',
-  'callStudio.layers.genre.color': 'Farbe',
-  'callStudio.layers.genre.face': 'Gesicht',
-  'callStudio.layers.genre.landscape': 'Landschaft',
-  'callStudio.layers.genre.voice': 'Stimme',
 } satisfies CallStudioCatalog;
 
 export default de;

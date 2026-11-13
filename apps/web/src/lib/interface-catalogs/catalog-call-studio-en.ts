@@ -51,7 +51,6 @@ const en = {
   'callStudio.preset.sky': 'Sky',
   'callStudio.preset.monochrome': 'Black & white',
   'callStudio.mode.montage': 'Capture the call',
-  'callStudio.mode.quit': 'Exit',
   'callStudio.mode.backEffects': 'Back to the call',
   'callStudio.mode.addLook': 'Add another look',
   'callStudio.mode.face': 'Face',
@@ -93,17 +92,6 @@ const en = {
   'callStudio.liveFrame.hold': 'Live frame',
   'callStudio.liveFrame.short': 'Frame',
   'callStudio.liveFrame.hint': 'Keeps this frame around both videos for the whole call, and offers it to the other person',
-  'callStudio.mode.frames': 'Frames',
-  'callStudio.layers.title': 'Applied effects',
-  'callStudio.layers.undo': 'Undo {name}',
-  'callStudio.layers.none': 'No effect applied',
-  'callStudio.layers.full': 'Three effects at most: remove one to add another',
-  'callStudio.layers.hint': 'Long press or Shift + Enter: applied effects',
-  'callStudio.layers.genre.frame': 'Frame',
-  'callStudio.layers.genre.color': 'Color',
-  'callStudio.layers.genre.face': 'Face',
-  'callStudio.layers.genre.landscape': 'Scenery',
-  'callStudio.layers.genre.voice': 'Voice',
 } satisfies CallStudioCatalog;
 
 export default en;

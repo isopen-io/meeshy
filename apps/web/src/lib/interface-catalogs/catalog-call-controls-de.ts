@@ -93,6 +93,17 @@ const de = {
   'callControls.liveFrame.answer.declined.anonymous': 'Dein Gegenüber behält die eigene Ansicht',
   'callControls.liveFrame.notProposed': 'Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden',
   'callControls.liveFrame.surface': 'Rahmen {frame} um beide Videos',
+  'callControls.mode.frames': 'Rahmen',
+  'callControls.layers.title': 'Angewendete Effekte',
+  'callControls.layers.undo': '{name} rückgängig machen',
+  'callControls.layers.none': 'Kein Effekt angewendet',
+  'callControls.layers.full': 'Höchstens drei Effekte: Entferne einen, um einen weiteren hinzuzufügen',
+  'callControls.layers.hint': 'Lange drücken oder Umschalt + Eingabe: angewendete Effekte',
+  'callControls.layers.genre.frame': 'Rahmen',
+  'callControls.layers.genre.color': 'Farbe',
+  'callControls.layers.genre.face': 'Gesicht',
+  'callControls.layers.genre.landscape': 'Landschaft',
+  'callControls.layers.genre.voice': 'Stimme',
 } satisfies CallControlsCatalog;
 
 export default de;

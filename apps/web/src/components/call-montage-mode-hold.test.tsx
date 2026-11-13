@@ -6,6 +6,7 @@ import type { CaptureEnv } from '@/lib/calls/call-capture';
 import { montageCircle, type MontageCall } from '@/lib/calls/call-montage-circle';
 import type { CallMember } from '@/lib/calls/call-store';
 import { recorder } from '@/lib/calls/frames/frame-recorder.test-support';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import { loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -40,6 +41,7 @@ describe('CallMontageMode — l’interrupteur du cadre en direct', () => {
 
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
+    await loadCallControlsCatalog('fr');
     await loadFrameUsageCatalog('fr');
     loaded.module = await import('@/lib/calls/frames/frame-studio');
     ensureHappyDomRegistered();

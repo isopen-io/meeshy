@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { CAPTURE_HOLD_MS } from '@/lib/calls/call-capture-gesture';
 import { effectLayersStore, setEffectLayers } from '@/lib/calls/call-effect-layers-store';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -24,6 +25,7 @@ const later = (ms: number) => act(async () => void (await new Promise((resolve) 
 describe('CallEffectsMode — la pile de trois couches', () => {
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
+    await loadCallControlsCatalog('fr');
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
@@ -155,7 +157,7 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     await view.press('[data-call-effects-add-look]');
     expect(view.find('[data-call-effects-category="color"]')?.getAttribute('aria-pressed')).toBe('true');
     view.done();
-    setEffectLayers([{ genre: 'frame', choice: 'neon' }, { genre: 'landscape', choice: 'beach' }]);
+    setEffectLayers([{ genre: 'voice', choice: 'deep' }, { genre: 'landscape', choice: 'beach' }]);
     const full = mount({ effects: { ...NO_EFFECTS, faceEffect: 'toad' } });
     const add = full.find('[data-call-effects-add-look]') as HTMLElement;
     expect(add.getAttribute('aria-disabled')).toBe('true');
@@ -163,12 +165,12 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     await full.press('[data-call-effects-add-look]');
     expect(full.find('[data-call-effects-category="face"]')?.getAttribute('aria-pressed')).toBe('true');
     await full.hold('[data-call-effects-add-look]');
-    expect(full.genres()).toEqual(['face', 'landscape', 'frame']);
+    expect(full.genres()).toEqual(['face', 'landscape', 'voice']);
     full.done();
   });
 
   test('à trois couches, un filtre d’un genre absent est refusé, et on le dit ; remplacer un genre présent reste permis', async () => {
-    setEffectLayers([{ genre: 'frame', choice: 'neon' }, { genre: 'landscape', choice: 'beach' }]);
+    setEffectLayers([{ genre: 'voice', choice: 'deep' }, { genre: 'landscape', choice: 'beach' }]);
     const view = mount({ effects: { ...NO_EFFECTS, faceEffect: 'toad' } });
     await view.press('[data-call-effects-category="color"]');
     await view.press('[data-carousel-item="golden"]');
@@ -180,14 +182,12 @@ describe('CallEffectsMode — la pile de trois couches', () => {
     view.done();
   });
 
-  test('la couche « cadre » vient du Montage : annulée ici, elle retire aussi le cadre gardé en direct', async () => {
-    setEffectLayers([{ genre: 'frame', choice: 'jovial.direct.duo' }]);
+  test('le cadre GARDÉ en direct est une couche : annulée ici, elle retire le cadre gardé, par le chemin de « Cadre »', async () => {
     const view = mount({ heldFrameId: 'jovial.direct.duo' });
     await view.hold('[data-call-effects-add-look]');
     expect(view.genres()).toEqual(['frame']);
     await view.press('[data-call-effect-layer-undo="frame"]');
     expect(view.toggled).toEqual(['jovial.direct.duo']);
-    expect(effectLayersStore.getState().stack).toEqual([]);
     view.done();
   });
 

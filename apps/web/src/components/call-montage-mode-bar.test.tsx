@@ -10,6 +10,7 @@ import type { CallMember } from '@/lib/calls/call-store';
 import { recorder } from '@/lib/calls/frames/frame-recorder.test-support';
 import { NO_EFFECTS, videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
 import { loadModeMotion } from '@/lib/calls/use-mode-motion';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import { loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -46,6 +47,7 @@ describe('CallMontageMode — la barre d’Effets', () => {
 
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
+    await loadCallControlsCatalog('fr');
     await loadFrameUsageCatalog('fr');
     await loadModeMotion();
     loaded.module = await import('@/lib/calls/frames/frame-studio');

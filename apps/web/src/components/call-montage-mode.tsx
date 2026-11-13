@@ -5,8 +5,6 @@ import { frameDisplayName } from '@meeshy/shared/types/frame-name';
 import { browserCanvas, captureDrawn, captureFaces, captureMontage, MONTAGE_DATE, saveCaptures, type CaptureEnv, type CaptureFile, type SaveOutcome } from '@/lib/calls/call-capture';
 import type { ClipEnv } from '@/lib/calls/call-capture-live';
 import { visibleTiles } from '@/lib/calls/call-capture-tiles';
-import { canAdd, isFull, nextGenre, removeLayer, type EffectGenre, type EffectLayer } from '@/lib/calls/call-effect-layers';
-import { setEffectLayers } from '@/lib/calls/call-effect-layers-store';
 import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Size } from '@/lib/calls/call-montage';
 import type { MontageCall, MontageCircle } from '@/lib/calls/call-montage-circle';
 import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
@@ -18,18 +16,19 @@ import { startFrameClock } from '@/lib/calls/frame-clock';
 import type { FrameScope } from '@/lib/calls/frames/frame-filter';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
-import { useEffectLayers } from '@/lib/calls/use-effect-layers';
 import { loadModeMotion, useModeRise, useSwapPresence } from '@/lib/calls/use-mode-motion';
 import { videoEffectsStore, type VideoEffects } from '@/lib/calls/video-effects';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
 import { frameUsageText, loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { LiveFrameHoldOption, type LiveFrameHold } from './call-live-frame-hold-option';
-import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, SettingsGlass, STACKED, textOf, useLayersList } from './call-effects-bar';
+import { appliedLabel, applyNow, EffectsBar, SettingsGlass, STACKED, useLayersList } from './call-effects-bar';
 import { ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
+import { useMontageLayers } from './use-montage-layers';
 import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader, type ShelfLoader } from './use-montage-frames';
 
 /**
@@ -73,7 +72,7 @@ import { browserCircle, browserShelf, montageChrome, paintFramed, useMontageFram
  * remet par `loadFrames` et que le mode charge à son entrée.
  */
 
-export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadFrameUsageCatalog(language), loadModeMotion()]);
+export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadCallControlsCatalog(language), loadFrameUsageCatalog(language), loadModeMotion()]);
 
 export const MONTAGE_PREVIEW_FPS = 5;
 
@@ -124,11 +123,7 @@ type ModeProps = {
   readonly onAddLook?: ((genre: 'face' | 'color') => void) | undefined;
 };
 
-/** Les genres que ce mode possède : il en lit la valeur (effets appliqués, cadre choisi). */
-const OWNED: readonly EffectGenre[] = ['face', 'color', 'frame'];
-
 export type { LiveFrameHold };
-
 
 const browserEnv = (): CaptureEnv => ({ canvas: browserCanvas, detector: browserFaceDetector(), now: () => new Date() });
 
@@ -171,11 +166,6 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
   const frame = frames === null || frameId === null ? null : frames.reconcile(frameId, people);
   const shelf: Shelf = frame?.mood ?? CLASSICS;
   const scope: FrameScope = frames === null ? 'all' : frames.scopeShowing(frame?.id ?? null, people, requestedScope);
-  /* Le cadre est une COUCHE de la pile d'Effets : celui du carrousel, ou celui qu'on garde en direct. */
-  const frameLayer = frame?.id ?? hold?.heldFrameId ?? null;
-  const stack = useEffectLayers([...effectsApplied(effects), ...(frameLayer === null ? [] : [{ genre: 'frame' as const, choice: frameLayer }])], OWNED);
-  const crowded = isFull(stack);
-  const say = textOf(language);
   const lastInMood = useRef(new Map<FrameMood, string>());
   const root = useRef<HTMLDivElement>(null);
   const preview = useRef<HTMLCanvasElement>(null);
@@ -251,6 +241,8 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
     save,
     ...(clipEnv === undefined ? {} : { clipEnv }),
   });
+
+  const layers = useMontageLayers({ language, effects, frame, frames, hold, apply, onAddLook, clearFrame: () => setFrameId(null), closeSettings: () => setSettings(false), closeList: list.hide, say: (text) => studio.setStatus({ text, tone: 'error' }) });
 
   useEffect(() => {
     const big = (): void => paintRef.current(preview.current, current.current, 'preview');
@@ -350,9 +342,6 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
         };
   const chips = [{ id: CLASSICS, label: t(language, 'callStudio.frames.mood.classics') }, ...moods.map((mood) => ({ id: mood, label: t(language, `callStudio.frames.mood.${mood}`) }))];
 
-  /** À trois couches, un cadre de plus n'entre pas : le choix est refusé et dit ; changer le cadre déjà posé reste permis. */
-  const refuse = (): void => studio.setStatus({ text: say('callStudio.layers.full'), tone: 'error' });
-
   const choose = (id: string): void => {
     const picked = frames?.find(id) ?? null;
     list.hide();
@@ -360,10 +349,7 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
       setStyle(MONTAGE_STYLES.find((option) => option === id) ?? style);
       return;
     }
-    if (!canAdd(stack, 'frame')) {
-      refuse();
-      return;
-    }
+    if (!layers.framePermitted()) return;
     lastInMood.current.set(picked.mood, picked.id);
     setFrameId(picked.id);
   };
@@ -375,57 +361,13 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
       setFrameId(null);
       return;
     }
-    if (!canAdd(stack, 'frame')) {
-      refuse();
-      return;
-    }
+    if (!layers.framePermitted()) return;
     const remembered = lastInMood.current.get(mood);
     const again = remembered === undefined ? null : frames.reconcile(remembered, people);
     const offered = frames.framesOf(people, mood, scope);
     const next = again?.mood === mood && offered.some((option) => option.id === frames.baseId(again.id)) ? again : offered[0];
     setFrameId(next?.id ?? null);
   };
-
-  const addLook = (): void => {
-    setSettings(false);
-    list.hide();
-    if (crowded) {
-      refuse();
-      return;
-    }
-    const target = nextGenre(stack, ['face', 'color']);
-    if (target === 'face' || target === 'color') onAddLook?.(target);
-  };
-
-  /** Annuler la couche « cadre » retire aussi le cadre gardé en direct, par le chemin de « Cadre » (loi 16). */
-  const releaseFrame = (): void => {
-    const held = hold?.heldFrameId ?? null;
-    if (hold !== undefined && held !== null && held === frameLayer) hold.toggle(held);
-  };
-
-  const undo = (genre: EffectGenre): void => {
-    list.hide();
-    if (genre === 'face') apply({ faceEffect: 'none' });
-    else if (genre === 'color') apply({ preset: 'natural' });
-    else {
-      if (genre === 'frame') {
-        releaseFrame();
-        setFrameId(null);
-      }
-      setEffectLayers(removeLayer(stack, genre));
-    }
-  };
-
-  const layerName = (layer: EffectLayer): string | undefined => {
-    if (layer.genre !== 'frame') return effectChoiceName(say, layer);
-    const named = frames?.find(layer.choice) ?? null;
-    return named === null ? undefined : frameDisplayName(named, language);
-  };
-
-  const sortEntries = [
-    ...(onAddLook === undefined ? [] : [{ id: 'face', label: say('callStudio.mode.face') }, { id: 'color', label: say('callStudio.effects.color') }]),
-    { id: 'frames', label: say('callStudio.mode.frames') },
-  ];
 
   const previewLabel = frame === null ? t(language, 'callStudio.capture.preview', { style: t(language, `callStudio.montage.${style}`) }) : t(language, 'callStudio.capture.framePreview', { name: frameDisplayName(frame, language) });
 
@@ -474,13 +416,13 @@ export function CallMontageMode({ language, onExit, stage, onWheel = onRowWheel,
         <EffectsBar
           language={language}
           rider={rider}
-          stack={stack}
-          full={crowded}
+          stack={layers.stack}
+          full={layers.crowded}
           chips={{ mounted: puces.mounted, ref: puces.ref, leaving: settings }}
-          categories={{ entries: sortEntries, pressed: 'frames', onPick: (id) => (id === 'face' || id === 'color' ? onAddLook?.(id) : undefined) }}
+          categories={{ entries: layers.sortEntries, pressed: 'frames', onPick: (id) => (id === 'face' || id === 'color' ? onAddLook?.(id) : undefined) }}
           settings={colorAvailable || blurAvailable ? { open: settings, onToggle: () => setSettings((open) => !open) } : null}
-          add={{ onAdd: addLook }}
-          list={{ open: list.open, onOpen: list.show, onUndo: undo, label: (layer) => appliedLabel(say, layer, layerName) }}
+          add={{ onAdd: layers.addLook }}
+          list={{ open: list.open, onOpen: list.show, onUndo: layers.undo, label: (layer) => appliedLabel(layers.words, layer, layers.layerName) }}
           onBack={onExit}
         />
       </div>

@@ -51,7 +51,6 @@ const it = {
   'callStudio.preset.sky': 'Cielo',
   'callStudio.preset.monochrome': 'Bianco e nero',
   'callStudio.mode.montage': 'Cattura la chiamata',
-  'callStudio.mode.quit': 'Esci',
   'callStudio.mode.backEffects': 'Torna alla chiamata',
   'callStudio.mode.addLook': 'Aggiungi un altro look',
   'callStudio.mode.face': 'Viso',
@@ -93,17 +92,6 @@ const it = {
   'callStudio.liveFrame.hold': 'Cornice dal vivo',
   'callStudio.liveFrame.short': 'Cornice',
   'callStudio.liveFrame.hint': 'Mantiene questa cornice attorno ai due video per tutta la chiamata e la propone all\'altra persona',
-  'callStudio.mode.frames': 'Cornici',
-  'callStudio.layers.title': 'Effetti applicati',
-  'callStudio.layers.undo': 'Annulla {name}',
-  'callStudio.layers.none': 'Nessun effetto applicato',
-  'callStudio.layers.full': 'Al massimo tre effetti: rimuovine uno per aggiungerne un altro',
-  'callStudio.layers.hint': 'Pressione lunga o Maiusc + Invio: effetti applicati',
-  'callStudio.layers.genre.frame': 'Cornice',
-  'callStudio.layers.genre.color': 'Colore',
-  'callStudio.layers.genre.face': 'Viso',
-  'callStudio.layers.genre.landscape': 'Paesaggio',
-  'callStudio.layers.genre.voice': 'Voce',
 } satisfies CallStudioCatalog;
 
 export default it;

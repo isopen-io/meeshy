@@ -101,6 +101,16 @@ const centered = (page, id) =>
   );
 const vanishes = (page, selector, timeout = 4000) => page.waitForSelector(selector, { state: 'detached', timeout }).then(() => true, () => false);
 
+/** L'appui long sur (+) : la liste des effets appliqués (#17903, #16979). */
+const holdAddLook = async (page) => {
+  const box = await page.locator('[data-call-effects-add-look]').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  return appears(page, '[data-call-effect-layers] [data-call-effect-layer]');
+};
+
 const ARM_PEER = () => localStorage.setItem('meeshy.fixtures.callPeer', '1');
 
 /* Une caméra qui OFFRE le zoom (Chrome sur Android) : la capacité est injectée, le réglage retenu. */
@@ -403,6 +413,17 @@ try {
       await page.click('[data-call-effects-settings-toggle]');
       check(await appears(page, '[data-call-mode="effects"] [data-carousel-item]'), `${label} : un second appui rend le carrousel`);
 
+      // ------------------------------------------------ 5 bis. la pile d'effets : l'appui long sur (+) liste ce qui est appliqué (#17903)
+      check(await holdAddLook(page), `${label} : l'appui long sur (+) liste les effets appliqués`);
+      const layers = await page.$$eval('[data-call-effect-layers] [data-call-effect-layer]', (items) => items.map((item) => item.getAttribute('data-call-effect-layer')));
+      check(layers.length >= 1 && layers.length <= 3 && layers[0] === 'color' && layers.includes('face'), `${label} : du dessus au dessous, trois couches au plus (${layers.join(' > ')})`);
+      const undoHeights = await page.$$eval('[data-call-effect-layer-undo]', (buttons) => buttons.map((button) => button.getBoundingClientRect().height));
+      check(undoHeights.length > 0 && undoHeights.every((height) => height >= TAP_FLOOR - 0.5), `${label} : chaque ligne de la liste fait ${TAP_FLOOR} au moins`);
+      check((await page.getAttribute('[data-call-effects-add-look]', 'aria-keyshortcuts')) === 'Shift+Enter', `${label} : le clavier a sa voie : Maj + Entrée sur (+)`);
+      await capture(page, `effets-pile-${slug}`);
+      await page.keyboard.press('Escape');
+      check((await vanishes(page, '[data-call-effect-layers]')) && (await page.$('[data-call-mode="effects"]')) !== null, `${label} : Échap referme la liste sans quitter le mode`);
+
       // ------------------------------------------------ 6. ‹ garde le look et rend l'appel ; Échap aussi
       check((await page.$('[data-call-effects-validate]')) === null, `${label} : ni Valider ni ✕ (P8b.5)`);
       await page.click('[data-call-mode-quit]');
@@ -471,6 +492,27 @@ try {
       check((await page.getAttribute('[data-call-capture-preview]', 'data-call-capture-preview')) === 'cover', `${label} : l'aperçu passe en Couverture`);
       check(await paintedAll('[data-call-capture-preview]'), `${label} : la couverture se peint`);
       await capture(page, `montage-couverture-${slug}`);
+      // ------------------------------------------------ 8 ter. la barre du Montage est celle d'Effets (#17903, #16979)
+      const montageBar = await page.evaluate(() => {
+        const bar = document.querySelector('[data-call-mode="montage"] [data-call-mode-bar]');
+        const sizes = [...(bar?.querySelectorAll('[data-call-mode-quit], [data-call-effects-settings-toggle], [data-call-effects-add-look]') ?? [])].map((button) => button.getBoundingClientRect().height);
+        return {
+          glass: bar?.querySelector('[data-call-mode-bar-skin]')?.className.includes('glass-call') === true,
+          back: bar?.querySelector('[data-call-mode-quit]')?.getAttribute('aria-label') ?? null,
+          settings: bar?.querySelector('[data-call-effects-settings-toggle]') !== null,
+          add: bar?.querySelector('[data-call-effects-add-look]') !== null,
+          frames: bar?.querySelector('[data-call-effects-category="frames"]')?.getAttribute('aria-pressed') ?? null,
+          sizes,
+          validate: document.querySelector('[data-call-effects-validate]') !== null,
+          faces: document.querySelector('[data-call-capture-faces]') !== null,
+          keyboard: document.querySelector('[data-call-record-key]') !== null,
+        };
+      });
+      check(montageBar.glass && montageBar.back === 'Retour à l’appel' && montageBar.settings && montageBar.add && !montageBar.validate, `${label} : la barre du Montage est celle d'Effets — verre, ‹ · Réglages · (+), ni Quitter ni Valider (${JSON.stringify(montageBar.back)})`);
+      check(montageBar.frames === 'true', `${label} : sous la barre, la puce « Cadres » est pressée`);
+      check(montageBar.sizes.length === 3 && montageBar.sizes.every((size) => size >= TAP_FLOOR - 0.5), `${label} : les trois boutons de la barre font ${TAP_FLOOR} au moins`);
+      check(montageBar.faces && montageBar.keyboard, `${label} : « Chaque visage » et la vidéo au clavier restent atteignables`);
+
       await centered(page, 'cover');
       const shot = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick('[data-carousel-item="cover"]');
@@ -526,6 +568,12 @@ try {
       check(await paintedAll('[data-call-frame-thumb]'), `${label} : les vignettes de cadre se peignent (${(await painted(page, '[data-call-frame-thumb]')).filter(Boolean).length})`);
       check(await paintedAll('[data-call-capture-preview]'), `${label} : l'aperçu du cadre se peint en direct`);
       await capture(page, `montage-cadre-${slug}`);
+      check(await holdAddLook(page), `${label} : l'appui long sur (+), au Montage, liste le cadre choisi`);
+      check((await page.$$eval('[data-call-effect-layers] [data-call-effect-layer]', (items) => items.map((item) => item.getAttribute('data-call-effect-layer')))).includes('frame'), `${label} : le cadre est une couche de la pile`);
+      await capture(page, `montage-pile-${slug}`);
+      await page.click('[data-call-effect-layer-undo="frame"]');
+      check((await vanishes(page, '[data-call-effect-layers]')) && (await page.getAttribute('[data-call-frame-mood="classics"]', 'aria-pressed')) === 'true', `${label} : annuler le cadre referme la liste et rend les classiques`);
+      await page.click(`[data-call-frame-mood="${mood}"]`);
       await centered(page, duoFrames[0]);
       const framed = page.waitForEvent('download', { timeout: 8000 });
       await page.dblclick(`[data-carousel-item="${duoFrames[0]}"]`);

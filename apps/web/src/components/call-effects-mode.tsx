@@ -13,6 +13,7 @@ import { onRowWheel } from '@/lib/calls/call-row-keys';
 import { useEffectLayers } from '@/lib/calls/use-effect-layers';
 import { useSwapPresence } from '@/lib/calls/use-mode-motion';
 import { FACE_EFFECTS, VIDEO_PRESET_CATALOG, videoEffectsStore, type FaceEffect, type VideoEffects, type VideoPreset } from '@/lib/calls/video-effects';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -20,7 +21,7 @@ import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop
 import { CallEffectsCompanions, type EffectsCompanion } from './call-effects-companions';
 import type { Portrait } from './call-portrait';
 import { StreamVideo } from './call-media-elements';
-import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, SettingsGlass, STACKED, textOf, useLayersList } from './call-effects-bar';
+import { appliedLabel, applyNow, effectChoiceName, effectsApplied, EffectsBar, layersTextOf, SettingsGlass, STACKED, textOf, useLayersList } from './call-effects-bar';
 import type { LiveFrameHold } from './call-live-frame-hold-option';
 import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
 
@@ -53,7 +54,7 @@ import { ModeCarousel, type CarouselItem } from './call-mode-carousel';
  * d'appel ; son catalogue se charge avec lui (`loadEffectsModeText`).
  */
 
-export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => loadCallStudioCatalog(language);
+export const loadEffectsModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadCallControlsCatalog(language)]);
 
 /**
  * LES AUTRES DE L'APPEL (#8737), remis tels quels par l'écran avec ce qui vit
@@ -235,8 +236,8 @@ const faceVisual = (effect: FaceEffect): ReactNode => (
 
 const swatch = (preset: VideoPreset): ReactNode => <span aria-hidden className="size-full" style={{ background: SWATCH[preset] }} />;
 
-/** Les genres que ce mode possède : il en lit la valeur dans les effets appliqués ; le cadre vient du Montage. */
-const OWNED: readonly EffectGenre[] = ['face', 'color'];
+/** Les genres que ce mode possède : il en lit la valeur dans les effets appliqués, et le cadre dans celui qu'on garde en direct (loi 16). */
+const OWNED: readonly EffectGenre[] = ['face', 'color', 'frame'];
 
 const layerChoice = (id: string): string => (id === 'none' || id === 'natural' ? NO_CHOICE : id);
 
@@ -246,7 +247,9 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   const [category, setCategory] = useState<EffectsCategory>(startOn);
   const [settings, setSettings] = useState(!colorAvailable);
   const t = textOf(language);
-  const stack = useEffectLayers(effectsApplied(effects), OWNED);
+  const words = layersTextOf(language);
+  const heldFrame = hold?.heldFrameId ?? null;
+  const stack = useEffectLayers([...effectsApplied(effects), ...(heldFrame === null ? [] : [{ genre: 'frame' as const, choice: heldFrame }])], OWNED);
   const full = isFull(stack);
   const list = useLayersList();
   const controls = useRef<HTMLDivElement>(null);
@@ -290,7 +293,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
   style.current = selected;
   /** À trois couches, un genre absent n'entre plus : le choix est refusé et dit ; remplacer un genre présent reste permis. */
   const refuses = (genre: EffectGenre, id: string): boolean => layerChoice(id) !== NO_CHOICE && !canAdd(stack, genre);
-  const refuse = (): void => studio.setStatus({ text: t('callStudio.layers.full'), tone: 'error' });
+  const refuse = (): void => studio.setStatus({ text: words.full, tone: 'error' });
   const select = (id: string): void => {
     const face = FACE_EFFECTS.find((effect) => effect === id);
     const preset = VIDEO_PRESET_CATALOG.find((entry) => entry === id);
@@ -314,23 +317,19 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
     const target = nextGenre(stack, ['face', 'color']);
     setCategory(target !== null && (target === 'face' || target === 'color') && target !== category ? target : addingLook(category));
   };
-  const releaseFrame = (): void => {
-    const held = hold?.heldFrameId ?? null;
-    if (hold !== undefined && held !== null && stack.some((layer) => layer.genre === 'frame' && layer.choice === held)) hold.toggle(held);
-  };
   const undo = (genre: EffectGenre): void => {
     list.hide();
     if (genre === 'face') apply({ faceEffect: 'none' });
     else if (genre === 'color') apply({ preset: 'natural' });
     else {
-      if (genre === 'frame') releaseFrame();
+      if (genre === 'frame' && hold !== undefined && heldFrame !== null) hold.toggle(heldFrame);
       setEffectLayers(removeLayer(stack, genre));
     }
   };
   const entries = [
     { id: 'face', label: t('callStudio.mode.face') },
     { id: 'color', label: t('callStudio.effects.color') },
-    ...(onOpenFrames === undefined ? [] : [{ id: 'frames', label: t('callStudio.mode.frames') }]),
+    ...(onOpenFrames === undefined ? [] : [{ id: 'frames', label: words.frames }]),
   ];
   const pick = (id: string): void => {
     list.hide();
@@ -376,7 +375,7 @@ export function CallEffectsMode({ language, colorAvailable, blurAvailable, previ
           categories={{ entries, pressed: category, onPick: pick }}
           settings={colorAvailable ? { open: settings, onToggle: () => setSettings((open) => !open) } : null}
           add={colorAvailable ? { onAdd: addLook } : null}
-          list={{ open: list.open, onOpen: list.show, onUndo: undo, label: (layer) => appliedLabel(t, layer, (entry) => effectChoiceName(t, entry)) }}
+          list={{ open: list.open, onOpen: list.show, onUndo: undo, label: (layer) => appliedLabel(words, layer, (entry) => effectChoiceName(t, entry)) }}
           onBack={onExit}
         />
       </div>

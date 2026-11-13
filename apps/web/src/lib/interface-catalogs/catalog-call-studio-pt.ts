@@ -51,7 +51,6 @@ const pt = {
   'callStudio.preset.sky': 'Céu',
   'callStudio.preset.monochrome': 'Preto e branco',
   'callStudio.mode.montage': 'Capturar a chamada',
-  'callStudio.mode.quit': 'Sair',
   'callStudio.mode.backEffects': 'Voltar à chamada',
   'callStudio.mode.addLook': 'Adicionar outro look',
   'callStudio.mode.face': 'Rosto',
@@ -93,17 +92,6 @@ const pt = {
   'callStudio.liveFrame.hold': 'Moldura ao vivo',
   'callStudio.liveFrame.short': 'Moldura',
   'callStudio.liveFrame.hint': 'Mantém esta moldura em volta dos dois vídeos durante toda a chamada e a sugere à outra pessoa',
-  'callStudio.mode.frames': 'Molduras',
-  'callStudio.layers.title': 'Efeitos aplicados',
-  'callStudio.layers.undo': 'Desfazer {name}',
-  'callStudio.layers.none': 'Nenhum efeito aplicado',
-  'callStudio.layers.full': 'No máximo três efeitos: remova um para adicionar outro',
-  'callStudio.layers.hint': 'Toque longo ou Shift + Enter: efeitos aplicados',
-  'callStudio.layers.genre.frame': 'Moldura',
-  'callStudio.layers.genre.color': 'Cor',
-  'callStudio.layers.genre.face': 'Rosto',
-  'callStudio.layers.genre.landscape': 'Paisagem',
-  'callStudio.layers.genre.voice': 'Voz',
 } satisfies CallStudioCatalog;
 
 export default pt;
