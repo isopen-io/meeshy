@@ -60,17 +60,36 @@ private struct MeeshyThumbnailRowSample: View {
             words: Self.words,
             tone: stateID == "scene-claire" ? .onLight : .deep,
             onSelect: { current = $0 },
-            onAdd: stateID == "serree" || stateID == "sans-plus" ? nil : { add() },
+            onAdd: addCallback,
             onDuplicate: { duplicate($0) },
             onMove: { move($0, to: $1) },
             onRemove: { remove($0) },
             content: { thumbnail, _ in gradient(thumbnail.id) }
         )
-        .previewing(
-            pressed: isPressed ? order.first { $0 != current } : nil,
-            armed: stateID == "armee" ? "s3" : (stateID == "soulevee" ? "s2" : nil),
-            lifted: stateID == "soulevee" ? (id: "s2", translation: Self.liftedTranslation) : nil
-        )
+        .previewing(pressed: pressedID, armed: armedID, lifted: liftedPlace)
+    }
+
+    /// Sans « + » au plafond de dix : la rangée serrée et celle qui a atteint son plafond.
+    private var addCallback: (() -> Void)? {
+        if stateID == "serree" || stateID == "sans-plus" { return nil }
+        return { add() }
+    }
+
+    private var pressedID: String? {
+        guard isPressed else { return nil }
+        return order.first(where: { $0 != current })
+    }
+
+    private var armedID: String? {
+        switch stateID {
+        case "armee": return "s3"
+        case "soulevee": return "s2"
+        default: return nil
+        }
+    }
+
+    private var liftedPlace: (id: String, translation: CGFloat)? {
+        stateID == "soulevee" ? (id: "s2", translation: Self.liftedTranslation) : nil
     }
 
     // MARK: - Les vignettes

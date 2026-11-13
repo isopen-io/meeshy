@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SwiftUI
 
@@ -109,6 +110,10 @@ public struct MeeshyThumbnailRow<ID: Hashable & Sendable, Content: View>: View {
         if !(items.isEmpty && callbacks.onAdd == nil) {
             GeometryReader { proxy in
                 rowBody(width: proxy.size.width)
+                    .frame(
+                        width: proxy.size.width, height: proxy.size.height,
+                        alignment: Alignment(horizontal: alignment, vertical: .center)
+                    )
             }
             .frame(height: max(tileHeight, MeeshyThumbnailRowRecipe.targetHeight))
         }
@@ -158,9 +163,7 @@ public struct MeeshyThumbnailRow<ID: Hashable & Sendable, Content: View>: View {
             let contentWidth = MeeshyThumbnailRowFit.contentWidth(
                 slots: items.count + (hasAdd ? 1 : 0), tileWidth: fit.width, spacing: MeeshyThumbnailRowRecipe.spacing
             )
-            stack
-                .frame(width: contentWidth, alignment: .center)
-                .frame(width: width, alignment: Alignment(horizontal: alignment, vertical: .center))
+            stack.frame(width: contentWidth)
         }
     }
 

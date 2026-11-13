@@ -151,7 +151,8 @@ struct MeeshyThumbnailRowTests {
     func tapTracker_followsTheVectors() throws {
         for scenario in try Self.rows("tapTracker") {
             var tracker = MeeshyThumbnailRowTapTracker<String>()
-            for step in try #require(scenario["steps"] as? [[String: Any]]) {
+            let steps = try #require(scenario["steps"] as? [[String: Any]])
+            for step in steps {
                 let double = tracker.isDouble(try #require(step["id"] as? String), at: try #require(step["at"] as? Double))
                 #expect(double == step["isDouble"] as? Bool, "\(scenario["name"] ?? "") : \(step)")
             }
@@ -182,13 +183,13 @@ struct MeeshyThumbnailRowTests {
     @Test("les mesures de la planche suivent les vecteurs")
     func recipe_metricsFollowTheVectors() throws {
         let recipe = try Self.object("recipe")
-        #expect(MeeshyThumbnailRowRecipe.tapWindow * 1000 == recipe["tapWindowMs"] as? Double)
-        #expect(MeeshyThumbnailRowRecipe.holdDuration * 1000 == recipe["holdMs"] as? Double)
+        #expect(Self.ms(MeeshyThumbnailRowRecipe.tapWindow) == recipe["tapWindowMs"] as? Double)
+        #expect(Self.ms(MeeshyThumbnailRowRecipe.holdDuration) == recipe["holdMs"] as? Double)
         #expect(Double(MeeshyThumbnailRowRecipe.holdSlop) == recipe["holdSlop"] as? Double)
         #expect(Double(MeeshyThumbnailRowRecipe.ringWidth) == recipe["ringWidth"] as? Double)
-        #expect(MeeshyThumbnailRowRecipe.ringFadeDuration * 1000 == recipe["ringFadeMs"] as? Double)
-        #expect(MeeshyThumbnailRowRecipe.neighbourDuration * 1000 == recipe["neighbourMs"] as? Double)
-        #expect(MeeshyThumbnailRowRecipe.revealDuration * 1000 == recipe["revealMs"] as? Double)
+        #expect(Self.ms(MeeshyThumbnailRowRecipe.ringFadeDuration) == recipe["ringFadeMs"] as? Double)
+        #expect(Self.ms(MeeshyThumbnailRowRecipe.neighbourDuration) == recipe["neighbourMs"] as? Double)
+        #expect(Self.ms(MeeshyThumbnailRowRecipe.revealDuration) == recipe["revealMs"] as? Double)
         #expect(Double(MeeshyThumbnailRowRecipe.liftScale) == recipe["liftScale"] as? Double)
         #expect(MeeshyThumbnailRowRecipe.liftTiltDegrees == recipe["liftTiltDegrees"] as? Double)
         #expect(MeeshyThumbnailRowRecipe.plusVeilRestOpacity == recipe["plusVeil"] as? Double)
@@ -717,6 +718,8 @@ struct MeeshyThumbnailRowTests {
 
     @MainActor
     final class Log {
+        nonisolated deinit {}
+
         var selected: [String] = []
         var duplicated: [String] = []
         var removed: [String] = []
@@ -745,6 +748,10 @@ struct MeeshyThumbnailRowTests {
         )
         model.play = { log.haptics.append($0) }
         return model
+    }
+
+    private static func ms(_ seconds: Double) -> Double {
+        (seconds * 1000).rounded()
     }
 
     private static func near(_ value: CGFloat, _ expected: Any?) -> Bool {
