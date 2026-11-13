@@ -466,3 +466,20 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil 26 : la position partagée dit de quel cercle vient la personne (#17966 ⊂ #17013)
+
+- Reprise : #17956 (carte web des positions, #16984) est menée par un réveil actif (commits de 13:13 à 13:19) ;
+  #17147 (« ensemble » dans une conversation close) a été réservée à 13:34 par un autre réveil
+  (`claude/cercles-ensemble-conversation-close`). Ce réveil n'avait rien écrit : il cède les deux.
+- Lot choisi : la tranche SERVEUR de l'icône de position par cercle (#17013), petite, prouvable en conteneur, et
+  préalable aux trois marqueurs. Issue #17966 ouverte sous #17013 (milestone #215).
+- Livré dans la PR : `location:share-changed` et `GET /relations/locations` portent `circle` (`FRIEND` · `CLOSE` ·
+  `BLOOD`), le niveau effectif du verdict qui ouvre `location.temporary` pour CE lecteur ; l'accès d'un lecteur est
+  `{précision, cercle}`, donc une montée ou une baisse de cercle à précision égale ressert la position ; le schéma
+  du rattrapage déclare le champ (enum) et retire toujours tout voisin. Champ additif : un ancien client l'ignore.
+- Décision écrite dans la PR : entre deux comptes de l'équipe, la loi rend le niveau Sang (#16623) ; le marqueur
+  le montre donc en Sang, comme les autres outils de cercle.
+- Ce qui reste de #17013 : les marqueurs web (après la fusion de #17956), iOS (#16983) et Android (#16985).
+- Prochain lot recommandé : la position temporaire sur iOS (#16983), qui dessinera directement le marqueur du cercle ;
+  sinon « ensemble » sur Android (#17100).
