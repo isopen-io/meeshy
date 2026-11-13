@@ -269,3 +269,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Le porteur a fusionné #17983 dans dev à 15:59 UTC ; #17182 fermée. Le run de preuve a fini rouge sur les trois tranches gateway, mais UNIQUEMENT sur `CallEventsHandler-*` (appels, hors lot) : ces suites passent sur dev à 17:20 UTC (14/14 relancés), rouge passager de dev à l'heure du run.
 - Aucun lot nouveau : le run a été consacré à la PR orpheline, comme le veut la routine.
 - Prochain lot recommandé : mener #17960, #17974, #18006 à la fusion s'ils restent ouverts, puis #16741 ou #16879 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 30 (17:40 UTC)
+
+- Lot : #18052. La personne qu'on fait entrer dans une communauté l'apprend (« Ajouté à la communauté Y »), dans SA langue (Prisme de cadrage, rang 4 témoigné), et le tap ouvre la communauté. Trois portes : invitation (`POST /communities/:id/invite`), ajout administrateur (`POST /communities/:id/members`, pas sur une réactivation déjà active), bascule en privée (#16723, au nom du créateur, seulement pour qui est réellement admis). Site unique `services/notifications/community-added.ts`, après la réponse.
+- La charge ne porte que `communityId` / `communityName` et l'acteur ; le nom part tel qu'écrit (#16786). Push : clé `communityId` sur la carte `data` (`''` = absent).
+- Web : destination `community` dans `target.ts` + son jumeau `sw-push.js` (parité 13 destinations), décodage `communityId`/`communityName` dans `record.ts`, `TargetLink`. iOS : `communityId` sur `NotificationContext`, `SocketNotificationEvent`, `NotificationPayload` et `NotificationNavContext` ; les deux aiguillages ouvrent le détail (iPhone `router.push`, iPad `rightPanelRoute`), repli conversation inchangé. Un ancien client ignore la clé et garde son comportement.
+- #16669 (invitation à accepter ou ajout direct) reste ouverte : l'annonce sert les deux réponses.
+- Gotcha : `NotificationService.ts` est à 3710/3761 lignes sous cliquet ; la clé push a été ajoutée à solde nul de lignes.

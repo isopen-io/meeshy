@@ -1192,10 +1192,10 @@ export class NotificationService {
                   || (params.metadata && 'commentId' in params.metadata ? String(params.metadata.commentId ?? '') : ''),
                 parentCommentId: params.context.parentCommentId
                   || (params.metadata && 'parentCommentId' in params.metadata ? String(params.metadata.parentCommentId ?? '') : ''),
-                // Navigation sociale iOS — requête d'ami (friend_request). Le
-                // handler iOS lit cette clé défensivement : absente →
-                // résolution via receivedRequests par senderId.
+                // Navigation sociale iOS — requête d'ami (friend_request) ; absente →
+                // résolution via receivedRequests par senderId. #18052 — la communauté rejointe.
                 friendRequestId: params.context.friendRequestId || '',
+                communityId: params.context.communityId || '',
                 // Indice de ROUTE — le nom d'écran que le tap doit ouvrir quand
                 // la notification ne porte ni conversation ni contenu social
                 // (les quatre notifications de réengagement, #5547/#5698 :

@@ -139,6 +139,7 @@ const ADRESSES = [
   [{ type: 'friend_request', friendRequestId: 'fr1' }, '/discover?onglet=requests&demandes=received'],
   [{ type: 'contact_joined', senderUsername: 'awa' }, '/u/awa'],
   [{ type: 'contact_recently_active', senderUsername: 'marie' }, '/u/marie'],
+  [{ type: 'community_invite', communityId: 'c1' }, '/communities/c1'],
   [{ type: 'login_new_device' }, '/settings'],
   [{ type: 'badge_earned' }, '/me/progression?section=badges'],
   [{ type: 'level_up', route: 'progression' }, '/me/progression?section=level'],
