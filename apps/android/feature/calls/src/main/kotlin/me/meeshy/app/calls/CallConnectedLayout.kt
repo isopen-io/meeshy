@@ -227,7 +227,8 @@ internal fun CallConnectedColumn(
         // #17327 : à deux le (…) fait sortir deux rails sur les bords, à plusieurs il déplie des rangées dans la pilule.
         val disposition = CallControlsDisposition.resolve(CallControlsDisposition.MAX_PARTICIPANTS_ON_RAILS, showsGroupGrid = groupStage != null)
         val stageMaxHeight = maxHeight
-        val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), CallGroupStageSizing.isCompactHeight(maxHeight.value))
+        val isCompactHeight = CallGroupStageSizing.isCompactHeight(maxHeight.value)
+        val rows = CallGroupStageSizing.rows(disposition.pillRows(available, chromeState.layer), isCompactHeight)
         Column(
             modifier = Modifier.matchParentSize().padding(MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -239,7 +240,7 @@ internal fun CallConnectedColumn(
             if (groupStage != null && gridClearance != null) {
                 groupStage(
                     Modifier.weight(1f).fillMaxWidth().padding(vertical = MeeshySpacing.md).glidesUnderTheBannerStack(gridClearance),
-                    CallGroupStageSizing.isCompactHeight(stageMaxHeight.value),
+                    isCompactHeight,
                 )
             } else if (!CallHeaderLaw.centersPeerBlock(videoStage)) {
                 // L'image est le pair : ni nom, ni chrono, ni barres au centre. Le temps et le signal

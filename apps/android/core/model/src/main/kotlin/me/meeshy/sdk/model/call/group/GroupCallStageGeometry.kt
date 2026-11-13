@@ -23,12 +23,6 @@ object GroupCallStageGeometry {
     /** La hauteur de la rangée du bandeau : la vignette et l'air de son halo, dessus et dessous. */
     const val STRIP_ROW_HEIGHT: Float = STRIP_TILE_HEIGHT + 2 * STRIP_HALO_PAD
 
-    /** La largeur au-delà de laquelle la grille ne s'étend plus : sur grand écran elle garde des marges latérales (W2). */
-    const val GRID_MAX_WIDTH: Float = 1040f
-
-    /** La marge de chaque côté de la grille, symétrique donc identique en droite-à-gauche. */
-    fun gridSideMargin(width: Float): Float = ((width - GRID_MAX_WIDTH) / 2f).coerceAtLeast(0f)
-
     fun rects(
         tileIds: List<String>,
         focus: GroupCallStageFocus,
@@ -87,13 +81,12 @@ object GroupCallStageGeometry {
     private fun grid(tileIds: List<String>, width: Float, height: Float, isCompactHeight: Boolean): Map<String, CallStageRect> {
         val layout = GroupCallGridLayout.layout(tileIds.size, isLandscape = width > height, isCompactHeight = isCompactHeight)
         val rows = tileIds.chunked(layout.columns)
-        val margin = gridSideMargin(width)
-        val cellWidth = (width - 2 * margin - SPACING * (layout.columns - 1)) / layout.columns
+        val cellWidth = (width - SPACING * (layout.columns - 1)) / layout.columns
         val cellHeight = (height - SPACING * (rows.size - 1)) / rows.size
         return buildMap {
             rows.forEachIndexed { row, ids ->
                 ids.forEachIndexed { column, id ->
-                    put(id, CallStageRect(margin + column * (cellWidth + SPACING), row * (cellHeight + SPACING), cellWidth, cellHeight))
+                    put(id, CallStageRect(column * (cellWidth + SPACING), row * (cellHeight + SPACING), cellWidth, cellHeight))
                 }
             }
         }
