@@ -1,6 +1,8 @@
 package me.meeshy.app.stories
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -64,11 +66,11 @@ class StoryCommentsOverlayComposeTest {
     }
 
     @Test
-    fun `an empty thread says there are no comments yet and invites the first one`() {
+    fun `an empty thread says there are no comments, in one line`() {
         show(StoryCommentsUiState())
 
-        compose.onNodeWithText("No comments yet").assertIsDisplayed()
-        compose.onNodeWithText("Be the first to comment!").assertIsDisplayed()
+        compose.onNodeWithText("No comments").assertIsDisplayed()
+        compose.onAllNodesWithText("Be the first to comment!").assertCountEquals(0)
     }
 
     @Test
@@ -76,7 +78,7 @@ class StoryCommentsOverlayComposeTest {
         show(StoryCommentsUiState(isOffline = true))
 
         compose.onNodeWithText("Couldn't load comments").assertIsDisplayed()
-        compose.onNodeWithText("No comments yet").assertDoesNotExist()
+        compose.onNodeWithText("No comments").assertDoesNotExist()
     }
 
     @Test
@@ -89,7 +91,7 @@ class StoryCommentsOverlayComposeTest {
 
         compose.onNodeWithText("Bonjour a").assertIsDisplayed()
         compose.onNodeWithText("Bonjour b").assertIsDisplayed()
-        compose.onNodeWithText("No comments yet").assertDoesNotExist()
+        compose.onNodeWithText("No comments").assertDoesNotExist()
     }
 
     @Test

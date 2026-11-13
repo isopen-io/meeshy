@@ -9,6 +9,7 @@ import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
@@ -40,11 +41,11 @@ class ReelRailVocabularyTest {
         likeCount = 0, isLiked = false, commentCount = 0, repostCount = 0, isBookmarked = false, bookmarkCount = 0,
     )
 
-    private fun show() {
+    private fun show(shown: ReelPresentation = reel) {
         compose.setContent {
             MeeshyTheme {
                 Box(Modifier.fillMaxSize().padding(end = 24.dp), contentAlignment = Alignment.CenterEnd) {
-                    ReelRail(reel = reel, quickEmojis = emptyList(), actions = ReelRailActions({}, { _, _ -> }, {}, {}, {}))
+                    ReelRail(reel = shown, quickEmojis = emptyList(), actions = ReelRailActions({}, { _, _ -> }, {}, {}, {}))
                 }
             }
         }
@@ -64,16 +65,27 @@ class ReelRailVocabularyTest {
     }
 
     @Test
-    fun `no caption of the rail is cut by its cell at 360 dp`() {
-        show()
+    fun `a counter of the rail is not cut by its cell at 360 dp`() {
+        show(reel.copy(likeCount = 1_200, commentCount = 34, bookmarkCount = 5, repostCount = 6, shareCount = 7))
         val captions = compose.onAllNodesWithTag(CAPTION_TAG, useUnmergedTree = true)
         val count = captions.fetchSemanticsNodes().size
         assertThat(count).isEqualTo(5)
         (0 until count).forEach { index ->
             val shown = captions[index].getBoundsInRoot()
             val full = captions[index].getUnclippedBoundsInRoot()
-            assertWithMessage("légende n°$index rognée par sa cellule").that(shown.width).isEqualTo(full.width)
+            assertWithMessage("compteur n°$index rogné par sa cellule").that(shown.width).isEqualTo(full.width)
         }
+    }
+
+    @Test
+    fun `a rail without any count writes no legend under its buttons, the names stay for the screen reader (#18090)`() {
+        show()
+        assertThat(compose.onAllNodesWithTag(CAPTION_TAG, useUnmergedTree = true).fetchSemanticsNodes()).isEmpty()
+        listOf("Commenter", "Repartager", "Envoyer", "Enregistrer").forEach { name ->
+            compose.onNodeWithContentDescription(name).assertExists()
+            assertThat(compose.onAllNodesWithText(name, useUnmergedTree = true).fetchSemanticsNodes()).isEmpty()
+        }
+        assertThat(compose.onAllNodesWithText("0", useUnmergedTree = true).fetchSemanticsNodes()).isEmpty()
     }
 
     private companion object {

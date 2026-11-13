@@ -86,3 +86,21 @@ class PostReachUniqueViewsTest {
         assertThat(PostReachFormatter.components("marie", true, 10, 5).uniqueViews).isNull()
     }
 }
+
+class PostReachNullFiguresTest {
+    @Test
+    fun `a null view or impression count is not written`() {
+        val c = PostReachFormatter.components("marie", true, viewCount = 0, impressionCount = 40, locale = Locale.ENGLISH)
+        assertThat(c.views).isNull()
+        assertThat(c.impressions).isEqualTo("40")
+    }
+
+    @Test
+    fun `both null leaves nothing but the pseudo`() {
+        val c = PostReachFormatter.components("marie", true, viewCount = 0, impressionCount = 0, uniqueViewCount = 0)
+        assertThat(c.views).isNull()
+        assertThat(c.impressions).isNull()
+        assertThat(c.uniqueViews).isNull()
+        assertThat(c.pseudo).isEqualTo("@marie")
+    }
+}

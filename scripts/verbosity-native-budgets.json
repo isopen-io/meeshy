@@ -43,10 +43,10 @@
       "explanations": 149
     },
     "android:feature/feed": {
-      "labels": 341,
-      "words": 1063,
-      "long": 5,
-      "explanations": 30
+      "labels": 335,
+      "words": 971,
+      "long": 3,
+      "explanations": 27
     },
     "android:feature/game": {
       "labels": 1269,
@@ -79,10 +79,10 @@
       "explanations": 59
     },
     "android:feature/stories": {
-      "labels": 818,
-      "words": 2755,
-      "long": 17,
-      "explanations": 48
+      "labels": 810,
+      "words": 2673,
+      "long": 16,
+      "explanations": 40
     },
     "android:sdk-core": {
       "labels": 4,
