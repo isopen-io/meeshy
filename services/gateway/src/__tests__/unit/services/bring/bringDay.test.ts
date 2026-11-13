@@ -31,4 +31,17 @@ describe('#14473 — le prochain minuit du Bring est le premier instant du jour 
     expect(bringDayOf(new Date('2026-10-31T12:00:00Z'), 'Asia/Tokyo')).toEqual({ day: '2026-10-31', resetsAt: new Date('2026-10-31T15:00:00.000Z') });
     expect(bringDayOf(new Date('2026-10-31T12:00:00Z'), 'Mars/Olympus')).toEqual({ day: '2026-10-31', resetsAt: new Date('2026-11-01T00:00:00.000Z') });
   });
+
+  it.each(['America/Santiago', 'America/Havana', 'Asia/Beirut', 'Europe/Paris', 'Australia/Lord_Howe', 'Pacific/Chatham', 'Asia/Kolkata'])(
+    '%s : chaque jour de 2026, le prochain minuit est le premier instant du jour suivant',
+    (zone) => {
+      const midis = Array.from({ length: 365 }, (_, i) => new Date(Date.UTC(2026, 0, 1, 12) + i * 86_400_000));
+      const fautes = midis.filter((midi) => {
+        const { day, resetsAt } = bringDayOf(midi, zone);
+        return bringDayOf(new Date(resetsAt.getTime() - 1_000), zone).day !== day || bringDayOf(resetsAt, zone).day === day;
+      });
+
+      expect(fautes).toEqual([]);
+    },
+  );
 });
