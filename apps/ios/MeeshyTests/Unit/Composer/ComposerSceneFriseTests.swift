@@ -583,6 +583,10 @@ final class ComposerSceneFrisePremiumTests: XCTestCase {
                 $0.range(of: #"(struct|class)\s+\w*(Trimmer|TrimStrip)\w*\s*[:<]"#, options: .regularExpression) != nil
             }
             XCTAssertTrue(rogneurs.isEmpty, "\(fichier.lastPathComponent) déclare un second rogneur : \(rogneurs)")
+            let pistes = code.components(separatedBy: "\n").filter {
+                $0.range(of: #"(struct|class)\s+(?!Meeshy|Composer)\w*TrimTrack\w*\s*[:<]"#, options: .regularExpression) != nil
+            }
+            XCTAssertTrue(pistes.isEmpty, "\(fichier.lastPathComponent) déclare une seconde piste de coupe : \(pistes) — `MeeshyTrimTrack` (kit) et `ComposerTrimTrack` (jusqu'à I9) sont les seules")
         }
     }
 }

@@ -153,7 +153,7 @@ nonisolated enum NSEAttachmentPolicy {
     }
 
     /// Ce qui survit au scellé : router le toucher (conversation, message,
-    /// post, commentaire, appel), dater, compter, nommer l'expéditeur, et
+    /// post, commentaire, communauté, appel), dater, compter, nommer l'expéditeur, et
     /// déclarer la protection. Rien qui décrive le contenu.
     ///
     /// Un appel entrant se scelle comme le reste : ses clés sont ADMISES une
@@ -164,6 +164,7 @@ nonisolated enum NSEAttachmentPolicy {
     static let sealedConversationKeys: Set<String> = [
         "type", "notificationId", "conversationId", "conversationTitle", "conversationType", "messageId",
         "postId", "postType", "commentId", "parentCommentId", "friendRequestId", "route",
+        "communityId",
         "contentId", "contentType",
         "senderId", "senderUsername", "senderDisplayName", "senderAvatar", "imageURL",
         "unreadCount", "badge", "createdAt", "ephemeralDuration", "effectFlags", "replacesActorSubject",
