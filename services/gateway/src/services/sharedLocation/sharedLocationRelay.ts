@@ -521,9 +521,11 @@ export async function sharedLocationSnapshotFor(
     const projection = projectSharedLocation(emitterId, state, allowed.has(emitterId) ? chosen : 'none', readerId);
     return projection ? [{ emitterId, state, projection }] : [];
   });
+  const seenBefore = await Promise.all(opened.map(async ({ emitterId, state }) => (await sharedLocationSeenAmong(deps.cache, emitterId, state.sessionId, [readerId])).length > 0));
   await Promise.all(opened.map(({ emitterId, state }) => markSharedLocationSeen(deps.cache, emitterId, state, [readerId], now)));
   const confirmed = opened.length > 0 ? await snapshotAllowed(deps, readerId, opened.map(({ emitterId }) => emitterId), now) : new Set<string>();
   const lost = opened.filter(({ emitterId }) => !confirmed.has(emitterId));
+  lost.filter((entry) => seenBefore[opened.indexOf(entry)]).forEach(({ emitterId }) => unserve(deps.io, readerId, emitterId));
   await Promise.all(lost.map(({ emitterId, state }) => unmarkSharedLocationSeen(deps.cache, emitterId, state.sessionId, [readerId])));
   const kept = opened.filter(({ emitterId }) => confirmed.has(emitterId));
   const current = await currentSharedLocationSessions(deps.cache, kept.map(({ emitterId }) => emitterId));
@@ -536,6 +538,8 @@ export async function sharedLocationSnapshotFor(
  * rattrapage la relit APRÈS avoir noté le lecteur servi (#16987, M1) : une baisse écrite
  * pendant la première lecture a pu envoyer sa fin avant que le lecteur soit noté, et la
  * réponse HTTP ne la contredit pas ; une baisse écrite après la relecture le trouve noté.
+ * Un lecteur qui avait déjà reçu le point en direct et que la relecture retire reçoit la
+ * fin : la baisse ne le trouvera plus parmi les servis. Qui n'avait rien vu n'apprend rien.
  */
 async function snapshotAllowed(deps: SharedLocationRelayDeps, readerId: string, emitterIds: readonly string[], now: number): Promise<ReadonlySet<string>> {
   const [law, usable] = await Promise.all([

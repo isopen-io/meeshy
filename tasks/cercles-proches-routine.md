@@ -481,3 +481,15 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (sharedLocation, rituel, blocage, purge, administration, suppression de compte, maintenance, relations, balayages,
   gardes et cliquets) 1 689/1 689 ; shared (`shared-location`, `relation-access`) 252/252.
 - Contre-audit adversarial des dernières corrections (b5837a213c, fede6d4463) relancé avant la fusion.
+- Contre-audit de 7e7dde1 : **bloquant**, deux constats élevés (un socket resté ouvert d'un compte désactivé ou
+  supprimé rangeait un nouveau partage, que la réactivation faisait revenir) et deux moyens (le rejeu d'une montée et
+  le rattrapage ne relisaient pas la loi après avoir noté le lecteur ; un lecteur dont l'accès se fermait sans rejeu,
+  un rôle d'équipe qui redescend, gardait le point). Corrigés en TDD : le démarrage relit l'émetteur après la
+  génération, le rejeu, la réconciliation et le rattrapage relisent après avoir noté, et l'éventail envoie la fin aux
+  servis dont l'accès est fermé. Le monde des témoins du relais sort dans un helper partagé (budget de taille).
+- Vérification des corrections : une régression trouvée (le rattrapage qui constatait une perte dénotait le lecteur
+  sans lui envoyer la fin, et la baisse ne le trouvait plus), corrigée : la fin part à qui avait reçu le point en
+  direct, rien à qui n'avait rien vu. Chaque correction a son témoin, prouvé rouge sur la tête d'avant.
+- Constats faibles mis en suivi : #17992 (ligne de maille au franchissement, purge annulée, fin perdue sans socket,
+  `MGET` sous Redis Cluster, p95 de la relecture, rejeu au changement de rôle).
+- Prochain lot recommandé : #16983 (position temporaire sur iOS, la référence), puis l'icône par cercle (#17013).

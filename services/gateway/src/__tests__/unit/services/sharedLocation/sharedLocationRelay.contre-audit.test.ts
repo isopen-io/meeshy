@@ -91,6 +91,45 @@ describe('un point lu avant une baisse ne survit pas à la fin (M1)', () => {
   });
 });
 
+describe('le rattrapage qui constate une perte ne la tait pas (vérification des corrections)', () => {
+  [0, 1, 2].forEach((passer) => {
+    it(`un lecteur servi en direct, retiré par la relecture du rattrapage, reçoit la fin (lecture suspendue après ${passer})`, async () => {
+      const m = monde();
+      await demarrer(m);
+      m.emissions.length = 0;
+
+      m.suspendreProchaineLecture(passer);
+      const rattrapage = sharedLocationSnapshotFor(m.deps, AMI, {});
+      await tick();
+      const avant = await captureSharedLocationAccess(m.deps, { userA: EMETTEUR, userB: AMI });
+      await m.lier(EMETTEUR, AMI, 'ACQUAINTANCE');
+      m.relacherLecture();
+      const items = (await rattrapage).items;
+      await refreshSharedLocationBetween(m.deps, { userA: EMETTEUR, userB: AMI, before: avant });
+
+      expect(items).toEqual([]);
+      expect(m.vers(AMI).at(-1)?.event).toBe(SERVER_EVENTS.SHARED_LOCATION_ENDED);
+    });
+  });
+
+  it('un lecteur désigné qui n\'avait rien vu et que la relecture retire n\'apprend rien', async () => {
+    const m = monde();
+    await m.lier(EMETTEUR, AMI, 'ACQUAINTANCE');
+    await demarrer(m);
+    await m.lier(EMETTEUR, AMI, 'FRIEND');
+    m.emissions.length = 0;
+
+    m.suspendreProchaineLecture();
+    const rattrapage = sharedLocationSnapshotFor(m.deps, AMI, {});
+    await tick();
+    await m.lier(EMETTEUR, AMI, 'ACQUAINTANCE');
+    m.relacherLecture();
+
+    expect((await rattrapage).items).toEqual([]);
+    expect(m.vers(AMI)).toEqual([]);
+  });
+});
+
 describe('un accès fermé sans rejeu se referme à la position suivante (M2)', () => {
   it('un collègue de l\'équipe redevenu utilisateur ordinaire reçoit la fin, une fois', async () => {
     const m = monde({ users: [{ id: MODO, role: 'MODERATOR' }, { id: ADMIN, role: 'ADMIN' }] });
