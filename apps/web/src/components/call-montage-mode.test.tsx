@@ -218,6 +218,20 @@ describe('CallMontageMode', () => {
     else Object.defineProperty(HTMLCanvasElement.prototype, 'captureStream', original);
   });
 
+  test('pendant une vidéo, le stop passe AU-DESSUS de la barre et du carrousel : sur 320 × 568, ils montent jusqu’au centre du gabarit (#17903)', async () => {
+    Object.defineProperty(HTMLCanvasElement.prototype, 'captureStream', { configurable: true, value: () => ({ getVideoTracks: () => [{ kind: 'video', stop: () => undefined }] }) });
+    const view = mount();
+    await view.press('[data-call-record-key]');
+    const layer = (element: Element | null | undefined): number => Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(element?.className ?? '')?.[1] ?? 0);
+    const stop = view.find('[data-call-recording]');
+    expect(stop).not.toBeNull();
+    expect(layer(stop)).toBeGreaterThan(layer(view.find('[data-call-montage-controls]')));
+    await view.press('[data-call-record-stop]');
+    await act(async () => {});
+    view.done();
+    delete (HTMLCanvasElement.prototype as { captureStream?: unknown }).captureStream;
+  });
+
   test('quitter le mode pendant une vidéo l’enregistre quand même (#8625)', async () => {
     Object.defineProperty(HTMLCanvasElement.prototype, 'captureStream', { configurable: true, value: () => ({ getVideoTracks: () => [{ kind: 'video', stop: () => undefined }] }) });
     const view = mount();

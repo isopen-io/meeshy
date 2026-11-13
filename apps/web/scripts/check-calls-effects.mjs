@@ -20,7 +20,7 @@
  *     Effets, Écran — chaque bouton fait 44, porte son disque de verre sans flou à lui, et le (…) ne
  *     les double pas (#8432, #8550, #8626) ;
  *  4. « Effets » entre dans le MODE Effets (#8578) : l'en-tête, la pilule et
- *     ses rangées partent, ma vidéo prend tout l'écran ; « Visage · Couleur »
+ *     ses rangées partent, ma vidéo prend tout l’écran ; « Visage · Couleur · Cadres » (#17915)
  *     au-dessus d'UN carrousel centré en bas ; « Doré » remplace la piste
  *     envoyée par la piste traitée, et le pair continue de DÉCODER des images
  *     (aucune image perdue) ; plus de déclencheur : l'indice « Deux tapes :
@@ -331,7 +331,7 @@ try {
       await page.mouse.up();
       check(await until(page, (from) => document.querySelector('[data-call-effects-companions]')?.getAttribute('data-call-effects-companions-corner') !== from, startCorner), `${label} : glissé de l'autre côté, il y reste (${startCorner} → l'autre coin)`);
       const categories = await page.$$eval('[data-call-effects-category]', (tabs) => tabs.map((tab) => [tab.getAttribute('data-call-effects-category'), tab.getAttribute('aria-pressed'), tab.textContent]));
-      check(JSON.stringify(categories) === JSON.stringify([['face', 'true', 'Visage'], ['color', 'false', 'Couleur']]), `${label} : « Visage · Couleur », Visage d'abord (${JSON.stringify(categories)})`);
+      check(JSON.stringify(categories) === JSON.stringify([['face', 'true', 'Visage'], ['color', 'false', 'Couleur'], ['frames', 'false', 'Cadres']]), `${label} : la rangée commune « Visage · Couleur · Cadres », Visage d'abord (#17915) (${JSON.stringify(categories)})`);
       const carousel = await page.$eval('[data-call-mode-carousel]', (element) => {
         const box = element.getBoundingClientRect();
         return { center: Math.round(box.left + box.width / 2), bottom: Math.round(box.bottom), overflowX: getComputedStyle(element.querySelector('[data-call-row-scroll]')).overflowX };
@@ -416,7 +416,7 @@ try {
       // ------------------------------------------------ 5 bis. la pile d'effets : l'appui long sur (+) liste ce qui est appliqué (#17903)
       check(await holdAddLook(page), `${label} : l'appui long sur (+) liste les effets appliqués`);
       const layers = await page.$$eval('[data-call-effect-layers] [data-call-effect-layer]', (items) => items.map((item) => item.getAttribute('data-call-effect-layer')));
-      check(layers.length >= 1 && layers.length <= 3 && layers[0] === 'color' && layers.includes('face'), `${label} : du dessus au dessous, trois couches au plus (${layers.join(' > ')})`);
+      check(layers.length >= 1 && layers.length <= 3 && layers[0] === 'face' && layers.includes('color'), `${label} : du dessus au dessous, trois couches au plus — « Éruption », posée après « Doré », est au-dessus (${layers.join(' > ')})`);
       const undoHeights = await page.$$eval('[data-call-effect-layer-undo]', (buttons) => buttons.map((button) => button.getBoundingClientRect().height));
       check(undoHeights.length > 0 && undoHeights.every((height) => height >= TAP_FLOOR - 0.5), `${label} : chaque ligne de la liste fait ${TAP_FLOOR} au moins`);
       check((await page.getAttribute('[data-call-effects-add-look]', 'aria-keyshortcuts')) === 'Shift+Enter', `${label} : le clavier a sa voie : Maj + Entrée sur (+)`);

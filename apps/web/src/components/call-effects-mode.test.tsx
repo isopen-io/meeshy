@@ -402,6 +402,18 @@ describe('CallEffectsMode', () => {
     expect(view.released).toEqual(['video']);
     view.done();
   });
+  test('pendant une vidéo, le stop passe AU-DESSUS de la barre et du carrousel, qui peuvent monter jusqu’au centre (#17903)', async () => {
+    const view = mount();
+    await view.settle('[data-call-record-key]');
+    const layer = (element: Element | null | undefined): number => Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(element?.className ?? '')?.[1] ?? 0);
+    const stop = view.find('[data-call-recording]');
+    expect(stop).not.toBeNull();
+    expect(layer(stop)).toBeGreaterThan(layer(view.find('[data-call-mode-rider]')?.parentElement));
+    await view.settle('[data-call-record-stop]');
+    await act(async () => {});
+    view.done();
+  });
+
   test('les autres restent visibles : un bloc nommé, en haut, HORS de l’aperçu capturé, qu’on touche (#8737)', () => {
     const view = mount({ companions: [companion('amina')] });
     const block = view.find('[data-call-effects-companions]');
