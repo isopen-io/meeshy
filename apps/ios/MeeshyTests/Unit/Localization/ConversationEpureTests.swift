@@ -102,7 +102,6 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.send.e2ee.servedWithoutEndToEnd": "Serveur sans chiffrement : message non parti. Voir la fiche Chiffrement.",
         "conversation.send.e2ee.unkeptOutsideConversation": "Message chiffré non gardé : ouvrez la conversation pour le réécrire.",
         "conversation.view.delete_for_everyone.hint": "Pour tout le monde : jusqu’à 2 h après l’envoi.",
-        "conversation.voiceConsent.message": "Autorisez votre profil vocal : vos vocaux seront traduits avec votre voix.",
         "message.translation.e2ee.serverRefused": "Chiffrée de bout en bout : traduite sur votre appareil, jamais par le serveur.",
         "share.link.create.access.account_required": "Compte Meeshy",
         "share.link.create.access.birthday_required": "Date de naissance",
@@ -225,7 +224,6 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.settings.permissions.slowMode.note",
         "conversation.settings.permissions.slowMode.question",
         "conversation.view.delete_for_everyone.hint",
-        "conversation.voiceConsent.message",
         "message.translation.e2ee.serverRefused",
         "share.link.create.access.account_required",
         "share.link.create.access.birthday_required",
@@ -350,6 +348,22 @@ final class ConversationEpureTests: XCTestCase {
     }
 
     // MARK: - Le talkie : la phrase qui le dit est visible, le (i) répond à une question
+
+    /// Un consentement ne se raccourcit pas au point de taire ce qu'il autorise (revue #18078) : la transcription,
+    /// la traduction dans la langue de chaque destinataire ET la voix clonée, dans les sept langues.
+    func test_voiceConsent_saysEverythingItAuthorizes_inEveryLanguage() throws {
+        let app = try Self.catalog(Self.appCatalogPath)
+        let consent = try XCTUnwrap(app["conversation.voiceConsent.message"])
+        let french = try XCTUnwrap(consent["fr"])
+        for clause in ["transcrits", "traduits", "la langue de chaque destinataire", "avec votre voix"] {
+            XCTAssertTrue(french.contains(clause), "le consentement tait « \(clause) » : \(french)")
+        }
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(consent[language], language)
+            XCTAssertNotEqual(value, french, "\(language) : copié du français")
+            XCTAssertGreaterThan(value.count, 80, "\(language) : le consentement a été raccourci : \(value)")
+        }
+    }
 
     func test_talkie_theInfoIsNamedByItsQuestion_andTheVisibleSentenceSaysWhatItIs() throws {
         let app = try Self.catalog(Self.appCatalogPath)

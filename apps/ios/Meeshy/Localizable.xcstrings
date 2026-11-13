@@ -117679,43 +117679,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسمح بملفك الصوتي: ستُترجم رسائلك الصوتية بصوتك."
+            "value": "اسمح بإنشاء بصمتك الصوتية ليتم تفريغ رسائلك الصوتية وترجمتها تلقائيًا إلى لغة كل مستلم — بصوتك أيضًا."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erlaube dein Stimmprofil: Deine Sprachnachrichten werden mit deiner Stimme übersetzt."
+            "value": "Erlaube die Erstellung deines Sprachprofils, damit deine Sprachnachrichten automatisch transkribiert und in die Sprache jedes Empfängers übersetzt werden — auch mit deiner Stimme."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Allow your voice profile: your voice messages will be translated in your own voice."
+            "value": "Allow your voice profile to be created so your voice messages are automatically transcribed and translated into each recipient's language — in your own voice too."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autoriza tu perfil de voz: tus audios se traducirán con tu voz."
+            "value": "Permite crear tu perfil de voz para que tus mensajes de voz se transcriban y traduzcan automáticamente al idioma de cada destinatario, incluso con tu voz."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autorisez votre profil vocal : vos vocaux seront traduits avec votre voix."
+            "value": "Autorisez la définition de votre profil vocal pour que vos messages vocaux soient transcrits et traduits automatiquement dans la langue de chaque destinataire — y compris avec votre voix."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autorizza il tuo profilo vocale: i tuoi vocali saranno tradotti con la tua voce."
+            "value": "Consenti la creazione del tuo profilo vocale affinché i tuoi messaggi vocali vengano trascritti e tradotti automaticamente nella lingua di ogni destinatario — anche con la tua voce."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Autorize seu perfil de voz: seus áudios serão traduzidos com a sua voz."
+            "value": "Permita a criação do seu perfil de voz para que suas mensagens de voz sejam transcritas e traduzidas automaticamente no idioma de cada destinatário — inclusive com a sua voz."
           }
         }
       }
