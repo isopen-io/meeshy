@@ -154,6 +154,7 @@ private fun TranscriptFailure(onRetry: () -> Unit) {
 @Composable
 private fun TranscriptLines(state: CallTranscriptState.Ready, accent: Color, onDelete: () -> Unit) {
     var showOriginal by rememberSaveable { mutableStateOf(false) }
+    val reduceMotion = rememberCallReduceMotion()
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
         TranscriptHeader()
         Column(
@@ -165,7 +166,7 @@ private fun TranscriptLines(state: CallTranscriptState.Ready, accent: Color, onD
         ) {
             state.lines.forEach { line ->
                 val kind = line.captureKind
-                if (kind == null) TranscriptRow(line, showOriginal) else CaptureRow(line, kind)
+                if (kind == null) TranscriptRow(line, showOriginal, reduceMotion) else CaptureRow(line, kind)
             }
         }
         if (state.canShowOriginal) OriginalToggle(showOriginal, accent) { showOriginal = it }
@@ -239,7 +240,7 @@ private fun TranscriptDeletion(onDelete: () -> Unit) {
 }
 
 @Composable
-private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean) {
+private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean, reduceMotion: Boolean) {
     val text = line.text(showOriginal)
     val original = line.originalBelow(showsOriginalInstead = showOriginal)
     val originalWord = stringResource(R.string.call_captions_original)
@@ -272,10 +273,10 @@ private fun TranscriptRow(line: CallTranscriptLine, showOriginal: Boolean) {
                 )
             }
         }
-        val textColor = CallSpeakerColor.textHex(line.speakerId.ifBlank { line.speakerName }, servesTranslation = !showOriginal && line.translated != null, mode = scheme)
+        val textColor = CallSpeakerColor.textHex(line.speakerId.ifBlank { line.speakerName }, servesTranslation = line.showsTranslation(showOriginal), mode = scheme)
             ?.let { hexColor(it, MeeshyTheme.tokens.textPrimary) } ?: MeeshyTheme.tokens.textPrimary
         Text(text, style = MaterialTheme.typography.bodyMedium, color = textColor)
-        CallCaptionOriginalBelow(original, reduceMotion = rememberCallReduceMotion(), ink = MeeshyTheme.tokens.textSecondary)
+        CallCaptionOriginalBelow(original, reduceMotion, ink = MeeshyTheme.tokens.textSecondary)
     }
 }
 

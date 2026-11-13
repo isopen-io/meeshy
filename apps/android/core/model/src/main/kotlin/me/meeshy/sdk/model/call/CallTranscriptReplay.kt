@@ -5,12 +5,11 @@ import me.meeshy.sdk.lang.PrismTranslationResolver
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /**
- * Who reads a replayed transcript: their id (to recognise their own words), their
- * name (kept for callers: their own lines read « Vous », never it), and their prism (`ReaderPrism.resolve`) to elect the served translation.
+ * Who reads a replayed transcript: their id (to recognise their own words, which read « Vous »)
+ * and their prism (`ReaderPrism.resolve`) to elect the served translation.
  */
 data class CallTranscriptReader(
     val userId: String?,
-    val name: String?,
     val prism: List<String>,
 )
 
@@ -32,18 +31,21 @@ data class CallTranscriptLine(
     /** #16665 — a capture line: [speakerName] is who captured (blank for a call-recording bound), no text. */
     val captureKind: CallCaptureKind? = null,
 ) {
-    /** What the row shows: the original when asked for, or when nothing was translated. */
-    fun text(showOriginal: Boolean): String = if (showOriginal) original else translated ?: original
-
     /** A sentence is served translated only when it is not mine, not a capture, and the translation says something. */
     val servesTranslation: Boolean get() = !isLocal && captureKind == null && !translated.isNullOrBlank()
+
+    /** Whether the row shows the served translation (its text and its ink): served, and the toggle not on the original. */
+    fun showsTranslation(showOriginal: Boolean): Boolean = servesTranslation && !showOriginal
+
+    /** What the row shows: the served translation, else the original. */
+    fun text(showOriginal: Boolean): String = translated?.takeIf { showsTranslation(showOriginal) } ?: original
 
     /**
      * #17340 — the original of a translated sentence, unfolded below it. Never for my own sentence, never without a
      * translation, never when the toggle already shows it in place of the translation.
      */
     fun originalBelow(showsOriginalInstead: Boolean): String? =
-        original.takeIf { servesTranslation && !showsOriginalInstead }
+        original.takeIf { showsTranslation(showsOriginalInstead) }
 }
 
 /**

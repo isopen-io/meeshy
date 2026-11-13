@@ -38,7 +38,7 @@ class CallDetailJournalWiringTest {
         val sections = code("CallDetailSections.kt")
 
         assertThat(sections).contains("line.originalBelow(showsOriginalInstead = showOriginal)")
-        assertThat(sections).contains("CallCaptionOriginalBelow(original, reduceMotion = rememberCallReduceMotion(), ink = MeeshyTheme.tokens.textSecondary)")
+        assertThat(sections).contains("CallCaptionOriginalBelow(original, reduceMotion, ink = MeeshyTheme.tokens.textSecondary)")
         assertThat(code("CallCaptionRow.kt")).contains("ink = MeeshyMediaChromeColors.ChromeSecondary")
     }
 
@@ -49,7 +49,7 @@ class CallDetailJournalWiringTest {
         assertThat(sections).doesNotContain("IconButton(")
         assertThat(sections).contains("toggleable(value = showOriginal, role = Role.Switch")
         assertThat(sections).contains("minHeight = 48.dp")
-        assertThat(sections.indexOf("OriginalToggle(showOriginal, accent)")).isGreaterThan(sections.indexOf("TranscriptRow(line, showOriginal)"))
+        assertThat(sections.indexOf("OriginalToggle(showOriginal, accent)")).isGreaterThan(sections.indexOf("TranscriptRow(line, showOriginal, reduceMotion)"))
         assertThat(sections.indexOf("OriginalToggle(showOriginal, accent)")).isLessThan(sections.indexOf("TranscriptDisclaimer()\n"))
     }
 
@@ -59,5 +59,13 @@ class CallDetailJournalWiringTest {
 
         assertThat(sections).contains("servesTranslation = line.showsTranslation(showOriginal)")
         assertThat(sections).doesNotContain("line.translated != null")
+    }
+
+    @Test
+    fun `le reglage Reduire les animations se lit une fois pour tout le journal, jamais une fois par phrase`() {
+        val sections = code("CallDetailSections.kt")
+
+        assertThat(Regex("""rememberCallReduceMotion\(\)""").findAll(sections).count()).isEqualTo(1)
+        assertThat(sections.indexOf("rememberCallReduceMotion()")).isLessThan(sections.indexOf("state.lines.forEach"))
     }
 }
