@@ -35,7 +35,7 @@ internal data class ExplanationTopicLayout(val topic: Topic, val visible: List<F
 
 private fun Topic.notedFacts(): Set<Fact> = when (this) {
     Topic.WHO_READS -> setOf(Fact.HYBRID_SECOND_LAYER)
-    Topic.DEVICES -> setOf(Fact.DEVICE_LIMIT, Fact.RESTORED_DEVICE_IS_NEW)
+    Topic.DEVICES -> setOf(Fact.DEVICE_LIMIT)
     Topic.SWITCHING -> setOf(Fact.WHO_MAY_TOGGLE, Fact.SWITCH_KEEPS_HISTORY)
     Topic.PERMANENCE -> setOf(Fact.SERVER_CANNOT_TURN_IT_OFF)
     else -> emptySet()

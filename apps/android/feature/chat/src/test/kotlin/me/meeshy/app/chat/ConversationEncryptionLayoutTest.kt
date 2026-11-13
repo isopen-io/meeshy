@@ -14,11 +14,11 @@ class ConversationEncryptionLayoutTest {
         ConversationEncryptionExplanation.of(mode, isDirect).layout(footerStatesFinality = footer).associateBy { it.topic }
 
     @Test
-    fun `an end to end conversation keeps one key per device visible and puts the two others behind the phone question`() {
+    fun `an end to end conversation keeps visible that a restored phone does not read the past, only the device cap goes behind its question`() {
         val devices = layout("e2ee").getValue(Topic.DEVICES)
 
-        assertThat(devices.visible).containsExactly(Fact.ONE_KEY_PER_DEVICE)
-        assertThat(devices.noted).containsExactly(Fact.DEVICE_LIMIT, Fact.RESTORED_DEVICE_IS_NEW).inOrder()
+        assertThat(devices.visible).containsExactly(Fact.ONE_KEY_PER_DEVICE, Fact.RESTORED_DEVICE_IS_NEW).inOrder()
+        assertThat(devices.noted).containsExactly(Fact.DEVICE_LIMIT)
         assertThat(devices.questionRes).isEqualTo(R.string.encryption_note_devices_question)
     }
 

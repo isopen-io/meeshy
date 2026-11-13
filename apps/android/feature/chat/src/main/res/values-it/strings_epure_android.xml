@@ -2,7 +2,7 @@
 <resources>
     <string name="action_more">Altro</string>
     <string name="conversation_options_section_actions">Altro</string>
-    <string name="encryption_note_devices_question">E se cambio telefono?</string>
+    <string name="encryption_note_devices_question">Quanti dispositivi cifrati posso avere?</string>
     <string name="encryption_note_switching_question">Chi può cambiare la modalità e che ne è della cronologia?</string>
     <string name="share_content_refused_source">Meeshy non apre un percorso di file. Condividi il file stesso.</string>
     <string name="share_capture_warning">Pubblicare questa acquisizione la rende visibile oltre questa conversazione.</string>

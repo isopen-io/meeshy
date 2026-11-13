@@ -2,7 +2,7 @@
 <resources>
     <string name="action_more">More</string>
     <string name="conversation_options_section_actions">More</string>
-    <string name="encryption_note_devices_question">What if I change phones?</string>
+    <string name="encryption_note_devices_question">How many encrypted devices can I have?</string>
     <string name="encryption_note_switching_question">Who can change the mode, and what happens to the history?</string>
     <string name="share_content_refused_source">Meeshy can\'t open a file path. Share the file itself.</string>
     <string name="share_capture_warning">Publishing this capture shows it beyond this conversation.</string>

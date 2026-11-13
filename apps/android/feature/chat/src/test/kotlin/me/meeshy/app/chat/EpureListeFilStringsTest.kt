@@ -111,7 +111,7 @@ class EpureListeFilStringsTest {
                 assertWithMessage("$folder:$key").that(strings.getValue(key)).containsMatch("[?؟]")
             }
         }
-        assertThat(epure("values-fr")["encryption_note_devices_question"]).isEqualTo("Et si je change de téléphone ?")
+        assertThat(epure("values-fr")["encryption_note_devices_question"]).isEqualTo("Combien d'appareils chiffrés puis-je avoir ?")
         assertThat(epure("values-fr")["encryption_note_switching_question"]).isEqualTo("Qui peut changer le mode, et que devient l'historique ?")
     }
 
