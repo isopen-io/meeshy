@@ -694,3 +694,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   la règle de la routine veut une CI verte ; elle fusionnera dès que `dev` sera reverdi (ou sur décision du porteur).
 - Prochain lot recommandé : #16983 (position temporaire sur iOS, émettre + carte), puis #17147 (la porte « ensemble »
   lit la conversation close), puis l'icône de position par cercle (#17013).
+## 2026-11-13 — réveil repris (14:20) : l'écoute d'un Proche sur l'avatar de la liste web (#16733)
+
+- Reprise : onze branches de la routine écrites dans les 45 dernières minutes par des réveils vivants (#17100 Android,
+  #16984 web, #16983 iOS, #17013, #17023, #16987…) ; ce réveil n'en touche aucune. Le volet WEB de #16733 (la rangée
+  d'un direct dans la liste) n'était écrit par personne : branche `claude/cercles-16733-web` réservée avant écriture.
+- Lot : `LensRow` lit l'écoute servie du pair (`useListeningBand`, la clé de l'en-tête du fil) et la pose sur l'avatar
+  de 44 px, iso `ConversationRowAvatar` (iOS, #17083) ; un groupe n'en porte jamais ; le lien principal de la rangée la
+  dit au lecteur d'écran (`listening.spoken`, une fois), le bandeau restant décoratif. Aucun libellé neuf.
+- Gates locaux : `lens-row-listening.test.tsx` 5/5 (rouge avant le correctif sur 3 cas) ; rangée, focale, avatar et
+  écoute 492/492 ; `tsc --noEmit` vert ; `vite build` et `measure-weight` verts.
+- Ce qui reste de #16733 : décision #17085 (écoute sur une conversation verrouillée par PIN), recette appareil.
+- En chemin : la tranche 2/3 de la passerelle était rouge sur `dev` (six suites `CallEventsHandler-*` moquaient
+  `socket-rate-limiter` sans `callSignalBudgetId`, ajouté par dda1585572) ; corrigé dans ce lot, 2282/2282.
+- Prochain lot recommandé : mener à la fusion les PR ouvertes ; « ensemble » sur Android (#17100) est tenu par le
+  réveil 28.
