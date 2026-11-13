@@ -84,12 +84,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "reading_mode.bubbles.subtitle",
-          "androidName": "reading_mode_bubbles_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "reading_mode.river.never",
           "androidName": "reading_mode_river_never",
           "status": "adopted"

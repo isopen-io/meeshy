@@ -13,4 +13,7 @@
     <string name="voiceProfile_processing_description">Elaborazione in corso, qualche minuto.</string>
     <string name="voiceProfile_recording_description">Leggi il testo ad alta voce: almeno 3 campioni da 10 secondi.</string>
     <string name="audio_consent_notice_message">Attiva il consenso vocale per trascrivere e tradurre i tuoi audio.</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">Per ridere di tutto, anche del peggio</string>
+    <string name="sticker_sheet_intent_quotidien_hint">Per dire cosa stai facendo: caffè, pasto, lavoro, viaggio</string>
+    <string name="sticker_sheet_intent_bonjour_hint">Per salutare, ringraziare, scusarsi</string>
 </resources>

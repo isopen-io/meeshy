@@ -13,4 +13,7 @@
     <string name="voiceProfile_processing_description">المعالجة جارية، بضع دقائق.</string>
     <string name="voiceProfile_recording_description">اقرأ النص بصوت عالٍ: 3 عيّنات على الأقل، 10 ثوانٍ لكل منها.</string>
     <string name="audio_consent_notice_message">فعّل الموافقة الصوتية لنسخ رسائلك الصوتية وترجمتها.</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">للضحك على كل شيء حتى الأسوأ</string>
+    <string name="sticker_sheet_intent_quotidien_hint">لتقول ما تفعله: قهوة، وجبة، عمل، طريق</string>
+    <string name="sticker_sheet_intent_bonjour_hint">للتحية والشكر والاعتذار</string>
 </resources>

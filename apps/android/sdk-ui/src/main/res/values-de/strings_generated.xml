@@ -394,7 +394,6 @@
     <string name="pull_refresh_done">Aktualisiert</string>
     <string name="pull_refresh_refreshing">Wird aktualisiert</string>
     <string name="reactions_more">Weitere Reaktionen</string>
-    <string name="reading_mode_bubbles_subtitle">Die klassischen Sprechblasen</string>
     <string name="reading_mode_bubbles_title">Blasen</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Wechselt zum nächsten Modus. Lange drücken für die Modusliste.</string>
     <string name="reading_mode_chip_a11y_label">Lesemodus: %1$s</string>
@@ -478,7 +477,6 @@
     <string name="retouch_tool_sound">Ton</string>
     <string name="retouch_tool_text">Text</string>
     <string name="retouch_tool_trim">Kürzen</string>
-    <string name="settings_info_button_label">Mehr über %1$s erfahren</string>
     <string name="skeleton_feed_post_loading">Ein Beitrag wird geladen</string>
     <string name="skeleton_link_row_loading">Ein Link wird geladen</string>
     <string name="skeleton_profile_loading">Profil wird geladen</string>
@@ -496,15 +494,12 @@
     <string name="sticker_sheet_instants_title">Momente</string>
     <string name="sticker_sheet_intent_amour_hint">Für ein liebes Wort, einen Kuss, eine Umarmung oder eine Liebeserklärung</string>
     <string name="sticker_sheet_intent_amour_title">Ich liebe dich</string>
-    <string name="sticker_sheet_intent_bonjour_hint">Zum Grüßen, Danken, Zustimmen, Entschuldigen oder Gute-Nacht-Sagen</string>
     <string name="sticker_sheet_intent_bonjour_title">Hallo, danke</string>
     <string name="sticker_sheet_intent_coup_de_mou_hint">Für Traurigkeit, Kummer, Müdigkeit oder Lust auf Schlaf</string>
     <string name="sticker_sheet_intent_coup_de_mou_title">Durchhänger</string>
     <string name="sticker_sheet_intent_fete_hint">Für gute Nachrichten, einen Erfolg, einen Geburtstag oder einen Lachanfall</string>
     <string name="sticker_sheet_intent_fete_title">Lachen und feiern</string>
-    <string name="sticker_sheet_intent_humour_noir_hint">Um über alles zu lachen, sogar das Schlimmste: totlachen, Gespenster und Grabsteine</string>
     <string name="sticker_sheet_intent_humour_noir_title">Schwarzer Humor</string>
-    <string name="sticker_sheet_intent_quotidien_hint">Um zu sagen, was du gerade machst: Kaffee, Essen, Arbeit, unterwegs, verspätet</string>
     <string name="sticker_sheet_intent_quotidien_title">Alltag</string>
     <string name="sticker_sheet_intent_rale_hint">Für Ärger, Wut, Eifersucht oder um auf Abstand zu gehen</string>
     <string name="sticker_sheet_intent_rale_title">Meckern und schmollen</string>

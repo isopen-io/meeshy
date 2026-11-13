@@ -13,4 +13,7 @@
     <string name="voiceProfile_processing_description">Verarbeitung läuft, einige Minuten.</string>
     <string name="voiceProfile_recording_description">Text laut lesen: mindestens 3 Proben à 10 Sekunden.</string>
     <string name="audio_consent_notice_message">Aktiviere die Sprach-Einwilligung, um deine Audios zu transkribieren und zu übersetzen.</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">Um über alles zu lachen, sogar das Schlimmste</string>
+    <string name="sticker_sheet_intent_quotidien_hint">Um zu sagen, was du gerade machst: Kaffee, Essen, Arbeit, unterwegs</string>
+    <string name="sticker_sheet_intent_bonjour_hint">Zum Grüßen, Danken, Entschuldigen</string>
 </resources>

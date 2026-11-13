@@ -414,7 +414,6 @@
     <string name="pull_refresh_done">تم التحديث</string>
     <string name="pull_refresh_refreshing">جارٍ التحديث</string>
     <string name="reactions_more">مزيد من التفاعلات</string>
-    <string name="reading_mode_bubbles_subtitle">الفقاعات الكلاسيكية</string>
     <string name="reading_mode_bubbles_title">فقاعات</string>
     <string name="reading_mode_chip_a11y_hint_cycle">ينتقل إلى الوضع التالي. اضغط مطولاً لعرض قائمة الأوضاع.</string>
     <string name="reading_mode_chip_a11y_label">وضع القراءة: %1$s</string>
@@ -498,7 +497,6 @@
     <string name="retouch_tool_sound">الصوت</string>
     <string name="retouch_tool_text">نص</string>
     <string name="retouch_tool_trim">قص</string>
-    <string name="settings_info_button_label">معرفة المزيد عن %1$s</string>
     <string name="skeleton_feed_post_loading">جارٍ تحميل منشور</string>
     <string name="skeleton_link_row_loading">جارٍ تحميل رابط</string>
     <string name="skeleton_profile_loading">جارٍ تحميل الملف الشخصي</string>
@@ -516,15 +514,12 @@
     <string name="sticker_sheet_instants_title">لحظات</string>
     <string name="sticker_sheet_intent_amour_hint">لكلمة لطيفة أو قبلة أو عناق أو اعتراف بالحب</string>
     <string name="sticker_sheet_intent_amour_title">قل أحبك</string>
-    <string name="sticker_sheet_intent_bonjour_hint">للتحية والشكر والموافقة والاعتذار أو لتمنّي ليلة سعيدة</string>
     <string name="sticker_sheet_intent_bonjour_title">مرحبًا، شكرًا</string>
     <string name="sticker_sheet_intent_coup_de_mou_hint">للحزن أو الأسى أو التعب أو الرغبة في النوم</string>
     <string name="sticker_sheet_intent_coup_de_mou_title">إحباط وتعب</string>
     <string name="sticker_sheet_intent_fete_hint">لخبر سار أو نجاح أو عيد ميلاد أو نوبة ضحك</string>
     <string name="sticker_sheet_intent_fete_title">اضحك واحتفل</string>
-    <string name="sticker_sheet_intent_humour_noir_hint">للضحك على كل شيء حتى الأسوأ: الموت من الضحك والأشباح وشواهد القبور</string>
     <string name="sticker_sheet_intent_humour_noir_title">كوميديا سوداء</string>
-    <string name="sticker_sheet_intent_quotidien_hint">لتقول ما تفعله: قهوة، وجبة، عمل، طريق، تأخير</string>
     <string name="sticker_sheet_intent_quotidien_title">الحياة اليومية</string>
     <string name="sticker_sheet_intent_rale_hint">للتعبير عن الضيق أو الغضب أو الغيرة أو للابتعاد قليلًا</string>
     <string name="sticker_sheet_intent_rale_title">تذمّر وزعل</string>

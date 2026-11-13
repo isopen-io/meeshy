@@ -399,7 +399,6 @@
     <string name="pull_refresh_done">Actualizado</string>
     <string name="pull_refresh_refreshing">Actualizando</string>
     <string name="reactions_more">Más reacciones</string>
-    <string name="reading_mode_bubbles_subtitle">Las burbujas clásicas</string>
     <string name="reading_mode_bubbles_title">Burbujas</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Cambia al siguiente modo. Mantén pulsado para ver la lista de modos.</string>
     <string name="reading_mode_chip_a11y_label">Modo de lectura: %1$s</string>
@@ -483,7 +482,6 @@
     <string name="retouch_tool_sound">Sonido</string>
     <string name="retouch_tool_text">Texto</string>
     <string name="retouch_tool_trim">Recortar</string>
-    <string name="settings_info_button_label">Más información sobre %1$s</string>
     <string name="skeleton_feed_post_loading">Cargando una publicación</string>
     <string name="skeleton_link_row_loading">Cargando un enlace</string>
     <string name="skeleton_profile_loading">Cargando el perfil</string>
@@ -501,15 +499,12 @@
     <string name="sticker_sheet_instants_title">Instantes</string>
     <string name="sticker_sheet_intent_amour_hint">Para una palabra dulce, un beso, un abrazo o una declaración</string>
     <string name="sticker_sheet_intent_amour_title">Decir te quiero</string>
-    <string name="sticker_sheet_intent_bonjour_hint">Para saludar, dar las gracias, decir que sí, disculparse o desear buenas noches</string>
     <string name="sticker_sheet_intent_bonjour_title">Hola, gracias</string>
     <string name="sticker_sheet_intent_coup_de_mou_hint">Para la tristeza, la pena, el cansancio o las ganas de dormir</string>
     <string name="sticker_sheet_intent_coup_de_mou_title">Bajón</string>
     <string name="sticker_sheet_intent_fete_hint">Para una buena noticia, un éxito, un cumpleaños o un ataque de risa</string>
     <string name="sticker_sheet_intent_fete_title">Reír y celebrar</string>
-    <string name="sticker_sheet_intent_humour_noir_hint">Para reírse de todo, incluso de lo peor: morirse de risa, fantasmas y lápidas</string>
     <string name="sticker_sheet_intent_humour_noir_title">Humor negro</string>
-    <string name="sticker_sheet_intent_quotidien_hint">Para contar lo que haces: un café, una comida, el trabajo, el camino, un retraso</string>
     <string name="sticker_sheet_intent_quotidien_title">El día a día</string>
     <string name="sticker_sheet_intent_rale_hint">Para mostrar fastidio, enfado, celos o tomar distancia</string>
     <string name="sticker_sheet_intent_rale_title">Quejarse y enfadarse</string>

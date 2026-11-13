@@ -394,7 +394,6 @@
     <string name="pull_refresh_done">Refreshed</string>
     <string name="pull_refresh_refreshing">Refreshing</string>
     <string name="reactions_more">More reactions</string>
-    <string name="reading_mode_bubbles_subtitle">The classic bubbles</string>
     <string name="reading_mode_bubbles_title">Bubbles</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Switches to the next mode. Long press for the list of modes.</string>
     <string name="reading_mode_chip_a11y_label">Reading mode: %1$s</string>
@@ -478,7 +477,6 @@
     <string name="retouch_tool_sound">Sound</string>
     <string name="retouch_tool_text">Text</string>
     <string name="retouch_tool_trim">Trim</string>
-    <string name="settings_info_button_label">Learn more about %1$s</string>
     <string name="skeleton_feed_post_loading">Loading a post</string>
     <string name="skeleton_link_row_loading">Loading a link</string>
     <string name="skeleton_profile_loading">Loading the profile</string>
@@ -496,15 +494,12 @@
     <string name="sticker_sheet_instants_title">Moments</string>
     <string name="sticker_sheet_intent_amour_hint">For a sweet word, a kiss, a hug or a declaration</string>
     <string name="sticker_sheet_intent_amour_title">Say I love you</string>
-    <string name="sticker_sheet_intent_bonjour_hint">To greet, thank, say yes, apologize or say good night</string>
     <string name="sticker_sheet_intent_bonjour_title">Hello, thanks</string>
     <string name="sticker_sheet_intent_coup_de_mou_hint">For sadness, heartache, tiredness or wanting to sleep</string>
     <string name="sticker_sheet_intent_coup_de_mou_title">Feeling low</string>
     <string name="sticker_sheet_intent_fete_hint">For good news, a win, a birthday or a fit of giggles</string>
     <string name="sticker_sheet_intent_fete_title">Laugh and celebrate</string>
-    <string name="sticker_sheet_intent_humour_noir_hint">To laugh at everything, even the worst: dying of laughter, ghosts and gravestones</string>
     <string name="sticker_sheet_intent_humour_noir_title">Dark humor</string>
-    <string name="sticker_sheet_intent_quotidien_hint">To say what you’re up to: coffee, a meal, work, the road, running late</string>
     <string name="sticker_sheet_intent_quotidien_title">Everyday life</string>
     <string name="sticker_sheet_intent_rale_hint">To show annoyance, anger, jealousy or keep your distance</string>
     <string name="sticker_sheet_intent_rale_title">Grumble and sulk</string>

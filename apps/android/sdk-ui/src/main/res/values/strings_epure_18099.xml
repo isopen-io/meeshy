@@ -13,4 +13,7 @@
     <string name="voiceProfile_processing_description">Processing, a few minutes.</string>
     <string name="voiceProfile_recording_description">Read the text aloud: at least 3 samples of 10 seconds.</string>
     <string name="audio_consent_notice_message">Enable voice consent to transcribe and translate your audio.</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">To laugh at everything, even the worst</string>
+    <string name="sticker_sheet_intent_quotidien_hint">To say what you’re up to: coffee, meals, work, the road</string>
+    <string name="sticker_sheet_intent_bonjour_hint">To greet, thank, apologize</string>
 </resources>

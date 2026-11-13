@@ -399,7 +399,6 @@
     <string name="pull_refresh_done">Aggiornato</string>
     <string name="pull_refresh_refreshing">Aggiornamento in corso</string>
     <string name="reactions_more">Altre reazioni</string>
-    <string name="reading_mode_bubbles_subtitle">Le bolle classiche</string>
     <string name="reading_mode_bubbles_title">Bolle</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Passa alla modalità successiva. Tocco prolungato per l\'elenco delle modalità.</string>
     <string name="reading_mode_chip_a11y_label">Modalità di lettura: %1$s</string>
@@ -483,7 +482,6 @@
     <string name="retouch_tool_sound">Audio</string>
     <string name="retouch_tool_text">Testo</string>
     <string name="retouch_tool_trim">Taglia</string>
-    <string name="settings_info_button_label">Maggiori informazioni su %1$s</string>
     <string name="skeleton_feed_post_loading">Caricamento di un post</string>
     <string name="skeleton_link_row_loading">Caricamento di un link</string>
     <string name="skeleton_profile_loading">Caricamento del profilo</string>
@@ -501,15 +499,12 @@
     <string name="sticker_sheet_instants_title">Istanti</string>
     <string name="sticker_sheet_intent_amour_hint">Per una parola dolce, un bacio, un abbraccio o una dichiarazione</string>
     <string name="sticker_sheet_intent_amour_title">Dire ti amo</string>
-    <string name="sticker_sheet_intent_bonjour_hint">Per salutare, ringraziare, dire di sì, scusarsi o augurare la buonanotte</string>
     <string name="sticker_sheet_intent_bonjour_title">Ciao, grazie</string>
     <string name="sticker_sheet_intent_coup_de_mou_hint">Per la tristezza, il dispiacere, la stanchezza o la voglia di dormire</string>
     <string name="sticker_sheet_intent_coup_de_mou_title">Giù di morale</string>
     <string name="sticker_sheet_intent_fete_hint">Per una bella notizia, un successo, un compleanno o una risata a crepapelle</string>
     <string name="sticker_sheet_intent_fete_title">Ridere e festeggiare</string>
-    <string name="sticker_sheet_intent_humour_noir_hint">Per ridere di tutto, anche del peggio: morire dal ridere, fantasmi e lapidi</string>
     <string name="sticker_sheet_intent_humour_noir_title">Umorismo nero</string>
-    <string name="sticker_sheet_intent_quotidien_hint">Per dire cosa stai facendo: un caffè, un pasto, il lavoro, il viaggio, un ritardo</string>
     <string name="sticker_sheet_intent_quotidien_title">La vita di tutti i giorni</string>
     <string name="sticker_sheet_intent_rale_hint">Per esprimere fastidio, rabbia, gelosia o prendere le distanze</string>
     <string name="sticker_sheet_intent_rale_title">Brontolare e tenere il muso</string>

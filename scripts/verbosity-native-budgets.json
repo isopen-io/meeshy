@@ -22,7 +22,7 @@
       "labels": 1136,
       "words": 4307,
       "long": 55,
-      "explanations": 112
+      "explanations": 111
     },
     "android:feature/community": {
       "labels": 118,
@@ -92,9 +92,9 @@
     },
     "android:sdk-ui": {
       "labels": 937,
-      "words": 3332,
+      "words": 3304,
       "long": 24,
-      "explanations": 73
+      "explanations": 71
     },
     "ios:Meeshy/(phrases)": {
       "labels": 407,

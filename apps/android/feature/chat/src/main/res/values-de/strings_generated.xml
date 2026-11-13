@@ -649,7 +649,6 @@
     <string name="piece_a11y_photo">Foto %1$d von %2$d</string>
     <string name="piece_a11y_video">Video %1$d von %2$d</string>
     <string name="piece_whole_message">Ganze Nachricht</string>
-    <string name="reading_mode_bubbles_subtitle">Die klassischen Sprechblasen</string>
     <string name="reading_mode_bubbles_title">Blasen</string>
     <string name="reading_mode_chip_a11y_hint_cycle">Wechselt zum nächsten Modus. Lange drücken für die Modusliste.</string>
     <string name="reading_mode_chip_a11y_label">Lesemodus: %1$s</string>
