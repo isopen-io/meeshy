@@ -111,6 +111,7 @@ internal fun CallGroupFeaturedCapsule(
     isFullScreen: Boolean,
     width: Dp,
     height: Dp,
+    isCompactHeight: Boolean,
     isChromeVisible: Boolean,
     onRevive: () -> Unit,
     onGrid: () -> Unit,
@@ -118,7 +119,7 @@ internal fun CallGroupFeaturedCapsule(
 ) {
     val reduceMotion = rememberCallReduceMotion()
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val target = featuredId?.let { GroupCallStageGeometry.rects(tileIds, focus, width.value, height.value, isFullScreen, isRtl)[it] }
+    val target = featuredId?.let { GroupCallStageGeometry.rects(tileIds, focus, width.value, height.value, isFullScreen, isRtl, isCompactHeight)[it] }
     val spot = remember { CallCapsuleSpot() }
     if (target != null) spot.rect = target
     val isPresent = target != null

@@ -23,6 +23,12 @@ object GroupCallStageGeometry {
     /** La hauteur de la rangée du bandeau : la vignette et l'air de son halo, dessus et dessous. */
     const val STRIP_ROW_HEIGHT: Float = STRIP_TILE_HEIGHT + 2 * STRIP_HALO_PAD
 
+    /** La largeur au-delà de laquelle la grille ne s'étend plus : sur grand écran elle garde des marges latérales (W2). */
+    const val GRID_MAX_WIDTH: Float = 1040f
+
+    /** La marge de chaque côté de la grille, symétrique donc identique en droite-à-gauche. */
+    fun gridSideMargin(width: Float): Float = ((width - GRID_MAX_WIDTH) / 2f).coerceAtLeast(0f)
+
     fun rects(
         tileIds: List<String>,
         focus: GroupCallStageFocus,
@@ -30,10 +36,11 @@ object GroupCallStageGeometry {
         height: Float,
         isFullScreen: Boolean,
         isRtl: Boolean,
+        isCompactHeight: Boolean,
     ): Map<String, CallStageRect> {
         if (tileIds.isEmpty() || width <= 0f || height <= 0f) return emptyMap()
         val leftToRight = when (focus) {
-            GroupCallStageFocus.Grid -> grid(tileIds, width, height)
+            GroupCallStageFocus.Grid -> grid(tileIds, width, height, isCompactHeight)
             is GroupCallStageFocus.Spotlight -> spotlight(tileIds, focus.tileId, width, height, isFullScreen)
         }
         return if (isRtl) leftToRight.mapValues { (_, rect) -> rect.copy(left = width - rect.left - rect.width) } else leftToRight
@@ -77,15 +84,16 @@ object GroupCallStageGeometry {
         }
     }
 
-    private fun grid(tileIds: List<String>, width: Float, height: Float): Map<String, CallStageRect> {
-        val layout = GroupCallGridLayout.layout(tileIds.size, isLandscape = width > height)
+    private fun grid(tileIds: List<String>, width: Float, height: Float, isCompactHeight: Boolean): Map<String, CallStageRect> {
+        val layout = GroupCallGridLayout.layout(tileIds.size, isLandscape = width > height, isCompactHeight = isCompactHeight)
         val rows = tileIds.chunked(layout.columns)
-        val cellWidth = (width - SPACING * (layout.columns - 1)) / layout.columns
+        val margin = gridSideMargin(width)
+        val cellWidth = (width - 2 * margin - SPACING * (layout.columns - 1)) / layout.columns
         val cellHeight = (height - SPACING * (rows.size - 1)) / rows.size
         return buildMap {
             rows.forEachIndexed { row, ids ->
                 ids.forEachIndexed { column, id ->
-                    put(id, CallStageRect(column * (cellWidth + SPACING), row * (cellHeight + SPACING), cellWidth, cellHeight))
+                    put(id, CallStageRect(margin + column * (cellWidth + SPACING), row * (cellHeight + SPACING), cellWidth, cellHeight))
                 }
             }
         }

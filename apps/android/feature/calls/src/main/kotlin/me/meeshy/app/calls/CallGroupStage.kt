@@ -39,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,6 +53,7 @@ import me.meeshy.sdk.model.call.group.GroupCallGridLayout
 import me.meeshy.sdk.model.call.group.GroupCallSpotlight
 import me.meeshy.sdk.model.call.group.GroupCallSpotlightChoice
 import me.meeshy.sdk.model.call.group.GroupCallStageFocus
+import me.meeshy.sdk.model.call.group.GroupCallStageGeometry
 import me.meeshy.sdk.model.call.group.GroupCallStageLaw
 import me.meeshy.sdk.model.call.group.GroupCallStageTile
 import me.meeshy.ui.component.MeeshyAvatar
@@ -89,6 +91,8 @@ internal fun CallGroupStage(
     isCapsuleVisible: Boolean = true,
     /** Un toucher reçu sur la capsule rangée rallume le chrome. */
     onChromeRevive: () -> Unit = {},
+    /** L4.1 · W2 : la fenêtre est de hauteur compacte (`CallGroupStageSizing`) — la rangée de quatre n'a lieu qu'alors. */
+    isCompactHeight: Boolean = false,
 ) {
     val tiles = GroupCallStageLaw.tiles(
         roster = mesh.roster,
@@ -134,10 +138,10 @@ internal fun CallGroupStage(
     val spotlight = focus as? GroupCallStageFocus.Spotlight
     val featured = spotlight?.let { focused -> tiles.firstOrNull { it.id == focused.tileId } }
     BoxWithConstraints(stageModifier) {
-        val staged = scope.copy(motionOf = rememberCallStageMotion(tiles.map { it.id }, focus, isFullScreen, maxWidth, maxHeight))
+        val staged = scope.copy(motionOf = rememberCallStageMotion(tiles.map { it.id }, focus, isFullScreen, maxWidth, maxHeight, isCompactHeight))
         val isLandscape = maxWidth > maxHeight
         if (spotlight == null || featured == null) {
-            CallGroupGrid(tiles, staged, isLandscape, onStageTap, Modifier.fillMaxSize())
+            CallGroupGrid(tiles, staged, isLandscape, isCompactHeight, maxWidth, onStageTap, Modifier.fillMaxSize())
         } else {
             CallGroupSpotlightStage(
                 tiles = tiles,
@@ -160,6 +164,7 @@ internal fun CallGroupStage(
             isFullScreen = isFullScreen,
             width = maxWidth,
             height = maxHeight,
+            isCompactHeight = isCompactHeight,
             isChromeVisible = isCapsuleVisible,
             onRevive = onChromeRevive,
             onGrid = { choose(GroupCallSpotlightChoice.Grid) },
@@ -191,6 +196,8 @@ private fun CallGroupGrid(
     tiles: List<GroupCallStageTile>,
     scope: CallGroupStageScope,
     isLandscape: Boolean,
+    isCompactHeight: Boolean,
+    stageWidth: Dp,
     onStageTap: (() -> Unit)?,
     modifier: Modifier,
 ) {
@@ -199,14 +206,17 @@ private fun CallGroupGrid(
     } else {
         Modifier
     }
-    val layout = GroupCallGridLayout.layout(tiles.size, isLandscape = isLandscape)
-    Column(modifier.then(stageTap), verticalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
-        tiles.chunked(layout.columns).forEach { row ->
-            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
-                row.forEach { tile ->
-                    key(tile.id) { CallGroupSelectableTile(tile, scope, Modifier.weight(1f).fillMaxSize()) }
+    val layout = GroupCallGridLayout.layout(tiles.size, isLandscape = isLandscape, isCompactHeight = isCompactHeight)
+    val sideMargin = GroupCallStageGeometry.gridSideMargin(stageWidth.value).dp
+    Box(modifier.then(stageTap)) {
+        Column(Modifier.fillMaxSize().padding(horizontal = sideMargin), verticalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
+            tiles.chunked(layout.columns).forEach { row ->
+                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(STAGE_SPACING)) {
+                    row.forEach { tile ->
+                        key(tile.id) { CallGroupSelectableTile(tile, scope, Modifier.weight(1f).fillMaxSize()) }
+                    }
+                    repeat(layout.columns - row.size) { Box(Modifier.weight(1f)) }
                 }
-                repeat(layout.columns - row.size) { Box(Modifier.weight(1f)) }
             }
         }
     }
