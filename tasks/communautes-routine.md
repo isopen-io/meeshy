@@ -294,3 +294,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Rouge de dev laissé à son lot : `gateway-test-file-size-budget` (`ZmqTranslationClient.test.ts` 2476 → 2477, #18042).
 - Pas de revue adversariale : resserrement d'une porte sur une loi existante (`mayReturnToSalon`, revue avec #16703), ni nouvelle permission ni migration.
 - Prochain lot recommandé : #16712 (salon sans créateur, décision à prendre sur la lecture la plus probable) ou #18061 dès que la CI des branches revient ; #16739, #16893, #16669 et #18028 attendent une décision ; #14227 / #16696 demandent une session de staging.
+
+## 2026-11-13 — réveil 33 (23:40 UTC)
+
+- Lot réservé : #16712 (un salon d'une communauté privée ne reste jamais sans créateur ni avec des invités sans gouvernance). Branche `claude/communautes-salon-sans-createur`.
