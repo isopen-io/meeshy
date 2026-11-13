@@ -435,8 +435,14 @@ final class EpureCerclesContactsTests: XCTestCase {
         XCTAssertTrue(try code("apps/ios/Meeshy/Features/Contacts/CallsTab.swift").contains("calls.search.empty.hint"))
     }
 
-    func test_callsSearchAndAddChannelEmptyStates_haveNoHint() throws {
-        XCTAssertFalse(try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityAddChannelScreen.swift").contains("community.addChannel.empty.hint"))
-        XCTAssertNil(try kit()["community.addChannel.empty.hint"], "plus aucun lecteur : supprimée de toutes les langues")
+    func test_addChannelEmpty_saysToCreateAConversationFirst_theOnlyWayOut_inEveryLanguage() throws {
+        let kit = try kit()
+        let french = try XCTUnwrap(kit["community.addChannel.empty.hint"]?["fr"])
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(kit["community.addChannel.empty.hint"]?[language], language)
+            XCTAssertNotEqual(value, french, "\(language) : copié du français")
+        }
+        XCTAssertTrue(try XCTUnwrap(kit["community.addChannel.empty.hint"]?["de"]).contains("hier"), "l'allemand dit où la conversation s'ajoutera")
+        XCTAssertTrue(try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityAddChannelScreen.swift").contains("community.addChannel.empty.hint"))
     }
 }

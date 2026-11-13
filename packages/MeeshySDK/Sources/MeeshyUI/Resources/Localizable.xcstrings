@@ -10598,6 +10598,53 @@
         }
       }
     },
+    "community.addChannel.empty.hint": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أنشئ محادثة أولًا لإضافتها هنا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstellen Sie zuerst eine Unterhaltung, um sie hier hinzuzufügen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Create a conversation first to add it here."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Crea una conversación primero para añadirla aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "new",
+            "value": "Créez d'abord une conversation pour l'ajouter ici."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea prima una conversazione per aggiungerla qui."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Crie uma conversa primeiro para adicioná-la aqui."
+          }
+        }
+      }
+    },
     "community.addChannel.empty.noConversations": {
       "extractionState": "extracted_with_value",
       "localizations": {
