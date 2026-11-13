@@ -9,7 +9,7 @@
 import type { MessageLiveness } from '../messages/message-liveness';
 import type { MessageProtectionRow } from '../messages/push-envelope-protection';
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
-import { isAfterReadEphemeral } from '@meeshy/shared/utils/ephemeral-countdown';
+import { isAfterReadEphemeral, inheritedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 
@@ -586,39 +586,54 @@ export function mediaSummaryString(lang: string, mediaType?: 'image' | 'video' |
  * L'échéance qu'une bannière SERT, entre ce que la base dit et ce que
  * l'appelant croyait savoir (#18030).
  *
+ * ─── L'ARITHMÉTIQUE N'EST PAS À NOUS ────────────────────────────────────────
+ *
+ * « la plus proche des échéances connues, rien si aucune » a DÉJÀ son site
+ * unique — `inheritedEphemeralExpiresAt` (`@meeshy/shared`), que cinq sites du
+ * gateway consomment. Ce helper-ci ne porte donc que la QUESTION (laquelle de
+ * deux observations d'une même colonne fait foi) et son repli en `undefined`,
+ * que `createNotification` attend. La première rédaction de ce lot en recopiait
+ * le corps — un sixième exemplaire, dans le commit même dont le doc-comment
+ * voisin dit que deux exemplaires d'une règle est la configuration qui a
+ * produit les cycles 121 à 128.
+ *
  * ─── POURQUOI UN ARBITRAGE, ET PAS « LA BASE GAGNE » ────────────────────────
  *
- * Les deux valeurs répondent à la même question à deux INSTANTS, et chacune
- * peut être la seule à savoir quelque chose :
+ * Côté BASE : trois écrivains RAPPROCHENT l'échéance après l'insertion —
+ * `ephemeralCountdown` (décompte démarré à la réception),
+ * `consumeAfterReadMessages` (« RAPPROCHER seulement », son propre commentaire)
+ * et `captureNoticeRetention` (rétention raccourcie d'un message capturé). La
+ * copie que l'appelant porte depuis l'envoi est alors périmée dans le seul sens
+ * qui compte : plus TARDIVE que la réalité, donc une ligne `Notification` — qui
+ * porte le corps servi et l'enveloppe — survivrait au message qu'elle annonce.
  *
- *   - la base RAPPROCHE après l'insertion — `ephemeralCountdown` (démarrage du
- *     décompte à la réception), `consumeAfterReadMessages` (« RAPPROCHER
- *     seulement », son propre commentaire) et `captureNoticeRetention`
- *     (rétention raccourcie d'un message capturé). La copie de l'appelant est
- *     alors périmée dans le seul sens qui compte : plus TARDIVE que la réalité,
- *     donc une ligne `Notification` — qui porte le corps servi et l'enveloppe —
- *     survivrait au message qu'elle annonce ;
- *   - l'appelant, lui, tient une échéance que la base n'a PAS encore écrite :
- *     sur le cas nominal d'un éphémère, le décompte ne démarre qu'à la
- *     réception et l'éventail court avant. « La base gagne » retirerait là
- *     l'échéance d'un message autodestructible.
+ * Côté APPELANT, il y a exactement DEUX cas, et aucun des deux n'est « la base
+ * n'a pas encore écrit » :
  *
- * D'où la règle, qui est celle que ces modules s'appliquent déjà à eux-mêmes :
- * **la plus PROCHE des deux valeurs non nulles gagne, et un `null` ne retire
- * jamais rien.** Une notification qui s'efface trop tôt ne retire qu'une
- * bannière ; une notification qui survit laisse un texte en base.
+ *   1. **la relecture a ÉCHOUÉ** (`UNKNOWN_BANNER_SOURCE`) — une panne de
+ *      lecture n'autorise ni à prolonger une échéance ni à en retirer une ;
+ *   2. **la colonne a été EFFACÉE sur place** par
+ *      `purgeViewOnceContent.reevaluateLegacyViewOnceBurn`, qui pose
+ *      `expiresAt: null` parce que l'échéance a DÉMÉNAGÉ vers `viewOnceBurnAt`.
+ *      Garder la valeur de l'appelant y est un CHOIX — la bannière s'efface à
+ *      l'ancienne échéance au lieu de suivre le déménagement — et c'est le
+ *      choix conservateur : `null` ne retire rien, et la vivacité de la vue
+ *      unique est gardée ailleurs (`messageLivenessOf`, `viewOnceBurnedAt`).
  *
- * Le doc-comment que ce helper remplace affirmait l'inverse — « `expiresAt` est
- * écrit à l'insertion et jamais modifié ensuite, donc sa copie ne peut pas
- * dériver ». Mesuré faux sur quatre écrivains ; cf. la règle du cycle 127, *un
- * doc-comment qui EXEMPTE une unité d'une règle que sa voisine applique se
- * vérifie comme une affirmation*.
+ * **Ce que ce doc-comment NE dit PAS, parce que c'est faux :** « l'appelant
+ * tient une échéance que la base n'a pas encore écrite, cas nominal d'un
+ * éphémère dont le décompte démarre à la réception ». C'était la première
+ * justification écrite de ce lot, et elle est impossible — `ephemeralSendFields`
+ * écrit `expiresAt` À L'INSERTION sur TOUTES ses branches éphémères (le plafond
+ * de rétention à défaut d'une destruction calculée), et `claimed` n'est jamais
+ * calculé : c'est toujours une copie de la colonne. Le lot a failli remplacer
+ * une affirmation non instruite par une autre, dans le commit qui condamne
+ * l'exemption non instruite. **Un raisonnement est une affirmation, au même
+ * titre qu'un compte ou un tri — y compris celui qui justifie un correctif.**
  */
 export function servedMessageDeadline(
   live: Date | null | undefined,
   claimed: Date | null | undefined
 ): Date | undefined {
-  const candidates = [live, claimed].filter((d): d is Date => d instanceof Date);
-  if (candidates.length === 0) return undefined;
-  return candidates.reduce((earliest, d) => (d.getTime() < earliest.getTime() ? d : earliest));
+  return inheritedEphemeralExpiresAt([live, claimed]) ?? undefined;
 }

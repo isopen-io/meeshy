@@ -92,28 +92,54 @@ vivacité en sortait. Zéro requête de plus — l'argument du cycle 127 et de
 #17195, repris tel quel : *avant de conclure qu'une garde coûterait une requête,
 regarder ce que le site lit déjà.*
 
-### L'arbitrage n'est PAS « la base gagne »
+### L'arbitrage n'est PAS « la base gagne » — et sa PREMIÈRE justification était fausse
 
-C'est le point du lot, et il se serait mal décidé sans le témoin qui le nomme.
-Les deux valeurs répondent à la même question à deux INSTANTS, et **chacune peut
-être la seule à savoir quelque chose** :
+La règle retenue : **la plus PROCHE des deux valeurs non nulles gagne, et un
+`null` ne retire jamais rien.** Une notification qui s'efface trop tôt ne retire
+qu'une bannière ; une notification qui survit laisse un texte en base.
 
-- la base RAPPROCHE après l'insertion (les trois écrivains ci-dessus) ⇒ la copie
-  de l'appelant est périmée ;
-- l'appelant tient une échéance que la base n'a PAS encore écrite — c'est le cas
-  NOMINAL d'un éphémère, dont le décompte ne démarre qu'à la réception quand
-  l'éventail court avant. « La base gagne » retirerait là l'échéance d'un
-  message autodestructible.
+Ce qui a failli partir avec, et qu'il faut écrire parce que c'est la faute la
+plus instructive du cycle :
 
-D'où la règle, qui est celle que ces modules s'appliquent déjà à eux-mêmes
-(« RAPPROCHER : toujours permis ») : **la plus PROCHE des deux valeurs non
-nulles gagne, et un `null` ne retire jamais rien.** Une notification qui
-s'efface trop tôt ne retire qu'une bannière ; une notification qui survit laisse
-un texte en base. Site unique : `servedMessageDeadline`.
+> « l'appelant tient une échéance que la base n'a PAS encore écrite — c'est le
+> cas NOMINAL d'un éphémère, dont le décompte ne démarre qu'à la réception
+> quand l'éventail court avant. »
 
-Et `UNKNOWN_BANNER_SOURCE` — ce qu'une relecture EN ÉCHEC rend — porte
-`expiresAt: null` : une panne de lecture n'autorise ni à PROLONGER une échéance,
-ni à en retirer une.
+**Impossible, et mesuré tel.** `ephemeralSendFields` écrit `expiresAt` **À
+L'INSERTION sur TOUTES ses branches éphémères** — une destruction calculée, ou à
+défaut le plafond de rétention. Et `claimed` n'est JAMAIS calculé : les cinq
+sites d'appel passent tous une colonne Prisma. L'appelant ne peut donc pas
+savoir quelque chose que la base ignore.
+
+> **Le lot allait remplacer une affirmation non instruite par une autre, dans le
+> commit même qui condamne l'exemption non instruite.** Un raisonnement est une
+> AFFIRMATION, au même titre qu'un compte (cycle 93) ou un tri (cycle 86 bis) —
+> **y compris celui qui justifie un correctif, et surtout quand il sonne juste.**
+> Celui-là sonnait juste : un décompte qui démarre à la réception, voilà qui
+> *devrait* laisser la colonne vide. Il a fallu ouvrir `ephemeralSendFields`
+> pour voir que non.
+
+Les DEUX cas réels où l'appelant est le seul à porter une date :
+
+1. **la relecture a ÉCHOUÉ** (`UNKNOWN_BANNER_SOURCE`, qui porte
+   `expiresAt: null`) — une panne de lecture n'autorise ni à prolonger une
+   échéance ni à en retirer une ;
+2. **la colonne a été EFFACÉE sur place** par
+   `purgeViewOnceContent.reevaluateLegacyViewOnceBurn`, qui pose `expiresAt:
+   null` parce que l'échéance a DÉMÉNAGÉ vers `viewOnceBurnAt`. Garder celle de
+   l'appelant y est un CHOIX, pas une conséquence — la bannière s'efface à
+   l'ancienne échéance au lieu de suivre le déménagement. C'est le choix
+   conservateur, et la vivacité de la vue unique est gardée ailleurs.
+
+### Et l'arithmétique n'était pas à nous
+
+`servedMessageDeadline` recopiait d'abord le corps d'`inheritedEphemeralExpiresAt`
+(`@meeshy/shared`) — même filtre `instanceof Date`, même « la plus proche des
+connues, rien si aucune », cinq consommateurs existants dans le gateway. **Un
+sixième exemplaire, dans le commit dont le doc-comment dit que deux exemplaires
+d'une règle est la configuration qui a produit les cycles 121 à 128.** Le helper
+ne porte plus que la QUESTION — laquelle de deux observations d'une même colonne
+fait foi — et son repli en `undefined`.
 
 ### Ce que ce lot n'affirme pas
 
@@ -160,7 +186,9 @@ continuent d'annoncer.
 | lot T | **186 suites / 4 086 témoins**, verdicts IDENTIQUES avant et après — c'est toute la preuve qu'une extraction pure peut porter |
 | zone d'impact | 94 suites / 1 495 témoins verts (notifications) ; 330 suites / 5 958 verts (messagerie, socket) |
 | cliquets | 96 suites / 1 452 témoins verts |
-| budget de taille | `NotificationService.ts` 3 660 → **3 710** (gelé à 3 761) ; `notification-preview.ts` 565 → 624 |
+| audit adversarial | **NON BLOQUANT**, et il a rendu TROIS trous de témoin et deux fautes de raisonnement — toutes corrigées DANS ce lot, aucune en suivi |
+| mutations de la seconde passe | **3 sur 3 attrapées** — la RÉPONSE relit le message CITÉ (1 rouge), `readerId` = l'expéditeur (1), `contentDetail` retiré du contexte partagé (1) |
+| budget de taille | `NotificationService.ts` 3 660 → **3 710** (gelé à 3 761) ; `notification-preview.ts` 565 → 639 |
 
 ### Sur le budget, contre ce que l'issue du lot T annonçait
 
@@ -174,6 +202,44 @@ avant d'y ajouter quoi que ce soit.
 C'est la règle du cycle 93, appliquée à une affirmation qu'on avait écrite
 soi-même deux heures plus tôt : **un compte est une AFFIRMATION, comme un tri ;
 il se compte dans le FICHIER, il ne s'hérite pas d'une prévision.**
+
+## Ce que l'audit adversarial a trouvé, et que ce lot a corrigé
+
+Il a rendu **NON BLOQUANT** sur le comportement — la probe différentielle sur six
+scénarios donne des contextes, des ordres de clés et des corps IDENTIQUES hors
+`conversationAvatar`, donc l'extraction est pure, MESURÉE et pas relue. Mais il a
+rendu trois trous de témoin et deux fautes de raisonnement, et la plus chère
+était celle-ci :
+
+> **La RÉPONSE pouvait relire le message CITÉ, et 1 490 témoins restaient verts.**
+
+Le code était juste. Mais #18030 venait de rendre cette ligne LOAD-BEARING — si
+`loadMessagePrismSource` lisait `originalMessageId`, l'échéance servie serait
+celle du message cité, ce qui est **pire que le défaut corrigé**. Reproduit à la
+main avant de le croire : mutation appliquée, `1490 passed, 1490 total`.
+
+La cause est précise, et c'est une leçon de harnais : **le double Prisma rendait
+la MÊME ligne pour n'importe quel id.** Aucun témoin de VALEUR ne pouvait
+distinguer, et le témoin de projection assertait `select.expiresAt` sans jamais
+regarder `where.id`.
+
+> **Un témoin d'échéance qui ne sait pas de QUELLE LIGNE elle vient ne garde pas
+> « l'échéance se relit chez elle » — il garde « une échéance se relit ».** Le
+> double qui l'attrape répond PAR LIGNE.
+
+Les deux autres entrées non gardées, toutes deux devenues load-bearing avec
+l'extraction : **`readerId`** — la seule valeur que le helper partagé reçoive du
+site d'appel, donc exactement celle qu'une fusion du troisième éventail câblera
+de travers, et elle décide `content.storyReply.yours` contre `.other` (dire
+« votre story » à qui n'en est pas l'auteur) — et **`contentDetail`**.
+
+Enfin, l'exemption déclarée fausse survivait **mot pour mot chez l'appelant**
+(`messageNotificationFanOut.ts:788`). *Un lot qui instruit une affirmation et en
+laisse la jumelle debout la fera recroire* — c'est « cette entité a-t-elle une
+JUMELLE ? » appliqué à un commentaire.
+
+**Toutes corrigées dans ce lot, aucune en suivi.** Le reste du rapport (budget,
+milestones) est dans les sections voisines.
 
 ## Ce que ce cycle laisse ouvert
 
