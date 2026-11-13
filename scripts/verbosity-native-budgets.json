@@ -356,9 +356,9 @@
     },
     "ios:Meeshy/conversation": {
       "labels": 338,
-      "words": 1892,
+      "words": 1884,
       "long": 23,
-      "explanations": 80
+      "explanations": 79
     },
     "ios:Meeshy/conversationCard": {
       "labels": 23,
@@ -896,7 +896,7 @@
     },
     "ios:Meeshy/share": {
       "labels": 151,
-      "words": 663,
+      "words": 658,
       "long": 3,
       "explanations": 15
     },
@@ -1087,10 +1087,10 @@
       "explanations": 0
     },
     "ios:Meeshy/voice": {
-      "labels": 61,
-      "words": 278,
+      "labels": 59,
+      "words": 267,
       "long": 1,
-      "explanations": 11
+      "explanations": 9
     },
     "ios:Meeshy/welcome": {
       "labels": 5,

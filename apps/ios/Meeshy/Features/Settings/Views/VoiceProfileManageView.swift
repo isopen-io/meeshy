@@ -416,11 +416,10 @@ struct VoiceProfileManageView: View {
         }
     }
 
-    /// L'état « Actif » se suffit : sa description le répétait (épure #18078, règle 2). Les autres disent quoi faire ou attendre.
+    /// Les états « Actif », « En attente » et « Analyse en cours » se suffisent : leur description répétait le libellé (épure #18078, règle 2). « Échec » et « Expiré » disent quoi faire.
     private func statusDescription(for status: VoiceProfileStatus) -> String? {
         switch status {
-        case .pending: return String(localized: "voice.profile.status.pending.description", defaultValue: "Votre profil est en file d'attente", bundle: .main)
-        case .processing: return String(localized: "voice.profile.status.processing.description", defaultValue: "L'IA analyse vos échantillons vocaux", bundle: .main)
+        case .pending, .processing: return nil
         case .ready: return nil
         case .failed: return String(localized: "voice.profile.status.failed.description", defaultValue: "L'analyse a échoué, veuillez réessayer", bundle: .main)
         case .expired: return String(localized: "voice.profile.status.expired.description", defaultValue: "Veuillez enregistrer de nouveaux échantillons", bundle: .main)

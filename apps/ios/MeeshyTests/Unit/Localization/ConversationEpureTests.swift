@@ -524,7 +524,7 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertTrue(manage.contains("case .ready: return nil"))
         XCTAssertFalse(manage.contains("voice.profile.status.ready.description"))
         for dropped in ["pending", "processing"] {
-            XCTAssertTrue(manage.contains("case .\(dropped): return nil"), "le sous-titre redisait « \(dropped) »")
+            XCTAssertTrue(manage.contains("case .pending, .processing: return nil"), "le sous-titre redisait « \(dropped) »")
             XCTAssertFalse(manage.contains("voice.profile.status.\(dropped).description"), dropped)
         }
         for kept in ["failed", "expired"] {

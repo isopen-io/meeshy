@@ -143,7 +143,7 @@ struct ShareSheetView: View {
             .accessibilityLabel(ShareSheetCopy.loading)
         } else if model.conversations.isEmpty && model.people.isEmpty && model.searchResults == nil {
             EmptyStateView(
-                icon: "person.2", title: ShareSheetCopy.emptyTitle, subtitle: ShareSheetCopy.emptyBody,
+                icon: "person.2", title: ShareSheetCopy.emptyTitle, subtitle: "",
                 accentColor: accentColor, compact: true
             )
         } else {

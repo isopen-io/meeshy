@@ -132,7 +132,6 @@ enum ShareSheetCopy {
     static var people: String { String(localized: "share.sheet.section.people", defaultValue: "Personnes", bundle: .meeshyShare) }
     static var communities: String { String(localized: "share.sheet.section.communities", defaultValue: "Communautés", bundle: .meeshyShare) }
     static var emptyTitle: String { String(localized: "share.sheet.empty.title", defaultValue: "Personne ici pour l’instant", bundle: .meeshyShare) }
-    static var emptyBody: String { String(localized: "share.sheet.empty.body", defaultValue: "Cherchez une personne par son nom, son pseudo ou son numéro.", bundle: .meeshyShare) }
     static var loading: String { String(localized: "share.loading", defaultValue: "Chargement des conversations…", bundle: .meeshyShare) }
 
     static func detail(_ detail: ShareRecipient.Detail, encrypted: Bool) -> String {

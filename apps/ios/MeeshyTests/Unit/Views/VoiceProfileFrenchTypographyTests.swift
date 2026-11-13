@@ -36,7 +36,6 @@ final class VoiceProfileFrenchTypographyTests: XCTestCase {
         "voice.profile.status.expired.label": "Expiré",
         "voice.profile.status.failed.description": "L'analyse a échoué, veuillez réessayer",
         "voice.profile.status.failed.label": "Échec",
-        "voice.profile.status.processing.description": "L'IA analyse vos échantillons vocaux",
         "voice.profile.totalDuration": "Durée totale",
         "voice.profile.voiceSamples": "Échantillons vocaux",
     ]

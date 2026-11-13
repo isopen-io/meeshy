@@ -106117,53 +106117,6 @@
         }
       }
     },
-    "conversation.composer.blocked.subtitle": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ألغِ حظره لتراسله وتستقبل رسائله."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hebe die Blockierung auf, um Nachrichten zu senden und zu empfangen."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unblock them to send and receive messages."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloquéalo para enviar y recibir mensajes."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Débloquez-le pour lui écrire et recevoir ses messages."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sbloccalo per scrivergli e ricevere i suoi messaggi."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloqueie para enviar e receber mensagens."
-          }
-        }
-      }
-    },
     "conversation.composer.blocked.title": {
       "extractionState": "stale",
       "localizations": {
@@ -215091,53 +215044,6 @@
         }
       }
     },
-    "voice.profile.status.pending.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ملفك في قائمة الانتظار"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ihr Profil ist in der Warteschlange"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your profile is queued"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tu perfil está en cola"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Votre profil est en file d'attente"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il tuo profilo è in coda"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seu perfil está na fila"
-          }
-        }
-      }
-    },
     "voice.profile.status.pending.label": {
       "extractionState": "manual",
       "localizations": {
@@ -215181,53 +215087,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pendente"
-          }
-        }
-      }
-    },
-    "voice.profile.status.processing.description": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يحلّل الذكاء الاصطناعي عيّناتك الصوتية"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die KI analysiert Ihre Sprachproben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AI is analyzing your voice samples"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La IA analiza tus muestras de voz"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L'IA analyse vos échantillons vocaux"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L'IA analizza i tuoi campioni vocali"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A IA está analisando suas amostras de voz"
           }
         }
       }
@@ -320194,53 +320053,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Grupo · %d membros"
-          }
-        }
-      }
-    },
-    "share.sheet.empty.body": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ابحث عن شخص باسمه أو اسم المستخدم أو رقمه."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suche jemanden nach Name, Benutzername oder Nummer."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search for someone by name, username or number."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Busca a alguien por su nombre, usuario o número."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cherchez une personne par son nom, son pseudo ou son numéro."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cerca una persona per nome, nome utente o numero."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Procure alguém pelo nome, usuário ou número."
           }
         }
       }
