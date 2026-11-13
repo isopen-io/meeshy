@@ -74,6 +74,7 @@ object CallLiveCaptionLines {
         prefersOriginal: Boolean,
         isRevealed: Boolean,
         labels: CallCaptionLabels,
+        participantNames: Map<String, String> = emptyMap(),
     ): CallLiveCaptionLine {
         val isLocal = isLocal(segment, reader)
         val translation = if (isLocal) null else served(segment, reader.prism)
@@ -85,7 +86,7 @@ object CallLiveCaptionLines {
         return CallLiveCaptionLine(
             key = segment.key,
             speakerId = segment.speakerId,
-            speakerName = speakerName(segment, isLocal, peerName, labels),
+            speakerName = speakerName(segment, isLocal, peerName, labels, participantNames),
             isLocal = isLocal,
             text = if (showsOriginal || translation == null) segment.text else translation.text,
             languageTag = tag(origin, servedLanguage, showsOriginal && outsidePrism),
@@ -107,8 +108,9 @@ object CallLiveCaptionLines {
         prefersOriginal: Boolean,
         revealed: Set<String>,
         labels: CallCaptionLabels,
+        participantNames: Map<String, String> = emptyMap(),
     ): List<CallLiveCaptionLine> = segments.map {
-        line(it, reader, peerName, prefersOriginal, isRevealed = it.key in revealed, labels = labels)
+        line(it, reader, peerName, prefersOriginal, isRevealed = it.key in revealed, labels = labels, participantNames = participantNames)
     }
 
     /** The last FINAL line of a peer, the only one worth announcing. */
@@ -141,15 +143,22 @@ object CallLiveCaptionLines {
         )
     }
 
-    /** Mine is « Me », never my name; then the call's own peer (a roster is the trusted source), then what the wire says. */
+    /**
+     * Mine is « Me », never my name; then the author's own name in the call's roster by `speakerId` (the trusted
+     * source, iOS `speakerName(for:)`), then the call's peer, then what the wire says.
+     */
     private fun speakerName(
         segment: CallJournalSegment,
         isLocal: Boolean,
         peerName: String?,
         labels: CallCaptionLabels,
+        participantNames: Map<String, String>,
     ): String = when {
         isLocal -> labels.me
-        else -> peerName?.takeIf { it.isNotBlank() } ?: segment.speakerDisplayName ?: labels.unknown
+        else -> participantNames[segment.speakerId]?.takeIf { it.isNotBlank() }
+            ?: peerName?.takeIf { it.isNotBlank() }
+            ?: segment.speakerDisplayName
+            ?: labels.unknown
     }
 
     /** « EN → FR » once translated, « EN » for an original outside the prism, nothing otherwise. */
