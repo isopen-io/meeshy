@@ -167,9 +167,12 @@ describe('#14490 — activer le bout en bout coupe le talkie de la paire', () =>
     expect(world.conversation.encryptionMode).toBe('e2ee');
   });
 
-  it('aucune paire d’un tiers n’est visée', async () => {
+  it('aucune paire d’un tiers n’est visée : une coupure antérieure de Carol reste telle quelle, aucune n’est ajoutée', async () => {
+    cutStore.set(cutKey(CAROL, ALICE), '1');
     await enable(makeWorld(), 'e2ee');
 
-    expect([...cutStore.keys()].some((key) => key.includes(CAROL))).toBe(false);
+    expect(cutStore.get(cutKey(CAROL, ALICE))).toBe('1');
+    expect([...cutStore.keys()].filter((key) => key.includes(CAROL))).toEqual([cutKey(CAROL, ALICE)]);
+    expect(cutStore.size).toBe(3);
   });
 });

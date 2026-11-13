@@ -449,7 +449,11 @@ export class TalkieRelay {
     session.judgedAt = now;
     const timeout = guardedTimeout({
       name: 'talkie-rejudge-timeout',
-      run: () => this.close(session.talkieId, 'cut', 'recipient'),
+      run: () => {
+        if (!this.sessions.has(session.talkieId)) return;
+        this.deps.report('Talkie rejudge timed out', new Error(`no verdict within ${REJUDGE_TIMEOUT_MS} ms`));
+        this.close(session.talkieId, 'cut', 'recipient');
+      },
       afterMs: REJUDGE_TIMEOUT_MS,
       logger: { error: (message, error) => this.deps.report(message, error) },
     });

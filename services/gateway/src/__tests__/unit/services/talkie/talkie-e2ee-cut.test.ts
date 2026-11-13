@@ -88,6 +88,26 @@ describe('#14490 — le passage en E2EE d’un tête-à-tête coupe sa voix en c
     expect(await readTalkieCut(elsewhere.cache, BOB, ALICE)).not.toBeNull();
   });
 
+  it('une écriture partagée qui échoue n’empêche ni la coupure locale des deux sens ni l’écriture de l’autre sens, et l’échec remonte', async () => {
+    const t = relayWith();
+    await open(t, 'sock-a', ALICE, BOB);
+    await open(t, 'sock-b', BOB, ALICE);
+    const failing: TalkieCutDeps = {
+      ...t.cutDeps,
+      cache: {
+        get: t.cache.get,
+        set: async (key: string, value: string) => {
+          if (key.endsWith(`${ALICE}:${BOB}`)) throw new Error('redis down');
+          return t.cache.set(key, value);
+        },
+      },
+    };
+
+    await expect(cutTalkiesOnEndToEnd(failing, { userIds: [ALICE, BOB] })).rejects.toThrow('redis down');
+    expect(t.relay.openCount).toBe(0);
+    expect(await readTalkieCut(t.cache, BOB, ALICE)).not.toBeNull();
+  });
+
   it('ne touche aucune autre paire', async () => {
     const t = relayWith();
     await open(t, 'sock-c', CAROL, ALICE);
@@ -130,7 +150,8 @@ describe('#14490 — un rejugement qui ne rend jamais coupe la voix', () => {
       calls += 1;
       return calls === 1 ? { ok: true } : new Promise<TalkieVerdict>(() => undefined);
     });
-    const t = relayWith({ judge });
+    const reports: string[] = [];
+    const t = relayWith({ judge, report: (message) => { reports.push(message); } });
     const talkieId = await open(t, 'sock-a', ALICE, BOB);
     t.advance(REJUDGE_EVERY_MS + 1);
     await t.relay.chunk('sock-a', ALICE, { talkieId, seq: 0, data: frame() });
@@ -141,6 +162,7 @@ describe('#14490 — un rejugement qui ne rend jamais coupe la voix', () => {
 
     expect(openBefore).toBe(1);
     expect(t.relay.openCount).toBe(0);
+    expect(reports).toEqual(['Talkie rejudge timed out']);
     const ended = of(t.emissions, 'talkie:ended');
     expect(ended.map((e) => e.room)).toEqual([`user:${BOB}`]);
     expect(ended[0].payload.reason).toBe('cut');

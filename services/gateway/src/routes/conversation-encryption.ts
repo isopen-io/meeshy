@@ -235,7 +235,8 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
   /**
    * #14490 — le bout en bout vient d'être écrit : la voix en clair de la paire s'arrête
    * à l'instant, sans attendre le rejugement du relais. Une coupure qui ne s'écrit pas
-   * ne défait pas la bascule : le rejugement d'arrière-plan (au plus 2 s, borné) prend le relais.
+   * ne défait pas la bascule (irréversible, #12949) : le rejugement d'arrière-plan prend le
+   * relais au fragment suivant (au plus `REJUDGE_EVERY_MS` + `REJUDGE_TIMEOUT_MS`).
    */
   const cutClearTalkies = async (conversation: RegimeConversation): Promise<void> => {
     try {

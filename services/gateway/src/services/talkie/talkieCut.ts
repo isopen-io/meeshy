@@ -60,12 +60,17 @@ export async function readTalkieCut(
   return Number.isFinite(at) ? at : null;
 }
 
+/**
+ * Tous les sens d'abord coupés SUR CETTE INSTANCE, puis chaque coupure partagée écrite :
+ * une écriture qui échoue n'empêche ni la coupure locale ni l'écriture d'un autre sens,
+ * et l'échec remonte à l'appelant une fois tout tenté (#14490).
+ */
 async function cutDirections(deps: TalkieCutDeps, directions: ReadonlyArray<readonly [string, string]>): Promise<void> {
   const at = String(deps.now());
-  for (const [fromUserId, toUserId] of directions) {
-    deps.relay?.cutPair(fromUserId, toUserId);
-    await deps.cache.set(cutKey(fromUserId, toUserId), at, CUT_TTL_SECONDS);
-  }
+  directions.forEach(([fromUserId, toUserId]) => deps.relay?.cutPair(fromUserId, toUserId));
+  const writes = await Promise.allSettled(directions.map(([fromUserId, toUserId]) => deps.cache.set(cutKey(fromUserId, toUserId), at, CUT_TTL_SECONDS)));
+  const failed = writes.find((write): write is PromiseRejectedResult => write.status === 'rejected');
+  if (failed) throw failed.reason;
 }
 
 export async function cutTalkiesOnBlock(
@@ -83,9 +88,11 @@ export async function cutTalkiesOnBlock(
  * Le passage d'un tête-à-tête en chiffrement de bout en bout (#14490) : le talkie y
  * devient indisponible (`TALKIE_E2EE_CONVERSATION`), et la voix en clair déjà ouverte
  * s'arrête À L'INSTANT, dans les deux sens, par la même coupure partagée qu'un blocage —
- * sans attendre le rejugement d'arrière-plan. Une voix scellée ne peut pas être ouverte à
- * cet instant (un sceau sans paire chiffrée est refusé, et une paire n'a qu'un seul
- * tête-à-tête chiffré, #12966) : seule une voix en clair est visée. Rien n'est posé hors
+ * sans attendre le rejugement d'arrière-plan. Une voix scellée n'est en principe pas ouverte
+ * à cet instant (un sceau sans paire chiffrée est refusé, et une paire n'a qu'un seul
+ * tête-à-tête chiffré, #12966) ; la porte et la règle de la paire ne jugent toutefois pas
+ * « chiffrée » de la même façon (un tête-à-tête obsolète, #14643), et une voix scellée peut
+ * alors être coupée une fois à tort — fail-closed, elle se rouvre. Rien n'est posé hors
  * d'un tête-à-tête de deux comptes distincts.
  */
 export async function cutTalkiesOnEndToEnd(
