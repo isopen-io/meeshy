@@ -82,6 +82,16 @@ class CallDetailTranscriptViewModel internal constructor(
         request?.let(::fetch)
     }
 
+    /**
+     * A1.6 — la bulle qui porte ce journal a quitté l'écran : la lecture des pages s'arrête, et la rouvrir relit au lieu
+     * de rester sur « Loading » (la requête est oubliée, [load] ne la prend plus pour déjà servie).
+     */
+    fun release() {
+        job?.cancel()
+        job = null
+        request = null
+    }
+
     /** « Supprimer ce transcript », confirmed: gone from the sheet at once, then from the device. */
     fun delete() {
         val request = request ?: return
@@ -111,7 +121,7 @@ class CallDetailTranscriptViewModel internal constructor(
                 is CachedCallTranscript.Copy -> CallTranscriptState.of(project(held.page, request)).also { publish(request, it) }
                 CachedCallTranscript.None -> null
             }
-            val remote = when (val result = records.transcript(request.callId)) {
+            val remote = when (val result = records.fullTranscript(request.callId)) {
                 is NetworkResult.Success -> CallTranscriptRemote.Served(result.data)
                 is NetworkResult.Failure -> CallTranscriptRemote.Failed(result.error.httpStatus)
             }
