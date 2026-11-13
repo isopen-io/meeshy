@@ -157,7 +157,6 @@ final class EpureCerclesContactsTests: XCTestCase {
     /// Les phrases qui EXPLIQUENT restent : « Elle n'existe pas… » dit pourquoi, et aucun bouton ne le dit à sa place.
     func test_communityRefusedBody_staysBecauseItExplains() throws {
         XCTAssertNotNil(try kit()["community.detail.refused.body"]?["fr"])
-        XCTAssertNotNil(try app()["story.mine.empty.subtitle"]?["fr"])
         XCTAssertNotNil(try app()["story.mine.drafts.empty.subtitle"]?["fr"])
     }
 
@@ -337,5 +336,59 @@ final class EpureCerclesContactsTests: XCTestCase {
         XCTAssertTrue(sessions.contains("sessions.retry"), "« Réessayer » reste")
         XCTAssertTrue(try app()["circles.unlink.confirm.body"]?["fr"]?.contains("30 jours") ?? false, "la conséquence d'un geste irréversible reste")
         XCTAssertTrue(try app()["circles.demote.confirm.body"]?["fr"]?.contains("30 jours") ?? false)
+    }
+
+    // MARK: - Les états vides tiennent en une ligne (#18088, constats 1 à 9)
+
+    private static let emptyStateSubtitlesRemoved = [
+        "keypad.prompt.subtitle", "keypad.no-match.subtitle", "conversations.empty.subtitle",
+        "conversations.error.subtitle", "story.mine.empty.subtitle", "profile.posts.empty.filter.subtitle",
+        "notifications.story.expired.subtitle",
+    ]
+
+    func test_emptyStateSubtitles_areGoneFromEveryLanguage_andNoSourceReadsThem() throws {
+        let app = try app(), sources = try shippedSources()
+        for key in Self.emptyStateSubtitlesRemoved {
+            XCTAssertNil(app[key], "\(key) : encore au catalogue")
+            XCTAssertFalse(sources.contains("\"\(key)\""), "\(key) : une source la lit encore")
+        }
+    }
+
+    func test_conversationsError_isOneLine_theFailureItself_inEveryLanguage() throws {
+        let app = try app()
+        XCTAssertEqual(app["conversations.error.title"]?["fr"], "Impossible de charger vos conversations.")
+        let french = try XCTUnwrap(app["conversations.error.title"]?["fr"])
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(app["conversations.error.title"]?[language])
+            XCTAssertNotEqual(value, french, "\(language) : copié du français")
+        }
+    }
+
+    func test_progressionEmptyAndOffline_areShortened_andTranslated() throws {
+        let app = try app()
+        XCTAssertEqual(app["progression.empty"]?["fr"], "Aucune activité pour l’instant.")
+        XCTAssertEqual(app["progression.offline.empty"]?["fr"], "Hors ligne — aucune progression en mémoire")
+        for key in ["progression.empty", "progression.offline.empty"] {
+            let french = try XCTUnwrap(app[key]?["fr"])
+            for language in Self.otherLanguages {
+                let value = try XCTUnwrap(app[key]?[language])
+                XCTAssertNotEqual(value, french, "\(key) \(language) : copié du français")
+                XCTAssertFalse(value.contains("…"), "\(key) \(language) : la phrase longue est encore là")
+            }
+        }
+    }
+
+    func test_emptyStateSites_passNoSubtitle() throws {
+        let sites: [(String, [String])] = [
+            ("apps/ios/Meeshy/Features/Contacts/KeypadTab.swift", ["keypad.prompt.subtitle", "keypad.no-match.subtitle"]),
+            ("apps/ios/Meeshy/Features/Main/Views/ConversationListView+EmptyState.swift", ["conversations.error.subtitle", "conversations.empty.subtitle"]),
+            ("apps/ios/Meeshy/Features/Stories/Views/MyStoriesView.swift", ["story.mine.empty.subtitle"]),
+            ("apps/ios/Meeshy/Features/Profile/Views/ProfileUserPostsList.swift", ["profile.posts.empty.filter.subtitle"]),
+            ("apps/ios/Meeshy/Features/Stories/Notifications/StoryExpiredContent.swift", ["notifications.story.expired.subtitle"]),
+        ]
+        for (path, keys) in sites {
+            let source = try code(path)
+            for key in keys { XCTAssertFalse(source.contains(key), "\(path) lit encore \(key)") }
+        }
     }
 }
