@@ -9,6 +9,7 @@ import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { DEFAULT_SELF_CORNER, DEFAULT_SELF_TILE, selfTileRestingFactor, selfTileSize, selfTileStore } from '@/lib/calls/call-self-tile';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 
 import { CallStage } from './call-stage';
 
@@ -101,6 +102,10 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
     return { cancel: () => undefined };
   };
   proto.getBoundingClientRect = function rect(this: HTMLElement) {
+    if (this.hasAttribute('data-call-stage-surface')) {
+      const width = 1000 - Number(this.getAttribute('data-bleed') ?? 0);
+      return { left: 0, top: 0, right: width, bottom: 800, width, height: 800, x: 0, y: 0, toJSON: () => ({}) };
+    }
     const moved = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(this.style.transform);
     const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) - (this.hasAttribute('data-call-self-tile-beside-column') ? 360 : 0) + Number(moved?.[1] ?? 0);
     const lifted = /\+ (\d+(?:\.\d+)?)px\)/.exec(this.style.top);
@@ -124,7 +129,7 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
   return played;
 }
 
-const mount = (active: ActiveCall = call(), { chromeVisible = true, bleedEnd = 0 }: { readonly chromeVisible?: boolean; readonly bleedEnd?: number } = {}) => {
+const mount = (active: ActiveCall = call(), { chromeVisible = true, bleedEnd = 0, surface = false }: { readonly chromeVisible?: boolean; readonly bleedEnd?: number; readonly surface?: boolean } = {}) => {
   const host = document.createElement('div');
   document.body.appendChild(host);
   const root = createRoot(host);
@@ -135,7 +140,18 @@ const mount = (active: ActiveCall = call(), { chromeVisible = true, bleedEnd = 0
   const render = (visible: boolean, nextInset = inset, nextBleed = bleed) => {
     inset = nextInset;
     bleed = nextBleed;
-    act(() => root.render(<Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} topInset={inset} bleedEnd={bleed} />));
+    const stage = <Harness active={active} onSwap={() => (swaps.count += 1)} onReveal={() => (reveals.count += 1)} chromeVisible={visible} topInset={inset} bleedEnd={bleed} />;
+    act(() =>
+      root.render(
+        surface ? (
+          <div data-call-stage-surface="" data-bleed={bleed}>
+            {stage}
+          </div>
+        ) : (
+          stage
+        ),
+      ),
+    );
   };
   render(chromeVisible);
   const find = (selector: string) => host.querySelector(selector) as HTMLElement | null;
@@ -304,6 +320,36 @@ describe('W1.5 — ma vignette prend le coin de fin du sens de lecture', () => {
       [{ transform: 'translate(360px, 0px)' }, { transform: 'none' }],
       [{ transform: 'translate(-360px, 0px)' }, { transform: 'none' }],
     ]);
+  });
+});
+
+describe('W1.5 — la scène qui glisse vers son nouveau centre (W1.20) porte ma vignette : son propre glissé n’en joue que le reste', () => {
+  beforeAll(async () => {
+    await loadPillMotion();
+  });
+
+  test('la colonne s’ouvre puis se ferme : la vignette part de sa place vue, la scène qui la porte ayant déjà fait la moitié du chemin', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount(call(), { surface: true });
+      view.render(true, 0, 360);
+      view.render(true, 0, 0);
+      view.done();
+    });
+    expect(played).toEqual([
+      [{ transform: 'translate(180px, 0px)' }, { transform: 'none' }],
+      [{ transform: 'translate(-180px, 0px)' }, { transform: 'none' }],
+    ]);
+  });
+
+  test('un changement de coin, colonne ouverte, ne retire rien : la scène ne bouge pas', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount(call(), { surface: true, bleedEnd: 360 });
+      view.key('ArrowLeft');
+      view.done();
+    });
+    expect(played).toEqual([[{ transform: 'translate(280px, 0px)' }, { transform: 'none' }]]);
   });
 });
 

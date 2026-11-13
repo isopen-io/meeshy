@@ -268,6 +268,9 @@ export function useFollowPlace(node: RefObject<HTMLElement | null>, place: numbe
  * pilule : quand `reserve` (ce que la colonne leur retire) change, le centre de l'élément est relevé AU RENDU qui
  * le change, puis il rejoint le nouveau par la transformation seule, au lieu de sauter.
  */
+/** `useFollowInline` fera glisser ce qu'on lui confie dans ce rendu : son moteur est là. Ce qu'il porte n'en joue que le reste (`useFlip`, `carrier`). */
+export const followsInline = (): boolean => loaded !== null;
+
 export function useFollowInline(node: RefObject<HTMLElement | null>, reserve: number): void {
   const engine = usePillEngine();
   const committed = useRef(reserve);

@@ -3,6 +3,13 @@ import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { flipKeyframes, type FlipBox, type FlipPoint } from '@/lib/view/flip';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
+/** Le centre horizontal vu d'un élément, un mouvement en cours compris. */
+const centerXOf = (element: HTMLElement | null): number | null => {
+  if (element === null) return null;
+  const rect = element.getBoundingClientRect();
+  return rect.left + rect.width / 2;
+};
+
 const pointOf = (element: HTMLElement | null): FlipBox | null => {
   if (element === null) return null;
   const rect = element.getBoundingClientRect();
@@ -41,6 +48,7 @@ export function useFlip(
     held = false,
     origin,
     reducedDuration = duration,
+    carrier,
   }: {
     readonly key: string | null;
     readonly duration: number;
@@ -51,27 +59,41 @@ export function useFlip(
     readonly origin?: FlipPoint;
     /** La durée du fondu qui remplace le mouvement sous « réduire les animations ». Défaut : `duration`. */
     readonly reducedDuration?: number;
+    /**
+     * L'ancêtre qui, dans le MÊME rendu, rejoint son nouveau centre horizontal en glissant (`useFollowInline`) : il
+     * porte l'élément d'une part du chemin, l'élément ne joue que le reste — sans lui, les deux glissés s'ajoutent
+     * et l'élément part d'à côté de sa place. À ne déclarer que pour le rendu où l'ancêtre glisse vraiment.
+     */
+    readonly carrier?: () => HTMLElement | null;
   },
 ): void {
   const committed = useRef<string | null>(null);
   const first = useRef<FlipBox | null>(null);
+  const carrierCenter = useRef<number | null>(null);
   const running = useRef<Animation | null>(null);
 
-  if (key !== committed.current) first.current = key === null || committed.current === null ? null : pointOf(ref.current);
+  if (key !== committed.current) {
+    first.current = key === null || committed.current === null ? null : pointOf(ref.current);
+    carrierCenter.current = carrier === undefined ? null : centerXOf(carrier());
+  }
 
   useLayoutEffect(() => {
     const before = committed.current;
     const from = first.current;
+    const carrierFrom = carrierCenter.current;
     committed.current = key;
     first.current = null;
+    carrierCenter.current = null;
     const element = ref.current;
     if (element === null || key === null || before === null || before === key || from === null) return;
     running.current?.cancel();
     running.current = null;
     if (held || typeof element.animate !== 'function') return;
-    const last = pointOf(element);
-    if (last === null) return;
+    const seen = pointOf(element);
+    if (seen === null) return;
     const reducedMotion = prefersReducedMotion();
+    const carrierTo = carrierFrom === null || reducedMotion || carrier === undefined ? null : centerXOf(carrier());
+    const last = carrierFrom === null || carrierTo === null ? seen : { ...seen, x: seen.x + carrierFrom - carrierTo };
     const carried = carriedOf(element);
     const frames = flipKeyframes({ first: from, last, reducedMotion, ...(fadeFrom === undefined ? {} : { fadeFrom }), ...(origin === undefined ? {} : { origin }), ...(carried === undefined ? {} : { carried }) });
     if (frames === null) return;
