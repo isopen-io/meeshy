@@ -467,6 +467,33 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
 
+## 2026-11-13 — réveil 25 : mener #16987 (partage de position : comptes qui partent, ligne de maille, course) à la fusion
+
+- Reprise : #17956 (carte des positions sur le web, #16984) et `claude/cercles-ensemble-conversation-close` (#17147)
+  sont menées par des réveils actifs (poussées dans la dernière demi-heure) ; `claude/cercles-16588-web` aussi. Ce réveil
+  ne les touche pas.
+- Trouvé : la branche `claude/cercles-16987-serveur`, écrite et contre-auditée deux fois le 2026-11-08 (voir #16987),
+  n'avait jamais été proposée et n'avait plus de réveil depuis quatre jours. Ce réveil la reprend.
+- `origin/dev` fusionnée à la main : un conflit dans `AccountPurgeService.ts`, les deux côtés gardés (dev efface les
+  relais externes ouverts par le compte, la branche arrête son partage de position), l'arrêt placé en dernier pour ne
+  pas décaler la déstructuration du résumé de purge.
+- Gates locaux : `tsc --noEmit` passerelle (8 Go de tas) et shared verts ; témoins passerelle du lot et voisins
+  (sharedLocation, rituel, blocage, purge, administration, suppression de compte, maintenance, relations, balayages,
+  gardes et cliquets) 1 689/1 689 ; shared (`shared-location`, `relation-access`) 252/252.
+- Contre-audit adversarial des dernières corrections (b5837a213c, fede6d4463) relancé avant la fusion.
+- Contre-audit de 7e7dde1 : **bloquant**, deux constats élevés (un socket resté ouvert d'un compte désactivé ou
+  supprimé rangeait un nouveau partage, que la réactivation faisait revenir) et deux moyens (le rejeu d'une montée et
+  le rattrapage ne relisaient pas la loi après avoir noté le lecteur ; un lecteur dont l'accès se fermait sans rejeu,
+  un rôle d'équipe qui redescend, gardait le point). Corrigés en TDD : le démarrage relit l'émetteur après la
+  génération, le rejeu, la réconciliation et le rattrapage relisent après avoir noté, et l'éventail envoie la fin aux
+  servis dont l'accès est fermé. Le monde des témoins du relais sort dans un helper partagé (budget de taille).
+- Vérification des corrections : une régression trouvée (le rattrapage qui constatait une perte dénotait le lecteur
+  sans lui envoyer la fin, et la baisse ne le trouvait plus), corrigée : la fin part à qui avait reçu le point en
+  direct, rien à qui n'avait rien vu. Chaque correction a son témoin, prouvé rouge sur la tête d'avant.
+- Constats faibles mis en suivi : #17992 (ligne de maille au franchissement, purge annulée, fin perdue sans socket,
+  `MGET` sous Redis Cluster, p95 de la relecture, rejeu au changement de rôle).
+- Prochain lot recommandé : #16983 (position temporaire sur iOS, la référence), puis l'icône par cercle (#17013).
+
 ## 2026-11-13 — réveil repris après coupure : clore #17188 sur sa preuve
 
 - Reprise : run coupé à 05:13 par une erreur d'API, repris à 13:49. Onze PR de la routine ou voisines sont ouvertes et
