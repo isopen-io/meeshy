@@ -27,6 +27,7 @@ const line = (overrides: Partial<TranscriptLine> = {}): TranscriptLine => ({
   mine: false,
   offsetMs: 4_000,
   original: 'Can you hear me?',
+  originalLanguage: 'en',
   text: 'Tu m’entends ?',
   language: 'fr',
   translated: true,
@@ -116,15 +117,63 @@ describe('« Original · … » sous chaque phrase traduite, après l’appel (#
     expect(html).not.toContain('data-call-transcript-original-line');
   });
 
-  test('la bascule « Voir l’original » remplace la traduction, sans doubler la ligne', () => {
+  test('la bascule « Voir l’original » INVERSE les deux lignes : rien ne disparaît', () => {
     const html = render([line()], true);
-    expect(html).not.toContain('data-call-transcript-original-line');
     expect(html).toMatch(/data-call-transcript-text="original"[^>]*>Can you hear me\?</);
+    expect(html).toContain('data-call-transcript-translated-line=""');
+    expect(html).toMatch(/Traduit · <span[^>]*data-call-translated-text="">Tu m’entends \?<\/span>/);
+    expect(html).not.toContain('data-call-transcript-original-line');
   });
 
   test('chaque phrase traduite a SA ligne', () => {
     const html = render([line(), line({ id: 's-4', original: 'Hi', text: 'Salut' })]);
     expect(originalLines(html)).toHaveLength(2);
+  });
+});
+
+describe('la bascule inverse les deux lignes de TOUT l’appel (#17897, loi 7, #17862)', () => {
+  const entryOf = (html: string): string => html.split('<li').find((chunk) => chunk.includes('data-call-transcript-line="peer"')) ?? '';
+  const footOf = (original: boolean) => renderToStaticMarkup(<CallTranscriptLines lines={[line()]} language="fr" original={original} onToggleOriginal={() => undefined} />);
+
+  test('par défaut : la traduction à la couleur d’auteur EN TÊTE, « Original · … » dessous', () => {
+    const entry = entryOf(render([line()]));
+    expect(entry.indexOf('data-call-transcript-text="translated"')).toBeGreaterThan(-1);
+    expect(entry.indexOf('data-call-transcript-text="translated"')).toBeLessThan(entry.indexOf('Original · '));
+  });
+
+  test('inversé : l’original EN TÊTE à l’encre du thème, « Traduit · … » dessous à l’encre secondaire du fil', () => {
+    const entry = entryOf(render([line()], true));
+    expect(entry.indexOf('data-call-transcript-text="original"')).toBeLessThan(entry.indexOf('Traduit · '));
+    expect(entry).toMatch(/color:var\(--color-ios-ink\)[^>]*data-call-transcript-text="original"/);
+    expect(entry).toMatch(/color:var\(--color-ios-ink-2\)[^>]*data-call-transcript-translated-line=""/);
+    expect(entry).not.toContain('--color-on-media-3');
+  });
+
+  test('chaque ligne porte SA langue et dir="auto" : l’original en tête comme la traduction dessous', () => {
+    const inverted = entryOf(render([line()], true));
+    expect(inverted).toMatch(/dir="auto" lang="en" data-call-transcript-text="original"/);
+    expect(inverted).toMatch(/lang="fr"[^>]*data-call-translated-text=""|data-call-translated-text=""[^>]*lang="fr"/);
+    expect(inverted).toMatch(/<span dir="auto"[^>]*data-call-translated-text=""/);
+    const standard = entryOf(render([line()]));
+    expect(standard).toMatch(/<span dir="auto" lang="en"[^>]*data-call-original-text=""/);
+  });
+
+  test('TOUTES les phrases traduites s’inversent ; ma phrase et une phrase sans traduction restent seules', () => {
+    const lines = [line(), line({ id: 's-4', original: 'Hi', text: 'Salut' }), line({ id: 's-5', mine: true, speakerId: 'u-moi', translated: false, text: 'Oui', original: 'Oui' }), line({ id: 's-6', translated: false, text: 'Hello', original: 'Hello', language: 'en' })];
+    const html = render(lines, true);
+    expect(html.match(/data-call-transcript-translated-line=""/g)).toHaveLength(2);
+    expect(html.match(/data-call-transcript-text="original"/g)).toHaveLength(4);
+    expect(html).not.toContain('data-call-transcript-original-line');
+    expect(render(lines, false).match(/data-call-transcript-original-line=""/g)).toHaveLength(2);
+  });
+
+  test('le pied dit « Voir l’original » puis « Voir la traduction », et aria-pressed suit l’état', () => {
+    expect(footOf(false)).toMatch(/aria-pressed="false"[^>]*data-call-transcript-original="">Voir l’original</);
+    expect(footOf(true)).toMatch(/aria-pressed="true"[^>]*data-call-transcript-original="">Voir la traduction</);
+  });
+
+  test('la cible du pied tient les 44 px', () => {
+    expect(footOf(false)).toContain('min-h-11');
   });
 });
 
