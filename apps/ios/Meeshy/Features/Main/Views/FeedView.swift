@@ -7,7 +7,7 @@ import MeeshyUI
 
 // MARK: - Feed View
 struct FeedView: View {
-    /// **La dernière dépendance qui manquait au MEUBLE** (2026-09-06).
+    /// **La dernière dépendance qui manquait au MEUBLE**.
     ///
     /// `DocumentComposerDoor` en a besoin, et l'arbre iPad l'avait déjà sous
     /// la main (`iPadRootView.conversationViewModel`) — il ne descendait
@@ -19,7 +19,8 @@ struct FeedView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var routerCommands
+    @Environment(\.meeshyRouter) private var meeshyRouter
     @EnvironmentObject private var statusViewModel: StatusViewModel
     // Stories in the iPad feed: the tray reads the shared StoryViewModel (loaded
     // by `iPadRootView`). FeedView is iPad-only, so these objects are always
@@ -441,18 +442,17 @@ struct FeedView: View {
         // des publications d'une autre nature que l'iPhone (#5322). L'origine est
         // la MÊME que celle du fil iPhone (`.feedComposer`) — une origine « iPad »
         // aurait fabriqué une seconde vérité à tenir d'accord avec la première.
-        .feedPostComposer(
-            isPresented: $showComposer, router: router, viewModel: viewModel,
+        .relayingMeeshyRouter(meeshyRouter) { $0.feedPostComposer(
+            isPresented: $showComposer, router: $1, viewModel: viewModel,
             storyViewModel: storyViewModel, statusViewModel: statusViewModel,
             conversationListViewModel: conversationListViewModel
-        )
+        ) }
     }
 
     /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
     /// proximité ». Les deux ouvrent une autre LECTURE du même feed — elles
     /// vont ensemble ; le chemin iPhone (`ThemedFeedOverlay.feedHeaderActions`)
-    /// porte la même paire. La carte des posts du feed (bouton `map`,
-    /// 2026-08-13) a fusionné dans « À proximité » le 2026-08-26 — mode
+    /// porte la même paire. La carte des posts du feed (bouton `map`) a fusionné dans « À proximité » — mode
     /// Discover, réservé au staff de la plateforme.
     private var feedHeaderActions: some View {
         HStack(spacing: MeeshySpacing.sm) {
@@ -475,9 +475,11 @@ struct FeedView: View {
         } label: {
             Image(systemName: "play.rectangle.on.rectangle.fill")
                 .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .buttonStyle(.plain)
         // Les réels dans leur propre fenêtre (iPad) : le fil des publications reste dans la fenêtre principale.
@@ -504,13 +506,15 @@ struct FeedView: View {
     private var nearbyButton: some View {
         Button {
             HapticFeedback.light()
-            router.push(.nearbyDiscovery())
+            routerCommands.push(.nearbyDiscovery())
         } label: {
             Image(systemName: "dot.radiowaves.left.and.right")
                 .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))
@@ -817,7 +821,7 @@ struct FeedView: View {
     // « Partager » et « Citer » ne produisaient rien. Pire, l'item restait armé
     // et bloquait les présentations suivantes du feed jusqu'au redémarrage.
     // Elles sont désormais ancrées au `body`, monté en permanence — et c'est cet
-    // ancrage qui a permis de retirer l'overlay (2026-09-06) sans rien emporter.
+    // ancrage qui a permis de retirer l'overlay sans rien emporter.
     private func postActionPresentations(_ content: some View) -> some View {
         content
             .sheet(item: $shareableLink) { link in
@@ -834,7 +838,7 @@ struct FeedView: View {
             .postEditCover(item: $editingPost) { post, draft in
                 await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects, additions: draft.additions)
             }
-            .fullScreenCover(item: $quoteTargetPost) { quoted in
+            .relayingMeeshyRouter(meeshyRouter) { view, router in view.fullScreenCover(item: $quoteTargetPost) { quoted in
                 QuoteComposerDoor(
                     quoted: quoted,
                     storyViewModel: storyViewModel,
@@ -843,7 +847,7 @@ struct FeedView: View {
                     statusViewModel: statusViewModel,
                     onFinish: { quoteTargetPost = nil }
                 )
-            }
+            } }
     }
 }
 

@@ -27,7 +27,7 @@ public extension StoryItem {
     /// (reposting:authorHandle:)`) ne produit d'ailleurs jamais l'un sans
     /// l'autre : il clone `story.storyEffects` dès qu'il y a un ajout. Durci
     /// ici en profondeur pour ne jamais dépendre de cette garantie côté
-    /// composer (post-revue 2026-07-13).
+    /// composer.
     init(feedPost: FeedPost) {
         let storySource = feedPost.republishedStory
         let hasOwnContent = StoryEffects.republicationHasOwnContent(own: feedPost.storyEffects,

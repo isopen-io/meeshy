@@ -74,7 +74,7 @@ struct MessageFrameTracker: Equatable {
 /// invalide le body de son propriétaire à chaque mutation. Or son propriétaire
 /// est `ConversationView` — la racine du fil. En Bulles/Script/Focal la
 /// question ne se posait pas : la publication de préférence a été retirée du
-/// pont UIKit (`MessageListView`, audit fluidité 2026-08-21), donc la carte
+/// pont UIKit (`MessageListView`), donc la carte
 /// restait vide et stable. **En Rivière, le lecteur est un sous-arbre SwiftUI
 /// PUR** : chaque bulle publie sa frame, la préférence remonte jusqu'à la
 /// racine, `update(_:)` invalide `ConversationView`, qui reconstruit le pane,

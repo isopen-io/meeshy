@@ -10,15 +10,13 @@ extension StickerPickerView {
 
     /// **Une section par INTENTION** — ce que le sticker permet de dire —, dans
     /// l'ordre du web : son titre, puis la phrase qui dit quand l'employer.
-    /// Mee, Meo et leurs duos y sont rangés ENSEMBLE (directive porteur
-    /// 2026-10-02).
+    /// Mee, Meo et leurs duos y sont rangés ENSEMBLE.
     ///
     /// **Des RANGÉES, pas une grille par section.** Chaque ligne est un enfant
     /// direct de la pile paresseuse de la feuille, d'une hauteur connue : la
     /// pile ne crée que ce qui entre à l'écran. Une `LazyVGrid` par intention
     /// créait ses quarante cases d'un coup et faisait osciller la hauteur du
     /// contenu au bas de la planche — défilement figé, processeur à 100 %
-    /// (retour porteur 2026-10-02).
     ///
     /// `cast` : la distribution d'un pack intégré (#9190) — `nil`, la planche
     /// entière.
@@ -35,7 +33,7 @@ extension StickerPickerView {
             case .title(let intent):
                 sectionHeader(symbole: StickerSheetTab.meeAndMeo.symbolName, titre: intent.title) {
                     Text(intent.hint)
-                        .font(.system(size: 12, design: .rounded))
+                        .font(MeeshyFont.relative(12, design: .rounded))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }

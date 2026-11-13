@@ -33,7 +33,7 @@ struct ReelAudioBackdrop: View, Equatable {
             Image(systemName: "waveform")
                 // doctrine 86i — glyphe décoratif borné, centré derrière le contenu du réel
                 .font(.system(size: 44, weight: .semibold))
-                .foregroundColor(.white.opacity(0.25))
+                .foregroundStyle(Color.white.opacity(0.25))
         }
         .onAppear { if isActive { startAnimating() } }
         .adaptiveOnChange(of: isActive) { _, active in

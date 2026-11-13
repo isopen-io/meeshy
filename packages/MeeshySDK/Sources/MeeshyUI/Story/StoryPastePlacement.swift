@@ -1,6 +1,6 @@
 import Foundation
 
-/// **Où va ce qu'on colle** (#4378, directive porteur 2026-08-30).
+/// **Où va ce qu'on colle** (#4378).
 ///
 /// > « décide de comment coller ! Si le texte est > 10 mots il faut mettre dans
 /// > la description, sinon créer un objet texte. Si c'est un audio mettre en

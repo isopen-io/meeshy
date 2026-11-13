@@ -4,7 +4,7 @@ import Foundation
 
 /// **Où se pose la tête de lecture d'un lecteur qu'on retrouve.**
 ///
-/// Mesuré sur l'iPhone 16 Pro Max (build Release, 2026-10-12) : revenir sur un
+/// Mesuré sur l'iPhone 16 Pro Max : revenir sur un
 /// réel déjà commencé le reprenait au même endroit en PLUSIEURS secondes. Le
 /// lecteur sortant était rendu au pool la tête ramenée à ZÉRO
 /// (`SharedAVPlayerManager.recycle`) ; au retour, la page le faisait jouer

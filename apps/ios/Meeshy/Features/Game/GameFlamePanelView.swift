@@ -67,7 +67,7 @@ struct GameFlamePanelView: View {
         if flame.freezes >= flame.maxFreezes {
             GameNote(text: String(
                 localized: "game.flame_panel.freeze_full",
-                defaultValue: "Tes Veilleuses sont au complet : une Veilleuse garde ta Flamme allumée un jour d’absence, tu n’en as pas besoin d’une de plus.",
+                defaultValue: "Tes Veilleuses sont au complet.",
                 bundle: .main
             ))
         } else {
@@ -105,7 +105,7 @@ struct GameFlamePanelView: View {
         } else if isOut && cannotPayRelight {
             GameNote(text: String(
                 localized: "game.flame_panel.relight_missing_window",
-                defaultValue: "Il te faut \(GameCopy.meeshes(flame.relightPrice)) pour la rallumer, si elle s’est éteinte il y a moins de 48 h.",
+                defaultValue: "Rallumage possible dans les 48 h qui suivent l’extinction.",
                 bundle: .main
             ))
             spendRow(relightSpend, identifier: "game.flame.relight.spend", missing: { ConceptText.spendMissingRelight(missing: $0) })

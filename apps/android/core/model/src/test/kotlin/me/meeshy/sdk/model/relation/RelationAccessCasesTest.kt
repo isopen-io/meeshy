@@ -193,9 +193,9 @@ class RelationAccessCasesTest {
     }
 
     @Test
-    fun `the team is moderator, admin and bigboss, never audit nor analyst`() {
+    fun `the team is analyst and above, never user nor agent`() {
         assertThat(PlatformRole.entries.filter { it.isTeam })
-            .containsExactly(PlatformRole.BIGBOSS, PlatformRole.ADMIN, PlatformRole.MODERATOR)
+            .containsExactly(PlatformRole.BIGBOSS, PlatformRole.ADMIN, PlatformRole.MODERATOR, PlatformRole.AUDIT, PlatformRole.ANALYST)
     }
 
     @Test

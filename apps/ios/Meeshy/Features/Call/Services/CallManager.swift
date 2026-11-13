@@ -18,7 +18,7 @@ import os
 ///
 /// File-level (not a method) because call sites include closures that do not
 /// capture the `CallManager` as `self`.
-func applyBestEffortAudioSetting(
+nonisolated func applyBestEffortAudioSetting(
     _ name: String,
     _ apply: () throws -> Void
 ) {
@@ -199,7 +199,7 @@ final class CallManager: ObservableObject, Sendable {
     @Published var isSignalingDegraded: Bool = false
     @Published var isMuted: Bool = false { didSet { if isMuted != oldValue { toggleTranscription() } } }
 
-    /// CALL-FIX 2026-06-06 — whether THIS call drives CallKit. CallKit is only
+    /// CALL-FIX — whether THIS call drives CallKit. CallKit is only
     /// needed to (a) ring a backgrounded/locked device woken by a VoIP push and
     /// (b) provide the system call UI. We bypass it when the app already shows its
     /// own in-app call UI: ALWAYS on iOS-app-on-Mac (no system call UI there), and
@@ -334,7 +334,7 @@ final class CallManager: ObservableObject, Sendable {
     }
 
     /// Thread-safe, nonisolated mirror of `callState.isActive`, updated on every
-    /// `callState` change (see the `didSet`). CALL-FIX 2026-06-05: lets the SDK
+    /// `callState` change (see the `didSet`). CALL-FIX: lets the SDK
     /// socket managers (which must stay call-agnostic — SDK purity) consult
     /// "is a call active?" from ANY thread via an injected closure, without
     /// referencing CallManager or hopping to the MainActor. Used to suppress
@@ -424,7 +424,7 @@ final class CallManager: ObservableObject, Sendable {
     /// by any newer incoming call.
     var callJoinTask: Task<Void, Never>?
 
-    /// [Fix 2026-07-02] The CallKit answer action, held until the call really
+    /// [] The CallKit answer action, held until the call really
     /// connects (`CallKitAnswerActionHold`). Called on the MainActor from
     /// `provider(_:perform: CXAnswerCallAction)`, which hops there via
     /// `Task { @MainActor ... }` — `CXProvider.setDelegate(_:queue: nil)`
@@ -450,7 +450,7 @@ final class CallManager: ObservableObject, Sendable {
     /// (i.e. a new call already grabbed `currentCallId`/`remoteUserId` between
     /// the ended transition and the timer firing).
     var settleToken: UUID?
-    /// Audit 2026-07-07 — `endCurrentAndAnswerPending`'s revalidation guard used
+    /// `endCurrentAndAnswerPending`'s revalidation guard used
     /// to read `pendingIncomingCall`, but `endCall()` (called earlier in the same
     /// function) synchronously drives `endCallInternal`, which unconditionally
     /// nils `pendingIncomingCall` for an unrelated reason (dropping a stale busy
@@ -615,9 +615,9 @@ final class CallManager: ObservableObject, Sendable {
     /// its doc comment below). This slot never got the equivalent fix: a
     /// user on call A who ALSO hangs up/declines a second call B while the
     /// socket is down needs BOTH replayed on reconnect, not just the last
-    /// write's callId (audit gateway-calls 2026-08-15).
+    /// write's callId.
     /// `reason == "rejected"` marks a DECLINE — the replay must preserve it,
-    /// or it resurrects the `missed` mislabel (arc reject 2026-07-12).
+    /// or it resurrects the `missed` mislabel.
     var pendingEndReconciliations: [(callId: String, reason: String?)] = []
 
     /// Combien de fois la fin de chaque appel a été armée pour un rejeu. Sans plafond, une fin que la passerelle

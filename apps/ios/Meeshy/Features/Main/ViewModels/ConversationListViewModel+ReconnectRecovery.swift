@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import MeeshySDK
 
 // #10927 — extrait de `ConversationListViewModel.swift`, hors budget : la
 // réparation d'une liste en échec quand le serveur revient vit ici.
@@ -17,9 +18,9 @@ extension ConversationListViewModel {
             .scan((was: false, now: false)) { previous, now in (was: previous.now, now: now) }
             .filter { !$0.was && $0.now }
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self, self.loadFailed, !self.isLoading else { return }
-                Task { @MainActor [weak self] in await self?.forceRefresh() }
+            .relay(through: OrderedEventLane()) { [weak self] _ in
+                guard let self, await self.loadFailed, await !self.isLoading else { return }
+                await self.forceRefresh()
             }
     }
 }

@@ -110,7 +110,7 @@ extension CallManager {
 
     // MARK: - Reliable call:join (incoming paths)
 
-    /// [Fix 2026-07-02] Reliable `call:join` — replaces the fire-and-forget
+    /// [] Reliable `call:join` — replaces the fire-and-forget
     /// `emitCallJoin` on BOTH incoming-call paths.
     ///
     /// On a VoIP-push cold start (locked phone, answer from the CallKit lock
@@ -120,7 +120,7 @@ extension CallManager {
     /// never creates our CallParticipant, then rejects every `call:signal` we
     /// send ("Sender not a participant") and the caller times out to `missed`
     /// even though the user answered (observed in prod, callIds
-    /// 6a461091/6a46110c, 2026-07-02). The P1-30 rejoin net doesn't cover this:
+    /// 6a461091/6a46110c). The P1-30 rejoin net doesn't cover this:
     /// the FIRST connection never fires `didReconnect` (`hadPreviousConnection`).
     ///
     /// Strategy: force `connect()` when needed, wait for `isConnected`

@@ -173,7 +173,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         manager = SocketManager(socketURL: url, config: [
             .log(false),
             .handleQueue(.main),
-            // CALL-FIX 2026-06-06 — WebSocket transport (voir MessageSocketManager).
+            // CALL-FIX — WebSocket transport (voir MessageSocketManager).
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
             .reconnectWait(1),
@@ -243,7 +243,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         forceReconnect()
     }
 
-    /// CALL-FIX 2026-06-05 — app-injected "is a call active?" predicate (opaque
+    /// CALL-FIX — app-injected "is a call active?" predicate (opaque
     /// closure, SDK stays call-agnostic). When true, forceReconnect is suppressed
     /// so a token rotation / re-auth never tears down the socket mid-call.
     public var isCallActiveGuard: (@Sendable () -> Bool)?

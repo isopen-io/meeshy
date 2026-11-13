@@ -85,6 +85,15 @@ const KNOWN_LIVE_VIA_NON_STANDARD_REFERENCE = new Set([
   // construisait le chemin à la main dans l'ancienne refonte v3, retirée du dépôt
   // depuis (#5994) : la route reste appelée, l'exception reste juste.
   'guestSessions.me',
+  // `POST`/`DELETE /api/v1/users/me/push-to-talk-token` — le jeton PushToTalk
+  // n'existe que sur iOS (`PTChannelManager`) : appelé par
+  // `apps/ios/Meeshy/Features/Talkie/TalkiePushToTalkChannel.swift` (chemin
+  // écrit à la main), hors `SEARCH_ROOTS`. Aucun client web n'en aura (#17142).
+  'users.mePushToTalkToken',
+  // `GET /api/v1/talkie/:talkieId/audio` — atteinte par l'URL SIGNÉE que le push
+  // de suivi porte (`attachmentUrl` / `audioUrl`, #17165), téléchargée telle
+  // quelle par la NSE iOS et le lecteur ; jamais composée depuis le catalogue.
+  'talkie.byTalkieIdAudio',
 ]);
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
@@ -537,6 +546,14 @@ const PENDING_CLIENT_ENTRIES = {
   'publishers.admin': { issue: 16274, reason: 'GET|POST /publishers/admin — la liste et la liaison des éditeurs, console web' },
   // La page éditeur (#16433) : iOS la lit d'abord ; la boutique web la lira avec sa page éditeur.
   'publishers.bySlugPage': { issue: 16433, reason: 'GET /publishers/:slug/page — l’identité de l’éditeur et le profil qui l’édite, page éditeur web' },
+  // Le réveil par push d'un talkie vers un Proche hors ligne (#17142, chapeau #17141) : la
+  // passerelle sert déjà le tampon et le jeton ; aucun client (web, iOS, Android) n'appelle encore
+  // ces deux routes REST — le relais se fait pour l'instant par socket (`talkie:join`).
+  'talkie.byTalkieIdAudio': { issue: 17142, reason: 'GET /talkie/:talkieId/audio — l’audio tamponné d’un talkie de réveil, que le web et Android liront (#17142)' },
+  'users.mePushToTalkToken': { issue: 17142, reason: 'POST|DELETE /users/me/push-to-talk-token — le jeton PushToTalk, lié à la session côté iOS' },
+  // La conversation externe (#17117, chantier #17007) : la passerelle ouvre une conversation chiffrée de bout en
+  // bout avec un ami WhatsApp, derrière un drapeau éteint en production ; le lot clients (#17118) l'appellera.
+  'conversations.external': { issue: 17118, reason: 'POST /conversations/external — ouvrir une conversation avec un ami WhatsApp, depuis le web, iOS et Android' },
 };
 
 // 274 -> 271 (#6375, 2026-11-07) : `communities.byIdMembers`, `.byIdMembersByMemberId` et

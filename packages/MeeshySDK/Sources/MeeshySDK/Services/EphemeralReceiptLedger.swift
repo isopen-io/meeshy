@@ -109,7 +109,7 @@ public final class EphemeralReceiptLedger: EphemeralReceiptRecording, Sendable {
     /// ligne reste dans le fil quelques instants après l'annonce de sa
     /// destruction, et la projection suivante — trouvant un registre VIDE pour
     /// cet identifiant — stampait une réception NEUVE. Mesuré en recette le
-    /// 2026-09-22 : un éphémère de 30 s atteignait 0:00, puis REMONTAIT à 0:06,
+    /// Un éphémère de 30 s atteignait 0:00, puis REMONTAIT à 0:06,
     /// une fenêtre de 30 s entière repartie.
     ///
     /// La pierre tombale coûte exactement la place que la réception libère —

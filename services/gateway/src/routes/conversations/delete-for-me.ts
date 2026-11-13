@@ -13,6 +13,7 @@ import { resoudreSuccessionDuCreateur } from '../../services/conversations/creat
 import { announceParticipantRoleWithCapabilities } from '../../services/conversations/obsoleteCapability'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
+import { eraseExternalPeerOnClose } from '../../services/external-conversation/erase-external-peers'
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
 
 const logger = enhancedLogger.child({ module: 'ConversationDeleteForMe' })
@@ -159,6 +160,8 @@ export async function performConversationDeleteForMe(
         // vers un fil déjà clos est un contrôle qui ment.
         deactivateShareLinksOnClose(prisma, conversationId),
       ])
+      // #17117 — le numéro de l'ami d'une conversation externe ne survit pas au fil.
+      await eraseExternalPeerOnClose(prisma, closed)
       closedAudience = (closed.participants ?? []).filter(p => p.isActive)
     }
   } else {

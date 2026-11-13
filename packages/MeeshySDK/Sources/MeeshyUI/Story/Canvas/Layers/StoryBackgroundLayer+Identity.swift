@@ -158,7 +158,7 @@ extension StoryBackgroundLayer {
         // → fit, sinon fill) sautait visuellement quand le bitmap arrivait async :
         // la gravity initiale `.resizeAspectFill` (posée à l.381) basculait sur
         // `.resizeAspect` (letterbox) pour les images paysage → le BG "se
-        // cachait" derrière sa propre letterbox (user feedback 2026-05-29).
+        // cachait" derrière sa propre letterbox.
         // Fit/Fill sont maintenant exclusivement déclenchés par le double-tap.
         return .resizeAspectFill
     }

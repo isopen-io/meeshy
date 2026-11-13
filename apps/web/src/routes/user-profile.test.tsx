@@ -98,7 +98,7 @@ describe('la fiche se lit par onglets', () => {
 
   test('trois onglets dans l’ordre d’iOS, Détails ouvert d’abord', async () => {
     const el = await mount('kwame-mensah');
-    expect(tabs(el)).toEqual(['posts', 'conversations', 'details']);
+    expect(tabs(el)).toEqual(['details', 'conversations', 'posts']);
     expect(selected(el)).toBe('details');
   });
 
@@ -139,17 +139,17 @@ describe('la fiche se lit par onglets', () => {
       details.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     });
     await settle();
-    expect(selected(el)).toBe('posts');
-    expect(document.activeElement?.getAttribute('data-profile-tab')).toBe('posts');
+    expect(selected(el)).toBe('conversations');
+    expect(document.activeElement?.getAttribute('data-profile-tab')).toBe('conversations');
     await act(async () => {
       (document.activeElement as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
     });
-    expect(selected(el)).toBe('details');
+    expect(selected(el)).toBe('posts');
   });
 
   test('sur SA PROPRE fiche, pas d’onglet Conversations', async () => {
     const el = await mount('vous');
-    expect(tabs(el)).toEqual(['posts', 'details']);
+    expect(tabs(el)).toEqual(['details', 'posts']);
   });
 
   test('sur un compte BLOQUÉ, aucun onglet : l’identité et « Débloquer »', async () => {

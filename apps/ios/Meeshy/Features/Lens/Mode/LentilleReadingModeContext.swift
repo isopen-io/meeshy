@@ -251,9 +251,7 @@ nonisolated enum LentilleReadingModeContext {
 /// même préférence : le mode choisi dans le menu de la liste n'était pas
 /// celui que le fil ouvrait, et la clé de la liste n'avait AUCUN préfixe
 /// d'identité — deux comptes sur le même appareil partageaient donc leurs
-/// préférences de lecture (exactement la fuite privacy du 2026-05-26 que
-/// `ReadingModePreferenceStore` documente en tête et que son préfixe scopé
-/// interdit).
+/// préférences de lecture.
 ///
 /// APRÈS : le stockage Focal est LE stockage. Cette classe ne fait que
 /// TRADUIRE — elle implémente le protocole GELÉ `ReadingModePreferenceStoring`
@@ -275,15 +273,13 @@ nonisolated enum LentilleReadingModeContext {
 /// (tests seuls). (2) Aucun build utilisateur n'a donc jamais écrit une de ces
 /// clés. (3) Surtout : migrer une clé NON scopée vers une clé scopée
 /// consisterait à attribuer au premier lecteur venu une préférence qu'un autre
-/// compte du même appareil aurait laissée — soit re-commettre la fuite du
-/// 2026-05-26 dans le geste même censé la refermer. Ne rien migrer est ici la
+/// compte du même appareil aurait laissée — soit re-commettre la fuite dans le geste même censé la refermer. Ne rien migrer est ici la
 /// seule lecture honnête.
 nonisolated final class LentilleScopedReadingModePreferenceStore: ReadingModePreferenceStoring, @unchecked Sendable {
 
     private let store: FocalReadingModePreferenceStoring
     private let scopeProvider: @Sendable @concurrent () async -> ReadingModePreferenceScope
-    private let lock = NSLock()
-    private var subscribers: [UUID: @Sendable (String, ReadingModePreference) -> Void] = [:]
+    private let subscribers = Locked<[UUID: @Sendable (String, ReadingModePreference) -> Void]>(uncheckedState: [:])
 
     init(
         store: FocalReadingModePreferenceStoring = ReadingModePreferenceStore(),
@@ -342,22 +338,15 @@ nonisolated final class LentilleScopedReadingModePreferenceStore: ReadingModePre
     /// divergentes » : seule la seconde était un défaut.
     func onChange(_ callback: @escaping @Sendable (String, ReadingModePreference) -> Void) -> @Sendable () -> Void {
         let token = UUID()
-        lock.lock()
-        subscribers[token] = callback
-        lock.unlock()
+        subscribers.mutateUnchecked { $0[token] = callback }
 
         return { [weak self] in
-            guard let self else { return }
-            self.lock.lock()
-            self.subscribers.removeValue(forKey: token)
-            self.lock.unlock()
+            self?.subscribers.mutateUnchecked { $0.removeValue(forKey: token) }
         }
     }
 
     private func notifySubscribers(conversationId: String, value: ReadingModePreference) {
-        lock.lock()
-        let callbacks = Array(subscribers.values)
-        lock.unlock()
+        let callbacks = subscribers.mutateUnchecked { Array($0.values) }
         for callback in callbacks {
             callback(conversationId, value)
         }

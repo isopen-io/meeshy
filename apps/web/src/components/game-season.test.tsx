@@ -61,7 +61,7 @@ describe('une saison en cours', () => {
 
   test('ce qu’il manque pour l’étape suivante, et comment on gagne des étoiles', () => {
     expect(text(html)).toContain('pas jusqu’à la halte suivante');
-    expect(text(html)).toContain('4 pas mènent à la halte suivante');
+    expect(text(html)).toContain('4 pas par halte');
   });
 
   test('quarante étapes, chacune lisible : réclamée, à réclamer, à venir', () => {
@@ -85,7 +85,7 @@ describe('une saison en cours', () => {
   });
 
   test('le Sceau est cosmétique et le dit', () => {
-    expect(text(html)).toContain('purement décoratif');
+    expect(text(html)).toContain('Sans effet sur le jeu');
   });
 });
 

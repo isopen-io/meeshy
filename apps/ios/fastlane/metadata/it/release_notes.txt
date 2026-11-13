@@ -1,9 +1,9 @@
-Meeshy 1.1.3 — tutto si crea sulla scena
+Meeshy 1.1.8 — chiamate più belle, più chiare, nella tua lingua.
 
-• Sticker: un unico pannello, nelle tue chat come nelle tue storie, post e reel; Mee e Meo prendono vita, e uno Shop installa o rimuove un pacchetto con un tocco
-• Editor: tocca lo strumento Testo per creare la tua scena, poi modifica testo, immagini, sticker e sfondo direttamente lì; un pizzico ingrandisce il testo senza spezzarne le righe
-• Foto e video si modificano nella scena prima dell'invio: ritaglia un'immagine (Originale, 1:1, 4:5, 9:16), accorcia un video, e la fotocamera si apre a schermo intero
-• Barra di scrittura più leggera: libreria foto e fotocamera con un tocco, e icone nei colori del tuo effetto
-• Chiamate: vedi quando l'altra persona spegne la fotocamera o il microfono, riprendi una chiamata interrotta invece di perderla, e una chiamata di gruppo continua quando qualcuno se ne va; in video, un incarnato naturale e una levigatura della pelle regolabile
-• Un link Meeshy aperto senza account mostra il post e chi te lo ha condiviso; un reel senza testo mostra la sua didascalia, e modificare un post ne conserva il tipo
-• Correzioni e più fluidità
+• Chiamate ridisegnate: ogni pulsante è di vetro (Liquid Glass su iOS 26), chi parla si illumina del suo colore e, in orizzontale, fino a quattro persone stanno su una sola riga.
+• Sottotitoli: ogni frase indica la sua lingua e mostra l'originale con un tocco. Dopo la chiamata, il registro si apre sotto la sua bolla nella conversazione.
+• Registrazione e condivisione schermo: tutti vedono chi chiede e chi accetta, la registrazione parte in Audio o in Video, e «Interrompi condivisione» è sempre a portata di mano.
+• Creazione: incolla un'immagine per lo sfondo della scena o un testo per la didascalia; il mirino propone per primi Testo, Sfondo, Galleria e Sticker.
+• Più semplice ovunque: registrazione, impostazioni e gioco dicono ogni cosa una sola volta, e i dettagli aspettano dietro una (i).
+
+E naturalmente, correzioni e più fluidità ovunque.

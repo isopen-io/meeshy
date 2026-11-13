@@ -37,7 +37,7 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
     /// (`UNNotificationExtensionCategory`) — une par cas ci-dessus.
     static let categoryIdentifiers: [String] = [
         NotificationDetailPolicy.audioCategory, "MEESHY_LOCATION", "MEESHY_CONTACT",
-        NotificationDetailPolicy.ephemeralCategory,
+        NotificationDetailPolicy.ephemeralCategory, NotificationDetailPolicy.talkieCategory,
     ]
 
     /// `resolveURL` résout l'adresse de la piste contre l'origine API de
@@ -78,6 +78,18 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
     /// Plafond du sommeil avant de retirer une notification d'éphémère :
     /// sept jours, au-delà de toute durée d'éphémère.
     static let expirySleepCapNanoseconds: UInt64 = 7 * 24 * 3_600 * 1_000_000_000
+    static let expirySleepCapDuration: Duration = .seconds(7 * 24 * 3_600)
+
+    /// Le sommeil, sous forme de `Duration`, jusqu'à l'échéance. L'échéance vient de la
+    /// charge du push : une valeur absurde (lointaine, infinie, NaN) ne doit
+    /// jamais faire piéger la conversion — elle est plafonnée.
+    static func expirySleepDuration(deadline: Date, now: Date) -> Duration {
+        let delay = deadline.timeIntervalSince(now)
+        guard delay.isFinite else { return expirySleepCapDuration }
+        guard delay > 0 else { return .zero }
+        let cap = Double(expirySleepCapNanoseconds) / 1_000_000_000
+        return .seconds(min(delay, cap))
+    }
 
     /// Le sommeil, en nanosecondes, jusqu'à l'échéance. L'échéance vient de la
     /// charge du push : une valeur absurde (lointaine, infinie, NaN) ne doit
@@ -93,6 +105,18 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
     /// Le fichier à jouer : celui que l'extension de service a déjà ATTACHÉ
     /// (sur disque, sans réseau), sinon la piste distante — la même, élue par
     /// le Prisme côté serveur.
+    /// #17143 — la voix d'un talkie ne se joue QUE depuis le fichier que la NSE a attaché (origine vérifiée, jeton de
+    /// la session, taille plafonnée) : jamais en flux depuis l'adresse. Sans ce fichier, rien ne se déploie et le
+    /// toucher ouvre l'app, qui rejoue la prise de parole.
+    static func talkieVoiceOnlyFromAttachment(_ userInfo: [AnyHashable: Any], attachmentURLs: [URL]) -> [AnyHashable: Any] {
+        guard NotificationDetailPolicy.isTalkieWake(userInfo), !attachmentURLs.contains(where: isAudioFile) else { return userInfo }
+        return NotificationDetailPolicy.withoutTalkieVoice(userInfo)
+    }
+
+    private static func isAudioFile(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .audio) == true
+    }
+
     static func playableURL(attachmentURLs: [URL], remote: URL) -> URL {
         attachmentURLs.first { url in
             UTType(filenameExtension: url.pathExtension)?.conforms(to: .audio) == true

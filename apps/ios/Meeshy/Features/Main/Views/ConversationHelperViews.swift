@@ -16,7 +16,6 @@ struct ThemedBackButton: View {
     let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
-    @State private var isPressed = false
 
     // MARK: - Pure formatting helpers (exposed for unit tests)
 
@@ -59,11 +58,11 @@ struct ThemedBackButton: View {
         MeeshyColors.unreadBadgeBackground(isDark: colorScheme == .dark)
     }
 
+    /// Le retour répond au doigt comme l'appel (#17095) : la surbrillance du
+    /// `Button` et le verre interactif de la capsule jouent DÈS le toucher —
+    /// l'échelle posée autrefois dans l'action ne jouait qu'au relâcher.
     var body: some View {
-        Button(action: {
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = true }
-            action()
-        }) {
+        Button(action: action) {
             HStack(spacing: 0) {
                 // Chevron — always visible, in a fixed 40-pt slot so the
                 // back affordance stays anchored regardless of pill width
@@ -96,7 +95,7 @@ struct ThemedBackButton: View {
                         // VoiceOver reads the count from the button label
                         // (`a11y.back.with_unread`), so the glyph is hidden.
                         .font(.system(size: 12, weight: NotificationBadge.fontWeight, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, MeeshySpacing.sm)
@@ -111,21 +110,31 @@ struct ThemedBackButton: View {
                         .transition(.scale.combined(with: .opacity))
                 }
             }
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-                    .overlay(Capsule().stroke(gradientStroke, lineWidth: 1))
-                    .shadow(color: Color(hex: color).opacity(MeeshyOpacity.medium), radius: 6, y: 3)
-                    .opacity(compactMode ? 0 : 1)
-                    .scaleEffect(compactMode ? 0.4 : 1, anchor: .leading)
-            )
             .frame(minWidth: compactMode ? 24 : 40, minHeight: 40)
-            .scaleEffect(isPressed ? 0.9 : 1)
+            .modifier(HeaderBackCapsule(color: color, stroke: gradientStroke, isCompact: compactMode))
+            .meeshyTapTarget()
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: compactMode)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showsPill)
         }
         .accessibilityLabel(showsPill ? String(format: String(localized: "a11y.back.with_unread", bundle: .main), unreadCount) : String(localized: "a11y.back", bundle: .main))
-        .settling($isPressed, to: false, after: .milliseconds(100), animation: .spring(response: 0.2, dampingFraction: 0.6))
+    }
+}
+
+/// La capsule du retour : le verre interactif de l'en-tête, teinté comme
+/// l'appel. Replié (en-tête déplié), le chevron se tient seul, sans capsule.
+private struct HeaderBackCapsule: ViewModifier {
+    let color: String
+    let stroke: LinearGradient
+    let isCompact: Bool
+
+    func body(content: Content) -> some View {
+        if isCompact {
+            content
+        } else {
+            content
+                .overlay(Capsule().stroke(stroke, lineWidth: 1))
+                .adaptiveGlass(in: Capsule(), tint: Color(hex: color).opacity(ConversationHeaderGlassGlyph.glassTintOpacity), interactive: ConversationHeaderGlassGlyph.isGlassInteractive)
+        }
     }
 }
 

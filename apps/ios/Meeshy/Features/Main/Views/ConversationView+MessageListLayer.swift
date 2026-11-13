@@ -93,7 +93,7 @@ struct ConversationMessageListLayer: View {
             // Header déplié = la pill de jour se retire. Les deux vivent
             // dans la même bande haute ; le déplié étant un geste
             // explicite vers les détails de la conversation, c'est lui qui
-            // gagne (retour user 2026-08-13).
+            // gagne.
             isHeaderExpanded: isHeaderExpanded,
             // WS-7 (F-086) — décision de l'orchestrateur (§WS-6 travail
             // 10 : props posées AVANT les closures on…, contrainte
@@ -219,7 +219,7 @@ struct ConversationMessageListLayer: View {
                 guard overlayState.quickReactionMessageId == nil else { return }
                 guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                 // L'appui long ouvre les options habituelles — pour TOUT
-                // message, avis système compris (directive 2026-08-24).
+                // message, avis système compris.
                 //
                 // Il aiguillait auparavant par type : un résumé d'appel
                 // ouvrait sa feuille de détail, et tout autre message
@@ -355,7 +355,7 @@ struct ConversationMessageListLayer: View {
             }
         ).equatable()
         // Le flux traverse la zone status bar / Dynamic Island jusqu'au bord
-        // haut de l'écran (retour user 2026-08-12) : sans ça, SwiftUI pose le
+        // haut de l'écran: sans ça, SwiftUI pose le
         // représentable DANS la safe area, la liste s'arrête sous l'îlot et
         // cette bande ne montre plus que le dégradé de fond — lu comme une
         // « couleur unie » derrière l'îlot, là où les autres écrans laissent
@@ -365,7 +365,7 @@ struct ConversationMessageListLayer: View {
         // défilement. Le header flottant, lui, reste dans la safe area
         // (zIndex 100, au-dessus).
         //
-        // MÊME règle au bord BAS (retour user 2026-08-16, capture device) :
+        // MÊME règle au bord BAS (capture device):
         // borné à la safe area basse, le représentable coupait les
         // messages ~34 pt AVANT le bord physique — visible dès que le
         // chrome s'escamote au défilement (Focal) : le fil doit sortir de

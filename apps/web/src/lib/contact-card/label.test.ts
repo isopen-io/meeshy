@@ -76,7 +76,7 @@ describe('contactCardLabelOf', () => {
 });
 
 describe('la citation d’une carte de visite (#8122)', () => {
-  const preview = (message: Message) => quotedPreviewOf({ quoted: message, readerLanguages: ['fr'], interfaceLanguage: 'fr' });
+  const preview = (message: Message) => quotedPreviewOf({ quoted: message, readerLanguages: ['fr'], interfaceLanguage: 'fr', viewerId: null });
 
   test('sans légende, elle dit le nom du contact, jamais le nom de fichier', () => {
     const result = preview(quoted([attachment({})]));

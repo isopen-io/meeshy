@@ -39,7 +39,7 @@ extension MessageListViewController: UICollectionViewDelegate {
 
         setScrollingActive(scrollView.isDragging || scrollView.isDecelerating)
         keyboardFirst.noteScroll(offsetY: offset, isTracking: scrollView.isTracking)
-        // Chrome caché tant que le doigt est posé, puis tant que la décélération est LOIN de son offset d'arrivée (`FocalChromeReturn`, directive 2026-08-21).
+        // Chrome caché tant que le doigt est posé, puis tant que la décélération est LOIN de son offset d'arrivée (`FocalChromeReturn`).
         setChromeHiddenForScroll(FocalChromeReturn.isHidden(
             isTracking: scrollView.isTracking,
             isDecelerating: scrollView.isDecelerating,
@@ -80,7 +80,7 @@ extension MessageListViewController: UICollectionViewDelegate {
         }
     }
 
-    /// ROULEAU (2026-08-18) : 4 hauteurs d'ÉCRAN d'avance — on ne frappe jamais le bord chargé, sinon rebond élastique puis insertion.
+    /// ROULEAU: 4 hauteurs d'ÉCRAN d'avance — on ne frappe jamais le bord chargé, sinon rebond élastique puis insertion.
     func loadOlderIfNeeded(_ scrollView: UIScrollView) {
         let contentHeight = scrollView.contentSize.height
         let frameHeight = scrollView.frame.height
@@ -111,7 +111,7 @@ extension MessageListViewController: UICollectionViewDelegate {
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         // Sans momentum : repos immédiat, le chrome revient. Avec momentum :
         // c'est l'approche de l'offset d'arrivée qui le fait revenir
-        // (directive user 2026-08-21), plus la levée du doigt. Le flush des
+        // plus la levée du doigt. Le flush des
         // reconfigures, lui, attend toujours le vrai arrêt.
         if !decelerate {
             decelerationTargetOffsetY = nil
@@ -194,14 +194,14 @@ extension MessageListViewController: UICollectionViewDelegate {
     func settleAtRest() {
         // Le rattrapage d'invalidation noté pendant le mouvement se joue ICI,
         // à la pose — plus jamais par re-proposition à chaque tour de boucle
-        // (Time Profiler 2026-08-21, voir `MessageListLayout`).
+        // (voir `MessageListLayout`).
         (collectionView.collectionViewLayout as? MessageListLayout)?.flushPendingRecoveryInvalidation()
         // Le fil vient de montrer ce qu'il mesure vraiment (#4041) : c'est le
         // seul moment où l'on a le droit de changer l'estimation servie.
         adoptRowHeightEstimateIfWorthwhile()
         syncFocalFocusDetails()
         scheduleFocalFlatten()
-        // Filet de la revue adversariale 2026-08-18 : une animation
+        // Filet de la: une animation
         // programmatique interrompue AU DOIGT ne livre jamais
         // `scrollViewDidEndScrollingAnimation` — le geste qui l'a tuée se
         // termine ICI. Sans cette retombée, le drapeau fuyait à true et le

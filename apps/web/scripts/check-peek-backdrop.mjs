@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * L'EN-TÊTE DE L'APERÇU RESTE LISIBLE SUR UN FOND PHOTO (#12633).
+ * LE FOND PEINT DE L'APERÇU PASSE SOUS SON CONTENU (#12633, #17243).
  *
  * La carte d'aperçu d'une conversation tenue se peint désormais sur le fond
  * choisi par le lecteur (`ConversationBackdrop`, `conversation-peek-card.tsx`).
@@ -10,10 +10,12 @@
  *
  *  1. le fond peint passe DEVANT la surface de la carte et DERRIÈRE son
  *     contenu — un pixel du corps vaut la photo, pas la carte (`isolation`) ;
- *  2. l'en-tête tient AA (4,5:1) pour le titre ET la ligne secondaire, sur une
- *     photo noire puis blanche sans voile, en schéma clair puis sombre ;
- *  3. tant que la couche rend Signature (photo en route), la carte garde SA
+ *  2. tant que la couche rend Signature (photo en route), la carte garde SA
  *     surface — un pixel du corps vaut la carte.
+ *
+ * La carte n'a plus d'en-tête (consigne porteur, #17243 : on sait déjà ce
+ * qu'on tient) : le contraste du titre et de la ligne secondaire, que ce gate
+ * mesurait, n'a plus d'objet.
  *
  * Aucune construction n'est requise : un harnais statique monte la carte telle
  * que le composant la rend. La lecture des pixels passe par Chromium lui-même
@@ -45,13 +47,6 @@ const harness = ({ scheme, photo, ready }) => `<!doctype html>
            </div>`
         : '<div class="thread-backdrop" aria-hidden="true"></div>'
     }
-    <div data-peek-header class="conversation-peek-header">
-      <div style="width: 36px; height: 36px"></div>
-      <div style="display: flex; flex-direction: column; flex: 1">
-        <span data-title style="color: var(--color-ios-ink); font-weight: 800">Équipe Lyon</span>
-        <span data-secondary style="color: var(--color-ios-ink-3); font-size: 12px">4 membres</span>
-      </div>
-    </div>
     <div class="conversation-peek-body"></div>
   </div>
 </body></html>`;
@@ -62,16 +57,6 @@ const parseColor = (text) => {
   const srgb = /color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)(?: \/ ([\d.]+))?\)/.exec(text);
   if (srgb !== null) return { rgb: [Number(srgb[1]), Number(srgb[2]), Number(srgb[3])], alpha: srgb[4] === undefined ? 1 : Number(srgb[4]) };
   throw new Error(`couleur illisible : ${text}`);
-};
-
-const over = ({ rgb, alpha }, bottom) => rgb.map((channel, index) => channel * alpha + bottom[index] * (1 - alpha));
-const luminance = (rgb) => {
-  const linear = rgb.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
-};
-const contrast = (a, b) => {
-  const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (high + 0.05) / (low + 0.05);
 };
 
 async function pixelsOf(page, points) {
@@ -102,23 +87,16 @@ try {
       for (const ready of [true, false]) {
         await page.setContent(harness({ scheme, photo, ready }));
         const geometry = await page.evaluate(() => {
-          const header = document.querySelector('[data-peek-header]').getBoundingClientRect();
           const body = document.querySelector('.conversation-peek-body').getBoundingClientRect();
           const card = getComputedStyle(document.querySelector('[data-peek-card]')).backgroundColor;
-          const title = getComputedStyle(document.querySelector('[data-title]')).color;
-          const secondary = getComputedStyle(document.querySelector('[data-secondary]')).color;
-          return { header: { x: header.right - 6, y: header.top + header.height / 2 }, body: { x: body.left + body.width / 2, y: body.top + body.height / 2 }, card, title, secondary };
+          return { body: { x: body.left + body.width / 2, y: body.top + body.height / 2 }, card };
         });
-        const [headerPixel, bodyPixel] = await pixelsOf(page, [geometry.header, geometry.body]);
+        const [bodyPixel] = await pixelsOf(page, [geometry.body]);
         const label = `${scheme} · photo ${photo} · ${ready ? 'prête' : 'en route'}`;
         const cardRgb = parseColor(geometry.card).rgb;
         const expectedBody = ready ? parseColor(`rgb(${photo === '#000000' ? '0, 0, 0' : '255, 255, 255'})`).rgb : cardRgb;
+        console.log(`  ${label} · corps : ${bodyPixel.map((c) => Math.round(c * 255))}`);
         if (!close(bodyPixel, expectedBody)) failures.push(`${label} : le corps vaut ${bodyPixel.map((c) => Math.round(c * 255))}, attendu ${expectedBody.map((c) => Math.round(c * 255))}`);
-        for (const [name, text] of [['titre', geometry.title], ['ligne secondaire', geometry.secondary]]) {
-          const ratio = contrast(over(parseColor(text), headerPixel), headerPixel);
-          console.log(`  ${label} · ${name} : ${ratio.toFixed(2)}:1`);
-          if (ratio < 4.5) failures.push(`${label} : ${name} à ${ratio.toFixed(2)}:1, sous AA (4,5:1)`);
-        }
       }
     }
   }
@@ -133,4 +111,4 @@ if (failures.length > 0) {
   console.error(`✗ check-peek-backdrop : ${failures.length} défaut(s)\n${failures.map((line) => `  - ${line}`).join('\n')}`);
   process.exit(1);
 }
-console.log('✓ check-peek-backdrop : le fond peint passe sous le contenu, l’en-tête tient AA sur toute photo, clair et sombre');
+console.log('✓ check-peek-backdrop : le fond peint passe sous le contenu, la carte garde sa surface tant qu’il n’est pas prêt, clair et sombre');

@@ -122,7 +122,6 @@ internal fun RulesGlossary(modifier: Modifier = Modifier) {
     val tokens = MeeshyTheme.tokens
     Column(modifier.fillMaxWidth().testTag(RULES_CONCEPTS_TAG), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
         SectionTitle(stringResource(R.string.game_rules_section_concepts))
-        Text(stringResource(R.string.game_rules_concepts_intro), style = MaterialTheme.typography.bodyMedium, color = tokens.textMuted)
         GameRulesBook.glossary.forEach { key ->
             Column(
                 Modifier
@@ -174,7 +173,6 @@ private fun RulesStepCard(step: OnboardingStep, position: String) {
             Text(position.uppercase(LocalConfiguration.current.locales[0]), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = tokens.textMuted)
             Text(stringResource(copy.what), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold, color = tokens.textPrimary)
             Text(stringResource(copy.means), style = MaterialTheme.typography.bodyMedium, color = tokens.textPrimary)
-            Text(stringResource(copy.next), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = tokens.textPrimary)
         }
     }
 }

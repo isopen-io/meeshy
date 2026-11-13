@@ -7,7 +7,7 @@ import MeeshyUI
 /// L'adresse que « Partager » transmet : `<origine web>/chat/<lien>`, la page
 /// de jonction que le web sert à tout le monde, compte ou pas.
 ///
-/// Directive porteur du 2026-10-11 : « mettre à côté de l'avatar le lien pour
+/// « mettre à côté de l'avatar le lien pour
 /// partager la conversation (/chat/mshy_world), permettant à chacun de
 /// transmettre la conversation ». Le lien existe dans deux cas :
 /// - l'invité est ENTRÉ par un lien — c'est celui-là qu'il transmet ;
@@ -101,8 +101,8 @@ enum GuestViewerAccess {
 // MARK: - Le bouton « Partager » de l'en-tête (#10206)
 
 /// Le partage natif de l'adresse publique, posé à côté de l'avatar. Même
-/// gabarit que le bouton d'appel voisin : cercle de verre de 28 pt, cible de
-/// 44 pt.
+/// gabarit que le bouton d'appel voisin (`ConversationHeaderGlassGlyph`) :
+/// cercle de verre interactif de 28 pt, cible de 44 pt.
 struct ConversationShareLinkButton: View {
     let url: URL
     let accentColor: String
@@ -110,17 +110,7 @@ struct ConversationShareLinkButton: View {
 
     var body: some View {
         ShareLink(item: url) {
-            Image(systemName: "square.and.arrow.up")
-                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-                .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
-                .meeshyTapTarget()
+            ConversationHeaderGlassGlyph(systemName: "square.and.arrow.up", accentColor: accentColor, secondaryColor: secondaryColor)
         }
         .accessibilityLabel(String(localized: "conversation.header.share", defaultValue: "Partager la conversation", bundle: .main))
         .accessibilityIdentifier("conversation.header.share")
@@ -131,7 +121,7 @@ struct ConversationShareLinkButton: View {
 
 /// Ce qu'un visiteur sans compte voit au-dessus du fil : le titre, l'avatar
 /// de la conversation — qui n'ouvre rien —, le lien à transmettre et la
-/// fermeture. Directive porteur du 2026-10-11 : ni nombre de participants, ni
+/// fermeture.: ni nombre de participants, ni
 /// détail de la conversation, ni fiche de profil pour qui n'est pas membre de
 /// Meeshy. Sorti de `ConversationView` (hors budget) pour y poser le partage.
 /// Le titre prend la couleur du thème et la bande le verre de l'en-tête d'un
@@ -144,7 +134,6 @@ struct ConversationGuestHeaderBar: View {
     let secondaryColor: String
     let guestLinkId: String?
     let titleColor: Color
-    let mutedColor: Color
     let onClose: () -> Void
 
     var body: some View {
@@ -176,11 +165,7 @@ struct ConversationGuestHeaderBar: View {
                 HapticFeedback.light()
                 onClose()
             } label: {
-                Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(mutedColor)
-                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-                    .background(Circle().fill(mutedColor.opacity(MeeshyOpacity.light)))
+                ConversationHeaderGlassGlyph(systemName: "xmark", accentColor: accentColor, secondaryColor: secondaryColor)
             }
             .accessibilityLabel(String(localized: "conversation.view.close", bundle: .main))
         }

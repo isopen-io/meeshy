@@ -103,7 +103,8 @@ object DynamicColorGenerator {
         "sv" to "0EA5E9", "vi" to "EC4899", "th" to "CA8A04",
     )
 
-    private val vibrantPalette = listOf(
+    /** The 39 palette colours (iOS `vibrantPalette`). */
+    val vibrantPalette = listOf(
         "E74C3C", "C0392B", "DC4A5A", "D94452", "F43F5E",
         "FF7F50", "E67E22", "F97316", "EA580C", "D4763B",
         "D97706", "B8860B", "CA8A04",

@@ -4,18 +4,6 @@ import MeeshyUI
 import MeeshySDK
 
 enum CallModeCopy {
-    static var quit: String {
-        String(localized: "call.mode.quit", defaultValue: "Quitter", bundle: .main)
-    }
-
-    static var quitEffectsHint: String {
-        String(localized: "call.mode.quit.effects.hint", defaultValue: "Rend votre image telle qu'elle était et revient à l'appel", bundle: .main)
-    }
-
-    static var quitMontageHint: String {
-        String(localized: "call.mode.quit.montage.hint", defaultValue: "Revient à l'appel", bundle: .main)
-    }
-
     static var carouselHint: String {
         String(localized: "call.mode.carousel.hint", defaultValue: "Balayez vers le haut ou le bas pour choisir", bundle: .main)
     }
@@ -54,12 +42,36 @@ enum CallModeCopy {
         String(localized: "call.mode.montage.title", defaultValue: "Montage de l'appel", bundle: .main)
     }
 
-    static var validate: String {
-        String(localized: "call.mode.effects.validate", defaultValue: "Valider", bundle: .main)
+    static var backToCall: String {
+        String(localized: "call.mode.effects.back", defaultValue: "Retour à l'appel", bundle: .main)
     }
 
-    static var validateHint: String {
-        String(localized: "call.mode.effects.validate.hint", defaultValue: "Garde cet effet et revient à l'appel", bundle: .main)
+    static var backToCallHint: String {
+        String(localized: "call.mode.effects.back.hint", defaultValue: "Garde votre look et revient à l'appel", bundle: .main)
+    }
+
+    static var addLook: String {
+        String(localized: "call.mode.effects.addLook", defaultValue: "Ajouter un autre look", bundle: .main)
+    }
+
+    static var addLookHint: String {
+        String(localized: "call.mode.effects.addLook.hint", defaultValue: "Passe aux looks d'un autre genre, à cumuler avec le vôtre", bundle: .main)
+    }
+
+    static var addLookFull: String {
+        String(localized: "call.mode.effects.addLook.full", defaultValue: "Trois effets au plus", bundle: .main)
+    }
+
+    static var addLookFullHint: String {
+        String(localized: "call.mode.effects.addLook.full.hint", defaultValue: "Annulez un effet pour en ajouter un autre ; appui long pour les voir", bundle: .main)
+    }
+
+    static var framesChip: String {
+        String(localized: "call.mode.effects.category.frame", defaultValue: "Cadres", bundle: .main)
+    }
+
+    static var montageSettingsHint: String {
+        String(localized: "call.mode.montage.settings.hint", defaultValue: "Affiche « Chaque visage » à la place des cadres", bundle: .main)
     }
 
     static var settings: String {
@@ -75,6 +87,12 @@ enum CallModeCopy {
         case .face: return String(localized: "call.mode.effects.category.face", defaultValue: "Visage", bundle: .main)
         case .color: return String(localized: "call.mode.effects.category.color", defaultValue: "Couleur", bundle: .main)
         }
+    }
+
+    /// #16979 — le mot d'un genre dans LA rangée de la famille : celui d'Effets, « Cadres » au Montage.
+    static func genreName(_ genre: CallEffectKind) -> String {
+        if let category = CallEffectsCategory(kind: genre) { return categoryName(category) }
+        return genre == .frame ? framesChip : CallEffectsCopy.layerKindName(genre)
     }
 
     static func title(_ mode: CallScreenMode) -> String {
@@ -107,7 +125,7 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
         VStack(spacing: MeeshySpacing.sm) {
             Text(name(centred ?? selection))
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
             if let hint {
@@ -459,6 +477,7 @@ private struct CallModeCarouselItem<Content: View>: View {
                 including: listens ? .all : .subviews
             )
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onGesture(.tap) }
     }
 }
 
@@ -484,7 +503,7 @@ struct CallModeGlyph: View {
         case .symbol(let symbol):
             Image(systemName: symbol)
                 .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .semibold))
-                .foregroundColor(isSelected ? .black : .white)
+                .foregroundStyle(isSelected ? Color.black : Color.white)
         case .emoji(let emoji):
             Text(emoji)
                 .font(.title)
@@ -514,60 +533,12 @@ struct CallModeThumbnail: View {
             } else {
                 Image(systemName: symbol)
                     .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
         }
         .clipShape(Self.shape)
         .overlay(Self.shape.stroke(isSelected ? Color.white : Color.white.opacity(MeeshyOpacity.medium), lineWidth: isSelected ? 3 : 1))
         .accessibilityHidden(true)
-    }
-}
-
-struct CallModeOption: Identifiable {
-    let id: String
-    let symbol: String
-    let label: String
-    let caption: String
-    var hint: String? = nil
-    var isOn: Bool? = nil
-    var isEnabled = true
-    let action: () -> Void
-}
-
-struct CallModeActionBar: View {
-    let exitHint: String
-    let onExit: () -> Void
-    let options: [CallModeOption]
-
-    private static let sideDiameter: CGFloat = 44
-
-    var body: some View {
-        HStack(alignment: .center, spacing: MeeshySpacing.md) {
-            CallPillButton(
-                symbol: "xmark",
-                kind: .normal,
-                label: CallModeCopy.quit,
-                caption: CallModeCopy.quit,
-                hint: exitHint,
-                diameter: Self.sideDiameter,
-                action: onExit
-            )
-            Spacer(minLength: 0)
-            ForEach(options) { option in
-                CallPillButton(
-                    symbol: option.symbol,
-                    kind: option.isOn == true ? .active : .normal,
-                    label: option.label,
-                    caption: option.caption,
-                    hint: option.hint,
-                    toggleState: option.isOn,
-                    diameter: Self.sideDiameter,
-                    action: option.action
-                )
-                .disabled(!option.isEnabled)
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.xxl)
     }
 }
 
@@ -617,7 +588,7 @@ struct CallModeRecordingStop: View {
                         .frame(width: 8, height: 8)
                     Text(CallModeGestureRule.clock(context.date.timeIntervalSince(startedAt)))
                         .font(.footnote.weight(.semibold).monospacedDigit())
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
                 .padding(.horizontal, MeeshySpacing.smPlus)
                 .padding(.vertical, MeeshySpacing.xs)

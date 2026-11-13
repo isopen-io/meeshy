@@ -25,12 +25,12 @@ struct PostDetailSecondaryTranslationPanel: View {
                         Text(display.flag).font(.caption)
                         Text(display.name)
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(langColor)
+                            .foregroundStyle(langColor)
                     }
                 }
                 Text(content)
                     .font(.subheadline)
-                    .foregroundColor(theme.textPrimary.opacity(0.8))
+                    .foregroundStyle(theme.textPrimary.opacity(0.8))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.vertical, MeeshySpacing.sm)

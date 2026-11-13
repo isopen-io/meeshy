@@ -36,11 +36,14 @@ public struct TalkieOpened: Sendable, Equatable {
     public let talkieId: String
     public let maxDuration: TimeInterval
     public let maxChunkBytes: Int
+    /// `waking` : le destinataire n'est pas connecté, la passerelle le réveille par un push et lui rejoue la voix.
+    public let delivery: TalkieDelivery
 
-    public init(talkieId: String, maxDuration: TimeInterval, maxChunkBytes: Int) {
+    public init(talkieId: String, maxDuration: TimeInterval, maxChunkBytes: Int, delivery: TalkieDelivery = .live) {
         self.talkieId = talkieId
         self.maxDuration = maxDuration
         self.maxChunkBytes = maxChunkBytes
+        self.delivery = delivery
     }
 }
 
@@ -49,12 +52,15 @@ struct TalkieOpenedWire: Decodable, Sendable, Equatable {
     let talkieId: String
     let maxDurationMs: Double?
     let maxChunkBytes: Int?
+    let delivery: String?
 }
 
 /// Le verdict de `talkie:start` : ouverte, ou refusée avec ce qu'il faut en dire.
 public enum TalkieStartVerdict: Sendable, Equatable {
     case opened(TalkieOpened)
     case refused(TalkieSendOutcome)
+    /// Le repli (`voice`) dont la passerelle nomme la conversation où partira la copie vocale.
+    case voiceInto(conversationId: String)
 
     static func read(_ ack: SocketAck<TalkieOpenedWire>) -> TalkieStartVerdict {
         switch ack {
@@ -62,15 +68,22 @@ public enum TalkieStartVerdict: Sendable, Equatable {
             return .opened(TalkieOpened(
                 talkieId: wire.talkieId,
                 maxDuration: bounded(wire.maxDurationMs.map { $0 / 1000 }, ceiling: TalkieContract.maxDuration),
-                maxChunkBytes: Int(bounded(wire.maxChunkBytes.map(Double.init), ceiling: Double(TalkieContract.maxChunkBytes)))
+                maxChunkBytes: Int(bounded(wire.maxChunkBytes.map(Double.init), ceiling: Double(TalkieContract.maxChunkBytes))),
+                delivery: wire.delivery.flatMap(TalkieDelivery.init(rawValue:)) ?? .live
             ))
         case .accepted, .acceptedWithoutPayload, .undecodable:
             return .refused(.failed)
         case .refused(let refusal):
-            return .refused(.ofRefusal(refusal.code))
+            let outcome = TalkieSendOutcome.ofRefusal(refusal.code)
+            guard outcome == .voice, let id = refusal.conversationId, isObjectId(id) else { return .refused(outcome) }
+            return .voiceInto(conversationId: id)
         case .timedOut:
             return .refused(.offline)
         }
+    }
+
+    private static func isObjectId(_ value: String) -> Bool {
+        value.count == 24 && value.allSatisfy(\.isHexDigit)
     }
 
     /// Une borne servie absente, nulle, négative ou plus large que le contrat est ramenée au contrat.
@@ -185,5 +198,40 @@ public struct TalkieBudget: Sendable {
         nextSeq += 1
         sentBytes += bytes
         return seq
+    }
+}
+
+/// Les temps d'une prise de parole, comptés depuis l'appui (#17094) : micro prêt, accusé reçu, premier fragment parti.
+/// Le journal du talkie l'écrit, pour qu'une recette sur appareil dise où passe le temps.
+public struct TalkieLatency: Sendable, Equatable {
+    public enum Step: String, Sendable, CaseIterable {
+        case micReady
+        case opened
+        case firstChunk
+    }
+
+    public let pressedAt: Date
+    public private(set) var marks: [Step: TimeInterval] = [:]
+
+    public init(pressedAt: Date) {
+        self.pressedAt = pressedAt
+    }
+
+    /// La première marque d'une étape compte ; un instant antérieur à l'appui vaut zéro.
+    public mutating func mark(_ step: Step, at instant: Date) {
+        guard marks[step] == nil else { return }
+        marks[step] = max(0, instant.timeIntervalSince(pressedAt))
+    }
+
+    public func milliseconds(_ step: Step) -> Int? {
+        marks[step].map { Int(($0 * 1000).rounded()) }
+    }
+
+    /// `micro 312 ms · accusé 140 ms · premier fragment 455 ms` — une étape non atteinte se lit `—`.
+    public var summary: String {
+        let labels: [(Step, String)] = [(.micReady, "micro"), (.opened, "accusé"), (.firstChunk, "premier fragment")]
+        return labels
+            .map { step, label in "\(label) \(milliseconds(step).map { "\($0) ms" } ?? "—")" }
+            .joined(separator: " · ")
     }
 }

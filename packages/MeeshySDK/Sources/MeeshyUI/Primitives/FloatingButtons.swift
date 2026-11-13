@@ -643,7 +643,7 @@ public struct NotificationBadge: View {
         if count > 0 {
             Text(Self.displayed(count))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: Self.fontWeight))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .lineLimit(1)
                 // Ni `minimumScaleFactor`, ni cadre carré figé : la pastille
                 // s'ÉLARGIT. L'ancien 18×18 forçait « 71 » à rétrécir et aurait

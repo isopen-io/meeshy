@@ -81,7 +81,7 @@ struct SectionScrollPillHost: View {
     /// réinitialise pas l'état ci-dessous : même type, même position dans
     /// l'arbre.
     let title: String
-    /// Les sections RENDUES, pour nommer la section épinglée (2026-08-21).
+    /// Les sections RENDUES, pour nommer la section épinglée.
     var sections: [ConversationSection] = []
     /// Boîte inerte alimentée par les stickers (voir ci-dessus). `nil` ⇒ le
     /// titre de repli seul.
@@ -97,7 +97,6 @@ struct SectionScrollPillHost: View {
     /// Le libellé suit la section ÉPINGLÉE, relue au tick (le sticker du haut
     /// de l'écran), jamais « la dernière rangée apparue » : en descendant, les
     /// rangées apparaissent par le BAS et nommaient la section suivante
-    /// (retour visuel 2026-08-21).
     private var liveTitle: String {
         guard let positions,
               let id = LentilleSectionPositionRegistry.pinnedSectionId(positions: positions.minYById, pinLine: positions.pinLine),

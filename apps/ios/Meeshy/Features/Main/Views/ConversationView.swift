@@ -34,7 +34,7 @@ struct ConversationView: View {
     /// l'afficherait deux fois.
     var showsOwnConnectionBanner: Bool = false
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant (item « Focal (bêta) »,
-    /// retiré avec Focal iOS le 2026-08-18) : `nil` ⇒ `init` bit-à-bit identique ;
+    /// retiré avec Focal iOS): `nil` ⇒ `init` bit-à-bit identique;
     /// SEUL le site d'appel qui lit `router.pendingForcedReadingMode`
     /// (RootView/iPadRootView) passe une valeur. Transmis tel quel à
     /// `ReadingModeController.init(forcedMode:)` — voir sa docstring.
@@ -698,7 +698,7 @@ struct ConversationView: View {
             favoriteEmoji: conversation?.userState.reaction,
             avatarURL: liveConversation?.avatar,
             accentColor: accentColor, secondaryColor: secondaryColor,
-            guestLinkId: anonymousSession?.linkId, titleColor: theme.textPrimary, mutedColor: theme.textMuted
+            guestLinkId: anonymousSession?.linkId, titleColor: theme.textPrimary
         ) { dismiss() }
     }
 
@@ -723,7 +723,7 @@ struct ConversationView: View {
     }
 
     /// Call + search buttons, grouped with zero extra spacing between them
-    /// (user-requested 2026-07-11) : chaque bouton porte déjà ~8 pt de marge
+    /// chaque bouton porte déjà ~8 pt de marge
     /// invisible par son `.meeshyTapTarget()` 44×44. Grappe d'ACTIONS : elle
     /// s'efface tant que la liste défile (loi commune `ScrollMotion`). L'aperçu
     /// (#9031) : « agrandir » prend la place de la loupe.
@@ -745,7 +745,7 @@ struct ConversationView: View {
 
     /// Title + tags column shown when the composer-options drawer is open
     /// (`ConversationHeaderTitleBlock`) : la bande DÉPLIÉE ne porte AUCUN bouton
-    /// d'action — titre + tags/catégorie seulement (arbitrage user 2026-08-18).
+    /// d'action — titre + tags/catégorie seulement.
     var expandedHeaderTitleAndTags: some View {
         ConversationHeaderTitleBlock(
             title: liveConversation?.displayName ?? "Conversation",

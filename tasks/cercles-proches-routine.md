@@ -406,3 +406,63 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reprise : aucune PR de la routine ouverte ; `claude/cercles-16984-web` (carte des positions sur le web) est vivante
   et tenue par un autre réveil, ce réveil ne la touche pas. Issue #17097 ouverte sous #17011 (milestone #215), branche
   `claude/cercles-ensemble-ios` réservée avant toute écriture.
+- Lot : PR #17101 vers `dev`. SDK : contrat `together:*` lu en Swift (décodeurs stricts, accusés), loi de
+  synchronisation portée à l'identique du web (`TogetherSync`), état de séance en valeur (`TogetherState`), émetteur
+  socket, galerie des pièces lisibles ensemble (`TogetherService`). App : `TogetherCenter`, `TogetherPlaybackDriver`
+  (commandes de l'app seulement, pour qu'une correction du pilote ne se relise jamais comme un geste),
+  `TogetherAVSurface` (AVPlayer adopté par la politique média), bandeau, attente et lecteur flottant montés dans
+  `OverlayHost`, ligne sur la fiche d'un Proche. 27 libellés `together.*` en sept langues. Suivi Android : #17100.
+- Le bot `[xcodegen]` a été annulé deux fois sans obtenir de runner macOS (les dispatches iOS des autres branches
+  aussi) : les références du pbxproj sont posées à la main, gardes Linux vertes.
+- Gates locaux : `check_house_rules.sh` 33 règles tenues, `check_cohesion_budget.sh` code 0,
+  `check_localization.py`, `check_pbxproj_consistency.sh`, `check_test_registration.sh` verts. Swift ne compile pas
+  en conteneur : la preuve est la CI iOS et SDK dispatchée sur la PR.
+- État en fin de réveil : **PR #17101 en brouillon, NON fusionnée, aucune preuve Swift.** Les deux dispatches sur
+  `1d6835a16` ont été annulés au bout d'une minute, avant tout job macOS et avant la fin des gardes Linux : iOS run
+  42517215302 (« File d'attente Mac » annulée à 19:53:32, 3 suites devant), SDK run 42517212606. Ce n'est pas une
+  concurrence de la branche (aucun run plus récent dans le groupe) : tous les dispatches iOS du moment, sur d'autres
+  branches (#17099, #17103), finissent annulés de la même façon. Le brouillon empêche le vert vide de la CI gelée
+  (`PR_CI_GEL`) d'emporter la fusion. Prochain réveil : redispatcher `ios.yml` et `sdk-tests.yml` sur la tête de la
+  branche, corriger ce que Swift refuse, fusionner `origin/dev`, puis sortir du brouillon et fusionner sur CI verte.
+
+## 2026-11-08 — réveil 22 : une séance « ensemble » s'arrête aussi quand un compte part, un membre est banni ou le média supprimé (#17022)
+
+- Reprise : #17101 (« ensemble » sur iOS) a été fusionnée dans `dev` par le porteur à 20:39, sans preuve Swift
+  propre ; le run iOS de `dev` qui la contient (42523576676) est en attente de runner. Aucune PR de la routine ouverte.
+  Aucune branche vivante n'écrit `services/together/` : lot #17022 réservé sur `claude/cercles-ensemble-coupures`.
+- Lot : PR #17146 vers `dev`. Relais : `rejudgeTogetherWhere` rejuge une paire, un compte (restreint ou non à une
+  conversation) ou une conversation ; la paire se lit aussi par l'index du compte, ce qui retrouve une séance sortie de
+  l'index de paire par des invitations concurrentes. Un index par conversation (HMAC, borné à 20, effacé avec la séance).
+  `cutTogetherWhere`, relais du processus posé au démarrage par `MeeshySocketIOHandler.setupSocketIO`, appelé après
+  l'écriture qui ferme par : `endConversationMembership` (départ, bannissement, retrait, suppression pour soi),
+  `applyMessageRemovalEffects` (les quatre écrivains de retrait), `DELETE /attachments/:id`, l'obsolescence d'une
+  conversation, la désactivation et la suppression par l'administration (bannissement de plateforme compris), la purge
+  de compte et la fin de grâce.
+- Revue adversariale : bloquante sur trois points, corrigés dans le lot (relais absent avant la première socket,
+  suppression d'une pièce, conversation obsolète). Ouvert en suivi : la porte ne lit pas une conversation CLOSE (#17147).
+  Assumés et écrits dans la PR : l'index de conversation plafonné à 20 et non atomique entre instances (la sauvegarde
+  suivante réinscrit), les séances déjà en cours au déploiement absentes de l'index de conversation jusqu'à leur
+  prochaine synchronisation.
+- Gates locaux : 374 suites voisines (together, socketio, messaging, admin, conversations, directory, relations,
+  attachments, handlers, jobs) 5 854/5 854 vertes ; `tsc` passerelle vert après fusion de `origin/dev` ; cliquet `any` 490.
+- Prochain lot recommandé : #17147 (la porte lit la conversation close, petit et serveur), puis « ensemble » sur Android
+  (#17100), puis l'icône de position par cercle (#17013) quand les clients de la position temporaire auront fusionné.
+
+## 2026-11-08 — réveil 23 : mener #17148 (suite de #17146) jusqu'à la fusion (#17022)
+
+- Reprise : #17146 a été fusionnée dans `dev` sur son premier commit (auto-fusion de la CI de PR gelée) ; ses
+  corrections d'audit sont dans #17148, restée ouverte parce que `dev` était verrouillée à 22:30. `dev` a repris ses
+  fusions depuis : ce réveil n'ouvre rien d'autre et mène #17148.
+- Fusion de `origin/dev` dans la branche : sans conflit, les nouveautés de `dev` ne touchent que l'iOS (caméra,
+  écoute) — aucun fichier de la passerelle. Le `ci.yml` dispatché sur la tête d'avant fusion (`ac2abe92`) était vert ;
+  un nouveau dispatch prouve le commit de fusion.
+- Prochain lot recommandé : inchangé — #17147 (la porte lit la conversation close), puis « ensemble » sur Android
+  (#17100), puis l'icône de position par cercle (#17013).
+
+## 2026-11-09 — réveil 24 : mener #17148 à la fusion (#17022)
+
+- Reprise : #17148 (coupures « ensemble » au démarrage, à la suppression d'une pièce ou d'une conversation) restait
+  ouverte, la fusion ayant été refusée deux fois (`dev` verrouillée la nuit, 405). Aucun nouveau lot ouvert.
+- `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
+  passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
+- Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).

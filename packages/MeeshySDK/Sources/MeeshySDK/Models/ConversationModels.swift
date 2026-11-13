@@ -203,7 +203,7 @@ public struct APIConversation: Decodable, Sendable {
     /// Le LECTEUR est-il un participant actif de cette conversation ? Calculé
     /// serveur, seule autorité sur la question : `GET /conversations/search`
     /// rend aussi les salons `public`/`global` dont il n'est pas membre, et
-    /// n'y émet plus AUCUN participant (décision du user, 2026-08-19).
+    /// n'y émet plus AUCUN participant.
     ///
     /// `nil` = le serveur ne l'a pas dit (route qui ne le calcule pas, ou
     /// gateway antérieur) — le lecteur retombe alors sur son comportement

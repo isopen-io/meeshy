@@ -30,18 +30,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "call.recording.askDetail",
-          "androidName": "call_recording_askDetail",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "call.recording.askDetail.video",
-          "androidName": "call_recording_askDetail_video",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "call.recording.cancel",
           "androidName": "call_recording_cancel",
           "status": "adopted"
@@ -120,6 +108,12 @@
         },
         {
           "catalog": "app",
+          "iosKey": "call.recording.stop.word",
+          "androidName": "call_recording_stop_word",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
           "iosKey": "call.recording.stopped.joined",
           "androidName": "call_recording_stopped_joined",
           "status": "adopted"
@@ -157,6 +151,12 @@
         {
           "androidName": "call_recording_end_to_end_refused",
           "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.recording.consent",
+          "androidName": "call_recording_consent",
+          "status": "adopted"
         }
       ]
     }

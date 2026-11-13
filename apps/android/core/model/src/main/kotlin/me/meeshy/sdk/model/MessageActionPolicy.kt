@@ -259,8 +259,9 @@ object MessageActionPolicy {
         val kind = context.content.kind
         val flags = context.content.flags
         val deletion = deleteVerdict(context)
-        val reacts = context.live && !context.notice && context.viewer.isActiveMember &&
+        val writes = context.live && context.viewer.isActiveMember &&
             context.viewer.canSendMessages && !context.conversation.isClosed
+        val reacts = writes && !context.notice
         fun serverFeature(applies: Boolean): Boolean? =
             if (context.e2ee) null else applies && context.live && context.readable
         val translatable = context.hasText && context.readable && context.live
@@ -273,7 +274,8 @@ object MessageActionPolicy {
             report = context.live && context.registered && context.viewer.isActiveMember &&
                 !context.notice && !context.isMine,
             canReact = reacts,
-            canReply = reacts && !flags.viewOnce && viewerCanWrite(context.conversation, context.viewer),
+            canReply = writes && (!context.notice || context.quotableNotice) && !flags.viewOnce &&
+                viewerCanWrite(context.conversation, context.viewer),
             translate = when {
                 !translatable -> null
                 context.e2ee -> TranslateVerdict.DEVICE
@@ -365,6 +367,8 @@ internal class MessageActionContext(
     val content: MessageContentKind.Shape,
     val registered: Boolean,
     val notice: Boolean,
+    /** Un avis AFFICHÉ qu'on cite (#17441, `quotableNoticeKind`) : appel, arrivée (seule ou regroupée), départ annoncé. */
+    val quotableNotice: Boolean,
     val forwardable: Boolean,
     val exportable: Boolean,
     val e2ee: Boolean,
@@ -379,6 +383,9 @@ internal class MessageActionContext(
 ) {
     companion object {
         private val NOTICE_KINDS: Set<MessageContentKind> = setOf(MessageContentKind.SYSTEM, MessageContentKind.CALL)
+
+        /** `QUOTABLE_NOTICE_KINDS` (`packages/shared/utils/quotable-notice.ts`) — l'avis de capture reste hors (#9629). */
+        val QUOTABLE_NOTICE_KINDS: Set<String> = setOf("call", "call-live", "member-joined", "members-arrived", "member-left")
 
         fun of(input: MessageActionPolicy.Input): MessageActionContext {
             val subject = input.message.subject
@@ -401,6 +408,7 @@ internal class MessageActionContext(
                 content = content,
                 registered = registered,
                 notice = notice,
+                quotableNotice = subject.messageType == "system" && subject.metadata.kind in QUOTABLE_NOTICE_KINDS,
                 forwardable = exit.forward.isAllowed,
                 exportable = reading.exportable,
                 e2ee = flags.encrypted || input.conversation.isEndToEnd,

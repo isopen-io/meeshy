@@ -1,7 +1,6 @@
 import Foundation
 
-/// Une section repliée dit ce qu'elle cache (#8694, directive porteur
-/// 2026-09-29).
+/// Une section repliée dit ce qu'elle cache (#8694).
 ///
 /// Repliée, une section de la liste retire ses rangées — et avec elles leurs
 /// pastilles de non-lus : ce qui restait à lire disparaissait de l'écran. Le

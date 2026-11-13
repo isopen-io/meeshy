@@ -19,7 +19,7 @@ public struct TrackBarView<Content: View>: View {
     public let iconName: String?
     /// Piste de la section FOND : la tuile d'étiquette prend une teinte indigo
     /// marquée et VoiceOver annonce « Fond » — les sections doivent se VOIR
-    /// dans les noms et types de piste (retour user 2026-07-20), pas seulement
+    /// dans les noms et types de piste, pas seulement
     /// se déduire du préfixe BG_.
     public let isBackgroundSection: Bool
     /// Largeur de la colonne d'étiquette collante. Passée par le conteneur —
@@ -147,7 +147,7 @@ public struct TrackBarView<Content: View>: View {
                     }
                 }
                 Text(durationLabel)
-                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                    .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                     .monospacedDigit()
                     .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo700)
                     .lineLimit(1)
@@ -155,7 +155,7 @@ public struct TrackBarView<Content: View>: View {
                 Spacer(minLength: 0)
             }
             Text(typeLabel)
-                .font(.system(size: MeeshyFont.footnoteSize, weight: isSelected ? .bold : .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: isSelected ? .bold : .semibold))
                 .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo900)
                 .lineLimit(1)
                 .allowsTightening(true)

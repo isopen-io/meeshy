@@ -428,7 +428,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// cette file. Une déclaration absente du payload persisté serait perdue au
     /// premier redémarrage — et silencieusement, même en ligne.
     public let mentions: [PostMentionInput]?
-    /// Le SECOND opt-in de position (spec du 2026-08-02 §2) : le grain de
+    /// Le SECOND opt-in de position : le grain de
     /// découvrabilité géographique DEMANDÉ au serveur, indépendant du badge
     /// gouverné par `location` ci-dessus.
     ///

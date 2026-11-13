@@ -162,6 +162,7 @@ import { relationsRoutes } from './relations';
 import { directoryContactsRoutes } from './directory/contacts';
 import { relationsLevelRoutes } from './relations/level';
 import { bringRoutes } from './bring';
+import { talkieRoutes } from './talkie';
 import { contactsResolveRoutes } from './contacts/resolve';
 import { pushTokenRoutes } from './push-tokens';
 import conversationPreferencesRoutes from './conversation-preferences';
@@ -407,6 +408,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'relations-level', prefix: `${API_PREFIX}/relations`, module: relationsLevelRoutes },
   // Le Bring (#13936, D-3) : faire sonner un Ami, un Proche ou un Sang pour l'urgence extrême.
   { name: 'bring', prefix: `${API_PREFIX}/bring`, module: bringRoutes },
+  // Le talkie réveillé (#17142) : la voix gardée, lisible sans socket, et le jeton PushToTalk.
+  { name: 'talkie', prefix: API_PREFIX, module: talkieRoutes },
   // La carte de visite partagée (#8101) — vCard → profils publics. Montage
   // AUTONOME ; même seau de débit que l'annuaire inversé (`profile-lookups`).
   { name: 'contacts-resolve', prefix: `${API_PREFIX}/contacts`, module: contactsResolveRoutes },

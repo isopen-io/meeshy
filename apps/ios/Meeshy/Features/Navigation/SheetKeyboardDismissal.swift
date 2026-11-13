@@ -1,8 +1,6 @@
 import UIKit
 
-/// **Une feuille qui monte baisse le clavier** (#16880, retour porteur du
-/// 2026-11-08 : « lorsqu'on ouvre un profil utilisateur ou une feuille de
-/// manière générale, il faut cacher le clavier »).
+/// **Une feuille qui monte baisse le clavier** (#16880, il faut cacher le clavier »).
 ///
 /// Toute présentation passe par `UIViewController.present` — `.sheet`,
 /// `.fullScreenCover` et `confirmationDialog` de SwiftUI compris. Garder ici

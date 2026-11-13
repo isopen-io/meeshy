@@ -86,16 +86,16 @@ const record = (visibility: string, authorId = AUTHOR): PostVisibilityRecord => 
   authorId,
   visibility: visibility as never,
   visibilityUserIds: [],
-  expiresAt: null,
+  expiresAt: null, communityId: null,
 });
 
 const CIRCLES = ['ACQUAINTANCES', 'CLOSE', 'BLOOD'] as const;
 const READERS = [COLLEAGUE, ADMIN2, ORDINARY, AUDITOR, GONE, BLOCKER, UNKNOWN_ROLE, LINKED_FRIEND] as const;
 
 describe('filterPostConsumers — un collègue de l\'équipe lit les cercles de l\'équipe sans lien', () => {
-  it.each(CIRCLES)('%s : admet les comptes de l\'équipe, jamais un utilisateur ordinaire, AUDIT, un compte parti ni un rôle inconnu', async (visibility) => {
+  it.each(CIRCLES)('%s : admet les comptes de l\'équipe (AUDIT compris), jamais un utilisateur ordinaire, un compte parti ni un rôle inconnu', async (visibility) => {
     const admitted = await filterPostConsumers({ prisma: world(), authorId: AUTHOR, visibility, candidateUserIds: READERS });
-    const expected = visibility === 'ACQUAINTANCES' ? [COLLEAGUE, ADMIN2, LINKED_FRIEND] : [COLLEAGUE, ADMIN2];
+    const expected = visibility === 'ACQUAINTANCES' ? [COLLEAGUE, ADMIN2, AUDITOR, LINKED_FRIEND] : [COLLEAGUE, ADMIN2, AUDITOR];
     expect(admitted).toEqual(expected);
   });
 
@@ -128,7 +128,7 @@ describe('le verdict unitaire dit la même chose que le lot', () => {
     expect(await canUserViewPost(prisma, record(visibility), COLLEAGUE)).toBe(true);
     expect(await canUserConsumePost(prisma, record(visibility), COLLEAGUE)).toBe(true);
     expect(await canUserViewPost(prisma, record(visibility), ORDINARY)).toBe(false);
-    expect(await canUserViewPost(prisma, record(visibility), AUDITOR)).toBe(false);
+    expect(await canUserViewPost(prisma, record(visibility), AUDITOR)).toBe(true);
   });
 
   it('le lot et le verdict ne divergent sur aucun lecteur', async () => {
@@ -145,7 +145,7 @@ describe('le verdict unitaire dit la même chose que le lot', () => {
 describe('les énumérateurs d\'audience ajoutent les collègues aux liens réels', () => {
   it.each(CIRCLES)('circleAudienceIds(%s) nomme les collègues utilisables non bloqués, et les liens réels', async (visibility) => {
     const ids = await circleAudienceIds(world(), AUTHOR, visibility);
-    expect([...(ids ?? [])].sort()).toEqual((visibility === 'ACQUAINTANCES' ? [COLLEAGUE, ADMIN2, LINKED_FRIEND] : [COLLEAGUE, ADMIN2]).sort());
+    expect([...(ids ?? [])].sort()).toEqual((visibility === 'ACQUAINTANCES' ? [COLLEAGUE, ADMIN2, AUDITOR, LINKED_FRIEND] : [COLLEAGUE, ADMIN2, AUDITOR]).sort());
   });
 
   it('circleAudienceIds ne nomme aucun collègue pour un auteur ordinaire', async () => {
@@ -155,9 +155,8 @@ describe('les énumérateurs d\'audience ajoutent les collègues aux liens réel
   it('loadFeedCircles range les collègues d\'un lecteur de l\'équipe dans les trois cercles', async () => {
     const circles = await loadFeedCircles({ prisma: world(), userId: AUTHOR });
     for (const ring of [circles.acquaintance, circles.close, circles.blood]) {
-      expect(ring).toEqual(expect.arrayContaining([COLLEAGUE, ADMIN2]));
+      expect(ring).toEqual(expect.arrayContaining([COLLEAGUE, ADMIN2, AUDITOR]));
       expect(ring).not.toEqual(expect.arrayContaining([ORDINARY]));
-      expect(ring).not.toEqual(expect.arrayContaining([AUDITOR]));
       expect(ring).not.toEqual(expect.arrayContaining([GONE]));
       expect(ring).not.toEqual(expect.arrayContaining([UNKNOWN_ROLE]));
     }
@@ -229,8 +228,8 @@ describe('le bouclier des mineurs tient dans les deux sens : un collègue adulte
 describe('resolveEntourage — l\'entourage d\'un compte de l\'équipe comprend ses collègues', () => {
   it('prévient les collègues sans lien, pas l\'utilisateur ordinaire', async () => {
     const { ids } = await resolveEntourage(world(), { ownerId: AUTHOR, key: 'circlePublicationPost' });
-    expect(ids).toEqual(expect.arrayContaining([COLLEAGUE, ADMIN2]));
-    expect(ids).not.toEqual(expect.arrayContaining([ORDINARY, AUDITOR, GONE, UNKNOWN_ROLE, BLOCKER]));
+    expect(ids).toEqual(expect.arrayContaining([COLLEAGUE, ADMIN2, AUDITOR]));
+    expect(ids).not.toEqual(expect.arrayContaining([ORDINARY, GONE, UNKNOWN_ROLE, BLOCKER]));
   });
 
   it('un propriétaire mineur déclaré ne prévient aucun collègue adulte sans lien (le bouclier des mineurs tient)', async () => {

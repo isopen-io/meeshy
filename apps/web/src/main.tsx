@@ -400,6 +400,10 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
     void import('@/lib/calls/call-answer-intent').then(({ listenCallAnswerIntentsInBrowser }) =>
       listenCallAnswerIntentsInBrowser(),
     );
+    /** ET LA NOTIFICATION DU TALKIE RATTRAPE LA VOIX (#17144) : `talkie:join`, ou l'audio porté par le push. */
+    void import('@/lib/talkie/talkie-wake-intent').then(({ listenTalkieWakeIntentsInBrowser }) =>
+      listenTalkieWakeIntentsInBrowser(),
+    );
     void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInBrowser }) =>
       listenCallBackIntentsInBrowser(),
     );

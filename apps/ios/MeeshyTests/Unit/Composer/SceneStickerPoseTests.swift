@@ -43,16 +43,41 @@ final class SceneStickerPoseTests: XCTestCase {
         XCTAssertTrue(stickers(vm).isEmpty)
     }
 
-    /// **Un Mee se pose ANIMÉ** : sa première image comme bitmap, et les octets
-    /// du film sous le même id — sans eux, la scène le figerait.
-    func test_aMee_posesItsStillAndItsFilm() throws {
+    /// **Un Mee se pose ANIMÉ, sans figer le geste** (#17040) : sa première
+    /// image tout de suite, puis les octets du film sous le même id quand ils
+    /// sont prêts — sans eux, la scène le figerait. Rasteriser le film pendant
+    /// le toucher bloquait le fil principal jusqu'à 1,09 s sur iPhone.
+    func test_aMee_posesItsStillAtOnce_thenItsFilm() async throws {
         let vm = StoryComposerViewModel()
         let mee = try XCTUnwrap(MeeStickerCatalog.all.first { $0.animated })
         let id = try XCTUnwrap(SceneStickerPose.pose(.mee(mee), on: vm))
         let posé = try XCTUnwrap(stickers(vm).first { $0.id == id })
         XCTAssertEqual(posé.provider, SceneStickerPose.meeProvider)
-        XCTAssertNotNil(vm.loadedImages[id], "la première image du film")
+        XCTAssertNotNil(vm.loadedImages[id], "la première image du film, dès le toucher")
+        XCTAssertNil(vm.loadedStickerAnimations[id],
+                     "le film ne se rasterise pas pendant le toucher : il arrive après")
+        for _ in 0..<200 where vm.loadedStickerAnimations[id] == nil {
+            try await Task.sleep(for: .milliseconds(50))
+        }
         XCTAssertNotNil(vm.loadedStickerAnimations[id], "le film, pour que la scène l'anime")
+    }
+
+    /// **Un film arrivé trop tard est ignoré** (#17040) : le sticker a été
+    /// retiré pendant la rasterisation, ses octets ne ressuscitent rien.
+    func test_aMeeFilm_arrivingAfterItsStickerLeft_isIgnored() async throws {
+        let vm = StoryComposerViewModel()
+        let mee = try XCTUnwrap(MeeStickerCatalog.all.first { $0.animated })
+        await SceneStickerPose.attachFilm(of: mee, to: "parti", on: vm).value
+        XCTAssertNil(vm.loadedStickerAnimations["parti"])
+    }
+
+    func test_aMeeFilm_attachesToTheStickerStillOnTheScene() async throws {
+        let vm = StoryComposerViewModel()
+        let mee = try XCTUnwrap(MeeStickerCatalog.all.first { $0.animated })
+        let id = try XCTUnwrap(vm.addSticker(image: UIImage(), provider: SceneStickerPose.meeProvider)?.id)
+        await SceneStickerPose.attachFilm(of: mee, to: id, on: vm).value
+        let octets = try XCTUnwrap(vm.loadedStickerAnimations[id])
+        XCTAssertEqual(AnimatedImageEligibility.container(octets), .apng)
     }
 
     /// Un Instant se pose avec le texte saisi DESSINÉ dans son image.

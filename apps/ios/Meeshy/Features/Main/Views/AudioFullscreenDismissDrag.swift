@@ -65,7 +65,7 @@ nonisolated enum AudioFullscreenDismissRule {
     /// L'écran suit le doigt à 60 % : la résistance dit qu'on peut revenir.
     static let follow: CGFloat = 0.6
     /// Un geste DOUX ne ferme qu'après la moitié de l'écran : avant, relâcher
-    /// ou remonter le doigt annule (directive porteur 2026-10-14).
+    /// ou remonter le doigt annule.
     static let slowFraction: CGFloat = 0.5
     /// Un geste BREF et très rapide ferme tout de suite : un coup sec vers le
     /// bas, qui a tout de même quitté le point de départ.

@@ -52,7 +52,7 @@ struct ShareIncomingStrip: View {
                 .overlay(alignment: .bottomLeading) {
                     Text("\(index + 1)")
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, MeeshySpacing.xs)
                         .background(Capsule().fill(Color.black.opacity(0.55)))
                         .padding(MeeshySpacing.xxs)
@@ -110,7 +110,7 @@ struct ShareIncomingThumbnail: View {
             } else {
                 Image(systemName: Self.symbol(for: piece.kind))
                     .font(.title2)
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
             }
         }
         .task(id: piece.id) {

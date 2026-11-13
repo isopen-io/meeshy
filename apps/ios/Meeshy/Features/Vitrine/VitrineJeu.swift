@@ -393,7 +393,7 @@ enum VitrineJeu {
         await jouer(enCours.celebration, sur: fiche, serveur: enCours.serveur)
         // La chorégraphie part quand l'état servi arrive à la fiche — la lecture ou la réponse du geste —, pas au signal.
         VitrineTournage.etape("servi")
-        try? await Task.sleep(until: .now + .seconds(enCours.celebration.duree) + finDeChoregraphie, clock: .continuous)
+        guard await cancellableSleep(for: .seconds(enCours.celebration.duree) + finDeChoregraphie) else { return }
     }
 }
 #endif

@@ -4,7 +4,7 @@ import UIKit
 import MeeshySDK
 
 /// **Loi pure de stabilité du champ visuel** de la liste de messages
-/// (chasse Fable 2026-08-16, causes n°1 et n°2 restantes du chantier Focal).
+/// (causes n°1 et n°2 restantes du chantier Focal).
 ///
 /// La liste est INVERSÉE (`transform scaleY: -1`, item 0 = bas visuel) et
 /// self-sizing (`.estimated`). Deux familles de corrections déplacent le
@@ -81,8 +81,7 @@ nonisolated enum MessageListOffsetCompensationLaw {
     }
 }
 
-/// **Loi d'estimation de hauteur de rangée** (issue #4041, capture
-/// utilisateur du 2026-08-27 : « l'effet de défilement étiré »).
+/// **Loi d'estimation de hauteur de rangée** (issue #4041).
 ///
 /// Le layout compositionnel ne reçoit qu'UNE hauteur estimée — la liste n'a
 /// qu'une section (`MessageListSection.main`), il n'existe aucun canal par
@@ -206,7 +205,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// violent (des dizaines de cellules réalisées par frame), la cascade
     /// dépasse la garde de ré-entrance d'UIKit : assertion SIGTRAP dans
     /// `_setNeedsVisibleCellsUpdate` (`_updateVisibleCellsNow` ×7) — trois
-    /// crashs reproduits 2026-08-18 (08:11, 08:15 ×2) sur long défilement.
+    /// crashs reproduits (08:11, 08:15 ×2) sur long défilement.
     ///
     /// Au-delà du plafond, la correction est ABANDONNÉE pour la transaction
     /// courante : le contenu glisse du delta non compensé — invisible en
@@ -217,8 +216,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// **Plafond d'invalidations PARTIELLES par transaction CoreAnimation —
     /// posé sur l'ENTONNOIR `invalidateLayout(with:)`.**
     ///
-    /// Quatre itérations du même SIGTRAP (2026-08-18 : flings du matin,
-    /// 11:36 au repos, 11:43/11:50/12:00/12:10) ont éliminé les autres
+    /// Quatre itérations du même SIGTRAP (11:36 au repos, 11:43/11:50/12:00/12:10) ont éliminé les autres
     /// leviers un à un : plafonner `contentOffsetAdjustment` puis
     /// `shouldInvalidateLayout(forPreferredLayoutAttributes:)` n'a jamais
     /// suffi, car le redimensionnement self-sizing des cellules
@@ -290,12 +288,12 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// le plafond ci-dessus ne l'appelle plus. Elle ne tombe JAMAIS pendant que la
     /// liste bouge : une invalidation complète en plein momentum tue la
     /// décélération — chaque fling semblait « avalé » dès qu'une tempête
-    /// avait laissé un refus derrière elle (rouleau, user 2026-08-18).
+    /// avait laissé un refus derrière elle (rouleau).
     /// Pendant le mouvement, chaque frame re-sollicite naturellement les
     /// cellules refusées (budget réarmé par tour) ; le rattrapage complet
     /// attend la pose, en se re-proposant au tour suivant.
     ///
-    /// **2026-08-21 — plus de re-proposition « au tour suivant ».** Se re-poser
+    /// ** — plus de re-proposition « au tour suivant ».** Se re-poser
     /// par `DispatchQueue.main.async` à chaque tour de boucle pendant tout le
     /// mouvement faisait tourner la main queue à vide : Time Profiler sur un
     /// défilement de 10 s — 830 ms CPU dans cette méthode et sa closure,
@@ -322,7 +320,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         // ci-dessus (elles ne s'accrochent qu'aux entonnoirs self-sizing et
         // batch update) : sans ancre, elle repositionne silencieusement le
         // contenu déjà visible dès que la re-mesure change quoi que ce soit
-        // dans la liste — mesuré en repro (2026-08-26) : `contentOffset`
+        // dans la liste — mesuré en repro: `contentOffset`
         // 968→842 en moins de 20 ms, sans doigt ni décélération. L'ancre
         // n'est PAS le bas visuel (l'utilisateur peut lire n'importe où dans
         // l'historique) : c'est la rangée la plus proche du bord haut de la
@@ -388,8 +386,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// Le repositionnement passe donc par le chemin ANCRÉ — celui qui existe
     /// déjà pour le rattrapage — et jamais par un `invalidateLayout()` nu :
     /// une invalidation complète sans ancre fait glisser la lecture en
-    /// silence (mesuré en repro 2026-08-26 : `contentOffset` 968→842 en moins
-    /// de 20 ms, sans doigt ni décélération). Le même chemin garantit aussi
+    /// silence (sans doigt ni décélération). Le même chemin garantit aussi
     /// qu'une adoption arrivée pendant un mouvement est DIFFÉRÉE à la pose au
     /// lieu de tuer la décélération.
     func invalidateForAdoptedEstimate() {
@@ -420,7 +417,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         super.invalidateLayout(with: context)
     }
 
-    // MARK: - Sur-réserve Focal (2026-08-21)
+    // MARK: - Sur-réserve Focal
 
     /// Hauteur supplémentaire de contenu demandée AU-DESSUS de l'écran
     /// (côté y croissant du repère renversé = visuellement le haut) quand la
@@ -433,7 +430,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
 
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
         guard focalOverscan > 0 else { return super.layoutAttributesForElements(in: rect) }
-        // Des DEUX côtés (2026-08-21) : la compaction est symétrique autour
+        // Des DEUX côtés: la compaction est symétrique autour
         // de la ligne de focus — les rangées du bas comme celles du haut sont
         // tirées vers elle, et la place libérée aux deux bords doit déjà être
         // occupée par des cellules réalisées.

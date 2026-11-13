@@ -8,7 +8,7 @@
  * Effets est GLISSÉ en continu (le rendu Preact du fil principal que le
  * traitement ne doit plus payer) :
  *
- *  1. un effet de couleur ET de visage (« Chaud » + « Éruption ») ;
+ *  1. un effet de couleur ET de visage (« Doré » + « Éruption ») ;
  *  2. le flou d'arrière-plan par segmentation (la caméra simulée n'offre pas
  *     `backgroundBlur`) — et il FLOUTE : la netteté de l'image envoyée chute ;
  *  3. le zoom numérique (#8441) : l'image ENVOYÉE est recadrée.
@@ -264,10 +264,10 @@ try {
   await page.click('[data-call-control="effects"]');
   check(await appears(page, '[data-call-mode="effects"]'), 'le mode Effets s’ouvre');
   await page.click('[data-call-effects-category="color"]');
-  await page.click('[data-carousel-item="warm"]');
+  await page.click('[data-carousel-item="golden"]');
   await page.click('[data-call-effects-category="face"]');
   await page.click('[data-carousel-item="volcano"]');
-  await measure(page, 'effet (Chaud + Éruption)');
+  await measure(page, 'effet (Doré + Éruption)');
 
   await page.click('[data-carousel-item="none"]');
   await page.click('[data-call-effects-category="color"]');
@@ -312,9 +312,9 @@ try {
     await page.click('[data-call-effects-settings-toggle]');
   }
 
-  await page.click('[data-call-effects-validate]');
+  await page.click('[data-call-mode-quit]');
   await until(page, () => document.querySelector('[data-call-mode]') === null);
-  const step = '[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]';
+  const step = '[data-call-corner-frame] [data-call-self-zoom] [data-call-self-control="zoom"]';
   const zoomOffered = (await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local';
   check(zoomOffered, 'le cran du zoom numérique est offert sur une caméra sans zoom (#8441)');
   if (zoomOffered) {

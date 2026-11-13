@@ -125,9 +125,8 @@ final class ContentOpenReporter: ContentOpenReporting {
         for name in [UIApplication.willResignActiveNotification,
                      UIApplication.didEnterBackgroundNotification] {
             NotificationCenter.default.publisher(for: name)
-                .sink { [weak self] _ in
-                    Task { @MainActor in await self?.flushNow() }
-                }
+                .map { _ in () }
+                .relay(through: OrderedEventLane()) { [weak self] _ in await self?.flushNow() }
                 .store(in: &cancellables)
         }
         #endif

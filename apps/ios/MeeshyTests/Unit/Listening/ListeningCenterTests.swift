@@ -218,6 +218,22 @@ final class ListeningCenterTests: XCTestCase {
         XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: AvatarContext.conversationHeaderExpanded.size))
         XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: AvatarContext.profileSheet.size))
     }
+
+    /// Le SDK parcourt `band(for:).values` depuis une tâche hors du MainActor : la demande remonte le flux et y exécute
+    /// ses `map`. Isolées au MainActor, elles arrêtaient l'app à l'ouverture d'un direct (EXC_BREAKPOINT,
+    /// `dispatch_assert_queue`, 2026-11-08, #17069).
+    func test_theBandStream_isReadableOffTheMainActor() async {
+        let rig = makeRig()
+        rig.sut.receive(served())
+        let stream = OffMainPublisher(publisher: rig.sut.band(for: "alice"))
+
+        let first = await Task.detached { () -> AvatarListening?? in
+            for await value in stream.publisher.values { return value }
+            return nil
+        }.value
+
+        XCTAssertEqual(first??.text, ListeningBandText.categoryLabel(.music))
+    }
 }
 
 /// La ligne de liste ne montre l'écoute que du pair d'un direct (#16733) : un groupe n'a pas UN pair, un direct sans
@@ -286,9 +302,21 @@ final class ConversationRowListeningWiringTests: XCTestCase {
         }
     }
 
-    func test_bothListForms_carryTheBand_notTheGlyph() {
-        XCTAssertEqual(AvatarListeningBand.form(avatarSize: ConversationRowAvatar.Style.classic.context.size), .band)
-        XCTAssertEqual(AvatarListeningBand.form(avatarSize: ConversationRowAvatar.Style.lentille.context.size), .band)
+    func test_header_paintsListening_throughTheSameGate_asTheListAndTheSheet() throws {
+        let band = try code("apps/ios/Meeshy/Features/Listening/ListeningBand.swift")
+        let header = try XCTUnwrap(band.range(of: "struct HeaderPeerListening").map { String(band[$0.lowerBound...]) })
+        XCTAssertTrue(header.contains("AvatarListeningOverlay.paints(userId: userId, avatarSize: avatarSize)"),
+                      "l'en-tête passe par la porte unique : sous 40 pt, plus de pastille, donc rien ne se pose (#17084)")
+    }
+
+    func test_bothHeaderForms_carryTheBand() {
+        XCTAssertTrue(AvatarListeningOverlay.paints(userId: "u1", avatarSize: AvatarContext.conversationHeaderExpanded.size))
+        XCTAssertTrue(AvatarListeningOverlay.paints(userId: "u1", avatarSize: AvatarContext.conversationHeaderCollapsed.size))
+    }
+
+    func test_bothListForms_carryTheBand() {
+        XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: ConversationRowAvatar.Style.classic.context.size))
+        XCTAssertTrue(AvatarListeningBand.isShown(avatarSize: ConversationRowAvatar.Style.lentille.context.size))
     }
 }
 

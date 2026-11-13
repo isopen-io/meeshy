@@ -62,6 +62,66 @@ nonisolated enum NotificationDetailPolicy {
 
     static let audioCategory = "MEESHY_AUDIO"
 
+    /// #17143 — la notification de réveil d'un talkie (`talkie_incoming`, `TalkieWakeContract` du SDK) : la SEULE
+    /// catégorie dont la VOIX se joue depuis la notification, par le lecteur déjà existant de la notification déployée
+    /// (#8859) — la piste que la passerelle y attache voyage sous les clés d'un vocal (`attachmentUrl`,
+    /// `attachmentMimeType`, `attachmentDurationMs`), que la NSE télécharge et attache comme tout média.
+    static let talkieCategory = "MEESHY_TALKIE"
+    static let talkiePushType = "talkie_incoming"
+
+    /// La catégorie du talkie pour ce `type` de push, `nil` pour tout autre.
+    static func talkieCategory(forType type: String) -> String? {
+        type == talkiePushType ? talkieCategory : nil
+    }
+
+    static func isTalkieWake(_ userInfo: [AnyHashable: Any]) -> Bool {
+        userInfo["type"] as? String == talkiePushType
+    }
+
+    private static let talkieVoiceKeys = ["attachmentUrl", "attachmentMimeType", "attachmentDurationMs", "attachmentFileSize", "attachmentId", "audioUrl"]
+
+    /// Les seuls chemins de la passerelle qu'une requête de la NSE peut viser avec le jeton de la session.
+    static let sessionTokenPathPrefixes = ["/api/v1/attachments/file/", "/api/v1/talkie/"]
+
+    /// Une adresse peut-elle recevoir le jeton de la session ? Même origine que la passerelle configurée ET un chemin
+    /// attendu, sans remontée (`..`). C'est aussi la règle de toute redirection d'un téléchargement authentifié.
+    static func mayCarrySessionToken(_ url: URL?, apiBaseURL: String) -> Bool {
+        guard let url, let trusted = URL(string: apiBaseURL), sameOrigin(url, trusted) else { return false }
+        let path = url.path
+        guard !path.split(separator: "/").contains("..") else { return false }
+        return sessionTokenPathPrefixes.contains { path.hasPrefix($0) }
+    }
+
+    /// La voix d'un talkie ne se télécharge ni ne se joue que depuis la passerelle CONFIGURÉE, sous un chemin attendu
+    /// (`mayCarrySessionToken`) : toute autre adresse est retirée de la charge, et le toucher retombe sur
+    /// `talkie:join`. Toute autre notification est rendue telle quelle.
+    static func sealingUntrustedTalkieVoice(_ userInfo: [AnyHashable: Any], apiBaseURL: String) -> [AnyHashable: Any] {
+        guard isTalkieWake(userInfo) else { return userInfo }
+        let addresses = ["attachmentUrl", "audioUrl"].compactMap { userInfo[$0] as? String }.filter { !$0.isEmpty }
+        let allTrusted = addresses.allSatisfy { mayCarrySessionToken(absoluteVoiceURL($0, base: apiBaseURL), apiBaseURL: apiBaseURL) }
+        return allTrusted ? userInfo : withoutTalkieVoice(userInfo)
+    }
+
+    static func withoutTalkieVoice(_ userInfo: [AnyHashable: Any]) -> [AnyHashable: Any] {
+        userInfo.filter { !talkieVoiceKeys.contains($0.key as? String ?? "") }
+    }
+
+    /// Un chemin relatif se lit sous la passerelle (c'est ainsi qu'elle persiste ses fichiers) ; une valeur qui porte
+    /// un schéma reste telle quelle et doit passer le contrôle d'origine.
+    private static func absoluteVoiceURL(_ raw: String, base: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let carriesScheme = trimmed.range(of: "^[A-Za-z][A-Za-z0-9+.-]*:", options: .regularExpression) != nil
+        guard !carriesScheme else { return URL(string: trimmed) }
+        let root = base.hasSuffix("/") ? String(base.dropLast()) : base
+        return URL(string: trimmed.hasPrefix("/") ? root + trimmed : root + "/" + trimmed)
+    }
+
+    private static func sameOrigin(_ lhs: URL, _ rhs: URL) -> Bool {
+        lhs.scheme?.lowercased() == rhs.scheme?.lowercased()
+            && lhs.host?.lowercased() == rhs.host?.lowercased()
+            && lhs.port == rhs.port
+    }
+
     /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
     /// décompte vivant (`MeeshyNotificationContentExtension`).
     static let ephemeralCategory = "MEESHY_EPHEMERAL"

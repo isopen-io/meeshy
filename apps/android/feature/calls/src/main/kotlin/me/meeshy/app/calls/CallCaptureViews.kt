@@ -31,16 +31,22 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.feature.calls.R
+import dagger.Binds
+import dagger.Module
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import dagger.multibindings.IntoSet
 import me.meeshy.sdk.model.call.CallCaptureKind
+import me.meeshy.sdk.model.call.CallTopBanner
+import me.meeshy.sdk.model.call.CallTopBannerStack
 import me.meeshy.ui.theme.MeeshyTheme
-
-/** Where the capsule sits: under the header row (44 dp and its margin), in audio as in video. */
-internal val CALL_CAPTURE_CAPSULE_TOP = 56.dp
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /**
  * #16665 — R1 : la capsule rouge « Karim capture l’écran de l’appel », 44 dp, un petit anneau
- * blanc puis la phrase. Posée UNE fois sous l'en-tête, elle ne suit pas le chrome : une capture ne
- * se cache pas (iOS `CallCaptureAlertCapsule`, web `CallCaptureAlerts`). TalkBack l'annonce.
+ * blanc puis la phrase. Elle ne suit pas le chrome : une capture ne se cache pas (iOS `CallCaptureAlertCapsule`, web
+ * `CallCaptureAlerts`). TalkBack l'annonce.
  */
 @Composable
 internal fun CallCaptureCapsule(name: String, modifier: Modifier = Modifier) {
@@ -68,6 +74,45 @@ internal fun CallCaptureCapsule(name: String, modifier: Modifier = Modifier) {
             modifier = Modifier.clearAndSetSemantics { },
         )
     }
+}
+
+/** Qui la capsule nomme : un visage non vide tant qu'une capture est montrée, `null` sinon. */
+private data class CaptureFace(val name: String)
+
+/**
+ * R1.1 · R1.6 — la capsule de capture est le troisième maillon de la pile des bandeaux du haut ([CallTopBannerStack]), après le
+ * partage et l'enregistrement : elle se range sous eux au lieu de les recouvrir, et le cadre en direct descend sous elle. Elle
+ * arrive du haut et y repart ([CallBannerPresence]), en audio comme en vidéo, en duo comme en groupe, hors du fondu du chrome ;
+ * elle dit sa hauteur à ma vignette, qui descend d'autant (R1.5). Absente de la fenêtre d'image dans l'image (iOS `CallTopBannerStackView`).
+ */
+@Singleton
+class CallCaptureBannerOverlay @Inject constructor() : CallOverlay {
+    override val id: String = "call-capture-alert"
+    override val slot: CallOverlaySlot = CallOverlaySlot.TopBanner
+    override val priority: Int = CallTopBannerStack.priority(CallTopBanner.Capture)
+
+    @Composable
+    override fun Content(context: CallOverlayContext) {
+        val state = context.state
+        val face = if (state.isPeerScreenCapturing && !context.inPip) CaptureFace(state.peerScreenCapturerName.ifBlank { state.peerName }) else null
+        CallBannerPresence(face) { shown ->
+            CallCaptureCapsule(
+                name = shown.name,
+                modifier = Modifier
+                    .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
+                    .padding(top = CallTopBannerStack.GAP_DP.dp)
+                    .reportsTopBannerHeight(CallTopBanner.Capture),
+            )
+        }
+    }
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+interface CallCaptureBannerModule {
+    @Binds
+    @IntoSet
+    fun bindCaptureBannerOverlay(impl: CallCaptureBannerOverlay): CallOverlay
 }
 
 /**

@@ -176,21 +176,21 @@ private struct ContactRow: View, Equatable {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(name)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     Text("@\(user.username)")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
 
                     if presence == .online {
                         Text(String(localized: "contacts.list.online", defaultValue: "En ligne", bundle: .main))
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(MeeshyColors.success)
+                            .foregroundStyle(MeeshyColors.success)
                     } else if let lastActive = user.lastActiveAt {
                         Text(String(format: String(localized: "contacts.list.last-seen", defaultValue: "Vu %@", bundle: .main), lastActive.relativeTimeString.lowercased()))
                             .font(.caption2.weight(.medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                 }
 
@@ -198,7 +198,7 @@ private struct ContactRow: View, Equatable {
 
                 Image(systemName: "chevron.forward")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.strong))
+                    .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.strong))
             }
             .padding(.horizontal, MeeshySpacing.xl)
             .padding(.vertical, MeeshySpacing.md)

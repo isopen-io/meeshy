@@ -5,7 +5,7 @@ import MeeshyUI
 // MARK: - L'aperçu d'UNE pièce d'un message (#9907)
 
 /// **L'appui long sur une tuile montre CETTE pièce seule, avec le défilement
-/// vers les autres pièces du message** (directive porteur du 2026-10-10).
+/// vers les autres pièces du message**.
 ///
 /// L'aperçu du message entier (`MessageOverlayMenu`) montrait la grille — quatre
 /// images au plus, sans « +N », non navigable — et son menu agissait sur le
@@ -20,6 +20,7 @@ import MeeshyUI
 /// Une pièce protégée (vue unique, flou, chiffrement) se montre masquée, sans
 /// réaction ni sortie : l'appui long ne dévoile pas ce que le fil retient.
 struct MessagePieceOverlay: View {
+    @State private var delayed = DelayedActions()
     let message: Message
     let accentHex: String
     @Binding var focusedPieceId: String?
@@ -255,7 +256,7 @@ struct MessagePieceOverlay: View {
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.9)) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+        delayed.run(after: .milliseconds(220)) {
             isPresented = false
         }
     }

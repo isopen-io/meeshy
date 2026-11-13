@@ -43,7 +43,7 @@ internal fun callFamilyTitle(family: CallActionFamily?): String? = when (family)
 
 /**
  * One row of the unfolded pill: an optional title (the family) over a horizontally scrolling line
- * of captioned buttons. A row that scrolls is a finger on the chrome: it holds the auto-hide and
+ * of captioned buttons, faded out at both edges (P12.8) so it is never cut short. A row that scrolls is a finger on the chrome: it holds the auto-hide and
  * lets go when it stops.
  */
 @Composable
@@ -80,7 +80,10 @@ internal fun CallActionRow(
         Row(
             horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs),
             verticalAlignment = Alignment.Top,
-            modifier = Modifier.horizontalScroll(scroll).padding(horizontal = MeeshySpacing.sm),
+            modifier = Modifier
+                .callScrollEdgeFade(scroll, horizontal = true)
+                .horizontalScroll(scroll)
+                .padding(horizontal = MeeshySpacing.sm),
         ) {
             items.forEach { item ->
                 key(item.action) {

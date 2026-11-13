@@ -96,7 +96,7 @@ struct GameLevelStepRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xs) {
             Image(systemName: step.met ? "checkmark.circle.fill" : "circle")
-                .foregroundColor(step.met ? MeeshyColors.success : theme.textMuted)
+                .foregroundStyle(step.met ? MeeshyColors.success : theme.textMuted)
                 .accessibilityHidden(true)
             Text(GameCopy.levelStepLine(step))
                 .foregroundStyle(theme.textPrimary)
@@ -104,7 +104,7 @@ struct GameLevelStepRow: View {
             Spacer(minLength: MeeshySpacing.xs)
             Text(GameCopy.levelStepState(step))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                .foregroundColor(step.met ? MeeshyColors.success : theme.textMuted)
+                .foregroundStyle(step.met ? MeeshyColors.success : theme.textMuted)
                 .lineLimit(1)
                 .minimumScaleFactor(GameChip.minimumScale)
         }

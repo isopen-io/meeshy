@@ -74,7 +74,7 @@ extension StickerPickerView {
             TextField(String(localized: "sticker.text.placeholder",
                              defaultValue: "Écrivez vos mots…", bundle: .module),
                       text: $typedStickerText)
-                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .medium, design: .rounded))
                 .textFieldStyle(.plain)
                 .submitLabel(.done)
                 .padding(.horizontal, 14)
@@ -98,7 +98,7 @@ extension StickerPickerView {
     ///
     /// Le partage de la grille avait masqué exactement ça : une seule
     /// destination pour trois familles.
-    /// `internal` depuis le 2026-09-05 : les onglets FAVORIS et RÉCENTS posent
+    /// `internal` : les onglets FAVORIS et RÉCENTS posent
     /// les mêmes gabarits depuis un autre fichier d'extension. `private` y
     /// aurait imposé une seconde pose — donc une seconde décision sur la
     /// famille LIEU, le gel de l'heure et l'enregistrement de l'usage, avec la
@@ -141,7 +141,7 @@ extension StickerPickerView {
         case .text:
             return [StickerSlotFiller.textSlot: typedStickerTextTrimmed]
         case .location:
-            // **Un SPÉCIMEN quand aucun lieu n'est encore connu** (2026-09-05).
+            // **Un SPÉCIMEN quand aucun lieu n'est encore connu**.
             // `[:]` rendait dix cadres vides — le dessinateur mesure sur son
             // texte, donc dix rectangles étroits et identiques, ce qui ne
             // montre AUCUN style. Le spécimen est un nom générique et traduit,
@@ -165,7 +165,7 @@ extension StickerPickerView {
 
     // MARK: - Lieu
 
-    /// **Le lieu choisi devient le centre, ET la tête de liste** (2026-09-05).
+    /// **Le lieu choisi devient le centre, ET la tête de liste**.
     ///
     /// Deux effets, et le second est celui qu'on oublierait : le poser en tête
     /// le rend SÉLECTIONNÉ, donc les dix vignettes le montrent immédiatement —
@@ -260,13 +260,13 @@ extension StickerPickerView {
                      : String(localized: "sticker.place.empty",
                               defaultValue: "Aucun lieu trouvé autour de vous",
                               bundle: .module))
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 4)
             }
-            // **Les puces ont déménagé dans l'EN-TÊTE de la section** (directive
-            // porteur 2026-09-05). Elles ne sont pas une option de plus : elles
+            // **Les puces ont déménagé dans l'EN-TÊTE de la section**.
+            // Elles ne sont pas une option de plus : elles
             // disent DE QUEL lieu parlent les dix vignettes du dessous, ce qui
             // est le rôle d'un en-tête. Voir `sectionHeader(accessoire:)`.
             templateGrid(family: .location, enabled: currentPlace != nil)
@@ -308,7 +308,7 @@ extension StickerPickerView {
                         Label(String(localized: "sticker.place.pickExact",
                                      defaultValue: "Ma position…", bundle: .module),
                               systemImage: "location.magnifyingglass")
-                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .font(MeeshyFont.relative(12, weight: .semibold, design: .rounded))
                             .labelStyle(.titleAndIcon)
                             .lineLimit(1)
                             .padding(.horizontal, 12)
@@ -329,7 +329,7 @@ extension StickerPickerView {
                         HapticFeedback.light()
                     } label: {
                         Text(Self.placeChipTitle(lieu))
-                            .font(.system(size: 12, weight: choisi ? .semibold : .regular,
+                            .font(MeeshyFont.relative(12, weight: choisi ? .semibold : .regular,
                                           design: .rounded))
                             .lineLimit(1)
                             .padding(.horizontal, 12)
@@ -361,7 +361,7 @@ extension StickerPickerView {
     /// VoiceOver n'en sert qu'un : « 14:32 » se LIT « quatorze heures
     /// trente-deux » mais se DIT mal seul — il lui faut le nom de ce qu'il
     /// décore.
-    /// `public` depuis le 2026-09-06 (#5326) : la pastille de cadre à mots du
+    /// `public` (#5326) : la pastille de cadre à mots du
     /// composer d'app dit la MÊME phrase que la vignette de la palette. Deux
     /// formulations pour la même décoration se seraient contredites au premier
     /// gabarit ajouté.
@@ -393,7 +393,7 @@ extension StickerPickerView {
 /// produite par `StickerTemplateRenderer`, le moteur qui dessinera sur la
 /// scène. Une vignette peinte à part aurait dérivé du rendu au premier
 /// ajustement, sans qu'aucun témoin ne rougisse.
-/// `public` depuis le 2026-09-06 (#5326) : la barre de composition de l'app
+/// `public` (#5326) : la barre de composition de l'app
 /// porte une pastille qui montre le cadre à mots avec le texte tapé. Elle a
 /// besoin de LA vignette, pas d'une jumelle — c'est tout l'objet de l'exigence
 /// #4110 ci-dessus, qu'un second site de rendu défairait.
@@ -428,7 +428,7 @@ public struct StickerTemplatePreview: View {
                 } else {
                     // Avant le premier rendu — et si le gabarit n'est pas
                     // dessinable — on montre son repli plutôt qu'un vide.
-                    Text(template.fallbackEmoji).font(.system(size: side * 0.34))
+                    Text(template.fallbackEmoji).meeshyScaledFont(side * 0.34)
                 }
             }
             .modifier(StickerMotionPreview(animation: template.animation, side: side))

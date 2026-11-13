@@ -25,12 +25,16 @@ import MeeshyUI
 struct ComposerCaptureBottomRow: View {
     @ObservedObject var session: ComposerCaptureSession
     let context: ComposerCaptureGestureContext
+    /// Le rail au repos retombe avec la rangée haute (CAM-8).
+    var railOpacity: Double = 1
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Les entrées de scène, posées par le composer seul (#17432).
+    @Environment(\.composerViewfinderSceneEntry) private var sceneEntry
     /// Le cadenas qui se ferme, élastique, avant de partir (#9753).
     @State private var lockSeal = ComposerLockSeal()
-    /// La phrase du geste a servi : une prise a été faite (#16482).
-    @AppStorage(ComposerShutterFeedback.hintSeenKey) private var hintSeen = false
+    /// Le tri de la bande ouverte (#17267), partagé par la bande et ses puces.
+    @State private var lookFilter = ComposerLookStripFilter()
 
     private var capture: ComposerSceneCameraBar.Capture { session.barCapture }
 
@@ -41,6 +45,11 @@ struct ComposerCaptureBottomRow: View {
     /// Ce que les miniatures peignent : le média retouché, l'objectif sinon.
     private var source: any ComposerFrameSourcing {
         session.editSource ?? session.camera.liveFeed
+    }
+
+    /// La colonne de scène du viseur (#17432) — vide sans composer derrière.
+    private var sceneEntries: [ComposerViewfinderEntry] {
+        ComposerViewfinderColumn.entries(composesScene: sceneEntry != nil, context: context)
     }
 
     private var showsLock: Bool {
@@ -55,15 +64,6 @@ struct ComposerCaptureBottomRow: View {
     private var trimClip: (url: URL, duration: TimeInterval)? {
         guard case .editing(.video(let url)) = session.phase, let lecteur = session.loopPlayer else { return nil }
         return (url, lecteur.duration)
-    }
-
-    /// La phrase du geste se tait pendant la prise et la retouche, sous un
-    /// cadre, dont le bas porte sa propre écriture (#9557) — et bande ouverte,
-    /// où le nom du choix prend sa place (#9566).
-    private var showsHint: Bool {
-        ComposerShutterFeedback.showsHint(
-            base: !recording && !editing && session.look.frame == ComposerPhotoFrame.none && session.openFamily == nil,
-            hasTakenAPhoto: hintSeen)
     }
 
     var body: some View {
@@ -83,12 +83,13 @@ struct ComposerCaptureBottomRow: View {
             guard !Task.isCancelled else { return }
             lockSeal.finish(scellement)
         }
-        .adaptiveOnChange(of: session.camera.shutterPresses) { _, _ in hintSeen = true }
-        .adaptiveOnChange(of: recording) { _, enregistre in if enregistre { hintSeen = true } }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: recording)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: editing)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: ComposerCaptureGesture.offersRail(context))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.openFamily)
+        .adaptiveOnChange(of: session.openFamily) { avant, apres in
+            lookFilter = lookFilter.following(open: avant, to: apres)
+        }
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editPanels)
     }
 
@@ -97,7 +98,7 @@ struct ComposerCaptureBottomRow: View {
             if !recording { zoom }
             ZStack {
                 ComposerLookStrip(session: session, source: source, context: context,
-                                  recordingTime: session.camera.recordingDuration)
+                                  recordingTime: session.camera.recordingDuration, filter: lookFilter)
                 HStack {
                     Spacer(minLength: 0)
                     if showsLockTrack {
@@ -109,29 +110,36 @@ struct ComposerCaptureBottomRow: View {
                 .environment(\.layoutDirection, .leftToRight)
             }
             .overlay(alignment: .bottomLeading) {
-                if ComposerCaptureGesture.offersRail(context) {
-                    ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
-                        session.toggleFamily(famille)
+                VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
+                    // **Texte · Fond · Galerie · Sticker AVANT les familles** (#17432).
+                    ComposerViewfinderColumnView(entries: sceneEntries) { sceneEntry?($0) }
+                    if ComposerViewfinderColumn.separatesLooks(sceneEntries: sceneEntries,
+                                                               offersLooks: ComposerCaptureGesture.offersRail(context)) {
+                        ComposerViewfinderRailSeparator()
                     }
-                    .padding(.leading, MeeshySpacing.mdPlus)
-                    .padding(.bottom, ComposerLookStripRule.railBottomInset)
+                    if ComposerCaptureGesture.offersRail(context) {
+                        ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                            session.toggleFamily(famille)
+                        }
                         .transition(.opacity)
+                    }
                 }
+                .opacity(railOpacity)
+                .padding(.leading, MeeshySpacing.mdPlus)
+                .padding(.bottom, ComposerLookStripRule.railBottomInset)
             }
-            if showsHint {
-                Text(showsLock ? ComposerSceneCameraCopy.lockHint
-                               : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .padding(.horizontal, MeeshySpacing.mdPlus)
-                    .accessibilityHidden(true)
+            if session.openFamily != nil && ComposerCaptureGesture.offersRail(context) {
+                lookChips
             }
         }
         .padding(.bottom, MeeshySpacing.lg)
+    }
+
+    /// **Les puces qui trient la bande ouverte, juste sous elle** (#17267) :
+    /// Tout · Filtres · Cadres · Effets image · Effets visage, puis les ambiances.
+    private var lookChips: some View {
+        ComposerLookFilterChips(filter: lookFilter) { lookFilter = $0 }
+            .transition(.opacity)
     }
 
     /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,
@@ -197,14 +205,18 @@ struct ComposerCaptureBottomRow: View {
     /// · Cadres en colonne, la bande à leur droite — jamais un panneau qui
     /// flotte au-dessus des outils. Retoucher la famille ouverte rend les outils.
     private var familyRow: some View {
-        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-            // Le haut de la colonne sur le haut des cases (#10339).
-            ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
-                session.toggleFamily(famille)
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
+                // Le haut de la colonne sur le haut des cases (#10339).
+                ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                    session.toggleFamily(famille)
+                }
+                .padding(.leading, MeeshySpacing.mdPlus)
+                .padding(.top, ComposerTriggerOutline.outset)
+                ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0,
+                                  filter: lookFilter)
             }
-            .padding(.leading, MeeshySpacing.mdPlus)
-            .padding(.top, ComposerTriggerOutline.outset)
-            ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
+            lookChips
         }
         .frame(height: ComposerEditScene.familyRow)
         .transition(.opacity)
@@ -227,6 +239,56 @@ struct ComposerCaptureBottomRow: View {
     }
 }
 
+/// **La phrase du geste, centrée sur la scène** (A8, #17109 : « Touchez deux
+/// fois pour une photo · maintenez pour filmer »). Elle se tait pendant la
+/// prise et la retouche, sous un cadre, dont le bas porte sa propre écriture
+/// (#9557), bande ouverte, où le nom du choix prend sa place (#9566), et dès
+/// qu'une prise a été faite (#16482). Elle ne prend aucun doigt : la scène
+/// sous elle vise et photographie.
+struct ComposerCaptureGestureHint: View {
+    @ObservedObject var session: ComposerCaptureSession
+
+    /// La phrase du geste a servi : une prise a été faite (#16482).
+    @AppStorage(ComposerShutterFeedback.hintSeenKey) private var hintSeen = false
+
+    private var recording: Bool { session.stage == .recording }
+
+    private var showsHint: Bool {
+        ComposerShutterFeedback.showsHint(
+            base: !recording && !session.phase.isEditing && session.look.frame == ComposerPhotoFrame.none
+                && session.openFamily == nil,
+            hasTakenAPhoto: hintSeen)
+    }
+
+    private var showsLock: Bool {
+        let capture = session.barCapture
+        return ComposerCaptureHold.showsLock(stage: session.stage, holding: capture.holding, locked: capture.locked)
+    }
+
+    var body: some View {
+        ZStack {
+            if showsHint {
+                Text(showsLock ? ComposerSceneCameraCopy.lockHint
+                               : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.6), radius: 4, y: 1)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.75)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .transition(.opacity)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .allowsHitTesting(false)
+        .animation(.easeOut(duration: 0.2), value: showsHint)
+        .adaptiveOnChange(of: session.camera.shutterPresses) { _, _ in hintSeen = true }
+        .adaptiveOnChange(of: recording) { _, enregistre in if enregistre { hintSeen = true } }
+    }
+}
+
 /// **Le rail entier, ou qui défile — jamais un libellé coupé** (porteur
 /// 2026-10-20) : à son idéal s'il tient, sinon il défile jusqu'aux bords.
 ///
@@ -244,5 +306,63 @@ struct ComposerEditRailFit: View {
                 rail.padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
             }
         }
+    }
+}
+
+/// **Les entrées de scène du viseur** (#17432) : un glyphe et son nom, comme les
+/// familles de look qu'elles précèdent ; 44 pt, nommées à VoiceOver.
+struct ComposerViewfinderColumnView: View {
+    let entries: [ComposerViewfinderEntry]
+    let onSelect: (ComposerViewfinderEntry) -> Void
+
+    var body: some View {
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: ComposerLookStripRule.spacing) {
+                ForEach(entries, id: \.self) { entree in
+                    Button { onSelect(entree) } label: {
+                        HStack(spacing: MeeshySpacing.xs) {
+                            Image(systemName: entree.symbol)
+                                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                            Text(ComposerViewfinderColumn.label(entree))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget,
+                               alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(ComposerBounceButtonStyle())
+                    .accessibilityLabel(ComposerViewfinderColumn.label(entree))
+                    .accessibilityIdentifier(entree.accessibilityIdentifier)
+                }
+            }
+            .transition(.opacity)
+        }
+    }
+}
+
+/// Le trait du rail bas gauche entre Texte · Fond · Galerie · Sticker et les looks (planche, vue A8).
+struct ComposerViewfinderRailSeparator: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.35))
+            .frame(width: MeeshyControlSize.tapTarget, height: 1)
+            .accessibilityHidden(true)
+    }
+}
+
+/// **Qui reçoit une entrée de scène du viseur** (#17432) : le composer la pose sur
+/// son montage ; la caméra de conversation n'en pose pas, et n'a pas de colonne.
+private struct ComposerViewfinderSceneEntryKey: EnvironmentKey {
+    static let defaultValue: (@MainActor (ComposerViewfinderEntry) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var composerViewfinderSceneEntry: (@MainActor (ComposerViewfinderEntry) -> Void)? {
+        get { self[ComposerViewfinderSceneEntryKey.self] }
+        set { self[ComposerViewfinderSceneEntryKey.self] = newValue }
     }
 }

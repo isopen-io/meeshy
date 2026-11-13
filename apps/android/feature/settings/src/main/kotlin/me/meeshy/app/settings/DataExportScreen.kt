@@ -215,18 +215,11 @@ private fun InfoCard() {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.Shield, contentDescription = null, tint = MeeshyPalette.Indigo500)
-        Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-            Text(
-                text = stringResource(R.string.data_export_info_title),
-                style = MaterialTheme.typography.titleSmall,
-                color = MeeshyTheme.tokens.textPrimary,
-            )
-            Text(
-                text = stringResource(R.string.data_export_info_body),
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-            )
-        }
+        Text(
+            text = stringResource(R.string.data_export_info_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MeeshyTheme.tokens.textPrimary,
+        )
     }
 }
 

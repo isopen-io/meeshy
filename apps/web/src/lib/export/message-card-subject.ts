@@ -230,7 +230,7 @@ export function messageCardSubjectOf(params: {
   let quotedAt: Date | null = null;
   let quotedMedia: readonly MessageCardMediaItem[] = [];
   if (replyTo !== undefined && replyTo !== null) {
-    const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages, interfaceLanguage: params.interfaceLanguage });
+    const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages, interfaceLanguage: params.interfaceLanguage, viewerId: viewer.id });
     const quotedLeaves = !preview.isProtected;
     if (quotedLeaves && preview.text.trim() !== '') {
       quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text, handle: cardHandleOf(replyTo, viewer) };

@@ -111,7 +111,7 @@ struct ComposerMentionStrip: View {
                         onSelect(updated)
                     } label: {
                         // Chaque entrée : avatar + nom d'affichage (au-dessus)
-                        // + @pseudo (en dessous) — retour porteur 2026-08-27.
+                        // + @pseudo (en dessous) —.
                         HStack(spacing: MeeshySpacing.sm) {
                             LivePresence { MeeshyAvatar(
                                 name: candidate.displayName,

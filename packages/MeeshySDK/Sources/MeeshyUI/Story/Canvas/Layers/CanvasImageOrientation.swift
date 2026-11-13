@@ -1,7 +1,7 @@
 import UIKit
 
 /// **`UIImage.cgImage` JETTE l'orientation — et le canvas la posait telle
-/// quelle** (2026-09-05).
+/// quelle**.
 ///
 /// ## Le défaut, mesuré
 ///

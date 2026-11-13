@@ -300,11 +300,14 @@ await page.keyboard.press('Enter');
 await page.waitForSelector('[role="menu"]');
 await page.waitForTimeout(120);
 const firstItem = await page.evaluate(() => document.activeElement?.textContent?.trim());
-check(firstItem === 'Appel vocal', `à l'ouverture, le focus entre DANS le menu, sur « Appel vocal » (#8109) (« ${firstItem} »)`);
+check(
+  firstItem === 'Épingler' || firstItem === 'Désépingler',
+  `à l'ouverture, le focus entre DANS le menu, sur sa tête « Épingler » — plus d'appel au menu de la ligne (#17243) (« ${firstItem} »)`,
+);
 await page.keyboard.press('ArrowDown');
 const secondItem = await page.evaluate(() => document.activeElement?.textContent?.trim());
 check(
-  secondItem !== firstItem && secondItem === 'Appel vidéo',
+  secondItem !== firstItem && (secondItem === 'Silence' || secondItem === 'Son'),
   `ArrowDown déplace RÉELLEMENT le focus vers la ligne suivante (« ${secondItem} »)`,
 );
 await page.keyboard.press('Escape');
@@ -721,8 +724,8 @@ const menuFit = await shortPage.evaluate(() => {
   };
 });
 check(
-  menuFit.count === 14 && menuFit.allInView,
-  `à 390×640, les QUATORZE lignes du menu de la dernière rangée (deux appels, trois actions, Rechercher et Mode de lecture — #11226 —, Détails, Renommer, Favori, Déplacer vers… — #10593 —, « Archiver », « Rendre obsolète » — #14653 —, « Supprimer » — #7285) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
+  menuFit.count === 11 && menuFit.allInView,
+  `à 390×640, les ONZE lignes du menu de la dernière rangée (la tête Épingler · Sourdine · Lu, Détails, Mode de lecture — #11226 —, Renommer, Favori, Déplacer vers… — #10593 —, « Archiver », « Rendre obsolète » — #14653 —, « Supprimer » — #7285 ; ni appel ni Rechercher depuis #17243) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
 );
 
 await shortContext.close();
@@ -928,10 +931,10 @@ await enTetePage.waitForSelector('ul li button', { timeout: 3000 }).catch(() => 
 const resultats = await enTetePage.locator('ul li button').count();
 check(resultats >= 1, `deux caractères rendent au moins un contact cliquable (obtenu : ${resultats})`);
 
-/** 4) « Progression » ⇒ sa route répond aussi. */
+/** 4) « Ma Légende » (ex « Progression », #17769) ⇒ sa route répond aussi. */
 await enTetePage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');
-await enTetePage.click('header a[aria-label^="Progression"]');
+await enTetePage.click('header a[aria-label^="Ma Légende"]');
 await enTetePage.waitForTimeout(400);
 const apresProgression = await enTetePage.evaluate(() => window.location.pathname);
 check(
@@ -1034,40 +1037,26 @@ check(
 
 await bottomContext.close();
 
-// ------------- 12. appeler depuis le menu de la ligne, clic droit compris (#8109)
+// ------------- 12. le clic droit ouvre le menu de la ligne, sans appel (#8109, #17243)
 /**
- * Deux gestes lancent un appel depuis la liste, dans les DEUX schémas : le
- * clic droit sur la rangée ouvre le MÊME menu que son bouton (jamais celui du
- * navigateur), et « Appel vocal » / « Appel vidéo » ouvrent l'écran d'appel
- * vers la conversation de la rangée, au-dessus de la liste.
+ * Le clic droit sur la rangée ouvre le MÊME menu que son bouton (jamais celui
+ * du navigateur), dans les DEUX schémas. L'appel vocal, l'appel vidéo et
+ * « Rechercher » ont quitté ce menu (consigne porteur, #17243) : ils se font
+ * dans la conversation ; « Détails » suit la tête Épingler · Sourdine · Lu.
  */
 for (const scheme of ['light', 'dark']) {
-  for (const [label, media] of [
-    ['Appel vocal', 'audio'],
-    ['Appel vidéo', 'video'],
-  ]) {
-    const callContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme, locale: 'fr-FR' });
-    const callPage = await callContext.newPage();
-    await callPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
-    await callPage.waitForSelector(`[data-row="${SUBJECT}"] [data-name]`);
-    const name = await callPage.$eval(`[data-row="${SUBJECT}"] [data-name]`, (el) => (el.textContent ?? '').trim());
-    await callPage.click(`[data-row="${SUBJECT}"] [data-name]`, { button: 'right' });
-    const menuOpened = await callPage.waitForSelector('[role="menu"]', { timeout: 2000 }).then(() => true, () => false);
-    const items = menuOpened ? await callPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
-    check(
-      menuOpened && items[0] === 'Appel vocal' && items[1] === 'Appel vidéo',
-      `${scheme} : le clic droit sur une rangée ouvre son menu, « Appel vocal » et « Appel vidéo » en tête (${JSON.stringify(items)})`,
-    );
-    if (menuOpened) await callPage.click(menuItem(label));
-    const screen = await callPage
-      .waitForSelector('[data-call-screen]', { timeout: 5000 })
-      .then(() => callPage.$eval('[data-call-screen]', (el) => el.getAttribute('aria-label')), () => null);
-    check(
-      screen === `Appel avec ${name}` && new URL(callPage.url()).pathname === '/chats',
-      `${scheme} : « ${label} » depuis le menu ouvre l'écran d'appel (${media}) vers « ${name} », au-dessus de la liste (${screen})`,
-    );
-    await callContext.close();
-  }
+  const menuContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme, locale: 'fr-FR' });
+  const menuPage = await menuContext.newPage();
+  await menuPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
+  await menuPage.waitForSelector(`[data-row="${SUBJECT}"] [data-name]`);
+  await menuPage.click(`[data-row="${SUBJECT}"] [data-name]`, { button: 'right' });
+  const menuOpened = await menuPage.waitForSelector('[role="menu"]', { timeout: 2000 }).then(() => true, () => false);
+  const items = menuOpened ? await menuPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
+  check(
+    menuOpened && !items.some((item) => item.startsWith('Appel')) && !items.includes('Rechercher') && items[3] === 'Détails',
+    `${scheme} : le clic droit sur une rangée ouvre son menu, sans appel ni Rechercher, « Détails » sous la tête (${JSON.stringify(items)})`,
+  );
+  await menuContext.close();
 }
 
 // ------------- 13. le menu parle la langue d'interface du lecteur (#8150)
@@ -1081,7 +1070,7 @@ for (const scheme of ['light', 'dark']) {
   const labels = opened ? await enPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
   check(
     JSON.stringify(labels) ===
-      JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Search', 'Read', 'Reading mode', 'Details', 'Favorite', 'Move to…', 'Archive', 'Leave', 'Delete']),
+      JSON.stringify(['Pin', 'Mute', 'Read', 'Details', 'Reading mode', 'Favorite', 'Move to…', 'Archive', 'Leave', 'Delete']),
     `en anglais, le menu d'une ligne — ouvert par le clic droit, sous l'aperçu (#11211) — est entièrement anglais, et un simple membre y quitte sans renommer (${JSON.stringify(labels)})`,
   );
   await enContext.close();

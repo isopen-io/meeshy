@@ -49,40 +49,40 @@ final class ConversationProtectionPreferenceStore: ConversationProtectionPrefere
 
     private static let key = "meeshy.conversation.armedProtections.v1"
     private let defaults: UserDefaults
-    private let lock = NSLock()
+    private let serial = Locked<Void>(())
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
     func preference(for conversationId: String) -> ConversationProtectionPreference {
-        lock.lock(); defer { lock.unlock() }
-        guard let data = table()[conversationId],
-              let preference = try? JSONDecoder().decode(ConversationProtectionPreference.self, from: data) else {
-            return .none
+        serial.mutateUnchecked { _ in
+            guard let data = table()[conversationId],
+                  let preference = try? JSONDecoder().decode(ConversationProtectionPreference.self, from: data) else {
+                return .none
+            }
+            return preference
         }
-        return preference
     }
 
     func save(_ preference: ConversationProtectionPreference, for conversationId: String) {
-        lock.lock(); defer { lock.unlock() }
-        var entries = table()
-        if preference.isEmpty {
-            guard entries.removeValue(forKey: conversationId) != nil else { return }
-        } else {
-            guard let data = try? JSONEncoder().encode(preference) else { return }
-            entries[conversationId] = data
+        serial.mutateUnchecked { _ in
+            var entries = table()
+            if preference.isEmpty {
+                guard entries.removeValue(forKey: conversationId) != nil else { return }
+            } else {
+                guard let data = try? JSONEncoder().encode(preference) else { return }
+                entries[conversationId] = data
+            }
+            defaults.set(entries, forKey: Self.key)
         }
-        defaults.set(entries, forKey: Self.key)
     }
 
     /// Déconnexion : les protections armées sont rangées par conversation, sans
     /// compte. Un second compte membre de la même conversation recevait celles
     /// du premier (vue unique, flou, éphémère) sans les avoir choisies.
     func purgeAll() {
-        lock.lock()
-        defaults.removeObject(forKey: Self.key)
-        lock.unlock()
+        serial.mutateUnchecked { _ in defaults.removeObject(forKey: Self.key) }
     }
 
     private func table() -> [String: Data] {

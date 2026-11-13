@@ -27,6 +27,8 @@ struct ComposerCaptureStage: View {
     var allowsPhoto = true
     var allowsVideo = true
     var onToggleSize: () -> Void = {}
+    var sceneObjects: ComposerViewfinderSceneCanvas?
+    var sceneObjectsFrame: CGRect?
     let onDisarm: () -> Void
     let onDeliver: @MainActor (CameraResult) -> Void
 
@@ -61,7 +63,9 @@ struct ComposerCaptureStage: View {
                 allowsVideo: allowsVideo,
                 onToggleSize: onToggleSize,
                 onDisarm: onDisarm,
-                onValidateSegments: { session.validateSegments() })
+                onValidateSegments: { session.validateSegments() },
+                sceneObjects: sceneObjects,
+                sceneObjectsFrame: sceneObjectsFrame)
         }
     }
 }

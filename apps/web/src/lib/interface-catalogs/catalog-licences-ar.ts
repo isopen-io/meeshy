@@ -10,11 +10,12 @@ const ar = {
   'licences.source.title': 'الكود المصدري',
   'licences.source.body': 'الكود المصدري المقابل لهذا الإصدار، بما في ذلك سكربتات البناء، متاح مجانًا.',
   'licences.source.commit': 'المراجعة {commit}',
-  'licences.source.open': 'فتح الكود المصدري',
+  'licences.source.open': 'فتح',
   'licences.agpl.title': 'نص ترخيص AGPL-3.0',
   'licences.libsignal.title': 'إشعارات libsignal',
   'licences.libsignal.body': 'مكتبة libsignal والمكتبات التي تتضمنها، مع نص تراخيصها.',
-  'licences.libsignal.open': 'عرض الإشعارات التي نشرتها Signal',
+  'licences.libsignal.question': 'ماذا يغطي هذا الإشعار؟',
+  'licences.libsignal.open': 'فتح',
   'licences.legal_review': 'هذه المعلومات قيد المراجعة القانونية.',
 } as const satisfies LicencesCatalog;
 

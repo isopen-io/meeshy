@@ -23,10 +23,10 @@ struct MediaPillLabel: View {
             : fgBase.opacity(0.18)
 
         return HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: MeeshyIconSize.xs, weight: .medium))
-            Text(text).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+            Image(systemName: icon).meeshyScaledFont(MeeshyIconSize.xs, weight: .medium)
+            Text(text).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
         }
-        .foregroundColor(foreground)
+        .foregroundStyle(foreground)
         .padding(.horizontal, MeeshySpacing.smPlus).padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)

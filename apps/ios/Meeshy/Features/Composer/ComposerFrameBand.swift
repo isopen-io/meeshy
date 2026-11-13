@@ -79,6 +79,8 @@ struct ComposerFrameBand: View {
                                                lineWidth: choisi ? 3 : 1))
                 .frame(width: 36, height: 44)
                 .contentShape(Rectangle())
+                .meeshyTapTarget()
+                .padding(.horizontal, -MeeshyTapTarget.inset(forVisualSide: 36))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(ComposerFrameCopy.label(fond)))

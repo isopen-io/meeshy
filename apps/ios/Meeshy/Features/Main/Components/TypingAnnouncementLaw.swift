@@ -32,7 +32,7 @@ nonisolated enum TypingAnnouncementLaw {
 
     /// **De combien la pastille enfle au début d'une frappe.**
     ///
-    /// `1.1` (#10840, retour porteur 2026-10-16) : « préserver la taille
+    /// `1.1` (#10840): « préserver la taille
     /// initiale et l'augmenter juste par ×1,1 par rapport à la taille initiale
     /// lorsqu'on a de la frappe ». Avant lui `1.18` (#6188), et `1.5` (#4018),
     /// qui avait motivé deux des trois reprises. La pastille se pose désormais

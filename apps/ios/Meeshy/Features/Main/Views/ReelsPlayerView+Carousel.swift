@@ -150,8 +150,7 @@ private struct ReelImageCell: View {
 ///
 /// Deliberately renders ONLY the thumbHash (via `UIImage.fromThumbHash`) — it
 /// NEVER loads the thumbnail URL. A sharp thumbnail popping into the blurred
-/// letterbox fill reads as a rendering glitch (user report 2026-07-08 : « le
-/// thumbnail donne l'impression d'un bogue »). This mirrors the story letterbox
+/// letterbox fill reads as a rendering glitch. This mirrors the story letterbox
 /// backdrop (`storyBlurredBackdrop`), which is thumbHash-only too. The full
 /// image is already fetched by the `.fit` foreground; a 60pt blur over the
 /// upscaled thumbHash hides its low resolution at zero extra network cost.

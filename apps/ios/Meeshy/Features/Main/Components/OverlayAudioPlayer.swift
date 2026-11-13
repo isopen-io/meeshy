@@ -44,14 +44,31 @@ final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer, Interrup
     @Published var playbackRate: Float = 1.0
     @Published var isLoading = false
 
-    nonisolated(unsafe) private var avPlayer: AVPlayer?
-    nonisolated(unsafe) private var timeObserver: Any?
-    nonisolated(unsafe) private var statusObservation: NSKeyValueObservation?
-    /// Token for the `.AVPlayerItemDidPlayToEndTime` block observer. Held so
-    /// `deinit` can remove it: `removeObserver(self)` does NOT remove block-based
-    /// observers (their "observer" is this returned token, not `self`), so
-    /// without it the observer leaked once per playback / per preview.
-    nonisolated(unsafe) private var endObserver: (any NSObjectProtocol)?
+    /// Le lecteur et ses observateurs, relâchés par le `deinit` nonisolated.
+    /// `endObserver` est le jeton de l'observateur à bloc de
+    /// `.AVPlayerItemDidPlayToEndTime` : `removeObserver(self)` ne retire PAS un
+    /// observateur à bloc, sans lui il fuyait à chaque lecture / aperçu.
+    private let teardown = TeardownBox(OverlayPlaybackResources())
+
+    private var avPlayer: AVPlayer? {
+        get { var value: AVPlayer?; teardown.update { value = $0.avPlayer }; return value }
+        set { teardown.update { $0.avPlayer = newValue } }
+    }
+
+    private var timeObserver: Any? {
+        get { var value: Any?; teardown.update { value = $0.timeObserver }; return value }
+        set { teardown.update { $0.timeObserver = newValue } }
+    }
+
+    private var statusObservation: NSKeyValueObservation? {
+        get { var value: NSKeyValueObservation?; teardown.update { value = $0.statusObservation }; return value }
+        set { teardown.update { $0.statusObservation = newValue } }
+    }
+
+    private var endObserver: (any NSObjectProtocol)? {
+        get { var value: (any NSObjectProtocol)?; teardown.update { value = $0.endObserver }; return value }
+        set { teardown.update { $0.endObserver = newValue } }
+    }
     private var currentURL: String?
 
     /// La session `.playback` (call-aware, `MediaSessionCoordinator`) : sans elle l'aperçu jouait en
@@ -310,8 +327,19 @@ final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer, Interrup
     }
 
     nonisolated deinit {
-        if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
-        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        teardown.releaseNow(OverlayPlaybackResources.release)
         NotificationCenter.default.removeObserver(self)
+    }
+}
+
+private nonisolated struct OverlayPlaybackResources {
+    var avPlayer: AVPlayer?
+    var timeObserver: Any?
+    var statusObservation: NSKeyValueObservation?
+    var endObserver: (any NSObjectProtocol)?
+
+    static func release(_ resources: OverlayPlaybackResources) {
+        if let observer = resources.timeObserver { resources.avPlayer?.removeTimeObserver(observer) }
+        if let observer = resources.endObserver { NotificationCenter.default.removeObserver(observer) }
     }
 }

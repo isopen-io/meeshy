@@ -293,7 +293,7 @@ final class StoryPublishService: ObservableObject {
                    defaultValue: "Story enfin publiée",
                    bundle: .main)
         )
-        // Directive 2026-08-02 : succès serveur CONFIRMÉ — seul événement qui
+        // succès serveur CONFIRMÉ — seul événement qui
         // efface le brouillon gelé au hand-off. `nil` = item legacy (queue
         // persistée avant ce champ) : rien à faire, comportement inchangé.
         if let draftId = payload.draftId {

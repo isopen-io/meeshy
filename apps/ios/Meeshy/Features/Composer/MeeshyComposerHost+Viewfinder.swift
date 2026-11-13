@@ -11,7 +11,8 @@ import MeeshySDK
 extension MeeshyComposerHost {
 
     /// L'étape du viseur, lue par la surface et le meuble.
-    var sceneCameraStage: ComposerSceneCameraStage { sceneCapture.stage }
+    /// Un viseur qui a cédé la scène à un outil (#17432) la laisse au repos : l'outil s'y ouvre.
+    var sceneCameraStage: ComposerSceneCameraStage { viewfinderYieldsToScene ? .off : sceneCapture.stage }
 
     /// **L'appui long sur une scène VIDE ouvre la caméra ET filme** (#4036, #4851, #8653), jamais
     /// pendant qu'on écrit (#15674) ; la tenue part dès que la session écrit.
@@ -25,28 +26,14 @@ extension MeeshyComposerHost {
         sceneCapture.beginHold()
     }
 
-    /// **Un toucher sur une scène VIDE ARME le viseur — il ne prend rien** (#8711) : le SECOND
-    /// toucher prend la photo. Rend `true` quand il a pris le geste.
-    func handleSceneQuickTap() -> Bool {
-        guard sceneServesCapture, ComposerSceneQuickCapture.offers(
-            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
-            format: selectedFormat,
-            stage: sceneCameraStage,
-            toolIsOpen: sceneToolOwnsScreen,
-            mediaIsEntering: sceneIntake?.isPreparing == true, writesText: writesText),
-              ComposerSceneQuickCapture.tap(format: selectedFormat) != nil else { return false }
-        HapticFeedback.light()
-        armSceneCamera()
-        return true
-    }
-
     /// **Toucher la scène pendant qu'on écrit termine l'écriture** (#15674), comme la coche.
     func endSceneWriting() {
         editsPostContent = false
         editsSceneDescription = false
     }
 
-    /// Le toucher d'une scène vide armerait-il le viseur ? Sans l'armer (#13839, L5).
+    /// L'appui long d'une scène vide filmerait-il ? Le toucher n'arme plus rien (#17269) :
+    /// seule l'indication grise le demande.
     var sceneQuickCaptureIsOffered: Bool {
         sceneServesCapture && ComposerSceneQuickCapture.offers(
             sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
@@ -54,7 +41,6 @@ extension MeeshyComposerHost {
             stage: sceneCameraStage,
             toolIsOpen: sceneToolOwnsScreen,
             mediaIsEntering: sceneIntake?.isPreparing == true, writesText: writesText)
-            && ComposerSceneQuickCapture.tap(format: selectedFormat) != nil
     }
 
     /// **L'appui long sur la photothèque PROPOSE ses sources** (#10357,
@@ -123,13 +109,33 @@ extension MeeshyComposerHost {
     /// entrée, pas un mode »). Le mode d'ouverture vient de `ComposerSceneCamera`, jamais d'un littéral.
     func armSceneCamera() {
         guard let mode = ComposerSceneCamera.initialMode(for: selectedFormat) else { return }
-        sceneCameraSize = .card
+        sceneCameraSize = .armed
+        viewfinderYieldsToScene = false
+        sceneCapture.recordingBudget = ComposerCaptureRecordingBudget.maxDuration(for: selectedFormat)
         // **Ce que le viseur prend appartient à la SCÈNE** : le marquage se fait à l'ARMEMENT, car
         // `ingestIntoDocument` consomme le drapeau AVANT d'écrire (#4879).
         railPosesNextMedia = true
         // La session remet la photo regardée (#9329) à `poseSceneCapture`.
         sceneCapture.onDeliver = { poseSceneCapture($0) }
         sceneCapture.arm(mode: mode)
+    }
+
+    /// **Une entrée du viseur** (#17432) : aucune ne coupe la caméra ; une feuille se pose sur le
+    /// viseur vivant, le texte prend la scène. Seul un choix en Galerie l'arrête (`closeOpeningLibraryForPick`).
+    func handleViewfinderEntry(_ entree: ComposerViewfinderEntry) {
+        guard let porte = entree.door else {
+            openingPickFoundsScenes = true
+            showsOpeningLibrary = true
+            return
+        }
+        handleRailDoor(porte)
+        viewfinderYieldsToScene = ComposerViewfinderColumn.yieldsToScene(toolPresentsSheet: presentedPortal != nil)
+    }
+
+    var viewfinderEntryToolIsOpen: Bool {
+        ComposerViewfinderColumn.entryToolIsOpen(
+            yieldsToScene: viewfinderYieldsToScene, sceneToolOwnsScreen: sceneToolOwnsScreen,
+            sheetIsPresented: presentedPortal != nil, bandIsOpen: requestedSceneBand != nil)
     }
 
     /// **La prise POSE, puis le viseur se RETIRE** (#4080, planche `2b` : « une
@@ -143,8 +149,9 @@ extension MeeshyComposerHost {
             retractMedia(objectIds: [ancien])
         }
         sceneCapture.finishCapture()
+        showsOpeningLibrary = false
         HapticFeedback.success()
-        Task {
+        ComposerSceneHistoryHold.around {
             if sceneIntakeAllowsAnother, let cadrage = await ComposerTakeAspect.sceneFit(of: result) { applySceneFitMode(cadrage) }
             await ingestCameraCapture(result)
         }
@@ -154,27 +161,35 @@ extension MeeshyComposerHost {
     /// les segments abandonnés avec leurs fichiers.
     func disarmSceneCamera() {
         sceneCaptureReplacesBackgroundId = nil
-        sceneCameraSize = .card
-        // Quitter sans prendre RETIRE la marque : laissée posée, elle
-        // classerait sur la scène le prochain média venu d'une AUTRE porte.
+        viewfinderYieldsToScene = false
+        sceneCameraSize = .armed
+        // Quitter sans prendre RETIRE la marque, sinon le prochain média d'une AUTRE porte irait sur la scène.
         railPosesNextMedia = false
         sceneCapture.disarm()
     }
 
     // MARK: - Le montage unique
 
-    /// **Le composer monte LE montage de la capture** (#9351) — celui que la
-    /// barre de conversation monte aussi, en plein écran figé. Ici la taille
-    /// est pilotée (carte ↔ plein écran), et le FORMAT dit si la photo et la
-    /// vidéo sont offertes ; la prise se POSE dans la scène.
+    /// Le montage du viseur vit dans `ComposerSceneViewfinderMount`.
     func withSceneCameraViewfinder<Contenu: View>(_ contenu: Contenu) -> some View {
-        let modes = ComposerSceneCamera.modes(for: selectedFormat)
-        return ComposerCaptureMount(session: sceneCapture, size: $sceneCameraSize,
-                                    allowsPhoto: modes.contains(.photo),
-                                    allowsVideo: modes.contains(.video),
-                                    onDisarm: { disarmSceneCamera() },
-                                    onDeliver: { poseSceneCapture($0) }) {
-            contenu
+        ComposerSceneViewfinderMount(host: self) { contenu }
+    }
+}
+
+/// **UNE prise, UN pas d'annulation** (#17109) : le cadrage et le média s'écrivent de part et
+/// d'autre d'attentes asynchrones ; l'historique est tenu entre les deux comme pendant un geste.
+@MainActor
+enum ComposerSceneHistoryHold {
+    static func around(_ pose: @escaping @MainActor () async -> Void) {
+        hold(true)
+        Task { @MainActor in
+            await pose()
+            hold(false)
         }
+    }
+
+    static func hold(_ held: Bool, center: NotificationCenter = .default) {
+        center.post(name: .storyCanvasManipulationDidChange, object: nil,
+                    userInfo: [StoryCanvasManipulation.activeKey: held])
     }
 }

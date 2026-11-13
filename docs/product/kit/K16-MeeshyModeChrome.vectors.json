@@ -1,0 +1,1078 @@
+{
+  "kit": "K16",
+  "recipe": {
+    "capsuleHeight": 44,
+    "capsuleMargin": 16,
+    "glyphGap": 6,
+    "glyphSize": 18,
+    "checkSize": 20,
+    "itemGap": 8,
+    "headerInset": 14,
+    "wideHeaderInset": 24,
+    "minimumLabelScale": 0.8,
+    "plateEdge": 12,
+    "plateRadius": 24,
+    "plateHorizontalPadding": 14,
+    "plateVerticalPadding": 12,
+    "plateGap": 12,
+    "plateBottomGap": 12,
+    "plateMinimumBottom": 28,
+    "plateCeilingShare": 0.42,
+    "plateFloor": 160,
+    "widePlateWidth": 400,
+    "travel": 12,
+    "enterMs": 250,
+    "exitMs": 200,
+    "fadeMs": 150,
+    "contentFadeMs": 150,
+    "restFillOpacity": 0.94,
+    "pressedFillOpacity": 0.78
+  },
+  "rule": [
+    {
+      "hasConfirm": true,
+      "hasCenter": true,
+      "hasAccessory": true,
+      "hasPlate": true,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": true,
+      "showsCenter": true,
+      "showsAccessory": true,
+      "showsPlate": true,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": true,
+      "hasAccessory": true,
+      "hasPlate": true,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": true,
+      "hasAccessory": true,
+      "hasPlate": false,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": true,
+      "showsCenter": true,
+      "showsAccessory": true,
+      "showsPlate": false,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": true,
+      "hasAccessory": true,
+      "hasPlate": false,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": true,
+      "hasAccessory": false,
+      "hasPlate": true,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": true,
+      "showsCenter": true,
+      "showsAccessory": false,
+      "showsPlate": true,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": true,
+      "hasAccessory": false,
+      "hasPlate": true,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": true,
+      "hasAccessory": false,
+      "hasPlate": false,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": true,
+      "showsCenter": true,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": true,
+      "hasAccessory": false,
+      "hasPlate": false,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": false,
+      "hasAccessory": true,
+      "hasPlate": true,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": true,
+      "showsCenter": false,
+      "showsAccessory": true,
+      "showsPlate": true,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": false,
+      "hasAccessory": true,
+      "hasPlate": true,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": false,
+      "hasAccessory": true,
+      "hasPlate": false,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": true,
+      "showsCenter": false,
+      "showsAccessory": true,
+      "showsPlate": false,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": false,
+      "hasAccessory": true,
+      "hasPlate": false,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": false,
+      "hasAccessory": false,
+      "hasPlate": true,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": true,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": true,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": false,
+      "hasAccessory": false,
+      "hasPlate": true,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": false,
+      "hasAccessory": false,
+      "hasPlate": false,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": true,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": true,
+      "hasCenter": false,
+      "hasAccessory": false,
+      "hasPlate": false,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": true,
+      "hasAccessory": true,
+      "hasPlate": true,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": false,
+      "showsCenter": true,
+      "showsAccessory": true,
+      "showsPlate": true,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": true,
+      "hasAccessory": true,
+      "hasPlate": true,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": true,
+      "hasAccessory": true,
+      "hasPlate": false,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": false,
+      "showsCenter": true,
+      "showsAccessory": true,
+      "showsPlate": false,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": true,
+      "hasAccessory": true,
+      "hasPlate": false,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": true,
+      "hasAccessory": false,
+      "hasPlate": true,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": false,
+      "showsCenter": true,
+      "showsAccessory": false,
+      "showsPlate": true,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": true,
+      "hasAccessory": false,
+      "hasPlate": true,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": true,
+      "hasAccessory": false,
+      "hasPlate": false,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": false,
+      "showsCenter": true,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": true,
+      "hasAccessory": false,
+      "hasPlate": false,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": false,
+      "hasAccessory": true,
+      "hasPlate": true,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": true,
+      "showsPlate": true,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": false,
+      "hasAccessory": true,
+      "hasPlate": true,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": false,
+      "hasAccessory": true,
+      "hasPlate": false,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": true,
+      "showsPlate": false,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": false,
+      "hasAccessory": true,
+      "hasPlate": false,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": false,
+      "hasAccessory": false,
+      "hasPlate": true,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": true,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": false,
+      "hasAccessory": false,
+      "hasPlate": true,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": false,
+      "hasAccessory": false,
+      "hasPlate": false,
+      "presence": "shown",
+      "showsHeader": true,
+      "showsExit": true,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": true
+    },
+    {
+      "hasConfirm": false,
+      "hasCenter": false,
+      "hasAccessory": false,
+      "hasPlate": false,
+      "presence": "stowed",
+      "showsHeader": false,
+      "showsExit": false,
+      "showsConfirm": false,
+      "showsCenter": false,
+      "showsAccessory": false,
+      "showsPlate": false,
+      "acceptsTouches": false
+    }
+  ],
+  "capsuleWidth": [
+    {
+      "textWidth": 52,
+      "hasGlyph": false,
+      "display": "title",
+      "labelScale": 1,
+      "width": 84
+    },
+    {
+      "textWidth": 52,
+      "hasGlyph": false,
+      "display": "title",
+      "labelScale": 0.8,
+      "width": 73.6
+    },
+    {
+      "textWidth": 0,
+      "hasGlyph": true,
+      "display": "glyph",
+      "labelScale": 1,
+      "width": 52
+    },
+    {
+      "textWidth": 52,
+      "hasGlyph": true,
+      "display": "glyph",
+      "labelScale": 1,
+      "width": 52
+    },
+    {
+      "textWidth": 60,
+      "hasGlyph": true,
+      "display": "glyphAndTitle",
+      "labelScale": 1,
+      "width": 116
+    },
+    {
+      "textWidth": 60,
+      "hasGlyph": true,
+      "display": "glyphAndTitle",
+      "labelScale": 0.8,
+      "width": 104.0
+    },
+    {
+      "textWidth": 0,
+      "hasGlyph": false,
+      "display": "glyph",
+      "labelScale": 1,
+      "width": 44
+    },
+    {
+      "textWidth": 4,
+      "hasGlyph": false,
+      "display": "title",
+      "labelScale": 1,
+      "width": 44
+    },
+    {
+      "textWidth": 52,
+      "hasGlyph": false,
+      "display": "title",
+      "labelScale": 0.5,
+      "width": 73.6
+    }
+  ],
+  "requiredWidth": [
+    {
+      "exit": 80,
+      "center": null,
+      "accessory": null,
+      "confirm": 80,
+      "width": 168
+    },
+    {
+      "exit": 80,
+      "center": 120,
+      "accessory": null,
+      "confirm": 80,
+      "width": 296
+    },
+    {
+      "exit": 80,
+      "center": 300,
+      "accessory": null,
+      "confirm": 80,
+      "width": 476
+    },
+    {
+      "exit": 80,
+      "center": null,
+      "accessory": 44,
+      "confirm": 80,
+      "width": 220
+    },
+    {
+      "exit": 80,
+      "center": 100,
+      "accessory": 44,
+      "confirm": 80,
+      "width": 380
+    },
+    {
+      "exit": 100,
+      "center": null,
+      "accessory": null,
+      "confirm": null,
+      "width": 100
+    }
+  ],
+  "fit": [
+    {
+      "case": "tout tient à 410",
+      "available": 410,
+      "exit": {
+        "textWidth": 52,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "center": {
+        "textWidth": 100,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "accessory": null,
+      "confirm": {
+        "textWidth": 60,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "step": "full",
+      "width": 404.0,
+      "fits": true
+    },
+    {
+      "case": "le centre passe en glyphe",
+      "available": 320,
+      "exit": {
+        "textWidth": 52,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "center": {
+        "textWidth": 100,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "accessory": null,
+      "confirm": {
+        "textWidth": 60,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "step": "centerGlyph",
+      "width": 300.0,
+      "fits": true
+    },
+    {
+      "case": "la validation passe en coche",
+      "available": 250,
+      "exit": {
+        "textWidth": 52,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "center": {
+        "textWidth": 100,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "accessory": null,
+      "confirm": {
+        "textWidth": 60,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "step": "confirmGlyph",
+      "width": 236.0,
+      "fits": true
+    },
+    {
+      "case": "compact : les libellés à 80 % tiennent",
+      "available": 230,
+      "exit": {
+        "textWidth": 52,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "center": {
+        "textWidth": 100,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "accessory": null,
+      "confirm": {
+        "textWidth": 60,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "step": "compact",
+      "width": 215.2,
+      "fits": true
+    },
+    {
+      "case": "même le plus serré ne tient pas",
+      "available": 150,
+      "exit": {
+        "textWidth": 52,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "center": {
+        "textWidth": 100,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "accessory": null,
+      "confirm": {
+        "textWidth": 60,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "step": "compact",
+      "width": 215.2,
+      "fits": false
+    },
+    {
+      "case": "sans centre, deux capsules tiennent",
+      "available": 300,
+      "exit": {
+        "textWidth": 52,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "center": null,
+      "accessory": null,
+      "confirm": {
+        "textWidth": 60,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "step": "full",
+      "width": 184.0,
+      "fits": true
+    },
+    {
+      "case": "avec l'accessoire",
+      "available": 300,
+      "exit": {
+        "textWidth": 52,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "center": null,
+      "accessory": 44,
+      "confirm": {
+        "textWidth": 60,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "step": "full",
+      "width": 236.0,
+      "fits": true
+    },
+    {
+      "case": "sans centre ni validation",
+      "available": 200,
+      "exit": {
+        "textWidth": 52,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "center": null,
+      "accessory": null,
+      "confirm": null,
+      "step": "full",
+      "width": 84.0,
+      "fits": true
+    },
+    {
+      "case": "un centre sans glyphe ne se réduit pas",
+      "available": 300,
+      "exit": {
+        "textWidth": 52,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "center": {
+        "textWidth": 100,
+        "hasGlyph": false,
+        "display": "title"
+      },
+      "accessory": null,
+      "confirm": {
+        "textWidth": 60,
+        "hasGlyph": true,
+        "display": "glyphAndTitle"
+      },
+      "step": "compact",
+      "width": 275.2,
+      "fits": true
+    }
+  ],
+  "allocate": [
+    {
+      "available": 358,
+      "exit": 80,
+      "center": 100,
+      "accessory": null,
+      "confirm": 100,
+      "allocation": {
+        "exit": 80,
+        "center": 100,
+        "accessory": null,
+        "confirm": 100
+      }
+    },
+    {
+      "available": 200,
+      "exit": 80,
+      "center": 100,
+      "accessory": null,
+      "confirm": 100,
+      "allocation": {
+        "exit": 80,
+        "center": 0,
+        "accessory": null,
+        "confirm": 100
+      }
+    },
+    {
+      "available": 150,
+      "exit": 80,
+      "center": 100,
+      "accessory": 44,
+      "confirm": 100,
+      "allocation": {
+        "exit": 80,
+        "center": 0,
+        "accessory": 44,
+        "confirm": 10
+      }
+    },
+    {
+      "available": 100,
+      "exit": 80,
+      "center": null,
+      "accessory": null,
+      "confirm": 100,
+      "allocation": {
+        "exit": 80,
+        "center": null,
+        "accessory": null,
+        "confirm": 12
+      }
+    },
+    {
+      "available": 60,
+      "exit": 80,
+      "center": null,
+      "accessory": null,
+      "confirm": 100,
+      "allocation": {
+        "exit": 52,
+        "center": null,
+        "accessory": null,
+        "confirm": 0
+      }
+    },
+    {
+      "available": 358,
+      "exit": 80,
+      "center": null,
+      "accessory": null,
+      "confirm": null,
+      "allocation": {
+        "exit": 80,
+        "center": null,
+        "accessory": null,
+        "confirm": null
+      }
+    }
+  ],
+  "plate": {
+    "maxHeight": [
+      {
+        "windowHeight": 844,
+        "maxHeight": 354.47999999999996
+      },
+      {
+        "windowHeight": 932,
+        "maxHeight": 391.44
+      },
+      {
+        "windowHeight": 300,
+        "maxHeight": 160
+      },
+      {
+        "windowHeight": 0,
+        "maxHeight": 160
+      },
+      {
+        "windowHeight": -5,
+        "maxHeight": 160
+      },
+      {
+        "windowHeight": "nan",
+        "maxHeight": 160
+      }
+    ],
+    "height": [
+      {
+        "content": 0,
+        "windowHeight": 844,
+        "height": 1
+      },
+      {
+        "content": 120,
+        "windowHeight": 844,
+        "height": 120
+      },
+      {
+        "content": 354,
+        "windowHeight": 844,
+        "height": 354
+      },
+      {
+        "content": 900,
+        "windowHeight": 844,
+        "height": 354.47999999999996
+      },
+      {
+        "content": 900,
+        "windowHeight": 300,
+        "height": 160
+      },
+      {
+        "content": 100,
+        "windowHeight": 300,
+        "height": 100
+      }
+    ],
+    "scrolls": [
+      {
+        "content": 300,
+        "windowHeight": 844,
+        "scrolls": false
+      },
+      {
+        "content": 355,
+        "windowHeight": 844,
+        "scrolls": true
+      },
+      {
+        "content": 900,
+        "windowHeight": 844,
+        "scrolls": true
+      },
+      {
+        "content": 170,
+        "windowHeight": 300,
+        "scrolls": true
+      }
+    ],
+    "bottom": [
+      {
+        "safeBottom": 0,
+        "bottom": 28
+      },
+      {
+        "safeBottom": 20,
+        "bottom": 32
+      },
+      {
+        "safeBottom": 34,
+        "bottom": 46
+      },
+      {
+        "safeBottom": 16,
+        "bottom": 28
+      }
+    ],
+    "width": [
+      {
+        "available": 390,
+        "maxWidth": null,
+        "width": 366
+      },
+      {
+        "available": 390,
+        "maxWidth": 400,
+        "width": 366
+      },
+      {
+        "available": 820,
+        "maxWidth": 400,
+        "width": 400
+      },
+      {
+        "available": 300,
+        "maxWidth": 400,
+        "width": 276
+      },
+      {
+        "available": 40,
+        "maxWidth": null,
+        "width": 16
+      },
+      {
+        "available": 10,
+        "maxWidth": null,
+        "width": 0
+      }
+    ]
+  },
+  "motion": [
+    {
+      "reduceMotion": false,
+      "travel": 12,
+      "enterMs": 250,
+      "exitMs": 200,
+      "fadeOnly": false
+    },
+    {
+      "reduceMotion": true,
+      "travel": 0,
+      "enterMs": 150,
+      "exitMs": 150,
+      "fadeOnly": true
+    }
+  ],
+  "style": [
+    {
+      "kind": "solid",
+      "pressed": false,
+      "enabled": true,
+      "busy": false,
+      "fillOpacity": 0.94,
+      "shadow": true,
+      "opacity": 1,
+      "responds": true
+    },
+    {
+      "kind": "solid",
+      "pressed": true,
+      "enabled": true,
+      "busy": false,
+      "fillOpacity": 0.78,
+      "shadow": true,
+      "opacity": 1,
+      "responds": true
+    },
+    {
+      "kind": "solid",
+      "pressed": true,
+      "enabled": false,
+      "busy": false,
+      "fillOpacity": 0.94,
+      "shadow": true,
+      "opacity": 0.4,
+      "responds": false
+    },
+    {
+      "kind": "solid",
+      "pressed": true,
+      "enabled": true,
+      "busy": true,
+      "fillOpacity": 0.94,
+      "shadow": true,
+      "opacity": 1,
+      "responds": false
+    },
+    {
+      "kind": "glass",
+      "pressed": false,
+      "enabled": true,
+      "busy": false,
+      "fillOpacity": 0,
+      "shadow": false,
+      "opacity": 1,
+      "responds": true
+    },
+    {
+      "kind": "glass",
+      "pressed": false,
+      "enabled": false,
+      "busy": false,
+      "fillOpacity": 0,
+      "shadow": false,
+      "opacity": 0.4,
+      "responds": false
+    }
+  ],
+  "contrast": {
+    "solidInkOnFill": 15.99,
+    "glassDeepDense": 6.12,
+    "glassOnLightDense": 5.07
+  }
+}

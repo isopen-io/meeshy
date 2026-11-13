@@ -101,7 +101,7 @@ extension StoryComposerViewModel {
     /// doigt qui trace, avec ses couleurs et sa gomme sous la scène. Rien de
     /// plus.
     ///
-    /// **Ce que la vérification simulateur a trouvé (2026-08-30)** : la porte
+    /// **Ce que la vérification simulateur a trouvé** : la porte
     /// du plateau appelait `enterDrawingEditingMode()` seul. La bande de
     /// réglages paraissait, et le doigt traçait dans le VIDE — parce que la
     /// couche de capture est montée sur `isDrawingActive`, c'est-à-dire
@@ -138,8 +138,8 @@ extension StoryComposerViewModel {
 
     /// Sort du mode édition de dessin. Le zoom d'inspection posé PENDANT le
     /// dessin (pinch 2 doigts sur la couche de capture) est ramené à l'échelle
-    /// 1 : « lorsqu'on quitte on revient au système initial » (user
-    /// 2026-07-11). Guardé sur `isActive` pour qu'un exit no-op (appelé à
+    /// 1 : « lorsqu'on quitte on revient au système initial ».
+    /// Guardé sur `isActive` pour qu'un exit no-op (appelé à
     /// chaque changement d'outil) n'écrase pas un zoom posé HORS dessin.
     public func exitDrawingEditingMode() {
         guard drawingEditingMode.isActive else { return }

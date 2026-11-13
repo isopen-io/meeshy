@@ -82,7 +82,7 @@ struct AgeGateView: View {
             Button(action: onAcknowledge) {
                 Text(String(localized: "onboarding.age.refused.signOut", bundle: .main))
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity, minHeight: 50)
                     .background(Capsule().fill(MeeshyColors.brandGradient))
             }

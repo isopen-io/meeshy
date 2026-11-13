@@ -138,6 +138,8 @@ const USER_STATE_SELECT = {
   blockedUserIds: true,
   onboardingCompletedAt: true,
   onboardingSteps: true,
+  avatar: true,
+  banner: true,
   ...SPARKS_USER_SELECT,
   ...ACTIVATION_SELECT,
 } as const;
@@ -169,6 +171,8 @@ type UserStateRow = {
   blockedUserIds: string[] | null;
   onboardingCompletedAt: Date | null;
   onboardingSteps: string[] | null;
+  avatar?: string | null;
+  banner?: string | null;
   emailVerifiedAt: Date | null;
   phoneNumber: string | null;
   emailReleasedAt: Date | null;
@@ -260,7 +264,7 @@ export class OnboardingService {
     const globalConversationId = await this.globalConversationId();
     const storyDefaultVisibility = protectedRegime ? 'friends' : 'public';
     const [prefilledSteps, suggestions, pendingFriendRequests, stepRewards] = await Promise.all([
-      this.prefilledSteps(user.id, globalConversationId, emailVerified),
+      this.prefilledSteps(user.id, globalConversationId, { emailVerified, profileDressed: Boolean(user.avatar && user.banner) }),
       window === 'open' && globalConversationId
         ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
@@ -342,7 +346,7 @@ export class OnboardingService {
   private async prefilledSteps(
     userId: string,
     globalConversationId: string | null,
-    emailVerified: boolean,
+    profile: { readonly emailVerified: boolean; readonly profileDressed: boolean },
   ): Promise<OnboardingStepId[]> {
     const [storyCounter, globalCredit, friendship] = await Promise.all([
       this.prisma.engagementCounter.findUnique({
@@ -361,7 +365,8 @@ export class OnboardingService {
       }),
     ]);
     const done = new Set<OnboardingStepId>([
-      ...(emailVerified ? (['email'] as const) : []),
+      ...(profile.emailVerified ? (['email'] as const) : []),
+      ...(profile.profileDressed ? (['profile'] as const) : []),
       ...(globalCredit ? (['global'] as const) : []),
       ...((storyCounter?.count ?? 0) > 0 ? (['story'] as const) : []),
       ...(friendship ? (['friends'] as const) : []),
@@ -451,24 +456,34 @@ export class OnboardingService {
  * en objet STRICT (web `z.strictObject`, énumération d'étapes fermée) : une
  * étape ou une clé qu'il ne connaît pas lui rendrait l'état illisible.
  */
-export type OnboardingClient = { readonly ageStepAware: boolean };
+export type OnboardingClient = { readonly ageStepAware: boolean; readonly profileStepAware?: boolean };
 
-export const LEGACY_ONBOARDING_CLIENT: OnboardingClient = { ageStepAware: false };
+export const LEGACY_ONBOARDING_CLIENT: OnboardingClient = { ageStepAware: false, profileStepAware: false };
+
+/** Les étapes qu'un client n'a pas annoncé savoir lire (#9927 `age`, #17235 `profile`). */
+const stepsUnknownTo = (client: OnboardingClient): ReadonlySet<OnboardingStepId> =>
+  new Set<OnboardingStepId>([
+    ...(client.ageStepAware ? [] : (['age'] as const)),
+    ...(client.profileStepAware ? [] : (['profile'] as const)),
+  ]);
 
 /**
- * Sans la capacité, l'état servi est EXACTEMENT celui d'avant #9927 : ni
+ * Une étape que le client n'a pas annoncée ne voyage jamais : `age` sans
+ * `onboarding-age`, `profile` sans `onboarding-profile` (#17235).
+ * Sans la capacité `onboarding-age`, l'état servi est celui d'avant #9927 : ni
  * l'étape `age` dans les listes d'étapes, ni `viewerWriteRestriction`. La
  * règle elle-même ne dépend pas du client — un mineur reste refusé en écriture
  * dans Global (403 `GLOBAL_ADULTS_ONLY`, message lisible par tout client).
  */
 export function servedToClient(state: OnboardingState, client: OnboardingClient): OnboardingState {
-  if (client.ageStepAware) return state;
-  const { viewerWriteRestriction: _restriction, ...legacy } = state;
-  return {
-    ...legacy,
-    seenSteps: state.seenSteps.filter((step) => step !== 'age'),
-    prefilledSteps: state.prefilledSteps.filter((step) => step !== 'age'),
+  const unknown = stepsUnknownTo(client);
+  const steps = {
+    seenSteps: state.seenSteps.filter((step) => !unknown.has(step)),
+    prefilledSteps: state.prefilledSteps.filter((step) => !unknown.has(step)),
   };
+  if (client.ageStepAware) return { ...state, ...steps };
+  const { viewerWriteRestriction: _restriction, ...legacy } = state;
+  return { ...legacy, ...steps };
 }
 
 /**

@@ -94,7 +94,7 @@ struct CallLiveFrameProposalCard: View {
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Capsule().fill(Color.white.opacity(0.16)))
+                        .callChipGlass(isActive: false, tint: .white)
                 }
                 .buttonStyle(.plain)
                 Button(action: onAccept) {
@@ -108,7 +108,7 @@ struct CallLiveFrameProposalCard: View {
             }
         }
         .padding(MeeshySpacing.md)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+        .modifier(CallBannerGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous)))
         .accessibilityElement(children: .contain)
     }
 }
@@ -128,7 +128,7 @@ struct CallLiveFrameNotice: View {
         .foregroundStyle(Color.white)
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
-        .background(Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+        .modifier(CallBannerGlass(shape: Capsule()))
         .accessibilityElement(children: .combine)
     }
 }

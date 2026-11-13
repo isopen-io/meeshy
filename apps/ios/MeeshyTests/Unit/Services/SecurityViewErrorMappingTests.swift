@@ -18,6 +18,7 @@ final class SecurityViewErrorMappingTests: XCTestCase {
 
     private static let files = [
         "Meeshy/Features/Settings/Views/SecurityView.swift",
+        "Meeshy/Features/Settings/Views/SecurityEmailSection.swift",
         "Meeshy/Features/Settings/ViewModels/PhoneChangeFlowModel.swift",
     ]
 

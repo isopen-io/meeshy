@@ -16,7 +16,6 @@ class StatusViewModel: ObservableObject {
     /// Index `userId → position` reconstruit à chaque écriture de `statuses`
     /// (O(n), rare) pour que `statusForUser` soit O(1) — il était un balayage
     /// linéaire appelé par cellule de message et par rangée de conversation
-    /// (audit fluidité 2026-08-21).
     private var statusIndexByUserId: [String: Int] = [:]
 
     private static func index(_ entries: [StatusEntry]) -> [String: Int] {

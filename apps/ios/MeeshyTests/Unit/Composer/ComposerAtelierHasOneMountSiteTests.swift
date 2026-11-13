@@ -119,17 +119,39 @@ final class ComposerAtelierHasOneMountSiteTests: XCTestCase {
         }
     }
 
-    /// **L'éditeur d'image plein écran ne sert plus que l'AVATAR** (#9170) : la
-    /// citation, le fond et l'image de premier plan de l'atelier s'éditent dans
-    /// la scène. Le profil et le choix d'image d'une entité gardent leur
-    /// recadrage ; aucun autre site ne le monte.
-    func test_lEditeurDImagePleinEcran_neSertPlusQueLAvatar() {
-        let sites = (sourcesDeLApp() + sourcesDuSDK()).compactMap { url -> String? in
-            guard let brut = try? String(contentsOf: url, encoding: .utf8) else { return nil }
-            return AppSourceGuard.stripComments(brut).contains("MeeshyImageEditorView(") ? url.lastPathComponent : nil
-        }.sorted()
-        XCTAssertEqual(sites, ["EntityImagePickerFlow.swift", "ProfileView.swift"],
-                       "`MeeshyImageEditorView` ne se monte que pour l'avatar : \(sites)")
+    /// **L'ancien éditeur d'image plein écran a quitté le dépôt** (#17251,
+    /// directive porteur 2026-11-09). Avatar et bannière — « Montre-toi », le
+    /// profil, les groupes et les communautés — s'éditent avec la retouche de la
+    /// capture caméra. Les noms se composent ici pour qu'aucune recherche ne les
+    /// retrouve dans le dépôt : seule cette garde les connaît.
+    static let ancienEditeurDImage = [
+        "Meeshy" + "ImageEditorView", "ImageEditor" + "ViewModel", "ImageEditor" + "ModeSwitcher",
+        "ImageEditor" + "Mode", "ImageEditor" + "CropGeometry", "ImageEditor" + "HistoryOverlay",
+        "ImageEdit" + "History", "ImageEdit" + "State", "ImageFilter" + "Engine", "Crop" + "OverlayView",
+        "Crop" + "Geometry", "Editor" + "Tool", "Crop" + "Ratio", "preferred" + "CropRatio",
+        "ImageEditor" + "AdjustPanel", "ImageEditor" + "ControllerPanel", "ImageEditor" + "CropPanel",
+        "ImageEditor" + "EffectsPanel", "ImageEditor" + "FiltersPanel",
+    ]
+
+    func test_lAncienEditeurDImage_aQuitteLeDepot() {
+        for ancien in Self.ancienEditeurDImage {
+            let sites = fichiersCitant(ancien)
+            XCTAssertEqual(sites, [], "`\(ancien)` est revenu : \(sites)")
+        }
+    }
+
+    /// Chaque image d'identité passe par `EntityImageRetouch` : les deux écrans
+    /// le montent, et l'app le remet au SDK, qui n'a plus d'éditeur à lui.
+    func test_lesImagesDIdentite_ouvrentLaRetoucheDeLaCamera() throws {
+        XCTAssertEqual(fichiersMontant("EntityImageRetouch("),
+                       ["EntityImageRetouch.swift", "OnboardingProfileCard.swift", "ProfileView.swift"])
+        XCTAssertEqual(fichiersMontant(".environment(\\.entityImageEditor, EntityImageRetouch.editor)"),
+                       ["SessionContent.swift"], "le choix d'image d'un groupe ou d'une communauté l'ouvre aussi")
+        let flux = Self.racineApp.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Utilities/EntityImagePickerFlow.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: flux, encoding: .utf8))
+        XCTAssertTrue(code.contains("@Environment(\\.entityImageEditor)"))
+        XCTAssertFalse(code.contains("ImageEditor" + "View("))
     }
 
     // MARK: - 3 · Le meuble reste atteignable

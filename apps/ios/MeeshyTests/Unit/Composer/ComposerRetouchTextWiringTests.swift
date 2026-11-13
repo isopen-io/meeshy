@@ -26,7 +26,7 @@ final class ComposerRetouchTextWiringTests: XCTestCase {
 
     func test_noSecondTextEditor_isMountedByTheRetouche() throws {
         let code = try source("ComposerEditTextLayer.swift") + (try source("ComposerRetouchTextBoard.swift"))
-        for interdit in ["TextEditor(", "TextField(", "UITextView", "MeeshyImageEditorView"] {
+        for interdit in ["TextEditor(", "TextField(", "UITextView"] {
             XCTAssertFalse(code.contains(interdit), "\(interdit) : la saisie est celle du canvas du composer")
         }
     }

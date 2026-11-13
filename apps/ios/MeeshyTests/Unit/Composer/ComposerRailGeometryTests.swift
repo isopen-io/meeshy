@@ -205,7 +205,7 @@ final class ComposerRailGeometryTests: XCTestCase {
         let surface = compact(AppSourceGuard.stripComments(try AppSourceGuard.unit(
             "Meeshy/Features/Composer/ComposerSceneSurface.swift")))
         XCTAssertTrue(surface.contains(
-            "varbody:someView{ZStack{sceneLetterboxsceneLayerchromeLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))ifarrangement==.rails{railsLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}else{restChrome.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}}"),
+            "varbody:someView{ZStack{sceneLetterboxsceneLayerif!chromeIsConcealed{chromeLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))ifarrangement==.rails{railsLayer.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}else{restChrome.modifier(ComposerIntakeVeil(veiled:intakeBlocks))}ComposerLimitCapsuleView(capsule:.shared)}else{concealedRevealLayer}}"),
                       "Le letterbox, la scène, le chrome et le repos — ou, sur grand écran, les rails libellés (#13839, L6) — sont quatre calques empilés, dans cet ordre.")
         XCTAssertTrue(surface.contains("SceneBackdropView(backdrop:.thumbHash,thumbHash:floorHash)"),
                       "Ce que la carte laisse est le SOL de la scène : le thumbhash de son résultat, comme le lecteur.")
@@ -222,8 +222,12 @@ final class ComposerRailGeometryTests: XCTestCase {
         // pose dessus ; sur grand écran, Publier se pose SOUS elle (#13839, L6).
         XCTAssertFalse(scene.contains("ComposerTopBar.height"),
                        "La scène réserve encore la hauteur d'une barre haute qui n'existe plus.")
-        XCTAssertTrue(scene.contains(".ignoresSafeArea(.container,edges:arrangement==.rails?[]:.bottom)"),
-                      "En surimpression la scène descend sous le socle (#13839) ; en rails, Publier est sous elle (L6).")
+        XCTAssertTrue(scene.contains(
+            ".ignoresSafeArea(.container,edges:ComposerSceneFit.ignoredEdges(rails:arrangement==.rails,concealed:chromeIsConcealed))"),
+                      "En surimpression la scène descend sous le socle (#13839) ; en rails, Publier est sous elle (L6) ; masquée, elle prend tout (#17111).")
+        XCTAssertEqual(ComposerSceneFit.ignoredEdges(rails: false, concealed: false), .bottom)
+        XCTAssertEqual(ComposerSceneFit.ignoredEdges(rails: true, concealed: false), [])
+        XCTAssertEqual(ComposerSceneFit.ignoredEdges(rails: true, concealed: true), .all)
         XCTAssertTrue(scene.contains(".ignoresSafeArea(.keyboard)"),
                       "Le clavier ne pousse pas la scène.")
         XCTAssertTrue(surface.contains(".statusBarHidden(true)"),

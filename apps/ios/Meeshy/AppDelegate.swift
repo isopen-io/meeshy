@@ -15,6 +15,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
+    /// #17442 — le bouton « Arrêter » de l'alarme d'un Bring s'exécute dans l'app, parfois lancée en arrière-plan pour
+    /// lui : le branchement se pose à la construction du délégué, avant tout lancement.
+    private let bringAlarmStopBinding: Void = BringAlarmStopRouter.handler = { BringCenter.shared.stop(bringId: $0) }
+
     /// Un réveil en arrière-plan (push silencieux, app tuée) ne passe jamais par
     /// `checkExistingSession` : `APIClient` n'a pas de jeton alors que le
     /// Keychain en tient un valide. Le jeton de la session restaurée l'amorce ;
@@ -530,7 +534,23 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         register(Set([
             messageCategory, mentionCategory, friendRequestCategory, socialCategory, socialCommentableCategory,
             callIncomingCategory, callMissedCategory, legacyCallCategory, LockedConversationNotificationCategory.category,
-        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle)))
+        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle) + [bringNotificationCategory(bundle: bundle)]))
+    }
+
+    /// #17442 — la bannière d'un Bring (catégorie posée par la passerelle, `BRING_PUSH_CATEGORY`) : « Arrêter » l'éteint
+    /// chez tous les appareils sans ouvrir l'app.
+    private static func bringNotificationCategory(bundle: Bundle) -> UNNotificationCategory {
+        let stop = UNNotificationAction(
+            identifier: MeeshyNotificationAction.stopBring.rawValue,
+            title: String(localized: "notifications.action.stopBring", defaultValue: "Arrêter", bundle: bundle),
+            options: [.destructive]
+        )
+        return UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.bring.rawValue,
+            actions: [stop],
+            intentIdentifiers: [],
+            options: []
+        )
     }
 
     // MARK: - Crash Reporting Bootstrap
@@ -671,6 +691,11 @@ enum MeeshyNotificationCategory: String {
     /// #12655 — une conversation verrouillée par PIN : aucune action rapide
     /// (`NSEAttachmentPolicy.lockedConversationCategory`).
     case lockedConversation = "MEESHY_LOCKED_CONVERSATION"
+    /// #17143 — le réveil d'un talkie : la SEULE notification dont la voix se joue sur place
+    /// (`NotificationDetailPolicy.talkieCategory`, lecteur de la notification déployée).
+    case talkie = "MEESHY_TALKIE"
+    /// #17442 — le Bring : le littéral est celui de la passerelle (`BRING_PUSH_CATEGORY`), pas un `MEESHY_*`.
+    case bring = "BRING"
 }
 
 enum MeeshyNotificationAction: String {
@@ -686,6 +711,8 @@ enum MeeshyNotificationAction: String {
     case openInMaps = "MEESHY_ACTION_OPEN_IN_MAPS"
     case addContact = "MEESHY_ACTION_ADD_CONTACT"
     case joinInvite = "MEESHY_ACTION_JOIN_INVITE"
+    /// #17442 — « Arrêter » sur la bannière d'un Bring.
+    case stopBring = "MEESHY_ACTION_STOP_BRING"
 }
 
 // MARK: - UNUserNotificationCenterDelegate
@@ -694,7 +721,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 
     /// Called when a notification arrives while the app is in the foreground.
     ///
-    /// Policy (2026-05-24, simplified): the Socket.IO connection is the
+    /// Policy (simplified): the Socket.IO connection is the
     /// authoritative signal.
     /// - **Socket connected** → the in-app toast (driven by Socket.IO
     ///   `notification:new`) will fire. Suppress the iOS banner, list entry
@@ -712,6 +739,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
     ) {
         let userInfo = notification.request.content.userInfo
         if routeBringPush(userInfo) { return completionHandler([]) }
+        if routeTalkieWake(userInfo) { return completionHandler([]) }
         let convId = userInfo["conversationId"] as? String
         let messageId = userInfo["messageId"] as? String
 
@@ -801,7 +829,12 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         let actionIdentifier = response.actionIdentifier
         let replyText = (response as? UNTextInputNotificationResponse)?.userText
         logger.info("Notification response: action=\(actionIdentifier)")
-        if actionIdentifier != UNNotificationDismissActionIdentifier { _ = routeBringPush(userInfo) }
+        // « Arrêter » ne refait pas sonner le Bring qu'il arrête : le routage de la sonnerie est sauté.
+        if actionIdentifier != UNNotificationDismissActionIdentifier,
+           actionIdentifier != MeeshyNotificationAction.stopBring.rawValue {
+            _ = routeBringPush(userInfo)
+            _ = routeTalkieWake(userInfo)
+        }
 
         Task { @MainActor in
             // #10507 — « ouverte », ou « écartée » sur une catégorie qui le déclare.
@@ -834,6 +867,17 @@ extension AppDelegate {
         Task { @MainActor in
             BringCenter.shared.receive(push: ring, stopped: stopped, name: name, avatarURL: avatarURL)
         }
+        return true
+    }
+}
+
+extension AppDelegate {
+    /// #17143 — le réveil d'un talkie (`talkie_incoming`) : au premier plan comme au toucher de la notification, l'app
+    /// rejoint la prise de parole (`talkie:join`) et la passerelle rejoue la voix, que `TalkieCenter` lit. Au premier
+    /// plan, aucune bannière : la voix sort déjà. Rend `false` pour tout autre push.
+    fileprivate func routeTalkieWake(_ userInfo: [AnyHashable: Any]) -> Bool {
+        guard let push = TalkieWakePush(userInfo: userInfo) else { return false }
+        Task { @MainActor in TalkieWakeJoiner.shared.wake(push) }
         return true
     }
 }

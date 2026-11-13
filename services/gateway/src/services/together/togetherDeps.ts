@@ -3,12 +3,18 @@
  * l'horloge, la porte d'émission. Les routes qui changent un lien ou un blocage rejugent la
  * séance de la paire par {@link rejudgeTogetherAfter} : un échec n'arrête jamais le geste,
  * il est seulement journalisé (sans charge).
+ *
+ * Les sites UNIQUES qui ferment une porte sans tenir de quoi émettre — la fin d'une
+ * appartenance, le retrait d'un message, la désactivation d'un compte (#17022) — passent par
+ * {@link cutTogetherWhere}, qui lit le relais du processus : le gestionnaire de sockets le partage
+ * au démarrage (`shareTogetherCuts`), comme le registre de la file de rejeu.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
 import type { Redis } from 'ioredis';
 import { claimPairThroughCache, extendPairThroughCache, releasePairThroughCache, type PairClaim, type PairExtend, type PairRelease } from './togetherStore';
-import { rejudgeTogetherBetween, type TogetherIo, type TogetherRelayDeps } from './togetherRelay';
+import { rejudgeTogetherWhere, type TogetherCutScope, type TogetherIo, type TogetherRelayDeps } from './togetherRelay';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 
 /** Le cache du processus, résolu à l'usage : brancher une socket n'ouvre aucune connexion. */
 const lazyCache: TogetherRelayDeps['cache'] = {
@@ -66,11 +72,43 @@ export function togetherRelayDepsOf(params: { readonly prisma: PrismaClient; rea
 
 export async function rejudgeTogetherAfter(
   params: { readonly prisma: PrismaClient; readonly io: TogetherIo | undefined; readonly report: (error: unknown) => void },
-  pair: { readonly userA: string; readonly userB: string },
+  scope: TogetherCutScope,
 ): Promise<void> {
   try {
-    await rejudgeTogetherBetween(togetherRelayDepsOf(params), pair);
+    await rejudgeTogetherWhere(togetherRelayDepsOf(params), scope);
   } catch (error) {
     params.report(error);
+  }
+}
+
+/** `io` est résolu à l'appel : le serveur Socket.IO naît après l'enregistrement des routes. */
+type SharedTogether = { readonly prisma: PrismaClient; readonly io: () => TogetherIo | null | undefined };
+
+let sharedTogether: SharedTogether | undefined;
+
+/** Le relais du processus, posé au démarrage par `MeeshySocketIOHandler.setupSocketIO` ; `undefined` le retire (témoins). */
+export function shareTogetherCuts(shared: SharedTogether | undefined): void {
+  sharedTogether = shared;
+}
+
+/**
+ * Rejuge les séances que ce geste vient de fermer, et les coupe chez les deux. NE REJETTE
+ * JAMAIS : l'écriture de l'appelant est déjà commise. Sans relais dans ce processus, ne fait
+ * rien — la synchronisation suivante rejuge la séance de toute façon.
+ */
+export async function cutTogetherWhere(scope: TogetherCutScope): Promise<void> {
+  const shared = sharedTogether;
+  if (!shared) return;
+  const report = (error: unknown): void => {
+    try {
+      enhancedLogger.warn('[TogetherCuts] séance « ensemble » non rejugée', { error });
+    } catch {
+      /* le journal ne fait jamais échouer le geste de l'appelant */
+    }
+  };
+  try {
+    await rejudgeTogetherAfter({ prisma: shared.prisma, io: shared.io() ?? undefined, report }, scope);
+  } catch (error) {
+    report(error);
   }
 }

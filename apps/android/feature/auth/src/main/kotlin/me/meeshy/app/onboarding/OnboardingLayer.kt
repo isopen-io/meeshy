@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -19,12 +20,17 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import me.meeshy.feature.auth.R
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadSource
 import me.meeshy.sdk.game.OnboardingPresence
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.onboarding.OnboardingCard
 import me.meeshy.sdk.model.onboarding.OnboardingStepId
 import me.meeshy.sdk.model.onboarding.OnboardingStoryVisibility
+import me.meeshy.ui.component.retouch.EntityImageRetouchHost
+import me.meeshy.ui.component.retouch.rememberEntityImageRetouch
+import me.meeshy.ui.component.retouch.rememberEntityImagePicker
 import me.meeshy.ui.component.permission.PermissionFlowHost
 import me.meeshy.ui.component.permission.openAppSettings
 import me.meeshy.ui.component.permission.rememberPermissionFlow
@@ -110,6 +116,12 @@ fun OnboardingLayer(
         }
     }
 
+    // « Montre-toi » : le sélecteur et la retouche de la capture PARTAGÉS avec l'écran Profil (#17257) ; la photo retouchée part par le modèle.
+    val profileEditor = rememberEntityImageRetouch { target, item ->
+        scope.launch { viewModel.pickProfileImage(target, item, item.localPreviewPath()) }
+    }
+    val chooseProfileImage by rememberUpdatedState(rememberEntityImagePicker(profileEditor::offer))
+
     val visible = state.isPresented && !isStoryComposerOpen && !isCallOpen
     BackHandler(enabled = visible) { }
     if (!visible) return
@@ -161,6 +173,9 @@ fun OnboardingLayer(
             pickBirthDate = viewModel::pickBirthDate,
             declareBirthDate = { scope.launch { viewModel.declareBirthDate() } },
             acknowledgeAgeRefusal = { scope.launch { viewModel.acknowledgeAgeRefusal() } },
+            chooseProfileImage = { target -> chooseProfileImage(target) },
+            retryFailedProfileImages = { scope.launch { viewModel.retryFailedProfileImages() } },
+            continueFromProfile = { scope.launch { viewModel.continueFromProfile() } },
         )
     }
 
@@ -177,4 +192,9 @@ fun OnboardingLayer(
     ) {
         OnboardingCardContent(state = state, actions = actions, reduceMotion = rememberOnboardingReduceMotion())
     }
+    EntityImageRetouchHost(profileEditor)
 }
+
+/** L'aperçu local d'une photo retouchée (le fichier du cache d'entrée), montré pendant son envoi ; vide s'il est en mémoire. */
+private fun MediaUploadItem.localPreviewPath(): String =
+    (source as? MediaUploadSource.OnDisk)?.file?.absolutePath.orEmpty()

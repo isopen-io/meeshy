@@ -267,8 +267,7 @@ struct BubbleStandardLayout: View {
     /// widget's playerBackground — single unified bubble (caption pattern,
     /// SOTA aligned with WhatsApp/Telegram/MIMI MultiPart processAll +
     /// disposition inline). The legacy path rendered audio + textBubble as
-    /// two adjacent bubbles which broke visual atomicity (user feedback
-    /// 2026-05-29).
+    /// two adjacent bubbles which broke visual atomicity.
     ///
     /// Excludes :
     /// - `audioHostsReply` : the reply citation already hosts the bottomSlot
@@ -617,7 +616,7 @@ struct BubbleStandardLayout: View {
     // MARK: - Content stack (text + media + reply, with blur mask)
 
     @ViewBuilder
-    /// `AnyView` à la DÉCLARATION (2026-08-19) — voir `visualMediaGrid`.
+    /// `AnyView` à la DÉCLARATION — voir `visualMediaGrid`.
     /// Ce corps est évalué sur `com.apple.uikit.datasource.diffing`, un thread
     /// à pile de **512 Ko** (moitié du main thread) : le budget d'imbrication
     /// y est deux fois plus serré.
@@ -677,7 +676,7 @@ struct BubbleStandardLayout: View {
             // injectés DANS le widget audio (single unified bubble) :
             //   - `audioIsSoleContent` : audio seul, footer dans widget
             //   - `audioHostsReply` : audio + reply, citation dans topSlot
-            //   - `audioHostsCaption` (NEW 2026-05-29) : audio + texte, le
+            // `audioHostsCaption`: audio + texte, le
             //     texte devient le caption rendu DANS playerBackground via
             //     `embedsCaptionInWidget` au lieu d'une bulle texte séparée.
             if case .audio(let auds) = content.attachments, auds.count > 1 {

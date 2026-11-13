@@ -593,6 +593,12 @@ export default defineConfig({
         institutional: fileURLToPath(new URL('./src/styles/institutional.css', import.meta.url)),
         /* LA LANDING (#10002) — sa feuille, inlinée par `scripts/prerender-landing.tsx`. */
         landing: fileURLToPath(new URL('./src/styles/landing.css', import.meta.url)),
+        /* LE PONT libsignal (#17114) — aucun écran ne l'appelle encore : sans
+           cette entrée, il ne serait pas construit, et son poids ne serait ni
+           mesuré ni borné (`budgets.json › on_demand_chunks.libsignal_bridge`).
+           Aucun document ne le référence ; l'application ne l'atteint que par
+           `loadLibsignalBridge()`, un import() différé. */
+        'libsignal-build-entry': fileURLToPath(new URL('./src/lib/e2ee/libsignal-build-entry.ts', import.meta.url)),
       },
       output: {
         /**
@@ -736,6 +742,20 @@ export default defineConfig({
            * première peinture, 87,85 Ko au lieu de 90,09, pour 0,29 Ko.
            */
           if (/\/socketio-events\/(viewing|session|call-recording)-event-names\.[jt]s$/.test(id)) return 'event-names-first-paint';
+          /**
+           * QUI PARLE, LU DANS LES SOUS-TITRES (`lib/calls/call-speaking.ts`) — lu par
+           * le mode Effets (les compagnons) ET par la scène de l'appel (l'anneau de la
+           * caméra coupée, G4.2), deux chunks à la demande qui ne doivent pas
+           * s'importer : laissée à Rolldown, la loi entrait dans `call_overlay` et le
+           * mode Effets l'en important statiquement (`call_overlay.dynamic_only`).
+           */
+          if (/\/lib\/calls\/call-speaking\.ts$/.test(id)) return 'call-speaking';
+          /**
+           * LE (i) DES NOTES (#17587) — `info-hint.tsx` sert les écrans d'entrée ET les réglages : seul, il devenait un
+           * chunk de plus, et chaque écran qui le cite allongeait la table de préchargement du socle (première peinture
+           * mesurée à 97,06 Ko > 97). Il voyage avec son unique dépendance, le glyphe, déjà partagé par les mêmes écrans.
+           */
+          if (/\/components\/(glyph|info-hint)\.tsx$/.test(id)) return 'glyph';
           /**
            * LA LOI DU NIVEAU ET DE LA FRAPPE (#9706) — `levels`, `level-steps`,
            * `level-wire`, `mint` et `rarity` (`@meeshy/shared/utils/game`)

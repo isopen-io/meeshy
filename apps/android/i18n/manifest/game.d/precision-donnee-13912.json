@@ -66,12 +66,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.detail.fact.mint_next",
-          "androidName": "game_detail_fact_mint_next",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.detail.fact.mint_glory",
           "androidName": "game_detail_fact_mint_glory",
           "status": "adopted"

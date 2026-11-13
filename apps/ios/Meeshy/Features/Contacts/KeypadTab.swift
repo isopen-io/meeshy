@@ -54,7 +54,7 @@ struct KeypadTab: View {
                 } label: {
                     Image(systemName: "delete.left.fill")
                         .font(.title3)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "keypad.delete.a11y", defaultValue: "Effacer", bundle: .main))
                 .accessibilityHint(String(localized: "keypad.delete.a11y.hint", defaultValue: "Efface le dernier caractère", bundle: .main))
@@ -122,10 +122,10 @@ struct KeypadTab: View {
         VStack(spacing: MeeshySpacing.xsPlus) {
             Text(title)
                 .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             Text(subtitle)
                 .font(.footnote)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
@@ -157,11 +157,11 @@ struct KeypadTab: View {
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(name)
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
                         Text("@\(user.username)")
                             .font(.caption.weight(.medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     Spacer()
                 }
@@ -223,12 +223,12 @@ struct KeypadTab: View {
                 Text(key.digit)
                     // doctrine 82i — chiffre borné par la touche fixe 72×56 du pavé
                     .font(.system(size: 30, weight: .regular, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(key.letters)
                     // doctrine 82i — lettres bornées par la touche fixe 72×56 du pavé
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(height: 10)
             }
             .frame(width: 72, height: 56)

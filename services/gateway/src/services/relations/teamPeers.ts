@@ -1,7 +1,7 @@
 /**
  * LES COLLÈGUES DE L'ÉQUIPE d'un compte (#16623, correction porteur 2026-11-08).
  *
- * Entre deux comptes de l'équipe (MODERATOR, ADMIN, BIGBOSS), TOUTES les features de
+ * Entre deux comptes de l'équipe (ANALYST, AUDIT, MODERATOR, ADMIN, BIGBOSS), TOUTES les features de
  * cercle s'ouvrent sans lien (`RELATION_TEAM_CLOSED_FEATURES` ne garde que la
  * Connaissance automatique). La loi (`resolveRelationAccess`) juge une PAIRE ; les
  * énumérateurs d'audience (« à qui pousser ? », « quels auteurs dans mes cercles ? »)
@@ -16,7 +16,7 @@ import type { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import { GlobalUserRole, isPlatformTeam } from '@meeshy/shared/types/role-types';
 import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
 import { pairAccessAmong, type PairAccessDb, type PairAccessSubject } from './pairAccess';
-import { ACCOUNT_STATE_SELECT, lawRoleOf } from './usableAccount';
+import { ACCOUNT_STATE_SELECT, isUsableTeamAccount } from './usableAccount';
 
 /**
  * Les rôles de l'équipe : `isPlatformTeam` est la seule définition. `GlobalUserRole` reprend
@@ -34,7 +34,7 @@ export type TeamPeersDb = Pick<PrismaClient, 'user'>;
 export async function isTeamAccount(prisma: TeamPeersDb, subjectId: string): Promise<boolean> {
   if (!subjectId) return false;
   const self = await prisma.user.findUnique({ where: { id: subjectId }, select: { role: true, ...ACCOUNT_STATE_SELECT } });
-  return isPlatformTeam(lawRoleOf(self));
+  return isUsableTeamAccount(self);
 }
 
 /**
@@ -48,7 +48,7 @@ export async function teamPeerCandidates(prisma: TeamPeersDb, subjectId: string)
     select: { id: true, role: true, ...ACCOUNT_STATE_SELECT },
     take: TEAM_PEERS_LIMIT + 1,
   });
-  return rows.filter((row) => row.id !== subjectId && isPlatformTeam(lawRoleOf(row))).slice(0, TEAM_PEERS_LIMIT).map((row) => row.id);
+  return rows.filter((row) => row.id !== subjectId && isUsableTeamAccount(row)).slice(0, TEAM_PEERS_LIMIT).map((row) => row.id);
 }
 
 /**

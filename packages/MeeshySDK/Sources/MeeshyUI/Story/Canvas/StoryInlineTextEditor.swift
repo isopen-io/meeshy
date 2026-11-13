@@ -56,6 +56,8 @@ public final class StoryInlineTextEditor: UITextView {
         spellCheckingType = .no
         placeholderLabel.numberOfLines = 0
         placeholderLabel.isUserInteractionEnabled = false
+        NotificationCenter.default.addObserver(self, selector: #selector(flameTextDidChange),
+                                               name: UITextView.textDidChangeNotification, object: self)
         placeholderLabel.text = String(localized: "story.textEditor.placeholder",
                                        defaultValue: "Exprimez-vous…",
                                        bundle: .module)
@@ -119,6 +121,8 @@ public final class StoryInlineTextEditor: UITextView {
             textStorage.setAttributes(
                 attrs, range: NSRange(location: 0, length: textStorage.length))
         }
+        flameFontSize = textObject.parsedTextEffect.burns ? renderedFontSize : nil
+        refreshFlame()
 
         placeholderLabel.font = resolved
         // Le placeholder doit rester visible quelle que soit la couleur de
@@ -146,8 +150,8 @@ public final class StoryInlineTextEditor: UITextView {
     /// ajoutée a des bounds quasi-nulles (designSize ≈ 0 + 16 padding)
     /// et l'invite "Exprimez-vous…" reste clippée à 6 px de large.
     ///
-    /// `maxHeight` borne la hauteur à celle de la ZONE d'édition (spec
-    /// 2026-08-01). Au-delà, le champ défile au lieu de continuer à grandir :
+    /// `maxHeight` borne la hauteur à celle de la ZONE d'édition.
+    /// Au-delà, le champ défile au lieu de continuer à grandir :
     /// un texte long sortait auparavant par le haut de l'écran, ses premières
     /// lignes devenant illisibles ET inéditables. Sans zone mesurée la valeur
     /// par défaut laisse la croissance libre, comportement d'origine.
@@ -208,6 +212,44 @@ public final class StoryInlineTextEditor: UITextView {
         // `contentOffset`, qui emporterait le placeholder hors du champ.
         placeholderLabel.frame = CGRect(origin: .zero, size: bounds.size)
             .inset(by: textContainerInset)
+        refreshFlame()
+    }
+
+    // MARK: - Flamme (#17112)
+
+    /// Taille de police rendue d'un texte en FEU, `nil` pour tout autre effet.
+    private var flameFontSize: CGFloat?
+    private var flameLayer: StoryFlameLayer?
+
+    @objc private func flameTextDidChange() { refreshFlame() }
+
+    /// **Le texte brûle pendant qu'on le tape.** La calque du canvas cache ses
+    /// flammes — taillées sur l'ancien texte — pendant l'édition ; le champ
+    /// pose les siennes, sur ses propres glyphes, mis en ligne par TextKit
+    /// comme il les peint. La silhouette ne se recalcule que si le texte ou le
+    /// cadre change, et le feu tourne sur le serveur de rendu : la frappe ne
+    /// perd aucune image.
+    private func refreshFlame() {
+        guard let fontSize = flameFontSize, let typed = attributedText, typed.length > 0 else {
+            flameLayer?.removeFromSuperlayer()
+            flameLayer = nil
+            return
+        }
+        let glyphs = NSMutableAttributedString(attributedString: typed)
+        glyphs.removeAttribute(.shadow, range: NSRange(location: 0, length: glyphs.length))
+        let size = CGSize(width: bounds.width, height: max(bounds.height, contentSize.height))
+        let flame = flameLayer ?? StoryFlameLayer()
+        flame.configure(glyphFrame: CGRect(origin: .zero, size: size),
+                        fontSize: fontSize,
+                        key: StoryFlameGlyphKey(glyphs: glyphs, size: size, scale: 1),
+                        animates: StoryFlameTextRenderer.motionAllowed) { _ in
+            glyphs.draw(with: CGRect(origin: .zero,
+                                     size: CGSize(width: size.width, height: .greatestFiniteMagnitude)),
+                        options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+        }
+        flame.zPosition = 1
+        if flame.superlayer !== layer { layer.addSublayer(flame) }
+        flameLayer = flame
     }
 
     // MARK: - Helpers

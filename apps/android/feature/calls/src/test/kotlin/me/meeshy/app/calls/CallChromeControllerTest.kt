@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.call.CallChromeInteraction
 import me.meeshy.sdk.model.call.CallScreenLayer
 import me.meeshy.sdk.model.call.CallScreenMode
 import me.meeshy.sdk.model.call.CallScreenPanel
+import me.meeshy.sdk.model.call.CallState
 import org.junit.Test
 
 class CallChromeControllerTest {
@@ -100,6 +101,26 @@ class CallChromeControllerTest {
     }
 
     @Test
+    fun `the journal button of the stowed captions relights the chrome and opens the journal in the pill`() {
+        val chrome = controller()
+        chrome.onSceneTap(true, false)
+        assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Controls)).isFalse()
+        chrome.open(CallScreenPanel.Journal)
+        assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Controls)).isTrue()
+        assertThat(chrome.state.value.layer.pillPanel).isEqualTo(CallScreenPanel.Journal)
+    }
+
+    @Test
+    fun `the menu over an open journal stows it and closing the menu gives it back`() {
+        val chrome = controller()
+        chrome.open(CallScreenPanel.Journal)
+        chrome.toggleMenu()
+        assertThat(chrome.state.value.layer).isEqualTo(CallScreenLayer.MenuOverJournal)
+        chrome.toggleMenu()
+        assertThat(chrome.state.value.layer).isEqualTo(CallScreenLayer.Panel(CallScreenPanel.Journal))
+    }
+
+    @Test
     fun `a mode frees the screen and reveals the chrome`() {
         val chrome = controller()
         chrome.onSceneTap(true, false)
@@ -120,5 +141,32 @@ class CallChromeControllerTest {
         assertThat(chrome.visibility(true, false).isVisible(CallChromeElement.Captions)).isTrue()
         chrome.setStageFullScreen(false)
         assertThat(chrome.visibility(false, false).isVisible(CallChromeElement.Controls)).isTrue()
+    }
+
+    private fun connected(video: Boolean, cameraOn: Boolean) = CallPresenter.present(
+        state = CallState.Connected,
+        config = CallConfig(peerId = "u1", peerName = "Alice", isVideo = video, isOutgoing = true),
+        media = CallMedia(isMuted = false, isCameraOn = cameraOn),
+        mediaEstablished = true,
+    )
+
+    @Test
+    fun `a group born audio becomes a video scene as soon as another camera lights (G1_13)`() {
+        val audioGroup = connected(video = false, cameraOn = false)
+        assertThat(callIsVideoStage(audioGroup, CallGroupVideoStage(remoteCamerasOn = 0))).isFalse()
+        assertThat(callIsVideoStage(audioGroup, CallGroupVideoStage(remoteCamerasOn = 1))).isTrue()
+    }
+
+    @Test
+    fun `a group born video with no camera on is not a video scene, so a tap does not hide the chrome (G1_13)`() {
+        val videoGroup = connected(video = true, cameraOn = false)
+        assertThat(callIsVideoStage(videoGroup, CallGroupVideoStage(remoteCamerasOn = 0))).isFalse()
+    }
+
+    @Test
+    fun `my own camera is enough for a group video scene, a duo still follows its video (G1_13)`() {
+        assertThat(callIsVideoStage(connected(video = true, cameraOn = true), CallGroupVideoStage(remoteCamerasOn = 0))).isTrue()
+        assertThat(callIsVideoStage(connected(video = true, cameraOn = false))).isTrue()
+        assertThat(callIsVideoStage(connected(video = false, cameraOn = false))).isFalse()
     }
 }

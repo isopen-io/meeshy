@@ -1,6 +1,7 @@
 import CoreImage
 import CoreGraphics
 import Foundation
+import MeeshySDK
 import simd
 
 /// **LES TEINTES D'APPEL, ÉTALONNÉES** (#9289).
@@ -201,16 +202,15 @@ nonisolated enum CallColorLook {
 nonisolated final class CallColorLookCubes: @unchecked Sendable {
     static let shared = CallColorLookCubes()
 
-    private let lock = NSLock()
-    private var cubes: [VideoFilterPreset: Data] = [:]
+    private let cubes = Locked<[VideoFilterPreset: Data]>(uncheckedState: [:])
 
     func cube(for preset: VideoFilterPreset) -> Data? {
         guard let recipe = CallColorLook.recipe(for: preset) else { return nil }
-        lock.lock()
-        defer { lock.unlock() }
-        if let cached = cubes[preset] { return cached }
-        let data = CallColorLook.cubeData(for: recipe)
-        cubes[preset] = data
-        return data
+        return cubes.mutateUnchecked { known in
+            if let cached = known[preset] { return cached }
+            let data = CallColorLook.cubeData(for: recipe)
+            known[preset] = data
+            return data
+        }
     }
 }

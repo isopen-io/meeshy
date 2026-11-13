@@ -30,6 +30,7 @@ import { isProtectedFromObsolescence } from './obsoleteCapability';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { deactivateShareLinksOnClose } from './shareLinkClosure';
+import { eraseExternalPeerOnClose, type ExternalPeerEraser } from '../external-conversation/erase-external-peers';
 import {
   announceConversationClosed,
   type ClosedConversationEphemeralState,
@@ -43,6 +44,7 @@ import {
   type RetractedNotification,
   type RetractedNotificationAnnouncer,
 } from '../notifications/retractedNotifications';
+import { cutTogetherWhere } from '../together/togetherDeps';
 
 export { isProtectedFromObsolescence };
 
@@ -56,7 +58,7 @@ const CONTEXT_NOTIFICATION_READ_CAP = 5000;
 export type ObsoleteConversationPrisma = Pick<
   PrismaClient,
   'conversation' | 'conversationShareLink' | 'message' | 'notification' | '$transaction' | '$runCommandRaw'
->;
+> & ExternalPeerEraser;
 
 export type ObsoleteConversationDeps = {
   readonly prisma: ObsoleteConversationPrisma;
@@ -173,6 +175,10 @@ export async function obsoleteConversation(
     eraseLiveMessages(),
   ]);
   await eraseLiveMessages();
+  // #17117 — le numéro de l'ami d'une conversation externe ne survit pas au fil.
+  await eraseExternalPeerOnClose(prisma, { id: conversationId, type: existing.type });
+  // #17022 — ses messages sont effacés : une séance « ensemble » qui y lisait une pièce s'arrête.
+  await cutTogetherWhere({ conversationId });
 
   await retractConversationNotifications(prisma, conversationId, announcer);
 

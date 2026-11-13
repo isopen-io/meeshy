@@ -20,6 +20,10 @@ on:
       - main
     paths:
       - 'packages/MeeshySDK/**'
+      # Le registre du kit de la planche (K00) : KitRegistryGuardTests le confronte au
+      # catalogue et à la table S de la planche — l'un ou l'autre qui change rejoue la garde.
+      - '.claude/workflows/meeshy-kit-planche.lots.json'
+      - 'docs/product/composer-vue-finale/planche.html'
       # Les vecteurs du scellement partagé (#9899) : SharedTranslationSealVectorTests
       # les relit depuis packages/shared — le TypeScript a raison sur divergence,
       # et une régénération qui ne toucherait que lui doit rejouer le miroir Swift.
@@ -70,9 +74,19 @@ on:
       # L'échelle d'une image clé multiplie celle de l'objet (#14316) : StoryKeyframeScaleVectorTests
       # rejoue ces vecteurs, partagés avec le web et Android.
       - 'packages/shared/fixtures/keyframe-scale.vectors.json'
+      # La lisibilité de la couleur d'auteur (#17879) : AuthorInkSharedVectorTests rejoue ces
+      # vecteurs, générés par la loi TypeScript et partagés avec le web et Android.
+      - 'packages/shared/fixtures/author-ink.vectors.json'
       # Le contrat MeeshyLens v1 (#11270) : LensFormatVectorsTests rejoue ses vecteurs.
       - 'packages/shared/fixtures/lens-v1/**'
+      # Les vecteurs croisés libsignal (#17113) : LibsignalCrossPlatformVectorTests les rejoue,
+      # comme la passerelle et :core:e2ee — une régénération, ou une montée de la version
+      # épinglée, doit rejouer le miroir Swift.
+      - 'packages/shared/fixtures/libsignal/**'
+      - 'packages/shared/types/external-interop-compliance.ts'
+      - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
+      - 'apps/ios/Meeshy/**'
       - 'scripts/ci/**'
   pull_request:
     branches:
@@ -80,6 +94,10 @@ on:
       - main
     paths:
       - 'packages/MeeshySDK/**'
+      # Le registre du kit de la planche (K00) : KitRegistryGuardTests le confronte au
+      # catalogue et à la table S de la planche — l'un ou l'autre qui change rejoue la garde.
+      - '.claude/workflows/meeshy-kit-planche.lots.json'
+      - 'docs/product/composer-vue-finale/planche.html'
       - 'packages/shared/fixtures/shared-translation/**'
       - 'packages/shared/design/packs/frame-usage-vectors.json'
       - 'packages/shared/design/packs/frame-usage-avatar-vectors.json'
@@ -118,8 +136,15 @@ on:
       # L'échelle d'une image clé multiplie celle de l'objet (#14316) : StoryKeyframeScaleVectorTests
       # rejoue ces vecteurs, partagés avec le web et Android.
       - 'packages/shared/fixtures/keyframe-scale.vectors.json'
+      # La lisibilité de la couleur d'auteur (#17879) : AuthorInkSharedVectorTests rejoue ces
+      # vecteurs, générés par la loi TypeScript et partagés avec le web et Android.
+      - 'packages/shared/fixtures/author-ink.vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
+      - 'packages/shared/fixtures/libsignal/**'
+      - 'packages/shared/types/external-interop-compliance.ts'
+      - 'packages/LibSignalClient/**'
       - '.github/workflows/sdk-tests.yml'
+      - 'apps/ios/Meeshy/**'
       - 'scripts/ci/**'
   # Un workflow se déclenche quand son OUTILLAGE change (2026-10-23) : ce fichier et
   # `scripts/ci/**` (répartition, file Mac, verdict) font rejouer la suite, sans quoi une
@@ -313,6 +338,11 @@ jobs:
     # supprime les deux. 30 est le plafond ; le délai PAR TEST (600 s
     # ci-dessous) reste le garde-fou d'un test bloqué.
     timeout-minutes: 30
+    # `contents: write` pour le seul commit des références ré-enregistrées
+    # (étape « Commit re-recorded snapshots », branche de travail seulement).
+    permissions:
+      contents: write
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -479,6 +509,36 @@ jobs:
           retention-days: 7
           overwrite: true
           if-no-files-found: warn
+
+      # #17400 — les sessions des conteneurs ne peuvent pas télécharger un
+      # artefact (stockage refusé par le proxy) : sur une branche de travail,
+      # la tranche commit elle-même les références qu'elle vient d'enregistrer,
+      # comme `android.yml` le fait pour le kit. Sur `dev` et `main`, seul
+      # l'artefact ci-dessus est publié. Les tranches parallèles se rebasent
+      # l'une sur l'autre avant de pousser.
+      - name: Commit re-recorded snapshots
+        if: always() && inputs.record_snapshots && github.ref_name != 'dev' && github.ref_name != 'main'
+        env:
+          SHARD: ${{ matrix.shard }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- 'packages/MeeshySDK/Tests/**/__Snapshots__/**'
+          if git diff --cached --quiet; then
+            echo "::notice::aucune référence nouvelle ou modifiée (tranche ${SHARD})"
+            exit 0
+          fi
+          git commit -q -m "chore(sdk): références de capture enregistrées par la CI (tranche ${SHARD})" \
+            -m "Ré-enregistrées par sdk-tests.yml (record_snapshots), run ${{ github.run_id }}."
+          for attempt in 1 2 3; do
+            git pull -q --rebase origin "$BRANCH"
+            if git push -q origin "HEAD:${{ github.ref_name }}"; then exit 0; fi
+            echo "::warning::poussée refusée (tentative ${attempt}), nouveau rebase"
+          done
+          echo "::error::les références de la tranche ${SHARD} n'ont pas pu être poussées"
+          exit 1
 
       - name: Publish shard summary
         if: always()

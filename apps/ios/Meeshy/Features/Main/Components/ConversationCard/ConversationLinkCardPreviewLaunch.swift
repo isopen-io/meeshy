@@ -116,7 +116,7 @@ private struct PreviewCardActions: ConversationCardActionPerforming {
     let succeeds: Bool
 
     func join(identifier: String) async throws -> String {
-        try await Task.sleep(nanoseconds: 1_500_000_000)
+        try await Task.sleep(for: .milliseconds(1_500))
         guard succeeds else { throw MeeshyError.server(statusCode: 410, message: "inactive") }
         return "c-\(identifier)"
     }

@@ -45,7 +45,7 @@ private val FORM_MAX_WIDTH = 600.dp
 private val TABLET_MIN_WIDTH = 840.dp
 private const val TOLERANCE_DP = 0.5f
 
-private const val ENABLE_TWO_FACTOR = "Set up two-factor authentication"
+private const val ENABLE_TWO_FACTOR = "Enable"
 private const val SETUP_NEXT = "Next"
 private const val UNVERIFIED_PHONE = "+33612345678"
 

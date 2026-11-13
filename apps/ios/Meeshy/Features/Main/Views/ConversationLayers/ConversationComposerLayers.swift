@@ -58,7 +58,7 @@ struct ComposerBarAnimationKeys: Equatable {
 /// `photoLibrary: .shared()` est requis pour la présélection : les
 /// `PhotosPickerItem(itemIdentifier:)` injectés depuis la bande ne matchent les
 /// assets du sélecteur que sur la photothèque partagée. **La caméra de la barre
-/// prend EN PLEIN ÉCRAN, hors de toute scène** (directive porteur 2026-10-04) :
+/// prend EN PLEIN ÉCRAN, hors de toute scène**:
 /// la prise rejoint le message en attente, la scène reste à un geste, par
 /// « Éditer » sur la pièce posée (#9126).
 struct ConversationComposerPickers: ViewModifier {

@@ -29,7 +29,7 @@ struct EncryptedDeviceCodeView: View {
                 format: String(localized: "e2ee.devices.code.digits.a11y", defaultValue: "Chiffres du code : %@", bundle: .main),
                 shown.groups.joined().map(String.init).joined(separator: " ")
             ))
-            Text(String(localized: "e2ee.devices.code.digits.note", defaultValue: "Ces chiffres sont donnés pour information : seule la lecture du code approuve un appareil.", bundle: .main))
+            Text(String(localized: "e2ee.devices.code.digits.note", defaultValue: "Pour information : seule la lecture du code approuve un appareil.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
                 .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)

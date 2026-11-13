@@ -118,7 +118,15 @@ private fun LevelGroup(badge: GameBannerBadge) {
     }
 }
 
-/** En colonne : la Gloire au-dessus du blason du rang, son nom et sa division dessous. */
+/** Les lignes du groupe du rang, de haut en bas. */
+internal enum class RankLine { NAME, CREST, GLORY }
+
+/**
+ * Le titre du rang en haut, le blason, la Gloire en bas (porteur 2026-11-09, #17203) — le même ordre que le groupe du
+ * niveau d'en face : le nom, l'emblème, le compte. Jumelle de `GameBannerBadgeView.rankLines` (iOS).
+ */
+internal val RANK_GROUP_LINES: List<RankLine> = listOf(RankLine.NAME, RankLine.CREST, RankLine.GLORY)
+
 @Composable
 private fun RankGroup(badge: GameBannerBadge) {
     val locale = LocalConfiguration.current.locales[0]
@@ -129,16 +137,20 @@ private fun RankGroup(badge: GameBannerBadge) {
         badge.glory?.let { gameString(GameCopyLaws.gloryAmount(GameTextArg.Count(it))) },
     ).joinToString(SEPARATOR)
     BannerGroup(startFacing = false, label = label) {
-        glory?.let { Text(it, style = banner(MeeshyFontSize.body, FontWeight.Bold), color = Color.White, maxLines = 1) }
-        RankBlason(
-            rank = badge.rank,
-            division5 = badge.division5,
-            mythic = badge.mythic,
-            level = badge.level,
-            figures = null,
-            modifier = Modifier.height(EMBLEM * 1.1f * 0.93f),
-        )
-        Text(rankName, style = banner(MeeshyFontSize.footnote, FontWeight.SemiBold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        RANK_GROUP_LINES.forEach { line ->
+            when (line) {
+                RankLine.NAME -> Text(rankName, style = banner(MeeshyFontSize.footnote, FontWeight.SemiBold), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                RankLine.CREST -> RankBlason(
+                    rank = badge.rank,
+                    division5 = badge.division5,
+                    mythic = badge.mythic,
+                    level = badge.level,
+                    figures = null,
+                    modifier = Modifier.height(EMBLEM * 1.1f * 0.93f),
+                )
+                RankLine.GLORY -> glory?.let { Text(it, style = banner(MeeshyFontSize.body, FontWeight.Bold), color = Color.White, maxLines = 1) }
+            }
+        }
     }
 }
 

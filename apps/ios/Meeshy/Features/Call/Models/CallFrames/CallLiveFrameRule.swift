@@ -53,7 +53,7 @@ nonisolated enum CallLiveFrameRule {
 
     /// Un cadre se propose en direct s'il sert un duo et que la loi d'usage lui ouvre l'appel —
     /// c'est-à-dire s'il DÉCLARE `live` (#10195). Un cadre de capture seule ne sert jamais
-    /// l'appel, quel que soit son coût (directive porteur 2026-10-11).
+    /// l'appel, quel que soit son coût.
     static func isEligible(_ design: CallFrameDesign) -> Bool {
         design.serves(people: people) && FrameUsageLaw.canUseFrame(design.usage, .call)
     }
@@ -101,6 +101,12 @@ nonisolated enum CallLiveFrameRule {
     /// Le cadre en direct n'existe qu'en vidéo, à deux.
     static func mayOffer(participants: Int, showsVideo: Bool) -> Bool {
         showsVideo && participants == people
+    }
+
+    /// #17815 (C2.10) — la proposition d'un cadre ne se montre qu'en duo vidéo : ni en groupe
+    /// (même à deux connectés), ni en audio.
+    static func mayShowProposal(participants: Int, showsVideo: Bool, isGroupStage: Bool) -> Bool {
+        !isGroupStage && mayOffer(participants: participants, showsVideo: showsVideo)
     }
 
     /// La forme d'un identifiant du catalogue, celle que la passerelle exige.

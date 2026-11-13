@@ -112,7 +112,7 @@ public struct CategoryPickerField: View {
                 Button {
                     editing = ""
                 } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Color.secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "common.clear_input", defaultValue: "Effacer la saisie", bundle: .module))

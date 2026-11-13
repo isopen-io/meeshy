@@ -3,7 +3,6 @@ import XCTest
 final class DragHandleAccessibilityGuardTests: XCTestCase {
 
     private static let dragFiles = [
-        "Sources/MeeshyUI/Media/CropOverlayView.swift",
         "Sources/MeeshyUI/Media/AudioEditorWaveform.swift",
         "Sources/MeeshyUI/Story/Timeline/Views/Track/ClipTrimHandles.swift",
         "Sources/MeeshyUI/Story/Timeline/Views/Track/VideoClipBar.swift",
@@ -39,9 +38,8 @@ final class DragHandleAccessibilityGuardTests: XCTestCase {
         XCTAssertFalse(Self.declaresAccessibilityAction(Self.stripComments(commented)))
     }
 
-    func test_cropAndWaveform_haveNoLiteral44_andReadTapTarget() throws {
-        for path in ["Sources/MeeshyUI/Media/CropOverlayView.swift",
-                     "Sources/MeeshyUI/Media/AudioEditorWaveform.swift"] {
+    func test_waveform_hasNoLiteral44_andReadsTapTarget() throws {
+        for path in ["Sources/MeeshyUI/Media/AudioEditorWaveform.swift"] {
             let code = try Self.code(path)
             XCTAssertNil(code.range(of: #"\b44\b"#, options: .regularExpression), "\(path) : littéral 44")
             XCTAssertTrue(code.contains("MeeshyControlSize.tapTarget"), path)

@@ -10,9 +10,11 @@ nonisolated enum ComposerLookFamily: String, CaseIterable, Hashable, Sendable {
     case frames
 }
 
-/// Une case de la bande : un filtre ou un cadre — jamais un look entier ; la case
-/// MONTRE la paire qu'elle produirait avec l'autre moitié en cours.
+/// Une case de la bande : un filtre, un effet ou un cadre — jamais un look
+/// entier ; la case MONTRE ce qu'elle produirait avec le reste du look en cours.
 nonisolated enum ComposerLookStripItem: Hashable, Sendable {
+    /// « Aucun » en tête de la liste mêlée (#17267) : la prise telle quelle.
+    case untouched
     case filter(VideoFilterPreset)
     case effect(CallFaceEffect)
     case frame(ComposerPhotoFrame)
@@ -122,6 +124,8 @@ nonisolated enum ComposerLookStripRule {
     /// Le nom du choix, seul sous la bande (#9566), discret (porteur 2026-10-12).
     static let chosenNameSize: CGFloat = 10
     static let chosenNameHeight: CGFloat = 18
+    /// La rangée des puces qui trient la bande (#17267) : une cible de 44 pt.
+    static let chipsHeight: CGFloat = 44
     /// Filtres · Effets · Cadres posés au niveau de la bande : leur bas sur le
     /// bas des cases (porteur 2026-10-12).
     static var railBottomInset: CGFloat { chosenNameHeight + ComposerTriggerOutline.outset }
@@ -170,6 +174,7 @@ nonisolated enum ComposerLookStripRule {
     /// **Filtre, effet et cadre se COMBINENT** : choisir l'un garde les autres.
     static func look(of item: ComposerLookStripItem, combinedWith current: ComposerPhotoLook) -> ComposerPhotoLook {
         switch item {
+        case .untouched: return ComposerPhotoLook()
         case .filter(let preset): return ComposerPhotoLook(filter: preset, frame: current.frame, effect: current.effect)
         case .effect(let effet): return ComposerPhotoLook(filter: current.filter, frame: current.frame, effect: effet)
         case .frame(let cadre): return ComposerPhotoLook(filter: current.filter, frame: cadre, effect: current.effect)
@@ -179,6 +184,7 @@ nonisolated enum ComposerLookStripRule {
     /// La case est-elle la moitié choisie du look ? C'est elle qu'on encadre.
     static func isChosen(_ item: ComposerLookStripItem, in look: ComposerPhotoLook) -> Bool {
         switch item {
+        case .untouched: return look.isUntouched
         case .filter(let preset): return look.filter == preset
         case .effect(let effet): return look.effect == effet
         case .frame(let cadre): return look.frame == cadre

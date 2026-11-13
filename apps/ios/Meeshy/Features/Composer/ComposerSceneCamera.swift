@@ -129,9 +129,9 @@ nonisolated enum ComposerSceneCameraOverlay {
         /// La trace du son de fond, ancrée AU-DESSUS du dessin (#5017). Le
         /// viseur ne monte pas jusque-là.
         case soundTrace
-        /// Les deux rails, dans les COULOIRS du plateau (#4561). Le viseur est
-        /// borné au dessin ; il ne les atteint pas, et les cacher priverait
-        /// l'auteur de sa sortie autant que de ses portes.
+        /// Les deux rails. Le viseur s'arme plein écran (A8, #17109) et sa
+        /// sortie est « Quitter », dans son propre en-tête : les rails cèdent
+        /// (loi 13, « pas de rail au viseur »), et reviennent avec la scène.
         case rails
     }
 
@@ -139,7 +139,7 @@ nonisolated enum ComposerSceneCameraOverlay {
         switch furniture {
         case .description: return true
         case .soundTrace:  return false
-        case .rails:       return false
+        case .rails:       return true
         }
     }
 
@@ -197,6 +197,10 @@ nonisolated enum ComposerSceneCameraSize: String, Equatable, CaseIterable, Senda
     /// Il occupe l'écran entier — plus de plateau, plus de rails.
     case fullScreen
 
+    /// **La taille d'armement : le plein écran** (A8, #17109). La carte ne
+    /// reste que pour le selfie éclairé par l'écran (#9566), qui peut s'y réduire.
+    static let armed: ComposerSceneCameraSize = .fullScreen
+
     /// Ce qu'un appui sur le bouton de taille produit.
     var toggled: ComposerSceneCameraSize { self == .card ? .fullScreen : .card }
 
@@ -206,5 +210,98 @@ nonisolated enum ComposerSceneCameraSize: String, Equatable, CaseIterable, Senda
         self == .card
             ? "arrow.up.left.and.arrow.down.right"
             : "arrow.down.right.and.arrow.up.left"
+    }
+}
+
+/// **Une entrée de scène de la colonne du viseur** (#17432, directive porteur) :
+/// ce qu'on compose sans quitter la caméra.
+nonisolated enum ComposerViewfinderEntry: String, CaseIterable, Equatable, Sendable {
+    /// En PREMIER (directive porteur) : choisir dans la photothèque est le geste
+    /// qui remplace la prise.
+    case gallery
+    case text
+    case background
+    case sticker
+
+    /// Ce que l'entrée fait de la caméra.
+    enum Camera: Equatable, Sendable {
+        /// La caméra reste armée, l'aperçu tourne : ce qu'on pose attend la prise, qui passera dessous.
+        case kept
+        /// La caméra s'arrête : l'élément choisi remplace ce qu'elle aurait pris.
+        case cut
+    }
+
+    /// Ce qui est arrivé à l'entrée ouverte.
+    enum Outcome: Equatable, Sendable {
+        case opened
+        case dismissed
+        case chosen
+    }
+
+    /// **Le viseur reste vivant pendant tout le processus** (directive porteur),
+    /// sauf quand un élément de la galerie est CHOISI : le viseur s'arrête et le composer de
+    /// base revient. Un fond choisi reste celui de la scène tant qu'aucune prise ne le remplace.
+    func camera(after outcome: Outcome) -> Camera {
+        guard self == .gallery, outcome == .chosen else { return .kept }
+        return .cut
+    }
+
+    /// La porte de la scène que l'entrée ouvre ; la galerie n'en a pas, elle ouvre la photothèque.
+    var door: ComposerRailDoor? {
+        switch self {
+        case .text: return .text
+        case .background: return .background
+        case .sticker: return .sticker
+        case .gallery: return nil
+        }
+    }
+
+    var symbol: String {
+        door?.symbolName ?? "photo.on.rectangle"
+    }
+
+    var accessibilityIdentifier: String { "composer.viewfinder.\(rawValue)" }
+}
+
+/// **La colonne du viseur du composer : Galerie · Texte · Fond · Stickers, puis
+/// les familles de look** (#17432). Elle retourne « pas de rail au viseur »
+/// (A8, #17109) : les rails de la SCÈNE cèdent toujours, mais le viseur armé
+/// porte ses entrées de scène. La caméra de conversation n'en a aucune ; une
+/// prise en cours, une tenue ou une retouche les retirent ; des segments en
+/// attente retirent la Galerie, dont le choix couperait la caméra.
+nonisolated enum ComposerViewfinderColumn {
+    static func entries(composesScene: Bool, context: ComposerCaptureGestureContext) -> [ComposerViewfinderEntry] {
+        guard composesScene, context.stage == .armed, !context.editing, !context.holding else { return [] }
+        guard context.pendingSegments > 0 else { return ComposerViewfinderEntry.allCases }
+        return ComposerViewfinderEntry.allCases.filter { $0.camera(after: .chosen) == .kept }
+    }
+
+    /// Une feuille se pose PAR-DESSUS le viseur vivant ; un outil qui s'édite SUR la scène (la
+    /// saisie d'un texte, la bande du cadre) prend la scène le temps de l'outil, caméra armée.
+    static func yieldsToScene(toolPresentsSheet: Bool) -> Bool {
+        !toolPresentsSheet
+    }
+
+    /// L'outil auquel le viseur a cédé la scène est-il encore ouvert ? Sa fermeture rend le
+    /// viseur. La bande du cadre en est un : sans elle, fermer la bande laissait la scène figée.
+    static func entryToolIsOpen(yieldsToScene: Bool, sceneToolOwnsScreen: Bool,
+                                sheetIsPresented: Bool, bandIsOpen: Bool) -> Bool {
+        yieldsToScene && (sceneToolOwnsScreen || sheetIsPresented || bandIsOpen)
+    }
+
+    /// Un trait sépare ce qu'on pose de ce qui teinte la prise, quand le rail porte les deux.
+    static func separatesLooks(sceneEntries: [ComposerViewfinderEntry], offersLooks: Bool) -> Bool {
+        !sceneEntries.isEmpty && offersLooks
+    }
+
+    /// **Des noms simples, ceux du porteur** : Galerie · Texte · Fond · Stickers —
+    /// des noms d'objets, pas les verbes du rail de la scène.
+    static func label(_ entry: ComposerViewfinderEntry) -> String {
+        switch entry {
+        case .gallery: return String(localized: "composer.viewfinder.gallery", defaultValue: "Galerie", bundle: .main)
+        case .text: return String(localized: "composer.viewfinder.text", defaultValue: "Texte", bundle: .main)
+        case .background: return String(localized: "composer.viewfinder.background", defaultValue: "Fond", bundle: .main)
+        case .sticker: return String(localized: "composer.viewfinder.stickers", defaultValue: "Stickers", bundle: .main)
+        }
     }
 }

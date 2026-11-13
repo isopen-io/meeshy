@@ -25,9 +25,11 @@ enum RootPresentationRules {
         isAuthenticated: Bool,
         splashPhase: LaunchSplashController.Phase,
         hasGuestSession: Bool,
-        hasVisitorRequest: Bool
+        hasVisitorRequest: Bool,
+        previewReplacesLogin: Bool
     ) -> Bool {
         !hasCompletedOnboarding && !isAuthenticated && splashPhase != .covering && !hasGuestSession && !hasVisitorRequest
+            && !previewReplacesLogin
     }
 
     static func showsCelebration(isAuthenticated: Bool, isShowing: Bool) -> Bool {

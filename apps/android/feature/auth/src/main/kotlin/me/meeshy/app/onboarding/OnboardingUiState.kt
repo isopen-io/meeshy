@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.onboarding.OnboardingContactsPhase
 import me.meeshy.sdk.model.onboarding.OnboardingContactsRules
 import me.meeshy.sdk.model.onboarding.OnboardingGain
 import me.meeshy.sdk.model.onboarding.OnboardingPlan
+import me.meeshy.sdk.model.onboarding.OnboardingProfileCard
 import me.meeshy.sdk.model.onboarding.OnboardingRecap
 import me.meeshy.sdk.model.onboarding.OnboardingSendState
 import me.meeshy.sdk.model.onboarding.OnboardingStepId
@@ -38,6 +39,10 @@ data class OnboardingUiState(
     val verificationLinkState: OnboardingSendState = OnboardingSendState.IDLE,
     val accountEmail: String? = null,
     val userDisplayName: String = "",
+    /** Le pseudo, montré sous le nom dans l'aperçu de « Montre-toi ». */
+    val userHandle: String = "",
+    /** La carte « Montre-toi » : avatar et bannière, aperçu optimiste et retour sur échec (#17238). */
+    val profileCard: OnboardingProfileCard = OnboardingProfileCard(),
     val requestedProfileIds: Set<String> = emptySet(),
     val failedProfileId: String? = null,
     val primaryLanguage: String = "fr",

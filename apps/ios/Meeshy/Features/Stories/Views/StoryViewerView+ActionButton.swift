@@ -15,7 +15,7 @@ struct StoryActionButton: View {
     let label: String
     var isActive: Bool = false
     var activeTint: Color? = nil
-    /// Le CONTOUR et le HALO du glyphe (directive porteur 2026-10-01) — l'effet que ce
+    /// Le CONTOUR et le HALO du glyphe — l'effet que ce
     /// bouton portait avant #8878 : le son ouvert, un fil ouvert, un geste déjà fait.
     var outlineTint: Color? = nil
     /// Sites porteurs d'un geste séquencé longpress→drag (scrub) : le tap

@@ -13,14 +13,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "encrypted_devices_notice_title",
-          "status": "android-only"
-        },
-        {
-          "androidName": "encrypted_devices_notice_body",
-          "status": "android-only"
-        },
-        {
           "androidName": "encrypted_devices_loading",
           "status": "android-only"
         },
@@ -42,14 +34,6 @@
         },
         {
           "androidName": "encrypted_devices_stale",
-          "status": "android-only"
-        },
-        {
-          "androidName": "encrypted_devices_empty_title",
-          "status": "android-only"
-        },
-        {
-          "androidName": "encrypted_devices_empty_body",
           "status": "android-only"
         },
         {
@@ -126,10 +110,6 @@
         },
         {
           "androidName": "encrypted_devices_enrolled",
-          "status": "android-only"
-        },
-        {
-          "androidName": "encrypted_devices_retire_changed",
           "status": "android-only"
         }
       ]

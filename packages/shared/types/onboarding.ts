@@ -12,7 +12,7 @@ import { VIEWER_WRITE_RESTRICTIONS } from './conversation.js';
  * jumeau) et `onboardingSteps String[]` (les étapes VUES, faites ou passées).
  */
 
-export const ONBOARDING_STEP_IDS = ['languages', 'age', 'email', 'global', 'story', 'friends', 'notifications'] as const;
+export const ONBOARDING_STEP_IDS = ['languages', 'age', 'email', 'global', 'story', 'friends', 'notifications', 'profile'] as const;
 
 /**
  * Les étapes dont la VUE clôt le parcours — celles proposées à tout compte.
@@ -24,6 +24,11 @@ export const ONBOARDING_STEP_IDS = ['languages', 'age', 'email', 'global', 'stor
  * `age` (#9927) n'en est pas non plus : l'étape est FACULTATIVE (un âge non
  * déclaré ne restreint rien). Elle vient juste après les langues, avant Global,
  * dont elle décide si le compte peut y écrire.
+ *
+ * `profile` (#17235) n'en est pas davantage : la carte « Montre-toi » (avatar
+ * et bannière) est FACULTATIVE, pré-cochée quand les deux images sont posées.
+ * Elle est déclarée en dernier pour ne rien décaler ; c'est le client qui la
+ * place, après le courriel et avant Global.
  */
 export const ONBOARDING_COMPLETION_STEP_IDS = ['languages', 'global', 'story', 'friends', 'notifications'] as const;
 

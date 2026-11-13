@@ -227,3 +227,34 @@ describe('createPost — loi d\'audience de la republication', () => {
     expect(prisma.post.create).toHaveBeenCalled();
   });
 });
+
+describe('createPost — une republication reste dans la communauté de sa source (#16892)', () => {
+  const X = '64b000000000000000000001';
+  const Y = '64b000000000000000000002';
+
+  const setup = () => {
+    const prisma = createMockPrisma();
+    prisma.postMedia.findMany.mockResolvedValue([]);
+    prisma.post.create.mockResolvedValue(makeSource({ id: 'repost-1' }));
+    prisma.post.findFirst.mockResolvedValue(makeSource({ visibility: 'COMMUNITY', communityId: X }));
+    return { prisma, service: new PostService(prisma as unknown as PrismaClient, new MediaService()) };
+  };
+
+  it('hérite de la communauté de la source quand le client n’en nomme aucune', async () => {
+    const { prisma, service } = setup();
+    await service.createPost({ visibility: PostVisibility.COMMUNITY, repostOfId: 'source-1', content: 'hop' }, 'user-2');
+    const created = (prisma.post.create.mock.calls[0] as unknown as [{ data: { communityId?: string } }])[0];
+    expect(created.data.communityId).toBe(X);
+  });
+
+  it('refuse de la poser dans une autre communauté', async () => {
+    const { prisma, service } = setup();
+    const err: any = await service
+      .createPost({ visibility: PostVisibility.COMMUNITY, repostOfId: 'source-1', content: 'hop', communityId: Y }, 'user-2')
+      .catch((e) => e);
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_COMMUNITY_MISMATCH');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+});
+

@@ -51,6 +51,9 @@ extension ListeningCenter {
     }
 
     /// Le bandeau d'UNE personne puis chacun de ses changements — rien de plus fin que l'écoute de cette personne.
+    ///
+    /// Le SDK lit ce flux depuis une tâche hors du MainActor : la demande y exécute les étapes, qui ne doivent donc
+    /// hériter d'aucune isolation (#17069).
     func band(for userId: String) -> AnyPublisher<AvatarListening?, Never> {
         Self.band(of: userId, in: $byUser.eraseToAnyPublisher())
     }
@@ -64,7 +67,7 @@ extension ListeningCenter {
         entries
             .map { $0[userId] }
             .removeDuplicates()
-            .map(ListeningBandText.band(for:))
+            .map { @Sendable entry in ListeningBandText.band(for: entry) }
             .eraseToAnyPublisher()
     }
 
@@ -77,7 +80,7 @@ extension ListeningCenter {
 }
 
 /// L'avatar du pair d'un direct dans l'en-tête : sa porte (VoiceOver), puis ce qu'il écoute posé par-dessus, en
-/// élément à part pour que l'avatar garde son libellé.
+/// élément à part pour que l'avatar garde son libellé. Même porte que la liste et la fiche (#17084).
 struct HeaderPeerListening: ViewModifier {
     let door: HeaderAvatarDoorAccessibility
     let userId: String?
@@ -87,7 +90,7 @@ struct HeaderPeerListening: ViewModifier {
         content
             .modifier(door)
             .overlay {
-                if let userId, !userId.isEmpty {
+                if let userId, AvatarListeningOverlay.paints(userId: userId, avatarSize: avatarSize) {
                     AvatarListeningLive(userId: userId, avatarSize: avatarSize, source: ListeningCenter.shared.source)
                 }
             }

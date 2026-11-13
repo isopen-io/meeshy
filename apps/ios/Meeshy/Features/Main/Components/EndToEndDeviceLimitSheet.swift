@@ -85,7 +85,7 @@ struct EndToEndDeviceLimitSheet: View {
             List {
                 Section {
                     Text(String(localized: "e2ee.deviceLimit.explanation",
-                                defaultValue: "Votre compte utilise déjà le nombre maximal d’appareils pour le chiffrement de bout en bout. Retirez-en un pour écrire depuis celui-ci. Un appareil retiré ne lit plus les nouveaux messages chiffrés.",
+                                defaultValue: "Votre compte a atteint le nombre maximal d’appareils chiffrés. Retirez-en un pour écrire depuis celui-ci. L’appareil retiré ne lira plus les nouveaux messages chiffrés.",
                                 bundle: .main))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -137,7 +137,7 @@ struct EndToEndDeviceLimitSheet: View {
             } header: {
                 if model.listChangedSinceReading {
                     Text(String(localized: "e2ee.devices.notice.deviceChanged.message",
-                                defaultValue: "Un autre appareil a pris cette place depuis l’affichage de la liste. Rien n’a été retiré. Vérifiez la liste à jour avant de retirer un appareil.",
+                                defaultValue: "La liste a changé. Rien n’a été retiré : vérifiez-la d’abord.",
                                 bundle: .main))
                 }
             }

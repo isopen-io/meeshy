@@ -22,7 +22,7 @@ enum SocketTransportFactory {
         return SocketManager(socketURL: url, config: [
             .log(false),
             .handleQueue(.main),
-            // CALL-FIX 2026-06-06 — WebSocket transport (polling handshake → auto
+            // CALL-FIX — WebSocket transport (polling handshake → auto
             // upgrade to WebSocket). The previous `.forcePolling(true)` (HTTP
             // long-poll ONLY) dropped mid-call: every re-poll under WebRTC CPU load
             // surfaced as "transport close" on the gateway, killing call:initiate /

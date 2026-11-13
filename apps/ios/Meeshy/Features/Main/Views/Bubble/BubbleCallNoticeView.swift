@@ -107,6 +107,9 @@ struct BubbleCallNoticeView: View, Equatable {
                 if let recording = notice.recording {
                     CallRecordingPlayback(recording: recording, accentHex: accentHex)
                 }
+                if BubbleCallJournalOffer.isOffered(summary) {
+                    BubbleCallJournalUnderCard(callId: summary.callId, accentHex: accentHex, alignsTrailing: isOutgoing)
+                }
             }
             if !isOutgoing { Spacer(minLength: 48) }
         }
@@ -121,8 +124,14 @@ struct BubbleCallNoticeView: View, Equatable {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(ThemeManager.shared.textPrimary)
+                        .foregroundStyle(ThemeManager.shared.textPrimary)
                         .lineLimit(1)
+                    if let participants = participantsLine {
+                        Text(participants)
+                            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                            .foregroundStyle(ThemeManager.shared.textSecondary)
+                            .lineLimit(1)
+                    }
                     if let liveSubtitle = presentation.liveSubtitle {
                         liveRow(subtitle: liveSubtitle)
                     } else {
@@ -132,7 +141,7 @@ struct BubbleCallNoticeView: View, Equatable {
             }
             Text(notice.timeString)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize - 1, weight: .medium))
-                .foregroundColor(ThemeManager.shared.textMuted)
+                .foregroundStyle(ThemeManager.shared.textMuted)
                 .accessibilityHidden(true)
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -158,7 +167,7 @@ struct BubbleCallNoticeView: View, Equatable {
                 if duration != nil, data != nil {
                     MetaSeparator()
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(ThemeManager.shared.textMuted)
+                        .foregroundStyle(ThemeManager.shared.textMuted)
                 }
                 if let data { metric(icon: "arrow.up.arrow.down", text: data) }
             }
@@ -272,8 +281,14 @@ struct BubbleCallNoticeView: View, Equatable {
 
     // MARK: - Accessibility
 
+    /// « Awa, Karim, Lina et vous » sous le titre, quand la passerelle a servi les noms.
+    private var participantsLine: String? {
+        summary.participantsLine(viewerId: notice.viewerId, youLabel: String(localized: "call.card.participants.you", defaultValue: "vous", bundle: .main))
+    }
+
     private var accessibilityLabel: Text {
         var parts: [String] = [title, directionWord, notice.timeString]
+        if let participants = participantsLine { parts.insert(participants, at: 1) }
         if let duration = durationLabel { parts.append(duration) }
         if let data = summary.dataSpentLabel { parts.append(data) }
         return Text(parts.joined(separator: ", "))
@@ -411,7 +426,7 @@ struct CallSummaryDetailSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .task(id: summary.callId) {
-            // Replay serveur (décision produit 2026-08-13) : cache local
+            // Replay serveur: cache local
             // chiffré d'abord, distant en fallback — `CallTranscriptLoader`.
             transcript = await CallTranscriptLoader.load(callId: summary.callId)
             networkJournal = await CallNetworkJournalStore.shared.journal(for: summary.callId)
@@ -443,11 +458,11 @@ struct CallSummaryDetailSheet: View {
             }
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
             Text(timestamp.formatted(date: .abbreviated, time: .shortened))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .padding(.top, MeeshySpacing.sm)
     }
@@ -525,12 +540,12 @@ struct CallSummaryDetailSheet: View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "waveform")
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(Color(hex: accentHex))
+                .foregroundStyle(Color(hex: accentHex))
                 .frame(width: 24)
                 .accessibilityHidden(true)
             Text(String(localized: "calls.detail.quality", defaultValue: "Qualité", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Spacer()
             Circle()
                 .fill(qualityColor(quality))
@@ -538,7 +553,7 @@ struct CallSummaryDetailSheet: View {
                 .accessibilityHidden(true)
             Text(qualityWord(quality))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.md)
@@ -549,16 +564,16 @@ struct CallSummaryDetailSheet: View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(Color(hex: accentHex))
+                .foregroundStyle(Color(hex: accentHex))
                 .frame(width: 24)
                 .accessibilityHidden(true)
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Spacer()
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.md)

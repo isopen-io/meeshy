@@ -3,7 +3,7 @@ import MeeshySDK
 
 /// Le rattrapage `listAfter` d'une conversation, UN par conversation (#10830).
 ///
-/// Mesuré en production le 2026-10-16 : à chaque reprise de socket, un même
+/// à chaque reprise de socket, un même
 /// appareil envoyait 19 `GET …/messages?after=…` IDENTIQUES dans la même
 /// milliseconde pour une conversation, 9 pour une autre. Chaque écran de
 /// conversation quitté laissait son `ConversationViewModel` en vie, avec son

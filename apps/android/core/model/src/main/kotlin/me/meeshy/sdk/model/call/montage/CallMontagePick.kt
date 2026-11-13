@@ -99,6 +99,9 @@ public object CallMontagePickRule {
         return CallMontageHold(id, isOn = heldFrameId == id)
     }
 
+    /** #17814 · C1.8 — « Cadre » ne se touche pas pendant une prise ou un film : il est désactivé, comme sur iOS. */
+    public fun holdEnabled(isRecording: Boolean): Boolean = !isRecording
+
     public fun look(pick: CallMontagePick, people: Int): CallCaptureLook =
         when (val current = choice(pick, people)) {
             is CallMontageChoice.Classic -> CallCaptureLook.Classic(current.style)

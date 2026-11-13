@@ -265,7 +265,7 @@ public struct VideoClipBar: View, Equatable {
             VStack(spacing: 0) {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(title)
-                        .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold)
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -296,6 +296,7 @@ public struct VideoClipBar: View, Equatable {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .accessibilityElement()
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onToggleMute?() }
             .accessibilityLabel(isMuted
                 ? String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
                 : String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module))

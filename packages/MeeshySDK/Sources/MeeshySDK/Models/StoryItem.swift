@@ -47,8 +47,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// storyEffects / médias) — distinct d'`updatedAt`, qui bouge sur CHAQUE
     /// écriture (compteurs de vues inclus). C'est le SEUL horodatage fiable
     /// pour faire céder la garde « viewed monotone » : une story éditée
-    /// APRÈS ma vue locale redevient non-vue (reset d'engagement,
-    /// directive 2026-07-29). Optionnel → rétro-compatible cache/payloads.
+    /// APRÈS ma vue locale redevient non-vue.
+    /// Optionnel → rétro-compatible cache/payloads.
     public var contentEditedAt: Date?
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
@@ -65,7 +65,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
 
     /// Count of impressions — one per slide display, NOT deduped (mirrors
     /// `Post.impressionCount`). Author-only, paired with `viewCount` so the story
-    /// viewer reports the SAME 2 metrics as Detail/Reel (unified 2026-07-14).
+    /// viewer reports the SAME 2 metrics as Detail/Reel.
     /// `nil` for anonymous reads or legacy payloads/caches.
     public var impressionCount: Int?
 
@@ -213,7 +213,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// L'ancien défaut interne de 24 h était un piège dormant : sans effet
     /// tant que le serveur pose toujours `expiresAt`, mais une story au
     /// fallback aurait survécu plus longtemps que sa vie serveur.
-    /// 20 h depuis 2026-08-12 (était 21 h) — SSOT serveur :
+    /// 20 h (était 21 h) — SSOT serveur :
     /// `services/gateway/src/services/posts/ephemeralPosts.ts`.
     public static let defaultExpiryInterval: TimeInterval = 20 * 60 * 60
 
@@ -238,7 +238,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// posés sur le canvas. Sans ce chemin, une traduction demandée depuis la
     /// feuille « Langues » arrivait bien en base mais n'atteignait jamais la
     /// story du lecteur : l'anneau de chargement tournait sans fin sur une
-    /// langue pourtant traduite (constaté au simulateur le 2026-07-27).
+    /// langue pourtant traduite.
     ///
     /// La langue est normalisée en minuscules — la feuille compare sur cette
     /// forme. Une langue déjà présente est remplacée, sinon ajoutée.
@@ -353,7 +353,7 @@ extension Array where Element == APIPost {
                 dict.map { lang, entry in StoryTranslation(language: lang, content: entry.text) }
             }
             // Fallback aligné sur la SSOT serveur (EPHEMERAL_POST_TTL_HOURS.STORY,
-            // 20 h depuis 2026-08-12) via l'unique constante iOS — le `Calendar`
+            // 20 h) via l'unique constante iOS — le `Calendar`
             // à 21 h d'avant divergeait ET dépendait du fuseau du process.
             let effectiveExpiresAt = post.expiresAt
                 ?? post.createdAt.addingTimeInterval(StoryItem.defaultExpiryInterval)

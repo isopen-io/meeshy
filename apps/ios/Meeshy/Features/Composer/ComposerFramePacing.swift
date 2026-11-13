@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreImage
 import Foundation
+import MeeshySDK
 
 /// **Une source de trames pour le peintre** (#9349) : la caméra, la photo figée
 /// ou la vidéo en boucle (#9352). Elle PRÉVIENT à chaque trame neuve : la vue
@@ -55,36 +56,36 @@ nonisolated struct ComposerFramePacer: Equatable, Sendable {
 /// fil principal pendant que les trames arrivent : l'échéance vit sous verrou,
 /// et ne repart de zéro que si la cadence change.
 nonisolated final class ComposerFrameGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var pacer: ComposerFramePacer
+    private let pacer: Locked<ComposerFramePacer>
 
     init(fps: Int) {
-        pacer = ComposerFramePacer(fps: fps)
+        pacer = Locked(ComposerFramePacer(fps: fps))
     }
 
     var fps: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return pacer.fps
+        pacer.read { $0.fps }
     }
 
     func setFPS(_ fps: Int) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard fps != pacer.fps else { return }
-        pacer = ComposerFramePacer(fps: fps)
+        pacer.mutate { current in
+            guard fps != current.fps else { return }
+            current = ComposerFramePacer(fps: fps)
+        }
     }
 
     func admit(presentedAt time: TimeInterval) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return pacer.admit(presentedAt: time)
+        pacer.mutate { $0.admit(presentedAt: time) }
     }
 }
 
 /// **Une image par trame, jamais deux** (spec § 5) : sans effet, la couche
 /// système seule ; avec effet, la vue Metal seule.
 nonisolated enum ComposerCaptureSurfaceRule {
+
+    /// Le viseur se peint-il ? Armé, et sans avoir cédé la scène à un outil (#17432).
+    static func showsViewfinder(stage: ComposerSceneCameraStage, yieldsToScene: Bool) -> Bool {
+        stage != .off && !yieldsToScene
+    }
     static func paintsWithMetal(look: ComposerPhotoLook, budget: ComposerThermalBudget, fixture: Bool) -> Bool {
         guard !budget.systemLayerOnly else { return false }
         return fixture || ComposerLiveLookRule.rendersLive(look)

@@ -1,0 +1,471 @@
+{
+  "kit": "K08",
+  "tapTarget": {
+    "ios": 44,
+    "android": 48,
+    "web": 44
+  },
+  "geometry": {
+    "radius": 14,
+    "lineHeight": 45,
+    "paragraphMinimumHeight": 110,
+    "gap": 8,
+    "fadeMs": 150
+  },
+  "opacity": {
+    "fill": 0.08,
+    "muted": 0.7,
+    "hairlineEmphasis": 0.6,
+    "disabled": 0.4
+  },
+  "nearLimitRatio": 0.8,
+  "inputs": [
+    {
+      "input": "search",
+      "lines": [
+        1,
+        1
+      ],
+      "keyboard": "search",
+      "returnKey": "search",
+      "autocorrects": false,
+      "capitalization": "none",
+      "offersClear": true,
+      "padding": {
+        "vertical": 12,
+        "horizontal": 14
+      },
+      "valueSize": 15,
+      "valueBold": false,
+      "captionSpacing": 6
+    },
+    {
+      "input": "token",
+      "lines": [
+        1,
+        1
+      ],
+      "keyboard": "text",
+      "returnKey": "done",
+      "autocorrects": false,
+      "capitalization": "none",
+      "offersClear": false,
+      "padding": {
+        "vertical": 12,
+        "horizontal": 14
+      },
+      "valueSize": 15,
+      "valueBold": false,
+      "captionSpacing": 6
+    },
+    {
+      "input": "sentence",
+      "lines": [
+        1,
+        1
+      ],
+      "keyboard": "text",
+      "returnKey": "done",
+      "autocorrects": true,
+      "capitalization": "sentences",
+      "offersClear": false,
+      "padding": {
+        "vertical": 12,
+        "horizontal": 14
+      },
+      "valueSize": 15,
+      "valueBold": false,
+      "captionSpacing": 6
+    },
+    {
+      "input": "paragraph",
+      "lines": [
+        3,
+        6
+      ],
+      "keyboard": "text",
+      "returnKey": "newline",
+      "autocorrects": true,
+      "capitalization": "sentences",
+      "offersClear": false,
+      "padding": {
+        "vertical": 12,
+        "horizontal": 14
+      },
+      "valueSize": 15,
+      "valueBold": false,
+      "captionSpacing": 6
+    },
+    {
+      "input": "numeric",
+      "lines": [
+        1,
+        1
+      ],
+      "keyboard": "numbersAndPunctuation",
+      "returnKey": "done",
+      "autocorrects": false,
+      "capitalization": "none",
+      "offersClear": false,
+      "padding": {
+        "vertical": 10,
+        "horizontal": 14
+      },
+      "valueSize": 20,
+      "valueBold": true,
+      "captionSpacing": 2
+    }
+  ],
+  "ink": [
+    {
+      "tone": null,
+      "ink": "onMedia"
+    },
+    {
+      "tone": "plain",
+      "ink": "onMedia"
+    },
+    {
+      "tone": "deep",
+      "ink": "onMedia"
+    },
+    {
+      "tone": "onLight",
+      "ink": "onLight"
+    },
+    {
+      "tone": "theme",
+      "ink": "themeInk"
+    }
+  ],
+  "prompt": [
+    {
+      "text": "",
+      "caption": null,
+      "shows": true
+    },
+    {
+      "text": "a",
+      "caption": null,
+      "shows": false
+    },
+    {
+      "text": "",
+      "caption": "Début",
+      "shows": false
+    }
+  ],
+  "clear": [
+    {
+      "input": "search",
+      "text": "a",
+      "busy": false,
+      "enabled": true,
+      "shows": true
+    },
+    {
+      "input": "search",
+      "text": "",
+      "busy": false,
+      "enabled": true,
+      "shows": false
+    },
+    {
+      "input": "sentence",
+      "text": "a",
+      "busy": false,
+      "enabled": true,
+      "shows": false
+    },
+    {
+      "input": "token",
+      "text": "a",
+      "busy": false,
+      "enabled": true,
+      "shows": false
+    },
+    {
+      "input": "search",
+      "text": "a",
+      "busy": true,
+      "enabled": true,
+      "shows": false
+    },
+    {
+      "input": "search",
+      "text": "a",
+      "busy": false,
+      "enabled": false,
+      "shows": false
+    }
+  ],
+  "counter": [
+    {
+      "limit": 60,
+      "text": "a",
+      "placement": "inline",
+      "shows": true
+    },
+    {
+      "limit": null,
+      "text": "a",
+      "placement": "inline",
+      "shows": false
+    },
+    {
+      "limit": 60,
+      "text": "",
+      "placement": "inline",
+      "shows": false
+    },
+    {
+      "limit": 60,
+      "text": "a",
+      "placement": "hosted",
+      "shows": false
+    }
+  ],
+  "count": [
+    {
+      "text": "",
+      "count": 0
+    },
+    {
+      "text": "abc",
+      "count": 3
+    },
+    {
+      "text": "é",
+      "count": 1
+    },
+    {
+      "text": "é",
+      "count": 2
+    },
+    {
+      "text": "👍🏽",
+      "count": 4
+    },
+    {
+      "text": "👨‍👩‍👧",
+      "count": 8
+    },
+    {
+      "text": "🇸🇳",
+      "count": 4
+    },
+    {
+      "text": "Enfin en vacances",
+      "count": 17
+    }
+  ],
+  "truncate": [
+    {
+      "text": "abcdef",
+      "limit": 3,
+      "result": "abc",
+      "count": 3
+    },
+    {
+      "text": "abc",
+      "limit": 10,
+      "result": "abc",
+      "count": 3
+    },
+    {
+      "text": "a👍🏽b",
+      "limit": 2,
+      "result": "a",
+      "count": 1
+    },
+    {
+      "text": "a👍🏽b",
+      "limit": 5,
+      "result": "a👍🏽",
+      "count": 5
+    },
+    {
+      "text": "a👨‍👩‍👧b",
+      "limit": 5,
+      "result": "a",
+      "count": 1
+    },
+    {
+      "text": "a👨‍👩‍👧b",
+      "limit": 9,
+      "result": "a👨‍👩‍👧",
+      "count": 9
+    },
+    {
+      "text": "🇸🇳🇸🇳🇸🇳",
+      "limit": 7,
+      "result": "🇸🇳",
+      "count": 4
+    },
+    {
+      "text": "éé",
+      "limit": 3,
+      "result": "é",
+      "count": 2
+    }
+  ],
+  "near": [
+    {
+      "count": 47,
+      "limit": 60,
+      "near": false
+    },
+    {
+      "count": 48,
+      "limit": 60,
+      "near": true
+    },
+    {
+      "count": 79,
+      "limit": 100,
+      "near": false
+    },
+    {
+      "count": 80,
+      "limit": 100,
+      "near": true
+    },
+    {
+      "count": 1000,
+      "limit": 1000,
+      "near": true
+    }
+  ],
+  "crossing": [
+    {
+      "from": 40,
+      "to": 47,
+      "limit": 60,
+      "crossing": null
+    },
+    {
+      "from": 47,
+      "to": 48,
+      "limit": 60,
+      "crossing": "near"
+    },
+    {
+      "from": 48,
+      "to": 49,
+      "limit": 60,
+      "crossing": null
+    },
+    {
+      "from": 59,
+      "to": 60,
+      "limit": 60,
+      "crossing": "reached"
+    },
+    {
+      "from": 10,
+      "to": 60,
+      "limit": 60,
+      "crossing": "reached"
+    },
+    {
+      "from": 60,
+      "to": 60,
+      "limit": 60,
+      "crossing": null
+    },
+    {
+      "from": 60,
+      "to": 40,
+      "limit": 60,
+      "crossing": null
+    }
+  ],
+  "counterText": [
+    {
+      "count": 17,
+      "limit": 60,
+      "locale": "fr",
+      "text": "17 / 60"
+    },
+    {
+      "count": 86,
+      "limit": 1000,
+      "locale": "fr",
+      "text": "86 / 1000"
+    },
+    {
+      "count": 17,
+      "limit": 60,
+      "locale": "en",
+      "text": "17 / 60"
+    }
+  ],
+  "spoken": [
+    {
+      "key": "count",
+      "count": 17,
+      "limit": 60,
+      "locale": "fr",
+      "said": "17 caractères sur 60"
+    },
+    {
+      "key": "count",
+      "count": 17,
+      "limit": 60,
+      "locale": "en",
+      "said": "17 characters of 60"
+    },
+    {
+      "key": "count",
+      "count": 86,
+      "limit": 1000,
+      "locale": "fr",
+      "said": "86 caractères sur 1000"
+    },
+    {
+      "key": "clear",
+      "locale": "fr",
+      "said": "Effacer"
+    },
+    {
+      "key": "clear",
+      "locale": "en",
+      "said": "Clear"
+    },
+    {
+      "key": "clear",
+      "locale": "ar",
+      "said": "مسح"
+    },
+    {
+      "key": "limit_reached",
+      "locale": "fr",
+      "said": "Limite de caractères atteinte"
+    },
+    {
+      "key": "limit_reached",
+      "locale": "en",
+      "said": "Character limit reached"
+    },
+    {
+      "key": "limit_reached",
+      "locale": "ar",
+      "said": "تم بلوغ الحد الأقصى للأحرف"
+    },
+    {
+      "key": "busy",
+      "locale": "fr",
+      "said": "En cours"
+    },
+    {
+      "key": "busy",
+      "locale": "en",
+      "said": "In progress"
+    },
+    {
+      "key": "busy",
+      "locale": "ar",
+      "said": "قيد التنفيذ"
+    }
+  ]
+}

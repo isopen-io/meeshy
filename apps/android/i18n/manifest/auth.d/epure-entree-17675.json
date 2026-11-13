@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:auth": {
+      "resDir": "feature/auth/src/main/res",
+      "entries": [
+        {
+          "androidName": "activation_email_sent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "activation_invite_days_left",
+          "status": "android-only"
+        },
+        {
+          "androidName": "activation_invite_days_left_one",
+          "status": "android-only"
+        },
+        {
+          "androidName": "activation_invite_lead",
+          "status": "android-only"
+        },
+        {
+          "androidName": "auth_forgot_sent_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "auth_magic_sent_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "auth_magic_subtitle",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_gate_invite",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_gate_link",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_gate_more_links",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_gate_publish",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_gate_sent",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_verification_code_a11y_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_verification_subtitle_account_created",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_verification_subtitle_activation_required",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_verification_success",
+          "status": "android-only"
+        },
+        {
+          "androidName": "email_verification_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "link_signin_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "link_signin_message_replacing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "link_switch_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "link_switch_message_unknown_current",
+          "status": "android-only"
+        },
+        {
+          "androidName": "newpw_err_code_required",
+          "status": "android-only"
+        },
+        {
+          "androidName": "newpw_err_weak",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_age_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_contacts_found_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_contacts_none_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_contacts_offer_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_email_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_friends_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_global_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_recap_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_recap_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_recap_tomorrow",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_story_audience_friends",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_story_audience_public",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_story_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_story_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "onboarding_story_verify",
+          "status": "android-only"
+        },
+        {
+          "androidName": "session_closed_activation_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "session_closed_admin_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "session_closed_admin_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "session_closed_all_signed_out_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "session_closed_signed_out_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "session_closed_user_revoke_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "signup_password_why_detail",
+          "status": "android-only"
+        },
+        {
+          "androidName": "visitor_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "welcome_tagline",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

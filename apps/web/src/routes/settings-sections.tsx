@@ -7,6 +7,7 @@ import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-a
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyphs';
 import { SETTINGS_GLYPHS, type SettingsGlyphName } from '@/components/glyphs-settings';
+import { InfoHintScope, InfoNoted, type InfoHint } from '@/components/info-hint';
 import { IosSwitch } from '@/components/ios-switch';
 import {
   GroupedSection,
@@ -83,14 +84,36 @@ const upper = (language: InterfaceLanguage, key: SettingsKey): string => transla
 const ROW_CLASS = 'flex items-center gap-3 px-3.5 py-2.5 text-start focus-visible:outline-2';
 const ROW_STYLE = { minHeight: 52, outlineColor: 'var(--color-ios-brand)' } as const;
 
-function RowText({ label, caption, captionId }: { readonly label: string; readonly caption?: string; readonly captionId?: string }) {
+/** La note d'une rangée (#17587) : la QUESTION que le (i) nomme et la réponse, deux clés du catalogue. */
+type RowNoteKeys = { readonly question: SettingsKey; readonly text: SettingsKey };
+
+const rowNote = (language: InterfaceLanguage, keys: RowNoteKeys | undefined): InfoHint | undefined =>
+  keys === undefined ? undefined : { label: translate(language, keys.question), text: translate(language, keys.text), glyph: SETTINGS_GLYPHS.info };
+
+/** `note` ne se pose que sur une rangée qui n'est PAS un lien : le (i) est un bouton (#17587). */
+function RowText({
+  label,
+  caption,
+  captionId,
+  note,
+  noteId,
+}: {
+  readonly label: string;
+  /** La phrase LUE AU REPOS (règle 7 de l'épure, #17594) : ce que fait un réglage propre à Meeshy. `note` ne porte alors que le détail secondaire. */
+  readonly caption?: string;
+  readonly captionId?: string;
+  readonly note?: InfoHint;
+  readonly noteId?: string;
+}) {
   return (
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span className="break-words text-body font-medium" style={{ color: SECTION_INK }}>
-        {label}
-      </span>
+      <InfoNoted note={note} inline {...(noteId === undefined ? {} : { noteId })}>
+        <span className="block break-words text-body font-medium" style={{ color: SECTION_INK }}>
+          {label}
+        </span>
+      </InfoNoted>
       {caption === undefined ? null : (
-        <span id={captionId} className="text-caption" style={{ color: SECTION_INK_2 }}>
+        <span id={captionId} data-row-caption className="text-caption" style={{ color: SECTION_INK_2 }}>
           {caption}
         </span>
       )}
@@ -219,6 +242,7 @@ function LocalToggleRow({
   setting,
   name,
   caption,
+  note,
   icon,
   tint,
   enabled,
@@ -228,6 +252,7 @@ function LocalToggleRow({
   readonly setting: string;
   readonly name: string;
   readonly caption: string;
+  readonly note: InfoHint;
   readonly icon: IconSpec;
   readonly tint?: string;
   readonly enabled: boolean;
@@ -235,18 +260,19 @@ function LocalToggleRow({
   readonly onToggle: (enabled: boolean) => void;
 }) {
   const captionId = useId();
+  const noteId = useId();
   return (
     <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
       <RowIcon {...(tint === undefined ? {} : { tint })}>
         <IconOf icon={icon} size={15} />
       </RowIcon>
-      <RowText label={name} caption={caption} captionId={captionId} />
+      <RowText label={name} caption={caption} captionId={captionId} note={note} noteId={noteId} />
       <button
         type="button"
         role="switch"
         aria-checked={enabled}
         aria-label={name}
-        aria-describedby={captionId}
+        aria-describedby={`${captionId} ${noteId}`}
         data-setting={setting}
         {...(disabled ? { disabled: true } : {})}
         onClick={() => onToggle(!enabled)}
@@ -300,7 +326,12 @@ function DeviceTranslationRow({ language, toggle }: { readonly language: Interfa
     <LocalToggleRow
       setting="deviceTranslation"
       name={translateDeviceTranslation(language, 'settings.device_translation')}
-      caption={translateDeviceTranslation(language, 'settings.device_translation.info')}
+      caption={translateDeviceTranslation(language, 'settings.device_translation.summary')}
+      note={{
+        label: translateDeviceTranslation(language, 'settings.device_translation.question'),
+        text: translateDeviceTranslation(language, 'settings.device_translation.info'),
+        glyph: SETTINGS_GLYPHS.info,
+      }}
       icon={{ set: 'socle', name: 'translate' }}
       enabled={toggle.enabled}
       disabled={!toggle.ready}
@@ -321,6 +352,7 @@ type ToggleSpec = {
   readonly key: BooleanPreference;
   readonly label: SettingsKey;
   readonly caption?: SettingsKey;
+  readonly note?: RowNoteKeys;
   readonly icon: IconSpec;
   readonly tint: string;
 };
@@ -340,19 +372,22 @@ function ToggleRow({
   readonly onToggle: (key: BooleanPreference, value: boolean) => void;
 }) {
   const captionId = useId();
+  const noteId = useId();
   const label = translate(language, spec.label);
+  const note = rowNote(language, spec.note);
+  const describedBy = [spec.caption === undefined ? undefined : captionId, note === undefined ? undefined : noteId].filter((id) => id !== undefined).join(' ');
   return (
     <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
       <RowIcon tint={spec.tint}>
         <IconOf icon={spec.icon} size={15} />
       </RowIcon>
-      <RowText label={label} {...(spec.caption === undefined ? {} : { caption: translate(language, spec.caption), captionId })} />
+      <RowText label={label} {...(spec.caption === undefined ? {} : { caption: translate(language, spec.caption), captionId })} {...(note === undefined ? {} : { note, noteId })} />
       <button
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
-        {...(spec.caption === undefined ? {} : { 'aria-describedby': captionId })}
+        {...(describedBy === '' ? {} : { 'aria-describedby': describedBy })}
         data-setting={spec.key}
         disabled={disabled}
         onClick={() => onToggle(spec.key, !checked)}
@@ -467,7 +502,7 @@ const PRIVACY_TOGGLES = [
 const NOTIFICATION_TOGGLES = [
   { key: 'pushEnabled', label: 'settings.notifications.title', icon: { set: 'ecran', name: 'bellRinging' }, tint: 'var(--color-error)' },
   { key: 'soundEnabled', label: 'settings.notif.sounds', icon: { set: 'ecran', name: 'speakerHigh' }, tint: 'var(--ios-indigo-300)' },
-  { key: 'contactActivityEnabled', label: 'settings.notif.contact_activity', icon: { set: 'ecran', name: 'handPalm' }, tint: 'var(--color-ios-brand)' },
+  { key: 'contactActivityEnabled', label: 'settings.notif.contact_activity', caption: 'settings.notif.contact_activity.info', icon: { set: 'ecran', name: 'handPalm' }, tint: 'var(--color-ios-brand)' },
 ] as const satisfies readonly ToggleSpec[];
 
 type PreferenceSectionProps = {
@@ -833,8 +868,10 @@ export function SettingsOfflineNotice({ language }: { readonly language: Interfa
  */
 export function SettingsContent({ children }: { readonly children: ReactNode }) {
   return (
-    <div className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
-      {children}
-    </div>
+    <InfoHintScope>
+      <div className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
+        {children}
+      </div>
+    </InfoHintScope>
   );
 }

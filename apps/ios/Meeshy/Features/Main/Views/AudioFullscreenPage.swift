@@ -376,7 +376,7 @@ struct AudioFullscreenPage: View, Equatable {
             }
             playback { snapshot, _ in
                 // Là où part le curseur : la durée totale à gauche de midi, le
-                // temps écoulé à droite (directive porteur du 2026-10-13).
+                // temps écoulé à droite.
                 let total = metadataDuration > 0 ? metadataDuration : snapshot.duration
                 HStack {
                     Text(MediaFormat.duration(total))
@@ -490,7 +490,7 @@ struct AudioFullscreenPage: View, Equatable {
             HapticFeedback.light()
         } label: {
             // Le disque de verre du chrome, celui de la croix et du
-            // téléchargement (directive porteur du 2026-10-13).
+            // téléchargement.
             FullscreenChromeDisc(systemImage: systemImage, tone: .adaptive)
         }
         .buttonStyle(.plain)
@@ -553,7 +553,7 @@ struct AudioFullscreenPage: View, Equatable {
         }
     }
 
-    /// **Le rail et les langues restent à l'écran** (porteur, 2026-10-13) :
+    /// **Le rail et les langues restent à l'écran** (porteur):
     /// seuls la barre du haut et le transport s'effacent pendant l'écoute. Les
     /// boutons sont NUS — leurs disques de verre, sans plaque derrière.
     private var actionRail: some View {

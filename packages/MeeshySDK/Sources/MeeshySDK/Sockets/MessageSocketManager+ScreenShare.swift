@@ -3,7 +3,7 @@ import SocketIO
 
 // #8063 — le partage d'écran d'appel. Dans son propre fichier parce que
 // `MessageSocketManager.swift` est hors budget de taille (directive
-// 2026-09-02 : on n'ajoute pas à un fichier qui dépasse).
+// On n'ajoute pas à un fichier qui dépasse).
 //
 // La passerelle diffuse ce geste aux AUTRES participants sous la forme
 // existante `call:media-toggled` avec `mediaType: "screen"`, que

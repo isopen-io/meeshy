@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 
 import { useMediaFlag } from '@/lib/use-media-flag';
 
@@ -25,6 +25,14 @@ export const JOURNAL_COLUMN_GUTTER = 12;
 
 /** Ce que la colonne retire à la scène : elle, et une gouttière de chaque côté. */
 export const JOURNAL_COLUMN_RESERVE = JOURNAL_COLUMN_WIDTH + 2 * JOURNAL_COLUMN_GUTTER;
+
+/**
+ * LA PLACE DE LA COLONNE (W1.2, W1.20) — la géométrie de la case qui entre et repart par le bord de fin
+ * (`HeldSwap`, forme `end`, dans `call-screen.tsx`, qui y pose aussi son verre et `data-call-chrome-keep`).
+ * Le conteneur a déjà retiré la zone sûre (`pt-safe`, `pb-safe` de la racine) : la colonne ne la compte pas
+ * une seconde fois — 60 px sous le haut du conteneur, 24 px (le `pb-6` de la pilule) au-dessus de son bas.
+ */
+export const JOURNAL_COLUMN_PLACE: CSSProperties = { insetInlineEnd: JOURNAL_COLUMN_GUTTER, top: '3.75rem', bottom: '1.5rem', width: JOURNAL_COLUMN_WIDTH };
 
 const STAGE_MIN_WIDTH = 720;
 

@@ -3,7 +3,7 @@ import MeeshySDK
 
 // MARK: - La barre des cinq onglets
 
-/// **Cinq positions, en verre** (directive porteur 2026-09-05).
+/// **Cinq positions, en verre**.
 ///
 /// Elle remplace `StickerNatureSwitch`, l'interrupteur à deux positions de
 /// #5012 — retiré avec son type, aucun site ne le montait plus —, et hérite de

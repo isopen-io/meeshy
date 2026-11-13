@@ -5,7 +5,7 @@ import os
 
 // MARK: - Le coordinateur de la traduction sur l'appareil (#9899)
 //
-// Décision porteur du 2026-10-10 : l'appareil de chaque membre traduit les
+// l'appareil de chaque membre traduit les
 // messages reçus vers SA langue, les montre aussitôt, puis les partage aux
 // autres membres par la passerelle — qui ne garde qu'une enveloppe SCELLÉE.
 //

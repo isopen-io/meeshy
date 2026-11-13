@@ -54,9 +54,7 @@ struct CallPresentationLayer: ViewModifier {
 
     private let incomingCallGate: IncomingCallWakeGate
 
-    // Mini-lecteur audio hoisté ICI (même point de montage que la bannière
-    // d'appel — demande produit 2026-08-13 : « le mini lecteur doit être
-    // intégré au même endroit que le composant de call »). Injecté en
+    // Mini-lecteur audio hoisté ICI. Injecté en
     // closures, pas en défaut `= { nil }`/`.shared`, car `CallPresentationLayer`
     // n'a lui-même aucun accès au `router` (iPhone) / `activeConversation`
     // (iPad) — seuls `RootView`/`iPadRootView`, qui possèdent ces états, le

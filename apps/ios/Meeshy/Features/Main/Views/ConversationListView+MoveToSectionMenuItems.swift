@@ -6,7 +6,7 @@ import MeeshyUI
 ///
 /// Deux `Menu` natifs le consomment : le sous-menu du menu contextuel de la
 /// rangée (ci-dessous) et l'encoche de catégorie de la carte de focus
-/// (`LentilleFocusCard`, réintroduite le 2026-08-22). Un second catalogue
+/// (`LentilleFocusCard`). Un second catalogue
 /// divergerait sur les deux conventions qui ne se voient pas : `""` signifie
 /// « aucune catégorie » (= « Mes conversations ») côté view model, et toucher
 /// la catégorie COURANTE l'en retire au lieu de la ré-appliquer.

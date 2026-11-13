@@ -33,7 +33,7 @@ public struct OpeningEffectChips: View {
     /// permanence**. Un appareil en thème CLAIR y peignait alors un texte
     /// `indigo950` sur un fond sombre : les puces non sélectionnées existaient
     /// dans l'arbre d'accessibilité, avec leur libellé et leur cadre, et
-    /// n'étaient PAS VISIBLES. Défaut mesuré au simulateur le 2026-08-30.
+    /// n'étaient PAS VISIBLES. Défaut mesuré au simulateur.
     ///
     /// C'est la même règle que `ComposerTopBar` documente pour sa croix de
     /// fermeture : sur une surface qui ne suit pas le thème, une couleur
@@ -86,8 +86,8 @@ public struct OpeningEffectChips: View {
             HapticFeedback.light()
         } label: {
             Text(title)
-                .font(.system(size: MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
-                .foregroundColor(textColor)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
+                .foregroundStyle(textColor)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(fillColor))

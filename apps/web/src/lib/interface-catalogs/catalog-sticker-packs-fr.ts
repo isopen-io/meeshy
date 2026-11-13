@@ -36,6 +36,7 @@ const frStickerPacks = {
   'stickerPacks.submit.instant': 'Instant',
   'stickerPacks.submit.removeItem': 'Retirer ce sticker',
   'stickerPacks.submit.zoneHint': 'Tracez sur l’image la zone où le texte s’écrira. L’aperçu montre le texte le plus long admis.',
+  'stickerPacks.submit.zoneHint.question': 'Comment placer le texte ?',
   'stickerPacks.submit.zoneDefault': 'Texte par défaut',
   'stickerPacks.submit.zoneLength': 'Longueur maximale',
   'stickerPacks.submit.send': 'Envoyer à la relecture',

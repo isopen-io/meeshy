@@ -92,8 +92,12 @@ public final class NetworkPathSource: @unchecked Sendable {
     /// Dernière photo connue.
     public var current: NetworkPathSnapshot { subject.value }
 
+    /// Le système rappelle `pathUpdateHandler` pour des changements que la photo ne voit pas (#17250 : toutes les
+    /// ~2 s en arrière-plan sur un iPhone en Wi-Fi) : une photo identique à la précédente ne repart pas.
     public var publisher: AnyPublisher<NetworkPathSnapshot, Never> {
         subject.publisher
+            .removeDuplicates()
+            .eraseToAnyPublisher()
     }
 
     /// - Parameter startMonitor: `false` en test — aucun `NWPathMonitor` réel

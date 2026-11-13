@@ -5,14 +5,14 @@ import MeeshySDK
 /// per-type messages on send. Pure and synchronous so the orchestration
 /// decision is unit-testable independently of the View / network.
 ///
-/// Rules (spec 2026-05-30, lot A2) :
+/// Rules (lot A2):
 /// - Attachments are grouped by type bucket : `.audio` vs `.visual`
 ///   (image|video|file). One message per non-empty group.
 /// - Group order follows the first-appearance order of each bucket.
 /// - Text rides the VISUAL group as its caption (#9860) : 5 photos + a
 ///   caption are ONE message, like every other client sends them. Without a
 ///   visual group (audio only, or no attachment) the text stays its own
-///   message, sent LAST — spec 2026-05-30 A2 for the voice-note case.
+/// message, sent LAST — A2 for the voice-note case.
 /// - A reply/forward reference is carried by the FIRST planned message only.
 enum MultiAttachmentSendPlanner {
 

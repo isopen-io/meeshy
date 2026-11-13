@@ -241,7 +241,7 @@ extension FeedViewModel {
             storyEffects: intent.storyEffects,
             mediaCaptions: intent.mediaCaptions,
             // **Un relais qui RECOPIE champ par champ est un inventaire à
-            // tenir à jour** (2026-09-05). Ce site s'arrêtait aux légendes :
+            // tenir à jour**. Ce site s'arrêtait aux légendes:
             // `mediaAlts` et `mediaObjectIds`, ajoutés en amont le même jour,
             // y mouraient en silence — l'intention les portait, le relais ne
             // les nommait pas, et rien ne rougissait.
@@ -335,7 +335,7 @@ extension FeedViewModel {
                 // serveur n'existera qu'à l'upload, et le dispatcher fait
                 // seul la traduction.
                 mediaCaptions: mediaCaptions,
-                // **TRANSMIS, plus posés à `nil`** (2026-09-05).
+                // **TRANSMIS, plus posés à `nil`**.
                 //
                 // Ils l'étaient, sous un commentaire qui disait « ce site n'en
                 // a aucune » — vrai de l'entrée `createOfflineMediaPost` (la

@@ -44,7 +44,7 @@ extension CallManager {
             return
         }
 
-        // CALL-FIX 2026-06-06 (macOS) — `CXSetMutedCallAction` fails on iOS-app-on-Mac
+        // CALL-FIX (macOS) — `CXSetMutedCallAction` fails on iOS-app-on-Mac
         // (CallKit requesttransaction error 4) and the rollback below then UNDOES the
         // mute → the mute button never sticks. On Mac the WebRTC track toggle above IS
         // the mute (no CallKit system UI), so short-circuit before the transaction.
@@ -57,7 +57,7 @@ extension CallManager {
         let muteAction = CXSetMutedCallAction(call: uuid, muted: isMuted)
         callController.request(CXTransaction(action: muteAction)) { error in
             if let error {
-                // CALL-FIX 2026-06-06 — do NOT roll back the WebRTC mute when CallKit
+                // CALL-FIX — do NOT roll back the WebRTC mute when CallKit
                 // refuses the transaction (CXSetMutedCallAction error 4). The WebRTC
                 // track toggle above IS the real mute; the old rollback UN-muted the
                 // user against their intent ("impossible de mute — ça fall back").

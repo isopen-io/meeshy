@@ -1,9 +1,7 @@
 import SwiftUI
 import MeeshySDK
 
-/// Respiration autour de la rangée MAGNIFIÉE (directive user 2026-08-22 :
-/// « le triple de l'espace actuel entre la rangée de magnificence et les
-/// autres rangées ») : pendant la scène, les rangées voisines s'écartent de
+/// Respiration autour de la rangée MAGNIFIÉE: pendant la scène, les rangées voisines s'écartent de
 /// la ligne de focus — celles du dessus montent, celles du dessous
 /// descendent — d'au plus `LentilleMetrics.FocusCard.breathing` points.
 ///
@@ -33,7 +31,7 @@ struct LentilleFocusBreathing: ViewModifier {
         return direction * LentilleMetrics.FocusCard.breathing * ramp(distance) * level
     }
 
-    /// Échelle de LOUPE (directive porteur 2026-09-15, #6586) d'une rangée de
+    /// Échelle de LOUPE (#6586) d'une rangée de
     /// largeur `width` à `distance` de la ligne de focus : `1 + gain` dans la
     /// demi-rangée de l'élue, retour à `1` sur la rampe de la respiration. Le
     /// gain est écrêté pour que la rangée, qui grandit autour de son centre,

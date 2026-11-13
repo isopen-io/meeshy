@@ -399,7 +399,15 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Stories/Views/MyStoriesDeleteAlerts.swift",
         "apps/ios/Meeshy/Features/Stories/Views/MyStoriesQueueRows.swift",
         "apps/ios/Meeshy/Features/Stories/Views/MyStoryActionMenu.swift",
-        "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift",  // 58
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityView.swift",  // 6
+        // Cohésion de `SecurityView` : le cliquet suit le CODE, pas le chemin (leçon 578). Les
+        // sections e-mail, téléphone, verrou des conversations et double authentification, et leurs
+        // pastilles communes, ont quitté l'hôte avec leurs clés.
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityEmailSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityPhoneSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityConversationLockSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecurityTwoFactorSection.swift",
+        "apps/ios/Meeshy/Features/Settings/Views/SecuritySectionChrome.swift",
         // #8843 — le flux SMS du numéro a quitté l'écran ci-dessus pour être
         // partagé avec la proposition faite avant la recherche de contacts :
         // le cliquet suit les CLÉS jusqu'à leur nouveau fichier (leçon 578),
@@ -564,6 +572,8 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/NewConversationView.swift",  // 12
         "apps/ios/Meeshy/Features/Links/Views/CommunityLinkDetailView.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift",  // 10
+        // #16901 — la carte du bas a quitté le sélecteur de lieu avec ses trois clés.
+        "apps/ios/Meeshy/Features/Main/Components/LocationPickerBottomCard.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",  // 10
         "apps/ios/Meeshy/Features/Main/ViewModels/ReelsViewModel.swift",  // 10
         "apps/ios/Meeshy/Features/Settings/Views/MediaDownloadSettingsView.swift",  // 10

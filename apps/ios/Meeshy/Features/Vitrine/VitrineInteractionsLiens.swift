@@ -37,7 +37,7 @@ extension VitrineInteractions {
             fatalError("Vitrine « \(scene.rawValue) » : le hub « Mes liens » n'a pas prêté son routeur")
         }
         VitrineTournage.etape("hub")
-        try? await Task.sleep(for: tenueDuHub)
+        guard await cancellableSleep(for: tenueDuHub) else { return }
         ouvrir(.affiliate)
         VitrineTournage.etape("affiliation")
         guard await cancellableSleep(for: tenueDeLAffiliation) else { return }
@@ -55,15 +55,15 @@ extension VitrineInteractions {
             fatalError("Vitrine « \(scene.rawValue) » : l'invitation n'a pas prêté son parcours")
         }
         VitrineTournage.etape("invitation")
-        try? await Task.sleep(for: tenueDeLInvitation)
+        guard await cancellableSleep(for: tenueDeLInvitation) else { return }
         VitrineTournage.etape("sans-compte")
         withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { parcours.proceedToForm() }
-        try? await Task.sleep(for: monteeDuFormulaire)
+        guard await cancellableSleep(for: monteeDuFormulaire) else { return }
         let (prenom, nom) = nomDeLInvite(f)
         parcours.firstName = prenom
-        try? await Task.sleep(for: entreDeuxChamps)
+        guard await cancellableSleep(for: entreDeuxChamps) else { return }
         parcours.lastName = nom
-        try? await Task.sleep(for: entreDeuxChamps)
+        guard await cancellableSleep(for: entreDeuxChamps) else { return }
         parcours.language = f.lang
         VitrineTournage.etape("formulaire")
         guard await cancellableSleep(for: tenueDuFormulaire) else { return }

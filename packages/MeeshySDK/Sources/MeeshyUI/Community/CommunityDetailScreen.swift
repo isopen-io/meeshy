@@ -87,15 +87,27 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 .tint(MeeshyColors.brandPrimary)
         } else if let community = viewModel.community {
             loadedContent(community)
-        } else if let error = viewModel.errorMessage {
-            EmptyStateView(
-                icon: "exclamationmark.triangle",
-                title: String(localized: "common.error", defaultValue: "Erreur", bundle: .module),
-                subtitle: error,
-                actionLabel: String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module),
-                onAction: { Task { await viewModel.load() } }
-            )
+        } else if let failure = viewModel.loadFailure {
+            loadFailureState(failure)
         }
+    }
+
+    /// #7816 — la cause, dans la langue du lecteur ; « Réessayer » seulement
+    /// là où réessayer peut aboutir, sinon le retour.
+    private func loadFailureState(_ failure: CommunityLoadFailure) -> some View {
+        EmptyStateView(
+            icon: failure.symbolName,
+            title: failure.title,
+            subtitle: failure.message,
+            actionLabel: failure.actionLabel,
+            onAction: {
+                if failure.offersRetry {
+                    Task { await viewModel.load() }
+                } else {
+                    dismissHost()
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -146,8 +158,9 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
     }
 
     private func refreshLocalAppearance(communityId: String) {
-        localColor = UserDefaults.standard.string(forKey: "community.color.\(communityId)")
-        localEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(communityId)")
+        let appearance = CommunityLocalAppearance.read(communityId: communityId)
+        localColor = appearance.color
+        localEmoji = appearance.emoji
     }
 
     private func dismissHost() {
@@ -178,6 +191,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .clipShape(Circle())
                     .meeshyTapTarget()
             }
+            .accessibilityLabel(String(localized: "common.back", bundle: .module))
 
             Spacer()
 
@@ -220,6 +234,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         .clipShape(Circle())
                         .meeshyTapTarget()
                 }
+                .accessibilityLabel(String(localized: "community.react.a11y", bundle: .module))
             }
         }
         .padding(.horizontal, MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
@@ -238,6 +253,11 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 bannerView(community, color: color)
                     .frame(height: 190)
                     .clipped()
+
+                if let localEmoji {
+                    CommunityEmojiMark(emoji: localEmoji)
+                        .frame(height: 190)
+                }
 
                 // Gradient overlay en bas pour lisibilité du header
                 LinearGradient(
@@ -338,7 +358,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .font(.system(size: MeeshyIconSize.xs))
                     .foregroundStyle(MeeshyColors.brandPrimary)
                 Text(value)
-                    .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                    .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
                     .foregroundStyle(theme.textPrimary)
             }
             Text(label)

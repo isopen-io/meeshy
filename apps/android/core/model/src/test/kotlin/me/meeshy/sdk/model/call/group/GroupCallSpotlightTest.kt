@@ -1,6 +1,9 @@
 package me.meeshy.sdk.model.call.group
 
 import com.google.common.truth.Truth.assertThat
+import java.util.Locale
+import me.meeshy.sdk.model.call.CallChromeStow
+import me.meeshy.sdk.model.call.camera.CameraZoomPolicy
 import org.junit.Test
 
 /** La mise à la une d'une vignette, miroir de iOS `GroupCallSpotlightTests`. */
@@ -99,9 +102,51 @@ class GroupCallSpotlightTest {
     }
 
     @Test
+    fun `the screen received in a duo zooms by the same law, a pinch in progress applies to the committed zoom`() {
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 2f, pinch = 1.5f, isReceivingScreen = true)).isEqualTo(3f)
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 2f, pinch = 9f, isReceivingScreen = true)).isEqualTo(GroupCallSpotlight.MAX_ZOOM)
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 3f, pinch = 0.1f, isReceivingScreen = true)).isEqualTo(1f)
+    }
+
+    @Test
+    fun `the return to 1x of a received screen takes 0,2 s, the short fade of the chrome under reduce motion`() {
+        assertThat(GroupCallSpotlight.receivedScreenResetMillis(reduceMotion = false)).isEqualTo(200)
+        assertThat(GroupCallSpotlight.receivedScreenResetMillis(reduceMotion = true)).isEqualTo(CallChromeStow.REDUCED_FADE_MILLIS)
+    }
+
+    @Test
+    fun `a zoom does not outlive the share that made it`() {
+        assertThat(GroupCallSpotlight.receivedScreenZoom(committed = 3f, pinch = 1.2f, isReceivingScreen = false)).isEqualTo(1f)
+    }
+
+    @Test
     fun `the others go below in portrait, on the side in landscape, nowhere in full screen`() {
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = false, isLandscape = false)).isEqualTo(GroupCallFilmstrip.Bottom)
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = false, isLandscape = true)).isEqualTo(GroupCallFilmstrip.Trailing)
         assertThat(GroupCallSpotlight.filmstrip(isFullScreen = true, isLandscape = true)).isEqualTo(GroupCallFilmstrip.None)
+    }
+
+    /** U2.5 — the factor announced by the « Screen of X · 2× » chip. */
+    @Test
+    fun `the displayed zoom is null at one, and otherwise rounded to tenths under the ceiling`() {
+        assertThat(GroupCallSpotlight.displayedZoom(1f)).isNull()
+        assertThat(GroupCallSpotlight.displayedZoom(1.04f)).isNull()
+        assertThat(GroupCallSpotlight.displayedZoom(2f)).isEqualTo(2f)
+        assertThat(GroupCallSpotlight.displayedZoom(2.46f)).isEqualTo(2.5f)
+        assertThat(GroupCallSpotlight.displayedZoom(9f)).isEqualTo(GroupCallSpotlight.MAX_ZOOM)
+    }
+
+    @Test
+    fun `the chip carries the zoom factor after the title, written by the camera's one zoom label in the reader's language`() {
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2f, locale = Locale.FRANCE)).isEqualTo("Écran de Karim · 2×")
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 2.5f, locale = Locale.FRANCE)).isEqualTo("Écran de Karim · 2,5×")
+        assertThat(GroupCallSpotlight.featuredChipText("Karim's screen", zoom = 2.5f, locale = Locale.US)).isEqualTo("Karim's screen · 2.5×")
+        assertThat(GroupCallSpotlight.featuredChipText("Karim's screen", zoom = 2.46f, locale = Locale.US))
+            .isEqualTo("Karim's screen · " + CameraZoomPolicy.label(2.5f, Locale.US))
+    }
+
+    @Test
+    fun `at one times the chip is the title alone`() {
+        assertThat(GroupCallSpotlight.featuredChipText("Écran de Karim", zoom = 1f, locale = Locale.FRANCE)).isEqualTo("Écran de Karim")
     }
 }

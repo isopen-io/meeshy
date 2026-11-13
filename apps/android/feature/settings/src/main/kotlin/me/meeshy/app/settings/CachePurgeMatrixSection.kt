@@ -28,6 +28,8 @@ import me.meeshy.sdk.model.mediacache.CacheDomain
 import me.meeshy.sdk.model.mediacache.CachePurgeAvailability
 import me.meeshy.sdk.model.mediacache.CachePurgeCellId
 import me.meeshy.sdk.model.mediacache.CachePurgeLimitation
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoteButton
 import me.meeshy.sdk.model.mediacache.CachePurgeReport
 import me.meeshy.sdk.model.mediacache.CachePurgeSelection
 import me.meeshy.ui.component.settings.SettingsCard
@@ -49,6 +51,7 @@ internal fun CachePurgeKindSection(
     selection: CachePurgeSelection,
     onToggleKind: () -> Unit,
     onToggleCell: (CachePurgeCellId) -> Unit,
+    noteHost: NoteHost,
 ) {
     val haptics = rememberMeeshyHaptics()
     val accent = MeeshyPalette.Indigo500
@@ -90,6 +93,7 @@ internal fun CachePurgeKindSection(
                     domain = domain,
                     availability = availability,
                     selected = selection.isSelected(id),
+                    noteHost = noteHost,
                     onToggle = {
                         haptics.light()
                         onToggleCell(id)
@@ -105,6 +109,7 @@ private fun CachePurgeCellRow(
     domain: CacheDomain,
     availability: CachePurgeAvailability?,
     selected: Boolean,
+    noteHost: NoteHost,
     onToggle: () -> Unit,
 ) {
     val name = stringResource(domain.labelRes())
@@ -143,32 +148,39 @@ private fun CachePurgeCellRow(
             }
         }
         is CachePurgeAvailability.Unavailable -> {
-            val reason = stringResource(availability.limitation.explanationRes())
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics(mergeDescendants = true) {}
-                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.smPlus),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
-            ) {
-                Icon(
-                    imageVector = MeeshyIcons.IndeterminateBox,
-                    contentDescription = null,
-                    tint = MeeshyTheme.tokens.textMuted,
-                    modifier = Modifier.size(24.dp),
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xxs)) {
+            val note = MeeshyInfoNote(
+                question = stringResource(R.string.purge_limitation_question, name),
+                text = stringResource(availability.limitation.explanationRes()),
+            )
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = MeeshySpacing.lg),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+                ) {
+                    Icon(
+                        imageVector = MeeshyIcons.IndeterminateBox,
+                        contentDescription = null,
+                        tint = MeeshyTheme.tokens.textMuted,
+                        modifier = Modifier.size(24.dp),
+                    )
                     Text(
                         text = name,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         color = MeeshyTheme.tokens.textMuted,
+                        modifier = Modifier.weight(1f),
                     )
+                    MeeshyInfoNoteButton(note = note, expanded = noteHost.isOpen(note), onToggle = { noteHost.toggle(note) })
+                }
+                if (noteHost.isOpen(note)) {
                     Text(
-                        text = reason,
+                        text = note.text,
                         style = MaterialTheme.typography.bodySmall,
                         color = MeeshyTheme.tokens.textMuted,
+                        modifier = Modifier.padding(start = MeeshySpacing.lg, end = MeeshySpacing.lg, bottom = MeeshySpacing.sm),
                     )
                 }
             }

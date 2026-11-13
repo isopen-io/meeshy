@@ -133,7 +133,7 @@ class BookmarksViewModel: ObservableObject {
         }
     }
 
-    /// **Le cœur des FAVORIS aimait dans le vide** (retour porteur 2026-09-13).
+    /// **Le cœur des FAVORIS aimait dans le vide**.
     ///
     /// `BookmarksView` montait `FeedPostCard` sans `onLike`. Le paramètre étant
     /// optionnel, rien ne rougissait — et le bouton n'était pas seulement

@@ -7,7 +7,7 @@ import SwiftUI
 /// editable segment. Mirrors what `AVPlayerLooper` already does at playback
 /// time (`StoryBackgroundLayer`) — without this, a 1s looping background on a
 /// 6s slide rendered as a single 1s bar followed by 5s of visually empty
-/// track, reading as "the background disappears" (user report 2026-07-17).
+/// track, reading as "the background disappears".
 public struct LoopRepeatOverlay: View {
     public let nativeDuration: Float
     public let clipStartTime: Float

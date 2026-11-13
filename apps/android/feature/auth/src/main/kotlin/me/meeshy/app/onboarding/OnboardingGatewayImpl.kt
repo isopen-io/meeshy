@@ -16,7 +16,10 @@ import javax.inject.Singleton
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.engagement.EngagementProgressRepository
 import me.meeshy.sdk.friend.FriendRepository
+import me.meeshy.sdk.media.MediaIntake
+import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.AndroidPermissions
+import me.meeshy.sdk.model.ImageUploadTarget
 import me.meeshy.sdk.model.PermissionNature
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.contacts.DirectoryFilter
@@ -43,6 +46,8 @@ import me.meeshy.sdk.user.BirthDateOutcome
 import me.meeshy.sdk.user.BirthDateRepository
 import me.meeshy.sdk.user.ContactsBookRepository
 import me.meeshy.sdk.user.DirectoryRepository
+import me.meeshy.sdk.user.ProfileImageUploadOutcome
+import me.meeshy.sdk.user.ProfileImageUploader
 import me.meeshy.sdk.user.UserRepository
 import me.meeshy.ui.component.permission.MediaPermissionRequester
 
@@ -67,6 +72,7 @@ class OnboardingGatewayImpl @Inject constructor(
     private val session: SessionRepository,
     private val workManager: WorkManager,
     private val publications: PublicationOutbox,
+    private val profileImages: ProfileImageUploader,
 ) : OnboardingGateway {
 
     override suspend fun fetchState(): ApiOnboardingState? = onboarding.fetchState()
@@ -150,6 +156,11 @@ class OnboardingGatewayImpl @Inject constructor(
         } catch (_: Exception) {
             null
         }
+
+    override suspend fun uploadProfileImage(target: ImageUploadTarget, item: MediaUploadItem): String? =
+        (profileImages.upload(target, item) as? ProfileImageUploadOutcome.Applied)?.url
+
+    override fun releaseProfileImage(item: MediaUploadItem) = MediaIntake.release(item)
 
     override fun isSettled(userId: String): Boolean = settled.isSettled(userId)
 

@@ -46,6 +46,10 @@ backend/node_modules/
 !apps/web/src/lib/*.d.ts
 !apps/web/scripts/*.d.mts
 !apps/web/scripts/lib/*.d.mts
+# La déclaration de la colle du pont libsignal (#17114), écrite par
+# `packages/libsignal-wasm/build.sh` avec le binaire : sans elle, un clone
+# frais rend TS7016 sur `libsignal-bridge.ts`.
+!apps/web/src/lib/e2ee/libsignal/libsignal_wasm.d.ts
 # Même classe côté gateway (#6160) : `bun-test-shim.d.ts` déclare le module
 # `bun:test` qu'importe `bun-preload.ts` (chargé par `bunfig.toml`, jamais
 # par ts-jest) — sans lui, `tsc -p tsconfig.test.json` lève TS2307 sur un

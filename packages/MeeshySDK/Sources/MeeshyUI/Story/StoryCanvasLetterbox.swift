@@ -55,6 +55,7 @@ struct StoryCanvasLetterbox: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+        .accessibilityHidden(true)
         // Le tracé immersif possède l'écran entier : lui voler un touch par le
         // letterbox interromprait un trait en cours.
         .allowsHitTesting(acceptsTaps)

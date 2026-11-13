@@ -11,6 +11,7 @@ import MeeshyUI
 /// rendues (jamais sur les fermetures, que la carte ignore déjà), plus
 /// `isDark` pour qu'un changement de thème repeigne la rangée.
 struct FeedPostActionsBar: View, Equatable {
+    @State private var delayed = DelayedActions()
     let postId: String
     let accentColor: String
     let isDark: Bool
@@ -126,7 +127,7 @@ struct FeedPostActionsBar: View, Equatable {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                     likeAnimating = true
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                delayed.run(after: .milliseconds(300)) {
                     likeAnimating = false
                 }
                 onLike?(postId)
@@ -145,7 +146,7 @@ struct FeedPostActionsBar: View, Equatable {
                         let heartColor: Color = isLikedByMe ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                         Image(systemName: isLikedByMe || likeCount > 0 ? "heart.fill" : "heart")
                             .font(MeeshyFont.relative(MeeshyIconSize.lg))
-                            .foregroundColor(heartColor)
+                            .foregroundStyle(heartColor)
                             .scaleEffect(likeAnimating ? 1.3 : (isLikedByMe ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
                             .opacity(isHeartInFlight ? 0.5 : 1.0)
@@ -153,7 +154,7 @@ struct FeedPostActionsBar: View, Equatable {
                         if isLikedByMe {
                             Image(systemName: "heart")
                                 .font(MeeshyFont.relative(MeeshyIconSize.lg))
-                                .foregroundColor(Color(hex: accentColor))
+                                .foregroundStyle(Color(hex: accentColor))
                                 .scaleEffect(likeAnimating ? 1.3 : 1.1)
                                 .rotationEffect(.degrees(likeAnimating ? -15 : 0))
                         }
@@ -219,7 +220,7 @@ struct FeedPostActionsBar: View, Equatable {
                         if isBookmarked {
                             Image(systemName: "bookmark")
                                 .font(MeeshyFont.relative(17))
-                                .foregroundColor(Color(hex: accentColor))
+                                .foregroundStyle(Color(hex: accentColor))
                         }
                     }
                     let count = bookmarkCount

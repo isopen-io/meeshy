@@ -15,8 +15,7 @@ import SwiftUI
 //
 // Les deux formes ci-dessous ne passent à SwiftUI que des fonctions
 // `nonisolated` : la fermeture qu'il appelle n'a plus de contrôle à faire.
-// `.ips` à l'appui : `ConversationCardStatsRow` (2026-09-29), rails du composer
-// (2026-10-05).
+// `.ips` à l'appui : `ConversationCardStatsRow`, rails du composer
 
 /// Une entrée de `ForEach` CONSTRUITE par le `body` — sur le fil principal —
 /// et seulement RELUE par le `ForEach` :

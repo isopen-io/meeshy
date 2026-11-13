@@ -41,7 +41,7 @@ struct ConversationLinkCardActionsRow: View {
         if isExpired {
             Label(ConversationLinkCardCopy.expiredTitle, systemImage: "clock.badge.xmark")
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
+                .foregroundStyle(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .accessibilityIdentifier("conversation-link-card-expired")
         } else {
@@ -50,8 +50,7 @@ struct ConversationLinkCardActionsRow: View {
                 EmptyView()
             case .join(_, let allowsAnonymous):
                 // « Rejoindre ? » puis « Anonyme » | le compte, dans le gabarit
-                // arrondi de Quitter | Ouvrir (#8726, correction porteur
-                // 2026-09-29) : côte à côte quand ils tiennent, empilés sinon.
+                // arrondi de Quitter | Ouvrir (#8726): côte à côte quand ils tiennent, empilés sinon.
                 VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     joinPrompt
                     ViewThatFits(in: .horizontal) {
@@ -68,7 +67,7 @@ struct ConversationLinkCardActionsRow: View {
         }
     }
 
-    /// Quitter EN PREMIER, puis Ouvrir (directive porteur 2026-09-26).
+    /// Quitter EN PREMIER, puis Ouvrir.
     @ViewBuilder
     private var memberButtons: some View {
         secondary(ConversationLinkCardCopy.leave, icon: "rectangle.portrait.and.arrow.right",
@@ -81,7 +80,7 @@ struct ConversationLinkCardActionsRow: View {
     private var joinPrompt: some View {
         Text(ConversationLinkCardCopy.joinPrompt)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-            .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+            .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
             .lineLimit(1)
             .fixedSize()
             .accessibilityAddTraits(.isHeader)

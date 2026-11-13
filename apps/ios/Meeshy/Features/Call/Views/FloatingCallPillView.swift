@@ -84,8 +84,8 @@ enum CallPillStatus: Equatable {
 /// le fond remonte sous la status bar jusqu'au bord haut du viewport
 /// (immersif). Toucher la
 /// bannière revient au plein écran ; le bouton « agrandir » dédié a été retiré
-/// (redondant avec le tap, retour user 2026-07-04), les chevrons décoratifs de
-/// bord aussi (retour user 2026-08-12). L'avatar réel du correspondant est
+/// (redondant avec le tap), les chevrons décoratifs de
+/// bord aussi. L'avatar réel du correspondant est
 /// résolu cache-first (Instant App) et l'état de connexion est porté par des
 /// glyphes code couleur, pas par du texte.
 struct FloatingCallPillView: View {
@@ -165,11 +165,11 @@ struct FloatingCallPillView: View {
 
     private var pillContent: some View {
         HStack(spacing: MeeshySpacing.md) {
-            CallParticipantVisual(diameter: 44, callManager: callManager)
-            userInfoSection
+            identitySection
             Spacer(minLength: 8)
             controlButtons
         }
+        .animation(CallShareCapsuleMotion.swapAnimation(reduceMotion: reduceMotion), value: callManager.screenShare.isSharing)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         // minHeight (not an exact height): userInfoSection stacks two
         // Dynamic-Type-scalable Text lines that can exceed pillHeight at
@@ -179,7 +179,7 @@ struct FloatingCallPillView: View {
         // Pleine largeur (façon barre d'appel WhatsApp) : la bannière s'étire
         // d'un bord à l'autre au sommet de l'app au lieu de flotter en capsule.
         .frame(maxWidth: .infinity)
-        // Retour user 2026-08-12 (second passage) : PLEINEMENT indigo. Plus de
+        // (second passage): PLEINEMENT indigo. Plus de
         // voile noir (l'ancien scrim 40 % faisait lire la zone status bar comme
         // une « barre noire ») ni de fondu transparent en bas.
         //
@@ -206,10 +206,15 @@ struct FloatingCallPillView: View {
         // système y étend son fond sans que rien ne le déclare — une seconde
         // propriété de la bande, muette, chez chaque barre. C'est le défaut que
         // ce lot ferme ; le laisser implicite le rouvrirait par omission.
-        .background(TopChromeTint.call.bandColor, ignoresSafeAreaEdges: [])
+        .background(callManager.screenShare.isSharing ? Color.clear : TopChromeTint.call.bandColor, ignoresSafeAreaEdges: [])
+        .background {
+            if callManager.screenShare.isSharing {
+                Color.clear.meeshyGlass(in: Rectangle(), tint: MeeshyColors.error)
+            }
+        }
         .offset(x: pillDragOffset)
         .opacity(pillDragOpacity)
-        .simultaneousGesture(collapseDragGesture)
+        .simultaneousGesture(collapseDragGesture, including: mayCollapseToBubble ? .all : .subviews)
         .contentShape(Rectangle())
         .onTapGesture {
             expandToFullScreen()
@@ -221,13 +226,31 @@ struct FloatingCallPillView: View {
         )
         .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
-            collapseToBubble(exitTranslation: 1)
+        .accessibilityActions {
+            if mayCollapseToBubble {
+                Button(String(localized: "a11y.call.pill.collapse", defaultValue: "Réduire en bulle", bundle: .main)) {
+                    collapseToBubble(exitTranslation: 1)
+                }
+            }
         }
         .callQualityDetailSheet(isPresented: $showQualityDetail)
     }
 
     // MARK: - User Info
+
+    /// P18.10 — pendant mon partage, la bannière dit l'écran et « nom · durée » sur sa
+    /// seule ligne d'état (signal dégradé et feuille « Qualité » compris) ; hors
+    /// partage, l'avatar, le nom et la ligne d'état.
+    @ViewBuilder private var identitySection: some View {
+        if callManager.screenShare.isSharing {
+            statusEntry.transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+        } else {
+            CallParticipantVisual(diameter: 44, callManager: callManager)
+                .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+            userInfoSection
+                .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
+        }
+    }
 
     private var userInfoSection: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -264,9 +287,7 @@ struct FloatingCallPillView: View {
                     // l'arrêt haut de l'aplat indigo — sous le seuil 4.5:1 du
                     // texte courant (CallBannerContrastTests). L'état « établi »
                     // reste porté par le glyphe signal.
-                    Text(formattedDuration)
-                        .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundStyle(Color.white)
+                    durationLabel
                 } else if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
                     Image(systemName: glyph)
                         .font(.caption.weight(.semibold))
@@ -283,6 +304,16 @@ struct FloatingCallPillView: View {
                 : pillStatus.label)
             .accessibilityValue(pillStatus.isConnected ? spokenDuration : "")
             .accessibilityAddTraits(.updatesFrequently)
+        }
+    }
+
+    @ViewBuilder private var durationLabel: some View {
+        if callManager.screenShare.isSharing {
+            CallReducedCaption(callManager: callManager, style: .screenShare)
+        } else {
+            Text(formattedDuration)
+                .font(.caption.weight(.medium).monospacedDigit())
+                .foregroundStyle(Color.white)
         }
     }
 
@@ -305,32 +336,20 @@ struct FloatingCallPillView: View {
 
     @ViewBuilder private var controlButtons: some View {
         if callManager.screenShare.isSharing {
-            stopShareButton
+            stopShareButton.transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         } else {
             HStack(spacing: MeeshySpacing.sm) {
                 muteButton
                 speakerButton
                 hangupButton
             }
+            .transition(CallShareCapsuleMotion.swapTransition(reduceMotion: reduceMotion))
         }
     }
 
     /// #16664 — je partage mon écran : la capsule offre l'écran et « Arrêter ».
     private var stopShareButton: some View {
-        Button {
-            callManager.screenShare.stopSharing()
-            HapticFeedback.light()
-        } label: {
-            Label(CallScreenShareCopy.stopCaption, systemImage: "rectangle.on.rectangle.slash")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
-                .padding(.horizontal, MeeshySpacing.md)
-                .frame(minHeight: 44)
-                .background(Capsule().fill(MeeshyColors.error))
-        }
-        .pressable()
-        .accessibilityLabel(CallScreenShareCopy.label(isSharing: true))
+        CallShareStopButton { callManager.screenShare.stopSharing() }
     }
 
     private var muteButton: some View {
@@ -372,13 +391,23 @@ struct FloatingCallPillView: View {
                 .font(.subheadline.weight(.medium))
                 // indigo200, pas indigo400 : ce dernier ne tient que 2.1:1
                 // contre l'aplat indigo de la bannière (CallBannerContrastTests).
-                .foregroundColor(callManager.isSpeaker || route.routesExternally ? CallBannerContrast.speakerActiveTint : .white)
+                .foregroundColor(isOutputLit(route) ? CallBannerContrast.speakerActiveTint : .white)
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
-                        .fill(callManager.isSpeaker || route.routesExternally ? CallBannerContrast.speakerActiveTint.opacity(0.2) : Color.white.opacity(0.1))
+                        .fill(isOutputLit(route) ? CallBannerContrast.speakerActiveTint.opacity(0.2) : Color.white.opacity(0.1))
                 )
         }
+    }
+
+    /// L1.3 — même loi que la pilule de l'écran : le haut-parleur d'office d'un
+    /// appel vidéo est le repos, un appareil externe reste allumé.
+    private func isOutputLit(_ route: CallAudioRouteState) -> Bool {
+        CallOutputButtonRule.kind(
+            isSpeaker: callManager.isSpeaker,
+            routesExternally: route.routesExternally,
+            isVideoCall: callManager.isVideoUIActive
+        ) == .active
     }
 
     private var hangupButton: some View {
@@ -407,6 +436,11 @@ struct FloatingCallPillView: View {
     }
 
     // MARK: - Collapse Gesture
+
+    /// P18.10 — pendant mon partage, la capsule ne se replie pas en bulle.
+    private var mayCollapseToBubble: Bool {
+        CallReturnPoint.mayCollapseToBubble(isSharing: callManager.screenShare.isSharing)
+    }
 
     private var pillDragOpacity: Double {
         let progress = min(abs(pillDragOffset) / 300, 1.0)
@@ -466,6 +500,10 @@ struct FloatingCallPillView: View {
             // against flipping displayMode to .bubble for a call that's no
             // longer active, matching CallBubbleView's own display guard.
             guard callManager.callState.isActive else { return }
+            guard mayCollapseToBubble else {
+                withAnimation(CallShareCapsuleMotion.swapAnimation(reduceMotion: reduceMotion)) { pillDragOffset = 0 }
+                return
+            }
             callManager.displayMode = .bubble
             callManager.bubbleSizeTier = .circle
             pillDragOffset = 0
@@ -480,7 +518,7 @@ struct FloatingCallPillView: View {
             callManager.displayMode = .fullScreen
             return
         }
-        // Agrandissement depuis la bannière (retour user 2026-08-12) : le
+        // Agrandissement depuis la bannière: le
         // fullScreenCover est présenté SANS animation système ; CallView
         // consomme l'indice et joue l'expansion depuis le haut (mouvement
         // inverse de collapseIntoPip) — la bannière se retire par sa propre

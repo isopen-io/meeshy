@@ -93,8 +93,7 @@ extension StoryCardView {
                                         columnWidth: captionColumn,
                                         viewportWidth: geometry.size.width),
                                     scrollToTopToken: captionScrollToTopToken,
-                                    // **La story refuse le voile** (directive
-                                    // porteur 2026-09-02). Elle a mieux : sa
+                                    // **La story refuse le voile**. Elle a mieux: sa
                                     // scène s'efface à 0,28 et laisse remonter
                                     // le fond naturel de la slide. Le voile du
                                     // composant s'y AJOUTAIT — deux mécanismes
@@ -129,7 +128,7 @@ extension StoryCardView {
             // la légende résout celle du CONTENEUR et le texte sort des deux
             // côtés — « The latest apps » s'affichait « e latest apps ».
             .frame(width: captionColumn)
-            // **La légende garde sa position** (directive porteur 2026-09-02) : elle
+            // **La légende garde sa position**: elle
             // MONTE depuis là où elle est, elle ne descend pas au bas de
             // l'écran. La marge basse était annulée au dépliage — le texte
             // changeait donc de place au moment où on demandait à en voir plus.
@@ -210,7 +209,7 @@ extension StoryCardView {
         // === Background audio badge ===
         //
         // Le canvas ne porte plus de chip « note + onde » pour l'audio de
-        // FOND (directive user 2026-07-30) : depuis que le header affiche la
+        // FOND: depuis que le header affiche la
         // note musicale suivie de l'onde animée, ce chip répétait la même
         // information au milieu de l'image. Les chips du canvas restent
         // réservés aux pistes FOREGROUND, qui ont chacune leur fenêtre de
@@ -260,7 +259,7 @@ extension StoryCardView {
     /// **Le vide au-dessus du corpus ramène le texte en tête.**
     ///
     /// > « Quand le corpus avec défilement est ouvert, le touché du haut du
-    /// > viewport doit le faire défiler tout en haut ! » — porteur, 2026-09-02
+    /// > viewport doit le faire défiler tout en haut ! » —
     ///
     /// C'est le geste de la barre d'état d'iOS, appliqué à la fenêtre qui occupe
     /// l'écran : après avoir descendu un long texte, on remonte d'un tap au lieu
@@ -290,14 +289,14 @@ extension StoryCardView {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { captionScrollToTopToken += 1 }
-                // Le retrait est RENDU au repère de l'écran : la colonne du
-                // canvas déborde le viewport, et 68 pt de colonne n'y valent pas
-                // 68 pt d'écran (cf. `railClearanceInset`).
+                // Retrait rendu au repère de l'écran : la colonne du canvas déborde le
+                // viewport, 68 pt de colonne n'y valent pas 68 pt d'écran (`railClearanceInset`).
                 .padding(.trailing, CaptionExpansionSpace.railClearanceInset(
                     columnWidth: columnWidth, viewportWidth: viewportWidth))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(Self.captionScrollToTopLabel)
                 .accessibilityHint(Self.captionScrollToTopHint)
+                .accessibilityAction { captionScrollToTopToken += 1 }
         }
     }
 

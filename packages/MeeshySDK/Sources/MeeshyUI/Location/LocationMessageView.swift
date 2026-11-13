@@ -22,7 +22,7 @@ public struct LocationMessageView: View {
         self.thumbnailProvider = thumbnailProvider
     }
 
-    /// Rendu unique d'un lieu (Task 14, 2026-07-29) : message, post et
+    /// Rendu unique d'un lieu : message, post et
     /// commentaire partagent désormais tous `SharedPlace` comme véhicule, donc
     /// tous convergent vers cet initialiseur plutôt que de reconstruire leur
     /// propre notion de « position ». L'initialiseur historique par
@@ -87,13 +87,13 @@ public struct LocationMessageView: View {
         HStack(spacing: MeeshySpacing.sm) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(infoLines.title ?? String(localized: "location.shared", defaultValue: "Position partagée", bundle: .module))
-                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                    .foregroundStyle(Color.primary)
                     .lineLimit(1)
                 if let subtitle = infoLines.subtitle {
                     Text(subtitle)
-                        .font(.system(size: MeeshyFont.captionSize))
-                        .foregroundColor(.secondary)
+                        .meeshyScaledFont(MeeshyFont.captionSize)
+                        .foregroundStyle(Color.secondary)
                         .lineLimit(1)
                 }
             }
@@ -102,7 +102,7 @@ public struct LocationMessageView: View {
             Button(action: openInMaps) {
                 Image(systemName: "arrow.up.right.square")
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                     .frame(width: LocationCardMetrics.infoBarHeight, height: LocationCardMetrics.infoBarHeight)
                     .contentShape(Rectangle())
             }
@@ -264,14 +264,14 @@ struct LocationPinView: View {
         VStack(spacing: 0) {
             Image(systemName: "location.fill")
                 .font(.system(size: size.iconSize, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
                 .frame(width: size.frameSize, height: size.frameSize)
                 .background(Circle().fill(Color(hex: accentColor)))
                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 4, y: 2)
 
             Image(systemName: "triangle.fill")
                 .font(.system(size: size.triangleSize))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundStyle(Color(hex: accentColor))
                 .rotationEffect(.degrees(180))
                 .offset(y: size.triangleOffset)
         }

@@ -391,7 +391,7 @@ export class AudioTranslateService extends EventEmitter {
       audioPath: options.audioPath,
       targetLanguages: options.targetLanguages,
       sourceLanguage: options.sourceLanguage,
-      generateVoiceClone: options.generateVoiceClone ?? true,
+      generateVoiceClone: options.generateVoiceClone ?? false,
       mobileTranscription: options.existingTranscription ? {
         text: options.existingTranscription.text,
         language: options.existingTranscription.language,
@@ -430,7 +430,7 @@ export class AudioTranslateService extends EventEmitter {
       audioPath: options.audioPath,
       targetLanguages: options.targetLanguages,
       sourceLanguage: options.sourceLanguage,
-      generateVoiceClone: options.generateVoiceClone ?? true,
+      generateVoiceClone: options.generateVoiceClone ?? false,
       webhookUrl: options.webhookUrl,
       priority: options.priority ?? 1,
       callbackMetadata: options.callbackMetadata,

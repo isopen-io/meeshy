@@ -221,6 +221,7 @@ extension AuthManager {
         // concurrently with `APIClient.shared.authToken = nil` below).
         let outgoingToken = APIClient.shared.authToken
         if endingIt {
+            await SessionEndingHooks.shared.runAll()
             if let outgoingToken {
                 Task { await self.performServerLogoutWithRetries(token: outgoingToken) }
             } else {
@@ -250,10 +251,8 @@ extension AuthManager {
         Task { await SyncSeqTracker.shared.reset() }
 
         if endingIt {
-            keychain.delete(forKey: tokenKey(for: userId), account: nil)
-            keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
-            keychain.delete(forKey: userKey(for: userId), account: nil)
-            keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
+            [tokenKey(for: userId), sessionTokenKey(for: userId), userKey(for: userId), tokenDateUDKey(for: userId)]
+                .forEach { keychain.delete(forKey: $0, account: nil) }
         }
         // La file des réglages vient d'être vidée : une édition optimiste en
         // attente ne sera jamais confirmée, sa garde ne doit pas survivre.

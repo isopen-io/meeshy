@@ -199,4 +199,45 @@ struct StoryTextEffectTests {
         let back = StoryEffects(rendering: document, sceneIndex: 0)
         #expect(back.textObjects.first?.textEffect == "relief")
     }
+
+    // MARK: - Le sélecteur : quatre effets (#17112, L10)
+
+    /// **Le sélecteur n'offre que Néon · Or · Ombre · Flamme, plus « aucun ».**
+    /// Les vingt autres restent dans l'énuméré : ils décodent et se rendent
+    /// toujours, parce que la production, le web et Android en ont publié.
+    @Test func thePicker_offersFourEffectsAndNone() {
+        #expect(StoryTextEffect.pickerChoices == [.none, .neon, .gold, .shadow, .fire])
+    }
+
+    /// Flamme ne crée PAS de valeur neuve sur le fil : elle EST `fire`, que
+    /// les anciens clients savent déjà rendre en lueur orangée.
+    @Test func theFlame_isTheLegacyFireValue_soOlderClientsStillRenderIt() {
+        #expect(StoryTextEffect.fire.rawValue == "fire")
+        #expect(StoryTextEffect.fire.shadow != nil)
+    }
+
+    /// Seule la Flamme brûle ; aucun autre effet n'anime.
+    @Test func onlyTheFlame_burns() {
+        for effet in StoryTextEffect.allCases {
+            #expect(effet.burns == (effet == .fire), "\(effet)")
+        }
+    }
+
+    /// Un texte publié avec un effet retiré du sélecteur le GARDE visible et
+    /// sélectionné : la grille l'ajoute en dernier plutôt que de le taire.
+    @Test func aLegacyEffect_staysOfferedWhileTheTextCarriesIt() {
+        #expect(StoryTextEffect.pickerChoices(keeping: .glow)
+                == [.none, .neon, .gold, .shadow, .fire, .glow])
+        #expect(StoryTextEffect.pickerChoices(keeping: .gold) == StoryTextEffect.pickerChoices)
+        #expect(StoryTextEffect.pickerChoices(keeping: .none) == StoryTextEffect.pickerChoices)
+    }
+
+    /// Les vingt-cinq valeurs historiques décodent toujours depuis le fil.
+    @Test func everyLegacyValue_stillDecodesFromTheWire() throws {
+        for effet in StoryTextEffect.allCases where effet != .none {
+            let json = "{\"id\":\"t1\",\"text\":\"X\",\"textEffect\":\"\(effet.rawValue)\"}"
+            let decoded = try JSONDecoder().decode(StoryTextObject.self, from: Data(json.utf8))
+            #expect(decoded.parsedTextEffect == effet)
+        }
+    }
 }

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:conversations": {
+      "resDir": "feature/conversations/src/main/res",
+      "entries": [
+        {
+          "androidName": "peek_menu_handle_expand",
+          "status": "android-only"
+        },
+        {
+          "androidName": "peek_menu_handle_collapse",
+          "status": "android-only"
+        },
+        {
+          "androidName": "peek_menu_state_compact",
+          "status": "android-only"
+        },
+        {
+          "androidName": "peek_menu_state_expanded",
+          "status": "android-only"
+        },
+        {
+          "androidName": "peek_close",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

@@ -62,7 +62,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// affichait la pastille et ne prévenait personne. Optionnel pour rester
     /// rétro-compatible avec les rows persistés avant lui (→ `nil`).
     public let mentionsPayload: [PostMentionInput]?
-    /// **Les mentions PAR SLIDE** (#4068, porteur 2026-09-03).
+    /// **Les mentions PAR SLIDE** (#4068).
     ///
     /// > Une mention est attachée à la publication. En Story, une publication
     /// > est une slide ; en Post et en Réel, il n'y en a qu'une.

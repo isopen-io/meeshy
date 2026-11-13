@@ -23,8 +23,8 @@ const more = (partial: Partial<RowMenuMore>): RowMenuMore => ({
 
 describe('rowMenuItems — les entrées d’iOS, à leur place', () => {
   test('un groupe : Détails, Renommer, Favori ›, Déplacer vers… › entre « Lu » et « Archiver »', () => {
-    const items = rowMenuItems({ flags, unread: false, language: 'fr', canCall: true, canDelete: true, more: more({ rename: true }) });
-    expect(items.map((i) => i.id)).toEqual(['callAudio', 'callVideo', 'pin', 'mute', 'read', 'details', 'rename', 'favorite', 'moveTo', 'archive', 'delete']);
+    const items = rowMenuItems({ flags, unread: false, language: 'fr', canDelete: true, more: more({ rename: true }) });
+    expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'read', 'details', 'rename', 'favorite', 'moveTo', 'archive', 'delete']);
     expect(items.filter((i) => i.submenu !== undefined).map((i) => [i.id, i.submenu])).toEqual([
       ['favorite', 'favorite'],
       ['moveTo', 'moveTo'],

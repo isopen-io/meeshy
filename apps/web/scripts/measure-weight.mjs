@@ -63,7 +63,9 @@ const critical = documentReferences
 
 const documentGzip = gzipSync(Buffer.from(index), { level: 9 }).length;
 
-// Tout le reste du repertoire : les ecrans a la demande.
+// Tout le reste du repertoire : les ecrans a la demande. Un binaire WASM
+// (le pont libsignal, #17114) est un module charge a la demande comme un
+// chunk : il se mesure en gzip -9 et se borne par `on_demand_chunks`.
 const allAssets = [];
 /** Les polices sont relevees dans la MEME traversee, mais a part : une police
  * n'est pas un MODULE (aucun chunk ne l'importe), et elle se mesure en octets
@@ -74,7 +76,7 @@ const walk = (dir, prefix = '') => {
     const path = join(dir, entry.name);
     const relatif = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) walk(path, relatif);
-    else if (/\.(js|css)$/.test(entry.name)) allAssets.push({ file: relatif, gzip: gz(path) });
+    else if (/\.(js|css|wasm)$/.test(entry.name)) allAssets.push({ file: relatif, gzip: gz(path) });
     else if (entry.name.endsWith('.woff2')) fontFiles.push({ file: relatif, bytes: statSync(path).size });
   }
 };
@@ -118,7 +120,7 @@ const seconds = (bytes) => Math.round(((bytes * 8) / profile.download_bps) * 100
  * gzip -9 rend plus d'octets que le fichier lui-même — une somme en gzip
  * dirait donc un poids que personne ne télécharge.
  *
- * Elles ne passent pas par `allAssets` (qui ne collecte que `.js` et `.css`)
+ * Elles ne passent pas par `allAssets` (qui ne collecte que `.js`, `.css` et `.wasm`)
  * parce qu'une police n'est pas un MODULE : aucun chunk ne l'importe, c'est
  * le navigateur qui la demande quand un caractère de son `unicode-range` doit
  * être peint. Son coût est donc conditionnel par nature, et les TROIS gardes

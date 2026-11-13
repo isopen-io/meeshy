@@ -858,8 +858,7 @@ struct StoryCardView: View {
             stallIndicatorGraceTask?.cancel()
             stallIndicatorGraceTask = nil
             showStallIndicator = false
-            try? await Task.sleep(for: .milliseconds(200))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(200)) else { return }
             if slideContentProgress < 0.20 {
                 withAnimation(.easeIn(duration: 0.2)) {
                     showProgressOverlay = true
@@ -881,8 +880,7 @@ struct StoryCardView: View {
             return
         }
         stallIndicatorGraceTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(350)) else { return }
             // Signal VISUEL uniquement : les haptics de stall/reprise
             // s'empileraient sur celle de navigation et hacheraient la lecture —
             // le spinner suffit.

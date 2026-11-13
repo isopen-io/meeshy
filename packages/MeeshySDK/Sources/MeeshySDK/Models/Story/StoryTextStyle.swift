@@ -14,7 +14,7 @@ public enum StoryTextStyle: String, Codable, CaseIterable, Sendable {
     case fantasy
     case curve
     case tag
-    // ── Extension à 18 familles (2026-08-20) ─────────────────────────────
+    // ── Extension à 18 familles ─────────────────────────────
     // `italic` et `retro` ne sont PAS des inventions : c'est le vocabulaire
     // HISTORIQUE du lecteur (`fontForStyle`, chemin texte simple), que des
     // stories publiées portent déjà sans que le composer sache le produire —

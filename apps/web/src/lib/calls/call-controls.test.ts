@@ -20,14 +20,13 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
   canShare: true,
   canEffect: true,
   cameraSwitch: 'flip' as const,
-  canPip: false,
   videoScene: false,
   ...overrides,
 });
 
 describe('ce que (…) sort', () => {
-  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Journal, Enregistrer, Ajouter, Réagir — la conversation vit dans l’en-tête (#8436, #8579)', () => {
-    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'journal', 'record', 'invite', 'react'] });
+  test('mon image : Caméra, Écran ; l’appel : Sous-titres, Enregistrer, Ajouter, Journal, Réagir — la conversation vit dans l’en-tête (#8436, #17327)', () => {
+    expect(callControlSet(context())).toEqual({ mine: ['camera', 'screen'], call: ['captions', 'record', 'invite', 'journal', 'react'] });
   });
 
   test('caméra allumée : Caméra, Retourner, Effets, Écran — l’ordre de la planche', () => {
@@ -55,7 +54,7 @@ describe('ce que (…) sort', () => {
 
   test('Enregistrer demande un appel identifié ET connecté (pas en reconnexion)', () => {
     expect(callControlSet(context({ callId: null })).call).toEqual(['captions', 'journal']);
-    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'journal', 'invite', 'react']);
+    expect(callControlSet(context({ phase: { kind: 'reconnecting' } })).call).toEqual(['captions', 'invite', 'journal', 'react']);
   });
 
   test('Ajouter et Réagir existent en duo comme en groupe, dès qu’un appel identifié est rejoint (#8433, #8439)', () => {
@@ -96,19 +95,15 @@ describe('se retourner, ou choisir sa caméra (#8432, #9094)', () => {
   });
 });
 
-describe('l’image dans l’image rejoint la rangée « l’appel » (#9095, `CallView+Pill.swift`)', () => {
-  test('offerte, elle ferme la rangée, après Ajouter et Réagir — comme iOS', () => {
-    expect(callControlSet(context({ canPip: true })).call).toEqual(['captions', 'journal', 'record', 'invite', 'react', 'pip']);
-  });
-
-  test('non offerte, elle n’y est pas', () => {
-    expect(callControlSet(context({ canPip: false })).call).not.toContain('pip');
+describe('l’image dans l’image a quitté la liste « l’appel » (#17329, elle vit dans l’en-tête)', () => {
+  test('la rangée « l’appel » ne la porte jamais', () => {
+    expect(callControlSet(context({ videoScene: true })).call).not.toContain('pip');
   });
 });
 
 describe('« Capturer » (#8552)', () => {
-  test('une vidéo connectée l’offre dans l’appel, après Enregistrer', () => {
-    expect(callControlSet(context({ videoScene: true })).call).toEqual(['captions', 'journal', 'record', 'capture', 'invite', 'react']);
+  test('une vidéo connectée l’offre dans l’appel, après Réagir (#17327)', () => {
+    expect(callControlSet(context({ videoScene: true })).call).toEqual(['captions', 'record', 'invite', 'journal', 'react', 'capture']);
   });
 
   test('jamais en audio, ni pendant une reconnexion ou la sonnerie', () => {

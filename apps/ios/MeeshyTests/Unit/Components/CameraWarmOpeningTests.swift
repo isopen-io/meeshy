@@ -126,7 +126,7 @@ final class CameraWarmOpeningTests: XCTestCase {
 
     func test_viewfinderAndComposer_openOnTheWarmCamera() throws {
         XCTAssertTrue(try source("Meeshy/Features/Composer/ComposerViewfinder.swift").contains("ComposerWarmCapture.session("))
-        XCTAssertTrue(try source("Meeshy/Features/Composer/MeeshyComposerHost.swift").contains("ComposerWarmCapture.session("))
+        XCTAssertTrue(try source("Meeshy/Features/Composer/ComposerSceneCaptureOwner.swift").contains("ComposerWarmCapture.session("))
     }
 
     // MARK: - La caméra gardée n'en fait qu'à son viseur

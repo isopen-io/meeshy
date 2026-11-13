@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.relation.TalkieEvent
 import me.meeshy.sdk.model.relation.TalkieFloor
@@ -19,6 +21,7 @@ import me.meeshy.sdk.model.relation.TalkieStep
 import me.meeshy.sdk.relation.CirclesGateway
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.RelationSocketEventsManager
+import me.meeshy.sdk.talkie.TalkieSpeakingPeers
 
 /** Ce qui fait (et cesse de faire) sortir la voix d'un talkie. Le vrai son est [TalkieVoicePlayer] ; un double le remplace dans les tests. */
 interface TalkieSink {
@@ -47,6 +50,7 @@ class TalkieCenter internal constructor(
     events: Flow<TalkieEvent>,
     private val scope: CoroutineScope,
     private val now: () -> Long,
+    private val onSpeakers: (Set<String>) -> Unit = {},
 ) {
     @Inject
     constructor(
@@ -54,6 +58,7 @@ class TalkieCenter internal constructor(
         circles: CirclesGateway,
         session: SessionRepository,
         sockets: RelationSocketEventsManager,
+        speakingPeers: TalkieSpeakingPeers,
     ) : this(
         sink = player,
         nameOf = { userId -> circles.people(listOf(userId))[userId]?.name },
@@ -61,6 +66,7 @@ class TalkieCenter internal constructor(
         events = sockets.talkie,
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
         now = System::currentTimeMillis,
+        onSpeakers = speakingPeers::update,
     )
 
     private val _floor = MutableStateFlow(TalkieFloorState())
@@ -70,11 +76,20 @@ class TalkieCenter internal constructor(
 
     init {
         scope.launch { events.collect(::handle) }
+        scope.launch { _floor.map { floor -> floor.active.map { it.fromUserId }.toSet() }.distinctUntilChanged().collect(onSpeakers) }
     }
 
     /** « Couper » : cette prise de parole se tait ICI, sur-le-champ. L'émetteur n'en est pas prévenu. */
     fun mute(talkieId: String) {
         apply(TalkieFloor.mute(_floor.value, talkieId))
+    }
+
+    /**
+     * « Lire » sur la notification de réveil (#17144) : une prise de parole close redevient ouvrable, pour que le
+     * rattrapage rejoué après un nouveau `talkie:join` sorte encore.
+     */
+    fun forget(talkieId: String) {
+        _floor.value = TalkieFloor.forget(_floor.value, talkieId)
     }
 
     private fun handle(event: TalkieEvent) {

@@ -69,6 +69,44 @@ struct ComposerShutterFlash: View {
     }
 }
 
+/// **Le déclencheur : un anneau blanc, vide** (A8, #17109). En filmant (A9),
+/// l'anneau devient une piste grise que remplit l'arc rouge du maximum du
+/// format, et le centre porte le carré d'arrêt rouge.
+struct ComposerShutterRing: View {
+    let recording: Bool
+    /// La part du maximum déjà prise, `0...1`.
+    let progress: Double
+
+    static let diameter: CGFloat = 76
+    static let ringWidth: CGFloat = 5
+    static let stopSide: CGFloat = 28
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            Circle().fill(Color.black.opacity(0.25))
+            if recording {
+                Circle().stroke(Color.white.opacity(0.35), lineWidth: Self.ringWidth)
+                Circle()
+                    .trim(from: 0, to: max(0.001, progress))
+                    .stroke(MeeshyColors.error, style: StrokeStyle(lineWidth: Self.ringWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                    .fill(MeeshyColors.error)
+                    .frame(width: Self.stopSide, height: Self.stopSide)
+                    .transition(.scale.combined(with: .opacity))
+            } else {
+                Circle().stroke(Color.white, lineWidth: Self.ringWidth)
+            }
+        }
+        .frame(width: Self.diameter, height: Self.diameter)
+        .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.8), value: recording)
+        .animation(reduceMotion ? nil : .linear(duration: 0.2), value: progress)
+        .accessibilityHidden(true)
+    }
+}
+
 /// Le déclencheur se contracte puis revient, à chaque toucher qui photographie.
 struct ComposerShutterPulse: ViewModifier {
     let tick: Int
@@ -99,6 +137,8 @@ nonisolated enum ComposerCaptureHaptic: Equatable {
     case recordingEnded
     case locked
     case zoomStep
+    /// Le niveau d'horizon devient droit (CAM-10).
+    case levelled
     case timerTick(secondsLeft: Int)
 
     enum Feedback: Equatable { case rigid, medium, doubleLightTick, success, selection, none }
@@ -113,7 +153,7 @@ nonisolated enum ComposerCaptureHaptic: Equatable {
         case .recordingStarted: .medium
         case .recordingEnded: .doubleLightTick
         case .locked: .success
-        case .zoomStep: .selection
+        case .zoomStep, .levelled: .selection
         case .timerTick(let reste): (1...Self.timerTickWindow).contains(reste) ? .selection : .none
         }
     }

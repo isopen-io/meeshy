@@ -95,8 +95,7 @@ final class HashtagResultsViewModel: ObservableObject {
         }
     }
 
-    /// **Le cœur des RÉSULTATS D'UN HASHTAG aimait dans le vide** (retour
-    /// porteur 2026-09-13) — jumeau exact du défaut des favoris :
+    /// **Le cœur des RÉSULTATS D'UN HASHTAG aimait dans le vide** — jumeau exact du défaut des favoris:
     /// `HashtagResultsView` montait `FeedPostCard(post: post)` et rien d'autre.
     /// Garde : `FeedPostCardLikeWiringSourceGuardTests`.
     ///

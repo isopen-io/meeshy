@@ -47,10 +47,10 @@ struct InviteGroupFacts: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(value.formatted())
                 .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .heavy, design: .rounded))
-                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
+                .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.lg)
@@ -117,11 +117,11 @@ public struct InviteRightRow: View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: allowed ? "checkmark" : "xmark")
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .heavy))
-                .foregroundColor(allowed ? MeeshyColors.successDeep : MeeshyColors.errorStrong)
+                .foregroundStyle(allowed ? MeeshyColors.successDeep : MeeshyColors.errorStrong)
                 .frame(width: 20)
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(allowed
+                .foregroundStyle(allowed
                                  ? (isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                                  : (isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500))
                 .strikethrough(!allowed, color: isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral400)

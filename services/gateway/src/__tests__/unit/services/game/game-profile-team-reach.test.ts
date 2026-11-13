@@ -36,7 +36,12 @@ describe('viewerReach — l\'équipe (#16623)', () => {
     expect(reach).toEqual({ kind: 'friend', sparksGlory: true });
   });
 
-  it.each(['USER', 'ANALYST', 'SUPERADMIN', null])('face à la cible %s, il reste un lecteur ordinaire', async (role) => {
+  it('un MODERATOR voit le jeu d\'un collègue ANALYST comme un Sang', async () => {
+    const reach = await service('ANALYST').game.viewerReach({ userId: LECTEUR, role: 'MODERATOR' }, CIBLE);
+    expect(reach).toEqual({ kind: 'friend', sparksGlory: true });
+  });
+
+  it.each(['USER', 'AGENT', 'SUPERADMIN', null])('face à la cible %s, il reste un lecteur ordinaire', async (role) => {
     const reach = await service(role).game.viewerReach({ userId: LECTEUR, role: 'MODERATOR' }, CIBLE);
     expect(reach).toEqual({ kind: 'other', sparksGlory: false });
   });

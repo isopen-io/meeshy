@@ -4,13 +4,19 @@ import { afterAll, beforeAll, describe, expect, jest, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { CallCaptionsPanel } from '@/components/call-captions-panel';
+import { speakerColor } from '@/lib/calls/call-speaker-color';
+import type { ActiveCall } from '@/lib/calls/call-store';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+
+import type { CallCaption } from './call-captions';
 import { tapTogglesChrome, useCallChrome } from './use-call-chrome';
 
 /**
  * QUEL TOUCHER EFFACE LES COMMANDES (#8550) — un toucher sur la scène, oui ;
  * un toucher sur un bouton, jamais : même quand le bouton a REDESSINÉ son
  * glyphe avant que le toucher n'arrive à l'écran d'appel (« Couper le micro »
- * devient « Activer le micro » et son icône est remplacée : à la remontée,
+ * devient « Réactiver le micro » et son icône est remplacée : à la remontée,
  * la cible est détachée du document). L'écran décide donc à la DESCENTE du
  * toucher, en phase de capture, comme `useCallChrome`.
  */
@@ -107,6 +113,58 @@ describe('tapTogglesChrome', () => {
         return stage;
       }),
     ).toBe(true);
+  });
+});
+
+/**
+ * LA BANDE DES SOUS-TITRES RETIENT TOUT TOUCHER (planche P5) — pas seulement la phrase
+ * traduite, qui est un bouton : ma phrase (« Moi · … »), l'original déplié, une capture et
+ * la marge de la bande appartiennent aux sous-titres. Sans quoi, sur une scène vidéo, la
+ * bande hors pilule (pilule fermée) laissait remonter le toucher et rangeait les commandes.
+ */
+describe('un toucher sur les sous-titres', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+  const line = (overrides: Partial<CallCaption>): CallCaption => ({ id: 'w', speakerId: 'u-nadia', speakerName: 'Nadia', original: 'Hello', translated: null, pair: null, isFinal: true, at: 1_000, mine: false, ...overrides });
+
+  beforeAll(async () => {
+    await loadCallControlsCatalog('fr');
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  test('ne range jamais les commandes : ma phrase, l’original déplié, une capture, une note et la marge', () => {
+    const base = { callId: 'c', conversationId: 'c-1', captionsMode: 'translated', transcription: 'unsupported', connectedAt: 0 };
+    const peer = line({ id: 'peer', translated: 'Bonjour', pair: { from: 'en', to: 'fr' }, at: 1_000 });
+    const mine = line({ id: 'me', speakerId: 'u-me', mine: true, original: 'Salut', at: 2_000 });
+    const screen = document.createElement('div');
+    screen.setAttribute('role', 'dialog');
+    document.body.appendChild(screen);
+    const root = createRoot(screen);
+    const show = (call: Record<string, unknown>) => act(() => root.render(<CallCaptionsPanel call={{ ...base, ...call } as unknown as ActiveCall} language="fr" colorOf={(who) => speakerColor(who.speakerId, who.speakerName)} surface="inset" />));
+    const decide = (selector: string): boolean | null => {
+      const target = screen.querySelector(selector);
+      expect(target).not.toBeNull();
+      const seen: { value: boolean | null } = { value: null };
+      const listener = (event: Event) => {
+        seen.value = tapTogglesChrome(event);
+      };
+      screen.addEventListener('click', listener, { capture: true });
+      target?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      screen.removeEventListener('click', listener, { capture: true });
+      return seen.value;
+    };
+    show({ captions: [peer, mine] });
+    act(() => (screen.querySelector('[data-call-caption-line="peer"]') as HTMLElement).click());
+    expect(['[data-call-caption-line="me"]', '[data-call-caption-original]', '[data-call-captions-footer]', '[data-call-captions-panel]'].map(decide)).toEqual([false, false, false, false]);
+    show({ captions: [], journalNotes: [{ id: 'n', kind: 'screenshot', userId: 'u-karim', name: 'Karim', at: 3_000 }] });
+    expect(decide('[data-call-caption-note]')).toBe(false);
+    act(() => root.unmount());
+    screen.remove();
   });
 });
 

@@ -91,6 +91,9 @@ public final class NetworkMonitor: ObservableObject, @unchecked Sendable, Networ
     private func apply(_ snapshot: NetworkPathSnapshot) {
         let offline = !snapshot.isSatisfied
         let type = Self.connectionType(for: snapshot)
+        // Une photo qui ne change que la QUALITÉ (coût, contrainte) laisse la lecture binaire intacte : rien à
+        // republier, rien à journaliser, aucun observateur à réveiller (#17250).
+        guard offline != isOffline || type != connectionType else { return }
         isOffline = offline
         connectionType = type
         isOfflineSubject.send(offline)

@@ -1,20 +1,10 @@
-import { colorForName } from '@meeshy/shared/utils/conversation-colors';
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { lazy, Suspense } from 'react';
 import { useStore } from 'zustand/react';
 
-import { PeerAvatar } from '@/components/peer-avatar';
 import { StreamAudio } from '@/components/call-media-elements';
 import { CallScreen } from '@/components/call-screen';
-import { Glyph, GlyphSvg } from '@/components/glyph';
-import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
-import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
-import { callActions } from '@/lib/calls/call-actions';
-import { PILL_COLLAPSE_DISTANCE } from '@/lib/calls/call-bubble';
-import { callStore, elapsedSeconds, formatCallClock, type ActiveCall, type WaitingCall } from '@/lib/calls/call-store';
-import { callStatusKey } from '@/lib/calls/call-view';
-import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { initialsOf } from '@/lib/view/conversation';
+import { callStore, type ActiveCall } from '@/lib/calls/call-store';
+import { type CallView, useViewHold } from '@/lib/calls/use-pill-motion';
 
 /**
  * **CE QUE LA COUCHE D'APPEL PEINT** (#6382) — l'écran plein, OU la pastille
@@ -31,140 +21,40 @@ import { initialsOf } from '@/lib/view/conversation';
  * bulle ne couvrent l'application : on navigue et on écrit dessous.
  */
 
-const PILL_BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
-const HANGUP = 'var(--ios-error-strong)';
+/* Le SECOND appel (#17499) : le bandeau de celui qui arrive et le refus « un appel est déjà en cours » d'en composer un, dans un chunk préchargé par l'appel vivant (`call-screen.tsx` › PREFETCH). */
+const SecondCallLayer = lazy(() => import('./call-waiting-banner').then((module) => ({ default: module.SecondCallLayer })));
 
-/** Je partage mon écran (#16664) : la capsule rougit, comme l'indicateur du système. */
-const SHARING_BG = 'color-mix(in srgb, var(--ios-error-strong) 96%, transparent)';
-const ANSWER = 'var(--ios-success)';
+/* La pastille de l'appel réduit (`FloatingCallPillView.swift`) : son chunk, chargé dès que l'appel vit (`call-screen.tsx`), si bien que réduire ne l'attend pas. */
+const CallPill = lazy(() => import('./call-floating-pill').then((module) => ({ default: module.CallPill })));
 
-function CallPill({ call }: { readonly call: ActiveCall }) {
-  const language = currentInterfaceLanguage();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const handle = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(handle);
-  }, []);
-  const statusKey = callStatusKey(call);
-  const sharing = call.screenSharing;
-  const label = statusKey === null ? formatCallClock(elapsedSeconds(call, now)) : translate(language, statusKey);
-  const swipeFrom = useRef<number | null>(null);
-  const swiped = useRef(false);
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    swipeFrom.current = event.clientX;
-    swiped.current = false;
-  };
-  const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
-    const from = swipeFrom.current;
-    swipeFrom.current = null;
-    if (from === null || Math.abs(event.clientX - from) < PILL_COLLAPSE_DISTANCE) return;
-    swiped.current = true;
-    callActions.collapse();
-  };
-  const expand = () => {
-    if (swiped.current) {
-      swiped.current = false;
-      return;
-    }
-    callActions.expand();
-  };
-  return (
-    <div
-      className="fixed left-1/2 z-[190] flex -translate-x-1/2 items-center gap-1 rounded-full py-1 ps-1 pe-1 shadow-lg"
-      style={{ background: sharing ? SHARING_BG : PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 0.5rem)', touchAction: 'pan-y' }}
-      onPointerDown={onPointerDown}
-      onPointerUp={onPointerUp}
-      onPointerCancel={() => void (swipeFrom.current = null)}
-      data-call-pill-bar=""
-      data-call-pill-sharing={sharing ? '' : undefined}
-    >
-      <button type="button" onClick={expand} aria-label={translate(language, 'call.expand')} className="flex min-h-11 items-center gap-2 rounded-full px-2">
-        {sharing ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={18} /> : <span aria-hidden className="size-2 rounded-full" style={{ background: ANSWER }} />}
-        <span className="max-w-[9rem] truncate text-body font-semibold">{call.title}</span>
-        <span className="text-mini tabular-nums" style={{ color: sharing ? 'var(--color-on-media)' : 'var(--color-on-media-3)' }}>
-          {label}
-        </span>
-      </button>
-      {sharing ? (
-        <button
-          type="button"
-          onClick={callActions.toggleScreen}
-          aria-label={translate(language, 'call.screen.stop')}
-          className="min-h-11 whitespace-nowrap rounded-full px-4 text-body font-semibold"
-          style={{ background: 'color-mix(in srgb, white 22%, transparent)' }}
-          data-call-pill-stop-share=""
-        >
-          {translate(language, 'call.screen.stopShort')}
-        </button>
-      ) : (
-        <>
-          <button
-            type="button"
-            onClick={callActions.toggleMic}
-            aria-label={translate(language, call.micMuted ? 'call.mic.unmute' : 'call.mic.mute')}
-            aria-pressed={call.micMuted}
-            className="grid size-11 place-items-center rounded-full"
-          >
-            {call.micMuted ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={20} /> : <Glyph name="microphone" size={20} />}
-          </button>
-          <button type="button" onClick={callActions.collapse} aria-label={translate(language, 'call.bubble.collapse')} className="grid size-11 place-items-center rounded-full" data-call-pill-collapse="">
-            <GlyphSvg glyph={CALL_DEVICES_GLYPHS.arrowDownRight} size={20} />
-          </button>
-          <button type="button" onClick={callActions.hangup} aria-label={translate(language, 'call.hangup')} className="grid size-11 place-items-center rounded-full" style={{ background: HANGUP }}>
-            <GlyphSvg glyph={CALL_SCREEN_GLYPHS.phoneDisconnect} size={20} />
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-function WaitingBanner({ waiting }: { readonly waiting: WaitingCall }) {
-  const language = currentInterfaceLanguage();
-  return (
-    <div
-      role="alertdialog"
-      aria-label={translate(language, 'call.waiting.from', { caller: waiting.callerName })}
-      className="fixed inset-x-3 z-[210] mx-auto flex max-w-md items-center gap-3 rounded-card p-3 shadow-lg"
-      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
-      data-call-waiting=""
-    >
-      <PeerAvatar presenceKey={waiting.callerKey ?? undefined} initials={initialsOf(waiting.callerName)} color={colorForName(waiting.callerName)} size={40} {...(waiting.callerAvatar === null ? {} : { src: waiting.callerAvatar })} />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-body font-semibold">{waiting.title}</p>
-        <p className="truncate text-mini" style={{ color: 'var(--color-on-media-3)' }}>
-          {translate(language, 'call.waiting.from', { caller: waiting.callerName })}
-        </p>
-      </div>
-      <button type="button" onClick={callActions.declineWaiting} className="min-h-11 rounded-full px-3 text-body font-semibold" style={{ background: HANGUP }}>
-        {translate(language, 'call.waiting.decline')}
-      </button>
-      <button type="button" onClick={callActions.answerWaiting} className="min-h-11 rounded-full px-3 text-body font-semibold" style={{ background: ANSWER }}>
-        {translate(language, 'call.waiting.answer')}
-      </button>
-    </div>
-  );
-}
-
-function Notice() {
-  const language = currentInterfaceLanguage();
-  useEffect(() => {
-    const handle = setTimeout(() => callStore.setState({ notice: null }), 2500);
-    return () => clearTimeout(handle);
-  }, []);
-  return (
-    <div role="status" className="fixed inset-x-0 z-[210] mx-auto w-fit rounded-full px-4 py-2 text-body shadow-lg" style={{ background: PILL_BG, color: 'var(--color-on-media)', bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}>
-      {translate(language, 'call.notice.alreadyInCall')}
-    </div>
-  );
-}
-
-/** L'écran plein ou la pastille — la bulle est un chunk frère (`call-layer.tsx`) ; la sonnerie et la fin reprennent toujours l'écran plein. */
-export function ActiveCallView({ call }: { readonly call: ActiveCall }) {
+/** Ce que la couche montre pour cet appel : la sonnerie et la fin reprennent toujours l'écran plein ; la bulle est un chunk frère (`call-layer.tsx`), elle ne montre ni l'un ni l'autre. */
+const viewOf = (call: ActiveCall): CallView | null => {
   const reduced = call.phase.kind !== 'incoming' && call.phase.kind !== 'ended';
-  if (reduced && call.display === 'pill') return <CallPill call={call} />;
-  if (reduced && call.display === 'bubble') return null;
-  return <CallScreen call={call} />;
+  if (reduced && call.display === 'pill') return 'pill';
+  return reduced && call.display === 'bubble' ? null : 'screen';
+};
+
+/**
+ * L'écran plein ou la pastille. Passer de l'un à l'autre se joue (S1.7, S2.1, `useViewHold`) : celui qui repart
+ * reste monté le temps de son mouvement pendant que l'autre arrive.
+ */
+export function ActiveCallView({ call }: { readonly call: ActiveCall }) {
+  const { screen, pill } = useViewHold(viewOf(call));
+  /* Ce que l'écran charge à part pour son premier rendu (la réponse d'un appel entrant, #17650) le retient ENTIER : jamais un portrait sans ses boutons. Le son des pairs, monté à côté, n'attend rien. */
+  return (
+    <>
+      {pill === null ? null : (
+        <Suspense fallback={null}>
+          <CallPill call={call} motion={pill} />
+        </Suspense>
+      )}
+      {screen === null ? null : (
+        <Suspense fallback={null}>
+          <CallScreen call={call} motion={screen} />
+        </Suspense>
+      )}
+    </>
+  );
 }
 
 export function CallOverlay() {
@@ -178,8 +68,11 @@ export function CallOverlay() {
         <StreamAudio key={userId} stream={stream} />
       ))}
       {call === null ? null : <ActiveCallView call={call} />}
-      {waiting === null ? null : <WaitingBanner waiting={waiting} />}
-      {notice === null ? null : <Notice />}
+      {waiting === null && notice === null ? null : (
+        <Suspense fallback={null}>
+          <SecondCallLayer waiting={waiting} busy={notice !== null} />
+        </Suspense>
+      )}
     </>
   );
 }

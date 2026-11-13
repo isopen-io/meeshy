@@ -43,7 +43,7 @@ struct BubbleSecondaryContent: View, Equatable {
                         Text(display.flag).font(.caption)
                         Text(display.name)
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(langColor)
+                            .foregroundStyle(langColor)
                     }
                 }
                 MessageTextRenderer.render(

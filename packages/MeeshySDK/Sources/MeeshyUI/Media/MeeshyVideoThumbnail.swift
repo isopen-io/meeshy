@@ -150,7 +150,7 @@ public struct MeeshyVideoThumbnail: View {
             )
             .overlay(
                 Image(systemName: "video.fill")
-                    .font(.system(size: 32))
+                    .meeshyScaledFont(32)
                     .foregroundStyle(Color.white.opacity(0.2))
             )
     }
@@ -177,7 +177,7 @@ public struct MeeshyVideoThumbnail: View {
             Spacer()
             HStack {
                 Text(formatted)
-                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
+                    .meeshyScaledFont(MeeshyFont.captionSize, weight: .semibold, design: .monospaced)
                     .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xs)
                     .padding(.vertical, MeeshySpacing.xxs)

@@ -41,6 +41,21 @@ describe('UserManagementService — les cercles de l\'équipe oublient un rôle 
     expect(order).toEqual(['written', 'forgotten:user-id']);
   });
 
+  it('une date de naissance réécrite par l\'administration oublie les cercles de l\'équipe, APRÈS l\'écriture (le bouclier des mineurs)', async () => {
+    const order: string[] = [];
+    const forgetTeamCircles = jest.fn(async (userId: string) => {
+      order.push(`forgotten:${userId}`);
+    });
+    await service(forgetTeamCircles, order).updateUser('user-id', { birthDate: new Date('2012-01-01T00:00:00Z') } as never);
+    expect(order).toEqual(['written', 'forgotten:user-id']);
+  });
+
+  it('une écriture de profil qui ne touche pas la date de naissance n\'oublie rien', async () => {
+    const forgetTeamCircles = jest.fn(async () => undefined);
+    await service(forgetTeamCircles).updateUser('user-id', { bio: 'bonjour' } as never);
+    expect(forgetTeamCircles).not.toHaveBeenCalled();
+  });
+
   it('un oubli qui échoue ne fait pas échouer le changement de rôle, et se journalise', async () => {
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const forgetTeamCircles = jest.fn(async () => {

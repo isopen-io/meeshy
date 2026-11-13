@@ -120,3 +120,30 @@ export function judgeDeclaredBirthDate(birthDate: Date, now: Date): BirthDateVer
   if (age < MINIMUM_ACCOUNT_AGE) return 'below-minimum';
   return 'admitted';
 }
+
+/** Âge révolu exigé pour le clonage vocal : donnée biométrique, ouverte aux seuls majeurs (#17309). */
+export const VOICE_CLONING_MINIMUM_AGE = ADULT_AGE;
+
+/**
+ * La date de naissance la plus RÉCENTE admise au clonage vocal, à l'instant `now` :
+ * minuit UTC du jour d'aujourd'hui moins 18 années civiles (#17309). Le recul se fait
+ * au calendrier, jamais par 365 × 18 jours ; un 29 février vise le 28 février quand
+ * l'année visée n'a pas de 29 (18 n'étant pas multiple de 4, c'est toujours le cas).
+ */
+export function voiceCloningBirthDateLimit(now: Date): Date {
+  const year = now.getUTCFullYear() - VOICE_CLONING_MINIMUM_AGE;
+  const month = now.getUTCMonth();
+  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(now.getUTCDate(), lastDayOfTargetMonth)));
+}
+
+/**
+ * Le clonage vocal est-il ouvert à cette date de naissance ? Admis si née au plus tard à
+ * `voiceCloningBirthDateLimit(now)`. Fail-closed : une date absente ou illisible n'est
+ * pas une preuve de majorité (#17309).
+ */
+export function isVoiceCloningAgeAdmitted(birthDate: Date | null | undefined, now: Date): boolean {
+  if (!birthDate || Number.isNaN(birthDate.getTime())) return false;
+  const birthDay = Date.UTC(birthDate.getUTCFullYear(), birthDate.getUTCMonth(), birthDate.getUTCDate());
+  return birthDay <= voiceCloningBirthDateLimit(now).getTime();
+}

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="onboarding_profile_title">Mostrati</string>
+    <string name="onboarding_profile_banner_add">Aggiungi un banner</string>
+    <string name="onboarding_profile_banner_a11y">Scegli un banner</string>
+    <string name="onboarding_profile_avatar_a11y">Scegli una foto profilo</string>
+    <string name="onboarding_profile_failed">Non è stato possibile inviare l\'immagine.</string>
+    <string name="onboarding_profile_retry">Riprova</string>
+    <string name="onboarding_profile_uploading_a11y">Invio in corso</string>
+</resources>

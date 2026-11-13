@@ -1,4 +1,7 @@
+import AVFoundation
 import CoreImage
+import MeeshySDK
+import MeeshyUI
 import SwiftUI
 
 /// **Le chrome du viseur reste lisible sur un cadre clair** (#9777) — la croix, le flash, la
@@ -164,5 +167,84 @@ struct ComposerCaptureChromeBandWatch: ViewModifier {
                 bands = ComposerCaptureChromeBands(top: mesure.top, bottom: mesure.bottom,
                                                    frame: ComposerLookSceneKey.token(key.look.frame))
             }
+    }
+}
+
+// MARK: - Le chrome respire (CAM-8)
+
+/// **Le chrome respire** (CAM-8) : viseur armé, sans prise, sans retardateur ni bande
+/// ouverte, la rangée haute et le rail retombent à 35 % après 3 s sans rien — jamais à 0,
+/// le déclencheur reste plein. Le moindre toucher ou changement les rend à 100 %.
+/// VoiceOver garde le chrome plein : il ne voit pas l'image qu'on dégage.
+nonisolated enum ComposerCaptureChromeRest {
+    static let idleDelay: Double = 3
+    static let restingOpacity: Double = 0.35
+
+    static func mayRest(stage: ComposerSceneCameraStage, editing: Bool, counting: Bool,
+                        familyOpen: Bool, voiceOver: Bool) -> Bool {
+        stage == .armed && !editing && !counting && !familyOpen && !voiceOver
+    }
+
+    static func opacity(mayRest: Bool, idle: Double) -> Double {
+        mayRest && idle >= idleDelay ? restingOpacity : 1
+    }
+}
+
+/// Ce qui réveille le chrome sans toucher : l'étape, l'objectif, le zoom, le flash,
+/// le retardateur, la bande, le look, l'obturateur.
+nonisolated struct ComposerCaptureChromeWake: Hashable, Sendable {
+    let stage: ComposerSceneCameraStage
+    let editing: Bool
+    let counting: Bool
+    let family: ComposerLookFamily?
+    let zoom: Double
+    let flipping: Bool
+    let flash: Int
+    let look: ComposerPhotoLook
+    let shutter: Int
+}
+
+/// Pose l'opacité du chrome au repos : relancée à chaque réveil, elle attend 3 s puis
+/// demande à la règle. Au repos, un toucher n'importe où réveille ; sans fondu sous
+/// Reduce Motion.
+struct ComposerCaptureChromeRestWatch: ViewModifier {
+    @ObservedObject var session: ComposerCaptureSession
+    @ObservedObject var timer: ComposerCaptureSelfTimer
+    @Binding var opacity: Double
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @State private var ticket = 0
+
+    private var wake: ComposerCaptureChromeWake {
+        ComposerCaptureChromeWake(
+            stage: session.stage, editing: session.phase.isEditing, counting: timer.remaining != nil,
+            family: session.openFamily, zoom: Double(session.camera.zoomFactor),
+            flipping: session.barCapture.flipping, flash: session.flash.rawValue,
+            look: session.look, shutter: session.camera.shutterPresses)
+    }
+
+    private var mayRest: Bool {
+        ComposerCaptureChromeRest.mayRest(stage: session.stage, editing: session.phase.isEditing,
+                                          counting: timer.remaining != nil,
+                                          familyOpen: session.openFamily != nil, voiceOver: voiceOver)
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in rouse() },
+                                 including: opacity < 1 ? .all : .subviews)
+            .adaptiveOnChange(of: wake) { _, _ in rouse() }
+            .adaptiveOnChange(of: voiceOver) { _, _ in rouse() }
+            .task(id: ticket) { @MainActor in
+                guard await cancellableSleep(for: .seconds(ComposerCaptureChromeRest.idleDelay)) else { return }
+                let repos = ComposerCaptureChromeRest.opacity(mayRest: mayRest, idle: ComposerCaptureChromeRest.idleDelay)
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.6)) { opacity = repos }
+            }
+    }
+
+    private func rouse() {
+        ticket += 1
+        guard opacity < 1 else { return }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { opacity = 1 }
     }
 }

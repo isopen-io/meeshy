@@ -56,7 +56,7 @@ enum StoryGestureAction: Equatable {
 /// rester IMMÉDIATE. Un double tap actif sur tout l'écran forcerait le tap
 /// simple à attendre l'échec du double tap (~250 ms) et rendrait la navigation
 /// molle. On réserve donc une bande centrale au double tap, et les bords
-/// naviguent sans délai (décision utilisateur 2026-07-25).
+/// naviguent sans délai.
 ///
 /// Le long-press reste un raccourci de pause disponible sur toute la surface.
 enum StoryTapZone: Equatable {
@@ -93,7 +93,6 @@ enum StoryGestureDecisions {
     /// Dans la **bande centrale**, on ne reprend PAS — cette bande appartient au
     /// double tap, dont le premier relâchement relancerait sinon la story avant
     /// que le second n'arrive, rendant impossible le « double tap relance »
-    /// (spec 2026-07-25).
     static func decideTouchDown(context: StoryGestureContext,
                                 touchStartX: CGFloat,
                                 width: CGFloat) -> StoryGestureAction {

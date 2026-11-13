@@ -199,11 +199,11 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         )
     }
 
-    func test_chip_presentsItsMenuOnLongPress_viaContextMenu() throws {
+    func test_chip_presentsItsMenuOnLongPress_viaANativeMenuWithPrimaryAction() throws {
         let chip = try strippedSource("Meeshy/Features/Focal/Lens/ReadingModeChip.swift")
         XCTAssertTrue(
-            chip.contains(".contextMenu"),
-            "l'appui long présente le menu natif (.contextMenu — rendu Liquid Glass sur iOS 26) listant les modes."
+            chip.contains("Menu {") && chip.contains("primaryAction: {"),
+            "l'appui long présente le menu natif listant les modes, par un `Menu` à action primaire comme le bouton d'appel (#17095)."
         )
         XCTAssertTrue(
             chip.contains(".disabled("),

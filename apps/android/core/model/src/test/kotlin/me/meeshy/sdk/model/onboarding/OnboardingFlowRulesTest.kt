@@ -34,11 +34,11 @@ private fun suggestion(id: String, name: String = id) = OnboardingSuggestion(id,
 class OnboardingFlowRulesTest {
 
     @Test
-    fun `a bare account sees languages, story and global in iOS order`() {
+    fun `a bare account sees languages, profile, global and story in iOS order`() {
         val steps = OnboardingFlowRules.pendingGestureSteps(state())
 
         assertThat(steps).containsExactly(
-            OnboardingStepId.LANGUAGES, OnboardingStepId.GLOBAL, OnboardingStepId.STORY,
+            OnboardingStepId.LANGUAGES, OnboardingStepId.PROFILE, OnboardingStepId.GLOBAL, OnboardingStepId.STORY,
         ).inOrder()
     }
 
@@ -48,7 +48,7 @@ class OnboardingFlowRulesTest {
 
         assertThat(steps).containsExactly(
             OnboardingStepId.LANGUAGES, OnboardingStepId.AGE, OnboardingStepId.EMAIL,
-            OnboardingStepId.GLOBAL, OnboardingStepId.STORY,
+            OnboardingStepId.PROFILE, OnboardingStepId.GLOBAL, OnboardingStepId.STORY,
         ).inOrder()
     }
 
@@ -68,7 +68,10 @@ class OnboardingFlowRulesTest {
     @Test
     fun `seen and prefilled steps are skipped`() {
         val steps = OnboardingFlowRules.pendingGestureSteps(
-            state(seen = listOf(OnboardingStepId.LANGUAGES), prefilled = listOf(OnboardingStepId.STORY)),
+            state(
+                seen = listOf(OnboardingStepId.LANGUAGES),
+                prefilled = listOf(OnboardingStepId.STORY, OnboardingStepId.PROFILE),
+            ),
         )
 
         assertThat(steps).containsExactly(OnboardingStepId.GLOBAL)
@@ -154,11 +157,12 @@ class OnboardingPlanTest {
         val start = OnboardingPlan.start(state(), contactsOfferable = false, notificationsUndetermined = true)
 
         assertThat(start.plannedSteps).containsExactly(
-            OnboardingStepId.LANGUAGES, OnboardingStepId.GLOBAL, OnboardingStepId.STORY, OnboardingStepId.NOTIFICATIONS,
+            OnboardingStepId.LANGUAGES, OnboardingStepId.PROFILE, OnboardingStepId.GLOBAL, OnboardingStepId.STORY,
+            OnboardingStepId.NOTIFICATIONS,
         ).inOrder()
         assertThat(start.position(OnboardingCard.Step(OnboardingStepId.LANGUAGES))).isEqualTo(1)
-        assertThat(start.position(OnboardingCard.Step(OnboardingStepId.STORY))).isEqualTo(3)
-        assertThat(start.position(OnboardingCard.Recap)).isEqualTo(4)
+        assertThat(start.position(OnboardingCard.Step(OnboardingStepId.STORY))).isEqualTo(4)
+        assertThat(start.position(OnboardingCard.Recap)).isEqualTo(5)
     }
 
     @Test

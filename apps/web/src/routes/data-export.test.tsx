@@ -73,12 +73,13 @@ describe('/settings/data-export — un geste explicite, jamais au montage', () =
     const script = scripted();
     const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);
 
-    expect(host.textContent).toContain('Exporter mes données');
-    await click(buttonNamed(host, 'Exporter mes données'));
+    expect(host.textContent).toContain('Exporter');
+    await click(buttonNamed(host, 'Exporter'));
 
     expect(script.requested).toEqual([0]);
     expect(script.downloaded).toEqual([{ fileName: 'meeshy-export-2026-09-16.json', jsonText: JSON.stringify(SERVED.raw, null, 2) }]);
-    expect(host.textContent).toContain('Le fichier a été téléchargé sur cet appareil.');
+    expect(host.querySelector('h1')?.textContent).toBe('Export terminé');
+    expect(host.textContent).not.toContain('Le fichier a été téléchargé sur cet appareil.');
   });
 
   test('le geste se voit avant la réponse — bouton désactivé, état « en cours »', async () => {
@@ -89,7 +90,7 @@ describe('/settings/data-export — un geste explicite, jamais au montage', () =
     };
     const host = await mount(<DataExportPage signedIn online language="fr" deps={deps} />);
 
-    await click(buttonNamed(host, 'Exporter mes données'));
+    await click(buttonNamed(host, 'Exporter'));
     expect(host.textContent).toContain('Export en cours…');
     expect(buttonNamed(host, 'Export en cours…')?.hasAttribute('disabled')).toBe(true);
 
@@ -102,7 +103,7 @@ describe('/settings/data-export — un geste explicite, jamais au montage', () =
     const script = scripted({ ok: false, status: 0, error: 'x' });
     const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);
 
-    await click(buttonNamed(host, 'Exporter mes données'));
+    await click(buttonNamed(host, 'Exporter'));
 
     expect(host.querySelector('h1')?.textContent).toBe('Hors ligne');
     expect(script.downloaded).toEqual([]);
@@ -112,8 +113,8 @@ describe('/settings/data-export — un geste explicite, jamais au montage', () =
     const script = scripted();
     const host = await mount(<DataExportPage signedIn online={false} language="fr" deps={script.deps} />);
 
-    expect(host.textContent).toContain('Reconnectez-vous à Internet');
-    expect(buttonNamed(host, 'Exporter mes données')?.hasAttribute('disabled')).toBe(true);
+    expect(host.textContent).toContain('Hors ligne');
+    expect(buttonNamed(host, 'Exporter')?.hasAttribute('disabled')).toBe(true);
   });
 });
 
@@ -129,21 +130,22 @@ describe('/settings/data-export — le fichier est livré, pas seulement annonc�
     const script = scripted({ ok: true, data: SERVED }, ['cancelled', 'delivered']);
     const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);
 
-    await click(buttonNamed(host, 'Exporter mes données'));
-    expect(host.textContent).not.toContain('Le fichier a été téléchargé sur cet appareil.');
+    await click(buttonNamed(host, 'Exporter'));
+    expect(host.querySelector('h1')?.textContent).toBe('Export prêt');
+    expect(host.textContent).not.toContain('Appuyez pour l’enregistrer sur cet appareil.');
 
     await click(buttonNamed(host, 'Enregistrer le fichier'));
 
     expect(script.requested).toEqual([0]);
     expect(script.downloaded.map((entry) => entry.fileName)).toEqual(['meeshy-export-2026-09-16.json', 'meeshy-export-2026-09-16.json']);
-    expect(host.textContent).toContain('Le fichier a été téléchargé sur cet appareil.');
+    expect(host.querySelector('h1')?.textContent).toBe('Export terminé');
   });
 
   test('une activation expirée pendant la requête : le tap suivant livre le même export', async () => {
     const script = scripted({ ok: true, data: SERVED }, ['expired', 'delivered']);
     const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);
 
-    await click(buttonNamed(host, 'Exporter mes données'));
+    await click(buttonNamed(host, 'Exporter'));
     expect(host.querySelector('h1')?.textContent).toBe('Export prêt');
     expect(host.textContent).not.toContain('Cet appareil n’a pas pu recevoir le fichier.');
 
@@ -157,7 +159,7 @@ describe('/settings/data-export — le fichier est livré, pas seulement annonc�
     const script = scripted({ ok: true, data: SERVED }, ['unavailable']);
     const host = await mount(<DataExportPage signedIn online language="fr" deps={script.deps} />);
 
-    await click(buttonNamed(host, 'Exporter mes données'));
+    await click(buttonNamed(host, 'Exporter'));
 
     expect(host.textContent).not.toContain('Export terminé');
     expect(host.textContent).toContain('Cet appareil n’a pas pu recevoir le fichier.');

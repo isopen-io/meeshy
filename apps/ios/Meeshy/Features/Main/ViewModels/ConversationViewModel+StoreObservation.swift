@@ -152,19 +152,17 @@ extension ConversationViewModel {
         // worth reconciling with the optimistic local id. Reaction success
         // is a no-op at the ViewModel level — the `reaction:added` /
         // `reaction:removed` socket broadcast keeps every client in sync.
+        let ackLane = OrderedEventLane()
+        ackLane.store(in: &cancellables)
         OfflineQueue.shared.retrySucceeded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
                 guard payload.kind == .sendMessage else { return }
                 pendingServerIds[payload.tempId] = payload.serverId
-                let localId = payload.tempId
-                let serverId = payload.serverId
-                Task { [weak self] in
-                    _ = try? await self?.messagePersistence.applyEvent(
-                        localId: localId,
-                        event: .serverAck(serverId: serverId, at: Date())
-                    )
+                ackLane.submit { [persistence = messagePersistence] in
+                    let ack = MessageEvent.serverAck(serverId: payload.serverId, at: Date())
+                    await bestEffort("conversationViewModel.messagePersistence.serverAck") { try await persistence.applyEvent(localId: payload.tempId, event: ack) }
                 }
             }
             .store(in: &cancellables)
@@ -175,8 +173,8 @@ extension ConversationViewModel {
         // `kind` to apply the right rollback strategy.
         OfflineQueue.shared.retryExhausted
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] payload in
-                Task { [weak self] in await self?.handleRetryExhausted(payload) }
+            .relay(through: OrderedEventLane()) { [weak self] payload in
+                await self?.handleRetryExhausted(payload)
             }
             .store(in: &cancellables)
     }

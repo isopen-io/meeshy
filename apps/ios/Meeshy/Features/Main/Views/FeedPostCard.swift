@@ -8,8 +8,7 @@ import MeeshyUI
 // MARK: - Feed Post Card
 struct FeedPostCard: View {
     let post: FeedPost
-    /// « Voir près d'ici » sur le badge de position du post (spec du
-    /// 2026-08-02 §4 — points d'entrée). Fermeture OPTIONNELLE, jamais un
+    /// « Voir près d'ici » sur le badge de position du post. Fermeture OPTIONNELLE, jamais un
     /// `@EnvironmentObject` : cette carte est une feuille `.equatable()` et
     /// n'observe rien. Les hôtes qui ont un routeur la branchent ; les autres
     /// (aperçus, listes de profil) restent valides sans rien changer, et le
@@ -313,15 +312,14 @@ struct FeedPostCard: View {
     /// TOUJOURS par `CanvasV3(migrating:)` (`StoryModels.swift:1889-1890`) côté
     /// iOS, et le composer web construit `{ v: 3, scenes: [...] }` directement
     /// (`StoryComposer.tsx:288`). `X-Canvas-Caps: 3` est posé depuis
-    /// `cf05538d9` (2026-08-22, `ClientInfoProvider.swift:77`), donc le
+    /// `cf05538d9` (`ClientInfoProvider.swift:77`), donc le
     /// gateway sert ce v3 natif au lieu de la sentinelle. `nil` reste le cas
     /// d'un post SANS storyEffects (post média simple, sans canvas).
     private var cardSceneDocument: CanvasV3? { post.storyEffects?.canvasV3 }
 
     /// La scène du post se rend chez elle — `PostSceneCard` +
     /// `PostSceneCardContainer` (`FeedSceneAutoplay.swift`), qui portent aussi
-    /// celle d'une story repartagée. Les deux surfaces obéissent depuis le
-    /// 2026-09-05 à la MÊME loi que les réels : le viewport élit celle qui joue,
+    /// celle d'une story repartagée. Les deux surfaces obéissent à la MÊME loi que les réels: le viewport élit celle qui joue,
     /// une seule à la fois, muette, et un appel les tait toutes.
     ///
     /// L'extraction n'était pas un choix de style : ce fichier est en dette de
@@ -336,7 +334,7 @@ struct FeedPostCard: View {
             format: String(localized: "a11y.feed.post.scene",
                            defaultValue: "Scène partagée par %@", bundle: .main),
             post.author)
-        // **La légende ENTRE dans le libellé** (2026-09-05).
+        // **La légende ENTRE dans le libellé**.
         //
         // La carte est un élément unique (`accessibilityElement(children:
         // .ignore)`) : tout ce qu'on peint DEDANS — dont la surimpression de
@@ -369,18 +367,17 @@ struct FeedPostCard: View {
         post.media.first { $0.type == .image || $0.type == .video }
     }
 
-    /// **La légende que la carte de scène affiche** — celle du média que la
-    /// scène montre, résolue par le MÊME juge que les deux autres surfaces du
-    /// fil (`SocialMediaCaption`), et jamais le texte du post : celui-ci est
-    /// déjà rendu au-dessus de la carte.
+    /// **La légende que la carte de scène affiche** — celle du média que la scène
+    /// montre, servie par le Prisme et le MÊME juge que le fil (`SocialMediaCaption`),
+    /// jamais le texte du post : celui-ci est déjà rendu au-dessus de la carte.
     private var cardSceneCaption: String? {
-        guard let cardSceneDocument else { return cardSceneFullscreenMedia?.caption }
+        guard let cardSceneDocument else {
+            return cardSceneFullscreenMedia?.resolvedCaption(preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)) }
         return SceneCaption.resolve(sceneIndex: 0, in: cardSceneDocument, post: post,
-                                    carrierFallback: false)
+                                    carrierFallback: false, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
     }
 
-    /// **Ce qui décide du plein écran est la SCÈNE, jamais le média** (corrigé
-    /// le 2026-09-05, dans le lot qui a introduit le plein écran de scène).
+    /// **Ce qui décide du plein écran est la SCÈNE, jamais le média** (dans le lot qui a introduit le plein écran de scène).
     ///
     /// La première écriture demandait « ce post a-t-il une image à agrandir ? »
     /// — hérité du temps où le plein écran feuilletait des médias. Depuis que
@@ -422,7 +419,7 @@ struct FeedPostCard: View {
                     // sur le texte non-lien (priorité au lien = défaut SwiftUI).
                     // Post « position seule » : le texte part EN OVERLAY sur la
                     // carte (`FeedPostLocationMapCard` plus bas) — le bloc texte
-                    // standard serait un doublon (directive user 2026-07-30).
+                    // standard serait un doublon.
                     let truncation = truncatedContent
                     if isLocationOnlyPost {
                         EmptyView()
@@ -457,7 +454,7 @@ struct FeedPostCard: View {
                                 // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
                                 // creusait ~14pt de vide au-dessus et en dessous du libellé
                                 // avant la rangée d'actions (même correctif que le « Voir
-                                // plus » des bulles, 2026-07-08). Cible tactile 44pt HIG via
+                                // plus » des bulles). Cible tactile 44pt HIG via
                                 // un contentShape étendu UNIQUEMENT vers le bas
                                 // (`DownwardExtendedTapShape`, +20pt) — vers le texte du post
                                 // au-dessus, jamais.
@@ -498,12 +495,12 @@ struct FeedPostCard: View {
                                         Text(display.flag).font(.caption)
                                         Text(display.name)
                                             .font(.caption2.weight(.semibold))
-                                            .foregroundColor(langColor)
+                                            .foregroundStyle(langColor)
                                     }
                                 }
                                 Text(content)
                                     .font(.footnote)
-                                    .foregroundColor(theme.textPrimary.opacity(0.8))
+                                    .foregroundStyle(theme.textPrimary.opacity(0.8))
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                             .padding(.vertical, MeeshySpacing.sm)
@@ -522,6 +519,7 @@ struct FeedPostCard: View {
                 .onTapGesture {
                     onTapPost?(post)
                 }
+                .accessibilityAction(named: Text(String(localized: "feed.post.open", bundle: .main))) { onTapPost?(post) }
 
                 // « Avec … » + marqueur personnel — HORS de la zone tappable
                 // ci-dessus : ses chips ouvrent CHACUN un profil différent, pas
@@ -575,7 +573,7 @@ struct FeedPostCard: View {
                     )
                     .sceneZoomSource(postId: post.id)
                     // **La légende paraît dans TOUS les modes, tronquée**
-                    // (directive porteur 2026-09-06, qui ABOLIT la règle « pas
+                    // (qui ABOLIT la règle « pas
                     // de légende en mosaïque ») — mais elle est peinte PAR
                     // `PostSceneMosaic`, et non ici en `overlay`.
                     //
@@ -592,14 +590,13 @@ struct FeedPostCard: View {
                         accentColor: accentColor,
                         onTapPost: onTapPost,
                         // **Le doigt sur la scène ouvre le PLEIN ÉCRAN**
-                        // (directive porteur 2026-09-05), jamais le détail du
+                        // jamais le détail du
                         // post. La scène EST le contenu : la toucher demande à
                         // la voir en grand, pas à lire ses commentaires.
                         onTapScene: cardSceneOpensFullscreen ? { openSceneFullscreen() } : nil
                     )
                         .sceneZoomSource(postId: post.id)
-                        // **La légende PAR-DESSUS la scène** (directive porteur
-                        // 2026-09-05). La carte de scène n'en affichait aucune :
+                        // **La légende PAR-DESSUS la scène**. La carte de scène n'en affichait aucune:
                         // l'auteur composait sa légende, la retrouvait en plein
                         // écran, et le fil n'en montrait rien — alors que c'est
                         // là qu'on décide d'ouvrir ou de passer.
@@ -668,7 +665,7 @@ struct FeedPostCard: View {
                     }
                 }
 
-                // Lieu attaché au post (constat user 2026-07-30) : carte pleine
+                // Lieu attaché au post: carte pleine
                 // largeur + texte en overlay quand la position est le seul
                 // contenu visuel, sinon sticker compact — cliquables tous deux.
                 if let place = post.location {
@@ -724,7 +721,6 @@ struct FeedPostCard: View {
                 .equatable()
             }
             .padding(MeeshySpacing.lg)
-
             // Comments preview (compact)
             if !post.comments.isEmpty {
                 commentsPreview
@@ -852,11 +848,11 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.accentText(repost.authorColor))
 
                     MetaSeparator()
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
 
                     Text(RelativeTimeFormatter.shortString(for: repost.timestamp))
                         .font(.caption)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 // Original content — préfixé du mood emoji pour un STATUS
@@ -869,7 +865,7 @@ struct FeedPostCard: View {
                     }
                     Text(Self.repostBodyText(for: repost))
                         .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(4)
                 }
 

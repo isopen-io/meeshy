@@ -4,6 +4,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { Message } from '@/lib/api/types';
 
 import { quotedPreviewOf } from './quoted-preview';
+import { useViewer } from './use-viewer';
 
 /**
  * LA CITATION PRÉ-ADRESSÉE DU COMPOSEUR — ce que `thread.tsx` transmet à
@@ -45,6 +46,7 @@ export function useReplyToPreview(params: {
      sans être en dépendance survivrait à son propre changement. C'est une
      primitive — l'identité du memo reste stable d'un rendu à l'autre. */
   const interfaceLanguage = currentInterfaceLanguage();
+  const viewerId = useViewer().id;
   return useMemo(() => {
     if (message === undefined) return undefined;
     /* LE SITE UNIQUE (#7556) — `quotedPreviewOf` (`quoted-preview.ts`), la
@@ -53,7 +55,7 @@ export function useReplyToPreview(params: {
        dans la MÊME langue, et un média SANS légende doit s'y nommer par son
        genre plutôt que de laisser la bande vide. Deux descentes parallèles
        sont exactement le défaut que le cycle 128 a fermé. */
-    const preview = quotedPreviewOf({ quoted: message, readerLanguages, interfaceLanguage });
+    const preview = quotedPreviewOf({ quoted: message, readerLanguages, interfaceLanguage, viewerId });
     return {
       author: message.sender?.displayName ?? message.senderId,
       excerpt: preview.text,
@@ -63,5 +65,5 @@ export function useReplyToPreview(params: {
       ...(preview.language === '' ? {} : { language: preview.language }),
       ...(preview.media !== null && preview.media.more > 0 ? { more: preview.media.more } : {}),
     };
-  }, [message, readerLanguages, interfaceLanguage]);
+  }, [message, readerLanguages, interfaceLanguage, viewerId]);
 }

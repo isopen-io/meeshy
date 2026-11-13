@@ -34,7 +34,7 @@ public object E2eePadding {
     public const val MAX_ENVELOPE_BYTES: Int = 64 * 1024
     public const val MAX_TOTAL_BYTES: Int = 512 * 1024
 
-    /** Ce que libsignal ajoute au clair, majoré (mesuré sur libsignal 0.105 : 1 761 à 1 763 octets pour un premier message). */
+    /** Ce que libsignal ajoute au clair, majoré (mesuré sur libsignal 0.106.2 : 1 753 à 1 761 octets pour un premier message, clairs de 0 à 4 096 octets). */
     public const val CIPHER_OVERHEAD: Int = 2048
 
     private const val SPACE: Byte = 0x20

@@ -6,16 +6,20 @@ import XCTest
 @MainActor
 final class ComposerCaptureRecetteTests: XCTestCase {
 
-    // MARK: - #10336 — « Aucun » nettement choisi, jamais un cercle
+    // MARK: - A8–A9 (#17109, revient sur #10336) — l'anneau blanc, puis la jauge rouge
 
-    func test_collapsedTriggerWithoutLook_isTheNoneCell_withTheChosenMark_noCircle() throws {
+    func test_collapsedTriggerWithoutLook_isTheWhiteRingShutter_withTheBudgetGaugeWhileFilming() throws {
         let bande = try Self.code("Meeshy/Features/Composer/ComposerLookStrip.swift")
         let debut = try XCTUnwrap(bande.range(of: "private var shutter: some View {"))
         let fin = try XCTUnwrap(bande.range(of: "private var chosenAlone", range: debut.upperBound..<bande.endIndex))
         let declencheur = String(bande[debut.upperBound..<fin.lowerBound])
-        XCTAssertFalse(declencheur.contains("Circle()"), "aucun cercle d'enregistrement en plus des cadres")
-        XCTAssertTrue(declencheur.contains("ComposerTriggerOutlineStyle(recording: recording)"), "la marque de la case choisie")
-        XCTAssertTrue(declencheur.contains("glyph(symbol: \"circle.slash\")"), "la case « Aucun »")
+        XCTAssertTrue(declencheur.contains("ComposerShutterRing(recording: captureProgress.capturing"),
+                      "le déclencheur à anneau blanc, rouge dès la tenue (#17268)")
+        XCTAssertTrue(declencheur.contains("progress: captureProgress.fraction"),
+                      "l'anneau rouge dit la part du maximum déjà filmée")
+        XCTAssertTrue(bande.contains("ComposerCaptureProgressDisplay.ringProgress("))
+        XCTAssertFalse(declencheur.contains("circle.slash"), "plus de case « Aucun » à la place du déclencheur")
+        XCTAssertTrue(declencheur.contains(".gesture(triggerGestures(zone: .shutter))"), "il garde les gestes de la prise")
     }
 
     // MARK: - #10337 — la bascule se voile, scène et vignettes

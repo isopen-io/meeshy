@@ -7,7 +7,7 @@ import MeeshyUI
 // MARK: - Pause ou boucle : ce que fait une story retenue (#9821)
 
 /// **Une story retenue se FIGE ou BOUCLE, jamais rien d'autre** (décision du
-/// porteur, 2026-10-09). Elle ne se fige — image arrêtée, son coupé — que pour
+/// porteur). Elle ne se fige — image arrêtée, son coupé — que pour
 /// poser une réaction ou sur la pause demandée par l'utilisateur. Ouvrir les
 /// commentaires, les options, composer une réponse (texte, pièce, panneau
 /// « + », sélecteurs) la laisse JOUER : à sa fin, elle repart à son début au
@@ -64,7 +64,7 @@ nonisolated struct StoryPlaybackCauses: Equatable {
 extension StoryViewerView {
 
     /// Un aperçu du centre de notifications / de contrôle n'y figure PAS : la
-    /// lecture continue pendant ce genre de coup d'œil (directive 2026-07-14).
+    /// lecture continue pendant ce genre de coup d'œil.
     /// Le vrai `.background` ferme le lecteur ailleurs.
     var playbackCauses: StoryPlaybackCauses {
         StoryPlaybackCauses(
@@ -208,7 +208,7 @@ extension View {
 // MARK: - Le menu ne retient la story que tant qu'il est RÉELLEMENT présenté (#9949)
 
 /// Le contenu d'un `Menu` ne reçoit pas son `onDisappear` à coup sûr quand on
-/// le referme d'un toucher à côté (recette du 2026-10-10, iOS 26) : la story
+/// le referme d'un toucher à côté (iOS 26): la story
 /// bouclait alors sans fin. La déclaration d'ouverture ne suffit donc pas ; à
 /// la fin de la story, le lecteur vérifie qu'un menu couvre ENCORE la scène.
 /// Sans sonde, ou si rien ne la couvre, le menu ne retient rien : la règle ne
