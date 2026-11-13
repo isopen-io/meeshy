@@ -220,3 +220,19 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Suivi ouvert : #17958 (libellés du composer de story). PR #17960.
 - État en fin de run : #17960 ouverte, NON fusionnée. « Gardes iOS (texte) » rouge HORS du lot : dev l'est depuis `b5b8216122` (correctif d'appel entrant du porteur, `PlayingSoundLoop` ajoute un `@unchecked Sendable`, 112 → 113) — #17968, cédée au chantier des appels. Le prochain réveil relance `ios.yml` quand #17968 est soldée, puis fusionne au vert.
 - Preuve au SHA `733ae908c` : `sdk-tests.yml` ciblé sur `FrenchLabelAccentGuardTests` VERT (run 43433787041) ; `ios.yml` (run 43433810304) rouge sur deux points HORS du lot, tous deux venus de `b5b8216122` : la garde maison (`unchecked-sendable` 112 → 113) et, en tranche 1, `test_everyMainActorObservableObject_declaresADeinit` (`PlayingSoundLoop` sans `nonisolated deinit`) — #17968. dev intégré dans la branche (sans conflit), garde maison toujours rouge sur dev.
+
+## 2026-11-13 — réveil 27
+
+- Début du run : #17960 (#6451, réveil 26) ouverte et menée EN DIRECT par sa session (commit poussé 4 minutes après ce réveil ; elle attend #17968, la garde maison iOS rouge sur dev depuis `b5b821612`). Une autre session écrit #17209 (`claude/communautes-story-blocage`). Les deux cédées, non touchées.
+- Lot : #17182 (passerelle, sécurité). `getBookmarks` servait les publications en favori sans aucun filtre d'audience : une publication `COMMUNITY` d'une communauté quittée, une `FRIENDS` d'un ami retiré, une publication passée en `PRIVATE` ou d'un auteur bloqué restaient lisibles entières depuis les favoris. La requête des favoris pose désormais `post: { is: { deletedAt: NOT_DELETED, AND: [audience] } }`, l'audience étant `viewerPostAudience` (amis ∪ contacts DM, co-membres, puis `buildFeedVisibilityFilter` : blocage, cercles, communautés lisibles). Dans la requête, pas après : la page reste pleine et le curseur reste sur la table des favoris. Le favori lui-même n'est pas supprimé : il réapparaît si l'audience se rouvre (on rejoint de nouveau).
+- `viewerPostAudience` quitte `search/globalPostSearch.ts` pour `posts/feedVisibility.ts` (le module de l'audience des listes), ré-exporté par la recherche : une seule composition, deux consommateurs.
+- Pas de revue adversariale : resserrement d'une lecture sur une loi existante, ni authentification, ni nouvelle permission, ni migration.
+- Témoins : `bookmarks-audience.test.ts` (4 : loi posée, communautés lisibles, blocage, suppression + curseur), rouges avant le correctif.
+- iOS / web / Android : aucun code client à changer (une page de favoris plus courte se décode à l'identique).
+- Reste : `bookmarkCount` d'une publication compte toujours les favoris des lecteurs qui ne la lisent plus (agrégat sans identité, inchangé).
+
+## 2026-11-13 — réveil 28
+
+- Run consacré à mener #17960 (#6451) à la fusion. Ses deux rouges iOS venaient de `b5b8216122` (sonnerie d'appel) et non du lot : la garde maison (`unchecked-sendable` 112 → 113) et, en tranche 1, `MainActorDeinitSourceGuardTests` (`PlayingSoundLoop` sans `deinit` sous l'isolation MainActor par défaut). Personne ne portait #17968 (la branche `claude/fix-dev-house-rules` est un reliquat du 2026-11-05) : correctif minimal en #18004 — le lecteur sous `Locked<AVAudioPlayer>(uncheckedState:)`, `nonisolated deinit {}` — fusionnée par le porteur à 17:08 UTC, #17968 fermée. `check_house_rules.sh` : « 36 règles tenues » sur dev.
+- `origin/dev` intégré dans #17960 (conflit du seul journal : réveils 26 et 27 gardés tous deux, dans l'ordre).
+- Gotcha : sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, toute classe de `apps/ios/Meeshy/**` non marquée `nonisolated` doit écrire `nonisolated deinit {}` — une garde de tests (tranche 1), pas une garde texte : elle ne rougit qu'au Mac.
