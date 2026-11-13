@@ -248,7 +248,7 @@
     <string name="game2_settings_celebrations_switch">Zeichen der Ahnen</string>
     <string name="game2_settings_celebrations_title">Mee und Meo</string>
     <string name="game2_settings_friends_league_body">Wochenwertung unter bestätigten Freunden. Wer sich zurückzieht, ist füreinander unsichtbar.</string>
-    <string name="game2_settings_friends_league_switch">Mich zurückziehen</string>
+    <string name="game2_settings_friends_league_switch">Mich vom Turnier der Freunde zurückziehen</string>
     <string name="game2_settings_friends_league_title">Turnier der Freunde</string>
     <string name="game2_settings_hidden_body">Blendet das Spiel auf diesem Gerät aus, verbirgt Trophäen, Rang, Erbe und Atlas vor anderen, nimmt dich aus dem öffentlichen Turnier. Funken und Trophäen bleiben erhalten.</string>
     <string name="game2_settings_hidden_card">Das Spiel ist auf diesem Gerät ausgeblendet.</string>

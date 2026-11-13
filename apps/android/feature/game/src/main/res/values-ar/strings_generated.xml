@@ -248,7 +248,7 @@
     <string name="game2_settings_celebrations_switch">علامات الأسلاف</string>
     <string name="game2_settings_celebrations_title">مي وميو</string>
     <string name="game2_settings_friends_league_body">ترتيب أسبوعي بين الأصدقاء المقبولين. انسحابك يُخفي كلًّا منكم عن الآخر.</string>
-    <string name="game2_settings_friends_league_switch">الانسحاب</string>
+    <string name="game2_settings_friends_league_switch">الانسحاب من مبارزة الأصدقاء</string>
     <string name="game2_settings_friends_league_title">مبارزة الأصدقاء</string>
     <string name="game2_settings_hidden_body">يخفي اللعبة على هذا الجهاز، ويغلق كؤوسك ورتبتك وإرثك وأطلسك أمام الآخرين، ويخرجك من المبارزة العامة. تبقى الشرارات والكؤوس محفوظة.</string>
     <string name="game2_settings_hidden_card">اللعبة مخفية على هذا الجهاز.</string>

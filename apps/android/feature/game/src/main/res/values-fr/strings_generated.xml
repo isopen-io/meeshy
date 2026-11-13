@@ -248,7 +248,7 @@
     <string name="game2_settings_celebrations_switch">Signes des aïeux</string>
     <string name="game2_settings_celebrations_title">Mee et Meo</string>
     <string name="game2_settings_friends_league_body">Classement de la semaine entre amis acceptés. T’en retirer vous masque les uns aux autres.</string>
-    <string name="game2_settings_friends_league_switch">Me retirer</string>
+    <string name="game2_settings_friends_league_switch">Me retirer de la joute des amis</string>
     <string name="game2_settings_friends_league_title">Joute des amis</string>
     <string name="game2_settings_hidden_body">Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.</string>
     <string name="game2_settings_hidden_card">Le jeu est masqué sur cet appareil.</string>

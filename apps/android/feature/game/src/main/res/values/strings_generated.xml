@@ -248,7 +248,7 @@
     <string name="game2_settings_celebrations_switch">Ancestors’ signs</string>
     <string name="game2_settings_celebrations_title">Mee and Meo</string>
     <string name="game2_settings_friends_league_body">Weekly ranking among accepted friends. Opting out hides you from each other.</string>
-    <string name="game2_settings_friends_league_switch">Opt me out</string>
+    <string name="game2_settings_friends_league_switch">Opt out of the Friends’ Joust</string>
     <string name="game2_settings_friends_league_title">Friends’ Joust</string>
     <string name="game2_settings_hidden_body">Hides the game on this device, closes your trophies, rank, Legacy and Atlas to others, takes you out of the public joust. Sparks and trophies are kept.</string>
     <string name="game2_settings_hidden_card">The game is hidden on this device.</string>
