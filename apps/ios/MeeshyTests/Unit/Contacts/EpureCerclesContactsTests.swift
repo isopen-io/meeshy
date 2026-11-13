@@ -391,4 +391,28 @@ final class EpureCerclesContactsTests: XCTestCase {
             for key in keys { XCTAssertFalse(source.contains(key), "\(path) lit encore \(key)") }
         }
     }
+
+    // MARK: - Le Bring dit, au repos, ce que fait son blocage (règle 7) ; deux états vides sans note (règle 4)
+
+    func test_blockBring_saysWhatItDoesAtRest_withoutAnInfoNote() throws {
+        let detail = try XCTUnwrap(CirclePersonSetting.blockBring.detail, "le Bring est propre à Meeshy : sa phrase est visible")
+        XCTAssertFalse(detail.isEmpty)
+        XCTAssertNil(CirclePersonSetting.blockBring.infoNote, "la phrase suffit : pas de (i) qui répète")
+        let catalog = try app()
+        let values = try XCTUnwrap(catalog["circles.settings.blockBring.detail"])
+        let french = try XCTUnwrap(values["fr"])
+        XCTAssertTrue(french.contains("Bring"))
+        for language in Self.otherLanguages {
+            let value = try XCTUnwrap(values[language])
+            XCTAssertFalse(value.isEmpty, language)
+            XCTAssertNotEqual(value, french, "\(language) : copié du français")
+        }
+    }
+
+    func test_callsSearchAndAddChannelEmptyStates_haveNoHint() throws {
+        XCTAssertFalse(try code("apps/ios/Meeshy/Features/Contacts/CallsTab.swift").contains("calls.search.empty.hint"))
+        XCTAssertFalse(try code("packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityAddChannelScreen.swift").contains("community.addChannel.empty.hint"))
+        XCTAssertNil(try app()["calls.search.empty.hint"], "plus aucun lecteur : supprimée de toutes les langues")
+        XCTAssertNil(try kit()["community.addChannel.empty.hint"], "plus aucun lecteur : supprimée de toutes les langues")
+    }
 }
