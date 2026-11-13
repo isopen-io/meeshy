@@ -66,6 +66,7 @@ jest.mock('../../../middleware/validation', () => ({
 
 const mockCheckRateLimit = jest.fn<any>().mockResolvedValue(true);
 jest.mock('../../../utils/socket-rate-limiter', () => ({
+  callSignalBudgetId: (userId: string, socketId: string) => `${userId}:${socketId}`,
   SocketRateLimiter: jest.fn().mockImplementation(() => ({
     checkLimit: mockCheckRateLimit,
     destroy: jest.fn(),
@@ -75,6 +76,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
     destroy: jest.fn(),
   }),
   checkSocketRateLimit: jest.fn<any>().mockResolvedValue(true),
+  callSignalBudgetId: jest.requireActual<typeof import('../../../utils/socket-rate-limiter')>('../../../utils/socket-rate-limiter').callSignalBudgetId,
   SOCKET_RATE_LIMITS: {
     MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
     CALL_LEAVE: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:call:leave' },

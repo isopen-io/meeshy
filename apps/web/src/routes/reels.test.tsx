@@ -133,6 +133,17 @@ describe('ReelPage — commenter et repartager depuis le rail (#6484)', () => {
     expect(html).toContain('Repartager');
   });
 
+  test('un réel de SANG n’offre pas « repartager », même quand l’écran sait repartager (#14501, RG-18)', () => {
+    const html = page({ ...REEL_SUNSET_EN, visibility: 'BLOOD' }, { onComment: () => undefined, onRepost: () => undefined });
+    expect(html).toContain('data-reel-gesture="comment"');
+    expect(html).not.toContain('data-reel-gesture="repost"');
+  });
+
+  test('un réel de Proches reste repartageable (vers les Proches ou le Sang)', () => {
+    const html = page({ ...REEL_SUNSET_EN, visibility: 'CLOSE' }, { onComment: () => undefined, onRepost: () => undefined });
+    expect(html).toContain('data-reel-gesture="repost"');
+  });
+
   test('l’ORDRE du rail suit iOS : j’aime · commenter · enregistrer · repartager · partager · son', () => {
     const html = page(REEL_STUDIO, { onComment: () => undefined, onRepost: () => undefined, soundOn: true });
     const order = ['like', 'comment', 'bookmark', 'repost', 'share', 'sound'].map((gesture) =>

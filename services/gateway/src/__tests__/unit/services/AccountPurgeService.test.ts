@@ -489,6 +489,15 @@ describe('purgeAccountIsolatedData — les packs du compte (#10151)', () => {
   });
 });
 
+describe('purgeAccountIsolatedData — la position partagée du compte (#16987)', () => {
+  it('éteint le partage du compte purgé, une fois, et rien sans l\'option', async () => {
+    const endSharedLocation = jest.fn(async (_userId: string) => undefined);
+    await purgeAccountIsolatedData(fakePrisma(), USER_ID, { ...NO_FILES, endSharedLocation });
+    expect(endSharedLocation.mock.calls).toEqual([[USER_ID]]);
+    await expect(purgeAccountIsolatedData(fakePrisma(), USER_ID, NO_FILES)).resolves.toBeDefined();
+  });
+});
+
 describe('anonymizeUserIdentity', () => {
   it('derives username/email from the account id, never a shared constant', async () => {
     const prisma = fakeUserPrisma();
