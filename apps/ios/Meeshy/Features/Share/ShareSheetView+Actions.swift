@@ -37,10 +37,12 @@ extension ShareSheetView {
                     }
                 }
                 if let reason {
-                    Label(reason, systemImage: "info.circle")
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundStyle(theme.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
+                    MeeshyInfoNoted(note: withheldReason(plan).flatMap(ShareSheetCopy.withheldNote), openNoteID: $openNoteID, tint: theme.textMuted) {
+                        Label(reason, systemImage: "info.circle")
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                            .foregroundStyle(theme.textMuted)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -63,8 +65,12 @@ extension ShareSheetView {
 
     /// La raison la plus parlante de ce qui n'est pas rendu — une seule ligne.
     func withheldLine(_ plan: SharePlan) -> String? {
+        withheldReason(plan).map(ShareSheetCopy.withheld)
+    }
+
+    func withheldReason(_ plan: SharePlan) -> ShareWithheldReason? {
         let priority: [ShareWithheldReason] = [.flame, .blurred, .encrypted, .citesProtected, .tooManyForPublication, .singlePhotoNotAReel]
-        return priority.first { reason in plan.withheld.contains { $0.reason == reason } }.map(ShareSheetCopy.withheld)
+        return priority.first { reason in plan.withheld.contains { $0.reason == reason } }
     }
 
     private func publicationChip(_ target: PublicationTarget) -> some View {

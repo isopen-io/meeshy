@@ -18212,53 +18212,6 @@
         }
       }
     },
-    "conversation.settings.permissions.announcement.subtitle": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المشرفون وحدهم يمكنهم الكتابة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Nur Admins können schreiben"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Only admins can write"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Solo los administradores pueden escribir"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Seuls les admins peuvent écrire"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solo gli amministratori possono scrivere"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Apenas administradores podem escrever"
-          }
-        }
-      }
-    },
     "conversation.settings.permissions.autoTranslate": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -86568,7 +86521,54 @@
         }
       }
     },
-    "conversation.settings.permissions.slowMode.subtitle": {
+    "conversation.settings.permissions.slowMode.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يفعل الوضع البطيء؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was bewirkt der Langsammodus?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does slow mode do?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué hace el modo lento?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que fait le mode lent ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa fa la modalità lenta?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que faz o modo lento?"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.slowMode.note": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -86611,6 +86611,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Um intervalo entre duas mensagens do mesmo membro."
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.announcement.question": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ماذا يغيّر وضع الإعلان؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ändert der Ankündigungsmodus?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What does announcement mode change?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué cambia el modo anuncio?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que change le mode annonce ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosa cambia la modalità annuncio?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O que muda no modo anúncio?"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.announcement.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المشرفون وحدهم يمكنهم الكتابة: يُقفَل عندئذٍ خيار «من يمكنه الكتابة»."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Admins können schreiben: „Wer schreiben darf“ ist dann gesperrt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only admins can write: “Who can write” is then locked."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo los administradores pueden escribir: «Quién puede escribir» queda bloqueado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seuls les admins peuvent écrire : « Qui peut écrire » est alors verrouillé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo gli amministratori possono scrivere: «Chi può scrivere» è quindi bloccato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apenas administradores podem escrever: “Quem pode escrever” fica bloqueado."
           }
         }
       }

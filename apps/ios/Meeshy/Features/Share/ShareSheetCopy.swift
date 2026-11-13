@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// **Les mots de l'écran de partage** — le vocabulaire commun de la planche
 /// (fr de référence), les mêmes sur iOS, dans l'extension, sur le web et dans la
@@ -108,11 +109,20 @@ enum ShareSheetCopy {
         case .singlePhotoNotAReel: return String(localized: "share.sheet.withheld.single-photo", defaultValue: "Une photo seule ne fait pas un réel.", bundle: .meeshyShare)
         case .notAReel: return String(localized: "share.sheet.withheld.not-a-reel", defaultValue: "Ce contenu ne fait pas un réel.", bundle: .meeshyShare)
         case .tooManyForPublication: return String(localized: "share.sheet.withheld.too-many", defaultValue: "Une publication porte au plus 10 médias.", bundle: .meeshyShare)
-        case .flame: return String(localized: "share.sheet.withheld.flame", defaultValue: "Une flamme ne se publie pas, ne s’enregistre pas et ne se copie pas. Sa copie disparaît aussi et ne se retransfère pas.", bundle: .meeshyShare)
+        case .flame: return String(localized: "share.sheet.withheld.flame", defaultValue: "Une flamme ne se publie pas, ne s’enregistre pas, ne se copie pas.", bundle: .meeshyShare)
         case .blurred: return String(localized: "share.sheet.withheld.blurred", defaultValue: "Un message flouté se transfère flouté ; rien d’autre ne sort.", bundle: .meeshyShare)
         case .encrypted: return String(localized: "share.sheet.withheld.encrypted", defaultValue: "Un message chiffré ne se publie pas. Il se transfère, se copie et s’enregistre sur cet appareil.", bundle: .meeshyShare)
         case .citesProtected: return String(localized: "share.sheet.withheld.cites-protected", defaultValue: "Un message qui cite un contenu protégé ne s’image pas.", bundle: .meeshyShare)
         }
+    }
+
+    /// Le détail secondaire d'une protection : la phrase reste lisible au repos, le sort de la copie passe derrière un (i).
+    static func withheldNote(_ reason: ShareWithheldReason) -> MeeshyInfoNote? {
+        guard reason == .flame else { return nil }
+        return MeeshyInfoNote(
+            question: String(localized: "share.sheet.withheld.flame.question", defaultValue: "Que devient la copie d’une flamme ?", bundle: .meeshyShare),
+            text: String(localized: "share.sheet.withheld.flame.note", defaultValue: "Sa copie disparaît aussi et ne se retransfère pas.", bundle: .meeshyShare)
+        )
     }
 
     // MARK: À qui

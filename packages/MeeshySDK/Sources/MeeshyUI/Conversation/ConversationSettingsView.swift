@@ -15,6 +15,7 @@ public struct ConversationSettingsView: View {
     @State private var showDeleteForMeAlert = false
     /// Les gestes rares (supprimer, quitter) sont rangés derrière « Plus » (épure #18078, règle 6).
     @State private var showMoreActions = false
+    @State private var openNoteID: String?
 
     public var onUpdated: ((MeeshyConversation) -> Void)? = nil
     public var onLeft: (() -> Void)? = nil
@@ -299,13 +300,10 @@ public struct ConversationSettingsView: View {
                 }
 
                 HStack {
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    MeeshyInfoNoted(note: ConversationSettingsNotes.announcement, openNoteID: $openNoteID, tint: theme.textMuted) {
                         Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
                             .meeshyScaledFont(MeeshyFont.labelSize, weight: .medium, design: .rounded)
                             .foregroundStyle(theme.textPrimary)
-                        Text(String(localized: "conversation.settings.permissions.announcement.subtitle", defaultValue: "Seuls les admins peuvent écrire", bundle: .module))
-                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
-                            .foregroundStyle(theme.textMuted)
                     }
                     Spacer()
                     Toggle("", isOn: $viewModel.isAnnouncementChannel)
@@ -318,7 +316,7 @@ public struct ConversationSettingsView: View {
 
                 settingsField(
                     label: String(localized: "conversation.settings.permissions.slowMode", defaultValue: "Mode lent", bundle: .module),
-                    caption: String(localized: "conversation.settings.permissions.slowMode.subtitle", defaultValue: "Un délai entre deux messages d’un même membre.", bundle: .module)
+                    note: ConversationSettingsNotes.slowMode
                 ) {
                     Picker("", selection: $viewModel.slowModeSeconds) {
                         Text(String(localized: "conversation.settings.permissions.slowMode.off", defaultValue: "Désactivé", bundle: .module)).tag(0)
@@ -623,15 +621,12 @@ public struct ConversationSettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func settingsField<Content: View>(label: String, caption: String? = nil, @ViewBuilder content: () -> Content) -> some View {
+    private func settingsField<Content: View>(label: String, note: MeeshyInfoNote? = nil, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            Text(label)
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))
-                .foregroundStyle(theme.textSecondary)
-            if let caption {
-                Text(caption)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
-                    .foregroundStyle(theme.textMuted)
+            MeeshyInfoNoted(note: note, openNoteID: $openNoteID, tint: theme.textSecondary) {
+                Text(label)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.textSecondary)
             }
             content()
                 .textFieldStyle(.plain)
