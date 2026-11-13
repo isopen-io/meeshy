@@ -727,3 +727,10 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `ios.yml` dispatchés sur la PR.
 - Reste de #16983 : la carte de réception (épingles, cercle de flou, VoiceOver) câblée sur `SharedLocationsLive`,
   puis l'émission (fiche d'un Ami, durée, précision, arrêt) et les chaînes `InfoPlist.strings`.
+- Suite du réveil (17:20–18:10 UTC) : #18004 fusionnée dans `dev` (rouges hérités de `PlayingSoundLoop`), `origin/dev`
+  fusionnée à la main dans la branche (seul conflit : ce journal, entrées des deux côtés gardées). Relecture du porteur,
+  bloquante et juste : une position ancienne rejouée par un rattrapage survivait à `expiresAt` (échéance posée à
+  `now + (expiresAt − updatedAt)`). Correctif `deadline = min(now + durée servie, expiresAt)`, deux témoins (position
+  rejouée bornée à son terme, position rejouée déjà échue jamais affichée). CI de branche coupée par `CI_DEV_SEUL`
+  (#18048, directive du porteur : fusionner les PR ouvertes, seul `dev` tourne) : la preuve Swift est la CI de `dev`.
+  Nouveau rouge hérité de `dev` signalé : #18050 (`try-sleep` 6 → 8, `sleep-nanoseconds` 0 → 2).
