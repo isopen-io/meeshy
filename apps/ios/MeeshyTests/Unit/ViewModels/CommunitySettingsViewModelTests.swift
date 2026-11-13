@@ -5,8 +5,8 @@ import MeeshySDK
 @MainActor
 final class CommunitySettingsViewModelTests: XCTestCase {
 
-    private func makeSUT(service: MockCommunityService = MockCommunityService()) -> CommunitySettingsViewModel {
-        let community = MeeshyCommunity(id: "c-settings-test", identifier: "mshy_x", name: "Alpha", createdBy: "u-creator")
+    private func makeSUT(service: MockCommunityService = MockCommunityService(), isPrivate: Bool = true) -> CommunitySettingsViewModel {
+        let community = MeeshyCommunity(id: "c-settings-test", identifier: "mshy_x", name: "Alpha", isPrivate: isPrivate, createdBy: "u-creator")
         return CommunitySettingsViewModel(community: community, service: service, currentUserId: { "u-creator" })
     }
 
@@ -47,5 +47,30 @@ final class CommunitySettingsViewModelTests: XCTestCase {
         XCTAssertNil(updated)
         XCTAssertTrue(sut.showError)
         XCTAssertFalse(sut.isSaving)
+    }
+
+    // MARK: - Rendre la communauté privée se confirme (#16787)
+
+    func test_needsPrivacyConfirmation_publiqueRenduePrivee_vrai() {
+        let sut = makeSUT(isPrivate: false)
+        XCTAssertFalse(sut.needsPrivacyConfirmation)
+
+        sut.isPrivate = true
+
+        XCTAssertTrue(sut.needsPrivacyConfirmation)
+    }
+
+    func test_needsPrivacyConfirmation_priveeRouverteOuAutreChangement_faux() {
+        let privee = makeSUT(isPrivate: true)
+        privee.isPrivate = false
+        XCTAssertFalse(privee.needsPrivacyConfirmation)
+
+        let publique = makeSUT(isPrivate: false)
+        publique.name = "Beta"
+        XCTAssertFalse(publique.needsPrivacyConfirmation)
+    }
+
+    func test_showPrivacyConfirm_fermeParDefaut() {
+        XCTAssertFalse(makeSUT(isPrivate: false).showPrivacyConfirm)
     }
 }
