@@ -15,6 +15,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -79,6 +82,7 @@ internal fun EffectsBar(
     onShowApplied: () -> Unit,
     onChip: (CallEffectKind) -> Unit,
     addsLook: Boolean = true,
+    settingsHint: String = stringResource(R.string.call_effects_settings_hint),
 ) {
     val millis = CallEffectsSettingsMotion.durationMillis(reduceMotion)
     val resize = if (reduceMotion) Modifier.animateContentSize(tween(millis)) else Modifier
@@ -93,7 +97,7 @@ internal fun EffectsBar(
                 CallPillHairline()
             }
         }
-        EffectsBaseRow(bar, layers, addsLook, onBack, onSettings, onAddLook, onShowApplied)
+        EffectsBaseRow(bar, layers, addsLook, settingsHint, onBack, onSettings, onAddLook, onShowApplied)
     }
 }
 
@@ -120,11 +124,21 @@ internal fun EffectsBand(bar: CallEffectsBarMode, reduceMotion: Boolean, content
     ) { shown -> content(shown) }
 }
 
-/** Les puces de tri : le genre montré est pressé (« Cadres » au Montage). */
+/**
+ * La rangée de genres de la famille (Visage · Couleur · Cadres) : le genre montré est pressé (« Cadres » au Montage). En
+ * grand texte, elle défile plutôt que de se couper, et ses bords s'effacent en fondu (iOS `CallEffectsGenreChips`).
+ */
 @Composable
 private fun KindPicker(chips: List<CallEffectKind>, selected: CallEffectKind?, onSelect: (CallEffectKind) -> Unit) {
     val haptics = LocalHapticFeedback.current
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val scroll = rememberScrollState()
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .callScrollEdgeFade(scroll, horizontal = true)
+            .horizontalScroll(scroll)
+            .padding(horizontal = MeeshySpacing.sm),
+    ) {
         chips.forEachIndexed { index, kind ->
             if (index > 0) Text("·", color = CallPalette.InkSecondary, fontWeight = FontWeight.SemiBold)
             val isSelected = kind == selected
@@ -134,7 +148,7 @@ private fun KindPicker(chips: List<CallEffectKind>, selected: CallEffectKind?, o
                 fontWeight = FontWeight.SemiBold,
                 color = if (isSelected) CallPalette.Ink else CallPalette.Ink.copy(alpha = 0.55f),
                 modifier = Modifier
-                    .heightIn(min = 48.dp)
+                    .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
                     .clickable(role = Role.Tab) {
                         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         onSelect(kind)
@@ -146,12 +160,16 @@ private fun KindPicker(chips: List<CallEffectKind>, selected: CallEffectKind?, o
     }
 }
 
-/** ‹ Retour à l'appel · Réglages (disque blanc quand ils sont ouverts) · (+) (iOS `CallEffectsBar.baseRow`). */
+/**
+ * ‹ Retour à l'appel · Réglages (disque blanc quand ils sont ouverts) · (+) (iOS `CallEffectsBar.baseRow`). [settingsHint]
+ * dit ce que Réglages ouvre dans ce mode : Luminosité · Flou du fond en Effets, « Chaque visage » au Montage.
+ */
 @Composable
 private fun EffectsBaseRow(
     bar: CallEffectsBarMode,
     layers: CallEffectLayers,
     addsLook: Boolean,
+    settingsHint: String,
     onBack: () -> Unit,
     onSettings: () -> Unit,
     onAddLook: () -> Unit,
@@ -176,7 +194,7 @@ private fun EffectsBaseRow(
             kind = if (showsSettings) CallPillKind.Active else CallPillKind.Normal,
             label = stringResource(R.string.call_effects_settings),
             caption = stringResource(R.string.call_effects_settings),
-            hint = stringResource(R.string.call_effects_settings_hint),
+            hint = settingsHint,
             toggleState = showsSettings,
             diameter = SIDE_DIAMETER,
             onClick = onSettings,
@@ -210,7 +228,7 @@ private fun EffectsAddButton(layers: CallEffectLayers, addsLook: Boolean, onAddL
             icon = MeeshyIcons.Add,
             kind = CallPillKind.Normal,
             label = stringResource(if (layers.isFull) R.string.call_effects_add_look_full else R.string.call_effects_add_look),
-            hint = stringResource(R.string.call_effects_add_look_hint),
+            hint = stringResource(if (layers.isFull) R.string.call_effects_add_look_full_hint else R.string.call_effects_add_look_hint),
             diameter = SIDE_DIAMETER,
             onClick = { if (!layers.isFull && addsLook) onAddLook() },
             onLongClick = showApplied.takeIf { hasLayers },
@@ -265,10 +283,10 @@ private fun AppliedRow(layer: CallEffectLayer, language: String?, onRemove: (Cal
     }
 }
 
-/** « Visage · Crapaud » : le genre et le nom du choix, dans la langue de l'appareil. */
+/** « Visage · Crapaud », « Cadre · Signature » : le genre et le nom du choix, dans la langue de l'appareil (iOS `layerTitle`). */
 @Composable
 internal fun effectLayerEntry(layer: CallEffectLayer, language: String?): String {
-    val kind = stringResource(effectKindLabel(layer.kind))
+    val kind = stringResource(layerKindLabel(layer.kind))
     val name = when (layer.kind) {
         CallEffectKind.Face -> CallFaceEffect.entries.firstOrNull { it.id == layer.choice }?.let { stringResource(faceLabel(it)) }
         CallEffectKind.Color -> VideoFilterPreset.fromId(layer.choice)?.let { stringResource(presetLabel(it)) }
@@ -277,6 +295,10 @@ internal fun effectLayerEntry(layer: CallEffectLayer, language: String?): String
     } ?: layer.choice
     return stringResource(R.string.call_effects_layer_entry, kind, name)
 }
+
+/** Le genre d'UNE couche : « Cadre » (le mot de l'option « Cadre »), comme iOS `layerKindName` ; les puces disent « Cadres ». */
+private fun layerKindLabel(kind: CallEffectKind): Int =
+    if (kind == CallEffectKind.Frame) R.string.call_live_frame_caption else effectKindLabel(kind)
 
 internal fun effectKindLabel(kind: CallEffectKind): Int = when (kind) {
     CallEffectKind.Face -> R.string.call_effects_category_face

@@ -145,9 +145,11 @@ class CallEffectsSettingsBarTest {
         host(last) { last = it }
 
         rule.onNodeWithContentDescription("Add another look").assertDoesNotExist()
-        rule.onNodeWithContentDescription("Three effects at most: remove one to add another").performClick()
+        val plus = rule.onNodeWithContentDescription("Three effects at most").fetchSemanticsNode()
+        assertThat(plus.config[SemanticsActions.OnClick].label).isEqualTo("Cancel an effect to add another; long press to see them")
+        rule.onNodeWithContentDescription("Three effects at most").performClick()
         rule.runOnIdle { assertThat(last.category).isEqualTo(CallEffectsCategory.Face) }
-        rule.onNodeWithContentDescription("Three effects at most: remove one to add another").performTouchInput { longClick() }
+        rule.onNodeWithContentDescription("Three effects at most").performTouchInput { longClick() }
         rule.waitForIdle()
 
         assertThat(last.showsApplied).isTrue()
@@ -162,7 +164,7 @@ class CallEffectsSettingsBarTest {
         rule.onNodeWithText("Applied effects").assertExists()
         rule.onNodeWithText("Face · Toad").assertExists()
         rule.onNodeWithText("Colour · Golden").assertExists()
-        rule.onNodeWithContentDescription("Undo Colour · Golden").performClick()
+        rule.onNodeWithContentDescription("Cancel Colour · Golden").performClick()
 
         assertThat(removed).containsExactly(CallEffectKind.Color)
         val tops = listOf("Face · Toad", "Colour · Golden").map { rule.onNodeWithText(it).fetchSemanticsNode().positionInRoot.y }

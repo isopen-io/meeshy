@@ -52,6 +52,7 @@ import me.meeshy.sdk.model.call.VideoFilterPreset
 import me.meeshy.sdk.model.call.effects.CallEffectKind
 import me.meeshy.sdk.model.call.effects.CallEffectsBarMode
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
+import me.meeshy.sdk.model.call.effects.CallEffectsGenreRule
 import me.meeshy.sdk.model.call.effects.CallEffectsModeRule
 import me.meeshy.sdk.model.call.effects.CallEffectsModeState
 import me.meeshy.sdk.model.call.effects.kind
@@ -90,6 +91,7 @@ internal fun CallEffectsMode(
     eglContext: EglBase.Context,
     reduceMotion: Boolean,
     onClose: () -> Unit,
+    onOpenFrames: () -> Unit = {},
     peerUserId: String? = null,
     peerAvatarUrl: String? = null,
 ) {
@@ -133,6 +135,7 @@ internal fun CallEffectsMode(
     val hint = stringResource(R.string.call_mode_gesture_hint)
         .takeIf { CallModeGestureRule.showsHint(hasSeenHint = hints.hasSeen, isRecording = captureState.isRecording) }
     val removeLayer = rememberEffectLayerRemoval(session, mode, capture, frameViewModel.controller)
+    val row = CallEffectsGenreRule.row(offersEffects = state.offersEffectsMode(), offersFrames = state.offersCaptureMode())
 
     Box(Modifier.fillMaxSize().background(Color.Black).semantics { paneTitle = title }) {
         localTrack?.let {
@@ -149,12 +152,14 @@ internal fun CallEffectsMode(
         EffectsControls(
             state = state,
             mode = mode,
+            row = row,
             reduceMotion = reduceMotion,
             shots = shots,
             hint = hint,
             onChange = setMode,
             onRemove = removeLayer,
             onFinish = finish,
+            onOpenFrames = onOpenFrames,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
@@ -183,21 +188,22 @@ private fun rememberEffectLayerRemoval(
 /**
  * Le bas du mode, de haut en bas : les sous-titres (ils restent, dans leur verre sans rangée, sans bouton Journal — iOS
  * `captionsBand(opensJournal: false)`), le carrousel OU le panneau Luminosité · Flou du fond (un verre séparé), puis
- * la barre ‹ · Réglages · (+).
+ * la barre ‹ · Réglages · (+) sous la rangée de genres de la famille ([row]).
  */
 @Composable
 private fun EffectsControls(
     state: CallUiState,
     mode: CallEffectsModeState,
+    row: List<CallEffectKind>,
     reduceMotion: Boolean,
     shots: CallModeShots,
     hint: String?,
     onChange: (CallEffectsModeState) -> Unit,
     onRemove: (CallEffectKind) -> Unit,
     onFinish: () -> Unit,
+    onOpenFrames: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val haptics = LocalHapticFeedback.current
     Column(
         modifier
             .fillMaxWidth()
@@ -211,28 +217,51 @@ private fun EffectsControls(
             CallCaptionsBandHost(state = state, hasOwnGlass = true, opensJournal = false, modifier = Modifier.padding(horizontal = MeeshySpacing.lg))
         }
         EffectsLooksOrPanel(mode, reduceMotion, shots, hint, onChange, onRemove)
-        EffectsBar(
-            chips = CallEffectsCategory.entries.map { it.kind },
-            selected = mode.category.kind,
-            bar = mode.bar,
-            layers = mode.layers,
-            reduceMotion = reduceMotion,
-            onBack = {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onFinish()
-            },
-            onSettings = {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onChange(mode.togglingSettings())
-            },
-            onAddLook = {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onChange(mode.addingLook())
-            },
-            onShowApplied = { onChange(mode.showingApplied()) },
-            onChip = { kind -> kind.category?.let { onChange(mode.showing(it)) } },
-        )
+        EffectsModeBar(mode, row, reduceMotion, onChange, onFinish, onOpenFrames)
     }
+}
+
+/**
+ * La barre d'Effets sous la rangée de genres de la famille (#16979, comme iOS `CallEffectsModeControls`) : Visage et
+ * Couleur se montrent ici, « Cadres » ouvre le Montage ; (+) ouvre un genre absent de la pile, d'abord en Effets, puis au
+ * Montage ([CallEffectsGenreRule.adding]) ; la barre revient au menu de base après chaque choix.
+ */
+@Composable
+internal fun EffectsModeBar(
+    mode: CallEffectsModeState,
+    row: List<CallEffectKind>,
+    reduceMotion: Boolean,
+    onChange: (CallEffectsModeState) -> Unit,
+    onFinish: () -> Unit,
+    onOpenFrames: () -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    val added = mode.addedGenre(row)
+    val open: (CallEffectKind) -> Unit = { kind ->
+        if (kind.category == null) onOpenFrames() else onChange(mode.showingAdded(kind))
+    }
+    EffectsBar(
+        chips = row,
+        selected = mode.category.kind,
+        bar = mode.bar,
+        layers = mode.layers,
+        reduceMotion = reduceMotion,
+        onBack = {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onFinish()
+        },
+        onSettings = {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onChange(mode.togglingSettings())
+        },
+        onAddLook = {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            added?.let(open)
+        },
+        onShowApplied = { onChange(mode.showingApplied()) },
+        onChip = { kind -> kind.category?.let { onChange(mode.showing(it)) } ?: onOpenFrames() },
+        addsLook = added != null,
+    )
 }
 
 /** P8b.6 — le panneau (réglages OU liste des effets appliqués) remplace la bande de looks, par le fondu de [EffectsBand]. */

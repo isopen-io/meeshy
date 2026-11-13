@@ -22,11 +22,7 @@
     <string name="call_effects_percent">%1$d%%</string>
     <string name="call_effects_next">Next effect</string>
     <string name="call_effects_previous">Previous effect</string>
-    <string name="call_effects_category_frame">Frames</string>
     <string name="call_effects_category_landscape">Landscape</string>
     <string name="call_effects_category_voice">Voice</string>
-    <string name="call_effects_applied_title">Applied effects</string>
     <string name="call_effects_layer_entry">%1$s · %2$s</string>
-    <string name="call_effects_layer_undo">Undo %1$s</string>
-    <string name="call_effects_add_look_full">Three effects at most: remove one to add another</string>
 </resources>

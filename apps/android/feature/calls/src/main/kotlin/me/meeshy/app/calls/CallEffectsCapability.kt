@@ -115,16 +115,22 @@ private val DEGRADED = VideoFilterDegradeState(
 )
 
 /**
- * « Effets » dans la pilule : offert en vidéo établie, caméra allumée — un effet porte sur MON image, il
- * n'a pas de sens sans elle. Allumé tant qu'un effet est choisi. Le mode s'ouvre par l'écran
- * (`CallScreenMode.Effects`), comme « Capturer l'appel ».
+ * Le mode Effets est offert en vidéo établie, caméra allumée — un effet porte sur MON image, il n'a pas de sens sans
+ * elle. La pilule (« Effets ») et la rangée de genres du Montage (Visage · Couleur) lisent ce même prédicat.
+ */
+internal fun CallUiState.offersEffectsMode(): Boolean =
+    status == CallStatus.CONNECTED && isVideoCall && isCameraOn && showsConnectedLayout
+
+/**
+ * « Effets » dans la pilule : offert par [offersEffectsMode]. Allumé tant qu'un effet est choisi. Le mode s'ouvre par
+ * l'écran (`CallScreenMode.Effects`), comme « Capturer l'appel ».
  */
 @Singleton
 class CallEffectsActionHandler @Inject constructor(
     private val effects: CallVideoEffectsController,
 ) : CallActionHandler {
     override fun present(state: CallUiState): CallActionPresentation? =
-        if (state.status == CallStatus.CONNECTED && state.isVideoCall && state.isCameraOn && state.showsConnectedLayout) {
+        if (state.offersEffectsMode()) {
             CallActionPresentation(MeeshyIcons.MagicWand, R.string.call_control_effects, isActive = effects.config.value.hasChosenFilters)
         } else {
             null

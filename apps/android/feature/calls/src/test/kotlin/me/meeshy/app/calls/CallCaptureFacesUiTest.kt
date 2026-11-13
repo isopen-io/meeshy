@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
@@ -118,6 +119,26 @@ class CallCaptureFacesUiTest {
 
         assertThat(capture.state.value.status).isEqualTo(CallCaptureStatus.NoVideo)
         assertThat(capture.state.value.flashCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `apres Chaque visage la barre revient a son menu de base (#16979)`() {
+        show(live(), capture())
+        openSettings()
+
+        rule.onNodeWithContentDescription("Each face").performClick()
+        rule.waitForIdle()
+
+        rule.onNodeWithContentDescription("Each face").assertDoesNotExist()
+        rule.onNodeWithText("Classics").assertExists()
+    }
+
+    @Test
+    fun `au Montage Reglages annonce Chaque visage, pas la luminosite`() {
+        show(live(), capture())
+
+        val node = rule.onNodeWithContentDescription("Settings").fetchSemanticsNode()
+        assertThat(node.config[SemanticsActions.OnClick].label).isEqualTo("Shows “Each face” instead of the frames")
     }
 
     @Test

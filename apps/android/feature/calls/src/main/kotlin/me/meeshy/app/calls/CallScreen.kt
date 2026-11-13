@@ -423,6 +423,7 @@ fun CallScreen(
                     eglContext = viewModel.eglBaseContext,
                     reduceMotion = reduceMotion,
                     onClose = chrome::exitMode,
+                    onOpenFrames = { chrome.enter(CallScreenMode.Montage) },
                     peerUserId = config.peerId.ifBlank { viewModel.activeConfig.peerId },
                     peerAvatarUrl = avatarUrl,
                 )

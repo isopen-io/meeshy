@@ -83,8 +83,13 @@
     <string name="call_detail_type">Tipo</string>
     <string name="call_detail_type_audio">Chamada de voz</string>
     <string name="call_detail_type_video">Chamada de vídeo</string>
+    <string name="call_effects_add_look_full">No máximo três efeitos</string>
+    <string name="call_effects_add_look_full_hint">Cancele um efeito para adicionar outro; mantenha pressionado para vê-los</string>
+    <string name="call_effects_applied_title">Efeitos aplicados</string>
+    <string name="call_effects_category_frame">Molduras</string>
     <string name="call_effects_companions_more">Mais %1$d participantes</string>
     <string name="call_effects_companions_move">Mudar de lado</string>
+    <string name="call_effects_layer_undo">Cancelar %1$s</string>
     <string name="call_ended">Chamada encerrada</string>
     <string name="call_ended_connection_lost">Conexão perdida</string>
     <string name="call_ended_declined">Chamada recusada</string>
@@ -185,6 +190,7 @@
     <string name="call_mode_record_stop">Parar a gravação</string>
     <string name="call_mode_recording">Gravando</string>
     <string name="call_moderation_cancel">Cancelar</string>
+    <string name="call_montage_settings_hint">Mostra “Cada rosto” no lugar das molduras</string>
     <string name="call_open_conversation">Conversa</string>
     <string name="call_open_conversation_hint">Abre a conversa mantendo a chamada ativa</string>
     <string name="call_panel_back">Voltar às ações</string>

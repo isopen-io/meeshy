@@ -83,8 +83,13 @@
     <string name="call_detail_type">Tipo</string>
     <string name="call_detail_type_audio">Chiamata vocale</string>
     <string name="call_detail_type_video">Videochiamata</string>
+    <string name="call_effects_add_look_full">Al massimo tre effetti</string>
+    <string name="call_effects_add_look_full_hint">Annulla un effetto per aggiungerne un altro; tieni premuto per vederli</string>
+    <string name="call_effects_applied_title">Effetti applicati</string>
+    <string name="call_effects_category_frame">Cornici</string>
     <string name="call_effects_companions_more">Altri %1$d partecipanti</string>
     <string name="call_effects_companions_move">Cambia lato</string>
+    <string name="call_effects_layer_undo">Annulla %1$s</string>
     <string name="call_ended">Chiamata terminata</string>
     <string name="call_ended_connection_lost">Connessione persa</string>
     <string name="call_ended_declined">Chiamata rifiutata</string>
@@ -185,6 +190,7 @@
     <string name="call_mode_record_stop">Interrompi la registrazione</string>
     <string name="call_mode_recording">Registrazione in corso</string>
     <string name="call_moderation_cancel">Annulla</string>
+    <string name="call_montage_settings_hint">Mostra «Ogni volto» al posto delle cornici</string>
     <string name="call_open_conversation">Conversazione</string>
     <string name="call_open_conversation_hint">Apre la conversazione mantenendo la chiamata attiva</string>
     <string name="call_panel_back">Torna alle azioni</string>

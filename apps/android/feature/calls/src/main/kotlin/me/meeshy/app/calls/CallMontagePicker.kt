@@ -77,7 +77,7 @@ import me.meeshy.sdk.model.call.effects.CallEffectLayers
 import me.meeshy.sdk.model.call.effects.CallEffectsBarMode
 import me.meeshy.sdk.model.call.effects.CallEffectsBarRule
 import me.meeshy.sdk.model.call.effects.CallEffectsCategory
-import me.meeshy.sdk.model.call.effects.CallEffectsModeRule
+import me.meeshy.sdk.model.call.effects.CallEffectsGenreRule
 import me.meeshy.sdk.model.call.effects.category
 import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFrameMood
@@ -105,20 +105,15 @@ private val THUMB_HEIGHT = 85.dp
 private val THUMB_SPACING = 12.dp
 private val SIDE_DIAMETER = 48.dp
 
-/** Les puces de tri du Montage, dans l'ordre de C1 : Filtres · Cadres (pressée) · Visage. */
-private val MONTAGE_KINDS = listOf(CallEffectKind.Color, CallEffectKind.Frame, CallEffectKind.Face)
-
-/** (+) depuis le Montage : Visage d'abord, puis Filtres (Effets les offre), le cadre étant celui qu'on tient. */
-private val ADDABLE_KINDS = listOf(CallEffectKind.Face, CallEffectKind.Color, CallEffectKind.Frame)
-
 /**
  * **LE CHOIX DU MODE MONTAGE** (#13690, #13732, #13733, #16979) — la barre est celle d'Effets, `‹ · Réglages · (+)` (loi 14) :
- * au-dessus d'elle, les puces de tri dont « Cadres » est pressée, puis la bande des cadres — l'option « Cadre » (garder le
- * cadre pour les deux et le proposer), les ambiances, le carrousel aimanté dont l'élément centré est choisi et SE déclenche
- * (deux tapes : photo ; appui long : film). Ni Quitter ni Valider : ce qui est touché s'applique aussitôt, ‹ revient à
- * l'appel, et après chaque choix la barre revient à son menu de base. « Réglages » porte « Chaque visage » ; (+) ouvre
- * Effets sur un genre absent de la pile (trois couches au plus) et son appui long liste les effets appliqués pour en
- * annuler un. Choisir un cadre ne sert que la capture : rien ne part vers l'appel sans « Cadre ».
+ * au-dessus d'elle, la rangée de genres de la famille (Visage · Couleur · Cadres, [CallEffectsGenreRule.row], la même
+ * qu'en Effets) dont « Cadres » est pressée, puis la bande des cadres — l'option « Cadre » (garder le cadre pour les deux
+ * et le proposer), les ambiances, le carrousel aimanté dont l'élément centré est choisi et SE déclenche (deux tapes :
+ * photo ; appui long : film). Ni Quitter ni Valider : ce qui est touché s'applique aussitôt, ‹ revient à l'appel, et après
+ * chaque choix la barre revient à son menu de base. « Réglages » porte « Chaque visage » ; Visage ou Couleur touchés, comme
+ * (+), ouvrent Effets sur ce genre (un genre absent de la pile, trois couches au plus) ; l'appui long de (+) liste les
+ * effets appliqués pour en annuler un. Choisir un cadre ne sert que la capture : rien ne part vers l'appel sans « Cadre ».
  */
 @Composable
 internal fun CallMontagePicker(
@@ -144,6 +139,12 @@ internal fun CallMontagePicker(
     val shownBar = CallEffectsBarRule.reconciled(bar, hasLayers = !layers.isEmpty)
     LaunchedEffect(shownBar) { bar = shownBar }
     val chosenFrame = CallFrameLayer.chosen(pick, people.size)
+    val row = CallEffectsGenreRule.row(offersEffects = effectsOffered, offersFrames = true)
+    val added = CallEffectsGenreRule.adding(CallEffectKind.Frame, layers, row)
+    val faces: () -> Unit = {
+        shooter.faces()
+        bar = CallEffectsBarRule.afterChoice
+    }
     val removeLayer: (CallEffectKind) -> Unit = { kind ->
         if (kind == CallEffectKind.Frame) CallFrameLayer.remove(capture, live, held.frameId, chosenFrame) else onRemoveEffect(kind)
         bar = CallEffectsBarRule.afterRemoval
@@ -159,22 +160,23 @@ internal fun CallMontagePicker(
         EffectsBand(shownBar, reduceMotion) { shown ->
             when (shown) {
                 CallEffectsBarMode.Base -> MontageLooksBand(live, capture, people, isLiveOffered, reduceMotion, layers, shooter, hints)
-                CallEffectsBarMode.Settings -> MontageSettingsPanel(facesEnabled = !captureState.isWorking && !captureState.isRecording, onFaces = shooter.faces)
+                CallEffectsBarMode.Settings -> MontageSettingsPanel(facesEnabled = !captureState.isWorking && !captureState.isRecording, onFaces = faces)
                 CallEffectsBarMode.Applied -> EffectsAppliedPanel(layers, removeLayer)
             }
         }
         EffectsBar(
-            chips = if (effectsOffered) MONTAGE_KINDS else listOf(CallEffectKind.Frame),
+            chips = row,
             selected = CallEffectKind.Frame,
             bar = shownBar,
             layers = layers,
             reduceMotion = reduceMotion,
             onBack = onClose,
             onSettings = { bar = CallEffectsBarRule.afterSettings(shownBar) },
-            onAddLook = { CallEffectsModeRule.addingKind(CallEffectKind.Frame, ADDABLE_KINDS, layers)?.category?.let(onOpenEffects) },
+            onAddLook = { added?.category?.let(onOpenEffects) },
             onShowApplied = { bar = CallEffectsBarRule.afterShowingApplied(shownBar, hasLayers = !layers.isEmpty) },
             onChip = { kind -> kind.category?.let(onOpenEffects) },
-            addsLook = effectsOffered,
+            addsLook = added != null,
+            settingsHint = stringResource(R.string.call_montage_settings_hint),
         )
     }
 }
@@ -296,7 +298,8 @@ private fun MontageFramesCarousel(
 
 /**
  * « Réglages » au Montage : un verre séparé, posé au-dessus de la barre à la place de la bande de cadres. « Chaque
- * visage » n'a pas de place dessinée sur C1 ; il se range ici (comme sur iOS), refusé pendant une prise ou un film.
+ * visage » n'a pas de place dessinée sur C1 ; il se range ici (comme sur iOS), refusé pendant une prise ou un film, et
+ * le toucher rend le menu de base ([CallEffectsBarRule.afterChoice]).
  */
 @Composable
 private fun MontageSettingsPanel(facesEnabled: Boolean, onFaces: () -> Unit) {

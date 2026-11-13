@@ -154,6 +154,24 @@ class CallMontageEffectsBarTest {
     }
 
     @Test
+    fun `la rangee de genres est celle d'Effets, Visage puis Couleur puis Cadres (#16979, comme iOS)`() {
+        show(Outcome())
+
+        val lefts = listOf("Face", "Colour", "Frames").map { rule.onNodeWithText(it).fetchSemanticsNode().positionInRoot.x }
+        assertThat(lefts).isInStrictOrder()
+    }
+
+    @Test
+    fun `(+) avec Visage et Couleur poses ouvre encore Effets, sur Visage`() {
+        val outcome = Outcome().apply { layers = stack(colorLayer, faceLayer) }
+        show(outcome)
+
+        rule.onNodeWithContentDescription("Add another look").performClick()
+
+        assertThat(outcome.opened).containsExactly(CallEffectsCategory.Face)
+    }
+
+    @Test
     fun `une puce d'un autre genre ouvre Effets sur ce genre, celle de Cadres ne fait rien`() {
         val outcome = Outcome()
         show(outcome)
@@ -195,9 +213,9 @@ class CallMontageEffectsBarTest {
         show(outcome)
 
         rule.onNodeWithContentDescription("Add another look").assertDoesNotExist()
-        rule.onNodeWithContentDescription("Three effects at most: remove one to add another").performClick()
+        rule.onNodeWithContentDescription("Three effects at most").performClick()
         assertThat(outcome.opened).isEmpty()
-        rule.onNodeWithContentDescription("Three effects at most: remove one to add another").performTouchInput { longClick() }
+        rule.onNodeWithContentDescription("Three effects at most").performTouchInput { longClick() }
         rule.waitForIdle()
 
         rule.onNodeWithText("Applied effects").assertExists()
@@ -212,7 +230,7 @@ class CallMontageEffectsBarTest {
         rule.waitForIdle()
         rule.onNodeWithText("Applied effects").assertExists()
         rule.onNodeWithText("Classics").assertDoesNotExist()
-        rule.onNodeWithContentDescription("Undo Colour · Golden").performClick()
+        rule.onNodeWithContentDescription("Cancel Colour · Golden").performClick()
         rule.waitForIdle()
 
         assertThat(outcome.removed).containsExactly(CallEffectKind.Color)
@@ -228,7 +246,7 @@ class CallMontageEffectsBarTest {
 
         rule.onNodeWithContentDescription("Add another look").performTouchInput { longClick() }
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("Undo Face · Toad").performClick()
+        rule.onNodeWithContentDescription("Cancel Face · Toad").performClick()
         rule.waitForIdle()
         outcome.layers  = stack(colorLayer)
         rule.waitForIdle()
@@ -271,7 +289,7 @@ class CallMontageEffectsBarTest {
 
         rule.onNodeWithContentDescription("Add another look").performTouchInput { longClick() }
         rule.waitForIdle()
-        rule.onNode(hasContentDescription("Undo Frames", substring = true)).performClick()
+        rule.onNode(hasContentDescription("Cancel Frame · ", substring = true)).performClick()
         rule.waitForIdle()
 
         assertThat(CallMontagePickRule.choice(capture.pick.value, 2)).isEqualTo(CallMontageChoice.Classic(CallCaptureSceneRule.DEFAULT_STYLE))

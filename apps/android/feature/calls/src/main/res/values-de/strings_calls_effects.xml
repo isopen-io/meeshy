@@ -22,11 +22,7 @@
     <string name="call_effects_percent">%1$d %%</string>
     <string name="call_effects_next">Nächster Effekt</string>
     <string name="call_effects_previous">Vorheriger Effekt</string>
-    <string name="call_effects_category_frame">Rahmen</string>
     <string name="call_effects_category_landscape">Landschaft</string>
     <string name="call_effects_category_voice">Stimme</string>
-    <string name="call_effects_applied_title">Angewendete Effekte</string>
     <string name="call_effects_layer_entry">%1$s · %2$s</string>
-    <string name="call_effects_layer_undo">%1$s rückgängig machen</string>
-    <string name="call_effects_add_look_full">Höchstens drei Effekte: Entferne einen, um einen weiteren hinzuzufügen</string>
 </resources>

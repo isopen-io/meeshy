@@ -160,7 +160,7 @@ private fun CallMontageContent(
         onClose = onClose,
         modifier = pickerModifier,
         layers = layers,
-        effectsOffered = state.status == CallStatus.CONNECTED && state.isVideoCall && state.isCameraOn && state.showsConnectedLayout,
+        effectsOffered = state.offersEffectsMode(),
         onRemoveEffect = effects::removeLayer,
         onOpenEffects = { category ->
             effects.requestEffectsCategory(category)

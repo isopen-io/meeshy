@@ -93,8 +93,10 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.category.frame",
           "androidName": "call_effects_category_frame",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "call_effects_category_landscape",
@@ -105,20 +107,38 @@
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.applied.title",
           "androidName": "call_effects_applied_title",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
           "androidName": "call_effects_layer_entry",
           "status": "android-only"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.applied.cancel",
           "androidName": "call_effects_layer_undo",
-          "status": "android-only"
+          "status": "adopted"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.addLook.full",
           "androidName": "call_effects_add_look_full",
-          "status": "android-only"
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.effects.addLook.full.hint",
+          "androidName": "call_effects_add_look_full_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.mode.montage.settings.hint",
+          "androidName": "call_montage_settings_hint",
+          "status": "adopted"
         }
       ]
     }
