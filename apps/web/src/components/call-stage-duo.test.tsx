@@ -102,7 +102,7 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
   };
   proto.getBoundingClientRect = function rect(this: HTMLElement) {
     const moved = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(this.style.transform);
-    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) + Number(moved?.[1] ?? 0);
+    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) - (this.hasAttribute('data-call-self-tile-beside-column') ? 360 : 0) + Number(moved?.[1] ?? 0);
     const lifted = /\+ (\d+(?:\.\d+)?)px\)/.exec(this.style.top);
     const top = 80 + Number(lifted?.[1] ?? 0) + Number(moved?.[2] ?? 0);
     const width = Number.parseFloat(this.style.width) || 0;
@@ -300,8 +300,10 @@ describe('W1.5 — ma vignette prend le coin de fin du sens de lecture', () => {
       view.render(true, 0, 0);
       view.done();
     });
-    expect(played).toHaveLength(2);
-    for (const frames of played) expect(Object.keys(frames[0] ?? {})).toEqual(['transform']);
+    expect(played).toEqual([
+      [{ transform: 'translate(360px, 0px)' }, { transform: 'none' }],
+      [{ transform: 'translate(-360px, 0px)' }, { transform: 'none' }],
+    ]);
   });
 });
 

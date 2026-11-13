@@ -279,12 +279,12 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   const size = selfTileSize(scale, screen);
   const restFactor = selfTileRestingFactor(scale, chromeVisible, screen);
   const topInset = self.topInset ?? 0;
-  const rest = selfTileBox({ corner, size, viewport: screen, topInset });
+  const rest = selfTileBox({ corner, size, viewport: screen, topInset, bleed: bleedEnd });
   const seen = { width: size.width * restFactor, height: size.height * restFactor };
   const seenX = corner.endsWith('left') ? rest.x : rest.x + rest.width - seen.width;
   const seenY = corner.startsWith('top') ? rest.y : rest.y + rest.height - seen.height;
   const drop = ({ dx, dy }: TileOffset): void => {
-    const next = nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset });
+    const next = nearestSelfCorner({ center: { x: seenX + seen.width / 2 + dx, y: seenY + seen.height / 2 + dy }, size, viewport: screen, topInset, bleed: bleedEnd });
     if (next !== corner) moveTo(next);
   };
   const drag = useTileDrag(drop);
@@ -306,7 +306,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
   };
   /* La clé dit la FORME (palier, fenêtre couchée ou debout), jamais les pixels : redimensionner la fenêtre sans la coucher ne mesure ni ne rejoue rien, la vignette la suit ; la coucher joue une fois. */
   useFlip(cornerFrame, {
-    key: cornerShown ? `${corner}:${scale}:${isLandscapeWindow(screen) ? 'couchée' : 'debout'}:${topInset}:${offset === null ? 'rest' : 'held'}` : null,
+    key: cornerShown ? `${corner}:${scale}:${isLandscapeWindow(screen) ? 'couchée' : 'debout'}:${topInset}:${bleedEnd > 0 ? 'colonne' : 'seule'}:${offset === null ? 'rest' : 'held'}` : null,
     origin: { x: corner.endsWith('left') ? 0 : 1, y: corner.startsWith('top') ? 0 : 1 },
     held: offset !== null,
     duration: SELF_TILE_FLIP_MS,
@@ -352,6 +352,7 @@ function VideoDuo({ call, language, self, chromeVisible = true, onRevealChrome =
           data-call-self-tile-composed={composed ? '' : undefined}
           data-call-self-tile-corner={corner}
           data-call-self-tile-compact={compact ? '' : undefined}
+          data-call-self-tile-beside-column={bleedEnd > 0 ? '' : undefined}
           data-call-self-tile-dragging={offset === null ? undefined : ''}
         >
           <button

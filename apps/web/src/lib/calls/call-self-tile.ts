@@ -88,6 +88,16 @@ export const SELF_CORNERS: readonly SelfTileCorner[] = ['top-left', 'top-right',
 
 export const DEFAULT_SELF_CORNER: SelfTileCorner = 'top-right';
 
+/**
+ * **W1.5 — LE COIN DE FIN DU SENS DE LECTURE** (`.topTrailing` d'iOS, `TopEnd` d'Android) : un appel neuf pose ma vignette
+ * en haut, côté fin de ligne — là où la colonne du journal (W1) se pose aussi. Haut-droite en gauche à droite,
+ * haut-gauche en droite à gauche. Un coin que j'ai choisi, lui, est physique et ne bouge plus.
+ */
+export const defaultSelfCorner = (rtl: boolean): SelfTileCorner => (rtl ? 'top-left' : DEFAULT_SELF_CORNER);
+
+/** Le sens de lecture de l'interface, posé sur le document (`dir`). */
+export const readingIsRtl = (): boolean => typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+
 export const SELF_TILE_MARGIN = 16;
 
 export const SELF_TILE_TOP = 128;
@@ -144,21 +154,22 @@ const onTop = (corner: SelfTileCorner): boolean => corner.startsWith('top');
 
 const onLeft = (corner: SelfTileCorner): boolean => corner.endsWith('left');
 
-type BoxInput = { readonly corner: SelfTileCorner; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number };
+/** `bleed` : la largeur que la colonne du journal retire à la scène (W1) — la vignette se tient dans la scène réduite, la forme de la fenêtre (`viewport`) restant celle qui décide de sa taille et de ses hauteurs. */
+type BoxInput = { readonly corner: SelfTileCorner; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number; readonly bleed?: number };
 
-export function selfTileBox({ corner, size, viewport, topInset = 0 }: BoxInput): TileBox {
+export function selfTileBox({ corner, size, viewport, topInset = 0, bleed = 0 }: BoxInput): TileBox {
   const clearance = selfTileCornerInsets(viewport);
   const top = clearance.top + topInset;
-  const x = onLeft(corner) ? SELF_TILE_MARGIN : viewport.width - SELF_TILE_MARGIN - size.width;
+  const x = onLeft(corner) ? SELF_TILE_MARGIN : viewport.width - bleed - SELF_TILE_MARGIN - size.width;
   const y = onTop(corner) ? top : Math.max(top, viewport.height - clearance.bottom - size.height);
   return { x, y, width: size.width, height: size.height };
 }
 
-type NearestInput = { readonly center: { readonly x: number; readonly y: number }; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number };
+type NearestInput = { readonly center: { readonly x: number; readonly y: number }; readonly size: TileSize; readonly viewport: TileSize; readonly topInset?: number; readonly bleed?: number };
 
-export function nearestSelfCorner({ center, size, viewport, topInset = 0 }: NearestInput): SelfTileCorner {
+export function nearestSelfCorner({ center, size, viewport, topInset = 0, bleed = 0 }: NearestInput): SelfTileCorner {
   const away = (corner: SelfTileCorner): number => {
-    const box = selfTileBox({ corner, size, viewport, topInset });
+    const box = selfTileBox({ corner, size, viewport, topInset, bleed });
     return Math.hypot(center.x - (box.x + box.width / 2), center.y - (box.y + box.height / 2));
   };
   return SELF_CORNERS.reduce((best, corner) => (away(corner) < away(best) ? corner : best), DEFAULT_SELF_CORNER);
@@ -181,7 +192,7 @@ export const selfTileStore = createStore<SelfTileState>(() => ({ callId: null, s
 
 export const selfTileScaleFor = (state: SelfTileState, callId: string): SelfTileScale => (state.callId === callId ? state.scale : DEFAULT_SELF_TILE);
 
-export const selfTileCornerFor = (state: SelfTileState, callId: string): SelfTileCorner => (state.callId === callId ? state.corner : DEFAULT_SELF_CORNER);
+export const selfTileCornerFor = (state: SelfTileState, callId: string, rtl: boolean = readingIsRtl()): SelfTileCorner => (state.callId === callId ? state.corner : defaultSelfCorner(rtl));
 
 export const setSelfTileScale = (callId: string, scale: SelfTileScale): void => selfTileStore.setState((state) => ({ callId, scale, corner: selfTileCornerFor(state, callId) }));
 
