@@ -102,7 +102,9 @@ internal data class ConversationMenuInput(
 
 /**
  * LE menu d'une rangée, calculé une fois depuis [ConversationRowMenuCapabilities] : le composable
- * ne porte aucune condition, il parcourt [groups] dans l'ordre. Miroir de `ConversationMenuCatalog.make`.
+ * ne porte aucune condition, il parcourt [groups] dans l'ordre. Miroir de `ConversationMenuCatalog.make`,
+ * dont il DIVERGE depuis l'épure (#17697, règle 6) : Renommer, Favori, Tags, Déplacer, Mentions seulement
+ * et Mode de lecture sont rangés derrière « Plus » ; l'iOS les garde à la racine tant que son lot n'a pas suivi.
  */
 internal data class ConversationMenuModel(
     val header: List<ConversationMenuEntry>,
