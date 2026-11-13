@@ -90,9 +90,17 @@ class CallCaptureFacesUiTest {
         }
     }
 
+    /** « Chaque visage » n'a pas de place dessinée sur C1 : il se range sous « Réglages » (#17902, comme iOS). */
+    private fun openSettings() {
+        rule.onNodeWithContentDescription("Settings").performClick()
+        rule.waitForIdle()
+    }
+
     @Test
-    fun `la barre du montage offre Chaque visage, qui dit ce qu'il enregistre`() {
+    fun `Reglages offre Chaque visage, qui dit ce qu'il enregistre`() {
         show(live(), capture())
+        rule.onNodeWithContentDescription("Each face").assertDoesNotExist()
+        openSettings()
 
         val node = rule.onNodeWithContentDescription("Each face").assertIsEnabled().fetchSemanticsNode()
         assertThat(node.config[SemanticsActions.OnClick].label).isEqualTo("Saves a square portrait of each participant to your gallery")
@@ -102,6 +110,7 @@ class CallCaptureFacesUiTest {
     fun `toucher Chaque visage lance la prise des portraits`() {
         val capture = capture()
         show(live(), capture)
+        openSettings()
 
         rule.onNodeWithContentDescription("Each face").performClick()
         // La porte des permissions relit son historique hors du fil principal : l'issue arrive après l'inactivité de Compose.
@@ -116,6 +125,7 @@ class CallCaptureFacesUiTest {
         val capture = capture()
         runBlocking { capture.startRecording({ CallCaptureScene(CallCaptureLook.Classic(CallMontageStyle.SCREEN), emptyList()) }) { true } }
         show(live(), capture)
+        openSettings()
 
         rule.onNodeWithContentDescription("Each face").assertIsNotEnabled()
         runBlocking { capture.stopRecording() }
