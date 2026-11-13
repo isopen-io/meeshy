@@ -493,3 +493,16 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   La preuve Android complète est `android.yml` sur la PR.
 - Reste pour fermer #17100 : émetteur socket et flux d'événements (`sdk-core`), lecteur Media3 piloté par la loi,
   bandeau d'invitation, ligne de la fiche d'un Proche, libellés `together.*`.
+
+## 2026-11-13 — réveil 29 : le passage en E2EE coupe le talkie à l'instant (#14490)
+
+- Reprise : dix-neuf PR de la routine ouvertes, toutes poussées par d'autres réveils dans l'heure ; aucune n'a été
+  doublée. Aucune branche n'écrivait le talkie côté passerelle hors `talkieRelay.ts` (#18010, traces seulement) : lot
+  #14490 réservé sur `claude/cercles-14490-talkie-e2ee`, témoins rouges poussés avant toute logique.
+- Lot : `cutTalkiesOnEndToEnd` (`talkieCut.ts`) pose la coupure partagée d'un blocage dans les deux sens de la paire,
+  appelée par `POST /conversations/:id/encryption` juste après l'écriture du régime `e2ee` ; `REJUDGE_TIMEOUT_MS`
+  (`talkieRelay.ts`) coupe une prise de parole dont le rejugement ne rend pas en 2 s. Une coupure qui ne s'écrit pas
+  ne défait pas la bascule : le rejugement borné prend le relais.
+- Gates locaux : 69 suites voisines (talkie, conversation-encryption, handlers socket, gardes de minuterie et de
+  promesse détachée) 1 318/1 318 vertes ; ROUGE prouvé en retirant la production (9 témoins tombent) ; `tsc`
+  passerelle vert ; cliquet `any` 489 inchangé.
