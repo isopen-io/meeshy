@@ -217,3 +217,5 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : simulation Python des trois balayages verte ; `xcstrings_to_android.py --check` vert (ces clés n'alimentent pas Android). iOS ne compile pas en conteneur : preuve par `ios.yml` / `sdk-tests.yml`.
 - Reste hors communautés (même défaut, autre domaine) : `story.post.*`, `story.slide.addSlide`, repères de timeline (« Keyframe », « Playhead », « VIDEO ») — laissés au composer, issue de suivi.
 - Prochain lot recommandé : #17209 (traductions de story et blocage), puis #16739 (décision) ; #14227 / #16696 et #6381 demandent une session de staging.
+- Suivi ouvert : #17958 (libellés du composer de story). PR #17960.
+- État en fin de run : #17960 ouverte, NON fusionnée. « Gardes iOS (texte) » rouge HORS du lot : dev l'est depuis `b5b8216122` (correctif d'appel entrant du porteur, `PlayingSoundLoop` ajoute un `@unchecked Sendable`, 112 → 113) — #17968, cédée au chantier des appels. Le prochain réveil relance `ios.yml` quand #17968 est soldée, puis fusionne au vert.
