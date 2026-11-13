@@ -166,22 +166,32 @@ final class GroupCallModelTests: XCTestCase {
     // MARK: - Grille
 
     func test_layout_growsWithTileCount() {
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 1, isLandscape: false), GroupCallGridLayout(columns: 1, rows: 1))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 2, isLandscape: false), GroupCallGridLayout(columns: 1, rows: 2))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 2, isLandscape: true), GroupCallGridLayout(columns: 2, rows: 1))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: false), GroupCallGridLayout(columns: 2, rows: 2))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 6, isLandscape: false), GroupCallGridLayout(columns: 2, rows: 3))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 6, isLandscape: true), GroupCallGridLayout(columns: 3, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 1, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 1, rows: 1))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 2, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 1, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 2, isLandscape: true, isCompactHeight: true), GroupCallGridLayout(columns: 2, rows: 1))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 6, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 3))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 6, isLandscape: true, isCompactHeight: true), GroupCallGridLayout(columns: 3, rows: 2))
     }
 
-    /// L4.1 — en paysage, quatre personnes tiennent sur UNE rangée de quatre (planche `cols:4`).
+    /// L4.1 — en paysage de hauteur compacte (téléphone), quatre personnes tiennent sur UNE rangée de quatre (planche `cols:4`).
     /// La planche ne dessine pas trois personnes en paysage : leur grille 2 × 2 (#3585) ne change pas.
     /// Le portrait garde sa grille 2 × 2.
-    func test_layout_landscape_putsFourOnASingleRow_andKeepsThreeInTheirGrid() {
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: true), GroupCallGridLayout(columns: 4, rows: 1))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 3, isLandscape: true), GroupCallGridLayout(columns: 2, rows: 2))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 3, isLandscape: false), GroupCallGridLayout(columns: 2, rows: 2))
-        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: false), GroupCallGridLayout(columns: 2, rows: 2))
+    func test_layout_compactLandscape_putsFourOnASingleRow_andKeepsThreeInTheirGrid() {
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: true, isCompactHeight: true), GroupCallGridLayout(columns: 4, rows: 1))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 3, isLandscape: true, isCompactHeight: true), GroupCallGridLayout(columns: 2, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 3, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 2))
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: false, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 2))
+    }
+
+    /// W2 · W2.1 — scène large ET haute (iPad ou fenêtre en paysage, hauteur ample) : 2 × 2, jamais une rangée de quatre.
+    /// Une scène large mais basse reste en rangée de quatre ; le seuil est celui de `CallGroupStageSizing`.
+    func test_layout_landscapeWithAmpleHeight_keepsFourInTwoByTwo() {
+        XCTAssertEqual(GroupCallGridLayout.layout(tileCount: 4, isLandscape: true, isCompactHeight: false), GroupCallGridLayout(columns: 2, rows: 2))
+        XCTAssertTrue(CallGroupStageSizing.isCompactHeight(390))
+        XCTAssertTrue(CallGroupStageSizing.isCompactHeight(430))
+        XCTAssertFalse(CallGroupStageSizing.isCompactHeight(800))
+        XCTAssertFalse(CallGroupStageSizing.isCompactHeight(820))
     }
 
     func test_layout_alwaysHoldsEveryTileUpToTheMeshCeiling() {
