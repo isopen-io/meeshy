@@ -54,7 +54,7 @@ object AuthorInk {
     fun hex(hex: String, mode: ThemeMode): String {
         val scheme = scheme(mode)
         val tint = hex.trim().removePrefix("#").uppercase()
-        return steps.map { mix(tint, scheme.ink, it) }.firstOrNull { isLegible(it, scheme.backgrounds) } ?: scheme.ink
+        return steps.asSequence().map { mix(tint, scheme.ink, it) }.firstOrNull { isLegible(it, scheme.backgrounds) } ?: scheme.ink
     }
 
     fun backgrounds(mode: ThemeMode): List<String> = scheme(mode).backgrounds
