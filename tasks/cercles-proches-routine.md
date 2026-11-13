@@ -466,3 +466,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil 25 : recevoir sur iOS les positions qu'on me partage, couche SDK (#16983)
+
+- Reprise : #17956 (carte web, #16984), #17147 (séance « ensemble » et conversation close) et #17013 (icône par cercle,
+  serveur) sont menés en ce moment par d'autres réveils de la routine (branches poussées dans les minutes précédentes) :
+  ce réveil leur cède et prend #16983, libre.
+- Lot : PR vers `dev`, SDK seulement. `SharedLocation.swift` (lecture Swift de `shared-location.ts`, décodeur borné :
+  un champ en trop n'a pas de place, une coordonnée hors du globe ou une précision inconnue sont refusées),
+  `location:share-changed|ended` routés et publiés (`SharedLocationEvents`), `RelationsService.sharedLocations(within:)`
+  (`GET /relations/locations?bbox=`, l'entrée sort de `PENDING_CLIENT_ENTRIES`), `SharedLocationsLive` (magasin en
+  mémoire, iso du web : montée de précision sans recharger, fin et échéance qui effacent, rattrapage qui fait foi dans
+  son emprise).
+- Gates locaux : catalogue Swift 328/328 conforme, `check_cohesion_budget.sh` et `check_pbxproj_consistency.sh` verts.
+  `check_house_rules.sh` est rouge sur `dev` AVANT ce lot (`unchecked-sendable` 112 → 113, fichiers d'appel et
+  d'onboarding), identique avec et sans le lot. Swift ne compile pas en conteneur : la preuve est `sdk-tests.yml` et
+  `ios.yml` dispatchés sur la PR.
+- Reste de #16983 : la carte de réception (épingles, cercle de flou, VoiceOver) câblée sur `SharedLocationsLive`,
+  puis l'émission (fiche d'un Ami, durée, précision, arrêt) et les chaînes `InfoPlist.strings`.
