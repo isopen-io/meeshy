@@ -170,8 +170,8 @@ struct ConversationEngagementBadge: View {
             return String(localized: "conversation.header.flame.card.hint",
                           defaultValue: "Ouvre la série de la conversation", bundle: .main)
         case .legend:
-            return String(localized: "conversation.header.engagement.legend.hint",
-                          defaultValue: "Ouvre Ma Légende", bundle: .main)
+            return String(localized: "conversation.header.flame.card.open",
+                          defaultValue: "Voir le jeu", bundle: .main)
         }
     }
 }

@@ -134,7 +134,6 @@
     <string name="chat_forward_search_hint">Unterhaltung suchen...</string>
     <string name="chat_forward_sent">Weitergeleitet</string>
     <string name="chat_guest_bar_close">Unterhaltung schließen</string>
-    <string name="chat_header_engagement_legend_hint">Öffnet Meine Legende</string>
     <string name="chat_header_flame_card_hide">Flamme ausblenden</string>
     <string name="chat_header_flame_card_hint">Öffnet die Serie der Unterhaltung</string>
     <string name="chat_header_flame_card_open">Zum Spiel</string>

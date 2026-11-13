@@ -53,7 +53,7 @@ internal fun ChatHeaderEngagementPill(
     val totalText = remember(form.totalPoints, locale) { CompactCountFormat.text(form.totalPoints, locale) }
     val description = flameDescription(snapshot!!)
     val hint = stringResource(
-        if (tap is EngagementPillTap.FlameCard) R.string.chat_header_flame_card_hint else R.string.chat_header_engagement_legend_hint,
+        if (tap is EngagementPillTap.FlameCard) R.string.chat_header_flame_card_hint else R.string.chat_header_flame_card_open,
     )
     var cardOpen by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
