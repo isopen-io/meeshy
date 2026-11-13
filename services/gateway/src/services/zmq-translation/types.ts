@@ -69,6 +69,22 @@ export interface TranslationErrorEvent {
 }
 
 /**
+ * Ce que `ZmqMessageHandler` puis `ZmqTranslationClient` émettent sous
+ * `translationError`. Chaque champ venu du fil est filtré par type (#18063) :
+ * `taskId`, `errorCode` et `targetLanguage` ne sont posés que s'ils sont des
+ * chaînes non vides, et `metadata` n'est jamais qu'un objet simple.
+ */
+export interface TranslationErrorPayload {
+  taskId?: string;
+  messageId: string;
+  error: string;
+  conversationId: string;
+  errorCode?: string;
+  targetLanguage?: string;
+  metadata: Record<string, unknown>;
+}
+
+/**
  * Le translator n'a pas traduit, et ne le fera jamais : le texte dépasse
  * `MAX_TRANSLATION_LENGTH` (#17204). `taskId` n'est porté que par un translator
  * qui le connaît ; sans lui, rien ne se solde.
