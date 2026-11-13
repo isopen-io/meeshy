@@ -36,6 +36,18 @@ public nonisolated enum MeeshyTileStripRule {
         guard let selection else { return [] }
         return tiles.filter { $0.id == selection }
     }
+
+    /// Le nom se lit sous CHAQUE vignette : `each`, hors carrousel. Un carrousel
+    /// ne lit que le nom de la courante, sous la bande : jamais deux fois le même.
+    public static func namesOnEachTile(_ names: MeeshyTileNames, layout: MeeshyTileStripLayout) -> Bool {
+        names == .each && !layout.isCarousel
+    }
+
+    /// Le nom de la courante se lit seul, sous la bande : `current`, ou un
+    /// carrousel dont les noms ne sont pas tus.
+    public static func nameUnderStrip(_ names: MeeshyTileNames, layout: MeeshyTileStripLayout) -> Bool {
+        names == .current || (layout.isCarousel && names != .none)
+    }
 }
 
 // MARK: - L'activation

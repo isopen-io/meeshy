@@ -339,6 +339,24 @@ struct MeeshyTileStripTests {
         #expect(MeeshyTileStripAccessibility.value(of: tiles, selection: nil) == "")
     }
 
+    @Test("un nom ne se lit jamais deux fois : en carrousel, seul celui de la courante, sous la bande")
+    func names_neverRepeated_followTheVectors() throws {
+        for row in try Self.rows("names") {
+            let names = try #require(MeeshyTileNames(rawValue: try kitRequired(row["names"] as? String)))
+            let layout: MeeshyTileStripLayout
+            switch try kitRequired(row["layout"] as? String) {
+            case "carousel": layout = .carousel()
+            case "grid": layout = .grid()
+            default: layout = .strip
+            }
+            let onTile = MeeshyTileStripRule.namesOnEachTile(names, layout: layout)
+            let underStrip = MeeshyTileStripRule.nameUnderStrip(names, layout: layout)
+            #expect(onTile == row["onTile"] as? Bool, "\(row)")
+            #expect(underStrip == row["underStrip"] as? Bool, "\(row)")
+            #expect(!(onTile && underStrip), "\(row)")
+        }
+    }
+
     // MARK: - Rendu
 
     @Test("une bande sans vignette ne rend rien : ni hauteur ni marge")

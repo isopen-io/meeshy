@@ -142,6 +142,42 @@ struct MeeshyTileOffsetObserver: ViewModifier {
 
 // MARK: - L'emplacement de dessous
 
+/// Le décalage du défilement, derrière une référence : seul le calque de
+/// dessous l'observe, la bande et ses vignettes ne se redessinent pas quand il
+/// bouge. Il ne publie qu'un décalage NEUF.
+@MainActor
+final class MeeshyTileScrollOffset: ObservableObject {
+    nonisolated deinit {}
+
+    @Published private(set) var value: CGFloat = 0
+
+    func move(to offset: CGFloat) {
+        guard offset != value else { return }
+        value = offset
+    }
+}
+
+/// La surface de l'hôte sous les vignettes visibles, relue au décalage du
+/// moment : la seule vue que le défilement redessine.
+struct MeeshyTileUnderlayLayer<Underlay: View>: View {
+    @ObservedObject var offset: MeeshyTileScrollOffset
+    let geometry: MeeshyTileStripGeometry
+    let isRightToLeft: Bool
+    let underlay: (MeeshyTileStripGeometry) -> Underlay
+
+    var body: some View {
+        let visible = geometry.scrolled(to: offset.value, viewport: geometry.viewport)
+        return underlay(visible)
+            .mask {
+                MeeshyTileUnderlayMask(
+                    geometry: visible, top: MeeshyTileMetrics.reserve, radius: MeeshyTileMetrics.radius,
+                    isRightToLeft: isRightToLeft
+                )
+            }
+            .allowsHitTesting(false)
+    }
+}
+
 /// Le masque de l'`underlay` : la forme des vignettes visibles, dans la zone
 /// visible. La surface de l'hôte ne se voit que là, sous les aperçus.
 struct MeeshyTileUnderlayMask: View {

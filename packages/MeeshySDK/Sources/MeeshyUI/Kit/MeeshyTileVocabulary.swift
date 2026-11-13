@@ -154,7 +154,7 @@ public nonisolated enum MeeshyTileMetrics {
     public static let nameMaxLines = 2
     /// La piste d'un carrousel ne descend jamais sous cette hauteur : un pouce
     /// posé un peu au-dessus ou au-dessous d'une vignette défile quand même.
-    public static let carouselMinimumHeight: CGFloat = 88
+    public static let carouselMinimumHeight = MeeshyControlSize.tapTarget * 2
     /// Le cercle : 2 de vide, puis 2 de trait.
     public static let ringGap = MeeshyBorder.strong
     public static let ringLine = MeeshyBorder.strong

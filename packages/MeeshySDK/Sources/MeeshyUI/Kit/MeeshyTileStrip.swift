@@ -44,7 +44,9 @@ public struct MeeshyTileStrip<ID: Hashable & Sendable, Preview: View, Underlay: 
     private var previewPressed: ID?
 
     @State private var viewport: CGFloat = 0
-    @State private var scrolled: CGFloat = 0
+    /// Le décalage, derrière une référence que seul le calque de dessous
+    /// observe : défiler ne redessine pas la bande.
+    @State private var scrollOffset = MeeshyTileScrollOffset()
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
     @Environment(\.layoutDirection) private var layoutDirection
@@ -157,7 +159,8 @@ public struct MeeshyTileStrip<ID: Hashable & Sendable, Preview: View, Underlay: 
         case .carousel(let dimsNeighbours):
             MeeshyTileCarousel(
                 tiles: shown, selection: selection, label: label, dimsNeighbours: dimsNeighbours,
-                configuration: configuration(fillsWidth: false), previewPressed: previewPressed,
+                configuration: configuration(fillsWidth: false),
+                showsCurrentName: MeeshyTileStripRule.nameUnderStrip(names, layout: layout), previewPressed: previewPressed,
                 revealsSelection: revealsSelection, isSolo: isSolo, gestures: currentGestures,
                 onSelect: onSelect, preview: preview
             )
@@ -166,7 +169,8 @@ public struct MeeshyTileStrip<ID: Hashable & Sendable, Preview: View, Underlay: 
 
     private func configuration(fillsWidth: Bool) -> MeeshyTileConfiguration {
         MeeshyTileConfiguration(
-            tileSize: tileSize, names: names, selectionStyle: selectionStyle, surface: surface,
+            tileSize: tileSize, namesOnTile: MeeshyTileStripRule.namesOnEachTile(names, layout: layout),
+            selectionStyle: selectionStyle, surface: surface,
             haptic: haptic, fillsWidth: fillsWidth
         )
     }
@@ -200,12 +204,13 @@ public struct MeeshyTileStrip<ID: Hashable & Sendable, Preview: View, Underlay: 
     private func geometry(count: Int) -> MeeshyTileStripGeometry {
         MeeshyTileStripGeometry(
             tileSize: tileSize, spacing: MeeshyTileMetrics.spacing, inset: inset + MeeshyTileMetrics.reserve,
-            count: count, offset: scrolled, viewport: viewport
+            count: count, viewport: viewport
         )
     }
 
     private func observer(count: Int) -> MeeshyTileScrollObserver {
-        let writesOffset: ((CGFloat) -> Void)? = underlay == nil ? nil : { scrolled = $0 }
+        let offset = scrollOffset
+        let writesOffset: ((CGFloat) -> Void)? = underlay == nil ? nil : { offset.move(to: $0) }
         return MeeshyTileScrollObserver(
             geometry: geometry(count: count),
             viewport: viewport,
@@ -219,15 +224,10 @@ public struct MeeshyTileStrip<ID: Hashable & Sendable, Preview: View, Underlay: 
     @ViewBuilder
     private func underlayLayer(_ shown: [MeeshyTile<ID>]) -> some View {
         if let underlay {
-            let visible = geometry(count: shown.count)
-            underlay(visible)
-                .mask {
-                    MeeshyTileUnderlayMask(
-                        geometry: visible, top: MeeshyTileMetrics.reserve, radius: MeeshyTileMetrics.radius,
-                        isRightToLeft: layoutDirection == .rightToLeft
-                    )
-                }
-                .allowsHitTesting(false)
+            MeeshyTileUnderlayLayer(
+                offset: scrollOffset, geometry: geometry(count: shown.count),
+                isRightToLeft: layoutDirection == .rightToLeft, underlay: underlay
+            )
         }
     }
 
@@ -264,7 +264,8 @@ public struct MeeshyTileStrip<ID: Hashable & Sendable, Preview: View, Underlay: 
 
     @ViewBuilder
     private func currentName(_ shown: [MeeshyTile<ID>]) -> some View {
-        if names == .current, let tile = shown.first(where: { $0.id == selection }), !tile.title.isEmpty {
+        if MeeshyTileStripRule.nameUnderStrip(names, layout: layout),
+           let tile = shown.first(where: { $0.id == selection }), !tile.title.isEmpty {
             MeeshyTileCurrentName(title: tile.title, surface: surface)
         }
     }
@@ -344,7 +345,8 @@ struct MeeshyTileCurrentName: View {
 /// bande et le carrousel construisent leurs cellules de la même façon.
 struct MeeshyTileConfiguration {
     let tileSize: CGSize
-    let names: MeeshyTileNames
+    /// Le nom sous chaque vignette : jamais en carrousel, qui le lit sous la bande.
+    let namesOnTile: Bool
     let selectionStyle: MeeshyTileSelectionStyle
     let surface: MeeshyTileSurface
     let haptic: MeeshyTileHaptic
@@ -358,7 +360,7 @@ struct MeeshyTileConfiguration {
         forcedPressed: Bool
     ) -> MeeshyTileCellSpec<ID> {
         MeeshyTileCellSpec(
-            tile: tile, isSelected: isSelected, tileSize: tileSize, names: names == .current ? .none : names,
+            tile: tile, isSelected: isSelected, tileSize: tileSize, names: namesOnTile ? .each : .none,
             selectionStyle: selectionStyle, surface: surface, haptic: haptic, isNeighbour: isNeighbour,
             listensToGestures: listensToGestures && isSelected, fillsWidth: fillsWidth, forcedPressed: forcedPressed
         )

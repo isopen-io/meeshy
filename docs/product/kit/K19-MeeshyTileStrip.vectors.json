@@ -1027,5 +1027,61 @@
       "cellWidth": 100,
       "cellHeight": 75
     }
+  ],
+  "names": [
+    {
+      "layout": "strip",
+      "names": "each",
+      "onTile": true,
+      "underStrip": false
+    },
+    {
+      "layout": "strip",
+      "names": "current",
+      "onTile": false,
+      "underStrip": true
+    },
+    {
+      "layout": "strip",
+      "names": "none",
+      "onTile": false,
+      "underStrip": false
+    },
+    {
+      "layout": "grid",
+      "names": "each",
+      "onTile": true,
+      "underStrip": false
+    },
+    {
+      "layout": "grid",
+      "names": "current",
+      "onTile": false,
+      "underStrip": true
+    },
+    {
+      "layout": "grid",
+      "names": "none",
+      "onTile": false,
+      "underStrip": false
+    },
+    {
+      "layout": "carousel",
+      "names": "each",
+      "onTile": false,
+      "underStrip": true
+    },
+    {
+      "layout": "carousel",
+      "names": "current",
+      "onTile": false,
+      "underStrip": true
+    },
+    {
+      "layout": "carousel",
+      "names": "none",
+      "onTile": false,
+      "underStrip": false
+    }
   ]
 }

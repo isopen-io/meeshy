@@ -37,6 +37,8 @@ struct MeeshyTileCarousel<ID: Hashable & Sendable, Preview: View>: View {
     let label: String
     let dimsNeighbours: Bool
     let configuration: MeeshyTileConfiguration
+    /// Le nom de la courante, seul sous la bande : la règle des noms le dit.
+    let showsCurrentName: Bool
     let previewPressed: ID?
     let revealsSelection: Bool
     let isSolo: Bool
@@ -77,7 +79,7 @@ struct MeeshyTileCarousel<ID: Hashable & Sendable, Preview: View>: View {
 
     @ViewBuilder
     private func currentName(at index: Int?) -> some View {
-        if configuration.names != .none, let index, tiles.indices.contains(index), !tiles[index].title.isEmpty {
+        if showsCurrentName, let index, tiles.indices.contains(index), !tiles[index].title.isEmpty {
             MeeshyTileCurrentName(title: tiles[index].title, surface: configuration.surface)
         }
     }

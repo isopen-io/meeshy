@@ -138,7 +138,7 @@ Choix retenus (mode autonome ; alternatives entre parenthèses) :
 4. La bande réserve 4 autour des vignettes : le cercle n'est jamais rogné. (Suivre la capture.)
 5. `tileSize` opaque, 56 × 72 par défaut ; chaque hôte passe sa taille, celles du code jusqu'à l'intégration. (Énumération de tailles.)
 6. Grille en colonnes égales, aux proportions de `tileSize` ; elle sert S4, S3, S2 et R8. (Repli libre à largeur fixe.)
-7. Noms : `each` par défaut, `current` en carrousel, `none` pour les polices. (Toujours sous chaque vignette.)
+7. Noms : `each` par défaut, `current` en carrousel (où `each` se lit `current` : un nom n'est jamais lu deux fois ; vecteurs `names`), `none` pour les polices. (Toujours sous chaque vignette.)
 8. Estompe selon la loi de K04 : par bord, là où il reste des vignettes, sur 44. (18 % en fin seulement ; 34 px des deux côtés.)
 9. `selectionStyle: fill` pour les vignettes de police d'A2, que K04 renvoie ici. (Les laisser à l'app.)
 10. Emplacement `underlay` et géométrie publique : une seule surface vivante. (Un aperçu vivant par vignette.)
