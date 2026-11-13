@@ -105,27 +105,20 @@ public final class CallTranscriptRemoteService: CallTranscriptRemoteServiceProvi
     }
 
     /// A1.6 — l'appel EN ENTIER : la passerelle sert `pageSize` phrases à la fois, on lit page après page
-    /// tant qu'elle dit `hasMore`. Une page qui échoue fait échouer la lecture : un appel à moitié lu
-    /// ne se range pas au cache comme s'il était complet. Les captures viennent de la première page
-    /// (la passerelle les rend à chaque page). Rien ne se lit avant l'appel de cette méthode : la
-    /// bascule fermée n'en déclenche aucune.
+    /// tant qu'elle dit `hasMore` (loi de `CallTranscriptPaging.Reading`). Une page qui échoue fait échouer
+    /// la lecture : un appel à moitié lu ne se range pas au cache comme s'il était complet. La Task annulée
+    /// (la cellule est partie, la bascule s'est repliée) ne lit plus aucune page. Rien ne se lit avant
+    /// l'appel de cette méthode : la bascule fermée n'en déclenche aucune.
     public func transcript(callId: String) async throws -> APICallTranscript {
+        try Task.checkCancellation()
         let first = try await fetchPage(callId: callId, offset: 0)
-        var segments = first.segments
-        var last = first
-        while CallTranscriptPaging.continues(after: last) {
-            last = try await fetchPage(callId: callId, offset: segments.count)
-            segments += last.segments
+        var reading = CallTranscriptPaging.Reading(first: first)
+        while reading.continues {
+            try Task.checkCancellation()
+            let page = try await fetchPage(callId: callId, offset: reading.offset)
+            reading = reading.absorbing(page)
         }
-        return APICallTranscript(
-            callId: first.callId,
-            conversationId: first.conversationId,
-            callStartedAt: first.callStartedAt,
-            segments: segments,
-            captures: first.captures,
-            total: first.total,
-            hasMore: false
-        )
+        return reading.transcript
     }
 
     private func fetchPage(callId: String, offset: Int) async throws -> APICallTranscript {
@@ -142,12 +135,66 @@ public final class CallTranscriptRemoteService: CallTranscriptRemoteServiceProvi
     }
 }
 
-/// La loi de la lecture page après page : on continue tant que la passerelle annonce une suite ET que la
-/// page lue a rapporté quelque chose (une page vide qui dit `hasMore` ne boucle jamais).
+/// La loi de la lecture page après page. On continue tant que la passerelle annonce une suite, que la
+/// page lue a apporté au moins une phrase NEUVE (une page vide, ou qui répète la précédente, ne boucle
+/// jamais) et que la borne de pages n'est pas atteinte. Une phrase servie par deux pages (la passerelle
+/// range par heure, une ligne arrivée entre deux lectures décale la suivante) ne se garde qu'une fois, à
+/// sa première place ; la page suivante reprend après ce que la passerelle a RENDU, doublons compris.
 enum CallTranscriptPaging {
     static let pageSize = 100
+    /// 200 pages de 100 : 20 000 phrases, bien au-delà d'un appel d'une journée ; au-delà, la passerelle se
+    /// trompe et la lecture s'arrête, l'appel se disant alors incomplet (`hasMore`).
+    static let maxPages = 200
 
-    static func continues(after page: APICallTranscript) -> Bool {
-        page.hasMore == true && !page.segments.isEmpty
+    struct Reading: Sendable {
+        let offset: Int
+        let continues: Bool
+        private let first: APICallTranscript
+        private let segments: [APICallTranscriptSegment]
+        private let seen: Set<String>
+        private let lastSaidMore: Bool
+        private let pagesRead: Int
+
+        init(first: APICallTranscript) {
+            self.init(first: first, kept: [], seen: [], offset: 0, pagesRead: 0, page: first)
+        }
+
+        private init(
+            first: APICallTranscript,
+            kept: [APICallTranscriptSegment],
+            seen: Set<String>,
+            offset: Int,
+            pagesRead: Int,
+            page: APICallTranscript
+        ) {
+            var known = seen
+            let fresh = page.segments.filter { known.insert($0.id).inserted }
+            let read = pagesRead + 1
+            let saysMore = page.hasMore == true
+            self.first = first
+            self.segments = kept + fresh
+            self.seen = known
+            self.offset = offset + page.segments.count
+            self.pagesRead = read
+            self.lastSaidMore = saysMore
+            self.continues = saysMore && !fresh.isEmpty && read < CallTranscriptPaging.maxPages
+        }
+
+        func absorbing(_ page: APICallTranscript) -> Reading {
+            Reading(first: first, kept: segments, seen: seen, offset: offset, pagesRead: pagesRead, page: page)
+        }
+
+        /// Les captures viennent de la première page : la passerelle les rend à chaque page.
+        var transcript: APICallTranscript {
+            APICallTranscript(
+                callId: first.callId,
+                conversationId: first.conversationId,
+                callStartedAt: first.callStartedAt,
+                segments: segments,
+                captures: first.captures,
+                total: first.total,
+                hasMore: lastSaidMore
+            )
+        }
     }
 }

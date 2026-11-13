@@ -15,8 +15,8 @@ enum CallTranscriptLoader {
     /// `CallTranscript`. La traduction affichée est résolue AU PRISME
     /// (langue préférée du lecteur) — si aucune traduction ne matche,
     /// l'original s'affiche (`nil`), jamais `translations.first` (règle
-    /// critique n°1 du Prisme). Le transcript récupéré est ré-ensemencé
-    /// dans le cache local chiffré.
+    /// critique n°1 du Prisme). Le transcript récupéré en entier est
+    /// ré-ensemencé dans le cache local chiffré.
     private static func fetchRemote(callId: String) async -> CallTranscript? {
         guard let remote = try? await CallTranscriptRemoteService.shared.transcript(callId: callId),
               !remote.segments.isEmpty || !(remote.captures ?? []).isEmpty else { return nil }
@@ -49,8 +49,16 @@ enum CallTranscriptLoader {
             },
             captures: CallTranscriptCaptureMapping.captures(remote.captures ?? [], localUserId: localUserId, localName: localName)
         )
-        await CallTranscriptStore.shared.saveMerging(fetched)
+        if cachesReplay(hasMore: remote.hasMore) {
+            await CallTranscriptStore.shared.saveMerging(fetched)
+        }
         return fetched
+    }
+
+    /// A1.6 — un replay lu jusqu'au bout se range au cache, en une écriture ; celui que la borne de pages
+    /// a coupé s'affiche sans s'y ranger, pour que la prochaine ouverture relise la suite.
+    static func cachesReplay(hasMore: Bool?) -> Bool {
+        hasMore != true
     }
 }
 
