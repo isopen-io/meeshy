@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
-import { RAILS_BESIDE_PILL_WIDTH, RAILS_PILL_CLEARANCE, RAILS_TOP, railLength, railsClearance } from '@/lib/calls/call-rails-clearance';
-import { callViewport, DEFAULT_SELF_TILE, selfTileFootprint, selfTileStore, setSelfTileCorner, type SelfTileCorner } from '@/lib/calls/call-self-tile';
+import { RAIL_TILE_GAP, RAILS_BESIDE_PILL_WIDTH, RAILS_PILL_CLEARANCE, RAILS_TOP, railLength, railsClearance } from '@/lib/calls/call-rails-clearance';
+import { callViewport, DEFAULT_SELF_TILE, SELF_TILE_MARGIN, selfTileFootprint, selfTileStore, setSelfTileCorner, type SelfTileCorner } from '@/lib/calls/call-self-tile';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadModeMotion } from '@/lib/calls/use-mode-motion';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
@@ -273,5 +273,36 @@ describe('CallScreen — sous « Réduire les animations », les rails entrent e
     });
     expect(view.host.querySelector('[data-call-journal-panel]')).not.toBeNull();
     view.done();
+  });
+});
+
+describe('CallScreen — colonne du journal ouverte (W1), le rail de fin longe ma vignette sans compter la colonne deux fois (W1.5, #17918)', () => {
+  const resize = (width: number, height: number) =>
+    act(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: height });
+      window.dispatchEvent(new Event('resize'));
+    });
+
+  test('grand écran court, journal en colonne, (…) ouvert : le rail « l’appel » se pose à côté de ma vignette, à sa largeur près', async () => {
+    const real = { width: window.innerWidth, height: window.innerHeight };
+    resize(1400, 240);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<CallScreen call={call({ localStream: stream(), remoteStreams: { 'u-peer': stream() } })} canShare initiallyExpanded wide />));
+    act(() => host.querySelector<HTMLElement>('[data-call-control="journal"]')?.click());
+    await act(async () => {});
+    if (host.querySelector('[data-call-more]')?.getAttribute('aria-expanded') !== 'true') act(() => host.querySelector<HTMLElement>('[data-call-more]')?.click());
+    await act(async () => {});
+    expect(host.querySelector('[data-call-screen]')?.getAttribute('data-call-journal-dock')).toBe('column');
+    const frame = host.querySelector<HTMLElement>('[data-call-corner-frame]');
+    expect(frame?.getAttribute('data-call-self-tile-beside-column')).toBe('');
+    const trailing = host.querySelector<HTMLElement>('[data-call-rails] > [data-call-rail-slot="trailing"]');
+    expect(trailing?.style.paddingTop ?? '').toBe('');
+    expect(trailing?.style.paddingInlineEnd).toBe(`${SELF_TILE_MARGIN + Number.parseFloat(frame?.style.width ?? '0') + RAIL_TILE_GAP}px`);
+    act(() => root.unmount());
+    host.remove();
+    resize(real.width, real.height);
   });
 });

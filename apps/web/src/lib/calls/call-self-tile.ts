@@ -120,7 +120,7 @@ export type TileBox = TileSize & { readonly x: number; readonly y: number };
 /** Ma vignette quand l'autre partage son écran : en haut à droite, 4,5 rem sous la zone sûre, à la taille x2. */
 export const SCREEN_SELF_TILE = { y: 72, width: 112, height: 160 } as const;
 
-/** Ma vignette en coin et son coin, dans les mesures de l'écran sous sa zone sûre. */
+/** Ma vignette en coin et son coin, dans les mesures de la scène sous sa zone sûre (l'écran, moins la colonne du journal quand elle est ouverte). */
 export type TileFootprint = TileBox & { readonly corner: SelfTileCorner };
 
 /** Ce que l'écran d'appel sait de ma vignette ; son coin et sa taille sont ceux que je lui ai choisis (`selfTileStore`). */
@@ -138,13 +138,15 @@ type FootprintInput = {
   readonly viewport: TileSize;
   /** Ce que la capsule de capture prend sous l'en-tête (R1) : ma vignette descend d'autant. */
   readonly topInset: number;
+  /** Ce que la colonne du journal retire à la scène (W1) : ma vignette se mesure dans la scène qui reste. */
+  readonly bleed?: number;
 };
 
 /** La vignette du coin que la scène pose (`call-stage.tsx`), à sa taille choisie — les rails du duo l'évitent (#17429). */
-export function selfTileFootprint({ layout, cameraOn, swapped, framed, immersive, corner, scale, viewport, topInset }: FootprintInput): TileFootprint | null {
-  if (layout === 'screen') return cameraOn && !immersive ? { corner: 'top-right', x: viewport.width - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width, ...SCREEN_SELF_TILE } : null;
+export function selfTileFootprint({ layout, cameraOn, swapped, framed, immersive, corner, scale, viewport, topInset, bleed = 0 }: FootprintInput): TileFootprint | null {
+  if (layout === 'screen') return cameraOn && !immersive ? { corner: 'top-right', x: viewport.width - bleed - SELF_TILE_MARGIN - SCREEN_SELF_TILE.width, ...SCREEN_SELF_TILE } : null;
   if (layout !== 'video-duo' || !(swapped || cameraOn) || (framed && !swapped)) return null;
-  return { corner, ...selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, topInset }) };
+  return { corner, ...selfTileBox({ corner, size: selfTileSize(scale, viewport), viewport, topInset, bleed }) };
 }
 
 /** L'écran de l'appel ; hors navigateur, celui de la planche. */
