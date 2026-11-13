@@ -341,10 +341,30 @@ final class BubbleCallJournalUnderCardTests: XCTestCase {
 
     func test_card_showsTheParticipantsLine_underTheTitle() throws {
         let view = try notice()
-        XCTAssertTrue(view.contains("summary.participantsLine("))
+        XCTAssertTrue(view.contains("summary.participantsLine(viewerId: notice.viewerId"),
+                      "Le lecteur se retire de la liste par son identifiant, jamais par son nom.")
         guard let title = view.range(of: "Text(title)"), let line = view.range(of: "participantsLine") else {
             return XCTFail("ligne des participants absente")
         }
         XCTAssertLessThan(title.lowerBound, line.lowerBound, "Sous le titre.")
+    }
+
+    // Le thème recolore le journal ouvert : la cellule est égale par primitives (la bascule ne se redessine pas
+    // quand le thème change), donc le journal lit la palette de l'ENVIRONNEMENT, qui l'invalide directement.
+
+    func test_transcriptSection_readsThePaletteOfTheEnvironment_notTheUnobservedSingleton() throws {
+        let section = try source("Meeshy/Features/Call/Views/CallTranscriptSection.swift")
+        XCTAssertTrue(section.contains("@ResolvedThemePalette private var theme"))
+        XCTAssertFalse(section.contains("ThemeManager.shared"), "Lu sans être observé : un journal ouvert gardait l'ancien thème.")
+    }
+
+    func test_journalUnderCard_saysNothingKept_inThePaletteOfTheEnvironment_andStaysEqualByPrimitives() throws {
+        let view = try source("Meeshy/Features/Main/Views/Bubble/BubbleCallJournalUnderCard.swift")
+        XCTAssertTrue(view.contains("@ResolvedThemePalette private var theme"))
+        XCTAssertFalse(view.contains("ThemeManager.shared"))
+        XCTAssertTrue(
+            view.contains("lhs.callId == rhs.callId && lhs.accentHex == rhs.accentHex && lhs.alignsTrailing == rhs.alignsTrailing"),
+            "La cellule reste égale par primitives."
+        )
     }
 }
