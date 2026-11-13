@@ -91,8 +91,16 @@ describe('ce que l’écran dit', () => {
     expect(callLayout({ members: { a: member() }, cameraOn: false, remoteStreams: {}, isGroup: false })).toBe('portrait');
     expect(callLayout({ members: { a: member() }, cameraOn: true, remoteStreams: {}, isGroup: false })).toBe('video-duo');
     expect(callLayout({ members: { a: member(), b: member({ userId: 'b' }) }, cameraOn: false, remoteStreams: {}, isGroup: true })).toBe('grid');
-    expect([1, 2, 3, 4, 5, 6].map((count) => gridColumns(count, false))).toEqual([1, 1, 2, 2, 2, 2]);
-    expect([1, 2, 3, 4, 5, 6].map((count) => gridColumns(count, true))).toEqual([1, 2, 2, 4, 3, 3]);
+    expect([1, 2, 3, 4, 5, 6].map((count) => gridColumns(count, false, false))).toEqual([1, 1, 2, 2, 2, 2]);
+    expect([1, 2, 3, 4, 5, 6].map((count) => gridColumns(count, true, false))).toEqual([1, 2, 2, 2, 3, 3]);
+  });
+
+  test('à quatre (L4.1 et W2.1), la rangée de quatre exige le paysage ET la hauteur compacte ; trois tuiles restent 2 × 2', () => {
+    expect(gridColumns(4, true, true)).toBe(4);
+    expect(gridColumns(4, true, false)).toBe(2);
+    expect(gridColumns(4, false, true)).toBe(2);
+    expect(gridColumns(4, false, false)).toBe(2);
+    expect([true, false].map((compact) => gridColumns(3, true, compact))).toEqual([2, 2]);
   });
 
   test('pastilles : micro coupé, pair muet (en direct seulement), réseau faible', () => {
