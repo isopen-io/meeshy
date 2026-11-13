@@ -82,7 +82,7 @@ class CallDetailTranscriptViewModelTest {
     @Test
     fun `stays loading, drawing nothing, until the replay answers`() = runTest {
         val pending = CompletableDeferred<NetworkResult<CallTranscriptPage>>()
-        coEvery { records.transcript("call-1", any(), any()) } coAnswers { pending.await() }
+        coEvery { records.fullTranscript("call-1") } coAnswers { pending.await() }
         val viewModel = viewModel()
 
         viewModel.load(request())
@@ -94,7 +94,7 @@ class CallDetailTranscriptViewModelTest {
 
     @Test
     fun `a served journal is projected in the reader's prism`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
         val viewModel = viewModel()
 
         viewModel.load(request())
@@ -106,13 +106,13 @@ class CallDetailTranscriptViewModelTest {
 
     @Test
     fun `a refusal hides the section, a transient failure offers a retry that reloads`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns
+        coEvery { records.fullTranscript("call-1") } returns
             NetworkResult.Failure(ApiError(message = "x", httpStatus = 403))
         val viewModel = viewModel()
         viewModel.load(request())
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
 
-        coEvery { records.transcript("call-2", any(), any()) } returnsMany listOf(
+        coEvery { records.fullTranscript("call-2") } returnsMany listOf(
             NetworkResult.Failure(ApiError(message = "offline")),
             NetworkResult.Success(page(peerSegment())),
         )
@@ -125,18 +125,18 @@ class CallDetailTranscriptViewModelTest {
 
     @Test
     fun `reopening the same call does not refetch`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
         val viewModel = viewModel()
 
         viewModel.load(request())
         viewModel.load(request())
 
-        coVerify(exactly = 1) { records.transcript("call-1", any(), any()) }
+        coVerify(exactly = 1) { records.fullTranscript("call-1") }
     }
 
     @Test
     fun `reopening a call whose replay failed tries again`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returnsMany listOf(
+        coEvery { records.fullTranscript("call-1") } returnsMany listOf(
             NetworkResult.Failure(ApiError(message = "offline")),
             NetworkResult.Success(page(peerSegment())),
         )
@@ -150,7 +150,7 @@ class CallDetailTranscriptViewModelTest {
 
     @Test
     fun `another call's lines are never served to the sheet opened next`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
         val viewModel = viewModel()
         viewModel.load(request())
 
@@ -165,14 +165,14 @@ class CallDetailTranscriptViewModelTest {
         viewModel.load(request(callId = ""))
 
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
-        coVerify(exactly = 0) { records.transcript(any(), any(), any()) }
+        coVerify(exactly = 0) { records.fullTranscript(any()) }
     }
 
     @Test
     fun `the encrypted copy is drawn at once and stays when offline`() = runTest {
         coEvery { cache.cached("call-1") } returns CachedCallTranscript.Copy(page(peerSegment()))
         val pending = CompletableDeferred<NetworkResult<CallTranscriptPage>>()
-        coEvery { records.transcript("call-1", any(), any()) } coAnswers { pending.await() }
+        coEvery { records.fullTranscript("call-1") } coAnswers { pending.await() }
         val viewModel = viewModel()
 
         viewModel.load(request())
@@ -186,8 +186,8 @@ class CallDetailTranscriptViewModelTest {
     @Test
     fun `a served replay revalidates the copy, a refusal removes it`() = runTest {
         val served = page(peerSegment())
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(served)
-        coEvery { records.transcript("call-2", any(), any()) } returns NetworkResult.Failure(ApiError(message = "x", httpStatus = 403))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(served)
+        coEvery { records.fullTranscript("call-2") } returns NetworkResult.Failure(ApiError(message = "x", httpStatus = 403))
         val viewModel = viewModel()
 
         viewModel.load(request())
@@ -205,12 +205,12 @@ class CallDetailTranscriptViewModelTest {
         viewModel.load(request())
 
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
-        coVerify(exactly = 0) { records.transcript(any(), any(), any()) }
+        coVerify(exactly = 0) { records.fullTranscript(any()) }
     }
 
     @Test
     fun `deleting hides the transcript at once and dismisses it on the device`() = runTest {
-        coEvery { records.transcript("call-1", any(), any()) } returns NetworkResult.Success(page(peerSegment()))
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
         val viewModel = viewModel()
         viewModel.load(request())
 
@@ -228,7 +228,36 @@ class CallDetailTranscriptViewModelTest {
         viewModel.load(request())
 
         assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Absent)
-        coVerify(exactly = 0) { records.transcript(any(), any(), any()) }
+        coVerify(exactly = 0) { records.fullTranscript(any()) }
         coVerify { cache.drop("call-1") }
+    }
+
+    /** A1.6 — la bulle qui quitte l'écran annule la lecture des pages ; la rouvrir relit au lieu de rester sur « Loading ». */
+    @Test
+    fun `a bubble that leaves the screen cancels the page reading and reopening reads again`() = runTest {
+        val pending = CompletableDeferred<NetworkResult<CallTranscriptPage>>()
+        coEvery { records.fullTranscript("call-1") } coAnswers { pending.await() }
+        val viewModel = viewModel()
+        viewModel.load(request())
+
+        viewModel.release()
+        pending.complete(NetworkResult.Success(page(peerSegment())))
+
+        assertThat(viewModel.state.value.state).isEqualTo(CallTranscriptState.Loading)
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()))
+        viewModel.load(request())
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
+    }
+
+    /** A1.6 — un appel que la lecture n'a pas pu finir se montre, mais n'est pas rangé au cache comme s'il était complet. */
+    @Test
+    fun `a call the reading could not finish is shown but not stored in the cache`() = runTest {
+        coEvery { records.fullTranscript("call-1") } returns NetworkResult.Success(page(peerSegment()).copy(hasMore = true))
+        val viewModel = viewModel()
+
+        viewModel.load(request())
+
+        assertThat(viewModel.state.value.state).isInstanceOf(CallTranscriptState.Ready::class.java)
+        coVerify(exactly = 0) { cache.store(any(), any()) }
     }
 }

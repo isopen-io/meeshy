@@ -35,4 +35,13 @@ class CallJournalUnderBubbleGuardTest {
         assertThat(bubble).contains("FocalCallJournalOffer.saysNothingWasKept(")
         assertThat(bubble).contains("audio_fullscreen_transcription_empty")
     }
+
+    @Test
+    fun `sur cache vide la bulle montre une attente sobre, et rend la main quand elle quitte l'ecran`() {
+        val bubble = code("CallJournalUnderBubble.kt")
+
+        assertThat(bubble).contains("FocalCallJournalOffer.showsWaiting(")
+        assertThat(bubble).contains("CircularProgressIndicator")
+        assertThat(bubble).contains("viewModel.release()")
+    }
 }
