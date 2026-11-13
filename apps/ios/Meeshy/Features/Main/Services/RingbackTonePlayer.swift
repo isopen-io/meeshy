@@ -148,6 +148,8 @@ private final class PlayingSoundLoop: CallSoundLoop {
 
     private init(player: AVAudioPlayer) { self.player = OSAllocatedUnfairLock(uncheckedState: player) }
 
+    nonisolated deinit {}
+
     static func start(url: URL, volume: Float) -> PlayingSoundLoop? {
         let logger = MeeshyLog.logger(.callSounds)
         let resource = url.deletingPathExtension().lastPathComponent
