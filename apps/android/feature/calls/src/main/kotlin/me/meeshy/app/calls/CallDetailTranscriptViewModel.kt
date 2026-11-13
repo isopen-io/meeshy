@@ -144,7 +144,6 @@ class CallDetailTranscriptViewModel internal constructor(
         val user = session.currentUser.value
         return CallTranscriptReader(
             userId = user?.id,
-            name = user?.effectiveDisplayName,
             prism = if (user == null) {
                 listOfNotNull(Locale.getDefault().language.takeIf { it.isNotBlank() })
             } else {
