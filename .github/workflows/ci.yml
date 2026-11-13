@@ -2731,6 +2731,13 @@ jobs:
     # nécessaires** : un job sauté produit quand même un check run à ce nom, et
     # `SKIPPED` comptait vert — déplacer ce `if` SANS le correctif de l'oracle
     # n'aurait rien gardé, en ayant l'air d'une garde.
+    # #18048 — la clause `CI_DEV_SEUL` vient de `dev` et elle est CONSERVÉE :
+    # elle n'est pas en conflit avec ce lot, elle est un SECOND gel. Elle est
+    # simplement portée au JOB avec la première, au lieu d'être répétée sur
+    # chacune des trois étapes — c'est le motif que ce lot retire, et l'y
+    # laisser aurait fait conclure `success` à un job sans étape exécutée dès
+    # que `CI_DEV_SEUL` est posé, c'est-à-dire sur toute branche hors dev,
+    # main et ci/promotion-*.
     if: always() && (github.event_name != 'pull_request' || vars.PR_CI_GEL != 'true') && (vars.CI_DEV_SEUL != 'true' || github.ref_name == 'dev' || github.ref_name == 'main' || startsWith(github.ref_name, 'ci/promotion-'))
     steps:
       - name: Checkout (le script du verdict seul)
