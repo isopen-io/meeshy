@@ -14,6 +14,8 @@
  * servirait, et dater la baisse qu'on lui a tue (RG-07, audit #14910).
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { compareRelationLevel, type RelationLevel } from '@meeshy/shared/types/relation';
+import { niveauEffectif, type RelationLevelDb } from '../friendship';
 import {
   RELATION_RITUAL_SHARES,
   RELATION_RITUAL_SHARE_WITHDRAWN_AT,
@@ -84,4 +86,45 @@ export async function withdrawListeningCategoryBetween(
       data: { listeningCategoryShared: false },
     }),
   ]);
+}
+
+export type SharesBeyondLinkDb = RelationLevelDb & Pick<PrismaClient, 'relationFeatureSetting'>;
+
+const SHARE_ROW_SELECT = {
+  ownerId: true,
+  otherId: true,
+  listeningCategoryShared: true,
+  ...Object.fromEntries(RELATION_RITUAL_SHARES.map((share) => [share, true])),
+} as const;
+
+type ShareRow = { readonly ownerId: string; readonly otherId: string; readonly listeningCategoryShared: boolean | null } & Partial<RitualSharesRow>;
+
+const revocationOf = (row: ShareRow, level: RelationLevel, now: Date): Record<string, boolean | Date> => ({
+  ...(level === 'BLOOD' ? {} : ritualShareWithdrawalOf(row, RELATION_RITUAL_SHARES, now)),
+  ...(compareRelationLevel(level, 'CLOSE') < 0 && row.listeningCategoryShared === true
+    ? { listeningCategoryShared: false, listeningCategoryWithdrawnAt: now }
+    : {}),
+});
+
+/**
+ * Les partages de `userId`, dans les DEUX sens, que le LIEN réel n'ouvre pas (#16814) :
+ * ceux du rituel hors Sang, la catégorie d'écoute sous Proche. Ils s'éteignent datés chez
+ * chaque émetteur — c'est la fin d'un accord donné hors rituel entre collègues de l'équipe,
+ * que seul l'appelant (`revokeTeamSharesOf`) sait reconnaître. Aucune ligne n'est créée.
+ */
+export async function withdrawSharesTheLinkDoesNotOpen(
+  prisma: SharesBeyondLinkDb,
+  params: { readonly userId: string; readonly at: Date },
+): Promise<void> {
+  const rows = (await prisma.relationFeatureSetting.findMany({
+    where: { OR: [{ ownerId: params.userId }, { otherId: params.userId }] },
+    select: SHARE_ROW_SELECT,
+  })) as unknown as readonly ShareRow[];
+  await Promise.all(
+    rows.map(async (row) => {
+      const data = revocationOf(row, await niveauEffectif(prisma, row.ownerId, row.otherId), params.at);
+      if (Object.keys(data).length === 0) return;
+      await prisma.relationFeatureSetting.updateMany({ where: { ownerId: row.ownerId, otherId: row.otherId }, data });
+    }),
+  );
 }

@@ -20,6 +20,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { RelationRitualShare } from '@meeshy/shared/types/relation-person-settings';
 import { pairAccessAmong, type PairAccessDb } from './pairAccess';
+import { withdrawSharesTheLinkDoesNotOpen, type SharesBeyondLinkDb } from './ritualShareWithdrawal';
 import { RITUAL_SHARE_FEATURE } from './relationConsent';
 import { ACCOUNT_STATE_SELECT, isUsableTeamAccount } from './usableAccount';
 
@@ -52,4 +53,24 @@ export async function teamMayGrantShares(
     ),
   );
   return verdicts.every((among) => among.get(params.otherId)?.allowed === true);
+}
+
+/**
+ * La FIN de l'accord hors rituel (#16814) : `userId` a cessé d'être un compte utilisable de
+ * l'équipe (rôle retiré, compte désactivé ou supprimé). Ce que lui et ses ex-collègues s'étaient
+ * accordé hors rituel s'éteint dans les DEUX sens, daté chez chaque émetteur comme un retrait :
+ * sans cela, la loi refusait bien aujourd'hui, mais un lien Sang créé plus tard rendait lisible
+ * ce que le rituel n'avait jamais recueilli. Ce que le LIEN réel ouvre survit : les partages du
+ * rituel au Sang, la catégorie d'écoute dès Proche. Un compte qui reste de l'équipe ne perd rien.
+ * Une lecture qui échoue LÈVE : l'appelant journalise, et la loi continue de refuser.
+ */
+export type TeamShareRevocationDb = SharesBeyondLinkDb & Pick<PrismaClient, 'user'>;
+
+export async function revokeTeamSharesOf(
+  prisma: TeamShareRevocationDb,
+  params: { readonly userId: string; readonly now: Date },
+): Promise<void> {
+  const account = await prisma.user.findUnique({ where: { id: params.userId }, select: { role: true, ...ACCOUNT_STATE_SELECT } });
+  if (isUsableTeamAccount(account)) return;
+  await withdrawSharesTheLinkDoesNotOpen(prisma, { userId: params.userId, at: params.now });
 }
