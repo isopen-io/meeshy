@@ -129,6 +129,8 @@ internal fun CallMontagePicker(
     effectsOffered: Boolean = false,
     onRemoveEffect: (CallEffectKind) -> Unit = {},
     onOpenEffects: (CallEffectsCategory) -> Unit = {},
+    /** #17946 · C1 — the captions stay above the carousel, in their own glass, with no « Journal » ([CallModeCaptions]). */
+    captions: @Composable () -> Unit = {},
 ) {
     val held by live.state.collectAsState()
     val pick by capture.pick.collectAsStateWithLifecycle()
@@ -157,6 +159,7 @@ internal fun CallMontagePicker(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        captions()
         EffectsBand(shownBar, reduceMotion) { shown ->
             when (shown) {
                 CallEffectsBarMode.Base -> MontageLooksBand(live, capture, people, isLiveOffered, reduceMotion, layers, shooter, hints)

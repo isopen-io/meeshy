@@ -493,3 +493,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Constats faibles mis en suivi : #17992 (ligne de maille au franchissement, purge annulée, fin perdue sans socket,
   `MGET` sous Redis Cluster, p95 de la relecture, rejeu au changement de rôle).
 - Prochain lot recommandé : #16983 (position temporaire sur iOS, la référence), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil repris après coupure : clore #17188 sur sa preuve
+
+- Reprise : run coupé à 05:13 par une erreur d'API, repris à 13:49. Onze PR de la routine ou voisines sont ouvertes et
+  toutes écrites dans les vingt dernières minutes par des réveils vivants (#17956, #17967, #17969, #17973, #17976,
+  #17979, #17981…) : ce réveil n'en prend aucune et n'ouvre pas de branche de code concurrente (« celui qui n'a rien
+  écrit cède »).
+- Lot : #17188 (témoin « ensemble » du SDK, écart d'horloge en `Double`) fermée sur preuve. Le correctif était sur
+  `dev` par #17186 ; `sdk-tests.yml` sur `0a77cc7dbd` (run 43391316368) rend « Verdict iOS SDK » vert, six tranches
+  `Passed`, 0 échec, aucun témoin `TogetherTests` désactivé.
+- Décisions ouvertes pour le porteur : #17218 (niveau d'accès servi entre deux comptes de l'équipe dont l'un bloque
+  l'autre) et #17971 (une communauté désactivée coupe-t-elle ses séances « ensemble »).
+- Prochain lot recommandé : mener à la fusion les PR ouvertes avant d'en ouvrir d'autres ; ensuite « ensemble » sur
+  Android (#17100), aucune branche ne l'écrivant au 2026-11-13 13:50.
