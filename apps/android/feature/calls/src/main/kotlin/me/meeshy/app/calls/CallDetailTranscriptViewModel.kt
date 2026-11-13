@@ -71,6 +71,7 @@ class CallDetailTranscriptViewModel internal constructor(
 
     private var request: CallTranscriptRequest? = null
     private var job: Job? = null
+    private var deletion: Job? = null
 
     fun load(request: CallTranscriptRequest) {
         if (request == this.request && _state.value.state != CallTranscriptState.Failed) return
@@ -84,7 +85,8 @@ class CallDetailTranscriptViewModel internal constructor(
 
     /**
      * A1.6 — la bulle qui porte ce journal a quitté l'écran : la lecture des pages s'arrête, et la rouvrir relit au lieu
-     * de rester sur « Loading » (la requête est oubliée, [load] ne la prend plus pour déjà servie).
+     * de rester sur « Loading » (la requête est oubliée, [load] ne la prend plus pour déjà servie). Une suppression
+     * confirmée ([delete]) n'est pas une lecture : elle va à son terme.
      */
     fun release() {
         job?.cancel()
@@ -97,7 +99,7 @@ class CallDetailTranscriptViewModel internal constructor(
         val request = request ?: return
         job?.cancel()
         publish(request, CallTranscriptState.Absent)
-        job = viewModelScope.launch { cache.dismiss(request.callId) }
+        deletion = viewModelScope.launch { cache.dismiss(request.callId) }
     }
 
     private fun fetch(request: CallTranscriptRequest) {
@@ -108,6 +110,7 @@ class CallDetailTranscriptViewModel internal constructor(
         }
         showUnlessReady(request, CallTranscriptState.ReadingCopy)
         job = viewModelScope.launch {
+            deletion?.join()
             if (regime.isEndToEnd(request.conversationId) == true) {
                 apply(request, CallTranscriptRevalidation.sealedEndToEnd)
                 return@launch
