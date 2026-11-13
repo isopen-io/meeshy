@@ -261,3 +261,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Run consacré à mener #17960 (#6451) à la fusion. Ses deux rouges iOS venaient de `b5b8216122` (sonnerie d'appel) et non du lot : la garde maison (`unchecked-sendable` 112 → 113) et, en tranche 1, `MainActorDeinitSourceGuardTests` (`PlayingSoundLoop` sans `deinit` sous l'isolation MainActor par défaut). Personne ne portait #17968 (la branche `claude/fix-dev-house-rules` est un reliquat du 2026-11-05) : correctif minimal en #18004 — le lecteur sous `Locked<AVAudioPlayer>(uncheckedState:)`, `nonisolated deinit {}` — fusionnée par le porteur à 17:08 UTC, #17968 fermée. `check_house_rules.sh` : « 36 règles tenues » sur dev.
 - `origin/dev` intégré dans #17960 (conflit du seul journal : réveils 26 et 27 gardés tous deux, dans l'ordre).
 - Gotcha : sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, toute classe de `apps/ios/Meeshy/**` non marquée `nonisolated` doit écrire `nonisolated deinit {}` — une garde de tests (tranche 1), pas une garde texte : elle ne rougit qu'au Mac.
+
+## 2026-11-13 — réveil 29 (15:26 UTC)
+
+- Début du run : quatre PR de la routine ouvertes. #18006, #17974 et #17960 poussées par leurs sessions moins de 20 minutes avant : cédées, non touchées. #17983 (#17182, favoris) sans session vivante, CI des PR gelée, preuve complète par `workflow_dispatch` (run 43438023758) en file depuis 13:56 : reprise.
+- Intégration vérifiée en local (dev fusionné dans la branche, non poussé pour ne pas relancer la file) : jest ciblé `bookmarks-audience|globalPostSearch|feedVisibility|PostFeedService` 6 suites, 130/130 ; `tsc --noEmit` vert (avec `--max-old-space-size=8192`, l'heap par défaut casse en conteneur).
+- Le porteur a fusionné #17983 dans dev à 15:59 UTC ; #17182 fermée. Le run de preuve a fini rouge sur les trois tranches gateway, mais UNIQUEMENT sur `CallEventsHandler-*` (appels, hors lot) : ces suites passent sur dev à 17:20 UTC (14/14 relancés), rouge passager de dev à l'heure du run.
+- Aucun lot nouveau : le run a été consacré à la PR orpheline, comme le veut la routine.
+- Prochain lot recommandé : mener #17960, #17974, #18006 à la fusion s'ils restent ouverts, puis #16741 ou #16879 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.
