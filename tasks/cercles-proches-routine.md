@@ -507,4 +507,4 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : shared `repost-audience` 14/14 ; web, témoins voisins 1 336/1 336, `tsc --noEmit` vert, `measure-weight`
   vert (feed 15,51 Ko, story_reader 15,97 Ko) ; suite web complète 31 645/31 648, les trois échecs hors lot (deux
   témoins de présence verts isolément, `act-leak-guard` rouge aussi sur `dev`).
-- Prochain lot recommandé : mener les PR ouvertes ; iOS a déjà sa jumelle (#14417).
+- Prochain lot recommandé : la jumelle iOS (#14417, ouverte), après avoir mené les PR ouvertes de la routine.
