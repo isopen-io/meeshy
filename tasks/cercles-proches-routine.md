@@ -567,3 +567,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates après correctifs : 165 suites voisines (talkie, conversations, encryption, handlers, gardes) 2 363/2 363
   vertes ; ROUGE du témoin de création prouvé ; `tsc` vert ; cliquet `any` inchangé.
 - Prochain lot recommandé : #18035 ou #18036 (petits, serveur, talkie), sinon mener à la fusion les PR ouvertes.
+## 2026-11-13 — réveil repris (15:15) : un contenu de Sang n'offre plus « Republier » sur le web (#14501)
+
+- Reprise : run du 2026-11-12 coupé par une erreur d'API sans trace. Seize PR de la routine sont ouvertes ; toutes
+  écrites dans l'heure par des sessions vivantes. #17956 (carte web des positions) semblait abandonnée depuis 14:05 :
+  sa fusion de `dev` était faite ici quand une autre session y a poussé à 15:16 — ce réveil a cédé sans rien pousser.
+- Lot : #14501, aucune branche ne l'écrivant. `isRepostable` (vue « offre-t-on le geste ? » de
+  `allowedRepostVisibilities`, `packages/shared/utils/repost-audience.ts`), `FeedCardModel.repostClosed`, carte du fil
+  et rail des réels sans hôte « Republier » sur un contenu `BLOOD`. Le rail des stories web n'a aucun gestionnaire de
+  republication : rien à fermer. Gater sa loi (`showsRepost`) faisait passer `story_reader` à 16,02 Ko pour 16 Ko de
+  plafond, sans effet visible : laissé, à reprendre le jour où le rail reçoit le geste.
+- Gates : shared `repost-audience` 14/14 ; web, témoins voisins 1 336/1 336, `tsc --noEmit` vert, `measure-weight`
+  vert (feed 15,51 Ko, story_reader 15,97 Ko) ; suite web complète 31 645/31 648, les trois échecs hors lot (deux
+  témoins de présence verts isolément, `act-leak-guard` rouge aussi sur `dev`).
+- Prochain lot recommandé : la jumelle iOS (#14417, ouverte), après avoir mené les PR ouvertes de la routine.
