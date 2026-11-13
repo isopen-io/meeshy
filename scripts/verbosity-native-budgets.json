@@ -897,7 +897,7 @@
     "ios:Meeshy/share": {
       "labels": 151,
       "words": 663,
-      "long": 4,
+      "long": 3,
       "explanations": 15
     },
     "ios:Meeshy/shareLink": {
@@ -1192,7 +1192,7 @@
       "labels": 64,
       "words": 170,
       "long": 1,
-      "explanations": 5
+      "explanations": 3
     },
     "ios:MeeshyUI/emailSent": {
       "labels": 1,

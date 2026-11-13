@@ -127,6 +127,9 @@ final class ConversationEpureTests: XCTestCase {
         "share.sheet.offline": "Hors ligne : l’envoi repartira au retour du réseau.",
         "share.sheet.sign-in.body": "Votre partage est gardé : il vous attend dans Meeshy.",
         "talkie.info.a11y": "Quand utiliser le talkie ?",
+        "share.sheet.withheld.flame": "Une flamme ne se publie pas, ne s’enregistre pas, ne se copie pas.",
+        "share.sheet.withheld.flame.note": "Sa copie disparaît aussi et ne se retransfère pas.",
+        "share.sheet.withheld.flame.question": "Que devient la copie d’une flamme ?",
         "talkie.info.text": "Votre voix sort même si Meeshy est en arrière-plan.",
         "talkie.send.e2ee": "Pas de talkie dans une conversation chiffrée : il ne l’est pas de bout en bout.",
         "talkie.send.explain": "Talkie d’urgence, pour vos très proches : maintenez et parlez, votre voix sort chez %@ sans décrocher.",
@@ -139,7 +142,10 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.settings.leave.confirm.message": "Vous ne recevrez plus de messages ; votre historique reste lisible.",
         "conversation.settings.more": "Plus",
         "conversation.settings.permissions.autoTranslate.subtitle": "Chacun lit les messages dans sa langue.",
-        "conversation.settings.permissions.slowMode.subtitle": "Un délai entre deux messages d’un même membre.",
+        "conversation.settings.permissions.announcement.note": "Seuls les admins peuvent écrire : « Qui peut écrire » est alors verrouillé.",
+        "conversation.settings.permissions.announcement.question": "Que change le mode annonce ?",
+        "conversation.settings.permissions.slowMode.note": "Un délai entre deux messages d’un même membre.",
+        "conversation.settings.permissions.slowMode.question": "Que fait le mode lent ?",
     ]
 
     /// Une clé dont un libellé quitte l'écran sans plus aucun lecteur est supprimée de TOUTES les langues.
@@ -166,6 +172,8 @@ final class ConversationEpureTests: XCTestCase {
     ]
 
     private static let deletedFromUI: [String] = [
+        "conversation.settings.permissions.announcement.subtitle",
+        "conversation.settings.permissions.slowMode.subtitle",
         "conversation.settings.section.danger",
     ]
 
@@ -213,7 +221,10 @@ final class ConversationEpureTests: XCTestCase {
         "conversation.settings.leave.confirm.message",
         "conversation.settings.more",
         "conversation.settings.permissions.autoTranslate.subtitle",
-        "conversation.settings.permissions.slowMode.subtitle",
+        "conversation.settings.permissions.announcement.note",
+        "conversation.settings.permissions.announcement.question",
+        "conversation.settings.permissions.slowMode.note",
+        "conversation.settings.permissions.slowMode.question",
         "conversation.view.delete_for_everyone.hint",
         "conversation.voiceConsent.message",
         "message.translation.e2ee.serverRefused",
@@ -238,6 +249,8 @@ final class ConversationEpureTests: XCTestCase {
         "share.sheet.content.refused-source",
         "share.sheet.offline",
         "share.sheet.sign-in.body",
+        "share.sheet.withheld.flame",
+        "share.sheet.withheld.flame.question",
         "talkie.info.a11y",
         "talkie.info.text",
         "talkie.send.e2ee",
@@ -447,12 +460,31 @@ final class ConversationEpureTests: XCTestCase {
         }
     }
 
-    func test_conversationSettings_autoTranslateAndSlowMode_sayWhatTheyDo() throws {
+    func test_conversationSettings_autoTranslate_saysWhatItDoes() throws {
         let ui = try Self.catalog(Self.uiCatalogPath)
         XCTAssertEqual(ui["conversation.settings.permissions.autoTranslate.subtitle"]?["fr"], "Chacun lit les messages dans sa langue.")
-        XCTAssertEqual(ui["conversation.settings.permissions.slowMode.subtitle"]?["fr"], "Un délai entre deux messages d’un même membre.")
+    }
+
+    func test_conversationSettings_slowModeAndAnnouncement_nameThemselves_theNoteSitsBehindAnInfoNamedByItsQuestion() throws {
+        let slow = ConversationSettingsNotes.slowMode
+        let announcement = ConversationSettingsNotes.announcement
+        for note in [slow, announcement] {
+            XCTAssertTrue(Self.endsAsQuestion(note.question), "le nom accessible du (i) est une question : \(note.question)")
+            XCTAssertFalse(note.text.isEmpty)
+            XCTAssertNotEqual(note.question, note.text)
+        }
+        XCTAssertNotEqual(slow.id, announcement.id, "deux (i) d'un même écran se distinguent à l'oreille")
         let view = try uiCode("Conversation/ConversationSettingsView.swift")
-        XCTAssertTrue(view.contains("conversation.settings.permissions.slowMode.subtitle"), "le mode lent dit ce qu'il fait au repos")
+        XCTAssertFalse(view.contains("slowMode.subtitle"), "le sous-titre du mode lent a quitté l'écran")
+        XCTAssertFalse(view.contains("announcement.subtitle"), "le sous-titre du mode annonce redisait le sélecteur « Qui peut écrire »")
+        XCTAssertTrue(view.contains("note: ConversationSettingsNotes.slowMode"))
+        XCTAssertTrue(view.contains("note: ConversationSettingsNotes.announcement"))
+        XCTAssertTrue(view.contains("conversation.settings.permissions.slowMode\", defaultValue: \"Mode lent\""), "la rangée garde « Mode lent »")
+        XCTAssertTrue(view.contains("\"10s\""), "le sélecteur du mode lent reste atteignable")
+    }
+
+    private static func endsAsQuestion(_ text: String) -> Bool {
+        ["?", "؟", "？"].contains { text.hasSuffix($0) }
     }
 
     // MARK: - Confirmations : une phrase, une clé
@@ -503,5 +535,22 @@ final class ConversationEpureTests: XCTestCase {
         XCTAssertEqual(app["share.sheet.blocked.view-once"]?["fr"], "À vue unique : il reste dans la conversation, le temps d’être vu.")
         XCTAssertEqual(app["share.sheet.blocked.after-read"]?["fr"], "Éphémère : il reste dans la conversation jusqu’à sa disparition.")
         XCTAssertEqual(ShareSheetCopy.blockedBody(.viewOnce), String(localized: "share.sheet.blocked.view-once", bundle: .meeshyShare))
+    }
+
+    func test_shareSheet_flame_keepsItsProtectionVisibleInOneSentence_theFateOfTheCopyIsBehindAnInfo() throws {
+        let sentence = ShareSheetCopy.withheld(.flame)
+        XCTAssertEqual(sentence, String(localized: "share.sheet.withheld.flame", bundle: .meeshyShare))
+        XCTAssertLessThanOrEqual(sentence.count, 80)
+        let note = try XCTUnwrap(ShareSheetCopy.withheldNote(.flame))
+        XCTAssertEqual(note.question, String(localized: "share.sheet.withheld.flame.question", bundle: .meeshyShare))
+        XCTAssertEqual(note.text, String(localized: "share.sheet.withheld.flame.note", bundle: .meeshyShare))
+        XCTAssertTrue(Self.endsAsQuestion(note.question))
+        XCTAssertFalse(sentence.contains(note.text), "la seconde phrase n'est plus au repos")
+        for other in [ShareWithheldReason.blurred, .encrypted, .citesProtected, .tooManyForPublication, .singlePhotoNotAReel, .notAReel] {
+            XCTAssertNil(ShareSheetCopy.withheldNote(other), "un libellé qui se comprend seul ne reçoit pas de (i)")
+        }
+        let actions = try code("Meeshy/Features/Share/ShareSheetView+Actions.swift")
+        XCTAssertTrue(actions.contains("Label(reason"), "la phrase de protection reste lisible sans clic")
+        XCTAssertTrue(actions.contains("MeeshyInfoNoted"))
     }
 }
