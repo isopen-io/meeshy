@@ -56,7 +56,7 @@ public enum AuthorInk {
     public static func hex(_ hex: String, for mode: ThemeMode) -> String {
         let ink = mode.isDark ? dark.ink : light.ink
         let measured = backgrounds(for: mode)
-        let tint = DynamicColorGenerator.bareHex(hex)
+        let tint = ConversationColorPalette.bareHex(hex)
         let steps = (0...Int((1 / step).rounded(.up))).map { min(1, Double($0) * step) }
         return steps
             .map { mix(tint, ink, $0) }
