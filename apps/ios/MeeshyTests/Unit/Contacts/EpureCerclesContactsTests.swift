@@ -129,7 +129,7 @@ final class EpureCerclesContactsTests: XCTestCase {
     // MARK: - Ce qui sort : la redite, jamais la conséquence (règles 2, 4, 5)
 
     private static let removedFromApp = [
-        "circles.empty.subtitle", "circles.pending", "circles.sheet.settings.unavailable", "circles.sheet.settings.none",
+        "circles.empty.subtitle", "circles.sheet.settings.unavailable", "circles.sheet.settings.none",
         "contacts.requests.received.intent", "contacts.requests.empty.received.subtitle", "contacts.requests.empty.sent.subtitle",
         "friends.requests.empty.subtitle", "contacts.blocked.empty-subtitle", "calls.empty.subtitle",
         "community.posts.empty.subtitle", "community.posts.failed.subtitle", "community.posts.offline.subtitle",
@@ -202,14 +202,15 @@ final class EpureCerclesContactsTests: XCTestCase {
         XCTAssertFalse(tab.contains("subtitle: String(localized: \"circles.empty"))
     }
 
-    func test_pendingRaise_sayThePendingStateWithOneWord_onTheRowAndInTheRequestsBlock() throws {
+    func test_pendingRaise_saysWhoSentIt_onTheRowAndTheProfile_withTheWebWord() throws {
         let rows = try code("apps/ios/Meeshy/Features/Contacts/CircleRows.swift")
         let profile = try code("apps/ios/Meeshy/Features/Contacts/ProfileCircleSection.swift")
-        XCTAssertFalse(rows.contains("circles.pending"))
-        XCTAssertFalse(profile.contains("circles.pending"))
-        XCTAssertTrue(rows.contains("circles.requests.outgoing"))
-        XCTAssertTrue(profile.contains("circles.requests.outgoing"), "la section du profil lit la même clé")
-        XCTAssertEqual(try app()["circles.requests.outgoing"]?["fr"], "En attente · %@")
+        XCTAssertTrue(rows.contains("\"circles.pending\""), "hors du bloc des demandes, « En attente » ne dit pas qui attend qui")
+        XCTAssertTrue(profile.contains("\"circles.pending\""), "la section du profil lit le même mot que le web")
+        let app = try app()
+        XCTAssertEqual(app["circles.pending"]?["fr"], "Demande envoyée · %@")
+        XCTAssertEqual(app["circles.pending"]?["en"], "Request sent · %@")
+        XCTAssertEqual(app["circles.requests.outgoing"]?["fr"], "En attente · %@", "sous le titre « Envoyées », le mot court reste")
     }
 
     func test_circleSheet_namesWhatTheLevelOpens_belowItsName_withoutAnInfoButton() throws {
