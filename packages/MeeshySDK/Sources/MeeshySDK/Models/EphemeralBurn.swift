@@ -25,9 +25,13 @@ import Foundation
 /// appliquée à une disparition.
 public enum EphemeralBurn {
 
-    /// La combustion complète — assez longue pour être vue, assez courte pour
-    /// ne pas retenir le fil.
-    public static let fullDuration: TimeInterval = 0.6
+    /// La combustion complète — assez longue pour être LUE, assez courte pour
+    /// ne pas retenir le fil. Portée de 0,6 à 1,2 s le 2026-11-13 (#17938) : la
+    /// destruction est devenue une vraie combustion — un front qui traverse la
+    /// bulle lettre par lettre, des flammes qui s'élèvent, des étincelles que le
+    /// vent emporte — et cela ne se lit pas en 600 ms. Même valeur que
+    /// `EPHEMERAL_BURN_FULL_MS` (`packages/shared/utils/ephemeral-burn.ts`).
+    public static let fullDuration: TimeInterval = 1.2
 
     /// Le fondu servi sous « Réduire les animations ».
     public static let fadeDuration: TimeInterval = 0.25
