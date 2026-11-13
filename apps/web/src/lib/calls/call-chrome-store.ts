@@ -11,16 +11,19 @@ import { createStore } from 'zustand/vanilla';
  *   (Effets, Montage) l'a masqué ; seule la carte d'accord (G1.6) ne se cache jamais ;
  * - `recordingCard` : la couche le publie, la pile des bandeaux le lit. La hauteur MESURÉE de la carte
  *   d'accord (0 : pas de carte) — la case qu'elle tient dans la pile en dépend, pour que la capture et
- *   le cadre en direct soient repoussés sous elle au lieu de passer dessous.
+ *   le cadre en direct soient repoussés sous elle au lieu de passer dessous ;
+ * - `journalReserve` : l'écran le publie, la couche le lit. La place que la colonne du journal prend au bord
+ *   de fin (0 : pas de colonne) — la carte d'accord, la capsule et l'avis se centrent sur la scène qu'elle
+ *   laisse, pas sur la fenêtre (W1.4, W1.21).
  */
-export const callChromeStore = createStore<{ readonly stowed: boolean; readonly recordingCard: number }>(() => ({ stowed: false, recordingCard: 0 }));
+export const callChromeStore = createStore<{ readonly stowed: boolean; readonly recordingCard: number; readonly journalReserve: number }>(() => ({ stowed: false, recordingCard: 0, journalReserve: 0 }));
 
 /** Publie l'état du chrome tant que l'écran d'appel vit ; il le rend quand il part. */
-export function usePublishChrome(stowed: boolean): void {
+export function usePublishChrome(stowed: boolean, journalReserve = 0): void {
   useEffect(() => {
-    callChromeStore.setState({ stowed });
-    return () => callChromeStore.setState({ stowed: false });
-  }, [stowed]);
+    callChromeStore.setState({ stowed, journalReserve });
+    return () => callChromeStore.setState({ stowed: false, journalReserve: 0 });
+  }, [stowed, journalReserve]);
 }
 
 /**

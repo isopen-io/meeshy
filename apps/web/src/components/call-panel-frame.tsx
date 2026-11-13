@@ -52,7 +52,7 @@ type FrameProps = {
   readonly closeData?: Readonly<Record<`data-${string}`, string>>;
   /** ‹ : revenir au menu des rangées (#8578). */
   readonly back?: PanelBack | undefined;
-  /** Le panneau prend toute la hauteur de son hôte (la colonne du journal sur grand écran, #16942). */
+  /** Le panneau prend toute la hauteur de son hôte (la colonne du journal sur grand écran, #16942) : sa tête est « titre à gauche, bascule à droite », sans ‹ ni ✕ (W1.9) — la colonne se referme par « Journal », par Échap. */
   readonly fill?: boolean;
   /** Ce qui se pose dans l'en-tête, avant ✕ (la bascule Traduit / Original du journal, loi 7). */
   readonly trailing?: ReactNode;
@@ -90,18 +90,27 @@ export function CallPanelFrame({ id, title, closeLabel, closeGlyph, onClose, But
       style={fill ? undefined : { background: 'var(--color-media-fill)' }}
       {...data}
     >
-      <div className="flex items-center gap-1">
-        {back === undefined ? (
-          <span aria-hidden className="size-11 shrink-0" />
-        ) : (
-          <Button label={back.label} glyph={chevron} onPress={back.onPress} size={44} data={{ 'data-panel-back': '' }} />
-        )}
-        <h2 id={titleId} className="min-w-0 flex-1 truncate text-center text-body font-semibold">
-          {title}
-        </h2>
-        {trailing}
-        <Button label={closeLabel} glyph={closeGlyph} onPress={onClose} size={44} data={{ 'data-panel-close': '', ...closeData }} />
-      </div>
+      {fill ? (
+        <div className="flex items-center gap-2 ps-3">
+          <h2 id={titleId} className="min-w-0 flex-1 truncate text-start text-body font-semibold">
+            {title}
+          </h2>
+          {trailing}
+        </div>
+      ) : (
+        <div className="flex items-center gap-1">
+          {back === undefined ? (
+            <span aria-hidden className="size-11 shrink-0" />
+          ) : (
+            <Button label={back.label} glyph={chevron} onPress={back.onPress} size={44} data={{ 'data-panel-back': '' }} />
+          )}
+          <h2 id={titleId} className="min-w-0 flex-1 truncate text-center text-body font-semibold">
+            {title}
+          </h2>
+          {trailing}
+          <Button label={closeLabel} glyph={closeGlyph} onPress={onClose} size={44} data={{ 'data-panel-close': '', ...closeData }} />
+        </div>
+      )}
       {children}
     </div>
   );

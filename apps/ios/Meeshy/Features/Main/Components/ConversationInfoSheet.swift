@@ -361,16 +361,33 @@ struct ConversationInfoSheet: View {
     }
 
     // MARK: - Compact pinned bar (overlay, fades in when collapsed)
-
-    private var compactPinnedBar: some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
+    /// Le petit avatar de la barre compacte : le pair avec sa présence et son contour servis, ou l'entité.
+    @ViewBuilder
+    private var compactAvatar: some View {
+        if isDirect {
+            LivePresence { MeeshyAvatar(
+                name: conversation.name,
+                context: .custom(32),
+                accentColor: accentColor,
+                avatarURL: conversation.participantAvatarURL,
+                presenceState: otherUserId.map { presenceManager.presenceState(for: $0) },
+                ring: conversation.participantRing
+            ) }
+        } else {
             MeeshyAvatar(
                 name: conversation.name,
                 context: .custom(32),
-                kind: isDirect ? .user : .entity,
+                kind: .entity,
                 accentColor: accentColor,
-                avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar
+                avatarURL: conversation.avatar
             )
+        }
+    }
+
+
+    private var compactPinnedBar: some View {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            compactAvatar
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(conversation.name)

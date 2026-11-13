@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { MeeshyGlass } from '@/components/kit/meeshy-glass-tone';
 import { callChromeStore, usePublishRecordingCard } from '@/lib/calls/call-chrome-store';
-import { HeldSwap, useFollowPlace, useStowFade } from '@/lib/calls/use-pill-motion';
+import { HeldSwap, useFollowInline, useFollowPlace, useStowFade } from '@/lib/calls/use-pill-motion';
 import type { CallRecordingNotice, CallRecordingState } from '@/lib/calls/call-recording';
 import { callRecording } from '@/lib/calls/call-recording-live';
 import { callRecordingStore } from '@/lib/calls/call-recording-store';
@@ -66,10 +66,11 @@ type Status = { readonly recording: boolean; readonly asking: boolean };
  * hauteur MESURÉE est publiée à la pile, qui lui garde cette case (R2.1) tant qu'elle attend une réponse, et non le temps de son départ ; sa place suit sa case quand un
  * bandeau arrive ou repart (S2.6).
  */
-function AskCard({ ask, language, onAnswer, offset, reserves }: { readonly ask: Ask; readonly language: InterfaceLanguage; readonly onAnswer: (accepted: boolean) => void; readonly offset: number; readonly reserves: boolean }) {
+function AskCard({ ask, language, onAnswer, offset, reserves, reserveEnd }: { readonly reserveEnd: number; readonly ask: Ask; readonly language: InterfaceLanguage; readonly onAnswer: (accepted: boolean) => void; readonly offset: number; readonly reserves: boolean }) {
   const node = useRef<HTMLDivElement>(null);
   usePublishRecordingCard(node, reserves);
   useFollowPlace(node, offset);
+  useFollowInline(node, reserveEnd);
   return (
     <div ref={node}>
       <MeeshyGlass role="alertdialog" aria-label={ask.question} density="dense" className="flex flex-col gap-3 rounded-card p-4 text-on-media" data-call-recording-ask="">
@@ -98,10 +99,11 @@ function AskCard({ ask, language, onAnswer, offset, reserves }: { readonly ask: 
  * haut comme lui, et revient avec lui (`call-motion.css`, `call-chrome-store.ts`). Sa place suit sa case de
  * la pile en glissant quand un bandeau arrive ou repart (S2.6).
  */
-function StatusCapsule({ status, language, stowed, offset, onStop }: { readonly status: Status; readonly language: InterfaceLanguage; readonly stowed: boolean; readonly offset: number; readonly onStop: () => void }) {
+function StatusCapsule({ status, language, stowed, offset, reserveEnd, onStop }: { readonly reserveEnd: number; readonly status: Status; readonly language: InterfaceLanguage; readonly stowed: boolean; readonly offset: number; readonly onStop: () => void }) {
   const node = useRef<HTMLDivElement>(null);
   useStowFade(node, stowed);
   useFollowPlace(node, offset);
+  useFollowInline(node, reserveEnd);
   const { recording, asking } = status;
   return (
     <div
@@ -144,6 +146,7 @@ export function CallRecordingPanel({
   onDismiss,
   stowed = false,
   offset = 0,
+  reserveEnd = 0,
 }: {
   readonly state: CallRecordingState;
   readonly requesterName: string;
@@ -155,6 +158,8 @@ export function CallRecordingPanel({
   readonly stowed?: boolean;
   /** Ce que les bandeaux posés avant lui prennent sous l'en-tête (px). */
   readonly offset?: number;
+  /** La place que la colonne du journal prend au bord de fin (px) : ces cartes se centrent sur la scène qu'elle laisse (W1.4). */
+  readonly reserveEnd?: number;
 }) {
   const top = topOf(offset);
   const { view, notice } = state;
@@ -164,13 +169,13 @@ export function CallRecordingPanel({
   const word = view.kind === 'idle' ? notice : null;
   return (
     <>
-      <HeldSwap value={ask} shape="top" className="fixed inset-x-3 z-[215] mx-auto max-w-md" style={{ top }} data-call-recording-layer="ask">
-        {(held) => <AskCard ask={held} language={language} onAnswer={onAnswer} offset={offset} reserves={ask !== null} />}
+      <HeldSwap value={ask} shape="top" className="fixed inset-x-3 z-[215] mx-auto max-w-md" style={{ top, ...(reserveEnd === 0 ? {} : { insetInlineEnd: `calc(0.75rem + ${reserveEnd}px)` }) }} data-call-recording-layer="ask">
+        {(held) => <AskCard ask={held} language={language} onAnswer={onAnswer} offset={offset} reserves={ask !== null} reserveEnd={reserveEnd} />}
       </HeldSwap>
-      <HeldSwap value={status} shape="top" className="fixed inset-x-0 z-[215] mx-auto w-fit" style={{ top }} data-call-recording-layer="status">
-        {(held) => <StatusCapsule status={held} language={language} stowed={stowed} offset={offset} onStop={onStop} />}
+      <HeldSwap value={status} shape="top" className="fixed inset-x-0 z-[215] mx-auto w-fit" style={{ top, ...(reserveEnd === 0 ? {} : { insetInlineEnd: reserveEnd }) }} data-call-recording-layer="status">
+        {(held) => <StatusCapsule status={held} language={language} stowed={stowed} offset={offset} reserveEnd={reserveEnd} onStop={onStop} />}
       </HeldSwap>
-      <HeldSwap value={word} shape="top" className="fixed inset-x-0 z-[215] mx-auto w-fit max-w-[calc(100vw-2rem)]" style={{ top }} data-call-recording-layer="notice">
+      <HeldSwap value={word} shape="top" className="fixed inset-x-0 z-[215] mx-auto w-fit max-w-[calc(100vw-2rem)]" style={{ top, ...(reserveEnd === 0 ? {} : { insetInlineEnd: reserveEnd }) }} data-call-recording-layer="notice">
         {(held) => (
           <MeeshyGlass role="status" density="dense" className="flex items-center gap-2 rounded-full py-1 ps-4 pe-1 text-body text-on-media" data-call-recording-notice={held.kind}>
             <span>{translate(language, noticeKey(held))}</span>
@@ -190,6 +195,7 @@ export default function CallRecordingLayer() {
   const requesterName = useStore(callStore, (calls) => (requesterId === null ? null : (calls.call?.members[requesterId]?.name ?? null)));
   const language = currentInterfaceLanguage();
   const stowed = useStore(callChromeStore, (chrome) => chrome.stowed);
+  const reserveEnd = useStore(callChromeStore, (chrome) => chrome.journalReserve);
   const offset = useStore(callStore, (calls) => topBannersAbove('recording', { 'screen-share': calls.call?.display === 'full' && calls.call.screenSharing }));
   const noticeShown = state.view.kind === 'idle' && state.notice !== null;
   useEffect(() => {
@@ -207,6 +213,7 @@ export default function CallRecordingLayer() {
       onDismiss={callRecording.dismiss}
       stowed={stowed}
       offset={offset}
+      reserveEnd={reserveEnd}
     />
   );
 }

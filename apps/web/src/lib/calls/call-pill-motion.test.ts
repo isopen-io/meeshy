@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { bannerCloseKeyframes, followKeyframes, morphKeyframes, MORPH_MS, PORTRAIT_MORPH_MS, portraitMorphKeyframes, portraitMorphMs, STOW_MS, STOW_REDUCED_MS, stowFadeKeyframes, stowedGlass, SWAP_MS, swapKeyframes, swapMs, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
+import { bannerCloseKeyframes, followKeyframes, inlineSlideKeyframes, morphKeyframes, MORPH_MS, PORTRAIT_MORPH_MS, portraitMorphKeyframes, portraitMorphMs, STOW_MS, STOW_REDUCED_MS, stowFadeKeyframes, stowedGlass, SWAP_MS, swapKeyframes, swapMs, viewSwapKeyframes, viewSwapMs } from './call-pill-motion';
 
 /**
  * RIEN N'APPARAÎT NI NE DISPARAÎT D'UN COUP (#17406, #17536 ; `CallChromeStow` et
@@ -220,5 +220,17 @@ describe('#17774 — la pile des bandeaux se referme en mouvement (S2.6)', () =>
 
   test('« Réduire les animations » : aucun déplacement, un fondu court', () => {
     expect(bannerCloseKeyframes(60, true)).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+  });
+});
+
+describe('ce qui se recentre quand la colonne du journal entre ou repart (W1.20)', () => {
+  test('le centre repart de celui d’avant par une translation, sans toucher la géométrie', () => {
+    expect(inlineSlideKeyframes(184, false)).toEqual([{ transform: 'translateX(184px)' }, { transform: 'none' }]);
+    expect(inlineSlideKeyframes(-184, false)).toEqual([{ transform: 'translateX(-184px)' }, { transform: 'none' }]);
+  });
+
+  test('sous « Réduire les animations », un fondu court sans déplacement ; un écart sous le demi-pixel ne joue rien', () => {
+    expect(inlineSlideKeyframes(184, true)).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(inlineSlideKeyframes(0.2, false)).toBeNull();
   });
 });

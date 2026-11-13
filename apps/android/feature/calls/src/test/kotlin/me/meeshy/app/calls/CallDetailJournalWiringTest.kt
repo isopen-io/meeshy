@@ -48,11 +48,13 @@ class CallDetailJournalWiringTest {
         val sections = code("CallDetailSections.kt")
         val below = code("CallCaptionRow.kt")
 
-        assertThat(sections).contains("CallTranscriptRowAccessibility.label(line, showOriginal")
+        assertThat(sections).containsMatch("""CallTranscriptRowAccessibility\.label\(\s*line = line,\s*showOriginal = showOriginal,""")
         assertThat(sections).contains("AnimatedContent(")
         assertThat(sections).contains("transitionSpec = { fadeIn(tween(fadeMillis)) togetherWith fadeOut(tween(fadeMillis)) }")
-        assertThat(below).contains("CallTranscriptSecondaryKind.TRANSLATED -> R.string.call_captions_translated")
-        assertThat(below).contains("CallTranscriptSecondaryKind.ORIGINAL -> R.string.call_captions_original")
+        assertThat(below).contains("val originalWord = stringResource(R.string.call_captions_original)")
+        assertThat(below).contains("val translatedWord = stringResource(R.string.call_captions_translated)")
+        assertThat(below).contains("CallTranscriptSecondaryKind.ORIGINAL -> originalWord")
+        assertThat(below).contains("CallTranscriptSecondaryKind.TRANSLATED -> translatedWord")
     }
 
     @Test
