@@ -466,3 +466,20 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - `origin/dev` fusionnée à la main dans la branche (aucun conflit) ; témoins touchés 14 suites, 191/191 verts ; `tsc`
   passerelle vert. `ci.yml` redispatché sur la nouvelle tête avant la fusion.
 - Prochain lot recommandé : #16983 (position temporaire sur iOS) ou #16984 (web), puis l'icône par cercle (#17013).
+
+## 2026-11-13 — réveil : couper tous les Bring depuis les réglages de notification iOS (#16609)
+
+- Reprise : le réveil du 2026-11-10 a été interrompu sans rien laisser (aucune branche, aucune PR). Quatre autres réveils
+  tournent en même temps et ont déjà réservé #16984 (carte web, PR #17956), #17147, #17013 et #16983 ; la branche
+  `claude/cercles-16588-web` est posée sur `dev` sans écriture. Lot libre et petit retenu : #16609.
+- Lot : PR #17973 vers `dev` (brouillon tant que la CI Swift n'a pas parlé). SDK : `bringEnabled: Bool?` stocké tel que
+  servi ou choisi, jamais encodé tant qu'il est `nil` (la passerelle le garde, `keptWhenUnnamed`), `receivesBrings` lu par
+  l'écran. Un `Bool` à défaut vrai aurait rallumé, à la première synchronisation d'un cache d'avant le champ, un refus posé
+  sur le web. App : « Recevoir des Bring » sous « Appels entrants », avec son explication, sept langues.
+- Gates locaux : localisation, cohésion, pbxproj (cohérence, guillemets), inscription des tests, littéraux de loi,
+  ViewBuilder verts ; `check_house_rules.sh` rouge à l'identique sur `dev` (appels, hors lot). Swift : `sdk-tests.yml`
+  et `ios.yml` dispatchés sur la branche.
+- Reste du Bring : l'interrupteur global sur le web (#16588, réservé) et sur Android (issue à ouvrir), Critical Alerts
+  (#14112), décisions #14409 et #14450.
+- Prochain lot recommandé : « ensemble » sur Android (#17100) ou la position temporaire sur Android (#16985), les lots
+  web et iOS de la position étant tenus par d'autres réveils.
