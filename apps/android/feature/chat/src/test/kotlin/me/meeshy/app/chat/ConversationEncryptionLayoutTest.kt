@@ -60,4 +60,15 @@ class ConversationEncryptionLayoutTest {
             assertThat(laid).containsExactlyElementsIn(explained)
         }
     }
+
+    @Test
+    fun `hybrid keeps the not end to end sentence visible and puts the second layer behind its question`() {
+        val whoReads = layout("hybrid").getValue(Topic.WHO_READS)
+
+        assertThat(whoReads.visible).containsExactly(
+            Fact.TRANSIT_PROTECTED, Fact.ENCRYPTED_ON_SERVER_SERVER_READS, Fact.HYBRID_IS_SERVER_TODAY,
+        ).inOrder()
+        assertThat(whoReads.noted).containsExactly(Fact.HYBRID_SECOND_LAYER)
+        assertThat(whoReads.questionRes).isEqualTo(R.string.encryption_note_second_layer_question)
+    }
 }
