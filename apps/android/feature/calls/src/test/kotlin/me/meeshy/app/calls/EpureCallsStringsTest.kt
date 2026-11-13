@@ -70,6 +70,11 @@ class EpureCallsStringsTest {
     }
 
     @Test
+    fun `the note behind the info button reads as a sentence of its own, not the tail of the one it left`() {
+        assertThat(epure("values-ar")["call_transcript_note"]).isEqualTo("يتضمن كلام محاورك كما وصل أثناء المكالمة.")
+    }
+
+    @Test
     fun `every label born of the epure exists in the seven languages with the same arguments, translated`() {
         val reference = epure("values")
         assertThat(reference).isNotEmpty()
