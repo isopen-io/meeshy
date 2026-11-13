@@ -130,7 +130,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/AddParticipantSheet.swift",
         "Features/Main/Components/AttachmentLoadingTile.swift",
         "Features/Main/Components/ConversationDashboardView.swift",
-        "Features/Main/Components/ConversationInfoSheet.swift",
         "Features/Main/Components/ConversationLockSheet.swift",
         "Features/Main/Components/ConversationPreferencesTab.swift",
         "Features/Main/Components/EditPostSheet.swift",
@@ -259,7 +258,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // 33 → 26 (S7c, #11494) : sept emoji passent par `MeeshyFont.emoji`.
     // 26 → 21 (#12568) : cinq initiales d'avatar figées (appel ×4, commentaire
     // de story) laissent la place à `CachedAvatarImage`.
-    private static let textCeiling = 21
+    // 21 → 20 (#17907) : le compteur des onglets de la fiche conversation part avec eux.
+    private static let textCeiling = 20
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -382,7 +382,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // 160 → 92 (#17297, GMAIN #17296) : le reste de l'app déclare ses glyphes
     // figés par `MeeshyFont.fixedGlyph` (−62), six glyphes de `Features/Main`
     // passent par `meeshyScaledFont` (−6) ; il ne fige plus que des textes encadrés.
-    private static let totalCeiling = 92
+    // 92 → 91 (#17907) : la pastille de compte des onglets de la fiche conversation part avec
+    // l'ancienne barre d'onglets (elle ne rendait plus rien) ; le fichier sort de `bearingFiles`.
+    private static let totalCeiling = 91
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

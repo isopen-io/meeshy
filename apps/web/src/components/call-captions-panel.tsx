@@ -168,7 +168,7 @@ const CaptionLine = memo(function CaptionLine({
           {content}
         </p>
       )}
-      <UnfoldedOriginal open={reveal.originalBelow} original={caption.original} from={caption.pair?.from} language={language} marker="data-call-caption-original" />
+      <UnfoldedOriginal open={reveal.originalBelow} text={caption.original} from={caption.pair?.from} language={language} marker="data-call-caption-original" />
     </div>
   );
 });

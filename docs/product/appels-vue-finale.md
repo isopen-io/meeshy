@@ -51,10 +51,19 @@
 7. **Le journal est FIDÈLE, pendant et après l'appel.**
    - C'est le MÊME journal avant et après la fin de l'appel : mêmes phrases, même ordre, mêmes couleurs, même descente du Prisme.
    - L'original : pendant l'appel, il se déplie sous la phrase qu'on touche, comme dans la bande ; après l'appel, il est sous chaque traduction (décision porteur du 2026-11-09, #17340).
-   - Pendant l'appel, toucher une phrase déplie son original sous elle seule (#17340). La bascule Traduit · Original de la tête du journal fait passer TOUT le journal dans l'autre texte ; elle ne touche pas la bande des sous-titres, qui reste dans la langue du lecteur (Prisme). Après l'appel, l'original se lit sous chaque traduction.
+   - Pendant l'appel, toucher une phrase déplie son original sous elle seule (#17340). La bascule Traduit · Original de la tête du journal fait passer TOUT le journal dans l'autre texte ; elle ne touche pas la bande des sous-titres, qui reste dans la langue du lecteur (Prisme). Après l'appel, l'original se lit sous chaque traduction, et la bascule y inverse les deux lignes (#17862, ci-dessous).
    - Pendant l'appel, il s'ouvre dans la pilule, au-dessus de la rangée de base, et y défile ; ouvrir les actions (…) le range (#17343). Ma vignette garde sa place, en haut à droite, pendant qu'il est ouvert (porteur, 2026-11-10 ; P6). Sur un écran large (web), il se pose en colonne à droite (W1) ; cette colonne ne masque rien et reste ouverte quand on ouvre (…) (porteur, 2026-11-10).
    - Rien n'est tronqué, et une ligne dont la traduction arrive après la fin de la phrase est mise à jour sur place, pas dupliquée. Les règles de fusion sont web `mergeCaption`, iOS `CallTranscriptMergeRules`, Android `CallLiveJournal.merged`.
-   - Après l'appel, il se déplie sous la bulle d'appel du fil et dans le détail de l'historique. Une bascule Traduit / Original s'y applique à tout l'appel.
+   - Après l'appel, il se déplie sous la bulle d'appel du fil et dans le détail de l'historique.
+   - **Après l'appel, la bascule INVERSE les deux lignes, sur tout l'appel** (décision porteur du 2026-11-13, #17862). C'est la même bascule Traduit · Original que celle du journal vivant (P6).
+     - Par défaut, la traduction servie par le Prisme est la ligne principale, et « Original · … » est dessous (#17340).
+     - « Voir l'original », au pied du journal, fait de l'original la ligne principale de chaque phrase traduite. La traduction passe dessous, étiquetée « Traduit · … ».
+     - Le libellé devient alors « Voir la traduction », qui rend l'état par défaut.
+     - Rien ne disparaît. Une phrase sans traduction (la mienne, ou une phrase déjà dans la langue du lecteur) reste seule dans les deux états.
+     - La bascule n'est offerte que si une phrase au moins est traduite.
+     - En tête, l'original reste à l'encre du thème et la traduction à la couleur de son auteur (loi 4). La ligne dessous garde la même place, le même retrait et l'encre secondaire, qu'elle dise « Original · » ou « Traduit · ».
+     - Le passage d'un état à l'autre se fait en fondu ; avec Réduire les animations, il n'y a aucun déplacement.
+     - Exemple : Awa a dit « Nos vemos mañana », traduit « On se voit demain ». Par défaut, le journal montre « On se voit demain » et, dessous, « Original · Nos vemos mañana ». Après « Voir l'original », il montre « Nos vemos mañana » et, dessous, « Traduit · On se voit demain ».
    - Pendant l'appel :
      - le défilement est libre ;
      - « Revenir au direct » apparaît dès qu'on a remonté ;
@@ -90,14 +99,21 @@
     - Effets est un mode plein écran qui parle la langue du composer (directive porteur du 2026-11-10, #17409) : ‹ · Réglages · (+). Réglages porte un engrenage et sa légende « Réglages », pour ne pas se confondre avec le glyphe d'Effets ; il ouvre P8b, où il passe en disque blanc.
     - **P8b, l'arrivée des réglages** (famille 2, 2026-11-11) : le panneau Luminosité · Flou du fond est un VERRE SÉPARÉ, posé au-dessus de la barre, à la place de la bande de looks. La barre perd sa rangée de puces (Filtres · Cadres · Visage…) et se resserre par morphisme sur ‹ · Réglages · (+). Les looks et les puces partent en fondu pendant que le panneau monte depuis la barre en fondu, en ≈ 200 ms (transformation et opacité) ; « Réduire les animations » ne garde que le fondu. Retoucher « Réglages » rend la bande de looks et ses puces par le chemin inverse. Les sous-titres restent au-dessus de tout, dans un verre sans rangée (loi 11), et le bandeau des autres reste comme en P8.
     - Le look touché s'applique tout de suite, sans « Valider » ; ‹ revient à l'appel ; (+) ajoute un look par-dessus le précédent, pour les cumuler ; « Aucun » rend mon image d'origine. Le choix se fait dans les looks du composer (loi 9).
-    - Montage garde Quitter · Réglages · Valider tant que le porteur ne l'a pas aligné ; « Quitter » rend mon image d'avant. Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
+    - **Effets, filtres et cadres sont UNE famille d'outils, avec la même barre et la même navigation, Montage compris** (décision porteur du 2026-11-13, #16979 ; P8, C1). Elle supplante la barre Quitter · Cadre · Valider du Montage.
+      - La barre est partout `‹ · Réglages · (+)`, sous les puces qui trient les looks. En Montage, la puce « Cadres » est pressée et le carrousel des cadres prend la place de la bande de looks.
+      - **La validation est automatique** : il n'y a de « Valider » nulle part. Ce qui est touché s'applique aussitôt, et ‹ revient à l'appel en gardant les effets appliqués.
+      - **Après le choix d'une fonction, la barre revient à son menu de base** : un look, un cadre ou un réglage choisi, ce que la fonction avait ouvert se referme par le chemin inverse (loi 17) et la barre retrouve ses puces et `‹ · Réglages · (+)`.
+      - **Au plus trois couches d'effet s'empilent** (un cadre, un filtre, une déformation…). (+) en ajoute une par-dessus les autres ; avec trois couches, (+) n'en ajoute plus de quatrième, le dit à son étiquette d'accessibilité et garde son appui long.
+      - **Un appui long sur (+) montre la liste des effets appliqués**, de la couche du dessus à celle du dessous, chacun avec de quoi l'annuler. En annuler un retire cette couche seule, les autres gardent leur ordre, et la liste se referme : la barre revient à son menu de base, comme après tout choix. Le lecteur d'écran offre la même liste par une action nommée sur (+), sans appui long.
+      - La pile est une loi PURE, la même sur les trois plateformes (ajouter, retirer, plafond de trois, ordre) : TS, Swift et Kotlin en sont des miroirs.
+    - Un mode libère l'écran : l'en-tête se masque (#8578, confirmé par le porteur le 2026-11-09, #17344).
 15. **À la une.**
     - Toucher une vignette la met à la une, choix local jamais imposé. Si les contrôles sont cachés, le toucher les rend d'abord.
     - La vignette à la une n'a pas de badge : une capsule en haut à droite offre « Revenir à la grille » et « Plein écran ».
     - Le bandeau des autres est en bas en portrait, en colonne en paysage.
     - Pincer zoome sur un écran partagé jusqu'à 4×, deux tapes reviennent à 1×.
 16. **Cadres en direct, en duo vidéo.**
-    - Je choisis un cadre dans Montage (ambiances, carrousel, déclinaisons par balayage vertical, option « Cadre »). Il s'applique chez moi et se PROPOSE à l'autre (« Non merci » · « Appliquer »).
+    - Je choisis un cadre dans Montage (ambiances, carrousel, déclinaisons par balayage vertical, option « Cadre »), dont la barre est celle d'Effets, `‹ · Réglages · (+)`, sans « Valider » (loi 14, #16979). Il s'applique chez moi et se PROPOSE à l'autre (« Non merci » · « Appliquer »).
     - Le proposeur apprend la réponse en une capsule.
     - Le cadre tombe si l'appel passe à trois.
 17. **Rien n'apparaît ni ne disparaît d'un coup** (directive porteur du 2026-11-10, #17406).
@@ -131,6 +147,8 @@
 |---|---|---|---|
 | ![G1](appels-vue-finale/vues/G1.png) | ![G2](appels-vue-finale/vues/G2.png) | ![G3](appels-vue-finale/vues/G3.png) | ![G4](appels-vue-finale/vues/G4.png) |
 
+Dans Effets (P8, P8b) comme dans Montage (C1), la barre est `‹ · Réglages · (+)` : ce qui est touché s'applique, la barre revient à son menu de base après chaque choix, (+) empile jusqu'à trois couches et son appui long liste les effets appliqués pour en retirer un (loi 14, #16979).
+
 | P8b · Effets : réglages |
 |---|
 | ![P8b](appels-vue-finale/vues/P8b.png) |
@@ -148,6 +166,8 @@
 | ![S1](appels-vue-finale/vues/S1.png) | ![S2](appels-vue-finale/vues/S2.png) |
 
 ### Cadres en direct
+
+C1 a la barre d'Effets (P8) : les puces, « Cadres » pressée, puis `‹ · Réglages · (+)`. Le cadre touché s'applique aussitôt, l'option « Cadre » le garde pour les deux et le propose ; un appui long sur (+) liste les effets appliqués, trois au plus, pour en retirer un (loi 14, #16979).
 
 | C1 · Choisir un cadre | C2 · La proposition chez l'autre | C3 · Cadre appliqué |
 |---|---|---|
@@ -199,6 +219,8 @@ Les rails restent sur les bords, centrés verticalement. La pilule et la bande d
 
 ### Après l'appel : le journal fidèle
 
+Les captures A1 et A2 montrent l'état par défaut : la traduction en tête, « Original · … » dessous, et « Voir l'original » au pied. Toucher « Voir l'original » inverse les deux lignes de tout l'appel. L'original passe en tête, la traduction dessous (« Traduit · … »), et le pied dit « Voir la traduction » (loi 7, #17862).
+
 | A1 · Bulle d'appel, fil clair | A2 · Bulle d'appel, fil sombre |
 |---|---|
 | ![A1](appels-vue-finale/vues/A1.png) | ![A2](appels-vue-finale/vues/A2.png) |
@@ -227,6 +249,7 @@ Ce tableau est un compte rendu daté. Les lignes du chantier #17329 (Liquid Glas
 | Sous-titres et journal DANS la pilule, (…) les range (lois 5–7, #17343) | fusionné, #17486 (#17479) ; phrases et pied Langue · Journal, #17503 (#17496) | fusionné, #17502 (#17456) ; phrases et pied, #17494 (#17492) ; avatar réduit à 56 pt en audio journal ouvert, `CallCompactAudioHeader` (#17529) | fusionné, #17484 (#17478) ; phrases et pied, #17500 (#17495) |
 | Le journal garde tout l'appel, sous-titres allumés ou non (loi 7, #17342) | gardé avant la décision (constat de #17342) ; heure dans l'appel et ordre, fusionné, #17519 (#17517) | fusionné, #17513 (#17510) | fusionné, #17518 (#17516), le témoin qui jetait ces phrases y est retourné |
 | Original au toucher pendant l'appel, bascule Traduit · Original sur tout le journal (lois 6, 7, #17340) | original seulement sous la phrase touchée, fusionné, #17519 (#17517) ; bascule dans la tête du journal (#16942) | fusionné, #17513 (#17510) | fusionné, #17518 (#17516) |
+| Après l'appel, « Voir l'original » inverse les deux lignes, « Traduit · … » dessous (loi 7, A1/A2, #17862) | fait, #17910 (#17897) : `transcriptReading` (loi pure), `UnfoldedOriginal` généralisée, fondu d'opacité seule | à faire, #17895 ; idem | à faire, #17896 ; idem |
 | Mode Effets : sous-titres gardés au-dessus des looks, Réglages à l'engrenage légendé (lois 9, 11, 14 ; P8) | fusionné, #17525 (#17524) ; engrenage : ligne P8b | P8 conforme à l'audit du 2026-11-11 (10/10, glyphe d'Effets alors dessiné sur Réglages) ; engrenage : ligne P8b | fusionné, #17512 (#17511, sous-titres gardés) ; engrenage : ligne P8b |
 | Sous-titre coloré, original puis traduction (lois 4–5) | livré (#16613, #16614) | livré | livré (`CallSpeakerColor`) |
 | Ma vignette à ma couleur (loi 4) | livré, grille et coin du duo (#16635) | livré en groupe (`GroupCallStage`) ; duo : liseré de 2 pt à la couleur de qui est montré, livré dans le code (`CallSelfTileStroke`), à recouper avec #16973 | livré dans le code, duo compris, celle de l'autre après permutation (#16952) |
@@ -242,7 +265,7 @@ Ce tableau est un compte rendu daté. Les lignes du chantier #17329 (Liquid Glas
 | P8b : panneau Luminosité · Flou du fond en verre séparé au-dessus de la barre ‹ · Réglages · (+) qui se resserre, engrenage légendé (lois 14, 17) | à faire, #17580 ouverte, aucune PR au relevé | fusionné, #17553 (#17552 fermée) | fusionné, #17565 (#17564 fermée) |
 | Partage lancé ⇒ appel réduit en capsule (loi 12) | livré (#16664) | livré (#16664) | livré (#16664) ; vignette vidéo flottante de P18, #16953 |
 | Capture visible chez tous et gardée au journal (loi 13) | livré (#16709) : capsule R1, ligne datée au journal vivant, au bandeau et au journal d'après l'appel ; en disposition audio la capsule reste dans la rangée d'alertes | livré (#16709) : capsule R1 en audio comme en vidéo, ligne au journal vivant et d'après l'appel | en partie (#16709) : sorte de capture sur le fil et lignes au journal d'après l'appel ; capsule R1 en direct et détection locale, #16981 |
-| Cadres en direct (loi 16) | livré dans le code pour l'appel à deux (#16943) ; groupe, #12313 ; disparition de ma vignette en C3 à trancher, #16974 ; disposition de la barre C1, #16979 ; pas de suspension au mouvement ni à la chauffe | livré ; clés `call.liveFrame.*` sans traduction pt | le cadre tombe quand l'appel passe à trois (#16952) ; à vérifier sur capture |
+| Cadres en direct (loi 16) | livré dans le code pour l'appel à deux (#16943) ; groupe, #12313 ; disparition de ma vignette en C3 à trancher, #16974 ; barre C1 `‹ · Réglages · (+)`, pile de trois couches et appui long sur (+), tranchés le 2026-11-13 (#16979), à porter sur les trois plateformes ; pas de suspension au mouvement ni à la chauffe | livré ; clés `call.liveFrame.*` sans traduction pt | le cadre tombe quand l'appel passe à trois (#16952) ; à vérifier sur capture |
 | Journal en colonne sur grand écran (W1, W2) | livré dans le code (#16942) ; marges latérales de W2 plus étroites que la référence | sans objet (iPad : à trancher) | sans objet (tablette : #15640) |
 | Vidéo entrante avec aperçu et « Sans vidéo » (P17) | livré dans le code (#16944) ; ordre de l'en-tête, #16978 | livré dans le code (#16945, ouverte jusqu'à la CI et la capture au simulateur) ; style de « Activer le son » à trancher (#8627) | « Sans vidéo » livré dans le code (#16952) ; barre micro et caméra et aperçu de ma caméra, #16949 |
 | Médaillon de la caméra de qui partage (P15, L5) | à vérifier | à vérifier | reporté, demande une seconde piste vidéo, #8404 |

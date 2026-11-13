@@ -11,7 +11,10 @@ import '@/styles/call-unfolded-original.css';
  * et dans le journal : il en descend, et y remonte en fondu, inerte, avant de ne
  * rien laisser (`PILL_TEXT_EXIT`, `call-unfolded-original.css`). `marker` est
  * l'attribut de repère de la surface qui le porte (`data-call-caption-original`,
- * `data-call-journal-original`). `ink` est l'encre de la surface : celle du verre
+ * `data-call-journal-original`). `label` dit ce que la ligne porte : `original` (« Original · »)
+ * ou `translated` (« Traduit · »), quand « Voir l'original » du journal d'après l'appel
+ * a inversé les deux lignes (#17897) — la MÊME pièce, jamais une jumelle ; `attrs` y pose
+ * les repères de la surface (le fondu de la bascule). `ink` est l'encre de la surface : celle du verre
  * d'appel (`--color-on-media-3`) dans la bande et le journal vivant, l'encre secondaire
  * du FIL (`--color-ios-ink-2`) dans le journal d'après l'appel, posé sur le fond du fil
  * (#17878, A2.3).
@@ -20,14 +23,27 @@ export const CALL_GLASS_INK = 'var(--color-on-media-3)';
 
 export const THREAD_SECONDARY_INK = 'var(--color-ios-ink-2)';
 
-export function UnfoldedOriginal({ open, original, from, language, marker, ink = CALL_GLASS_INK }: { readonly open: boolean; readonly original: string; readonly from: string | undefined; readonly language: InterfaceLanguage; readonly marker: string; readonly ink?: string }) {
+const LABELS = { original: 'callControls.journal.original', translated: 'callControls.journal.translated' } as const;
+
+type Props = {
+  readonly open: boolean;
+  readonly text: string;
+  readonly from: string | undefined;
+  readonly language: InterfaceLanguage;
+  readonly marker: string;
+  readonly label?: keyof typeof LABELS;
+  readonly ink?: string;
+  readonly attrs?: Readonly<Record<string, string>>;
+};
+
+export function UnfoldedOriginal({ open, text, from, language, marker, label = 'original', ink = CALL_GLASS_INK, attrs }: Props) {
   const present = useRailPresence(open, PILL_TEXT_EXIT).mounted;
   if (!present) return null;
   return (
-    <span className="block ps-3 text-mini" style={{ color: ink }} dir={noteDirection(language)} data-call-unfolded-original="" {...{ [marker]: '' }} {...(open ? {} : PILL_TEXT_LEAVING)}>
-      {`${translateCallControls(language, 'callControls.journal.original')} · `}
-      <span dir="auto" lang={from} data-call-original-text="">
-        {original}
+    <span className="block ps-3 text-mini" style={{ color: ink }} dir={noteDirection(language)} data-call-unfolded-original="" {...{ [marker]: '' }} {...attrs} {...(open ? {} : PILL_TEXT_LEAVING)}>
+      {`${translateCallControls(language, LABELS[label])} · `}
+      <span dir="auto" lang={from} {...{ [`data-call-${label}-text`]: '' }}>
+        {text}
       </span>
     </span>
   );

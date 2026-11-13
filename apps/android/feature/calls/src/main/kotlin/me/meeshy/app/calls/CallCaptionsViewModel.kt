@@ -37,12 +37,22 @@ class CallCaptionsViewModel @Inject constructor(
     fun advance() = captions.advance()
 
     /** The band: the last two sentences, read in the « Sous-titres » button's mode only. */
-    fun bandLines(state: CallCaptionsState, labels: CallCaptionLabels): List<CallLiveCaptionLine> =
-        captions.captionLines(state.journal.tail(BAND_LINES), state.showsOriginal, state.revealed, labels)
+    fun bandLines(
+        state: CallCaptionsState,
+        labels: CallCaptionLabels,
+        participantNames: Map<String, String> = emptyMap(),
+    ): List<CallLiveCaptionLine> =
+        captions.captionLines(state.journal.tail(BAND_LINES), state.showsOriginal, state.revealed, labels, participantNames)
 
     /** The journal: every sentence of the call, read in ITS switch, each dated by the time in the call (P6.4). */
-    fun journalLines(state: CallCaptionsState, view: CallJournalView, labels: CallCaptionLabels): List<CallLiveCaptionLine> =
-        captions.captionLines(state.journal.segments, view.showsOriginal, view.revealed, labels).map { it.dated(state.callStartedAtMs) }
+    fun journalLines(
+        state: CallCaptionsState,
+        view: CallJournalView,
+        labels: CallCaptionLabels,
+        participantNames: Map<String, String> = emptyMap(),
+    ): List<CallLiveCaptionLine> =
+        captions.captionLines(state.journal.segments, view.showsOriginal, view.revealed, labels, participantNames)
+            .map { it.dated(state.callStartedAtMs) }
 
     /** A touch on a sentence of the band. */
     fun toggleReveal(key: String) = captions.toggleReveal(key)
@@ -62,6 +72,7 @@ internal fun CallCaptionsController.captionLines(
     prefersOriginal: Boolean,
     revealed: Set<String>,
     labels: CallCaptionLabels,
+    participantNames: Map<String, String> = emptyMap(),
 ): List<CallLiveCaptionLine> = CallLiveCaptionLines.lines(
     segments = segments,
     reader = reader,
@@ -69,4 +80,5 @@ internal fun CallCaptionsController.captionLines(
     prefersOriginal = prefersOriginal,
     revealed = revealed,
     labels = labels,
+    participantNames = participantNames,
 )
