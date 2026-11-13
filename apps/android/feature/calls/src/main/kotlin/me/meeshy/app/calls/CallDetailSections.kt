@@ -183,7 +183,7 @@ private fun TranscriptLines(state: CallTranscriptState.Ready, accent: Color, onD
 /** « Voir l'original » at the foot of the journal: one switch for the whole call, its label and effect unchanged (#17862). */
 @Composable
 private fun OriginalToggle(showOriginal: Boolean, accent: Color, onChange: (Boolean) -> Unit) {
-    val label = stringResource(if (showOriginal) R.string.call_transcript_show_translated else R.string.call_transcript_show_original)
+    val label = stringResource(if (showOriginal) R.string.call_transcript_toggle_show_translation else R.string.call_transcript_toggle_show_original)
     Box(
         modifier = Modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
