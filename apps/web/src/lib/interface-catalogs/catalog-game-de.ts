@@ -498,7 +498,7 @@ const de = {
   'game.league.me': 'Du',
   'game.league.empty': 'Das Turnier füllt sich: Die Plätze erscheinen, sobald die ersten Funken sprühen.',
   'game.league.friends.title': 'Turnier der Freunde',
-  'game.league.friends.body': 'Funken der Woche unter bestätigten Freunden. Für alle offen, ohne Einwilligung.',
+  'game.league.friends.body': 'Funken der Woche unter bestätigten Freunden. Immer offen, ohne Einwilligung.',
   'game.league.friends.empty': 'Füge Freunde hinzu, um dich jede Woche mit ihnen zu vergleichen.',
   'game.league.friends.unknown': 'Ein Freund',
   'game.duo.title': 'Bündnis',

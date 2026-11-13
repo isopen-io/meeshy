@@ -151,7 +151,7 @@
     <string name="game2_league_cup_gold">Coupe d’or</string>
     <string name="game2_league_cup_silver">Coupe d’argent</string>
     <string name="game2_league_empty">Le groupe se remplit : le classement apparaît dès que les premières étincelles tombent.</string>
-    <string name="game2_league_friends_body">Étincelles de la semaine entre amis acceptés. Ouverte à tous, sans consentement.</string>
+    <string name="game2_league_friends_body">Étincelles de la semaine entre amis acceptés. Toujours ouverte, rien à accepter.</string>
     <string name="game2_league_friends_empty">Ajoute des amis pour te comparer à eux chaque semaine.</string>
     <string name="game2_league_friends_title">Joute des amis</string>
     <string name="game2_league_friends_unknown">Un ami</string>

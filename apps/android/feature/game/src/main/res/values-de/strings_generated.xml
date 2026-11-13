@@ -151,7 +151,7 @@
     <string name="game2_league_cup_gold">Goldpokal</string>
     <string name="game2_league_cup_silver">Silberpokal</string>
     <string name="game2_league_empty">Das Turnier füllt sich: Die Plätze erscheinen, sobald die ersten Funken sprühen.</string>
-    <string name="game2_league_friends_body">Funken der Woche unter bestätigten Freunden. Für alle offen, ohne Einwilligung.</string>
+    <string name="game2_league_friends_body">Funken der Woche unter bestätigten Freunden. Immer offen, ohne Einwilligung.</string>
     <string name="game2_league_friends_empty">Füge Freunde hinzu, um dich jede Woche mit ihnen zu vergleichen.</string>
     <string name="game2_league_friends_title">Turnier der Freunde</string>
     <string name="game2_league_friends_unknown">Ein Freund</string>

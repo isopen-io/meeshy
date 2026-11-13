@@ -498,7 +498,7 @@ const es = {
   'game.league.me': 'Tú',
   'game.league.empty': 'El grupo se está llenando: la clasificación aparece en cuanto caen las primeras chispas.',
   'game.league.friends.title': 'Justa de los amigos',
-  'game.league.friends.body': 'Chispas de la semana entre amigos aceptados. Abierta a todos, sin consentimiento.',
+  'game.league.friends.body': 'Chispas semanales entre amigos aceptados. Siempre abierta, sin consentimiento.',
   'game.league.friends.empty': 'Añade amigos para compararte con ellos cada semana.',
   'game.league.friends.unknown': 'Un amigo',
   'game.duo.title': 'Alianza',

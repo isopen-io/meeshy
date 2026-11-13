@@ -58,7 +58,7 @@ final class GameEpureTests: XCTestCase {
         "game2.settings.hidden.body": "Masque le jeu sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas aux autres, te retire de la joute publique. Étincelles et trophées gardés.",
         "game2.league.pseudonym.invalid": "Nom non valable : lettres, chiffres, point, tiret, tiret bas.",
         "game2.league.pseudonym.hint_change": "3 à 20 caractères. Ni ton nom, ni ton identifiant.",
-        "game2.league.friends.body": "Étincelles de la semaine entre amis acceptés. Ouverte à tous, sans consentement.",
+        "game2.league.friends.body": "Étincelles de la semaine entre amis acceptés. Toujours ouverte, rien à accepter.",
         "game2.season.how": "Actes et alliance font avancer le voyage : %@ pas par halte. Tout est gratuit.",
         "game2.season.seal.body": "Objet décoratif, une fois toutes les %@ haltes. Sans effet sur le jeu.",
         "game2.atlas.intro": "Un tampon par langue vraiment échangée : un message envoyé, un reçu.",
@@ -165,6 +165,20 @@ final class GameEpureTests: XCTestCase {
         XCTAssertTrue(copy.contains("la joute et l’alliance le restent"))
     }
 
+    /// La Joute des amis se joue ENTRE AMIS ACCEPTÉS : « ouverte à tous » contredisait la phrase qu'elle suit.
+    /// Ce qui est ouvert, c'est l'accès (aucun niveau, aucun consentement), pas l'audience.
+    func test_friendsLeagueBody_neverSaysOpenToAll_itSaysAlwaysOpen_inEveryLanguage() throws {
+        let body = try XCTUnwrap(try Self.catalog()["game2.league.friends.body"])
+        let alwaysOpen: [String: String] = ["fr": "Toujours ouverte", "en": "Always open", "es": "Siempre abierta", "pt-BR": "Sempre aberta",
+                                            "de": "Immer offen", "it": "Sempre aperta", "ar": "مفتوحة دائمًا"]
+        let openToAll = ["à tous", "to all", "a todos", "für alle", "a tutti", "للجميع"]
+        for (language, fragment) in alwaysOpen {
+            let value = body[language] ?? ""
+            XCTAssertTrue(value.contains(fragment), "\(language) : « \(value) »")
+            XCTAssertFalse(openToAll.contains { value.contains($0) }, "\(language) : « \(value) » dit la joute ouverte à tous")
+        }
+    }
+
     func test_catalog_theConsequences_andTheLandmarks_stayVisible() throws {
         let catalog = try Self.catalog()
         XCTAssertTrue(try XCTUnwrap(catalog["game2.settings.hidden.body"]?["fr"]).contains("te retire de la joute publique"), "la conséquence de « Jeu masqué »")
@@ -174,7 +188,7 @@ final class GameEpureTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(catalog["game2.atlas.privacy"]?["fr"]).contains("jamais l’interlocuteur"), "ce que le jeu ne garde pas")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.season.how"]?["fr"]).contains("gratuit"), "la gratuité du voyage")
         XCTAssertTrue(try XCTUnwrap(catalog["game2.season.seal.body"]?["fr"]).contains("Sans effet sur le jeu"), "le Sceau ne change rien")
-        XCTAssertTrue(try XCTUnwrap(catalog["game2.league.friends.body"]?["fr"]).contains("sans consentement"), "la Joute des amis est ouverte")
+        XCTAssertTrue(try XCTUnwrap(catalog["game2.league.friends.body"]?["fr"]).contains("rien à accepter"), "la Joute des amis est ouverte")
     }
 
     // MARK: - Les deux phrases « nom de joute non valable » n'en font qu'une

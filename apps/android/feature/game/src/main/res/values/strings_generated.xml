@@ -151,7 +151,7 @@
     <string name="game2_league_cup_gold">Gold cup</string>
     <string name="game2_league_cup_silver">Silver cup</string>
     <string name="game2_league_empty">The group is filling up: the places appear as soon as the first sparks fall.</string>
-    <string name="game2_league_friends_body">This week’s sparks among accepted friends. Open to all, no consent needed.</string>
+    <string name="game2_league_friends_body">This week’s sparks among accepted friends. Always open, no consent needed.</string>
     <string name="game2_league_friends_empty">Add friends to compare yourself with them every week.</string>
     <string name="game2_league_friends_title">Friends’ Joust</string>
     <string name="game2_league_friends_unknown">A friend</string>

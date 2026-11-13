@@ -508,7 +508,7 @@ const ar = {
   'game.league.me': 'أنت',
   'game.league.empty': 'المجموعة تمتلئ: يظهر الترتيب بمجرد وصول الشرارات الأولى.',
   'game.league.friends.title': 'مبارزة الأصدقاء',
-  'game.league.friends.body': 'شرارات الأسبوع بين الأصدقاء المقبولين. مفتوحة للجميع، دون موافقة.',
+  'game.league.friends.body': 'شرارات الأسبوع بين الأصدقاء المقبولين. مفتوحة دائمًا، دون موافقة.',
   'game.league.friends.empty': 'أضف أصدقاء لتقارن نفسك بهم كل أسبوع.',
   'game.league.friends.unknown': 'صديق',
   'game.duo.title': 'التحالف',

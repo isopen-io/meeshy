@@ -151,7 +151,7 @@
     <string name="game2_league_cup_gold">Taça de ouro</string>
     <string name="game2_league_cup_silver">Taça de prata</string>
     <string name="game2_league_empty">O grupo está se enchendo: a classificação aparece assim que as primeiras faíscas chegam.</string>
-    <string name="game2_league_friends_body">Faíscas da semana entre amigos aceitos. Aberta a todos, sem consentimento.</string>
+    <string name="game2_league_friends_body">Faíscas da semana entre amigos aceitos. Sempre aberta, sem consentimento.</string>
     <string name="game2_league_friends_empty">Adicione amigos para se comparar com eles toda semana.</string>
     <string name="game2_league_friends_title">Torneio dos amigos</string>
     <string name="game2_league_friends_unknown">Um amigo</string>

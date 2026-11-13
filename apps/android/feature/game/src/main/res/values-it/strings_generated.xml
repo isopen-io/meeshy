@@ -151,7 +151,7 @@
     <string name="game2_league_cup_gold">Coppa d’oro</string>
     <string name="game2_league_cup_silver">Coppa d’argento</string>
     <string name="game2_league_empty">Il gruppo si sta riempiendo: la classifica compare appena arrivano le prime scintille.</string>
-    <string name="game2_league_friends_body">Scintille della settimana tra amici accettati. Aperta a tutti, senza consenso.</string>
+    <string name="game2_league_friends_body">Scintille della settimana tra amici accettati. Sempre aperta, senza consenso.</string>
     <string name="game2_league_friends_empty">Aggiungi amici per confrontarti con loro ogni settimana.</string>
     <string name="game2_league_friends_title">Torneo degli amici</string>
     <string name="game2_league_friends_unknown">Un amico</string>

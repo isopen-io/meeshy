@@ -103,7 +103,7 @@ extension GameText {
 
     static var leagueFriendsTitle: String { String(localized: "game2.league.friends.title", defaultValue: "Joute des amis", bundle: .main) }
 
-    static var leagueFriendsBody: String { String(localized: "game2.league.friends.body", defaultValue: "Étincelles de la semaine entre amis acceptés. Ouverte à tous, sans consentement.", bundle: .main) }
+    static var leagueFriendsBody: String { String(localized: "game2.league.friends.body", defaultValue: "Étincelles de la semaine entre amis acceptés. Toujours ouverte, rien à accepter.", bundle: .main) }
 
     static var leagueFriendsEmpty: String { String(localized: "game2.league.friends.empty", defaultValue: "Ajoute des amis pour te comparer à eux chaque semaine.", bundle: .main) }
 

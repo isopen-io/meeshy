@@ -515,7 +515,7 @@ const fr = {
   'game.league.me': 'Toi',
   'game.league.empty': 'Le groupe se remplit : le classement apparaît dès que les premières étincelles tombent.',
   'game.league.friends.title': 'Joute des amis',
-  'game.league.friends.body': 'Étincelles de la semaine entre amis acceptés. Ouverte à tous, sans consentement.',
+  'game.league.friends.body': 'Étincelles de la semaine entre amis acceptés. Toujours ouverte, rien à accepter.',
   'game.league.friends.empty': 'Ajoute des amis pour te comparer à eux chaque semaine.',
   'game.league.friends.unknown': 'Un ami',
   'game.duo.title': 'Alliance',

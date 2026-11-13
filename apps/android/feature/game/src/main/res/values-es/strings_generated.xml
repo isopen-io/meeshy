@@ -151,7 +151,7 @@
     <string name="game2_league_cup_gold">Copa de oro</string>
     <string name="game2_league_cup_silver">Copa de plata</string>
     <string name="game2_league_empty">El grupo se está llenando: la clasificación aparece en cuanto caen las primeras chispas.</string>
-    <string name="game2_league_friends_body">Chispas de la semana entre amigos aceptados. Abierta a todos, sin consentimiento.</string>
+    <string name="game2_league_friends_body">Chispas semanales entre amigos aceptados. Siempre abierta, sin consentimiento.</string>
     <string name="game2_league_friends_empty">Añade amigos para compararte con ellos cada semana.</string>
     <string name="game2_league_friends_title">Justa de los amigos</string>
     <string name="game2_league_friends_unknown">Un amigo</string>

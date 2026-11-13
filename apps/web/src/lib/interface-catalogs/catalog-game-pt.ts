@@ -498,7 +498,7 @@ const pt = {
   'game.league.me': 'Você',
   'game.league.empty': 'O grupo está se enchendo: a classificação aparece assim que as primeiras faíscas chegam.',
   'game.league.friends.title': 'Torneio dos amigos',
-  'game.league.friends.body': 'Faíscas da semana entre amigos aceitos. Aberta a todos, sem consentimento.',
+  'game.league.friends.body': 'Faíscas da semana entre amigos aceitos. Sempre aberta, sem consentimento.',
   'game.league.friends.empty': 'Adicione amigos para se comparar com eles toda semana.',
   'game.league.friends.unknown': 'Um amigo',
   'game.duo.title': 'Aliança',

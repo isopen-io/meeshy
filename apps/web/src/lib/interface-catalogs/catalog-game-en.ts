@@ -498,7 +498,7 @@ const en = {
   'game.league.me': 'You',
   'game.league.empty': 'The group is filling up: the places appear as soon as the first sparks fall.',
   'game.league.friends.title': 'Friends’ Joust',
-  'game.league.friends.body': 'This week’s sparks among accepted friends. Open to all, no consent needed.',
+  'game.league.friends.body': 'This week’s sparks among accepted friends. Always open, no consent needed.',
   'game.league.friends.empty': 'Add friends to compare yourself with them every week.',
   'game.league.friends.unknown': 'A friend',
   'game.duo.title': 'Alliance',

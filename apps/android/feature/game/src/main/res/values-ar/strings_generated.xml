@@ -151,7 +151,7 @@
     <string name="game2_league_cup_gold">كأس ذهبية</string>
     <string name="game2_league_cup_silver">كأس فضية</string>
     <string name="game2_league_empty">المجموعة تمتلئ: يظهر الترتيب بمجرد وصول الشرارات الأولى.</string>
-    <string name="game2_league_friends_body">شرارات الأسبوع بين الأصدقاء المقبولين. مفتوحة للجميع، دون موافقة.</string>
+    <string name="game2_league_friends_body">شرارات الأسبوع بين الأصدقاء المقبولين. مفتوحة دائمًا، دون موافقة.</string>
     <string name="game2_league_friends_empty">أضف أصدقاء لتقارن نفسك بهم كل أسبوع.</string>
     <string name="game2_league_friends_title">مبارزة الأصدقاء</string>
     <string name="game2_league_friends_unknown">صديق</string>

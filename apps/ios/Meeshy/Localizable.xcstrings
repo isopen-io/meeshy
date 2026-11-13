@@ -290291,43 +290291,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "شرارات الأسبوع بين الأصدقاء المقبولين. مفتوحة للجميع، دون موافقة."
+            "value": "شرارات الأسبوع بين الأصدقاء المقبولين. مفتوحة دائمًا، دون موافقة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Funken der Woche unter bestätigten Freunden. Für alle offen, ohne Einwilligung."
+            "value": "Funken der Woche unter bestätigten Freunden. Immer offen, ohne Einwilligung."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This week’s sparks among accepted friends. Open to all, no consent needed."
+            "value": "This week’s sparks among accepted friends. Always open, no consent needed."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chispas de la semana entre amigos aceptados. Abierta a todos, sin consentimiento."
+            "value": "Chispas semanales entre amigos aceptados. Siempre abierta, sin consentimiento."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étincelles de la semaine entre amis acceptés. Ouverte à tous, sans consentement."
+            "value": "Étincelles de la semaine entre amis acceptés. Toujours ouverte, rien à accepter."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scintille della settimana tra amici accettati. Aperta a tutti, senza consenso."
+            "value": "Scintille della settimana tra amici accettati. Sempre aperta, senza consenso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Faíscas da semana entre amigos aceitos. Aberta a todos, sem consentimento."
+            "value": "Faíscas da semana entre amigos aceitos. Sempre aberta, sem consentimento."
           }
         }
       }

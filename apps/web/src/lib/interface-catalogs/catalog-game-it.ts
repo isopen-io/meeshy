@@ -498,7 +498,7 @@ const it = {
   'game.league.me': 'Tu',
   'game.league.empty': 'Il gruppo si sta riempiendo: la classifica compare appena arrivano le prime scintille.',
   'game.league.friends.title': 'Torneo degli amici',
-  'game.league.friends.body': 'Scintille della settimana tra amici accettati. Aperta a tutti, senza consenso.',
+  'game.league.friends.body': 'Scintille della settimana tra amici accettati. Sempre aperta, senza consenso.',
   'game.league.friends.empty': 'Aggiungi amici per confrontarti con loro ogni settimana.',
   'game.league.friends.unknown': 'Un amico',
   'game.duo.title': 'Alleanza',
