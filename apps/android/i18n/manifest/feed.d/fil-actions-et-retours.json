@@ -12,12 +12,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "feed.empty.subtitle",
-          "androidName": "feed_empty_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "feed.load.error",
           "androidName": "feed_load_error",
           "status": "adopted"

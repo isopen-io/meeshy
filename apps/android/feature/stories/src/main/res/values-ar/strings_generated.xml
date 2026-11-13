@@ -174,7 +174,6 @@
     <string name="composer_text_frame_rounded">مستدير</string>
     <string name="composer_text_frame_speech">فقاعة حوار</string>
     <string name="feed_post_publish_error">خطأ أثناء النشر</string>
-    <string name="my_stories_archive_empty_subtitle">ستنضم قصصك المنتهية الصلاحية إلى هذا الأرشيف.</string>
     <string name="my_stories_archive_empty_title">لا يوجد أرشيف</string>
     <string name="my_stories_back">رجوع</string>
     <string name="my_stories_cancel">إلغاء</string>
@@ -192,10 +191,8 @@
     <string name="my_stories_delete_title">حذف القصة؟</string>
     <string name="my_stories_drafts_delete_message">هذا الإجراء نهائي. ستُحذف المسودة ووسائطها.</string>
     <string name="my_stories_drafts_delete_title">هل تريد حذف المسودة؟</string>
-    <string name="my_stories_drafts_empty_subtitle">أي قصة أُغلقت دون نشر ستنتظرك هنا.</string>
     <string name="my_stories_drafts_empty_title">لا توجد مسودات</string>
     <string name="my_stories_edit">تعديل</string>
-    <string name="my_stories_empty_subtitle">ستظهر قصصك المنشورة هنا ما دامت نشطة.</string>
     <string name="my_stories_empty_title">لم تُرسَل أي قصة</string>
     <string name="my_stories_failed_a11y">لم يتم نشر القصة، قبل %1$s. %2$s</string>
     <string name="my_stories_failed_delete_message">لم تُنشر هذه القصة قط: هذه نسختها الأخيرة وستضيع نهائيًا. «استئناف» يحوّلها إلى مسودة بدلًا من ذلك.</string>
@@ -210,8 +207,6 @@
     <string name="my_stories_more">خيارات إضافية</string>
     <string name="my_stories_ok">حسنًا</string>
     <string name="my_stories_open">فتح</string>
-    <string name="my_stories_queue_empty_subtitle">ستظهر منشوراتك قيد التقدم أو الفاشلة هنا.</string>
-    <string name="my_stories_queue_empty_title">لا يوجد شيء في قائمة الانتظار</string>
     <string name="my_stories_repost">إعادة النشر</string>
     <string name="my_stories_repost_error">فشلت إعادة النشر</string>
     <string name="my_stories_repost_success">تمت إعادة نشر القصة</string>
@@ -254,8 +249,6 @@
         <item quantity="many">%1$d تعليقات</item>
         <item quantity="other">%1$d تعليقات</item>
     </plurals>
-    <string name="stories_comments_empty_subtitle">كن أول من يعلّق!</string>
-    <string name="stories_comments_empty_title">لا توجد تعليقات بعد</string>
     <string name="stories_comments_open">التعليقات</string>
     <string name="stories_comments_send">إرسال</string>
     <string name="stories_comments_title">التعليقات</string>
@@ -352,7 +345,6 @@
     <string name="stories_viewer_fullscreen_exit">الخروج من ملء الشاشة</string>
     <string name="stories_viewer_mute">كتم صوت الخلفية</string>
     <string name="stories_viewer_next">القصة التالية</string>
-    <string name="stories_viewer_not_found_description">تعذّر تحميل هذه القصة. أعِد المحاولة أو أغلِق.</string>
     <string name="stories_viewer_not_found_title">القصة غير موجودة</string>
     <string name="stories_viewer_previous">القصة السابقة</string>
     <string name="stories_viewer_profile_of">الملف الشخصي لـ %1$s</string>
@@ -366,8 +358,6 @@
         <item quantity="many">%1$d مشاهدات</item>
         <item quantity="other">%1$d مشاهدات</item>
     </plurals>
-    <string name="stories_viewers_empty_subtitle">سيظهر هنا الأشخاص الذين يشاهدون قصتك.</string>
-    <string name="stories_viewers_empty_title">لا توجد مشاهدات بعد</string>
     <string name="stories_viewers_title">المشاهدات</string>
     <string name="stories_visibility_community">مجتمع</string>
     <string name="stories_visibility_except">باستثناء…</string>
@@ -459,7 +449,6 @@
     <string name="story_media_video">فيديو</string>
     <string name="story_notification_expired_back">العودة إلى الإشعارات</string>
     <string name="story_notification_expired_cta_create">إنشاء قصة</string>
-    <string name="story_notification_expired_subtitle">لم تعد هذه القصة متاحة.</string>
     <string name="story_notification_expired_title">قصة منتهية</string>
     <string name="story_reader_buffering">جارٍ تحميل القصة</string>
     <string name="story_reader_loading">جارٍ تحميل القصة…</string>
@@ -481,7 +470,6 @@
     </plurals>
     <string name="story_send_search_hint">ابحث عن محادثة...</string>
     <string name="story_send_sent">أُرسل</string>
-    <string name="story_sentinel_body">لا يمكن لإصدار التطبيق لديك عرضها بعد. لم تُفقد: ستظهر تمامًا كما أنشأها صاحبها بعد التحديث.</string>
     <string name="story_sentinel_skip">الانتقال إلى التالية</string>
     <string name="story_sentinel_title">تستخدم هذه القصة تنسيقًا أحدث</string>
     <string name="story_sentinel_update">تحديث</string>

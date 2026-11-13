@@ -22,7 +22,7 @@
     <string name="bookmarks_remove">Quitar de guardados</string>
     <string name="post_detail_not_found">Esta publicación ya no está disponible</string>
     <string name="post_detail_empty">No se pudo cargar esta publicación</string>
-    <string name="post_comments_empty">Aún no hay comentarios. ¡Sé el primero!</string>
+    <string name="post_comments_empty">Sin comentarios</string>
     <string name="post_comments_load_more">Ver más comentarios</string>
     <string name="post_comments_input_hint">Añadir un comentario…</string>
     <string name="post_comments_delete_action">Eliminar comentario</string>
@@ -37,7 +37,7 @@
     <string name="status_composer_republishing">Volviendo a publicar @%1$s</string>
     <string name="status_composer_placeholder">¿Cómo estás?</string>
     <string name="status_composer_mood_label">Estado de ánimo %1$s</string>
-    <string name="feed_composer_open_placeholder">Comparte algo con el mundo…</string>
+    <string name="feed_composer_open_placeholder">Comparte algo…</string>
     <string name="feed_composer_attach_media">Añadir foto o video</string>
     <string name="feed_composer_remove_media">Quitar contenido multimedia</string>
     <string name="feed_composer_media_unusable">No se pudo adjuntar ese contenido multimedia</string>
@@ -55,12 +55,11 @@
     <string name="feed_header_reels">Iniciar Reels</string>
 
     <!-- Cerca de ti -->
-    <string name="nearby_empty">No hay publicaciones cerca por ahora</string>
-    <string name="nearby_permission_title">Se necesita acceso a la ubicación</string>
-    <string name="nearby_permission_message">Permite el acceso a la ubicación para ver publicaciones compartidas cerca de ti.</string>
+    <string name="nearby_empty">No hay publicaciones cerca</string>
+    <string name="nearby_permission_message">Permite la ubicación para ver publicaciones cercanas.</string>
     <string name="nearby_permission_action">Conceder acceso</string>
-    <string name="nearby_location_unavailable">Ubicación no disponible — revisa tu configuración de ubicación e inténtalo de nuevo</string>
+    <string name="nearby_location_unavailable">Ubicación no disponible</string>
     <string name="nearby_distance_meters">a %1$d m</string>
     <string name="nearby_distance_km">a %1$.1f km</string>
-    <string name="status_composer_emoji_too_long">Este emoji es demasiado largo para un estado: elige otro.</string>
+    <string name="status_composer_emoji_too_long">Emoji demasiado largo</string>
 </resources>

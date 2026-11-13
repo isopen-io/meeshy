@@ -140,25 +140,58 @@ internal fun ReelAuthorRow(
     }
 }
 
-/** `@pseudo`, puis — pour l'auteur seul, à qui la passerelle les sert — impressions et vues. */
+/** `@pseudo`, puis — pour l'auteur seul, à qui la passerelle les sert — impressions et vues : l'icône et le nombre, jamais un zéro. */
 @Composable
 private fun ReelAuthorMeta(username: String?, reel: ReelPresentation, isOwn: Boolean) {
     val locale = Locale.getDefault()
-    val parts = buildList {
+    val impressionsLabel = stringResource(R.string.reels_impressions)
+    val viewsLabel = stringResource(R.string.reels_views)
+    val figures = ReelAuthorFigures.of(isOwn, reel.impressionCount, reel.viewCount, locale)
+    if (username == null && figures.isEmpty()) return
+    val tint = MeeshyPalette.White.copy(alpha = 0.7f)
+    val spoken = buildList {
         username?.let { add("@$it") }
-        if (isOwn) {
-            add(stringResource(R.string.reels_impressions) + " " + CompactCountFormat.text(reel.impressionCount, locale))
-            add(stringResource(R.string.reels_views) + " " + CompactCountFormat.text(reel.viewCount, locale))
+        figures.forEach { add((if (it.kind == ReelAuthorFigures.Kind.Impressions) impressionsLabel else viewsLabel) + " " + it.text) }
+    }.joinToString(", ")
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = spoken },
+    ) {
+        username?.let {
+            Text(
+                text = "@$it",
+                color = tint,
+                style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        }
+        figures.forEach { figure ->
+            Icon(
+                imageVector = if (figure.kind == ReelAuthorFigures.Kind.Impressions) MeeshyIcons.ChartBar else MeeshyIcons.EyeFilled,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(text = figure.text, color = tint, style = androidx.compose.material3.MaterialTheme.typography.labelSmall, maxLines = 1)
         }
     }
-    if (parts.isEmpty()) return
-    Text(
-        text = parts.joinToString(" · "),
-        color = MeeshyPalette.White.copy(alpha = 0.7f),
-        style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
+}
+
+/** Les nombres de portée d'un réel, pour son auteur seul : un nombre nul n'est pas écrit, les mots restent lus par le lecteur d'écran. */
+internal object ReelAuthorFigures {
+    enum class Kind { Impressions, Views }
+    data class Figure(val kind: Kind, val text: String)
+
+    fun of(isOwn: Boolean, impressions: Int, views: Int, locale: Locale): List<Figure> {
+        if (!isOwn) return emptyList()
+        return listOfNotNull(
+            impressions.takeIf { it > 0 }?.let { Figure(Kind.Impressions, CompactCountFormat.text(it, locale)) },
+            views.takeIf { it > 0 }?.let { Figure(Kind.Views, CompactCountFormat.text(it, locale)) },
+        )
+    }
 }
 
 /**

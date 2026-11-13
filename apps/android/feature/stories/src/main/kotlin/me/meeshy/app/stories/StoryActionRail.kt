@@ -133,7 +133,7 @@ fun StoryActionRail(
         if (plan.showsReply) {
             StoryRailButton(
                 icon = MeeshyIcons.Reply,
-                caption = stringResource(R.string.stories_action_reply),
+                caption = null,
                 accessibilityLabel = stringResource(R.string.stories_action_reply),
                 onTap = onTapReply,
             )
@@ -142,9 +142,9 @@ fun StoryActionRail(
         if (plan.showsComments) {
             StoryRailButton(
                 icon = FullscreenChromeSymbol.Comments.icon,
-                caption = counts.comments.toString(),
+                caption = StoryRailCaption.of(counts.comments),
                 accessibilityLabel = stringResource(R.string.stories_comments_open),
-                value = counts.comments.toString(),
+                value = counts.comments.takeIf { it > 0 }?.toString(),
                 isActive = emphasis.live.commentsOpen,
                 outline = emphasis.outline(StoryRailEmphasisAction.COMMENTS),
                 onTap = taps.onComments,
@@ -194,7 +194,7 @@ private fun StoryRailSoundButton(emphasis: StoryRailEmphasis, onToggle: () -> Un
     val label = stringResource(if (emphasis.isMuted) R.string.stories_action_mute else R.string.stories_action_sound)
     StoryRailButton(
         icon = if (emphasis.isMuted) MeeshyIcons.VolumeOff else MeeshyIcons.VolumeUp,
-        caption = label,
+        caption = null,
         accessibilityLabel = label,
         isActive = !emphasis.isMuted,
         outline = emphasis.outline(StoryRailEmphasisAction.SOUND),
@@ -226,7 +226,7 @@ private fun StoryRailHeartButton(
     val react = stringResource(R.string.stories_action_react)
     StoryRailButton(
         icon = Icons.Filled.Favorite,
-        caption = if (reactionCount > 0) reactionCount.toString() else react,
+        caption = StoryRailCaption.of(reactionCount),
         accessibilityLabel = react,
         value = reactionCount.takeIf { it > 0 }?.toString(),
         isActive = emphasis.participation.hasReacted,
@@ -283,7 +283,7 @@ private fun StoryRailTapButtons(plan: StoryRailPlan, counts: StoryRailCounts, em
         val send = stringResource(R.string.stories_action_send)
         StoryRailButton(
             icon = MeeshyIcons.Send,
-            caption = countOr(counts.shares, send),
+            caption = StoryRailCaption.of(counts.shares),
             accessibilityLabel = send,
             value = counts.shares.takeIf { it > 0 }?.toString(),
             outline = emphasis.outline(StoryRailEmphasisAction.FORWARD),
@@ -294,7 +294,7 @@ private fun StoryRailTapButtons(plan: StoryRailPlan, counts: StoryRailCounts, em
         val repost = stringResource(R.string.stories_action_repost)
         StoryRailButton(
             icon = FullscreenChromeSymbol.Repost.icon,
-            caption = countOr(counts.reposts, repost),
+            caption = StoryRailCaption.of(counts.reposts),
             accessibilityLabel = repost,
             value = counts.reposts.takeIf { it > 0 }?.toString(),
             isActive = counts.reposted || emphasis.participation.hasReposted,
@@ -305,7 +305,7 @@ private fun StoryRailTapButtons(plan: StoryRailPlan, counts: StoryRailCounts, em
         val views = stringResource(R.string.stories_action_views)
         StoryRailButton(
             icon = MeeshyIcons.EyeFilled,
-            caption = countOr(counts.views, views),
+            caption = StoryRailCaption.of(counts.views),
             accessibilityLabel = views,
             value = counts.views.takeIf { it > 0 }?.toString(),
             onTap = taps.onViews,
@@ -327,7 +327,7 @@ private fun StoryRailTapButtons(plan: StoryRailPlan, counts: StoryRailCounts, em
 private fun StoryRailSaveButton(saving: Boolean, onSave: () -> Unit) {
     val save = stringResource(R.string.stories_action_save)
     if (!saving) {
-        StoryRailButton(icon = MeeshyIcons.Download, caption = save, accessibilityLabel = save, onTap = onSave)
+        StoryRailButton(icon = MeeshyIcons.Download, caption = null, accessibilityLabel = save, onTap = onSave)
         return
     }
     val busy = stringResource(R.string.stories_rail_saving)
@@ -342,4 +342,7 @@ private fun StoryRailSaveButton(saving: Boolean, onSave: () -> Unit) {
     }
 }
 
-private fun countOr(count: Int, label: String): String = if (count > 0) count.toString() else label
+/** Sous un bouton du rail : le compte quand il y en a un, rien sinon (un zéro n'est pas écrit) ; le nom reste dans la description du bouton. */
+internal object StoryRailCaption {
+    fun of(count: Int): String? = count.takeIf { it > 0 }?.toString()
+}

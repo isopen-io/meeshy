@@ -30,12 +30,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "profile.posts.empty.subtitle",
-          "androidName": "profile_posts_empty_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "profile.posts.empty.posts",
           "androidName": "profile_posts_empty_posts",
           "status": "adopted"
@@ -44,18 +38,6 @@
           "catalog": "app",
           "iosKey": "profile.posts.empty.reels",
           "androidName": "profile_posts_empty_reels",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.posts.empty.filter.subtitle",
-          "androidName": "profile_posts_empty_filter_subtitle",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "profile.posts.endOfContent",
-          "androidName": "profile_posts_end_of_content",
           "status": "adopted"
         },
         {

@@ -28,7 +28,6 @@
     <string name="feed_delete_confirm">Löschen</string>
     <string name="feed_draft_recovered">Offline-Entwurf wiederhergestellt</string>
     <string name="feed_empty">Noch keine Beiträge</string>
-    <string name="feed_empty_subtitle">Beiträge deiner Kontakte erscheinen hier</string>
     <string name="feed_header_nearby">Beiträge in der Nähe</string>
     <string name="feed_like">Gefällt mir</string>
     <string name="feed_link_copied">Link kopiert</string>
@@ -149,8 +148,6 @@
     <string name="mood_spotlight_unavailable">Diese Stimmung ist nicht mehr verfügbar</string>
     <string name="nearby_back">Zurück</string>
     <string name="nearby_denied_action">Einstellungen öffnen</string>
-    <string name="nearby_denied_detail">Meeshy hat keinen Zugriff auf deinen Standort. Erlaube ihn in den Einstellungen oder verschiebe die Karte von Hand.</string>
-    <string name="nearby_denied_title">Standort nicht erlaubt</string>
     <string name="nearby_retry">Erneut versuchen</string>
     <string name="nearby_title">In der Nähe</string>
     <string name="post_bookmark_removed">Aus Lesezeichen entfernt</string>
@@ -196,11 +193,8 @@
     <string name="post_detail_title">Beitrag</string>
     <string name="post_detail_viewers">Aufrufe</string>
     <string name="profile_posts_empty">Keine Beiträge</string>
-    <string name="profile_posts_empty_filter_subtitle">Tippe erneut auf die Kachel, um alles zu sehen</string>
     <string name="profile_posts_empty_posts">Keine Beiträge</string>
     <string name="profile_posts_empty_reels">Keine Reels</string>
-    <string name="profile_posts_empty_subtitle">Beiträge werden hier angezeigt</string>
-    <string name="profile_posts_end_of_content">Du hast alles gesehen</string>
     <string name="profile_posts_first_published_at">Erster Inhalt veröffentlicht am %1$s</string>
     <string name="profile_posts_load_error">Fehler beim Laden der Beiträge</string>
     <string name="profile_posts_stat_posts">Beiträge</string>

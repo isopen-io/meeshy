@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nearby_denied_detail">Allow location in Settings.</string>
+</resources>

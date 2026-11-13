@@ -59,15 +59,13 @@ internal fun PostDetailAuthorChip(post: FeedPostPresentation, onOpenProfile: ((S
         )
         Column {
             Text(text = name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MeeshyTheme.tokens.textPrimary)
-            if (reach.pseudo != null || reach.views != null) {
+            if (reach.pseudo != null || reach.views != null || reach.impressions != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
                     reach.pseudo?.let {
                         Text(text = it, style = MaterialTheme.typography.labelSmall, color = MeeshyTheme.tokens.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     }
-                    if (reach.views != null && reach.impressions != null) {
-                        ReachFigure(MeeshyIcons.EyeFilled, reach.views)
-                        ReachFigure(MeeshyIcons.ChartBar, reach.impressions)
-                    }
+                    reach.views?.let { ReachFigure(MeeshyIcons.EyeFilled, it) }
+                    reach.impressions?.let { ReachFigure(MeeshyIcons.ChartBar, it) }
                 }
             }
         }

@@ -174,7 +174,6 @@
     <string name="composer_text_frame_rounded">Redondeado</string>
     <string name="composer_text_frame_speech">Globo de diálogo</string>
     <string name="feed_post_publish_error">Error al publicar</string>
-    <string name="my_stories_archive_empty_subtitle">Tus historias caducadas se unirán a este archivo.</string>
     <string name="my_stories_archive_empty_title">Sin archivo</string>
     <string name="my_stories_back">Atrás</string>
     <string name="my_stories_cancel">Cancelar</string>
@@ -192,10 +191,8 @@
     <string name="my_stories_delete_title">¿Eliminar esta story?</string>
     <string name="my_stories_drafts_delete_message">Esta acción es definitiva. El borrador y sus archivos se eliminarán.</string>
     <string name="my_stories_drafts_delete_title">¿Eliminar el borrador?</string>
-    <string name="my_stories_drafts_empty_subtitle">Una historia cerrada sin publicar te esperará aquí.</string>
     <string name="my_stories_drafts_empty_title">Sin borradores</string>
     <string name="my_stories_edit">Editar</string>
-    <string name="my_stories_empty_subtitle">Tus stories publicadas aparecerán aquí mientras estén activas.</string>
     <string name="my_stories_empty_title">Aún no has enviado ninguna story</string>
     <string name="my_stories_failed_a11y">Historia no publicada, hace %1$s. %2$s</string>
     <string name="my_stories_failed_delete_message">Esta historia nunca se publicó: es su última copia y se perderá para siempre. «Retomar» permite convertirla en borrador.</string>
@@ -210,8 +207,6 @@
     <string name="my_stories_more">Más opciones</string>
     <string name="my_stories_ok">OK</string>
     <string name="my_stories_open">Abrir</string>
-    <string name="my_stories_queue_empty_subtitle">Tus publicaciones en curso o fallidas aparecerán aquí.</string>
-    <string name="my_stories_queue_empty_title">Nada en cola</string>
     <string name="my_stories_repost">Republicar</string>
     <string name="my_stories_repost_error">Error al republicar</string>
     <string name="my_stories_repost_success">Story republicada</string>
@@ -251,8 +246,6 @@
         <item quantity="many">%1$d comentarios</item>
         <item quantity="other">%1$d comentarios</item>
     </plurals>
-    <string name="stories_comments_empty_subtitle">¡Sé el primero en comentar!</string>
-    <string name="stories_comments_empty_title">Aún no hay comentarios</string>
     <string name="stories_comments_open">Comentarios</string>
     <string name="stories_comments_send">Enviar</string>
     <string name="stories_comments_title">Comentarios</string>
@@ -349,7 +342,6 @@
     <string name="stories_viewer_fullscreen_exit">Salir de pantalla completa</string>
     <string name="stories_viewer_mute">Silenciar el sonido de fondo</string>
     <string name="stories_viewer_next">Historia siguiente</string>
-    <string name="stories_viewer_not_found_description">No se pudo cargar esta story. Reinténtalo o cierra.</string>
     <string name="stories_viewer_not_found_title">Story no encontrada</string>
     <string name="stories_viewer_previous">Historia anterior</string>
     <string name="stories_viewer_profile_of">Perfil de %1$s</string>
@@ -360,8 +352,6 @@
         <item quantity="many">%1$d vistas</item>
         <item quantity="other">%1$d vistas</item>
     </plurals>
-    <string name="stories_viewers_empty_subtitle">Las personas que vean tu historia aparecerán aquí.</string>
-    <string name="stories_viewers_empty_title">Aún no hay vistas</string>
     <string name="stories_viewers_title">Visualizaciones</string>
     <string name="stories_visibility_community">Comunidad</string>
     <string name="stories_visibility_except">Excepto…</string>
@@ -453,7 +443,6 @@
     <string name="story_media_video">Vídeo</string>
     <string name="story_notification_expired_back">Volver a las notificaciones</string>
     <string name="story_notification_expired_cta_create">Crear una historia</string>
-    <string name="story_notification_expired_subtitle">Esta historia ya no está disponible.</string>
     <string name="story_notification_expired_title">Historia caducada</string>
     <string name="story_reader_buffering">Cargando la story</string>
     <string name="story_reader_loading">Cargando historia…</string>
@@ -472,7 +461,6 @@
     </plurals>
     <string name="story_send_search_hint">Buscar una conversación...</string>
     <string name="story_send_sent">Enviado</string>
-    <string name="story_sentinel_body">Tu versión de la aplicación aún no sabe pintarla. No se ha perdido: se mostrará tal y como la compuso su autor después de la actualización.</string>
     <string name="story_sentinel_skip">PASAR A LA SIGUIENTE</string>
     <string name="story_sentinel_title">Esta historia usa un formato más reciente</string>
     <string name="story_sentinel_update">ACTUALIZAR</string>

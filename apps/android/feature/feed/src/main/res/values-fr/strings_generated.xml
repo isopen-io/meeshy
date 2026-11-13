@@ -28,7 +28,6 @@
     <string name="feed_delete_confirm">Supprimer</string>
     <string name="feed_draft_recovered">Brouillon hors-ligne restauré</string>
     <string name="feed_empty">Aucune publication</string>
-    <string name="feed_empty_subtitle">Les publications de vos contacts apparaîtront ici</string>
     <string name="feed_header_nearby">Publications à proximité</string>
     <string name="feed_like">Aimer</string>
     <string name="feed_link_copied">Lien copié</string>
@@ -156,8 +155,6 @@
     <string name="mood_spotlight_unavailable">Cette humeur n\'est plus disponible</string>
     <string name="nearby_back">Retour</string>
     <string name="nearby_denied_action">Ouvrir les Réglages</string>
-    <string name="nearby_denied_detail">Meeshy n\'a pas accès à votre position. Autorisez-la dans les Réglages, ou déplacez la carte à la main.</string>
-    <string name="nearby_denied_title">Position non autorisée</string>
     <string name="nearby_retry">Réessayer</string>
     <string name="nearby_title">À proximité</string>
     <string name="post_bookmark_removed">Retiré des favoris</string>
@@ -205,11 +202,8 @@
     <string name="post_detail_title">Publication</string>
     <string name="post_detail_viewers">Vues</string>
     <string name="profile_posts_empty">Aucune publication</string>
-    <string name="profile_posts_empty_filter_subtitle">Touchez à nouveau la tuile pour tout revoir</string>
     <string name="profile_posts_empty_posts">Aucun poste</string>
     <string name="profile_posts_empty_reels">Aucun réel</string>
-    <string name="profile_posts_empty_subtitle">Les publications apparaîtront ici</string>
-    <string name="profile_posts_end_of_content">Vous avez tout vu</string>
     <string name="profile_posts_first_published_at">Premier contenu publié le %1$s</string>
     <string name="profile_posts_load_error">Erreur lors du chargement des publications</string>
     <string name="profile_posts_stat_posts">Publications</string>

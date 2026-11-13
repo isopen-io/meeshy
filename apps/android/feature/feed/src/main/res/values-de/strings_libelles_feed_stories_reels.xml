@@ -22,7 +22,7 @@
     <string name="bookmarks_remove">Aus Gespeichert entfernen</string>
     <string name="post_detail_not_found">Dieser Beitrag ist nicht mehr verfügbar</string>
     <string name="post_detail_empty">Dieser Beitrag konnte nicht geladen werden</string>
-    <string name="post_comments_empty">Noch keine Kommentare. Schreib den ersten!</string>
+    <string name="post_comments_empty">Keine Kommentare</string>
     <string name="post_comments_load_more">Weitere Kommentare anzeigen</string>
     <string name="post_comments_input_hint">Kommentar hinzufügen …</string>
     <string name="post_comments_delete_action">Kommentar löschen</string>
@@ -32,7 +32,7 @@
     <string name="status_composer_republishing">\@%1$s wird erneut veröffentlicht</string>
     <string name="status_composer_placeholder">Wie geht es dir?</string>
     <string name="status_composer_mood_label">Stimmung %1$s</string>
-    <string name="feed_composer_open_placeholder">Teile etwas mit der Welt …</string>
+    <string name="feed_composer_open_placeholder">Teile etwas …</string>
     <string name="feed_composer_attach_media">Foto oder Video hinzufügen</string>
     <string name="feed_composer_remove_media">Medium entfernen</string>
     <string name="feed_composer_media_unusable">Dieses Medium konnte nicht angehängt werden</string>
@@ -44,11 +44,10 @@
     <string name="feed_delete_confirm_message">Diese Aktion kann nicht rückgängig gemacht werden.</string>
     <string name="feed_report_title">Diesen Beitrag melden</string>
     <string name="feed_header_reels">Reels starten</string>
-    <string name="nearby_empty">Gerade keine Beiträge in deiner Nähe</string>
-    <string name="nearby_permission_title">Standortzugriff erforderlich</string>
-    <string name="nearby_permission_message">Erlaube den Standortzugriff, um Beiträge in deiner Nähe zu sehen.</string>
+    <string name="nearby_empty">Keine Beiträge in der Nähe</string>
+    <string name="nearby_permission_message">Erlaube den Standort, um Beiträge in der Nähe zu sehen.</string>
     <string name="nearby_permission_action">Zugriff erlauben</string>
-    <string name="nearby_location_unavailable">Standort nicht verfügbar – prüfe deine Standorteinstellungen und versuche es erneut</string>
+    <string name="nearby_location_unavailable">Standort nicht verfügbar</string>
     <string name="nearby_distance_meters">%1$d m entfernt</string>
     <string name="nearby_distance_km">%1$.1f km entfernt</string>
     <plurals name="post_comments_view_all_replies">
@@ -59,5 +58,5 @@
         <item quantity="one">Du kannst bis zu %1$d Element anhängen</item>
         <item quantity="other">Du kannst bis zu %1$d Elemente anhängen</item>
     </plurals>
-    <string name="status_composer_emoji_too_long">Dieses Emoji ist zu lang für einen Status – wähle ein anderes.</string>
+    <string name="status_composer_emoji_too_long">Emoji zu lang</string>
 </resources>

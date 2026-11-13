@@ -28,7 +28,6 @@
     <string name="feed_delete_confirm">Excluir</string>
     <string name="feed_draft_recovered">Rascunho offline restaurado</string>
     <string name="feed_empty">Nenhuma publicação</string>
-    <string name="feed_empty_subtitle">As publicações dos seus contatos aparecerão aqui</string>
     <string name="feed_header_nearby">Publicações por perto</string>
     <string name="feed_like">Curtir</string>
     <string name="feed_link_copied">Link copiado</string>
@@ -156,8 +155,6 @@
     <string name="mood_spotlight_unavailable">Este humor não está mais disponível</string>
     <string name="nearby_back">Voltar</string>
     <string name="nearby_denied_action">Abrir Ajustes</string>
-    <string name="nearby_denied_detail">O Meeshy não tem acesso à sua localização. Permita nos Ajustes ou mova o mapa manualmente.</string>
-    <string name="nearby_denied_title">Localização não autorizada</string>
     <string name="nearby_retry">Tentar novamente</string>
     <string name="nearby_title">Por perto</string>
     <string name="post_bookmark_removed">Removido dos favoritos</string>
@@ -205,11 +202,8 @@
     <string name="post_detail_title">Publicação</string>
     <string name="post_detail_viewers">Visualizações</string>
     <string name="profile_posts_empty">Nenhuma publicação</string>
-    <string name="profile_posts_empty_filter_subtitle">Toque no bloco novamente para ver tudo</string>
     <string name="profile_posts_empty_posts">Nenhuma publicação</string>
     <string name="profile_posts_empty_reels">Nenhum reel</string>
-    <string name="profile_posts_empty_subtitle">As publicações aparecerão aqui</string>
-    <string name="profile_posts_end_of_content">Você já viu tudo</string>
     <string name="profile_posts_first_published_at">Primeiro conteúdo publicado em %1$s</string>
     <string name="profile_posts_load_error">Erro ao carregar as publicações</string>
     <string name="profile_posts_stat_posts">Publicações</string>

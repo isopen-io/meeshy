@@ -22,7 +22,7 @@
     <string name="bookmarks_remove">Rimuovi dai salvati</string>
     <string name="post_detail_not_found">Questo post non è più disponibile</string>
     <string name="post_detail_empty">Impossibile caricare questo post</string>
-    <string name="post_comments_empty">Ancora nessun commento. Scrivi il primo!</string>
+    <string name="post_comments_empty">Nessun commento</string>
     <string name="post_comments_load_more">Mostra altri commenti</string>
     <string name="post_comments_input_hint">Aggiungi un commento…</string>
     <string name="post_comments_delete_action">Elimina commento</string>
@@ -32,7 +32,7 @@
     <string name="status_composer_republishing">Ripubblicazione di @%1$s</string>
     <string name="status_composer_placeholder">Come va?</string>
     <string name="status_composer_mood_label">Umore %1$s</string>
-    <string name="feed_composer_open_placeholder">Condividi qualcosa con il mondo…</string>
+    <string name="feed_composer_open_placeholder">Condividi qualcosa…</string>
     <string name="feed_composer_attach_media">Aggiungi foto o video</string>
     <string name="feed_composer_remove_media">Rimuovi il contenuto multimediale</string>
     <string name="feed_composer_media_unusable">Impossibile allegare questo contenuto</string>
@@ -44,11 +44,10 @@
     <string name="feed_delete_confirm_message">Questa azione non può essere annullata.</string>
     <string name="feed_report_title">Segnala questo post</string>
     <string name="feed_header_reels">Avvia Reels</string>
-    <string name="nearby_empty">Nessun post nelle vicinanze al momento</string>
-    <string name="nearby_permission_title">Accesso alla posizione necessario</string>
-    <string name="nearby_permission_message">Consenti l\'accesso alla posizione per vedere i post condivisi nelle vicinanze.</string>
+    <string name="nearby_empty">Nessun post nelle vicinanze</string>
+    <string name="nearby_permission_message">Consenti la posizione per vedere i post vicini.</string>
     <string name="nearby_permission_action">Consenti l\'accesso</string>
-    <string name="nearby_location_unavailable">Posizione non disponibile: controlla le impostazioni di localizzazione e riprova</string>
+    <string name="nearby_location_unavailable">Posizione non disponibile</string>
     <string name="nearby_distance_meters">a %1$d m</string>
     <string name="nearby_distance_km">a %1$.1f km</string>
     <plurals name="post_comments_view_all_replies">
@@ -61,5 +60,5 @@
         <item quantity="many">Puoi allegare fino a %1$d elementi</item>
         <item quantity="other">Puoi allegare fino a %1$d elementi</item>
     </plurals>
-    <string name="status_composer_emoji_too_long">Questa emoji è troppo lunga per uno stato: scegline un\'altra.</string>
+    <string name="status_composer_emoji_too_long">Emoji troppo lunga</string>
 </resources>

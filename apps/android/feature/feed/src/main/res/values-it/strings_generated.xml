@@ -28,7 +28,6 @@
     <string name="feed_delete_confirm">Elimina</string>
     <string name="feed_draft_recovered">Bozza offline ripristinata</string>
     <string name="feed_empty">Nessun post</string>
-    <string name="feed_empty_subtitle">I post dei tuoi contatti appariranno qui</string>
     <string name="feed_header_nearby">Post nelle vicinanze</string>
     <string name="feed_like">Metti mi piace</string>
     <string name="feed_link_copied">Link copiato</string>
@@ -156,8 +155,6 @@
     <string name="mood_spotlight_unavailable">Questo umore non è più disponibile</string>
     <string name="nearby_back">Indietro</string>
     <string name="nearby_denied_action">Apri Impostazioni</string>
-    <string name="nearby_denied_detail">Meeshy non ha accesso alla tua posizione. Consentilo nelle Impostazioni o sposta la mappa a mano.</string>
-    <string name="nearby_denied_title">Posizione non autorizzata</string>
     <string name="nearby_retry">Riprova</string>
     <string name="nearby_title">Nelle vicinanze</string>
     <string name="post_bookmark_removed">Rimosso dai preferiti</string>
@@ -205,11 +202,8 @@
     <string name="post_detail_title">Post</string>
     <string name="post_detail_viewers">Visualizzazioni</string>
     <string name="profile_posts_empty">Nessun post</string>
-    <string name="profile_posts_empty_filter_subtitle">Tocca di nuovo il riquadro per rivedere tutto</string>
     <string name="profile_posts_empty_posts">Nessun post</string>
     <string name="profile_posts_empty_reels">Nessun reel</string>
-    <string name="profile_posts_empty_subtitle">I post appariranno qui</string>
-    <string name="profile_posts_end_of_content">Hai visto tutto</string>
     <string name="profile_posts_first_published_at">Primo contenuto pubblicato il %1$s</string>
     <string name="profile_posts_load_error">Errore durante il caricamento dei post</string>
     <string name="profile_posts_stat_posts">Post</string>

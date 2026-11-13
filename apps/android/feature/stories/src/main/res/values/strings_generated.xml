@@ -174,7 +174,6 @@
     <string name="composer_text_frame_rounded">Rounded</string>
     <string name="composer_text_frame_speech">Speech bubble</string>
     <string name="feed_post_publish_error">Error while publishing</string>
-    <string name="my_stories_archive_empty_subtitle">Your expired stories will join this archive.</string>
     <string name="my_stories_archive_empty_title">No archive</string>
     <string name="my_stories_back">Back</string>
     <string name="my_stories_cancel">Cancel</string>
@@ -192,10 +191,8 @@
     <string name="my_stories_delete_title">Delete this story?</string>
     <string name="my_stories_drafts_delete_message">This cannot be undone. The draft and its media will be deleted.</string>
     <string name="my_stories_drafts_delete_title">Delete this draft?</string>
-    <string name="my_stories_drafts_empty_subtitle">A story closed without being published will wait for you here.</string>
     <string name="my_stories_drafts_empty_title">No drafts</string>
     <string name="my_stories_edit">Edit</string>
-    <string name="my_stories_empty_subtitle">Your published stories will appear here while they\'re active.</string>
     <string name="my_stories_empty_title">No stories sent yet</string>
     <string name="my_stories_failed_a11y">Story not published, %1$s ago. %2$s</string>
     <string name="my_stories_failed_delete_message">This story was never published: this is its last copy and it will be lost forever. “Resume” converts it into a draft instead.</string>
@@ -210,8 +207,6 @@
     <string name="my_stories_more">More options</string>
     <string name="my_stories_ok">OK</string>
     <string name="my_stories_open">Open</string>
-    <string name="my_stories_queue_empty_subtitle">Your in-progress or failed publishes will appear here.</string>
-    <string name="my_stories_queue_empty_title">Nothing queued</string>
     <string name="my_stories_repost">Repost</string>
     <string name="my_stories_repost_error">Repost failed</string>
     <string name="my_stories_repost_success">Story reposted</string>
@@ -250,8 +245,6 @@
         <item quantity="one">%1$d comment</item>
         <item quantity="other">%1$d comments</item>
     </plurals>
-    <string name="stories_comments_empty_subtitle">Be the first to comment!</string>
-    <string name="stories_comments_empty_title">No comments yet</string>
     <string name="stories_comments_open">Comments</string>
     <string name="stories_comments_send">Send</string>
     <string name="stories_comments_title">Comments</string>
@@ -348,7 +341,6 @@
     <string name="stories_viewer_fullscreen_exit">Exit full screen</string>
     <string name="stories_viewer_mute">Mute background sound</string>
     <string name="stories_viewer_next">Next story</string>
-    <string name="stories_viewer_not_found_description">This story couldn\'t be loaded. Try again or close.</string>
     <string name="stories_viewer_not_found_title">Story not found</string>
     <string name="stories_viewer_previous">Previous story</string>
     <string name="stories_viewer_profile_of">Profile of %1$s</string>
@@ -358,8 +350,6 @@
         <item quantity="one">%1$d view</item>
         <item quantity="other">%1$d views</item>
     </plurals>
-    <string name="stories_viewers_empty_subtitle">People who watch your story will appear here.</string>
-    <string name="stories_viewers_empty_title">No views yet</string>
     <string name="stories_viewers_title">Views</string>
     <string name="stories_visibility_community">Community</string>
     <string name="stories_visibility_except">Except…</string>
@@ -451,7 +441,6 @@
     <string name="story_media_video">Video</string>
     <string name="story_notification_expired_back">Back to notifications</string>
     <string name="story_notification_expired_cta_create">Create a story</string>
-    <string name="story_notification_expired_subtitle">This story is no longer available.</string>
     <string name="story_notification_expired_title">Story expired</string>
     <string name="story_reader_buffering">Loading the story</string>
     <string name="story_reader_loading">Loading story…</string>
@@ -469,7 +458,6 @@
     </plurals>
     <string name="story_send_search_hint">Search a conversation...</string>
     <string name="story_send_sent">Sent</string>
-    <string name="story_sentinel_body">Your version of the app can\'t paint it yet. It isn\'t lost: it will appear exactly as its author composed it once you update.</string>
     <string name="story_sentinel_skip">SKIP TO THE NEXT</string>
     <string name="story_sentinel_title">This story uses a newer format</string>
     <string name="story_sentinel_update">UPDATE</string>

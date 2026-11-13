@@ -22,7 +22,7 @@
     <string name="bookmarks_remove">إزالة من المحفوظات</string>
     <string name="post_detail_not_found">لم يعد هذا المنشور متاحًا</string>
     <string name="post_detail_empty">تعذّر تحميل هذا المنشور</string>
-    <string name="post_comments_empty">لا توجد تعليقات بعد. كن أول من يعلّق!</string>
+    <string name="post_comments_empty">لا توجد تعليقات</string>
     <string name="post_comments_load_more">عرض المزيد من التعليقات</string>
     <string name="post_comments_input_hint">أضف تعليقًا…</string>
     <string name="post_comments_delete_action">حذف التعليق</string>
@@ -32,7 +32,7 @@
     <string name="status_composer_republishing">إعادة نشر @%1$s</string>
     <string name="status_composer_placeholder">كيف حالك؟</string>
     <string name="status_composer_mood_label">المزاج %1$s</string>
-    <string name="feed_composer_open_placeholder">شارك شيئًا مع العالم…</string>
+    <string name="feed_composer_open_placeholder">شارك شيئًا…</string>
     <string name="feed_composer_attach_media">إضافة صورة أو فيديو</string>
     <string name="feed_composer_remove_media">إزالة الوسائط</string>
     <string name="feed_composer_media_unusable">تعذّر إرفاق هذه الوسائط</string>
@@ -44,11 +44,10 @@
     <string name="feed_delete_confirm_message">لا يمكن التراجع عن هذا الإجراء.</string>
     <string name="feed_report_title">الإبلاغ عن هذا المنشور</string>
     <string name="feed_header_reels">تشغيل Reels</string>
-    <string name="nearby_empty">لا توجد منشورات قريبة منك حاليًا</string>
-    <string name="nearby_permission_title">يلزم الوصول إلى الموقع</string>
-    <string name="nearby_permission_message">اسمح بالوصول إلى الموقع لعرض المنشورات المشاركة بالقرب منك.</string>
+    <string name="nearby_empty">لا توجد منشورات قريبة</string>
+    <string name="nearby_permission_message">اسمح بالموقع لعرض المنشورات القريبة.</string>
     <string name="nearby_permission_action">السماح بالوصول</string>
-    <string name="nearby_location_unavailable">الموقع غير متاح — تحقق من إعدادات الموقع وأعد المحاولة</string>
+    <string name="nearby_location_unavailable">الموقع غير متاح</string>
     <string name="nearby_distance_meters">على بعد %1$d م</string>
     <string name="nearby_distance_km">على بعد %1$.1f كم</string>
     <plurals name="post_comments_view_all_replies">
@@ -67,5 +66,5 @@
         <item quantity="many">يمكنك إرفاق %1$d عنصرًا كحد أقصى</item>
         <item quantity="other">يمكنك إرفاق %1$d عنصر كحد أقصى</item>
     </plurals>
-    <string name="status_composer_emoji_too_long">هذا الرمز التعبيري طويل جدًا لحالة — اختر رمزًا آخر.</string>
+    <string name="status_composer_emoji_too_long">الرمز طويل جدًا</string>
 </resources>

@@ -26,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -182,27 +181,18 @@ internal fun LazyListScope.profilePostsItems(
 
 @Composable
 private fun ProfilePostsEmpty(kind: ProfilePostsEmptyKind) {
-    val title: String
-    val subtitle: String
-    when (kind) {
-        ProfilePostsEmptyKind.NO_REELS -> {
-            title = stringResource(R.string.profile_posts_empty_reels)
-            subtitle = stringResource(R.string.profile_posts_empty_filter_subtitle)
-        }
-        ProfilePostsEmptyKind.NO_POSTS -> {
-            title = stringResource(R.string.profile_posts_empty_posts)
-            subtitle = stringResource(R.string.profile_posts_empty_filter_subtitle)
-        }
-        else -> {
-            title = stringResource(R.string.profile_posts_empty)
-            subtitle = stringResource(R.string.profile_posts_empty_subtitle)
-        }
-    }
+    val title = stringResource(
+        when (kind) {
+            ProfilePostsEmptyKind.NO_REELS -> R.string.profile_posts_empty_reels
+            ProfilePostsEmptyKind.NO_POSTS -> R.string.profile_posts_empty_posts
+            else -> R.string.profile_posts_empty
+        },
+    )
     Box(Modifier.fillMaxWidth().height(220.dp)) {
         MeeshyEmptyState(
             icon = if (kind == ProfilePostsEmptyKind.NO_REELS) MeeshyIcons.Movie else MeeshyIcons.Notes,
             title = title,
-            subtitle = subtitle,
+            subtitle = "",
             compact = true,
         )
     }
@@ -217,12 +207,6 @@ private fun ProfilePostsEndFooter(firstPublishedAtIso: String?, locale: Locale) 
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus),
     ) {
         Icon(MeeshyIcons.Verified, contentDescription = null, tint = MeeshyTheme.tokens.textSecondary)
-        Text(
-            stringResource(R.string.profile_posts_end_of_content),
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
         date?.let {
             Text(
                 stringResource(R.string.profile_posts_first_published_at, it),

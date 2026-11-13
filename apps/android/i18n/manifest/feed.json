@@ -399,10 +399,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "nearby_permission_title",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "feed.nearby.empty.retry",
           "androidName": "nearby_retry",
@@ -689,16 +685,8 @@
           "status": "adopted"
         },
         {
-          "catalog": "app",
-          "iosKey": "feed.nearby.empty.denied.detail",
           "androidName": "nearby_denied_detail",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "feed.nearby.empty.denied.title",
-          "androidName": "nearby_denied_title",
-          "status": "adopted"
+          "status": "android-only"
         }
       ]
     }

@@ -174,7 +174,6 @@
     <string name="composer_text_frame_rounded">Arrondi</string>
     <string name="composer_text_frame_speech">Bulle BD</string>
     <string name="feed_post_publish_error">Erreur lors de la publication</string>
-    <string name="my_stories_archive_empty_subtitle">Vos stories expirées rejoindront cette archive.</string>
     <string name="my_stories_archive_empty_title">Aucune archive</string>
     <string name="my_stories_back">Retour</string>
     <string name="my_stories_cancel">Annuler</string>
@@ -192,10 +191,8 @@
     <string name="my_stories_delete_title">Supprimer la story ?</string>
     <string name="my_stories_drafts_delete_message">Cette action est définitive. Le brouillon et ses médias seront supprimés.</string>
     <string name="my_stories_drafts_delete_title">Supprimer le brouillon ?</string>
-    <string name="my_stories_drafts_empty_subtitle">Une story fermée sans être publiée vous attend ici.</string>
     <string name="my_stories_drafts_empty_title">Aucun brouillon</string>
     <string name="my_stories_edit">Modifier</string>
-    <string name="my_stories_empty_subtitle">Vos stories publiées apparaîtront ici tant qu\'elles sont actives.</string>
     <string name="my_stories_empty_title">Aucune story envoyée</string>
     <string name="my_stories_failed_a11y">Story non publiée, il y a %1$s. %2$s</string>
     <string name="my_stories_failed_delete_message">Cette story n\'a jamais été publiée : c\'est sa dernière copie, elle sera définitivement perdue. « Reprendre » permet plutôt de la convertir en brouillon.</string>
@@ -210,8 +207,6 @@
     <string name="my_stories_more">Plus d\'options</string>
     <string name="my_stories_ok">OK</string>
     <string name="my_stories_open">Ouvrir</string>
-    <string name="my_stories_queue_empty_subtitle">Vos publications en cours ou en échec apparaîtront ici.</string>
-    <string name="my_stories_queue_empty_title">Rien en file</string>
     <string name="my_stories_repost">Republier</string>
     <string name="my_stories_repost_error">Échec de la republication</string>
     <string name="my_stories_repost_success">Story republiée</string>
@@ -251,8 +246,6 @@
         <item quantity="many">%1$d commentaires</item>
         <item quantity="other">%1$d commentaires</item>
     </plurals>
-    <string name="stories_comments_empty_subtitle">Soyez le premier à commenter !</string>
-    <string name="stories_comments_empty_title">Pas encore de commentaires</string>
     <string name="stories_comments_open">Commentaires</string>
     <string name="stories_comments_send">Envoyer</string>
     <string name="stories_comments_title">Commentaires</string>
@@ -349,7 +342,6 @@
     <string name="stories_viewer_fullscreen_exit">Quitter le plein écran</string>
     <string name="stories_viewer_mute">Couper le son de fond</string>
     <string name="stories_viewer_next">Story suivante</string>
-    <string name="stories_viewer_not_found_description">Impossible de charger cette story. Réessayez ou fermez.</string>
     <string name="stories_viewer_not_found_title">Story introuvable</string>
     <string name="stories_viewer_previous">Story précédente</string>
     <string name="stories_viewer_profile_of">Profil de %1$s</string>
@@ -360,8 +352,6 @@
         <item quantity="many">%1$d vues</item>
         <item quantity="other">%1$d vues</item>
     </plurals>
-    <string name="stories_viewers_empty_subtitle">Les personnes qui regardent votre story apparaîtront ici.</string>
-    <string name="stories_viewers_empty_title">Aucune vue pour le moment</string>
     <string name="stories_viewers_title">Vues</string>
     <string name="stories_visibility_community">Communauté</string>
     <string name="stories_visibility_except">Sauf…</string>
@@ -453,7 +443,6 @@
     <string name="story_media_video">Vidéo</string>
     <string name="story_notification_expired_back">Retour aux notifications</string>
     <string name="story_notification_expired_cta_create">Créer une story</string>
-    <string name="story_notification_expired_subtitle">Cette story n\'est plus disponible.</string>
     <string name="story_notification_expired_title">Story expirée</string>
     <string name="story_reader_buffering">Chargement de la story en cours</string>
     <string name="story_reader_loading">Chargement de la story…</string>
@@ -472,7 +461,6 @@
     </plurals>
     <string name="story_send_search_hint">Rechercher une conversation...</string>
     <string name="story_send_sent">Envoyé</string>
-    <string name="story_sentinel_body">Votre version de l\'application ne sait pas encore la peindre. Elle n\'est pas perdue : elle s\'affichera telle que son auteur l\'a composée après la mise à jour.</string>
     <string name="story_sentinel_skip">PASSER À LA SUIVANTE</string>
     <string name="story_sentinel_title">Cette story utilise un format plus récent</string>
     <string name="story_sentinel_update">METTRE À JOUR</string>

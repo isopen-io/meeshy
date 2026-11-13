@@ -84,7 +84,7 @@ internal fun ReelRail(
                 onClick = { haptics.light(); actions.onLike(reel.id) },
                 style = style,
                 hint = stringResource(R.string.reels_like),
-                caption = ReelRailCaption.of(reel.likeCount, stringResource(R.string.reels_like), locale),
+                caption = ReelRailCaption.of(reel.likeCount, locale),
                 accessibilityValue = reel.likeCount.takeIf { it > 0 }?.toString(),
                 isActive = reel.isLiked,
                 activeTint = MeeshyPalette.Error,
@@ -109,7 +109,7 @@ internal fun ReelRail(
             onClick = { haptics.light(); actions.onComments(reel.id) },
             style = style,
             hint = stringResource(R.string.reels_action_comment),
-            caption = ReelRailCaption.of(reel.commentCount, stringResource(R.string.reels_action_comment), locale),
+            caption = ReelRailCaption.of(reel.commentCount, locale),
             accessibilityValue = reel.commentCount.takeIf { it > 0 }?.toString(),
         )
         FullscreenActionButton(
@@ -118,7 +118,7 @@ internal fun ReelRail(
             onClick = { haptics.medium(); actions.onBookmark(reel.id) },
             style = style,
             hint = stringResource(R.string.reels_bookmark),
-            caption = ReelRailCaption.of(reel.bookmarkCount, stringResource(R.string.reels_bookmark), locale),
+            caption = ReelRailCaption.of(reel.bookmarkCount, locale),
             accessibilityValue = reel.bookmarkCount.takeIf { it > 0 }?.toString(),
             isActive = reel.isBookmarked,
             activeTint = MeeshyPalette.Warning,
@@ -130,7 +130,7 @@ internal fun ReelRail(
             onClick = { haptics.light(); choosingRepost = true },
             style = style,
             hint = stringResource(R.string.reels_action_repost),
-            caption = ReelRailCaption.of(reel.repostCount, stringResource(R.string.reels_action_repost), locale),
+            caption = ReelRailCaption.of(reel.repostCount, locale),
             accessibilityValue = reel.repostCount.takeIf { it > 0 }?.toString(),
             isActive = reel.isReposted,
             activeTint = MeeshyPalette.Success,
@@ -141,7 +141,7 @@ internal fun ReelRail(
             label = stringResource(R.string.reels_action_send),
             onClick = { haptics.light(); actions.onSend(reel.id) },
             style = style,
-            caption = ReelRailCaption.of(reel.shareCount, stringResource(R.string.reels_action_send), locale),
+            caption = ReelRailCaption.of(reel.shareCount, locale),
             accessibilityValue = reel.shareCount.takeIf { it > 0 }?.toString(),
         )
         val imager = actions.onImager
@@ -165,10 +165,10 @@ internal fun ReelRail(
     }
 }
 
-/** Sous chaque bouton du rail, comme au rail de la story : le compte abrégé quand il y en a un, sinon le nom de l'action. */
+/** Sous chaque bouton du rail : le compte abrégé quand il y en a un, rien sinon. Le nom de l'action reste lu par le lecteur d'écran. */
 internal object ReelRailCaption {
-    fun of(count: Int, label: String, locale: Locale): String =
-        count.takeIf { it > 0 }?.let { CompactCountFormat.text(it, locale) } ?: label
+    fun of(count: Int, locale: Locale): String? =
+        count.takeIf { it > 0 }?.let { CompactCountFormat.text(it, locale) }
 }
 
 /** Le rail : colonne de droite de la page, sous le voile bas du lecteur (iOS `MediaChromeStage.reelPlayer`). */

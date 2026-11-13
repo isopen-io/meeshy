@@ -22,7 +22,7 @@
     <string name="bookmarks_remove">Remove from saved</string>
     <string name="post_detail_not_found">This post is no longer available</string>
     <string name="post_detail_empty">Couldn\'t load this post</string>
-    <string name="post_comments_empty">No comments yet. Be the first!</string>
+    <string name="post_comments_empty">No comments</string>
     <string name="post_comments_load_more">Show more comments</string>
     <string name="post_comments_input_hint">Add a comment…</string>
     <string name="post_comments_delete_action">Delete comment</string>
@@ -36,7 +36,7 @@
     <string name="status_composer_republishing">Republishing @%1$s</string>
     <string name="status_composer_placeholder">How are you doing?</string>
     <string name="status_composer_mood_label">Mood %1$s</string>
-    <string name="feed_composer_open_placeholder">Share something with the world…</string>
+    <string name="feed_composer_open_placeholder">Share something…</string>
     <string name="feed_composer_attach_media">Add photo or video</string>
     <string name="feed_composer_remove_media">Remove media</string>
     <string name="feed_composer_media_unusable">That media couldn\'t be attached</string>
@@ -54,12 +54,11 @@
     <string name="feed_header_reels">Launch Reels</string>
 
     <!-- Nearby (À proximité) -->
-    <string name="nearby_empty">No posts near you right now</string>
-    <string name="nearby_permission_title">Location access needed</string>
-    <string name="nearby_permission_message">Allow location access to see posts shared near you.</string>
+    <string name="nearby_empty">No posts nearby</string>
+    <string name="nearby_permission_message">Allow location to see nearby posts.</string>
     <string name="nearby_permission_action">Grant access</string>
-    <string name="nearby_location_unavailable">Location unavailable — check your location settings and try again</string>
+    <string name="nearby_location_unavailable">Location unavailable</string>
     <string name="nearby_distance_meters">%1$d m away</string>
     <string name="nearby_distance_km">%1$.1f km away</string>
-    <string name="status_composer_emoji_too_long">This emoji is too long for a status — pick another one.</string>
+    <string name="status_composer_emoji_too_long">Emoji too long</string>
 </resources>

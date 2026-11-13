@@ -22,7 +22,7 @@
     <string name="bookmarks_remove">Retirer des enregistrés</string>
     <string name="post_detail_not_found">Cette publication n\'est plus disponible</string>
     <string name="post_detail_empty">Impossible de charger cette publication</string>
-    <string name="post_comments_empty">Aucun commentaire pour l\'instant. Soyez le premier !</string>
+    <string name="post_comments_empty">Aucun commentaire</string>
     <string name="post_comments_load_more">Voir plus de commentaires</string>
     <string name="post_comments_input_hint">Ajouter un commentaire…</string>
     <string name="post_comments_delete_action">Supprimer le commentaire</string>
@@ -37,7 +37,7 @@
     <string name="status_composer_republishing">Republication de @%1$s</string>
     <string name="status_composer_placeholder">Comment allez-vous ?</string>
     <string name="status_composer_mood_label">Humeur %1$s</string>
-    <string name="feed_composer_open_placeholder">Partager quelque chose avec le monde…</string>
+    <string name="feed_composer_open_placeholder">Partager quelque chose…</string>
     <string name="feed_composer_attach_media">Ajouter une photo ou une vidéo</string>
     <string name="feed_composer_remove_media">Supprimer le média</string>
     <string name="feed_composer_media_unusable">Ce média n\'a pas pu être joint</string>
@@ -55,12 +55,11 @@
     <string name="feed_header_reels">Lancer les Réels</string>
 
     <!-- À proximité -->
-    <string name="nearby_empty">Aucune publication à proximité pour le moment</string>
-    <string name="nearby_permission_title">Accès à la localisation requis</string>
-    <string name="nearby_permission_message">Autorisez la localisation pour voir les publications partagées près de vous.</string>
+    <string name="nearby_empty">Aucune publication à proximité</string>
+    <string name="nearby_permission_message">Autorisez la position pour voir les publications proches.</string>
     <string name="nearby_permission_action">Autoriser</string>
-    <string name="nearby_location_unavailable">Localisation indisponible — vérifiez vos réglages de localisation et réessayez</string>
+    <string name="nearby_location_unavailable">Position indisponible</string>
     <string name="nearby_distance_meters">à %1$d m</string>
     <string name="nearby_distance_km">à %1$.1f km</string>
-    <string name="status_composer_emoji_too_long">Cet emoji est trop long pour un statut — choisis-en un autre.</string>
+    <string name="status_composer_emoji_too_long">Emoji trop long</string>
 </resources>
