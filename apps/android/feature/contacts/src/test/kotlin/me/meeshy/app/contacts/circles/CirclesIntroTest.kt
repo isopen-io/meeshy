@@ -26,4 +26,13 @@ class CirclesIntroTest {
 
         compose.onNodeWithText("Each person’s circle sets what you share with them.").assertIsDisplayed()
     }
+
+    @Test
+    fun `with no link yet, the empty circles say what a circle sets and how people join one`() {
+        compose.setContent { MeeshyTheme { CirclesEmptyState(onFindContacts = {}) } }
+
+        compose.onNodeWithText("Each person’s circle sets what you share with them.").assertIsDisplayed()
+        compose.onNodeWithText("As you exchange with people, they join your circles").assertIsDisplayed()
+        compose.onNodeWithText("Find contacts").assertIsDisplayed()
+    }
 }

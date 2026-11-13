@@ -70,12 +70,7 @@ fun CirclesTab(
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             state.showsSkeleton -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            state.isEmptyState -> FullState(
-                title = stringResource(R.string.circles_intro),
-                subtitle = null,
-                action = stringResource(R.string.circles_empty_action),
-                onAction = onFindContacts,
-            )
+            state.isEmptyState -> CirclesEmptyState(onFindContacts = onFindContacts)
             state.visibleLinks.isEmpty() && state.hasError -> FullState(
                 title = stringResource(R.string.circles_error_load),
                 subtitle = null,
@@ -189,6 +184,20 @@ internal fun CirclesIntro(modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.bodyMedium,
         color = MeeshyTheme.tokens.textSecondary,
         modifier = modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
+}
+
+/**
+ * Aucun lien encore : ce que règle un cercle ET comment on y entre, visibles au repos (règle 7 — les cercles
+ * sont propres à Meeshy, rien d'autre ne le dit à qui arrive ici pour la première fois, #18083).
+ */
+@Composable
+internal fun CirclesEmptyState(onFindContacts: () -> Unit) {
+    FullState(
+        title = stringResource(R.string.circles_intro),
+        subtitle = stringResource(R.string.circles_empty_subtitle),
+        action = stringResource(R.string.circles_empty_action),
+        onAction = onFindContacts,
     )
 }
 

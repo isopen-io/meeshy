@@ -31,10 +31,10 @@
       "explanations": 25
     },
     "android:feature/contacts": {
-      "labels": 143,
-      "words": 697,
+      "labels": 144,
+      "words": 709,
       "long": 10,
-      "explanations": 8
+      "explanations": 9
     },
     "android:feature/conversations": {
       "labels": 634,

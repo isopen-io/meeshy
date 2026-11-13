@@ -2,6 +2,7 @@
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. -->
 <resources>
     <string name="circles_empty_action">ابحث عن جهات اتصال</string>
+    <string name="circles_empty_subtitle">كلما تبادلت مع الأشخاص، انضموا إلى دوائرك</string>
     <string name="circles_error_load">تعذّر تحميل دوائرك</string>
     <string name="circles_error_retry">أعد المحاولة</string>
     <string name="circles_offline_banner">غير متصل — هذه آخر دوائرك المعروفة</string>

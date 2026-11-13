@@ -40,7 +40,6 @@ class EpureContactsStringsTest {
         "contacts_requests_empty_received_subtitle",
         "contacts_requests_empty_sent_subtitle",
         "circles_empty_title",
-        "circles_empty_subtitle",
         "keypad_prompt_subtitle",
         "keypad_no_match_subtitle",
         "contacts_requests_empty",

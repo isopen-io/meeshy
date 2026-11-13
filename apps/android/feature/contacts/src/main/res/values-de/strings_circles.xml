@@ -2,6 +2,7 @@
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. -->
 <resources>
     <string name="circles_empty_action">Kontakte finden</string>
+    <string name="circles_empty_subtitle">Wenn du dich mit Leuten austauschst, kommen sie in deine Kreise</string>
     <string name="circles_error_load">Deine Kreise konnten nicht geladen werden</string>
     <string name="circles_error_retry">Erneut versuchen</string>
     <string name="circles_offline_banner">Offline – hier sind deine zuletzt bekannten Kreise</string>

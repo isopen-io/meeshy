@@ -2,6 +2,7 @@
 <!-- « Mes cercles » (#13938) : android-only tant que les clés circles.* ne sont pas au catalogue iOS de dev ; texte exact de la branche lot/ui-cercles-ios-13938. -->
 <resources>
     <string name="circles_empty_action">Trouver des contacts</string>
+    <string name="circles_empty_subtitle">À mesure que tu échanges avec des personnes, elles rejoignent tes cercles</string>
     <string name="circles_error_load">Impossible de charger tes cercles</string>
     <string name="circles_error_retry">Réessayer</string>
     <string name="circles_offline_banner">Hors ligne — voici tes derniers cercles connus</string>
