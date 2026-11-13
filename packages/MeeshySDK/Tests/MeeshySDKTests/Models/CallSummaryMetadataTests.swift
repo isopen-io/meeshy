@@ -219,4 +219,42 @@ struct CallSummaryMetadataTests {
         )
         #expect(plainMissed.isCancelled(viewerIsInitiator: true) == false)
     }
+
+    // MARK: - A1.2 : la ligne des participants sous le titre de la carte
+
+    private func summary(participantNames: [String]?) -> CallSummaryMetadata {
+        CallSummaryMetadata(
+            callId: "c1", initiatorId: "u_a", callType: .video, outcome: .completed,
+            durationSeconds: 760, bytesTotal: nil, bytesEstimated: false, networkQuality: nil,
+            participantNames: participantNames
+        )
+    }
+
+    @Test func participantsLine_namesThePeersThenYou() {
+        let line = summary(participantNames: ["Awa", "Karim", "Lina"])
+            .participantsLine(youLabel: "vous", locale: Locale(identifier: "fr"))
+        #expect(line == "Awa, Karim, Lina et vous")
+    }
+
+    @Test func participantsLine_aDuoReadsAsTwoNames() {
+        let line = summary(participantNames: ["Awa"])
+            .participantsLine(youLabel: "vous", locale: Locale(identifier: "fr"))
+        #expect(line == "Awa et vous")
+    }
+
+    @Test func participantsLine_isAbsentWhenNoNameWasServed() {
+        #expect(summary(participantNames: nil).participantsLine(youLabel: "vous", locale: Locale(identifier: "fr")) == nil)
+        #expect(summary(participantNames: []).participantsLine(youLabel: "vous", locale: Locale(identifier: "fr")) == nil)
+        #expect(summary(participantNames: ["  ", ""]).participantsLine(youLabel: "vous", locale: Locale(identifier: "fr")) == nil)
+    }
+
+    @Test func participantNames_decodeWhenServed_andStayAbsentOtherwise() throws {
+        let served = try decode("""
+        {"kind":"call","callId":"c1","initiatorId":"u","callType":"audio","outcome":"completed",
+         "durationSeconds":5,"participantNames":["Awa","Karim"]}
+        """)
+        #expect(served.participantNames == ["Awa", "Karim"])
+        let legacy = try decode(#"{"kind":"call","callId":"c1","initiatorId":"u","callType":"audio","outcome":"completed","durationSeconds":5}"#)
+        #expect(legacy.participantNames == nil)
+    }
 }
