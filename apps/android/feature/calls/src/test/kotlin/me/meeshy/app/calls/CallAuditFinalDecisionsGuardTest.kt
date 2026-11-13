@@ -32,8 +32,12 @@ class CallAuditFinalDecisionsGuardTest {
         assertThat(screen + layout).doesNotContain("chrome.visibility(callIsVideoStage")
         assertThat(screen).doesNotContain("mayToggleByTap(videoScene")
         val background = screen.substringAfter("if (duo.shown) {").substringBefore("preview.video?")
-        assertThat(background).contains("CallAudioSceneTapTarget(onTap = it)")
-        val target = code("CallAudioStage.kt").substringAfter("internal fun CallAudioSceneTapTarget(")
+        assertThat(background).contains("CallSceneBackgroundTapTarget(onTap = it)")
+        // #17945 étendu : un groupe sans caméra range aussi son chrome — le fond hors de la grille prend le toucher, comme
+        // le `stageRevealTarget` d'iOS ; la loi ne lit plus le groupe.
+        assertThat(background).contains("groupShown || !duo.videoStage")
+        assertThat(layout.substringAfter("internal fun callIsTapStage(").substringBefore("\n)")).doesNotContain("isGroup")
+        val target = code("CallAudioStage.kt").substringAfter("internal fun CallSceneBackgroundTapTarget(")
         assertThat(target).contains("detectTapGestures(onTap = { onTap() })")
         assertThat(target).contains("clearAndSetSemantics")
     }
