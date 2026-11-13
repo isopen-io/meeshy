@@ -150,7 +150,6 @@ final class ConversationEpureTests: XCTestCase {
 
     /// Une clé dont un libellé quitte l'écran sans plus aucun lecteur est supprimée de TOUTES les langues.
     private static let deletedFromApp: [String] = [
-        "conversation.encryption.fact.endToEndIsFinal",
         "conversation.lock.subtitle.confirmNewMasterPin",
         "conversation.lock.subtitle.enableBiometric",
         "conversation.lock.subtitle.reenterMasterPin",
@@ -405,7 +404,7 @@ final class ConversationEpureTests: XCTestCase {
         for mode in [nil, "server", "hybrid"] {
             let sections = ConversationEncryptionExplanation(mode: mode, isDirect: true).sections
             let switching = sections.first { $0.topic == .switching }
-            XCTAssertEqual(switching?.facts, [.switchKeepsHistory], "\(String(describing: mode))")
+            XCTAssertEqual(switching?.facts, [.switchKeepsHistory, .endToEndIsFinal], "\(String(describing: mode))")
         }
         let note = ConversationEncryptionExplanation.Fact.switchKeepsHistory.note
         XCTAssertTrue(note?.text.contains(ConversationEncryptionExplanation.Fact.whoMayToggle.text) == true)
@@ -423,7 +422,8 @@ final class ConversationEpureTests: XCTestCase {
         for key in ["conversation.encryption.create.footer", "conversation.encryption.fact.endToEndNeverTurnedOff"] {
             XCTAssertEqual(app[key]?["fr"], "Le chiffrement de bout en bout ne se désactive jamais.", key)
         }
-        XCTAssertNil(app["conversation.encryption.fact.endToEndIsFinal"], "la troisième copie de la même phrase est supprimée")
+        XCTAssertEqual(app["conversation.encryption.fact.endToEndIsFinal"]?["fr"], "Une fois activé, le chiffrement de bout en bout ne se désactive plus.",
+                       "là où l'on bascule, même sans le droit de basculer, « définitif » reste visible (revue #18078)")
         XCTAssertFalse(ConversationEncryptionExplanation.Fact.allCases.map(\.text).contains(""))
     }
 

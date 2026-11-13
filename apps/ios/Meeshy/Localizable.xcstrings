@@ -325900,6 +325900,53 @@
         }
       }
     },
+    "conversation.encryption.fact.endToEndIsFinal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بعد تفعيله، لا يمكن إيقاف التشفير التام بين الطرفين."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einmal eingeschaltet, lässt sich die Ende-zu-Ende-Verschlüsselung nicht mehr ausschalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once turned on, end-to-end encryption can’t be turned off."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una vez activado, el cifrado de extremo a extremo ya no se puede desactivar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une fois activé, le chiffrement de bout en bout ne se désactive plus."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una volta attivata, la crittografia end-to-end non si può più disattivare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depois de ativada, a criptografia de ponta a ponta não pode mais ser desativada."
+          }
+        }
+      }
+    },
     "conversation.encryption.fact.endToEndNeverTurnedOff": {
       "extractionState": "manual",
       "localizations": {

@@ -52,6 +52,7 @@ extension ConversationEncryptionExplanation.Fact {
         case .whoMayToggle: "person.crop.circle.badge.checkmark"
         case .switchKeepsHistory: "clock.arrow.circlepath"
         case .switchIsShownInThread: "text.bubble"
+        case .endToEndIsFinal: "lock.fill"
         case .endToEndNeverTurnedOff, .endToEndNeverTurnedOffDirect: "lock.shield"
         case .serverCannotTurnItOff: "iphone"
         }
@@ -124,6 +125,8 @@ extension ConversationEncryptionExplanation.Fact {
     /// Le bout en bout ne se désactive pas (#12949).
     private var permanenceText: String? {
         switch self {
+        case .endToEndIsFinal:
+            String(localized: "conversation.encryption.fact.endToEndIsFinal", defaultValue: "Une fois activé, le chiffrement de bout en bout ne se désactive plus.", bundle: .main)
         case .endToEndNeverTurnedOff:
             String(localized: "conversation.encryption.fact.endToEndNeverTurnedOff", defaultValue: "Le chiffrement de bout en bout ne se désactive jamais.", bundle: .main)
         case .endToEndNeverTurnedOffDirect:

@@ -71,7 +71,7 @@ struct ConversationEncryptionExplanation: Equatable {
         case noServerTranscription, noNotificationPreview, noSearch, noEdit, noForward, noOfflineSending
         case notYetAttachments, notYetDecryptedNotifications, notYetGroups, groupSendingUnavailable, notYetSafetyNumbers
         case oneKeyPerDevice, deviceLimit, restoredDeviceIsNew
-        case whoMayToggle, switchKeepsHistory, switchIsShownInThread
+        case whoMayToggle, switchKeepsHistory, switchIsShownInThread, endToEndIsFinal
         case endToEndNeverTurnedOff, endToEndNeverTurnedOffDirect, serverCannotTurnItOff
     }
 
@@ -112,7 +112,9 @@ struct ConversationEncryptionExplanation: Equatable {
         }
     }
 
-    private static let switchingFacts: [Fact] = [.switchKeepsHistory]
+    /// Ce que la bascule a d'irréversible reste VISIBLE là où l'on bascule (#12949) : l'épure range
+    /// qui peut basculer et l'avis dans le fil derrière un (i), jamais « définitif » (revue #18078).
+    private static let switchingFacts: [Fact] = [.switchKeepsHistory, .endToEndIsFinal]
 
     private static func readable(whoReads: [Fact]) -> [Section] {
         [

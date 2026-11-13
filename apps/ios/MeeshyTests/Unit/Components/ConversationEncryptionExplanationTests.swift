@@ -78,6 +78,7 @@ final class ConversationEncryptionExplanationTests: XCTestCase {
         for mode in [nil, "server", "hybrid"] {
             let facts = facts(mode)
             XCTAssertTrue(facts.contains(.switchKeepsHistory), "\(String(describing: mode))")
+            XCTAssertTrue(facts.contains(.endToEndIsFinal), "le bout en bout est définitif, et la fiche le dit au repos (#12949, revue #18078)")
             XCTAssertFalse(facts.contains(.whoMayToggle), "qui peut basculer passe derrière un (i) (#18078)")
             XCTAssertFalse(facts.contains(.switchIsShownInThread), "l'avis dans le fil passe derrière le même (i) (#18078)")
             XCTAssertEqual(ConversationEncryptionExplanation.noteFacts(of: .switchKeepsHistory), [.whoMayToggle, .switchIsShownInThread], "\(String(describing: mode))")
