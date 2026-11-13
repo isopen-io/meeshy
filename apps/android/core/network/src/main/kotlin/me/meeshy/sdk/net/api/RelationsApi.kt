@@ -11,12 +11,14 @@ import me.meeshy.sdk.model.relation.RelationLinkWire
 import me.meeshy.sdk.model.relation.RelationRitualBody
 import me.meeshy.sdk.model.relation.RelationRitualStep
 import me.meeshy.sdk.model.relation.RelationsConfig
+import me.meeshy.sdk.model.relation.SharedLocationSnapshotWire
 import me.meeshy.sdk.net.routes.ApiRoutesRelations
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * La réponse de `GET /relations/:userId` (#13998) : le niveau EFFECTIF du lien du lecteur avec [userId], tel que la
@@ -56,6 +58,14 @@ interface RelationsApi {
     /** Ce que mes Proches et mes Sangs écoutent en ce moment, tronqué par la passerelle à ce qu'ils me partagent (#16686). */
     @GET(ApiRoutesRelations.NOW_PLAYING)
     suspend fun nowPlaying(): ApiResponse<NowPlayingSnapshotWire>
+
+    /**
+     * Les positions qu'on me partage en ce moment (#16985), tronquées par la passerelle à la précision que chaque émetteur
+     * m'a donnée et filtrées par [bbox] (`minLon,minLat,maxLon,maxLat`, `SharedLocationBounds.queryValue`) ; `null` = toute
+     * la carte.
+     */
+    @GET(ApiRoutesRelations.LOCATIONS)
+    suspend fun sharedLocations(@Query("bbox") bbox: String? = null): ApiResponse<SharedLocationSnapshotWire>
 
     /** Les niveaux, leurs libellés des sept langues et leurs icônes. */
     @GET(ApiRoutesRelations.CONFIG)
