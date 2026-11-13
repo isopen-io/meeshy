@@ -553,9 +553,10 @@ const resoudreIdentifiant = (
     /\b(?:const|let|var)\s*\[([^\]]*)\]\s*(?::[^=;]*)?=\s*(?:await\s+)?Promise\s*\.\s*all\s*\(\s*\[/g;
   // `rows.filter(…).map((user) => …)` — le paramètre d'un rappel de tableau est
   // un ÉLÉMENT de la racine de la chaîne : `filter`, `find`… gardent la ligne
-  // telle qu'elle a été chargée (#8105).
+  // telle qu'elle a été chargée (#8105). Un rappel `async` reçoit le même
+  // élément (`Promise.all(rows.map(async (user) => …))`, #16724).
   const rappels = new RegExp(
-    `\\.\\s*(?:${METHODES_DE_TABLEAU.join('|')})\\s*\\(\\s*(?:\\(\\s*${echappe}\\s*(?::[^)]*)?\\)|${echappe})\\s*=>`,
+    `\\.\\s*(?:${METHODES_DE_TABLEAU.join('|')})\\s*\\(\\s*(?:async\\s+)?(?:\\(\\s*${echappe}\\s*(?::[^)]*)?\\)|${echappe})\\s*=>`,
     'g',
   );
 
