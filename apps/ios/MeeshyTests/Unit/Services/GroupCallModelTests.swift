@@ -195,9 +195,11 @@ final class GroupCallModelTests: XCTestCase {
     }
 
     func test_layout_alwaysHoldsEveryTileUpToTheMeshCeiling() {
+        let scenes: [(isLandscape: Bool, isCompactHeight: Bool)] = [(false, false), (false, true), (true, false), (true, true)]
         (1...CallRules.maxParticipants).forEach { count in
-            XCTAssertGreaterThanOrEqual(GroupCallGridLayout.layout(tileCount: count, isLandscape: false).capacity, count)
-            XCTAssertGreaterThanOrEqual(GroupCallGridLayout.layout(tileCount: count, isLandscape: true).capacity, count)
+            scenes.forEach { scene in
+                XCTAssertGreaterThanOrEqual(GroupCallGridLayout.layout(tileCount: count, isLandscape: scene.isLandscape, isCompactHeight: scene.isCompactHeight).capacity, count)
+            }
         }
     }
 
