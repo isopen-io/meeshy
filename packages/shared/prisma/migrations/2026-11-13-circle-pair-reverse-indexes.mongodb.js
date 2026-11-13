@@ -12,9 +12,13 @@
  *   progrès, et le préfixe seul sert la purge. La branche basse l'est déjà par l'unique (userLowId, userHighId, day).
  *
  * Aucune donnée n'est lue ni modifiée, aucun index existant n'est touché. Un index se reconnaît à sa CLÉ : présent
- * sous un autre nom, il est laissé tel quel. Idempotente.
+ * sous un autre nom, il est laissé tel quel. Un index de même clé mais PARTIEL, ÉPARS ou à COLLATION propre ne sert
+ * pas le `$or` : il est signalé (sortie 2), jamais remplacé — à arbitrer à la main. Idempotente.
  *
- * À JOUER SUR LE STAGING D'ABORD ; en production, avec le feu vert du porteur (#9223), sauvegarde vérifiée d'abord.
+ * À JOUER SUR LE STAGING D'ABORD ; en production, avec le feu vert du porteur (#9223), sauvegarde vérifiée d'abord,
+ * hors pic, après avoir relevé `db.PairInteractionDay.estimatedDocumentCount()` (la construction ne verrouille la
+ * collection qu'à son début et à sa fin depuis MongoDB 4.2). Retour arrière : `dropIndex` des deux noms créés, rien
+ * d'autre n'ayant été touché.
  *
  * Exécution (DRY_RUN=1 pour simuler), puis relecture et mesure :
  *   docker exec -i -e DRY_RUN=1 meeshy-database mongosh meeshy --quiet < 2026-11-13-circle-pair-reverse-indexes.mongodb.js
@@ -35,12 +39,19 @@ const specs = [
 
 const sameKey = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-const report = { created: [], present: [] };
+const servesTheOr = (index) => index.partialFilterExpression === undefined && index.sparse !== true && index.collation === undefined;
+
+const report = { created: [], present: [], blocked: [] };
 const collections = db.getCollectionNames();
 
 for (const spec of specs) {
   const existing = collections.includes(spec.collection) ? db.getCollection(spec.collection).getIndexes() : [];
   const match = existing.find((index) => sameKey(index.key, spec.key));
+
+  if (match && !servesTheOr(match)) {
+    report.blocked.push(`${spec.collection}.${match.name} — même clé, mais partiel, épars ou à collation propre`);
+    continue;
+  }
 
   if (match) {
     report.present.push(`${spec.collection}.${match.name}`);
@@ -56,3 +67,6 @@ print(`Créés (${report.created.length}) :`);
 report.created.forEach((line) => print(`  + ${line}`));
 print(`Déjà présents (${report.present.length}) :`);
 report.present.forEach((line) => print(`  = ${line}`));
+print(`Bloqués (${report.blocked.length}) :`);
+report.blocked.forEach((line) => print(`  ! ${line}`));
+if (report.blocked.length > 0) quit(2);

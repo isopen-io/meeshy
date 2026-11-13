@@ -23,7 +23,13 @@ const ROOT = resolve(__dirname, '../../../../../../packages/shared/prisma');
 const SCRIPT = resolve(ROOT, 'migrations/2026-11-13-circle-pair-reverse-indexes.mongodb.js');
 const SCHEMA = resolve(ROOT, 'schema.prisma');
 
-type Index = { readonly name: string; readonly key: Record<string, number>; readonly unique?: boolean };
+type Index = {
+  readonly name: string;
+  readonly key: Record<string, number>;
+  readonly unique?: boolean;
+  readonly sparse?: boolean;
+  readonly partialFilterExpression?: Record<string, unknown>;
+};
 
 const ID_ONLY: readonly Index[] = [{ name: '_id_', key: { _id: 1 } }];
 
@@ -116,6 +122,23 @@ describe('2026-11-13-circle-pair-reverse-indexes.mongodb.js', () => {
     expect(keysOf(database, 'RelationFeatureSetting').filter((key) => key === '{"otherId":1}')).toHaveLength(1);
     expect(database.journal).not.toContain('create RelationFeatureSetting.RelationFeatureSetting_otherId_idx');
     expect(printed.join('\n')).toContain('RelationFeatureSetting.autre_nom');
+  });
+
+  it('un index de même clé mais PARTIEL ou ÉPARS ne sert pas le $or : signalé (sortie 2), jamais remplacé', () => {
+    const partial = { name: 'partiel', key: { otherId: 1 }, partialFilterExpression: { locationShared: true } };
+    const database = fakeDatabase({
+      ...PRESENT,
+      RelationFeatureSetting: [...PRESENT.RelationFeatureSetting, partial],
+      PairInteractionDay: [...PRESENT.PairInteractionDay, { name: 'epars', key: { userHighId: 1, day: 1 }, sparse: true }],
+    });
+
+    const printed = run(database);
+
+    expect(database.journal).toEqual([]);
+    expect(database.indexes.get('RelationFeatureSetting')).toContainEqual(partial);
+    expect(printed.join('\n')).toContain('RelationFeatureSetting.partiel');
+    expect(printed.join('\n')).toContain('PairInteractionDay.epars');
+    expect(printed).toContain('quit 2');
   });
 
   it('se rejoue sans rien changer', () => {
