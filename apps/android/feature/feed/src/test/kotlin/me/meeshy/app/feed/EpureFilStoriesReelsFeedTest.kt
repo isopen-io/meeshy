@@ -43,7 +43,7 @@ class FeedEpureStatesTest {
     }
 
     @Test
-    fun `the offline empty feed is one short line and Retry, the band already says Offline`() {
+    fun `the offline empty feed is one short line naming the network, and Retry`() {
         compose.setContent { MeeshyTheme { FeedOfflineEmptyState(onRetry = {}) } }
         compose.onNodeWithText("The feed will appear when the network is back.").assertExists()
         compose.onAllNodesWithText("Offline").assertCountEquals(0)

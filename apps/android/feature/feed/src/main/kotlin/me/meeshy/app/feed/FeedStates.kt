@@ -74,7 +74,7 @@ internal fun FeedErrorState(onRetry: () -> Unit, modifier: Modifier = Modifier) 
     )
 }
 
-/** Hors ligne, rien de gardé : une seule ligne, qui dit quand le fil se remplira (le bandeau dit déjà « Hors ligne ») (#14263). */
+/** Hors ligne, rien de gardé : une seule ligne, qui nomme le réseau absent et dit quand le fil se remplira — le bandeau ne se pose pas sur cet état (#14263). */
 @Composable
 internal fun FeedOfflineEmptyState(onRetry: () -> Unit, modifier: Modifier = Modifier) {
     FeedStatePane(
