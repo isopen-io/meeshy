@@ -34,12 +34,14 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.profile.R
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyGradients
+import me.meeshy.ui.theme.MeeshyOpacity
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.text.NumberFormat
 
 internal const val PROFILE_BIO_CARD_TAG = "profile-bio-card"
+internal const val PROFILE_E2EE_BADGE_TAG = "profile-e2ee-badge"
 internal const val PROFILE_COMPLETION_RING_TAG = "profile-completion-ring"
 
 private const val BIO_MAX_LINES = 5
@@ -74,6 +76,7 @@ internal fun ProfileAboutSection(about: ProfileAboutPresentation, accent: Color)
                 about.country?.let { ProfileInfoChip(leadingText = it.flag.ifEmpty { null }, text = it.name, accent = accent) }
             }
         }
+        if (about.hasE2EE) ProfileE2eeBadge()
         about.completionPercent?.let { ProfileCompletionGauge(it, accent) }
     }
 }
@@ -130,6 +133,32 @@ private fun ProfileInfoChip(text: String, accent: Color, leadingText: String? = 
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium,
             color = MeeshyTheme.tokens.textPrimary,
+        )
+    }
+}
+
+/** Le badge vert « Chiffrement de bout en bout activé » (miroir de `e2eeBadge` iOS), en capsule. */
+@Composable
+private fun ProfileE2eeBadge() {
+    val success = MeeshyTheme.tokens.success
+    val shape = RoundedCornerShape(MeeshyRadius.pill)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .background(success.copy(alpha = MeeshyOpacity.light), shape)
+            .border(1.dp, success.copy(alpha = MeeshyOpacity.medium), shape)
+            .padding(horizontal = MeeshySpacing.mdPlus, vertical = MeeshySpacing.sm)
+            .semantics(mergeDescendants = true) {}
+            .testTag(PROFILE_E2EE_BADGE_TAG),
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(imageVector = MeeshyIcons.ShieldFilled, contentDescription = null, tint = success, modifier = Modifier.size(14.dp))
+        Text(
+            text = stringResource(R.string.profile_e2ee_enabled),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            color = success,
         )
     }
 }

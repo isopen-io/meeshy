@@ -6,7 +6,7 @@ import java.io.File
 import org.junit.Test
 
 /**
- * L'épure du profil : le détail ne redit pas le chiffrement, la demande envoyée tient en une ligne.
+ * L'épure du profil : la demande envoyée tient en une ligne ; le badge du chiffrement reste (règle 7).
  * Un libellé nomme ; ce qui n'a plus de lecteur quitte les sept dossiers dans le même commit ; ce qui est raccourci
  * est traduit, jamais recopié du français (#18083, épure #17584).
  */
@@ -36,7 +36,6 @@ class EpureProfileStringsTest {
     private fun specifiers(text: String) = Regex("""%(\d+)\$[sd]""").findAll(text).map { it.value }.sorted().toList()
 
     private val removed = listOf(
-        "profile_e2ee_enabled",
         "profile_regional_language_label",
         "profile_custom_language_label",
         "profile_avatar",
@@ -65,6 +64,7 @@ class EpureProfileStringsTest {
     @Test
     fun `the header keeps its end to end badge, the request sent is one short line`() {
         assertThat(all("values-fr")["profile_e2ee"]).isEqualTo("Chiffrée de bout en bout")
+        assertThat(all("values-fr")["profile_e2ee_enabled"]).isEqualTo("Chiffrement de bout en bout activé")
         assertThat(epure("values-fr")["profile_connection_context_sent"]).isEqualTo("Demande envoyée à %1\$s, en attente de sa réponse.")
         assertThat(epure("values")["profile_connection_context_sent"]).isEqualTo("Request sent to %1\$s, waiting for their reply.")
     }

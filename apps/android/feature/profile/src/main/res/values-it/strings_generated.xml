@@ -40,6 +40,7 @@
     <string name="profile_detail_system_language">Lingua principale</string>
     <string name="profile_display_name_label">Nome visualizzato</string>
     <string name="profile_e2ee">Crittografata end-to-end</string>
+    <string name="profile_e2ee_enabled">Crittografia end-to-end attiva</string>
     <string name="profile_edit">Modifica</string>
     <string name="profile_email">Email</string>
     <string name="profile_first_name_label">Nome</string>

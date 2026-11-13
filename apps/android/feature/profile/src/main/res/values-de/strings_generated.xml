@@ -40,6 +40,7 @@
     <string name="profile_detail_system_language">Hauptsprache</string>
     <string name="profile_display_name_label">Anzeigename</string>
     <string name="profile_e2ee">Ende-zu-Ende-verschlüsselt</string>
+    <string name="profile_e2ee_enabled">Ende-zu-Ende-Verschlüsselung aktiviert</string>
     <string name="profile_edit">Bearbeiten</string>
     <string name="profile_email">E-Mail</string>
     <string name="profile_first_name_label">Vorname</string>

@@ -40,6 +40,7 @@
     <string name="profile_detail_system_language">Idioma principal</string>
     <string name="profile_display_name_label">Nome de exibição</string>
     <string name="profile_e2ee">Criptografada de ponta a ponta</string>
+    <string name="profile_e2ee_enabled">Criptografia de ponta a ponta ativada</string>
     <string name="profile_edit">Editar</string>
     <string name="profile_email">E-mail</string>
     <string name="profile_first_name_label">Nome</string>

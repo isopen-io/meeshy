@@ -40,6 +40,7 @@
     <string name="profile_detail_system_language">Idioma principal</string>
     <string name="profile_display_name_label">Nombre visible</string>
     <string name="profile_e2ee">Cifrada de extremo a extremo</string>
+    <string name="profile_e2ee_enabled">Cifrado de extremo a extremo activado</string>
     <string name="profile_edit">Editar</string>
     <string name="profile_email">Correo electrónico</string>
     <string name="profile_first_name_label">Nombre</string>

@@ -40,6 +40,7 @@
     <string name="profile_detail_system_language">Primary language</string>
     <string name="profile_display_name_label">Display name</string>
     <string name="profile_e2ee">End-to-end encrypted</string>
+    <string name="profile_e2ee_enabled">End-to-end encryption enabled</string>
     <string name="profile_edit">Edit</string>
     <string name="profile_email">Email</string>
     <string name="profile_first_name_label">First name</string>

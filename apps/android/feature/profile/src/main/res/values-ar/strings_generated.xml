@@ -40,6 +40,7 @@
     <string name="profile_detail_system_language">اللغة الأساسية</string>
     <string name="profile_display_name_label">الاسم المعروض</string>
     <string name="profile_e2ee">مشفّرة من طرف إلى طرف</string>
+    <string name="profile_e2ee_enabled">التشفير من طرف إلى طرف مفعّل</string>
     <string name="profile_edit">تعديل</string>
     <string name="profile_email">البريد الإلكتروني</string>
     <string name="profile_first_name_label">الاسم الأول</string>

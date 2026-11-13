@@ -40,6 +40,7 @@
     <string name="profile_detail_system_language">Langue principale</string>
     <string name="profile_display_name_label">Nom d\'affichage</string>
     <string name="profile_e2ee">Chiffrée de bout en bout</string>
+    <string name="profile_e2ee_enabled">Chiffrement de bout en bout activé</string>
     <string name="profile_edit">Modifier</string>
     <string name="profile_email">Email</string>
     <string name="profile_first_name_label">Prénom</string>
