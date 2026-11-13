@@ -74,6 +74,8 @@ export type TranscriptLine = {
   /** Millisecondes depuis le début de l'appel : l'ordre se tranche à la milliseconde (comme iOS et Android), l'heure affichée en tronque les secondes. */
   readonly offsetMs: number;
   readonly original: string;
+  /** La langue dans laquelle la phrase a été DITE : celle de `original`, jamais celle du texte servi (`language`). */
+  readonly originalLanguage: string;
   readonly text: string;
   readonly language: string;
   readonly translated: boolean;
@@ -117,6 +119,7 @@ export function transcriptLines(transcript: CallTranscript, reader: { readonly v
         mine,
         offsetMs: Math.max(0, segment.capturedAtMs - origin),
         original: segment.text,
+        originalLanguage: segment.language,
         text: shown.text,
         language: shown.language,
         translated: shown.translated,
