@@ -37,7 +37,8 @@ export const communitySchema = {
     creator: { ...userMinimalSchema, description: 'Creator user info' },
     memberCount: { type: 'number', description: 'Number of members' },
     conversationCount: { type: 'number', description: 'Number of conversations' },
-    currentUserRole: { type: 'string', nullable: true, description: "Reader's active role (admin, moderator, member); null when not a member. Served by GET /communities/:id" }
+    currentUserRole: { type: 'string', nullable: true, description: "Reader's active role (admin, moderator, member); null when not a member. Served by GET /communities/:id" },
+    onlineMemberCount: { type: 'number', nullable: true, description: 'Other active members online now, as an anonymous aggregate; null when the community is too small for a count to stay anonymous. Served by GET /communities/:id (#18014)' }
   }
 } as const;
 
