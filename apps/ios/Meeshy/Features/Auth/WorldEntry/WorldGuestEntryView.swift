@@ -68,7 +68,7 @@ struct WorldGuestEntryView: View {
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .meeshyTapTarget()
             }
             .accessibilityLabel(viewModel.step == .language ? WorldGuestEntryCopy.back : WorldGuestEntryCopy.close)
@@ -132,7 +132,7 @@ struct WorldGuestEntryView: View {
                 .overlay(
                     Image(systemName: "globe")
                         .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .light))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 )
                 .shadow(color: .black.opacity(isDark ? 0.5 : 0.15), radius: 10, x: 0, y: 6)
                 .accessibilityHidden(true)
@@ -147,13 +147,13 @@ struct WorldGuestEntryView: View {
 
             Text(WorldGuestEntryCopy.namePrompt)
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 Text(WorldGuestEntryCopy.nameLabel)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 TextField(WorldGuestEntryCopy.namePlaceholder, text: $viewModel.name)
                     .focused($nameFocused)
                     .textContentType(.name)
@@ -162,7 +162,7 @@ struct WorldGuestEntryView: View {
                     .submitLabel(.continue)
                     .onSubmit(advance)
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .frame(minHeight: 48)
                     .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.inputBackground))
@@ -194,13 +194,13 @@ struct WorldGuestEntryView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                     Text(WorldGuestEntryCopy.greeting(viewModel.trimmedName))
                         .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
 
                     Text(WorldGuestEntryCopy.languageHint)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
 
                     languageList
                         .padding(.top, MeeshySpacing.sm)
@@ -208,7 +208,7 @@ struct WorldGuestEntryView: View {
                     if let error = viewModel.errorMessage {
                         Text(error)
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.top, MeeshySpacing.xs)
                     }
@@ -251,15 +251,15 @@ struct WorldGuestEntryView: View {
             HStack(spacing: MeeshySpacing.md) {
                 Text(verbatim: language.endonym)
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 Text(verbatim: language.code.uppercased())
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .accessibilityHidden(true)
                 Image(systemName: "checkmark")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .opacity(isSelected ? 1 : 0)
                     .accessibilityHidden(true)
             }
@@ -277,16 +277,16 @@ struct WorldGuestEntryView: View {
             Spacer()
             Image(systemName: "globe")
                 .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .light))
-                .foregroundColor(MeeshyColors.indigo400)
+                .foregroundStyle(MeeshyColors.indigo400)
                 .accessibilityHidden(true)
             Text(WorldGuestEntryCopy.unavailable)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxxl)
             Button(WorldGuestEntryCopy.close) { dismiss() }
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .meeshyTapTarget()
             Spacer()
         }

@@ -69,7 +69,7 @@ struct ChestStage: View {
     private func chip(_ text: String) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-            .foregroundColor(ThemeManager.shared.textPrimary)
+            .foregroundStyle(ThemeManager.shared.textPrimary)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(MeeshyColors.warning.opacity(0.2)))

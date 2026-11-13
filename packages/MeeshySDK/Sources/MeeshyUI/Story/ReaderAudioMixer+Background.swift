@@ -8,7 +8,7 @@ import MeeshySDK
 /// slot (`backgroundEntry`, unique par slide), son propre transport
 /// (`startBackground`) et sa propre enveloppe. Le fichier d'origine avait
 /// franchi le seuil de 1 000 lignes au-delà duquel le découpage ne se discute
-/// pas (budget 2026-09-02).
+/// pas.
 ///
 /// Ce qui reste PARTAGÉ vit chez le type et n'est pas recopié ici : la fenêtre
 /// de rognage (`scheduleAudio`, le site unique d'où part toute planification),

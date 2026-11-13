@@ -118,3 +118,63 @@ nonisolated enum ComposerCaptureSegments {
         !segments.isEmpty
     }
 }
+
+/// **Ce qu'une prise peut durer, et comment la barre du haut le montre**
+/// (vue A9, #17109).
+///
+/// Chaque format a sa durée maximale : une story se lit d'un trait, un réel
+/// porte un peu plus. La barre du haut est UNE piste continue de ce maximum,
+/// remplie pendant qu'on filme, et découpée seulement à partir de deux prises
+/// (#17433, `ComposerCaptureProgressDisplay.isSegmented`) ; l'anneau
+/// rouge du déclencheur dit la même fraction. À la limite, la prise se clôt
+/// d'elle-même plutôt que de produire un fichier que le format refusera.
+nonisolated enum ComposerCaptureRecordingBudget {
+
+    /// La durée maximale d'une prise pour ce format ; `nil` ⇒ le format ne
+    /// filme pas (un statut n'a pas de scène).
+    static func maxDuration(for format: ComposerFormat) -> TimeInterval? {
+        switch format {
+        case .story, .post: return 60
+        case .reel: return 90
+        case .status: return nil
+        }
+    }
+
+    /// La part du maximum déjà prise, bornée à `0...1`.
+    static func fraction(elapsed: TimeInterval, budget: TimeInterval?) -> Double {
+        guard let budget, budget > 0 else { return 0 }
+        return min(1, max(0, elapsed / budget))
+    }
+
+    /// La limite est-elle atteinte ? Sans maximum, jamais.
+    static func reached(elapsed: TimeInterval, budget: TimeInterval?) -> Bool {
+        guard let budget, budget > 0 else { return false }
+        return elapsed >= budget
+    }
+
+    /// Une nouvelle prise peut-elle commencer ? Pas quand les segments déjà pris
+    /// ont épuisé le maximum : elle se clôturerait aussitôt en un segment vide.
+    static func allowsAnotherTake(taken: TimeInterval, budget: TimeInterval?) -> Bool {
+        !reached(elapsed: taken, budget: budget)
+    }
+}
+
+extension ComposerCaptureRecordingBudget {
+    /// **La limite atteinte clôt la prise** (A9, #17109) : la durée, segments compris, a touché le
+    /// maximum du format. La tenue est oubliée — la levée du doigt qui suivra ne clôt plus rien.
+    /// `true` quand la prise vient d'être close.
+    @MainActor @discardableResult
+    static func enforce(on session: ComposerCaptureSession, elapsed: TimeInterval) -> Bool {
+        guard session.stage == .recording, reached(elapsed: elapsed, budget: session.recordingBudget) else { return false }
+        session.holdStartedAt = nil
+        session.closeTake()
+        return true
+    }
+
+    /// Les segments déjà pris, celui qui s'écrit compris, laissent-ils place à une prise de plus ?
+    @MainActor
+    static func allowsAnotherTake(after session: ComposerCaptureSession) -> Bool {
+        allowsAnotherTake(taken: ComposerCaptureSegments.totalDuration(session.segments) + session.pendingSegmentDuration,
+                          budget: session.recordingBudget)
+    }
+}

@@ -129,6 +129,14 @@ describe('appel entrant', () => {
     expect(h.call()?.cameraOn).toBe(false);
   });
 
+  test('un micro coupé avant de décrocher (P17) rejoint micro coupé : la passerelle et mon écran le savent', async () => {
+    const h = harness();
+    h.engine.handle(SERVER_EVENTS.CALL_INITIATED, initiated);
+    await h.engine.accept({ micMuted: true });
+    expect(h.requested[0]?.[1]).toMatchObject({ settings: { audioEnabled: false, videoEnabled: true } });
+    expect(h.call()?.micMuted).toBe(true);
+  });
+
   test('« Refuser » dit rejected au serveur et libère l’écran', () => {
     const h = harness();
     h.engine.handle(SERVER_EVENTS.CALL_INITIATED, initiated);
@@ -456,18 +464,51 @@ describe('partage d’écran (#8063)', () => {
     expect(h.emitted.at(-1)).toEqual([CLIENT_EVENTS.CALL_TOGGLE_SCREEN, { callId: 'call-1', enabled: false }]);
   });
 
-  test('la caméra qui tournait avant le partage revient à son arrêt', async () => {
+  test('la caméra qui tournait avant le partage reste en aperçu local, sans être émise, puis revient à l’arrêt (S2.8)', async () => {
+    const h = await connected({ ...DIRECT, media: 'video' });
+    const before = h.call()?.localStream?.getVideoTracks()[0] as unknown as FakeTrack;
+    const camerasBefore = h.cameras.length;
+    await h.engine.toggleScreen();
+    const display = h.displays[0];
+    expect(before.readyState).toBe('live');
+    expect(h.call()?.cameraOn).toBe(false);
+    expect(h.links[0]?.sent.at(-1)).toBe(display);
+    expect(h.call()?.localStream?.getVideoTracks()).toEqual([display] as unknown as MediaStreamTrack[]);
+    expect(h.call()?.cameraPreview?.getVideoTracks()).toEqual([before] as unknown as MediaStreamTrack[]);
+    await h.engine.toggleScreen();
+    expect(h.cameras).toHaveLength(camerasBefore);
+    expect(before.readyState).toBe('live');
+    expect(h.links[0]?.sent.at(-1)).toBe(before);
+    expect(h.call()?.cameraOn).toBe(true);
+    expect(h.call()?.cameraPreview ?? null).toBeNull();
+    expect(h.call()?.screenSharing).toBe(false);
+  });
+
+  test('sans caméra avant le partage, aucun aperçu n’est gardé', async () => {
+    const h = await connected();
+    await h.engine.toggleScreen();
+    expect(h.call()?.cameraPreview ?? null).toBeNull();
+  });
+
+  test('raccrocher pendant le partage arrête l’aperçu de la caméra : aucune piste orpheline', async () => {
     const h = await connected({ ...DIRECT, media: 'video' });
     const before = h.call()?.localStream?.getVideoTracks()[0] as unknown as FakeTrack;
     await h.engine.toggleScreen();
+    h.engine.hangup();
     expect(before.readyState).toBe('ended');
-    expect(h.call()?.cameraOn).toBe(false);
+    expect(h.call()?.cameraPreview ?? null).toBeNull();
+  });
+
+  test('une caméra morte pendant le partage est rouverte à l’arrêt, l’aperçu mort est relâché', async () => {
+    const h = await connected({ ...DIRECT, media: 'video' });
+    const before = h.call()?.localStream?.getVideoTracks()[0] as unknown as FakeTrack;
+    await h.engine.toggleScreen();
+    before.readyState = 'ended';
     await h.engine.toggleScreen();
     const camera = h.cameras.at(-1);
-    expect(camera).toBeDefined();
+    expect(camera).not.toBe(before);
     expect(h.links[0]?.sent.at(-1)).toBe(camera);
     expect(h.call()?.cameraOn).toBe(true);
-    expect(h.call()?.screenSharing).toBe(false);
   });
 
   test('« Arrêter le partage » du navigateur (fin de la piste) arrête le partage comme le bouton', async () => {

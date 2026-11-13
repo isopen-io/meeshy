@@ -1,11 +1,16 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
+import { authorAccentColor, colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 
 import { CallBubble } from './call-bubble';
 import { ActiveCallView } from './call-overlay';
-import { CallScreen } from './call-screen';
+import { CallScreen, loadColdCallViews } from './call-screen';
+import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
+import { appQueryClient } from '@/lib/api/query-client';
+import { speakerColor } from '@/lib/calls/call-speaker-color';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 
 /**
  * **CONTINUER À DISCUTER PENDANT L'APPEL, DESSINÉ** (#8046) — la pastille se
@@ -47,6 +52,15 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
 });
 
 const overlay = (active: ActiveCall) => renderToStaticMarkup(<ActiveCallView call={active} />);
+
+/* La pastille vit dans son chunk (`call-floating-pill.tsx`), que l'appel vivant charge : le rendu sans geste la trouve chargée, comme l'écran la trouve. */
+beforeAll(async () => {
+  overlay(call({ display: 'pill' }));
+  await import('./call-floating-pill');
+  await loadCallControlsCatalog('fr');
+  await loadColdCallViews();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
 
 describe('la pastille', () => {
   test('propose de se replier en bulle, sans bloquer l’application', () => {
@@ -128,10 +142,10 @@ describe('un écran partagé dans la bulle (#8164)', () => {
 });
 
 describe('la sortie audio depuis la bulle (#9097)', () => {
-  test('« Choisir les périphériques » est dans la bulle là où le navigateur choisit la sortie ; absent sinon', () => {
+  test('« Sortie audio » est dans la bulle là où le navigateur choisit la sortie ; absent sinon', () => {
     const offered = withSinks(true, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />));
     expect(offered).toContain('data-call-bubble-control="output"');
-    expect(offered).toContain('aria-label="Choisir les périphériques"');
+    expect(offered).toContain('aria-label="Sortie audio"');
     expect(offered).toContain('aria-haspopup="dialog"');
     expect(withSinks(false, () => renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />))).not.toContain('data-call-bubble-control="output"');
   });
@@ -139,8 +153,8 @@ describe('la sortie audio depuis la bulle (#9097)', () => {
 
 describe('l’écran d’appel', () => {
   test('en appel, l’en-tête ouvre les périphériques ; pendant la sonnerie, non', () => {
-    expect(renderToStaticMarkup(<CallScreen call={call()} />)).toContain('aria-label="Choisir les périphériques"');
-    expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming' })} />)).not.toContain('Choisir les périphériques');
+    expect(renderToStaticMarkup(<CallScreen call={call()} />)).toContain('aria-label="Sortie audio"');
+    expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming' })} />)).not.toContain('Sortie audio');
   });
 });
 
@@ -152,5 +166,122 @@ describe('la bulle ne déplace que son `translate` (#11314)', () => {
     expect(html).toContain('translate:');
     expect(html).toContain('transition:translate 180ms ease-out');
     expect(html).not.toMatch(/transition:[^;"]*(left|top|width|height)/);
+  });
+});
+
+const tagOf = (html: string, marker: string): string => html.match(new RegExp(`<[^>]*${marker}[^>]*>`))?.[0] ?? '';
+
+const knowConversation = (customName?: string) =>
+  appQueryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
+    pageParams: [],
+    pages: [{ conversations: [{ id: 'c-1', type: 'direct', title: 'Amina Diallo', userPreferences: customName === undefined ? [] : [{ customName }] }] }],
+  });
+
+describe('la bulle montre l’autre, pas moi (P18.3)', () => {
+  const mineOnly = call({ display: 'bubble', peerKey: 'u-peer', cameraOn: true, localStream: liveVideo, members: { 'u-peer': peer({ userId: 'u-peer', cameraOn: false }) } });
+
+  test('sa caméra coupée et la mienne allumée : son avatar, aucune vidéo — la bulle n’affiche jamais ma caméra', () => {
+    const html = renderToStaticMarkup(<CallBubble call={mineOnly} />);
+    expect(html).not.toContain('data-call-stream');
+    expect(html).toContain('data-call-bubble-caption');
+  });
+
+  test('sa caméra allumée : sa vidéo', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', peerKey: 'u-peer', members: { 'u-peer': peer({ userId: 'u-peer', cameraOn: true }) }, remoteStreams: { 'u-peer': liveVideo } })} />);
+    expect(html).toContain('data-call-stream="cover"');
+  });
+});
+
+describe('le liseré de la bulle (P18.4)', () => {
+  /* La couleur que l'écran d'appel donne à l'autre — son portrait et le liseré de sa vignette (`speakerColor`, tirée d'`authorAccentColor`
+     et rendue lisible sur le verre d'appel, miroir de `CallSpeakerColor`) : réduire l'appel ne change pas sa couleur. `u-peer` est un
+     identifiant dont la couleur partagée brute n'est PAS lisible telle quelle, donc où les deux tons se distinguent. */
+  const shown = speakerColor('u-peer', 'Amina Diallo');
+
+  test('il porte la couleur de l’autre que l’écran d’appel lui donne — celle de son id, jamais celle du titre seul', () => {
+    expect(shown).not.toBe(authorAccentColor('u-peer', 'Amina Diallo').toLowerCase());
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', peerKey: 'u-peer', title: 'Amina Diallo' })} />);
+    const ring = tagOf(html, 'data-call-bubble-ring');
+    expect(ring).not.toBe('');
+    expect(ring.toLowerCase()).toContain(shown);
+  });
+
+  test('la teinte de l’avatar est la même, et c’est celle du portrait de l’écran d’appel', () => {
+    const bubble = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', peerKey: 'u-peer', title: 'Amina Diallo' })} />).toLowerCase();
+    expect(bubble.split(shown).length - 1).toBeGreaterThanOrEqual(2);
+    expect(renderToStaticMarkup(<CallScreen call={call({ peerKey: 'u-peer', title: 'Amina Diallo' })} />).toLowerCase()).toContain(shown);
+  });
+
+  test('sans pair connu (un groupe), la couleur du nom, comme le portrait de l’écran d’appel', () => {
+    const ring = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', isGroup: true, peerKey: null, title: 'Famille' })} />), 'data-call-bubble-ring');
+    expect(ring.toLowerCase()).toContain(colorForName('Famille').toLowerCase());
+  });
+});
+
+describe('l’étiquette « nom · durée » de la bulle (P18.5)', () => {
+  test('sur le verre du kit (l’atome adaptatif, jamais un verre posé à la main), avec le nom d’affichage et la durée', () => {
+    appQueryClient.removeQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', connectedAt: Date.now() - 252_000 })} />);
+    const tag = tagOf(html, 'data-call-bubble-caption');
+    expect(tag).toContain('glass-tone');
+    expect(tag).toContain('data-glass-tone="deep"');
+    expect(tag).not.toMatch(/\bglass-call\b/);
+    expect(html).toMatch(/data-call-bubble-caption[^>]*>Amina Diallo · \d+:\d{2}</);
+  });
+
+  test('le nom que j’ai donné à la personne passe avant son nom d’affichage (#17341)', () => {
+    knowConversation('Awa');
+    try {
+      expect(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />)).toMatch(/data-call-bubble-caption[^>]*>Awa · /);
+    } finally {
+      appQueryClient.removeQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    }
+  });
+
+  test('en vidéo aussi, l’étiquette est en bas à gauche de l’image', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble', members: { 'u-a': peer({ cameraOn: true }) }, remoteStreams: { 'u-a': liveVideo } })} />);
+    expect(html).toMatch(/data-call-bubble-caption[^>]*>Amina Diallo · /);
+  });
+});
+
+describe('la bulle et la capsule s’effacent pendant l’image dans l’image (P18.9)', () => {
+  test('la bulle s’efface en fondu, retirée du toucher et du lecteur d’écran ; elle revient avec la fenêtre fermée', () => {
+    const away = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} away />), 'data-call-bubble="');
+    expect(away).toContain('aria-hidden="true"');
+    expect(away).toContain('inert');
+    expect(away).toContain('opacity:0');
+    const here = tagOf(renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />), 'data-call-bubble="');
+    expect(here).not.toContain('aria-hidden');
+    expect(here).not.toContain('opacity:0');
+  });
+
+  test('la capsule de même', async () => {
+    const { CallPillBar } = await import('./call-floating-pill');
+    const away = tagOf(renderToStaticMarkup(<CallPillBar call={call({ display: 'pill' })} away />), 'data-call-pill-bar');
+    expect(away).toContain('aria-hidden="true"');
+    expect(away).toContain('opacity:0');
+    expect(tagOf(renderToStaticMarkup(<CallPillBar call={call({ display: 'pill' })} away={false} />), 'data-call-pill-bar')).not.toContain('aria-hidden');
+  });
+});
+
+describe('pendant MON partage, la capsule dit le nom donné et ne se replie pas (P18.10)', () => {
+  test('« nom donné · durée » au lieu du titre de l’appel ; Arrêter reste', async () => {
+    knowConversation('Awa');
+    try {
+      const { CallPillBar } = await import('./call-floating-pill');
+      const html = renderToStaticMarkup(<CallPillBar call={call({ display: 'pill', screenSharing: true })} away={false} />);
+      expect(html).toMatch(/Awa · \d+:\d{2}/);
+      expect(html).not.toContain('Amina Diallo');
+      expect(html).toContain('data-call-pill-stop-share');
+    } finally {
+      appQueryClient.removeQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    }
+  });
+
+  test('hors partage, la capsule garde le titre de l’appel puis la durée', async () => {
+    const { CallPillBar } = await import('./call-floating-pill');
+    const html = renderToStaticMarkup(<CallPillBar call={call({ display: 'pill' })} away={false} />);
+    expect(html).toContain('Amina Diallo');
+    expect(html).not.toContain('Amina Diallo ·');
   });
 });

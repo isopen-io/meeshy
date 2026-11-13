@@ -23,7 +23,7 @@ struct BrandedMedia: Equatable, Sendable {
 // MARK: - Origine
 
 /// D'où vient le média qu'on s'apprête à écrire chez l'utilisateur — la SEULE
-/// question que pose désormais la marque (directive porteur 2026-09-12, voir
+/// question que pose désormais la marque (voir
 /// `MeeshyMediaSaveBranding`).
 ///
 /// Le TYPE du fichier ne peut plus y répondre : une image est tantôt la photo

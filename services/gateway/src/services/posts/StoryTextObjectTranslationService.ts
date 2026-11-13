@@ -14,7 +14,7 @@ import type { StoryTranslationUpdatedEventData } from '@meeshy/shared/types/sock
 import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { getCommunityCoMemberIds } from './communityVisibility';
+import { communityPostAudienceIds } from './communityVisibility';
 import { circleAudienceIds } from './postAudience';
 import {
   composeStoryContentForLanguage,
@@ -71,6 +71,7 @@ export class StoryTextObjectTranslationService {
           authorId: true,
           visibility: true,
           visibilityUserIds: true,
+          communityId: true,
           content: true,
           storyEffects: true,
         },
@@ -168,7 +169,7 @@ export class StoryTextObjectTranslationService {
       // in their own composer/preview) AND to viewers who can see the post.
       // Previously only the author was notified, so live viewers stayed on the
       // untranslated text until they refreshed.
-      const recipientIds = await this.resolveBroadcastRecipients(post.authorId, post.visibility, post.visibilityUserIds);
+      const recipientIds = await this.resolveBroadcastRecipients(post.authorId, post.visibility, post.visibilityUserIds, post.communityId ?? null);
       if (eventData) {
         for (const userId of recipientIds) {
           this.io.to(ROOMS.feed(userId)).emit(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, eventData);
@@ -254,6 +255,7 @@ export class StoryTextObjectTranslationService {
     authorId: string,
     visibility: string,
     visibilityUserIds: string[],
+    communityId: string | null,
   ): Promise<string[]> {
     const recipients = new Set<string>([authorId]);
     if (visibility === 'ONLY') {
@@ -262,7 +264,9 @@ export class StoryTextObjectTranslationService {
     }
 
     if (visibility === 'COMMUNITY') {
-      for (const id of await getCommunityCoMemberIds(this.prisma, authorId)) recipients.add(id);
+      // Posée dans une communauté, la story ne se traduit en direct que pour ses
+      // lecteurs (#17178), jamais pour les co-membres de l'auteur ailleurs.
+      for (const id of await communityPostAudienceIds(this.prisma, { authorId, communityId })) recipients.add(id);
       return [...recipients];
     }
 

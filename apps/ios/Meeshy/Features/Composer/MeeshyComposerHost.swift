@@ -216,6 +216,9 @@ struct MeeshyComposerHost: View {
     @State var reelAutoSwitch = ComposerReelAutoSwitch.State()
     /// Le post à une seule vidéo qui attend « C'est un Réel / C'est un Post » (#8603).
     @State var pendingReelOffer: ComposerPublishChoice?
+    /// L'état masqué de la scène (#17111) : posé et levé par un toucher dans
+    /// le vide, jamais par un minuteur.
+    @State var sceneChromeIsConcealed = false
     @State var composerVisibility: PostVisibility
     @State var composerVisibilityUserIds: [String] = []
 
@@ -310,12 +313,10 @@ struct MeeshyComposerHost: View {
     /// > déclencher la caméra et **utiliser le fond de la scène comme
     /// > caméra** » — porteur
     ///
-    /// **La machine de capture — la MÊME que le viseur plein écran.**
-    /// Étape, pastille, flash, segments, tenue, cadenas, zoom : tout vit dans
-    /// `ComposerCaptureSession`. `@StateObject` et non `.shared` : une session
-    /// de capture appartient à CETTE composition, et le modèle de caméra est
-    /// construit MUET tant que l'auteur n'a pas armé.
-    @StateObject var sceneCapture = ComposerWarmCapture.session()
+    /// **La machine de capture — la MÊME que le viseur plein écran** — appartient à CETTE
+    /// composition ; le meuble n'observe que son gardien, jamais ses trames (#17469).
+    @StateObject var sceneCaptureOwner = ComposerSceneCaptureOwner()
+    var sceneCapture: ComposerCaptureSession { sceneCaptureOwner.session }
 
     /// La taille du viseur — propre à la scène, le plein écran n'en a qu'une.
     /// REPOSÉE à chaque armement : un plein écran qui survivrait ferait naître
@@ -484,6 +485,8 @@ struct MeeshyComposerHost: View {
     @StateObject var mediaPorterStore = ComposerMediaPorterStore()
 
     @State var showsPhotoPicker = false
+    /// La photothèque d'ouverture, à mi-hauteur devant la caméra armée (#17269).
+    @State var showsOpeningLibrary = false
     /// Les médias choisis EN SÉRIE : chacun fonde sa scène (`ComposerScenePicking`).
     @State var sceneSeriesMediaURLs: Set<URL> = []
     /// Le sélecteur ouvert À L'OUVERTURE du composer : même un seul média y
@@ -578,6 +581,7 @@ struct MeeshyComposerHost: View {
     /// Le fond que la prochaine prise du viseur REMPLACE — posé par
     /// « Reprendre une photo », consommé à la pose, oublié au désarmement.
     @State var sceneCaptureReplacesBackgroundId: String?
+    @State var viewfinderYieldsToScene = false
 
     /// **La bande contextuelle DEMANDÉE sur la surface de scène.**
     ///
@@ -829,13 +833,12 @@ struct MeeshyComposerHost: View {
         let issue = ComposerSceneEmptyTap.outcome(
             hadSelection: sceneSelectionRelay.hasLiveSelection,
             effectIsOpen: openSceneEffect != nil,
-            quickCaptureOffered: sceneQuickCaptureIsOffered,
             backgroundMediaId: mountedComposerView == .scene ? sceneBackgroundMedia?.id : nil,
             bandIsOpen: ComposerSceneBand.opened(requestedSceneBand, served: openableSceneBands) != nil,
             writesText: writesText)
+        if sceneRestRelay.concealmentConsumes(issue) { return }
         if issue == .endWriting { return endSceneWriting() }
         if ComposerSceneEmptyTap.closesBand(issue) { requestedSceneBand = nil }
-        if issue == .armViewfinder, handleSceneQuickTap() { return }
         // Le document sélectionne son fond par KIND (#4035).
         selectedSceneItemKind = ComposerSceneBackgroundTapPolicy.selection(
             currentSelection: selectedSceneItemKind,
@@ -846,7 +849,7 @@ struct MeeshyComposerHost: View {
         switch issue {
         case .deselect:                   sceneSelectionRelay.deselectSceneItem()
         case .selectBackground(let fond): sceneSelectionRelay.selectSceneItem(fond)
-        case .endWriting, .closeEffect, .closeBand, .armViewfinder, .nothing:
+        case .endWriting, .closeEffect, .closeBand, .nothing:
             selectedSceneItemId = nil
             inlineEdit = nil
         }
@@ -879,7 +882,9 @@ struct MeeshyComposerHost: View {
         // la feuille de partage. Une seconde y serait silencieusement
         // avalée — le mode de panne qui ne rougit nulle part.
         withComposerAutosave(withSceneCameraViewfinder(sceneMenuPresented(composerStackNode)))
+        .overlay { ComposerHostAnchoredSheetLayer(host: self, observation: observation, aboveViewfinder: true) }
         .background(tint.color.ignoresSafeArea())
+        .environment(\.composerChromeIsConcealed, sceneChromeIsConcealedServed)
     }
 
     func composerLifecycle<Contenu: View>(_ contenu: Contenu) -> some View {

@@ -35,6 +35,8 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     pairInteractionDay: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     relationFeatureSetting: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     friendRequest: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    // Les adresses d'amis d'un réseau tiers (#17117) : aucune conversation externe ouverte.
+    externalConversationPeer: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // L'annuaire E2EE (#12543) : un compte qui n'a jamais enrôlé d'appareil chiffré.
     ...Object.fromEntries(['e2EEDevice', 'e2EEOneTimePreKey', 'messageEnvelope', 'e2EERevokedIdentity', 'e2EEBindingProof'].map((model) =>
       [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
@@ -137,6 +139,13 @@ describe('purgeAccountIsolatedData', () => {
     expect(prisma.e2EERevokedIdentity.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(prisma.e2EEBindingProof.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.e2eeErased).toEqual({ devices: 2, preKeys: 150, envelopes: 4 });
+  });
+
+  it("efface le numéro des amis d'un réseau tiers qu'il avait ouverts (#17117) : ce numéro ne sert plus personne", async () => {
+    const prisma = fakePrisma({ externalConversationPeer: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }) } });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+    expect(prisma.externalConversationPeer.deleteMany).toHaveBeenCalledWith({ where: { openedByUserId: USER_ID } });
+    expect(summary.externalPeerHandlesDeleted).toBe(2);
   });
 
   it('deletes the UserVoiceModel row for the account', async () => {

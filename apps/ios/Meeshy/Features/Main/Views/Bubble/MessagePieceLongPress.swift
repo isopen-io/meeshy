@@ -4,7 +4,7 @@ import MeeshyUI
 
 // MARK: - L'appui long d'une TUILE vise CETTE pièce (#9907)
 //
-// Directive porteur du 2026-10-10 : « l'appui long sur une pièce d'un message à
+// « l'appui long sur une pièce d'un message à
 // plusieurs pièces montre CETTE pièce seule, avec un défilement vers les autres
 // pièces du message ». La tuile ne connaît ni le menu ni la conversation : elle
 // remonte l'identifiant de la pièce par l'environnement, que la cellule du fil

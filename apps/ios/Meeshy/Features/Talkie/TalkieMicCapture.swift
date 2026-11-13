@@ -3,11 +3,18 @@ import Foundation
 import MeeshySDK
 import os
 
+private extension Logger {
+    nonisolated static let talkieMic = MeeshyLog.logger(.audioRecorder)
+}
+
 /// Le micro du talkie (#16927) : `AVAudioEngine` capte, `AVAudioConverter` encode en AAC-LC mono 64 kb/s, chaque paquet
 /// part en trame ADTS autonome (`TalkieAdts`) — l'encodage que lisent les trois récepteurs.
 ///
 /// La session audio se prend par `MeeshyRecordingSession`, le chemin des vocaux : le son Meeshy qui joue baisse sans
 /// s'arrêter, et pendant un appel rien ne se reconfigure (le micro ne s'ouvre pas).
+///
+/// Chaque ouverture écrit au journal ce que coûtent la permission, la session et le moteur, puis la taille du premier
+/// tampon livré par le micro (#17094) : c'est elle qui dit à quel pas les trames arrivent.
 @MainActor
 final class TalkieMicCapture: TalkieCapturing {
 
@@ -16,12 +23,21 @@ final class TalkieMicCapture: TalkieCapturing {
     private var holdsSession = false
     private var frameRelay: AsyncStream<[TalkieAacFrame]>.Continuation?
     private var frameDelivery: Task<Void, Never>?
+    /// Le niveau de la voix captée, que l'onde de l'en-tête lit en direct (#17310).
+    private let meter: any TalkieLevelMetering
+
+    init(meter: any TalkieLevelMetering = TalkieLevelMeter.outgoing) {
+        self.meter = meter
+    }
 
     nonisolated deinit {}
 
     func start(onFrame: @escaping @MainActor @Sendable (Data, TimeInterval) -> Void) async -> Bool {
+        let startedAt = Date()
         guard engine == nil, await DevicePermissions.requestMicrophone().isUsable else { return false }
-        guard MeeshyRecordingSession.shared.begin(.voiceMessage) else { return false }
+        let permittedAt = Date()
+        guard await MeeshyRecordingSession.shared.begin(.voiceMessage) else { return false }
+        let sessionAt = Date()
         holdsSession = true
         let engine = AVAudioEngine()
         let input = engine.inputNode
@@ -37,7 +53,18 @@ final class TalkieMicCapture: TalkieCapturing {
             releaseSession()
             return false
         }
-        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in encoder.encode(buffer) }
+        let firstBuffer = OSAllocatedUnfairLock(initialState: true)
+        let rate = Int(format.sampleRate)
+        let meter = self.meter
+        let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
+            if firstBuffer.withLock({ first in defer { first = false }; return first }) {
+                Logger.talkieMic.info("talkie · micro · premier tampon \(buffer.frameLength) trames à \(rate) Hz")
+            }
+            encoder.encode(buffer)
+            if let channel = buffer.floatChannelData?[0] {
+                meter.push(rms: TalkieWaveLaw.rms(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength))))
+            }
+        }
         input.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
         engine.prepare()
         do {
@@ -48,6 +75,7 @@ final class TalkieMicCapture: TalkieCapturing {
             releaseSession()
             return false
         }
+        Logger.talkieMic.info("talkie · micro · permission \(Self.ms(startedAt, permittedAt)) ms · session \(Self.ms(permittedAt, sessionAt)) ms · moteur \(Self.ms(sessionAt, Date())) ms")
         self.engine = engine
         self.encoder = encoder
         frameRelay = relay
@@ -62,6 +90,7 @@ final class TalkieMicCapture: TalkieCapturing {
         self.engine = nil
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        meter.reset()
         encoder?.drain()
         encoder = nil
         releaseSession()
@@ -69,6 +98,10 @@ final class TalkieMicCapture: TalkieCapturing {
         frameRelay = nil
         await frameDelivery?.value
         frameDelivery = nil
+    }
+
+    private static func ms(_ from: Date, _ to: Date) -> Int {
+        Int((to.timeIntervalSince(from) * 1000).rounded())
     }
 
     private func releaseSession() {

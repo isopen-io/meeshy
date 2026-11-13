@@ -19,21 +19,26 @@ final class BringTone: BringRinging {
     func startRinging() {
         stopPlayer()
         guard !isInCall(), let url = Bundle.main.url(forResource: "Ringtone", withExtension: "caf") else { return }
-        let session = AVAudioSession.sharedInstance()
-        try? session.setCategory(.playback, mode: .default, options: [])
-        try? session.setActive(true)
+        // La session `.playback` se pose hors du fil principal (#17038) ; la
+        // sonnerie part une fois posée, pour ignorer le bouton silencieux dès
+        // la première note.
+        MediaSessionCoordinator.shared.activatePlaybackSync(options: [])
         guard let player = try? AVAudioPlayer(contentsOf: url) else { return }
         player.numberOfLoops = -1
         player.volume = 1
         player.prepareToPlay()
-        player.play()
         self.player = player
+        let token = ObjectIdentifier(player)
+        MediaSessionCoordinator.shared.whenSessionSettled { [weak self] in
+            guard let player = self?.player, ObjectIdentifier(player) == token else { return }
+            player.play()
+        }
     }
 
     func stopRinging() {
         guard player != nil else { return }
         stopPlayer()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        MediaSessionCoordinator.shared.deactivatePlaybackSync()
     }
 
     private func stopPlayer() {
@@ -47,7 +52,8 @@ extension BringCenter {
     static let shared = BringCenter(
         service: BringService.shared,
         people: CirclePeopleDirectory.shared,
-        ringer: BringTone()
+        ringer: BringTone(),
+        alarms: .system
     )
 }
 

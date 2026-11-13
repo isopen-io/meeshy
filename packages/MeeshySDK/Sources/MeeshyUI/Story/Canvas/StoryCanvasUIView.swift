@@ -261,6 +261,11 @@ public final class StoryCanvasUIView: UIView {
     var selectionMarkerBadge: String?
     var selectionMarkerLayers: [CALayer] = []
 
+    public var passesThroughEmptyTouches = false
+    public override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        super.point(inside: point, with: event) && StoryCanvasTouchClaim.claims(self, at: point)
+    }
+
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
     /// `internal` (not private) so test seams can introspect transform during live drag tests.
     internal let backgroundLayer = StoryBackgroundLayer()

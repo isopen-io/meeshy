@@ -64,7 +64,7 @@ struct GamePhotoFlowView: View {
         } label: {
             Image(systemName: "xmark")
                 .font(MeeshyFont.relative(16, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(Color.white.opacity(0.18)))
         }
@@ -108,12 +108,12 @@ struct GamePhotoFlowView: View {
             }
             Text(String(localized: "game.photo.offer.title", defaultValue: "On immortalise ?", bundle: .main))
                 .font(MeeshyFont.relative(26, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
             // La carte posée dit déjà le moment : le titre ne se répète pas sous elle.
             if plate == nil {
                 Text(session.moment.title)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo200)
+                    .foregroundStyle(MeeshyColors.indigo200)
             }
             VStack(spacing: MeeshySpacing.sm) {
                 bigButton(String(localized: "game.photo.selfie", defaultValue: "Selfie avec nous", bundle: .main), "camera.fill", primary: true, id: "game.photo.selfie") {
@@ -138,7 +138,7 @@ struct GamePhotoFlowView: View {
         } label: {
             Label(title, systemImage: symbol)
                 .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                .foregroundColor(primary ? MeeshyColors.indigo950 : .white)
+                .foregroundStyle(primary ? MeeshyColors.indigo950 : Color.white)
                 .frame(maxWidth: .infinity, minHeight: 50)
                 .background(Capsule().fill(primary ? Color.white : Color.white.opacity(0.16)))
         }
@@ -148,7 +148,7 @@ struct GamePhotoFlowView: View {
 
     // MARK: - 2. La caméra
 
-    /// LE CADRE EST LE DÉCLENCHEUR (#10284, directive porteur 2026-10-12) — aucun cercle d'enregistrement à
+    /// LE CADRE EST LE DÉCLENCHEUR (#10284) — aucun cercle d'enregistrement à
     /// côté du cadre. La disposition est celle de la caméra du composer (`ComposerLookStrip`, bande repliée) :
     /// la case du cadre choisi photographie d'un toucher, part dans Photos puis ouvre le résultat ; la scène,
     /// touchée deux fois, prend hors cadre et la photo reste dans l'app. La table des gestes du composer
@@ -160,7 +160,7 @@ struct GamePhotoFlowView: View {
                 ZStack {
                     switch phase {
                     case .live:
-                        CameraPreviewLayer(session: session.camera.session)
+                        CameraPreviewLayer(session: session.camera.session, sessionQueue: session.camera.sessionQueue)
                     case .opening:
                         Color(white: 0.12)
                         ProgressView().tint(.white)
@@ -188,7 +188,7 @@ struct GamePhotoFlowView: View {
                 PhotosPicker(selection: $pickerItem, matching: .images) {
                     Image(systemName: "photo.on.rectangle")
                         .font(MeeshyFont.relative(20, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: 52, height: 52)
                         .background(Circle().fill(Color.white.opacity(0.16)))
                 }
@@ -214,7 +214,7 @@ struct GamePhotoFlowView: View {
     private func sideGlyph(_ symbol: String) -> some View {
         Image(systemName: symbol)
             .font(MeeshyFont.relative(20, weight: .semibold))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .frame(width: 52, height: 52)
             .background(Circle().fill(Color.white.opacity(0.16)))
             .frame(height: ComposerLookStripRule.cellSize.height)
@@ -270,11 +270,11 @@ struct GamePhotoFlowView: View {
         case .unsupported:
             text = String(localized: "game.photo.camera.unsupported", defaultValue: "Cet appareil ne permet pas la caméra ici. Choisis une photo dans ta galerie, ou garde la carte seule.", bundle: .main)
         case .unavailable:
-            text = String(localized: "game.photo.camera.unavailable", defaultValue: "La caméra n’est pas disponible (une autre application l’utilise ?). Choisis une photo dans ta galerie, ou garde la carte seule.", bundle: .main)
+            text = String(localized: "game.photo.camera.unavailable", defaultValue: "Caméra indisponible. Choisis une photo dans ta galerie, ou garde la carte seule.", bundle: .main)
         }
         return Text(text)
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, MeeshySpacing.xl)
@@ -292,7 +292,7 @@ struct GamePhotoFlowView: View {
                         .animation(.spring(response: 0.45, dampingFraction: 0.55), value: session.strike)
                     Text(String(localized: "game.mint.tchak", defaultValue: "Tchak !", bundle: .main))
                         .font(MeeshyFont.relative(34, weight: .heavy, design: .rounded))
-                        .foregroundColor(MeeshyColors.warning)
+                        .foregroundStyle(MeeshyColors.warning)
                         .opacity(session.strike)
                         .offset(y: size.height * 0.12)
                 }
@@ -334,7 +334,7 @@ struct GamePhotoFlowView: View {
                     Toggle(isOn: Binding(get: { session.linkOnCard }, set: { session.setLinkOnCard($0) })) {
                         Text(String(localized: "game.referral.link_toggle", defaultValue: "Mon lien d'invitation sur la carte", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                     }
                     .tint(MeeshyColors.brandPrimary)
                     .padding(.horizontal, MeeshySpacing.xl)
@@ -344,7 +344,7 @@ struct GamePhotoFlowView: View {
                     Toggle(isOn: Binding(get: { session.flameOnCard }, set: { session.setFlameOnCard($0) })) {
                         Text(String(localized: "game.referral.flame_toggle", defaultValue: "Ma Flamme sur la carte", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                     }
                     .tint(MeeshyColors.warning)
                     .padding(.horizontal, MeeshySpacing.xl)
@@ -354,7 +354,7 @@ struct GamePhotoFlowView: View {
             if let notice = session.notice {
                 Text(notice.text)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(notice.tone == .good ? MeeshyColors.success : MeeshyColors.errorSoft)
+                    .foregroundStyle(notice.tone == .good ? MeeshyColors.success : MeeshyColors.errorSoft)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .accessibilityIdentifier("game.photo.notice")
@@ -365,7 +365,7 @@ struct GamePhotoFlowView: View {
                     } label: {
                         Text(String(localized: "game.photo.notice.no_space_save", defaultValue: "L’enregistrer dans Photos", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .frame(minHeight: 44)
                             .padding(.horizontal, MeeshySpacing.lg)
                             .background(Capsule().fill(MeeshyColors.brandPrimary))
@@ -429,7 +429,7 @@ struct GamePhotoFlowView: View {
     private func message(_ text: String) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .multilineTextAlignment(.center)
             .padding(MeeshySpacing.xl)
     }

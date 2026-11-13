@@ -381,7 +381,7 @@ readonly SHARED_BASELINE=0
 # charge assignable au `Record<string, unknown>` que la file stocke, sans assertion.
 # Le lot avait été écrit avec les casts, puis nettoyé avant la fusion ; c'est ce
 # nettoyage qui gagne la ligne. Fusionné avec dev (#16940), la mesure tombe à 490.
-readonly GATEWAY_BASELINE=490
+readonly GATEWAY_BASELINE=489
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO

@@ -27,7 +27,7 @@ struct LentilleBridgeLine: View {
     let accentColor: String
     var isDark: Bool = false
 
-    // Lot 2 (2026-08-22) — le point accent de 8 px qui ouvrait cette ligne est
+    // Lot 2 — le point accent de 8 px qui ouvrait cette ligne est
     // RETIRÉ (behaviour-matrix:L06 amendé). Il n'apparaissait que sous
     // `showsBridge`, c'est-à-dire exactement sous `unreadCount > 0` : la
     // pastille rouge CHIFFRÉE rétablie en queue de ligne de titre porte la
@@ -40,7 +40,7 @@ struct LentilleBridgeLine: View {
         HStack(spacing: MeeshySpacing.xs) {
             Text(resolvedText)
                 .font(LentilleMetrics.Line2.font)
-                .foregroundColor(textColor)
+                .foregroundStyle(textColor)
                 .lineLimit(1)
 
             // `isComplete == false` (`LentilleProviders.swift`, gelé) :
@@ -50,7 +50,7 @@ struct LentilleBridgeLine: View {
             if bridge.isComplete == false, let count = bridge.data?.messageCount {
                 Text(String(format: partialFormat, count))
                     .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                    .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
                     .lineLimit(1)
             }
         }

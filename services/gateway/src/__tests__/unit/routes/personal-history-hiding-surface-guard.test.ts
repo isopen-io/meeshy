@@ -452,15 +452,13 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // masqué : deux lectures, une seule application TEXTUELLE.
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 1 },
 
-  'ConversationMessageStatsService.ts': {
-    kind: 'exempt',
-    reads: 1,
-    why:
-      "Statistiques agrégées d'une conversation (volumes, langues, types) " +
-      'partagées par TOUS ses participants. Un masquage est personnel : ' +
-      "l'appliquer rendrait une statistique différente par lecteur, pour une " +
-      'valeur qui est stockée une fois et lue par tout le monde.',
-  },
+  // #17076 — la raison d'exemption d'avant (« une valeur stockée une fois et lue
+  // par tout le monde ») est devenue à moitié fausse : ce fichier a désormais
+  // DEUX lectures de régimes opposés. `recompute()` reconstruit la ligne
+  // PARTAGÉE — rien n'y est par lecteur, donc rien à masquer.
+  // `foldFlooredWindow` plie la fenêtre d'UN lecteur, et c'est le régime où
+  // `clear-history` et `delete-for-me` veulent dire quelque chose : il applique.
+  'ConversationMessageStatsService.ts': { kind: 'applies', reads: 2, applications: 1 },
   'conversationCard.ts': {
     kind: 'exempt',
     reads: 1,

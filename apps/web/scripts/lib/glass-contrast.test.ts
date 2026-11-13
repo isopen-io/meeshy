@@ -13,6 +13,7 @@ import {
   glassWorstCaseContrast,
   loadColorAliasMap,
   loadGlassDensities,
+  loadGlassDiscVeil,
   loadIosSchemes,
   resolveColor,
   wcagContrastRatio,
@@ -263,5 +264,42 @@ describe('le dépôt — tout couple (ton, encre) posé sur une surface glass* e
 
   test('aucun couple (ton, encre) réellement peint sur du verre n’échappe à l’inventaire nommé', () => {
     expect(glassContrastCoverage(sources)).toEqual([]);
+  });
+});
+
+describe('le disque de verre d’un bouton de l’appel tient son contraste (#17345)', () => {
+  const white = { r: 255, g: 255, b: 255, a: 1 };
+
+  test('le voile se lit depuis glass.css, jamais recopié', () => {
+    expect(loadGlassDiscVeil()).toBe(12);
+  });
+
+  test('l’inventaire nomme le disque, sur la pilule régulière ET sur la sombre', () => {
+    const densities = GLASS_CONTRAST_INVENTORY.filter((entry) => entry.veil === 'glass-call-disc').map((entry) => entry.density);
+    expect(densities.sort()).toEqual(['glass-call', 'glass-call-prominent']);
+  });
+
+  test('le glyphe blanc tient 3:1 sur le disque, au pire cas (un fond blanc sous la pilule), dans les deux schémas', () => {
+    const disc = glassContrastAudit().filter((entry) => entry.veil === 'glass-call-disc');
+    expect(disc).toHaveLength(4);
+    expect(disc.filter((entry) => !entry.passes)).toEqual([]);
+  });
+
+  test('le voile COMPTE dans la mesure : le même glyphe, sans voile, contraste davantage', () => {
+    const [entry] = glassContrastAudit().filter((candidate) => candidate.veil === 'glass-call-disc' && candidate.density === 'glass-call');
+    const tone = resolveColor('var(--ios-indigo-950)', loadIosSchemes().dark);
+    const bare = glassWorstCaseContrast({ tone, ink: white, densityPercent: entry!.densityPercent, scheme: 'dark', canvas: white });
+    expect(entry!.ratio).toBeLessThan(bare);
+  });
+
+  test('falsifié : un voile de 60 % ferait tomber le glyphe sous 3:1 sur la pilule régulière', () => {
+    const tone = resolveColor('var(--ios-indigo-950)', loadIosSchemes().dark);
+    const ratio = glassWorstCaseContrast({ tone, ink: white, densityPercent: 72, scheme: 'dark', canvas: white, veilPercent: 60 });
+    expect(ratio).toBeLessThan(3);
+  });
+
+  test('sous Réduire la transparence, le disque est un plein indigo où le glyphe blanc tient AA texte', () => {
+    const indigo = resolveColor('var(--ios-indigo-800)', loadIosSchemes().dark);
+    expect(wcagContrastRatio(white, indigo)).toBeGreaterThanOrEqual(4.5);
   });
 });

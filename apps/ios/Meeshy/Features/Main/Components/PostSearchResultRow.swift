@@ -24,25 +24,25 @@ struct PostSearchResultRow: View, Equatable {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(result.authorName)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     Spacer(minLength: MeeshySpacing.xs)
 
                     Text(RelativeTimeFormatter.shortString(for: result.createdAt))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Label(result.kind.displayName, systemImage: result.kind.icon)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo300)
+                    .foregroundStyle(MeeshyColors.indigo300)
                     .lineLimit(1)
 
                 if !result.text.isEmpty {
                     Text(MessageSearchResultRow.highlighted(result.text, query: highlightedQuery))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(2)
                 }
             }

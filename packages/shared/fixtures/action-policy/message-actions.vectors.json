@@ -8058,7 +8058,9 @@
           }
         },
         "groups": {
-          "primary": [],
+          "primary": [
+            "reply"
+          ],
           "organize": [],
           "more": [],
           "moderation": [],
@@ -8074,7 +8076,7 @@
           "pin": null,
           "report": false,
           "canReact": false,
-          "canReply": false,
+          "canReply": true,
           "translate": null,
           "transcribe": false,
           "sentiment": false,
@@ -8139,6 +8141,85 @@
           }
         },
         "groups": {
+          "primary": [
+            "reply"
+          ],
+          "organize": [],
+          "more": [],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": false,
+          "canReact": false,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "delete",
+        "pin"
+      ]
+    },
+    {
+      "_label": "avis-systeme",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Zoé a rejoint",
+          "messageType": "system",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "system",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
           "primary": [],
           "organize": [],
           "more": [],
@@ -8171,15 +8252,599 @@
       ]
     },
     {
-      "_label": "avis-systeme",
+      "_label": "appel-en-cours-se-cite",
       "input": {
         "message": {
           "id": "65f000000000000000000001",
           "senderId": "part-author",
           "authorUserId": "user-author",
-          "content": "Zoé a rejoint",
+          "content": "Appel en cours",
           "messageType": "system",
-          "createdAt": "2026-10-20T11:00:00.000Z"
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "metadata": {
+            "kind": "call-live",
+            "callId": "c1"
+          }
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "call",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply"
+          ],
+          "organize": [],
+          "more": [],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": false,
+          "canReact": false,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "delete",
+        "pin"
+      ]
+    },
+    {
+      "_label": "appel-manque-ne-se-cite-pas-dans-un-canal-d-annonces",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Appel manqué",
+          "messageType": "system",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "metadata": {
+            "kind": "call",
+            "callId": "c1"
+          }
+        },
+        "conversation": {
+          "type": "broadcast",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": true,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "call",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [],
+          "organize": [],
+          "more": [],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": false,
+          "canReact": false,
+          "canReply": false,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "delete",
+        "pin"
+      ]
+    },
+    {
+      "_label": "appel-manque-ne-se-cite-pas-par-un-invite-muet",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Appel manqué",
+          "messageType": "system",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "metadata": {
+            "kind": "call",
+            "callId": "c1"
+          }
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "part-guest",
+          "participantId": "part-guest",
+          "hasAccount": false,
+          "isAnonymous": true,
+          "platformRole": null,
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": false,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "call",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [],
+          "organize": [],
+          "more": [],
+          "moderation": [],
+          "destructive": []
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": false,
+          "remove": null,
+          "pin": null,
+          "report": false,
+          "canReact": false,
+          "canReply": false,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "delete",
+        "react",
+        "pin"
+      ]
+    },
+    {
+      "_label": "arrivee-se-cite",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Zoé a rejoint la conversation",
+          "messageType": "system",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "metadata": {
+            "kind": "member-joined",
+            "participantId": "part-zoe",
+            "displayName": "Zoé"
+          }
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "system",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply"
+          ],
+          "organize": [],
+          "more": [],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": false,
+          "canReact": false,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "delete",
+        "pin"
+      ]
+    },
+    {
+      "_label": "arrivees-regroupees-se-citent",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Zoé et Tom viennent d’arriver",
+          "messageType": "system",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "metadata": {
+            "kind": "members-arrived",
+            "count": 2
+          }
+        },
+        "conversation": {
+          "type": "global",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "system",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply"
+          ],
+          "organize": [],
+          "more": [],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": false,
+          "canReact": false,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "delete",
+        "pin"
+      ]
+    },
+    {
+      "_label": "depart-annonce-se-cite",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Zoé a quitté la conversation",
+          "messageType": "system",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "metadata": {
+            "kind": "member-left",
+            "actor": {
+              "participantId": "part-zoe",
+              "displayName": "Zoé"
+            }
+          }
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "system",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply"
+          ],
+          "organize": [],
+          "more": [],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": false,
+          "canReact": false,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "delete",
+        "pin"
+      ]
+    },
+    {
+      "_label": "depart-annonce-ne-se-cite-pas-dans-une-conversation-close",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Zoé a quitté la conversation",
+          "messageType": "system",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "metadata": {
+            "kind": "member-left",
+            "actor": {
+              "participantId": "part-zoe",
+              "displayName": "Zoé"
+            }
+          }
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": "2026-10-19T00:00:00.000Z",
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "system",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [],
+          "organize": [],
+          "more": [],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": false,
+          "canReact": false,
+          "canReply": false,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "delete",
+        "pin"
+      ]
+    },
+    {
+      "_label": "retrait-par-un-tiers-ne-se-cite-pas",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Demo a retiré Zoé",
+          "messageType": "system",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "metadata": {
+            "kind": "member-removed"
+          }
         },
         "conversation": {
           "type": "group",

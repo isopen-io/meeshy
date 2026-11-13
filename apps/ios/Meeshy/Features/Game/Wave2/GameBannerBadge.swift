@@ -4,13 +4,11 @@ import MeeshyUI
 
 // MARK: - Le niveau et le rang sur la bannière d'une fiche (#10093, #10231)
 //
-// Deux groupes sur la bannière, aux deux bouts (précision porteur 2026-10-11 : « les détails de points à gauche de la
-// bannière et le reste de rang à droite ») :
+// Deux groupes sur la bannière, aux deux bouts:
 //  · au DÉBUT (à gauche ; à droite en RTL) : le nom du palier au-dessus du cercle — qui porte le niveau, sa
-//    progression et le prestige — et à droite les étincelles en grand, par leur glyphe (« ✦ 18 347 » — porteur
-//    2026-10-19, #10951) ; le record ne se lit qu'à VoiceOver ;
-//  · à la FIN : la Gloire (« ♛ 18 790 »), puis le blason du rang, son nom et sa division dessous (« Murmure V ») —
-//    la Gloire fait le rang, elle se lit à côté de lui.
+// progression et le prestige — et à droite les étincelles en grand, par leur glyphe (#10951); le record ne se lit qu'à VoiceOver;
+//  · à la FIN : le nom du rang et sa division en haut (« Murmure V »), le blason, puis la Gloire dessous
+//    (« ♛ 18 790 », #17202) — la Gloire fait le rang, elle se lit à côté de lui.
 // Ce que le serveur sert du jeu de ce membre selon SES réglages (`GET /users/:userId/game`, réglage `rank`) — la
 // sienne comprise — et rien d'autre : ni trésor, ni vitrine, ni Flamme. Les points ne sont servis qu'à soi et aux
 // amis (#9541) : absents, rien ne se dessine à leur place. La Flamme n'a aucun réglage de visibilité : son
@@ -93,7 +91,7 @@ struct GameBannerBadge: View {
 
     var body: some View {
         // Un `ZStack`, jamais un `Group` : un `Group` distribue ses modificateurs à ses enfants, et tant que rien n'est
-        // chargé il n'en a aucun — la tâche qui devait charger ne démarrait donc jamais (recette 2026-10-11). L'ancre
+        // chargé il n'en a aucun — la tâche qui devait charger ne démarrait donc jamais. L'ancre
         // invisible garantit au `ZStack` un enfant, donc une apparition, cache vide compris.
         ZStack {
             GameLoadAnchor()
@@ -183,7 +181,7 @@ struct GameBannerBadgeView: View {
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
-    /// En colonne : le nom du palier, le cercle, puis les étincelles dessous (porteur 2026-10-19, #10951).
+    /// En colonne: le nom du palier, le cercle, puis les étincelles dessous (#10951).
     private var levelGroup: some View {
         VStack(spacing: MeeshySpacing.xxs) {
             small(model.levelName)
@@ -198,16 +196,34 @@ struct GameBannerBadgeView: View {
         }
     }
 
-    /// En colonne : la Gloire au-dessus du blason du rang, son nom et sa division dessous (porteur 2026-10-19, #10951).
+    /// Les lignes du groupe du rang, de haut en bas.
+    enum RankLine { case name, crest, glory }
+
+    /// Le titre du rang en haut, le blason, la Gloire en bas (#17202) — le même ordre que le groupe
+    /// du niveau d'en face : le nom, l'emblème, le compte.
+    static let rankLines: [RankLine] = [.name, .crest, .glory]
+
     private var rankGroup: some View {
         VStack(spacing: MeeshySpacing.xxs) {
-            if let gloryText = model.gloryText {
-                amount(gloryText, size: MeeshyFont.bodySize)
+            ForEach(Self.rankLines, id: \.self) { line in
+                rankLine(line)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func rankLine(_ line: RankLine) -> some View {
+        switch line {
+        case .name:
+            caption(model.rankName)
+        case .crest:
             RankBlasonView(rank: model.rank, division5: model.division, level: model.level,
                            mythic: model.mythic, title: nil, figures: nil)
                 .frame(width: emblemSize * 1.1, height: emblemSize * 1.1 * 0.93)
-            caption(model.rankName)
+        case .glory:
+            if let gloryText = model.gloryText {
+                amount(gloryText, size: MeeshyFont.bodySize)
+            }
         }
     }
 

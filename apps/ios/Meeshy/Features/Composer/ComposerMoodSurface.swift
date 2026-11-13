@@ -514,7 +514,7 @@ struct ComposerMoodSurface: View {
         HStack(spacing: MeeshySpacing.sm) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(MeeshyFont.fixedGlyph(13, weight: .bold))
                     // Pas `glassControlForeground()` : ce helper rend
                     // `indigo950` en thème CLAIR, juste sur une surface qui
                     // suit le thème — faux ici, le plateau est sombre en

@@ -9,11 +9,10 @@ import { swipeEngages } from './swipe';
  * `SwipeableRow` (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/SwipeableRow.swift`)
  * et des couples que `ConversationListView.swift` lui remet. Aucun DOM ici.
  *
- * - bord de DÉBUT (balayage dans le sens de lecture) : épingler, sourdine ;
- * - bord de FIN : archiver, lu / non lu, supprimer, puis « Rendre obsolète »
- *   en dernier quand le serveur l'accorde (#14645) — miroir de
- *   `ConversationTrailingSwipe.plan` : quand il remplirait le bord au-delà du
- *   plafond, la bascule lu / non lu cède sa place (elle reste au menu) ;
+ * - bord de DÉBUT (balayage dans le sens de lecture) : épingler ;
+ * - bord de FIN : archiver, lu / non lu. Sourdine, Supprimer et « Rendre
+ *   obsolète » vivent au menu de l'appui long SEULEMENT (consigne porteur du
+ *   2026-11-09, #17243) ;
  * - `ROW_SWIPE_MAX_ACTIONS` par côté, jamais plus.
  *
  * Les actions SONT celles du menu de la ligne (`rowMenuItems`) : même id, même
@@ -34,10 +33,15 @@ const FLICK_CLOSE_DISTANCE = 10;
 
 export type RowSwipeEdge = 'leading' | 'trailing';
 
-/** Dans l'ordre depuis le BORD : la première est la première révélée. La table peut dépasser le plafond : `ROW_SWIPE_YIELDS` la ramène. */
+/**
+ * Dans l'ordre depuis le BORD : la première est la première révélée. La table
+ * peut dépasser le plafond : `ROW_SWIPE_YIELDS` la ramène. La sourdine, la
+ * suppression et « Rendre obsolète » ne se balaient plus (consigne porteur,
+ * #17243) : elles restent au menu de l'appui long, avec leurs confirmations.
+ */
 export const ROW_SWIPE_EDGES: Readonly<Record<RowSwipeEdge, readonly RowActionId[]>> = {
-  leading: ['pin', 'mute'],
-  trailing: ['archive', 'read', 'delete', 'obsolete'],
+  leading: ['pin'],
+  trailing: ['archive', 'read'],
 };
 
 /** L'action qui cède sa place quand un bord dépasse `ROW_SWIPE_MAX_ACTIONS` (iOS : `ConversationTrailingSwipe.plan`). */
@@ -50,7 +54,7 @@ export function conversationRowSwipeSides(params: {
   readonly unread: boolean;
   readonly language: InterfaceLanguage;
   readonly canDelete: boolean;
-  /** Les verdicts du rôle : seul « Rendre obsolète » en passe au balayage. */
+  /** Les verdicts du rôle : aucun n'ajoute d'entrée au balayage (#17243). */
   readonly actions?: RowConversationActions;
 }): RowSwipeSides {
   const menu = rowMenuItems(params);

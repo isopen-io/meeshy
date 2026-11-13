@@ -78,7 +78,6 @@ final class CommentSceneRetouchTests: XCTestCase {
         ]
         for hote in hotes {
             let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(hote))
-            XCTAssertFalse(code.contains("MeeshyImageEditorView("), "\(hote) : l'image s'édite dans la scène (#9127).")
             XCTAssertFalse(code.contains("MeeshyVideoEditorView("), "\(hote) : la vidéo s'édite dans la scène (#9127).")
             XCTAssertTrue(code.contains(".commentSceneRetouch("),
                           "\(hote) : « Éditer » sur une pièce jointe ouvre la scène (#9127).")

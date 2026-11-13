@@ -4,6 +4,7 @@ import type { Prisma } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
+import { repostCommunityId } from './posts/repostCommunity';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { STORY_VIEW_RESET } from './posts/postCounters';
@@ -237,13 +238,7 @@ export class PostService {
         where: { id: data.repostOfId, deletedAt: NOT_DELETED },
         // `visibility`/`visibilityUserIds` sont lus pour la LOI D'AUDIENCE
         // ci-dessous — sans eux ce chemin ne pouvait rien vérifier.
-        select: {
-          id: true,
-          repostOfId: true,
-          originalRepostOfId: true,
-          visibility: true,
-          visibilityUserIds: true,
-        },
+        select: { id: true, repostOfId: true, originalRepostOfId: true, visibility: true, visibilityUserIds: true, communityId: true },
       });
       if (!sourcePost) {
         const err: any = new Error('Repost source not found');
@@ -275,6 +270,7 @@ export class PostService {
         throw err;
       }
 
+      data = { ...data, communityId: repostCommunityId(sourcePost, data.communityId) };
       repostOfId = sourcePost.id;
       originalRepostOfId = (sourcePost.originalRepostOfId as string | null)
         ?? (sourcePost.repostOfId as string | null)
@@ -1994,7 +1990,7 @@ export class PostService {
             visibilityUserIds: effectiveVisibilityUserIds,
             content: snapshotContent ?? undefined,
             originalLanguage: snapshotOriginalLanguage,
-            repostOfId: postId,
+            repostOfId: postId, communityId: repostCommunityId(original, undefined),
             originalRepostOfId, snapshotAuthorId: (original.snapshotAuthorId as string | null | undefined) ?? original.authorId,
             isQuote,
             ...(sourceMoodEmoji !== undefined ? { moodEmoji: sourceMoodEmoji } : {}),
@@ -2101,7 +2097,7 @@ export class PostService {
         originalLanguage,
         repostOfId: postId,
         originalRepostOfId,
-        isQuote,
+        isQuote, communityId: repostCommunityId(original, undefined),
         ...(expiresAt !== undefined ? { expiresAt } : {}),
       },
       select: postInclude,

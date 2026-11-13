@@ -4,14 +4,13 @@ import Foundation
 /// ou réel (#9727). Servi par `GET /posts/:postId/interactions`, à côté de
 /// l'identité de la ligne, à l'auteur d'une STORY et à ADMIN/BIGBOSS (lecture
 /// journalisée) ; l'auteur d'un post ou d'un réel n'en voit que les nombres
-/// (décision porteur 2026-10-09).
 ///
 /// Miroir de `PostViewerEngagement` (`packages/shared/types/publication-viewers.ts`).
 /// Chaque champ est ABSENT du fil quand il vaut zéro : il se décode à zéro, et
 /// `marks` ne produit jamais « 0 commentaire ». Un serveur d'avant #9727 ne
 /// sert que `reaction` (la plus récente) : elle devient la seule réaction.
 ///
-/// Le FAVORI n'y figure jamais (décision porteur 2026-10-09) : mettre un
+/// Le FAVORI n'y figure jamais : mettre un
 /// contenu de côté reste un geste privé. Une passerelle plus ancienne qui
 /// servirait encore `bookmarked` voit la clé ignorée au décodage.
 public struct PostViewerEngagement: Decodable, Equatable, Hashable, Sendable {

@@ -1,3 +1,5 @@
+import { quotableNoticeKind, quotedNoticeText } from '@meeshy/shared/utils/quotable-notice';
+
 import { served } from '@/lib/api/prism';
 import { contactCardLabelOf } from '@/lib/contact-card/label';
 import { attachmentSrc } from '@/lib/api/media-url';
@@ -304,16 +306,36 @@ function sealedByExpiry(deletedAt: unknown, expiresAt: unknown): boolean {
   return Number.isFinite(expiry) && Number.isFinite(sealed) && expiry <= sealed;
 }
 
+/**
+ * L'AVIS CITÉ (#17441) — un appel, une arrivée, des arrivées regroupées ou un
+ * départ annoncé. Sa métadonnée arrive sous `metadata` quand la citation vient
+ * du fil (bandeau du composeur) et sous `notice` quand la passerelle la sert
+ * (`servedQuotedMessage`). Son texte est de l'INTERFACE : il suit la langue du
+ * lecteur, et l'appel se dit de SON point de vue (`viewerId`).
+ */
+function quotedNoticeOf(params: {
+  readonly quoted: Partial<Pick<Message, 'messageType' | 'metadata' | 'notice'>>;
+  readonly viewerId: string | null;
+  readonly interfaceLanguage: InterfaceLanguage;
+}): string | null {
+  const { quoted, viewerId, interfaceLanguage } = params;
+  const metadata: unknown = quoted.notice ?? quoted.metadata;
+  if (quotableNoticeKind({ messageType: quoted.messageType ?? null, metadata }) === null) return null;
+  return quotedNoticeText({ metadata, viewerId: viewerId ?? '', language: interfaceLanguage });
+}
+
 export function quotedPreviewOf(params: {
   readonly quoted: Pick<
     Message,
     'content' | 'originalLanguage' | 'translations' | 'attachments' | 'isViewOnce' | 'isBlurred' | 'isEncrypted' | 'effectFlags'
   > &
-    Partial<Pick<Message, 'deletedAt' | 'expiresAt' | 'visualAttachmentCount'>>;
+    Partial<Pick<Message, 'deletedAt' | 'expiresAt' | 'visualAttachmentCount' | 'messageType' | 'metadata' | 'notice'>>;
   readonly readerLanguages: readonly string[];
   readonly interfaceLanguage: InterfaceLanguage;
+  /** Le LECTEUR (`useViewer().id`) — un appel manqué cité se dit « manqué » ou « sans réponse » selon qui l'a passé. */
+  readonly viewerId: string | null;
 }): QuotedPreview {
-  const { quoted, readerLanguages, interfaceLanguage } = params;
+  const { quoted, readerLanguages, interfaceLanguage, viewerId } = params;
   /* UN MESSAGE CITÉ SUPPRIMÉ NE DIT PLUS RIEN DE LUI (#7926) — le libellé du
      catalogue, celui de la bulle supprimée (`ProtectionNotice`), jamais
      l'ancien texte, sa traduction ou sa pièce, même si une charge en garde
@@ -322,6 +344,8 @@ export function quotedPreviewOf(params: {
     const key = sealedByExpiry(quoted.deletedAt, quoted.expiresAt) ? 'message.expired.a11y' : 'message.deleted';
     return { text: translate(interfaceLanguage, key), language: '', media: null, inventory: [], isProtected: true };
   }
+  const noticeText = quotedNoticeOf({ quoted, viewerId, interfaceLanguage });
+  if (noticeText !== null) return { text: noticeText, language: '', media: null, inventory: [], isProtected: false };
   const messageIsProtected = quotedIsProtected(quoted);
   const piece = representativeOf(quoted);
   const media =

@@ -6,6 +6,7 @@ import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import type { CallMember } from '@/lib/calls/call-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { CallButton } from './call-glass-button';
 import { CallPeopleSheet } from './call-people-sheet';
 
 /**
@@ -51,7 +52,7 @@ const mount = (members: readonly CallMember[]) => {
   const root = createRoot(host);
   act(() =>
     root.render(
-      <CallPeopleSheet id="people" closeGlyph="x" language="fr" members={members} onClose={() => undefined} renderModeration={() => null} />,
+      <CallPeopleSheet Button={CallButton} id="people" closeGlyph="x" language="fr" members={members} onClose={() => undefined} renderModeration={() => null} />,
     ),
   );
   cleanup = () => {

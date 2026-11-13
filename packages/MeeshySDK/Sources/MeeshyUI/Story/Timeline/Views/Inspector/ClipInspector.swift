@@ -91,7 +91,7 @@ public struct ClipInspector: View {
 
     /// Machine d'état minimale du flux « supprimer » : le bouton corbeille ne
     /// détruit JAMAIS directement — il présente une alerte ; seule la
-    /// confirmation explicite invoque `onDelete` (retour user 2026-07-11).
+    /// confirmation explicite invoque `onDelete`.
     public struct DeleteConfirmation: Sendable, Equatable {
         public private(set) var isPresented = false
         public init() {}
@@ -122,7 +122,7 @@ public struct ClipInspector: View {
     public let onSplit: () -> Void
     /// Ferme l'inspecteur (désélection) — la modale était infermable :
     /// aucune affordance, seul un tap hasardeux hors clip la faisait
-    /// disparaître (retour user 2026-07-11).
+    /// disparaître.
     public let onClose: () -> Void
     /// Ajustement du DÉBUT par pas (déplace le clip, durée constante).
     public let onStartAdjusted: (Float) -> Void
@@ -616,7 +616,7 @@ public struct ClipInspector: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "story.timeline.inspector.volume", bundle: .module).uppercased())
-                    .font(.system(size: MeeshyFont.microSize, weight: .semibold))
+                    .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 // Le chiffre est indispensable depuis que la course va jusqu'à
@@ -721,7 +721,7 @@ public struct ClipInspector: View {
     /// Configuration d'animation dépliée par l'icône losange de la rangée
     /// d'actions : apparition/disparition (chips de fondu) + étape
     /// d'animation au playhead avec sa légende. Repliée par défaut — la
-    /// modale ne montre plus que l'essentiel (retour user 2026-07-11).
+    /// modale ne montre plus que l'essentiel.
     private var animationConfig: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             ClipFadeChipRow(

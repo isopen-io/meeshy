@@ -96,7 +96,7 @@ struct ArrivalGreetingInvite: View {
         Button(action: action) {
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundStyle(Color(hex: accentColor))
                 .multilineTextAlignment(.center)
         }
         .buttonStyle(.plain)

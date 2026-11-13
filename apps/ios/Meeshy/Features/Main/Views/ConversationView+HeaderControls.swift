@@ -17,7 +17,7 @@ import MeeshyUI
 /// titre ouvre les détails ; en conversation DIRECTE, l'appui long
 /// propose détails OU profil de l'utilisateur.
 struct ConversationHeaderTitleBlock<Tags: View>: View {
-    /// F11 (revue adversariale 2026-08-25) : le TITRE et le libellé
+    /// F11: le TITRE et le libellé
     /// d'accessibilité lisent la conversation VIVANTE (`liveConversation`,
     /// depuis #9359) : un pair renommé ou un enregistrement des réglages s'y
     /// voit sans quitter le fil, et le libellé dit le même nom que l'œil lit.
@@ -54,32 +54,41 @@ struct ConversationHeaderTitleBlock<Tags: View>: View {
 
     /// Le bouton-titre de la bande dépliée — tap = détails de la
     /// conversation ; en DIRECT, appui long = choix détails / profil
-    /// (arbitrage user 2026-08-18).
+    /// par un `Menu` natif (#17095).
     @ViewBuilder
     private var titleButton: some View {
-        let button = Button { onOpenInfo() } label: {
-            titleLabel
-                .meeshyTapTarget()
-        }
-        .accessibilityLabel(accessibilityName)
-        .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
-
         if isDirect {
-            button.contextMenu {
-                Button {
-                    onOpenInfo()
-                } label: {
+            // Un `Menu` à action primaire, comme le bouton d'appel (#17095) :
+            // la surbrillance dès le toucher, le menu ancré au titre à l'appui
+            // long, sans l'aperçu soulevé ni le délai d'un `.contextMenu`.
+            Menu {
+                Button(action: onOpenInfo) {
                     Label(String(localized: "conversation.view.details", defaultValue: "Détails de la conversation", bundle: .main), systemImage: "info.circle.fill")
                 }
-                Button {
-                    onOpenProfile()
-                } label: {
+                Button(action: onOpenProfile) {
                     Label(String(localized: "conversation.view.view_profile", defaultValue: "Voir le profil", bundle: .main), systemImage: "person.circle.fill")
                 }
+            } label: {
+                titleLabel
+                    .meeshyTapTarget()
+            } primaryAction: {
+                openInfo()
             }
+            .accessibilityLabel(accessibilityName)
+            .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
         } else {
-            button
+            Button(action: openInfo) {
+                titleLabel
+                    .meeshyTapTarget()
+            }
+            .accessibilityLabel(accessibilityName)
+            .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
         }
+    }
+
+    private func openInfo() {
+        HapticFeedback.light()
+        onOpenInfo()
     }
 
     /// Title text + optional revalidation sparkle. Splitting this off keeps
@@ -109,43 +118,24 @@ struct ConversationHeaderTitleBlock<Tags: View>: View {
     }
 }
 
-/// Le bouton de recherche de l'en-tête. Le glyphe est une struct NOMINALE
-/// (`HeaderSearchGlyph`) : le type structurel du bouton lui-même (crash
-/// stack-overflow du décodeur de métadonnées Swift au 1er rendu SUR DEVICE,
-/// .ips du 2026-07-30 dans `expandedHeaderSearchButton.getter`) reste trivial.
-/// Leçon 5cdde93c4 : couper au niveau du type qui est décodé.
+/// Le bouton de recherche de l'en-tête. Le glyphe est la struct NOMINALE
+/// partagée par toutes les icônes de l'en-tête (`ConversationHeaderGlassGlyph`,
+/// #17095) : le type structurel du bouton reste trivial (crash stack-overflow
+/// du décodeur de métadonnées Swift au 1er rendu SUR DEVICE), et la loupe répond au doigt comme l'appel.
 struct ConversationHeaderSearchButton: View {
     let accentColor: String
     let secondaryColor: String
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HeaderSearchGlyph(accentColor: accentColor, secondaryColor: secondaryColor)
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            ConversationHeaderGlassGlyph(systemName: "magnifyingglass", accentColor: accentColor, secondaryColor: secondaryColor)
         }
         .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", bundle: .main))
         .accessibilityHint(String(localized: "accessibility.search.hint", bundle: .main))
         .accessibilityIdentifier("conversation.header.search")
-    }
-}
-
-// MARK: - Header Search Glyph (extracted struct to keep the Button's type trivial)
-
-/// Struct NOMINALE : le type structurel du glyphe (opaques `adaptiveGlass` +
-/// `meeshyTapTarget`, chacun portant ses 2 branches #available) reste scopé à
-/// ce body au lieu de gonfler le mangled name du Button parent — dont le
-/// décodage récursif débordait la pile du main thread au 1er rendu SUR DEVICE
-/// (.ips 2026-07-30, `expandedHeaderSearchButton.getter`).
-private struct HeaderSearchGlyph: View {
-    let accentColor: String
-    let secondaryColor: String
-
-    var body: some View {
-        Image(systemName: "magnifyingglass")
-            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-            .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
-            .meeshyTapTarget()
     }
 }

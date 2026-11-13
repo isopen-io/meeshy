@@ -9,7 +9,7 @@ import Foundation
 /// réglage : jusqu'où préparer devant et derrière le réel regardé, et jusqu'où
 /// préparer chacun.
 ///
-/// - **Le plancher est N−2…N+2, toujours** (directive porteur 2026-10-08).
+/// - **Le plancher est N−2…N+2, toujours**.
 ///   Aucune contrainte ne le baisse.
 /// - **Devant, la cadence élargit** : la MÉDIANE du temps passé par réel (un
 ///   arrêt long isolé ne referme pas la fenêtre d'un balayeur) — 1 s ou moins

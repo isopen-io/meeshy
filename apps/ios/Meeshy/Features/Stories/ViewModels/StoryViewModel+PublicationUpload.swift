@@ -198,7 +198,7 @@ extension StoryViewModel {
                     onProgress(baseProgress + (0.30 + mediaProgress * 0.50) * slideShare)
                 }
 
-                // **L'ADOPTION du fond** (#5280, 2026-09-05).
+                // **L'ADOPTION du fond** (#5280).
                 //
                 // Le fond de la slide vient d'être téléversé plus haut : son
                 // `id` et son `fileUrl` partent dans `allMediaIds`, donc dans
@@ -428,7 +428,7 @@ extension StoryViewModel {
         return newPostIds
     }
 
-    // MARK: - Background Update (édition d'une story publiée, 2026-07-29)
+    // MARK: - Background Update (édition d'une story publiée)
 
     /// Contexte d'édition capturé depuis `StoryComposerViewModel` au moment du
     /// publish — valeurs COPIÉES, le VM du composer n'est jamais retenu.
@@ -729,7 +729,7 @@ extension StoryViewModel {
             HapticFeedback.success()
             FeedbackToastManager.shared.showSuccess(String(
                 localized: "story.edit.success", defaultValue: "Story mise à jour", bundle: .main))
-            // Directive 2026-08-02 : succès serveur CONFIRMÉ — le brouillon
+            // succès serveur CONFIRMÉ — le brouillon
             // d'édition (gelé par `freezeCurrentDraftForPublish` au hand-off)
             // n'a plus de raison d'être : la story qu'il modifiait est à jour.
             if let draftId {

@@ -257,11 +257,11 @@ final class ConversationTopChromeFadeTests: XCTestCase {
         )
         XCTAssertTrue(
             band.contains("isDirect: conversation?.type == .direct") && button.contains("if isDirect")
-                && button.contains(".contextMenu"),
+                && button.contains("Menu {"),
             "En conversation DIRECTE, l'appui long du titre propose détails OU profil — le menu n'existe qu'en direct."
         )
         XCTAssertTrue(
-            band.contains("ProfileSheetUser.from(conversation:") && button.contains("onOpenProfile()"),
+            band.contains("ProfileSheetUser.from(conversation:") && button.contains("Button(action: onOpenProfile)"),
             "Le profil proposé est celui de l'interlocuteur (résolution existante ProfileSheetUser.from)."
         )
     }

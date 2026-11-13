@@ -26,7 +26,7 @@ internal class CachedPreview(val reading: PreviewCacheReading, val messages: Lis
 internal interface ConversationPreviewSource {
     suspend fun cached(conversationId: String): CachedPreview
 
-    /** Les cinq derniers messages servis par le réseau, `null` sur tout échec. */
+    /** Les [ConversationPreviewLaw.PREVIEW_LIMIT] derniers messages servis par le réseau, `null` sur tout échec. */
     suspend fun fetchRecent(conversationId: String): List<ApiMessage>?
 }
 
@@ -34,7 +34,7 @@ internal class RepositoryConversationPreviewSource(
     private val repository: MessageRepository,
 ) : ConversationPreviewSource {
     override suspend fun cached(conversationId: String): CachedPreview {
-        val messages = guarded { repository.recentMessages(conversationId).map { it.message } }.orEmpty()
+        val messages = guarded { repository.recentMessages(conversationId, ConversationPreviewLaw.PREVIEW_LIMIT).map { it.message } }.orEmpty()
         val fresh = guarded { repository.isCacheFresh(conversationId) } == true
         val reading = when {
             fresh -> PreviewCacheReading.Fresh(hasMessages = messages.isNotEmpty())
@@ -73,7 +73,7 @@ internal sealed interface PreviewState {
 }
 
 /**
- * **Les cinq derniers messages d'une conversation, lus pour l'aperçu d'appui long** — cache d'abord,
+ * **Les derniers messages d'une conversation ([ConversationPreviewLaw.PREVIEW_LIMIT]), lus pour l'aperçu d'appui long** — cache d'abord,
  * réseau ensuite (miroir de `ConversationListPreviewLoader`, iOS #11212).
  *
  * Trois intentions dédoublonnées avec montée en gamme ([ConversationPreviewIntent]) ; un résultat

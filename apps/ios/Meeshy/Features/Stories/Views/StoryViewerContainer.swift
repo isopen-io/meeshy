@@ -250,7 +250,7 @@ struct StoryViewerContainer: View {
                 Image(systemName: "exclamationmark.circle")
                     // Doctrine 84i/86i : glyphe hero d'etat d'erreur (~38pt, decoratif) → fige ;
                     // le titre ci-dessous porte le sens. Masque de VoiceOver.
-                    .font(.system(size: 38, weight: .regular))
+                    .font(MeeshyFont.fixedGlyph(38, weight: .regular))
                     .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
 
@@ -438,7 +438,7 @@ struct StoryReaderCover: ViewModifier {
         .environmentObject(statusViewModel)
         .conversationListObject(conversationList)
         .environment(\.meeshyConversationList, conversationList)
-        // La pastille de synchronisation se masque sous le lecteur (2026-05-27).
+        // La pastille de synchronisation se masque sous le lecteur.
         .environment(\.isStoryViewerPresenting, true)
         // Zoom depuis la bulle du tray quand elle est enregistrée (iOS 18+),
         // cover standard sinon.

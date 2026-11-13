@@ -35,6 +35,21 @@ final class TopChromeExitRenderTests: XCTestCase {
     /// Le contenu de l'app, sous les barres.
     private static let contenu = Color(.sRGB, red: 0, green: 0.85, blue: 0.35, opacity: 1)
 
+    /// Le ressort est rejoué à ce facteur de vitesse, sans que sa forme change (#17405).
+    ///
+    /// Le ressort tourne sur l'horloge murale, pas au rythme des images. Une capture
+    /// (`drawHierarchy(afterScreenUpdates: true)`) coûte environ 80 ms en local, et bien plus sur
+    /// un runner de CI chargé. Là-bas, le ressort de 0,4 s finissait presque entre deux images :
+    /// on lisait `0…0` puis `0…124` (seuil < 128), ou rien du tout puis `0…129`. Le verdict
+    /// dépendait donc de la vitesse de la machine. Mesuré en local, avant → après : de 4 à
+    /// environ 30 images intermédiaires à l'arrivée, de 6 à environ 45 à la sortie.
+    ///
+    /// `window.layer.speed` a été essayé et n'agit pas : SwiftUI interpole lui-même, et le film
+    /// reste identique à 0,25. Le ralenti passe donc par la transaction, ce qui ne relâche rien.
+    /// Une barre posée sans animation porte une animation `nil`, qui reste `nil` : elle apparaît
+    /// d'un coup et le témoin tombe.
+    static let ralenti: Double = 0.2
+
     /// La colonne filmée : dans la marge de la barre, là où elle ne peint que son aplat.
     private let colonne = 6
 
@@ -50,6 +65,7 @@ final class TopChromeExitRenderTests: XCTestCase {
                     miniPlayerCurrentConversationId: { nil },
                     miniPlayerCoordinator: coordinateur
                 ))
+                .transaction { $0.animation = $0.animation?.speed(TopChromeExitRenderTests.ralenti) }
         }
     }
 
@@ -132,7 +148,7 @@ final class TopChromeExitRenderTests: XCTestCase {
 
         coord.close()
 
-        let images = filmer(rendu, borne: 3) { $0.hautDuChrome == nil && ($0.hautDuContenu ?? .max) <= encart + 1 }
+        let images = filmer(rendu, borne: 12) { $0.hautDuChrome == nil && ($0.hautDuContenu ?? .max) <= encart + 1 }
         let film = images.map(\.description).joined(separator: "\n")
 
         XCTAssertTrue(
@@ -180,7 +196,7 @@ final class TopChromeExitRenderTests: XCTestCase {
 
         var stables = 0
         var precedente: Releve?
-        let images = filmer(rendu, borne: 3) { image in
+        let images = filmer(rendu, borne: 12) { image in
             let immobile = image.hautDuChrome != nil
                 && image.basDuChrome == precedente?.basDuChrome
                 && image.hautDuContenu == precedente?.hautDuContenu

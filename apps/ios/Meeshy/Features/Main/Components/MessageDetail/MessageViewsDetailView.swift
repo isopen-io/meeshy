@@ -44,8 +44,7 @@ struct MessageViewsDetailView: View {
         )
     }
 
-    // Historique local des tentatives d'envoi (spec 2026-07-08
-    // message-send-failure-retry-flow) — vide pour les messages reçus
+    // Historique local des tentatives d'envoi — vide pour les messages reçus
     // (aucune ligne `send_attempts` locale), la carte ne s'affiche pas.
     @State private var sendAttempts: [SendAttemptRecord] = []
 

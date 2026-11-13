@@ -128,7 +128,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// Apple endpoint (api.sandbox.push.apple.com vs api.push.apple.com).
     /// Hard-coded at compile time so a release build cannot accidentally
     /// claim to be sandbox (or vice-versa) at runtime.
-    public static let apnsEnvironment: String = {
+    nonisolated public static let apnsEnvironment: String = {
         #if DEBUG
         return "development"
         #else

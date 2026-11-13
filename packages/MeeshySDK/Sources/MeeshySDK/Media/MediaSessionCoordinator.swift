@@ -89,7 +89,8 @@ public actor MediaSessionCoordinator {
     /// que par `activatePlaybackSync` (vidéo, story) ne recevait jamais
     /// d'interruption (#11040).
     private nonisolated let _systemObserversLock = OSAllocatedUnfairLock(initialState: false)
-    nonisolated(unsafe) private var observerTokens: [any NSObjectProtocol] = []
+    // unchecked: jetons d'observateurs, écrits sous _systemObserversLock et lus par deinit
+    private nonisolated let observerTokens = Locked<[any NSObjectProtocol]>(uncheckedState: [])
 
     /// `true` tant qu'un contenu AUDIBLE de Meeshy a activé la session
     /// `.playback` et que rien ne l'a rendue depuis. Une vidéo muette lit ce
@@ -163,16 +164,33 @@ public actor MediaSessionCoordinator {
     }
 
     #if DEBUG
-    /// Test seam: increments `deactivateCount` from callers that want to
-    /// assert whether `deactivateForBackground()` was reached via the
-    /// background transition path. `nonisolated(unsafe)` so a synchronous
-    /// `MediaSessionCoordinator.shared.testProbe = probe` assignment from a
-    /// test running on `@MainActor` does not require an `await` hop. The
-    /// probe is only read/written from `@MainActor` callers in this codebase.
-    public nonisolated(unsafe) var testProbe: MediaSessionCoordinatorTestProbe?
+    /// Test seam: lets a synchronous `MediaSessionCoordinator.shared.testProbe = probe`
+    /// assignment from a `@MainActor` test land without an `await` hop.
+    private nonisolated let probeSlot = Locked<MediaSessionCoordinatorTestProbe?>(nil)
+    public nonisolated var testProbe: MediaSessionCoordinatorTestProbe? {
+        get { probeSlot.read { $0 } }
+        set { probeSlot.mutate { $0 = newValue } }
+    }
     #endif
 
     private nonisolated let scheduleAfter: DelayedScheduler
+
+    /// **La file série UNIQUE de la session audio** (#17038). Chaque
+    /// `setCategory` / `setActive` est un aller-retour SYNCHRONE vers le
+    /// serveur audio — jusqu'à 1,69 s mesuré par HangTracer sur le fil
+    /// principal. Tout ce qui écrit la session passe par cette file : les
+    /// appels rendent la main tout de suite, et l'ordre des appels EST l'ordre
+    /// des effets (une désactivation demandée avant une relance ne passe
+    /// jamais après elle). Les décisions qui dépendent de l'état (appel,
+    /// enregistrement, bail, configuration) se prennent AU MOMENT de
+    /// l'exécution, sur la file. La couche appel y pose aussi sa session
+    /// (`CallAudioSessionController.audioSessionQueue`).
+    public nonisolated let sessionQueue = DispatchQueue(label: "me.meeshy.media-session", qos: .userInitiated)
+    nonisolated let audioSession: any AudioSessionProviding
+    private nonisolated let _pendingSessionWork = OSAllocatedUnfairLock(initialState: 0)
+
+    /// `true` tant qu'une écriture de session attend ou s'exécute sur la file.
+    nonisolated var hasPendingSessionWork: Bool { _pendingSessionWork.withLock { $0 > 0 } }
 
     /// **La file ordonnée des prises de lecture** (#9879) : une `Task` par appel
     /// ne garantit aucun ordre entre une libération et la requête qui la suit.
@@ -187,21 +205,76 @@ public actor MediaSessionCoordinator {
         case barrier(CheckedContinuation<Void, Never>)
     }
 
-    private init(scheduleAfter: @escaping DelayedScheduler = DelayedScheduling.real) {
+    /// Le centre où les signaux qui révoquent le bail sont écoutés : `.default`
+    /// en production. Un témoin en reçoit un à part, pour qu'une interruption
+    /// publiée par une suite parallèle ne révoque pas son bail.
+    private nonisolated let leaseNotificationCenter: NotificationCenter
+
+    private init(
+        scheduleAfter: @escaping DelayedScheduler = DelayedScheduling.real,
+        session: any AudioSessionProviding = SystemAudioSession(),
+        leaseNotificationCenter: NotificationCenter = .default
+    ) {
         self.scheduleAfter = scheduleAfter
+        self.audioSession = session
+        self.leaseNotificationCenter = leaseNotificationCenter
     }
 
     #if DEBUG
     /// Une instance à part (tests) : le compteur du singleton est partagé avec
     /// des suites qui tournent en parallèle et le remettent à zéro.
-    static func makeForTesting(scheduleAfter: @escaping DelayedScheduler = DelayedScheduling.real) -> MediaSessionCoordinator {
-        MediaSessionCoordinator(scheduleAfter: scheduleAfter)
+    static func makeForTesting(
+        scheduleAfter: @escaping DelayedScheduler = DelayedScheduling.real,
+        session: any AudioSessionProviding = SystemAudioSession(),
+        leaseNotificationCenter: NotificationCenter = .default
+    ) -> MediaSessionCoordinator {
+        MediaSessionCoordinator(scheduleAfter: scheduleAfter, session: session, leaseNotificationCenter: leaseNotificationCenter)
     }
     #endif
 
+    // MARK: - File de session (#17038)
+
+    /// Met une écriture de session en file. Ne bloque jamais l'appelant.
+    nonisolated func onSessionQueue(_ work: @escaping @Sendable () -> Void) {
+        _pendingSessionWork.withLock { $0 += 1 }
+        sessionQueue.async { [self] in
+            work()
+            _pendingSessionWork.withLock { $0 -= 1 }
+        }
+    }
+
+    /// Exécute `work` sur la file et en attend l'issue, sans bloquer le fil
+    /// de l'appelant.
+    nonisolated func awaitSessionQueue<T: Sendable>(_ work: @escaping @Sendable () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            onSessionQueue { continuation.resume(with: Result { try work() }) }
+        }
+    }
+
+    /// Rend quand tout ce qui a été mis en file de session avant l'appel est
+    /// exécuté.
+    public nonisolated func sessionSettled() async {
+        await withCheckedContinuation { continuation in
+            onSessionQueue { continuation.resume() }
+        }
+    }
+
+    /// **L'attente d'une lecture audible** : `body` s'exécute sur le fil
+    /// principal une fois la session posée. Sans écriture en file, il
+    /// s'exécute tout de suite, sans saut de fil (un balayage de réel sous
+    /// bail ne paie rien).
+    public nonisolated func whenSessionSettled(_ body: @escaping @MainActor @Sendable () -> Void) {
+        guard hasPendingSessionWork || !Thread.isMainThread else {
+            return MainActor.assumeIsolated { body() }
+        }
+        onSessionQueue {
+            Task { @MainActor in body() }
+        }
+    }
+
     deinit {
         let center = NotificationCenter.default
-        for token in observerTokens {
+        for token in observerTokens.mutateUnchecked({ $0 }) {
             center.removeObserver(token)
         }
     }
@@ -249,14 +322,16 @@ public actor MediaSessionCoordinator {
     /// sans dépendance à la couche appel de l'app. `nonisolated` → lecture sync.
     public nonisolated var isCallActive: Bool { callActive }
 
-    /// Configure + active SYNCHRONEMENT la session `.playback` (call-aware) — source
-    /// UNIQUE de la config de session de lecture pour les composants dont `load`/`play`
-    /// sont synchrones (vidéo `SharedAVPlayerManager`, story canvas/coordinator), par
-    /// opposition aux moteurs voice-note qui passent par `request(role:)` async
-    /// refcompté. NE TOUCHE PAS la session pendant un appel VoIP (sinon micro coupé) :
-    /// le média joue alors sous la session de l'appel. `nonisolated` (I/O session +
-    /// `callActive` sont synchrones). Pas de refcount : `PlaybackCoordinator` garantit
-    /// déjà l'exclusion mutuelle entre lecteurs.
+    /// Pose la session `.playback` (call-aware) — source UNIQUE de la config de
+    /// session de lecture pour les composants dont `load`/`play` sont
+    /// synchrones (vidéo `SharedAVPlayerManager`, story, éditeurs), par
+    /// opposition aux moteurs voice-note qui passent par `request(role:)`
+    /// refcompté. Rend la main TOUT DE SUITE : l'écriture part sur
+    /// `sessionQueue` (#17038), et une lecture qui doit l'attendre passe par
+    /// `whenSessionSettled`. NE TOUCHE PAS la session pendant un appel VoIP
+    /// (sinon micro coupé), y compris quand l'appel commence entre la demande
+    /// et son exécution. Pas de refcount : `PlaybackCoordinator` garantit déjà
+    /// l'exclusion mutuelle entre lecteurs.
     public nonisolated func activatePlaybackSync(
         mode: AVAudioSession.Mode = .default,
         options: AVAudioSession.CategoryOptions
@@ -265,32 +340,29 @@ public actor MediaSessionCoordinator {
         observeSystemEvents()
         guard Self.shouldManageSession(callActive: callActive) else { return }
         bumpActivationGeneration()
-        guard contentMayReconfigureSession else { return }
-        let session = AVAudioSession.sharedInstance()
-        // Independent do/catch per call — a setCategory failure must not skip the
-        // setActive attempt (each used to run regardless of the other's outcome).
-        // `setCategory` is a synchronous round-trip to the audio server, paid on
-        // the main thread by every video play and story open: skipped when the
-        // session already carries exactly this configuration.
-        let configurationDiffers = Self.playbackConfigurationDiffers(
-            currentCategory: session.category, currentMode: session.mode,
-            currentOptions: session.categoryOptions, mode: mode, options: options
-        )
-        // `setActive(true)` aussi est un aller-retour bloquant : sauté quand ce
-        // coordinateur tient déjà le bail d'une session `.playback` identique
-        // (chaque balayage de réel le payait — #9702).
-        guard Self.shouldActivatePlayback(
-            configurationDiffers: configurationDiffers, leaseHeld: playbackLeaseHeld
-        ) else { return }
-        if configurationDiffers {
+        // Sous bail identique et file vide, rien à écrire ni à attendre : un
+        // balayage de réel ne paie aucun saut de fil.
+        guard hasPendingSessionWork || playbackActivationNeeded(mode: mode, options: options) else { return }
+        onSessionQueue { [self] in performPlaybackActivation(mode: mode, options: options) }
+    }
+
+    /// L'écriture d'une activation `.playback`, sur `sessionQueue`. La décision
+    /// se reprend sur l'état du moment : un appel commencé, un enregistrement
+    /// posé ou un bail pris depuis la demande la changent.
+    nonisolated func performPlaybackActivation(mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions) {
+        guard playbackActivationNeeded(mode: mode, options: options) else { return }
+        // Independent do/catch per call — a setCategory failure must not skip
+        // the setActive attempt. `setCategory` is skipped when the session
+        // already carries exactly this configuration.
+        if currentPlaybackConfigurationDiffers(mode: mode, options: options) {
             do {
-                try session.setCategory(.playback, mode: mode, options: options)
+                try audioSession.setCategory(.playback, mode: mode, options: options)
             } catch {
                 logger.error("activatePlaybackSync: setCategory failed — \(error.localizedDescription, privacy: .public)")
             }
         }
         do {
-            try session.setActive(true)
+            try audioSession.setActive(true, options: [])
             playbackLeaseHeld = true
             audibleContentHoldsSession = true
         } catch {
@@ -299,39 +371,73 @@ public actor MediaSessionCoordinator {
         }
     }
 
-    /// Pose SYNCHRONEMENT la session d'un enregistrement (vocal, caméra) telle
-    /// que la dit `RecordingSessionLaw` — par `MeeshyRecordingSession`, seul
-    /// appelant. Call-aware : pendant un appel VoIP la session appartient à
-    /// RTCAudioSession — la reconfigurer casserait l'uplink micro de l'appel.
-    /// `holding` : un enregistrement commence, et les lecteurs de contenu ne
-    /// touchent plus la session jusqu'à `releaseRecordingHold()`.
-    /// Retourne `false` si la session n'a pas pu être prise.
-    @discardableResult
-    public nonisolated func activateRecordingSync(
+    /// Faut-il écrire la session pour cette lecture ? Jamais pendant un appel
+    /// ni sous un enregistrement ; sinon dès que la configuration diffère ou
+    /// que ce coordinateur ne tient pas le bail (#9702).
+    private nonisolated func playbackActivationNeeded(mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions) -> Bool {
+        guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return false }
+        return Self.shouldActivatePlayback(
+            configurationDiffers: currentPlaybackConfigurationDiffers(mode: mode, options: options),
+            leaseHeld: playbackLeaseHeld
+        )
+    }
+
+    private nonisolated func currentPlaybackConfigurationDiffers(mode: AVAudioSession.Mode, options: AVAudioSession.CategoryOptions) -> Bool {
+        Self.playbackConfigurationDiffers(
+            currentCategory: audioSession.category, currentMode: audioSession.mode,
+            currentOptions: audioSession.categoryOptions, mode: mode, options: options
+        )
+    }
+
+    /// Pose la session d'un enregistrement (vocal, caméra) telle que la dit
+    /// `RecordingSessionLaw` — par `MeeshyRecordingSession`, seul appelant —
+    /// sur `sessionQueue`, et rend son issue à `completion` sur le fil
+    /// principal : l'enregistreur démarre une fois la session posée, sans que
+    /// l'interface ait attendu (#17038). Call-aware : pendant un appel VoIP la
+    /// session appartient à RTCAudioSession — la reconfigurer casserait
+    /// l'uplink micro de l'appel. `holding` : un enregistrement commence, et
+    /// les lecteurs de contenu ne touchent plus la session jusqu'à
+    /// `releaseRecordingHold()`. `false` ⇒ la session n'a pas pu être prise.
+    public nonisolated func activateRecording(
         _ configuration: RecordingSessionConfiguration,
-        holding: Bool
-    ) -> Bool {
+        holding: Bool,
+        completion: @escaping @MainActor @Sendable (Bool) -> Void
+    ) {
         observeSystemEvents()
-        guard Self.shouldManageSession(callActive: callActive) else { return false }
+        guard Self.shouldManageSession(callActive: callActive) else {
+            return Self.deliverOnMain(false, to: completion)
+        }
         bumpActivationGeneration()
         playbackLeaseHeld = false
         audibleContentHoldsSession = false
-        let session = AVAudioSession.sharedInstance()
+        onSessionQueue { [self] in
+            Self.deliverOnMain(performRecordingActivation(configuration, holding: holding), to: completion)
+        }
+    }
+
+    private nonisolated func performRecordingActivation(_ configuration: RecordingSessionConfiguration, holding: Bool) -> Bool {
+        guard Self.shouldManageSession(callActive: callActive) else { return false }
+        playbackLeaseHeld = false
+        audibleContentHoldsSession = false
         let differs = Self.recordingConfigurationDiffers(
-            currentCategory: session.category, currentMode: session.mode,
-            currentOptions: session.categoryOptions, configuration: configuration
+            currentCategory: audioSession.category, currentMode: audioSession.mode,
+            currentOptions: audioSession.categoryOptions, configuration: configuration
         )
         do {
             if differs {
-                try session.setCategory(configuration.category, mode: configuration.mode, options: configuration.options)
+                try audioSession.setCategory(configuration.category, mode: configuration.mode, options: configuration.options)
             }
-            try session.setActive(true)
+            try audioSession.setActive(true, options: [])
         } catch {
-            logger.error("activateRecordingSync failed — \(error.localizedDescription, privacy: .public)")
+            logger.error("activateRecording failed — \(error.localizedDescription, privacy: .public)")
             return false
         }
         if holding { recordingHoldsSession = true }
         return true
+    }
+
+    private nonisolated static func deliverOnMain(_ value: Bool, to completion: @escaping @MainActor @Sendable (Bool) -> Void) {
+        Task { @MainActor in completion(value) }
     }
 
     /// Pure : la session porte-t-elle déjà exactement cette configuration
@@ -348,25 +454,33 @@ public actor MediaSessionCoordinator {
             || currentOptions != configuration.options
     }
 
-    /// Désactive SYNCHRONEMENT la session (call-aware : ne coupe rien pendant un appel,
-    /// la session appartient alors à l'appel).
+    /// Rend la session (call-aware : ne coupe rien pendant un appel, la session
+    /// appartient alors à l'appel). Rend la main tout de suite : la
+    /// désactivation passe sur `sessionQueue`, à son rang (#17038).
     public nonisolated func deactivatePlaybackSync() {
+        playbackLeaseHeld = false
+        audibleContentHoldsSession = false
+        onSessionQueue { [self] in performPlaybackDeactivation() }
+    }
+
+    /// L'écriture d'une désactivation, sur `sessionQueue`.
+    nonisolated func performPlaybackDeactivation() {
         playbackLeaseHeld = false
         audibleContentHoldsSession = false
         guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return }
         do {
-            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
             logger.error("deactivatePlaybackSync failed — \(error.localizedDescription, privacy: .public)")
         }
     }
 
-    /// Rend la session HORS du fil principal (`setActive(false)` est bloquant).
-    /// Le bail tombe tout de suite, pour qu'une relance immédiate réactive la
-    /// session ; et la désactivation s'efface si une prise est survenue entre la
-    /// demande et son exécution — sinon elle coupait le lecteur relancé.
-    public nonisolated func deactivatePlaybackDeferred(on queue: DispatchQueue = .global(qos: .utility)) {
-        deactivatePlaybackDeferred(on: queue) { [self] in deactivatePlaybackSync() }
+    /// Rend la session à son rang sur `sessionQueue`. Le bail tombe tout de
+    /// suite, pour qu'une relance immédiate réactive la session ; et la
+    /// désactivation s'efface si une prise est survenue entre la demande et son
+    /// exécution — vérifié SUR la file, sinon elle coupait le lecteur relancé.
+    public nonisolated func deactivatePlaybackDeferred() {
+        deactivatePlaybackDeferred(on: sessionQueue) { [self] in performPlaybackDeactivation() }
     }
 
     /// **Rend la main après une pause de l'utilisateur** (#11039) : la session
@@ -376,8 +490,8 @@ public actor MediaSessionCoordinator {
     /// (toute prise de session) annule la libération. Le lecteur doit être en
     /// pause AVANT l'appel : une désactivation sous un lecteur qui tourne
     /// échoue.
-    public nonisolated func releaseAfterUserPause(on queue: DispatchQueue = .global(qos: .utility)) {
-        releaseContentSession(after: ContentPlaybackSessionLaw.userPauseReleaseDelay, on: queue)
+    public nonisolated func releaseAfterUserPause() {
+        releaseContentSession(after: ContentPlaybackSessionLaw.userPauseReleaseDelay, on: sessionQueue)
     }
 
     /// **Rend la main après une interruption sans reprise** (#11040, décision
@@ -387,15 +501,15 @@ public actor MediaSessionCoordinator {
     /// lecteurs qui reprennent réactivent la session pendant
     /// `ContentSessionReleaseLaw.interruptionResumeGrace`, ce qui annule la
     /// libération ; sinon la session se rend et la musique interrompue repart.
-    public nonisolated func releaseAfterUnresumedInterruption(on queue: DispatchQueue = .global(qos: .utility)) {
-        releaseContentSession(after: ContentSessionReleaseLaw.interruptionResumeGrace, on: queue)
+    public nonisolated func releaseAfterUnresumedInterruption() {
+        releaseContentSession(after: ContentSessionReleaseLaw.interruptionResumeGrace, on: sessionQueue)
     }
 
     /// La libération CENTRALE d'une session de contenu : au bout de `delay`,
     /// sur le fil principal, elle s'efface si une lecture a repris la session
     /// depuis la demande ou si un lecteur Meeshy joue encore
     /// (`ContentSessionReleaseLaw.mayRelease`) ; sinon la désactivation
-    /// (bloquante) part sur `queue`.
+    /// (bloquante) part sur `queue` — `sessionQueue` en production.
     nonisolated func releaseContentSession(
         after delay: TimeInterval,
         on queue: DispatchQueue,
@@ -404,12 +518,12 @@ public actor MediaSessionCoordinator {
     ) {
         playbackLeaseHeld = false
         let generation = _activationGeneration.withLock { $0 }
-        let run: @Sendable () -> Void = deactivate ?? { [self] in deactivatePlaybackSync() }
+        let run: @Sendable () -> Void = deactivate ?? { [self] in performPlaybackDeactivation() }
         scheduleAfter(delay, .main) { [self] in
             let stillPlays = MainActor.assumeIsolated { meeshyStillPlays() }
             let activated = _activationGeneration.withLock { $0 } != generation
             guard ContentSessionReleaseLaw.mayRelease(activatedSinceRequest: activated, meeshyStillPlays: stillPlays) else { return }
-            queue.async { [self] in
+            dispatch(on: queue) { [self] in
                 guard _activationGeneration.withLock({ $0 }) == generation else { return }
                 run()
             }
@@ -427,46 +541,74 @@ public actor MediaSessionCoordinator {
             guard _activationGeneration.withLock({ $0 }) == generation else { return }
             deactivate()
         }
-        guard delay > 0 else { return queue.async(execute: run) }
+        guard delay > 0 else { return dispatch(on: queue, run) }
         scheduleAfter(delay, queue, run)
+    }
+
+    /// `sessionQueue` passe par `onSessionQueue`, qui compte l'écriture en
+    /// attente ; une autre file (témoins) reçoit le travail tel quel.
+    private nonisolated func dispatch(on queue: DispatchQueue, _ work: @escaping @Sendable () -> Void) {
+        guard queue === sessionQueue else { return queue.async(execute: work) }
+        onSessionQueue(work)
     }
 
     /// **Le point d'entrée des lecteurs de CONTENU** (#11039) : la session
     /// devient ce que dit `ContentPlaybackSessionLaw` pour ce contenu. Un son
     /// met la musique des autres apps en pause ; une vidéo muette n'y touche
-    /// pas. Call-aware, synchrone, sans saut d'acteur.
+    /// pas. Call-aware, rend la main tout de suite : la loi se lit sur l'état
+    /// du moment, sur `sessionQueue` — un son mis en file avant une vidéo
+    /// muette n'est pas rétrogradé par elle (#17038).
     public nonisolated func activateContentPlayback(
         _ audibility: ContentPlaybackAudibility = .audible,
         mode: AVAudioSession.Mode = .default
     ) {
-        let directive = ContentPlaybackSessionLaw.directive(
-            for: audibility, audibleContentHoldsSession: audibleContentHoldsSession
-        )
-        switch directive {
+        installLeaseObserversIfNeeded()
+        observeSystemEvents()
+        guard Self.shouldManageSession(callActive: callActive) else { return }
+        bumpActivationGeneration()
+        guard hasPendingSessionWork || contentSessionWorkNeeded(audibility, mode: mode) else { return }
+        onSessionQueue { [self] in performContentPlayback(audibility, mode: mode) }
+    }
+
+    private nonisolated func contentDirective(_ audibility: ContentPlaybackAudibility) -> ContentPlaybackSessionDirective {
+        ContentPlaybackSessionLaw.directive(for: audibility, audibleContentHoldsSession: audibleContentHoldsSession)
+    }
+
+    private nonisolated func contentSessionWorkNeeded(_ audibility: ContentPlaybackAudibility, mode: AVAudioSession.Mode) -> Bool {
+        switch contentDirective(audibility) {
         case .activatePlayback:
-            activatePlaybackSync(mode: mode, options: ContentPlaybackSessionLaw.audibleOptions)
+            return playbackActivationNeeded(mode: mode, options: ContentPlaybackSessionLaw.audibleOptions)
+        case .configureAmbientWithoutActivating:
+            return Self.shouldManageSession(callActive: callActive)
+                && contentMayReconfigureSession
+                && audioSession.category != .ambient
+        case .leaveSessionAlone:
+            return false
+        }
+    }
+
+    private nonisolated func performContentPlayback(_ audibility: ContentPlaybackAudibility, mode: AVAudioSession.Mode) {
+        switch contentDirective(audibility) {
+        case .activatePlayback:
+            performPlaybackActivation(mode: mode, options: ContentPlaybackSessionLaw.audibleOptions)
         case .configureAmbientWithoutActivating:
             configureAmbientForMutedPlayback()
         case .leaveSessionAlone:
-            observeSystemEvents()
-            guard Self.shouldManageSession(callActive: callActive) else { return }
-            bumpActivationGeneration()
+            return
         }
     }
 
     /// Une lecture muette compte comme une prise (une libération différée ne
     /// la coupe pas), mais ne s'approprie pas la session : `.ambient` est
     /// mélangeable, et l'activation implicite d'`AVPlayer` ne coupera rien.
+    /// Sur `sessionQueue`.
     private nonisolated func configureAmbientForMutedPlayback() {
         observeSystemEvents()
-        guard Self.shouldManageSession(callActive: callActive) else { return }
-        bumpActivationGeneration()
-        guard contentMayReconfigureSession else { return }
+        guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return }
         playbackLeaseHeld = false
-        let session = AVAudioSession.sharedInstance()
-        guard session.category != .ambient else { return }
+        guard audioSession.category != .ambient else { return }
         do {
-            try session.setCategory(.ambient, mode: .default, options: [])
+            try audioSession.setCategory(.ambient, mode: .default, options: [])
         } catch {
             logger.error("configureAmbientForMutedPlayback: setCategory failed — \(error.localizedDescription, privacy: .public)")
         }
@@ -520,7 +662,7 @@ public actor MediaSessionCoordinator {
         guard firstCall else { return }
         let lease = _playbackLeaseLock
         let audibleHold = _audibleHoldLock
-        let center = NotificationCenter.default
+        let center = leaseNotificationCenter
         // Le passage en arrière-plan aussi : une app suspendue perd sa session
         // sans interruption notifiée (iOS 14.5+), et le premier balayage au
         // retour doit la réactiver.
@@ -551,37 +693,43 @@ public actor MediaSessionCoordinator {
         // sa prise par `release()` même si l'activation jette. Compter après le
         // `try` faisait retirer à ce `release()` la prise d'un autre détenteur.
         activationCount += 1
+        try await awaitSessionQueue { [self] in
+            try performRoleActivation(role, playbackOptions: playbackOptions)
+        }
+    }
+
+    /// L'écriture d'une prise refcomptée, sur `sessionQueue`.
+    private nonisolated func performRoleActivation(
+        _ role: AudioRole,
+        playbackOptions: AVAudioSession.CategoryOptions
+    ) throws {
         // Never reconfigure the shared session while a VoIP call owns it (would
         // mute the mic). The refcount still tracks holders so balancing across
         // the call boundary stays coherent.
         let recordingKeepsSession = role == .playback && !contentMayReconfigureSession
-        if Self.shouldManageSession(callActive: callActive), !recordingKeepsSession {
-            #if DEBUG
-            if let probe = testProbe, probe.failNextRequest {
-                probe.failNextRequest = false
-                throw MediaSessionCoordinatorTestProbe.SimulatedFailure()
-            }
-            #endif
-            let session = AVAudioSession.sharedInstance()
-            switch role {
-            case .playback:
-                try session.setCategory(.playback, mode: .default, options: playbackOptions)
-            case .record:
-                try session.setCategory(.record, mode: .default)
-            case .playAndRecord:
-                // Audit P2-iOS-3 — `.allowBluetooth` is the deprecated alias for
-                // HFP. Use `.allowBluetoothHFP` explicitly to align with the
-                // call-path policy (CallManager L1081 / PERF-010) and remove
-                // the deprecation warning.
-                try session.setCategory(.playAndRecord, mode: .default,
-                                        options: [.defaultToSpeaker, .allowBluetoothHFP])
-            }
-            #if DEBUG
-            testProbe?.calls.append(.activate)
-            #endif
-            try session.setActive(true)
-            audibleContentHoldsSession = role == .playback
+        guard Self.shouldManageSession(callActive: callActive), !recordingKeepsSession else { return }
+        #if DEBUG
+        if let probe = testProbe, probe.failNextRequest {
+            probe.failNextRequest = false
+            throw MediaSessionCoordinatorTestProbe.SimulatedFailure()
         }
+        #endif
+        switch role {
+        case .playback:
+            try audioSession.setCategory(.playback, mode: .default, options: playbackOptions)
+        case .record:
+            try audioSession.setCategory(.record, mode: .default, options: [])
+        case .playAndRecord:
+            // Audit P2-iOS-3 — `.allowBluetoothHFP` explicitly (the deprecated
+            // `.allowBluetooth` alias), aligned with the call-path policy.
+            try audioSession.setCategory(.playAndRecord, mode: .default,
+                                         options: [.defaultToSpeaker, .allowBluetoothHFP])
+        }
+        #if DEBUG
+        testProbe?.calls.append(.activate)
+        #endif
+        try audioSession.setActive(true, options: [])
+        audibleContentHoldsSession = role == .playback
     }
 
     /// Libère la session si personne d'autre ne l'utilise.
@@ -598,10 +746,13 @@ public actor MediaSessionCoordinator {
         #if DEBUG
         testProbe?.calls.append(.deactivate)
         #endif
-        do {
-            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        } catch {
-            logger.error("release: setActive(false) failed — \(error.localizedDescription, privacy: .public)")
+        onSessionQueue { [self] in
+            guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return }
+            do {
+                try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+            } catch {
+                logger.error("release: setActive(false) failed — \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -682,13 +833,23 @@ public actor MediaSessionCoordinator {
         #if DEBUG
         testProbe?.deactivateCount += 1
         #endif
-        do {
-            try AVAudioSession.sharedInstance().setActive(
-                false,
-                options: .notifyOthersOnDeactivation
-            )
-        } catch {
-            logger.error("deactivateForBackground failed: \(error.localizedDescription, privacy: .public)")
+        await sessionSettled(after: { [self] in
+            guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return }
+            do {
+                try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+            } catch {
+                logger.error("deactivateForBackground failed: \(error.localizedDescription, privacy: .public)")
+            }
+        })
+    }
+
+    /// Exécute `work` sur `sessionQueue` et rend quand il est fait.
+    private nonisolated func sessionSettled(after work: @escaping @Sendable () -> Void) async {
+        await withCheckedContinuation { continuation in
+            onSessionQueue {
+                work()
+                continuation.resume()
+            }
         }
     }
 
@@ -704,16 +865,17 @@ public actor MediaSessionCoordinator {
             guard !installed else { return }
             installed = true
             let center = NotificationCenter.default
-            observerTokens.append(center.addObserver(
+            let interruption = center.addObserver(
                 forName: AVAudioSession.interruptionNotification, object: nil, queue: .main
             ) { [weak self] notification in
                 self?.forward(Self.parseInterruption(notification))
-            })
-            observerTokens.append(center.addObserver(
+            }
+            let routeChange = center.addObserver(
                 forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
             ) { [weak self] notification in
                 self?.forward(Self.parseRouteChange(notification))
-            })
+            }
+            observerTokens.mutateUnchecked { $0 += [interruption, routeChange] }
         }
     }
 

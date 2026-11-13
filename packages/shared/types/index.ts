@@ -803,7 +803,28 @@ export * from './relation.js';
 export * from './relation-level-response.js';
 export * from './bring.js';
 export * from './talkie.js';
-export * from './now-playing.js';
+// Les schémas zod de l'écoute et de la position partagée ne passent pas par le
+// baril : chaque `z.object` y est un effet de bord que le bundler web ne secoue pas.
+export * from './now-playing-constants.js';
+export type {
+  NowPlayingUpdatePayload,
+  NowPlayingAck,
+  NowPlayingClearAck,
+  NowPlayingChangedEventData,
+  NowPlayingClearedEventData,
+  NowPlayingSnapshot,
+} from './now-playing.js';
+export * from './shared-location-constants.js';
+export type {
+  SharedLocationPosition,
+  SharedLocationStartPayload,
+  SharedLocationUpdatePayload,
+  SharedLocationAck,
+  SharedLocationStopAck,
+  SharedLocationChangedEventData,
+  SharedLocationEndedEventData,
+  SharedLocationSnapshot,
+} from './shared-location.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';

@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import MeeshySDK
 
-// MARK: - StoryComposerViewModel + Edit (directive 2026-07-29)
+// MARK: - StoryComposerViewModel + Edit
 
 extension StoryComposerViewModel {
 

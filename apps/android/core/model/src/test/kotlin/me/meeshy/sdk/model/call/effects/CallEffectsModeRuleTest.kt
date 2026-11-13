@@ -20,8 +20,25 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `the colours are the five looks in iOS order`() {
-        assertThat(CallEffectsModeRule.colors.map { it.id }).containsExactly("natural", "warm", "cool", "vivid", "muted").inOrder()
+    fun `the colours are the eight moods of iOS, in iOS order, the four older tints no longer offered`() {
+        assertThat(CallEffectsModeRule.colors.map { it.id })
+            .containsExactly("natural", "golden", "film", "softNight", "bright", "velvet", "sky", "monochrome").inOrder()
+    }
+
+    @Test
+    fun `an older tint stays readable and selectable by a call that carries it`() {
+        val warm = CallEffectsModeRule.applying(VideoFilterPreset.Warm, VideoFilterConfig())
+        assertThat(CallEffectsModeRule.colorSelection(warm)).isEqualTo(VideoFilterPreset.Warm)
+        assertThat(VideoFilterPreset.fromId("muted")).isEqualTo(VideoFilterPreset.Muted)
+    }
+
+    @Test
+    fun `every mood of the catalogue applies and is read back as itself`() {
+        CallEffectsModeRule.colors.forEach { mood ->
+            val applied = CallEffectsModeRule.applying(mood, VideoFilterConfig())
+            assertThat(CallEffectsModeRule.colorSelection(applied)).isEqualTo(mood)
+            assertThat(applied.isEnabled).isEqualTo(mood != VideoFilterPreset.Natural)
+        }
     }
 
     @Test
@@ -53,12 +70,27 @@ class CallEffectsModeRuleTest {
     }
 
     @Test
-    fun `quitting restores the image as it was, validating keeps the trial`() {
-        val original = VideoFilterConfig(backgroundBlurEnabled = true)
-        val tried = CallEffectsModeState.opening(original).selecting(VideoFilterPreset.Vivid).togglingBlur()
-        assertThat(tried.exiting(validated = false)).isEqualTo(original)
-        assertThat(tried.exiting(validated = true)).isEqualTo(tried.current)
+    fun `every try is kept as it is, nothing is restored on leaving (P8b, no Quit, no Validate)`() {
+        val tried = CallEffectsModeState.opening(VideoFilterConfig(backgroundBlurEnabled = true)).selecting(VideoFilterPreset.Vivid).togglingBlur()
         assertThat(tried.current.backgroundBlurEnabled).isFalse()
+        assertThat(tried.color).isEqualTo(VideoFilterPreset.Vivid)
+    }
+
+    @Test
+    fun `(+) opens the looks of the other kind to stack on the one in hand, and closes the settings`() {
+        val open = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Angel).togglingSettings()
+        val added = open.addingLook()
+        assertThat(added.showsSettings).isFalse()
+        assertThat(added.category).isEqualTo(CallEffectsCategory.Color)
+        assertThat(added.face).isEqualTo(CallFaceEffect.Angel)
+    }
+
+    @Test
+    fun `the settings panel rises from the bar in 200 ms and only fades, shorter, under Reduce Motion (P8b_6)`() {
+        assertThat(CallEffectsSettingsMotion.durationMillis(reduceMotion = false)).isEqualTo(200)
+        assertThat(CallEffectsSettingsMotion.riseDp(reduceMotion = false)).isEqualTo(20)
+        assertThat(CallEffectsSettingsMotion.durationMillis(reduceMotion = true)).isEqualTo(150)
+        assertThat(CallEffectsSettingsMotion.riseDp(reduceMotion = true)).isEqualTo(0)
     }
 
     @Test
@@ -69,6 +101,22 @@ class CallEffectsModeRuleTest {
         assertThat(state.withBrightness(0.1f).current.isEnabled).isTrue()
         assertThat(state.withSmoothing(0f).current.skinSmoothingIntensity).isEqualTo(0.1f)
         assertThat(state.withSmoothing(4f).current.skinSmoothingIntensity).isEqualTo(1f)
+    }
+
+    /**
+     * #17947 (A) : un réglage continu n'est pas un choix — le panneau Luminosité · Flou du fond reste ouvert tant qu'on
+     * règle, et ne se referme qu'en retouchant « Réglages » (‹ quitte le mode). La fermeture automatique de #16979 vaut
+     * pour les choix discrets (look, cadre). Vecteurs partagés avec iOS et le web.
+     */
+    @Test
+    fun `the settings panel stays open while adjusting and closes only on Settings (#17947)`() {
+        val open = CallEffectsModeState.opening(VideoFilterConfig()).selecting(CallFaceEffect.Smoothing).togglingSettings()
+        assertThat(open.showsSettings).isTrue()
+        val adjusted = open.withBrightness(-0.2f).withBrightness(0.1f).withSmoothing(0.6f).togglingBlur().togglingBlur()
+        assertThat(adjusted.bar).isEqualTo(CallEffectsBarMode.Settings)
+        assertThat(adjusted.current.brightness).isEqualTo(0.1f)
+        assertThat(adjusted.togglingSettings().bar).isEqualTo(CallEffectsBarMode.Base)
+        assertThat(CallEffectsBarRule.afterChoice).isEqualTo(CallEffectsBarMode.Base)
     }
 
     @Test

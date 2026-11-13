@@ -6,13 +6,12 @@ import Combine
 /// Décalage sous le bord haut de la safe area. La pill vivait à +4, en plein
 /// sous la Dynamic Island : une Live Activity (bandeau noir étendu sous
 /// l'îlot) la recouvrait, et elle chevauchait la rangée du header flottant
-/// (retour user 2026-08-12, capture à l'appui). 60 = padding haut du header
+/// (capture à l'appui). 60 = padding haut du header
 /// (8) + rangée de contrôles (~44) + marge (8) — la pill démarre SOUS le
 /// header, hors de la barre noire status bar / îlot.
 ///
 /// C'est la géométrie qui sépare les deux, PAS une exclusion mutuelle : le
-/// header reste lisible pendant que la pill suit le défilement (retour user
-/// 2026-08-14, retour à la gestion d'avant le 13/08 au soir). Seuls les
+/// header reste lisible pendant que la pill suit le défilement (retour à la gestion d'avant le 13/08 au soir). Seuls les
 /// BOUTONS D'ACTION du header s'effacent pendant le mouvement — loi commune
 /// `ScrollMotion`, cf. `ConversationView.hidesHeaderActions(...)`.
 ///
@@ -50,7 +49,7 @@ enum MessageDayStickyPlacement {
 /// visible entre cette ligne et le bas de l'écran du fil (sous la barre de
 /// composition, transparente, comprise : une pastille qui y affleure se voit).
 ///
-/// Deux défauts qu'elle ferme (recettes du 2026-10-16) : l'item de tête était
+/// Deux défauts qu'elle ferme: l'item de tête était
 /// le plus grand `IndexPath` VISIBLE au sens de la collection, qui court
 /// jusqu'au bord de l'écran — un message déjà sorti sous l'en-tête restait «
 /// en haut » et la pastille retardait d'une section ; et la pastille ne se

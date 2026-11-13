@@ -5,7 +5,7 @@ import Foundation
 ///
 /// Une vue unique non ouverte ne laisse rien lire : ni texte, ni légende, ni
 /// média, ni libellé accessible qui les contienne. Mesuré en recette staging le
-/// 2026-09-23 : la légende d'une photo à vue unique s'affichait en clair sous le
+/// La légende d'une photo à vue unique s'affichait en clair sous le
 /// voile en Focal, VoiceOver lisait le texte d'une vue unique jamais ouverte
 /// dans les trois modes, et le fichier d'un sticker à vue unique se téléchargeait
 /// à l'ouverture de la conversation. Un voile posé PAR-DESSUS un contenu monté

@@ -61,18 +61,16 @@ import {
   normalizeConversationId,
   type SocketUser
 } from '../utils/socket-helpers';
-import {
-  filterMessagePayloadForLanguages,
-  groupSocketsByLanguage,
-} from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { agentSenderIdentity } from './agentSenderIdentity.js';
 import { agentMayReadMessage, agentReadableMessage, notifyAgentOfMessage } from './agentMessageNotification.js';
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import { isServerAtRestMode, isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
 import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
-import { emitMessageNew } from '../messageNewEmission';
-import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
+import { safeBroadcast } from '../serverEmit';
+import { emitMessageNewBestEffort } from '../messageNewEmission';
+import { emitMessageNewByLanguage } from '../messageNewByLanguage';
+import { readerSignedPlanBestEffort, readerSignedPlanForMessageIdBestEffort } from '../readerSignedDelivery';
 import { editReadership, blockedEditKeys, emitEditedToReaders } from '../editedAudience';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
@@ -108,6 +106,7 @@ import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmiss
 import { writeGuardedMessageEdit } from '../../services/messaging/messageEditWrite';
 import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
+import { softDeleteMessage } from '../../services/messaging/softDeleteMessage';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -419,8 +418,9 @@ export class MessageHandler {
         resolvedParticipantId
       );
 
-      // Répondre au client
-      this._sendResponse(callback, response, socket);
+      // Répondre au client. Le cid SOUMIS voyage explicitement : celui de la
+      // ligne relue nomme un AUTRE message sur un hit de dédup (#17058).
+      this._sendResponse(callback, response, socket, validated.clientMessageId);
 
       // Broadcaster le message si succès — SAUF sur un dedup idempotent
       // (même clientMessageId renvoyé). Le message existe déjà et a déjà été
@@ -639,7 +639,7 @@ export class MessageHandler {
       // (Prisma read failure, connection drop) would silently skip the
       // callback and leave iOS / web waiting indefinitely → spurious
       // retry. Mirror the order used by `handleMessageSend` above.
-      this._sendResponse(callback, response, socket);
+      this._sendResponse(callback, response, socket, validated.clientMessageId);
 
       if (response.success && response.data && !(response.data as { isDuplicate?: boolean }).isDuplicate) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
@@ -925,7 +925,7 @@ export class MessageHandler {
       // le chemin d'envoi (`broadcastNewMessage`), à ceci près qu'ici les
       // `User.id` sont déjà résolus — inutile de repasser par les usernames.
       emitMentionCreated({
-        blockedReaders: editBlocked,
+        readership: editReaders,
         io: this.io,
         newlyMentionedUserIds: await withoutPendingMessageRequests(this.prisma, message.conversationId, editedMentions.newlyMentionedUserIds),
         messageId: message.id,
@@ -968,9 +968,15 @@ export class MessageHandler {
       // Le site de la loi est UNIQUE (`editedAudience.ts`), partagé avec l'autre
       // transport : une règle retapée à chaque site est une règle qu'un site
       // finira par ne pas avoir.
-      const editPlan = await readerSignedPlanForMessageId(this.prisma, { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments });
+      // 5e site #17026 : l'édition est déjà PERSISTÉE ici, et le `catch` de fin
+      // de méthode rend en plus « échec » au client. Raison : `safeBroadcast`.
+      const editPlan = await readerSignedPlanForMessageIdBestEffort(
+        this.prisma,
+        { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments },
+        (error) => handlerLogger.error('reader-signed plan failed (socket edit) — no live per-reader delivery', { conversationId: message.conversationId, messageId: validated.messageId, error }),
+      );
       if (editReaders.kind !== 'unknown') {
-        emitEditedToReaders({
+        safeBroadcast('message:edited', () => emitEditedToReaders({
           io: this.io,
           conversationId: message.conversationId,
           payload: editedPayload,
@@ -979,7 +985,7 @@ export class MessageHandler {
           blocked: editBlocked,
           sealedVariant: (payload) => payload,
           sealedForAll: (payload) => payload,
-        });
+        }), (error) => handlerLogger.error('message:edited live emission failed — offline replay unaffected', { conversationId: message.conversationId, messageId: validated.messageId, error }));
       }
 
       // Fan a conversation:updated preview refresh to participants sitting on
@@ -1130,11 +1136,16 @@ export class MessageHandler {
         );
       }
 
-      // Soft delete: atomically clear translations and set deletedAt in one write
-      await this.prisma.message.update({
-        where: { id: validated.messageId },
-        data: { translations: null, deletedAt: new Date() },
-      });
+      // #17079 — le retrait et sa garde OPTIMISTE, par leur site unique.
+      // L'audit ne nommait que le transport REST ; celui-ci portait le même
+      // trou, et c'est le transport que le dépôt appelle « primaire ». Deux
+      // suppressions CONCURRENTES franchissaient toutes deux la lecture
+      // d'amont et appliquaient toutes deux les effets du retrait, dont un
+      // décompte NON idempotent.
+      if (await softDeleteMessage(this.prisma, validated.messageId, { translations: null, deletedAt: new Date() }) === 'already-deleted') {
+        this._sendGenericError(callback, 'Message not found', socket);
+        return;
+      }
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
       // désactivation des `/l/<token>` que ce message emporte. La liste vit
@@ -1156,7 +1167,9 @@ export class MessageHandler {
         messageId: validated.messageId,
         conversationId: message.conversationId,
       };
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+      // 7e site #17026, trouvé par le CLIQUET. Raison : `safeBroadcast`.
+      safeBroadcast('message:deleted', () => this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload),
+        (error) => handlerLogger.error('message:deleted live emission failed — offline replay unaffected', { messageId: validated.messageId, error }));
 
       // Fan a conversation:updated preview refresh to list-screen participants
       // (in user:<id> but not conversation:<id>): deleting the latest message
@@ -1397,7 +1410,14 @@ export class MessageHandler {
       // (`SOCKET_LANG_FILTER`) ou, pour un message dont une pièce se lit par
       // lecteur, remise par destinataire avec ses adresses signées (#9646) —
       // vit dans `messageNewEmission.ts`, partagée avec le chemin REST/ZMQ.
-      emitMessageNew({
+      // Émission et lecture de plan BEST-EFFORT : raison au site unique,
+      // `safeBroadcast` (#17026).
+      // UN seul rapporteur de panne pour les deux chemins, et c'est le point
+      // (constat C3 de l'audit) : la délégation par langue posait le SIEN, qui
+      // ne connaît que la `room`. Le `messageId` ne vit qu'ici.
+      const onLiveEmissionError = (error: unknown, audience: string) =>
+        handlerLogger.error('message:new live emission failed — offline replay unaffected', { conversationId: normalizedId, messageId: message.id, audience, error });
+      emitMessageNewBestEffort({
         io: this.io,
         room,
         senderPayload,
@@ -1408,10 +1428,14 @@ export class MessageHandler {
         hiddenKeys,
         payloadForKey,
         emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
-          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
+          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion, onLiveEmissionError)
           : null,
-        readerSigned: await readerSignedPlan(this.prisma, { conversationId: normalizedId, message, attachments: peerPayload.attachments }),
-      });
+        readerSigned: await readerSignedPlanBestEffort(
+          this.prisma,
+          { conversationId: normalizedId, message, attachments: peerPayload.attachments },
+          (error) => handlerLogger.error('reader-signed plan failed (socket send) — no live per-reader delivery', { conversationId: normalizedId, messageId: message.id, error }),
+        ),
+      }, onLiveEmissionError);
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
       // Offline delivery queue — parity with the REST send path
@@ -1577,74 +1601,28 @@ export class MessageHandler {
   }
 
   /**
-   * Phase B1 — emit `message:new` to a conversation room grouped by each peer's
-   * preferred language, sending a translation-trimmed payload once per distinct
-   * language set (delegating the pure grouping/trimming to unit-tested helpers).
-   * The sender's own sockets are excluded here; their cid-aware payload is sent
-   * separately by the caller.
+   * Phase B1 — `message:new` groupé PAR LANGUE, délégué au site unique
+   * `messageNewByLanguage.ts` (#17086). La doctrine multi-nœud, l'ordre des
+   * deux étapes et l'enrobage PAR AUDIENCE y sont écrits une fois ; cette
+   * méthode ne fournit que ce que SEUL ce porteur sait — ses cartes de sockets.
+   * Opt-in par `SOCKET_LANG_FILTER=true` (OFF par défaut).
    */
-  private _emitMessageNewByLanguage<P extends SocketIOMessage>(
+  private _emitMessageNewByLanguage(
     room: string,
-    payload: P,
-    opts: { excludeUserId?: string; excludeSocketId?: string }
+    payload: SocketIOMessage,
+    opts: { excludeUserId?: string; excludeSocketId?: string },
+    onEmissionError?: (error: unknown, label: string) => void
   ): void {
-    // `adapter.rooms` and the `connectedUsers`/`socketToUser` maps only ever see
-    // THIS node's sockets. On a multi-node deployment (the documented 100k+
-    // msg/s horizontal-scale topology runs the Socket.IO Redis adapter) a
-    // recipient connected to another gateway node is never enumerated here — so
-    // the per-language loop below, which can only resolve locally-connected
-    // sockets, would silently never deliver `message:new` to them. Broadcast the
-    // FULL, untrimmed payload to the room across the cluster FIRST (the Redis
-    // adapter propagates `io.to(room)`), excepting every LOCAL room socket —
-    // each of which the loop below serves with a language-trimmed copy — plus
-    // the sender. Remote sockets thus receive exactly one (unfiltered)
-    // `message:new`; local sockets receive exactly one trimmed copy. On a single
-    // node every room socket is local, so the except-set covers the whole room
-    // and this cross-node broadcast reaches nobody — behavior is unchanged. The
-    // bandwidth trim still applies to every socket whose language IS resolvable
-    // locally (the common co-located case).
-    const localSocketIds = this.io.sockets.adapter.rooms.get(room);
-    const exceptForRemote: string[] = localSocketIds ? [...localSocketIds] : [];
-    if (opts.excludeUserId) exceptForRemote.push(ROOMS.user(opts.excludeUserId));
-    if (opts.excludeSocketId) exceptForRemote.push(opts.excludeSocketId);
-    this.io.to(room).except(exceptForRemote).emit(SERVER_EVENTS.MESSAGE_NEW, payload);
-
-    if (!localSocketIds || localSocketIds.size === 0) return;
-
-    const originalLanguage = payload.originalLanguage || 'fr';
-    const groups = groupSocketsByLanguage({
-      socketIds: localSocketIds,
-      originalLanguage,
-      excludeUserId: opts.excludeUserId,
-      excludeSocketIds: opts.excludeSocketId ? new Set([opts.excludeSocketId]) : undefined,
+    emitMessageNewByLanguage({
+      io: this.io,
+      room,
+      payload,
+      exclusion: opts,
       socketToUser: (sid) => this.socketToUser.get(sid),
       resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
       userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
+      onEmissionError,
     });
-
-    for (const group of groups) {
-      if (group.socketIds.length === 0) continue;
-      const filtered = filterMessagePayloadForLanguages(payload, group.languages);
-      // 5.3 — mesure du gain bande passante (debug, gaté). Permet de prouver la
-      // réduction en staging avant un flip prod. Coût nul quand le flag est OFF.
-      if (process.env.SOCKET_LANG_FILTER === 'true') {
-        const fullBytes = JSON.stringify(payload).length;
-        const filteredBytes = JSON.stringify(filtered).length;
-        handlerLogger.debug('[lang-filter] payload reduced', {
-          fullBytes,
-          filteredBytes,
-          savedPct: fullBytes > 0 ? Math.round((1 - filteredBytes / fullBytes) * 100) : 0,
-          languages: group.languages,
-          originalLanguage,
-        });
-      }
-      // Chain `.to(socketId)` so a single emit fans out to exactly this group's
-      // sockets (mirrors the manager's per-language emit).
-      const [firstSid, ...restSids] = group.socketIds;
-      let emitter: ReturnType<MeeshyIOServer['to']> = this.io.to(firstSid);
-      for (const sid of restSids) emitter = emitter.to(sid);
-      emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
-    }
   }
 
   /**
@@ -2202,7 +2180,9 @@ export class MessageHandler {
    */
   private _sendResponse(
     callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string; createdAt?: string }>) => void) | undefined,
-    response: MessageResponse, socket?: MeeshySocket
+    response: MessageResponse, socket?: MeeshySocket,
+    /** Le cid SOUMIS — #17058. Jamais celui de la ligne relue. */
+    submittedClientMessageId?: string,
   ): void {
     const refusal = response.success ? null : messageRefusalEvent(response);
     if (refusal) socket?.emit(SERVER_EVENTS.ERROR, refusal);
@@ -2217,10 +2197,12 @@ export class MessageHandler {
         // `createdAt` is echoed too so the WS-first send path can stamp the
         // optimistic row with the authoritative server time without waiting
         // for the `message:new` broadcast.
-        const data = response.data as MessageAckSource;
         callback({
           success: true,
-          data: buildMessageAckData(data)
+          data: buildMessageAckData({
+            row: response.data as MessageAckSource,
+            ...(submittedClientMessageId ? { submittedClientMessageId } : {}),
+          }),
         });
       } else callback(buildMessageFailureAck(response));
     } catch (error) {

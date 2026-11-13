@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="login_welcome_back">Welcome back</string>
     <string name="login_error_required">Username and password are required</string>
     <string name="login_custom_host_label">Custom host</string>
     <string name="login_apply_custom_host">Apply custom host</string>
@@ -13,14 +12,10 @@
     <string name="guest_join_requires_account">This link requires an account.</string>
     <string name="share_link_entry_resolving">Opening link…</string>
     <string name="share_link_choose_title">How do you want to join?</string>
-    <string name="share_link_choose_subtitle">Join %1$s with your account, or as a guest.</string>
-    <string name="share_link_choose_subtitle_generic">Join with your account, or as a guest.</string>
     <string name="share_link_continue_with_account">Continue with my account</string>
 
     <!-- Account recovery -->
     <string name="auth_back_to_login">Back to login</string>
-    <string name="auth_magic_sent">Open the link sent to %1$s</string>
-    <string name="auth_magic_countdown">Link valid for %1$s</string>
     <string name="auth_magic_validating">Signing you in…</string>
 
     <!-- Account creation (one screen, no wizard) -->
@@ -29,11 +24,7 @@
     <string name="signup_display_name_taken">This name is already taken. Try another one.</string>
     <string name="signup_email_invalid">This email address looks incomplete.</string>
     <string name="signup_phone_invalid">This number cannot be dialled.</string>
-    <string name="signup_phone_conflict">This number is already linked to an account. Leave it empty to continue.</string>
-    <string name="signup_choose_country">Choose country</string>
     <string name="signup_country_picker_title">Choose a country</string>
     <string name="signup_password_too_short">At least 6 characters.</string>
-    <string name="signup_submit">Create my account</string>
-    <string name="signup_display_name_invalid_characters">The name can only contain letters, spaces, apostrophes, periods and hyphens.</string>
     <string name="signup_error_invalid_field">This value was refused.</string>
 </resources>

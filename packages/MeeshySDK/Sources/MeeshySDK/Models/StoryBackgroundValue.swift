@@ -2,7 +2,7 @@ import Foundation
 
 /// Valeur sérialisée du fond coloré d'un slide (`StoryEffects.background`).
 ///
-/// Deux formes (C11, 2026-07-04) :
+/// Deux formes :
 /// - `"RRGGBB"` — couleur unie (forme historique, hex sans `#`) ;
 /// - `"gradient:RRGGBB:RRGGBB"` — dégradé linéaire 2 couleurs
 ///   (top-leading → bottom-trailing, convention brandGradient).

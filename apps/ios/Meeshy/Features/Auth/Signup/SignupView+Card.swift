@@ -18,7 +18,7 @@ extension SignupView {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
             Text(String(localized: "auth.signup.card.title", defaultValue: "Votre compte", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             switch viewModel.card {
@@ -110,7 +110,7 @@ extension SignupView {
                         } label: {
                             Text("@\(candidat)")
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
+                                .foregroundStyle(MeeshyColors.indigo500)
                                 .padding(.horizontal, MeeshySpacing.md)
                                 .frame(minHeight: MeeshyControlSize.tapTarget)
                                 .background(inputSurface(isFocused: false))
@@ -134,13 +134,13 @@ extension SignupView {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
             HStack(spacing: MeeshySpacing.xs) {
                 if let prefix {
                     Text(prefix)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .accessibilityHidden(true)
                 }
                 TextField(placeholder.isEmpty ? label : placeholder, text: text)
@@ -148,7 +148,7 @@ extension SignupView {
                     .textInputAutocapitalization(prefix == nil ? .words : .never)
                     .autocorrectionDisabled()
                     .focused($focusedField, equals: field)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .accessibilityLabel(label)
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -183,7 +183,7 @@ extension SignupView {
             if let error = viewModel.signInLinkError {
                 Text(error)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -193,7 +193,7 @@ extension SignupView {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "auth.signup.email.isItYou", defaultValue: "Est-ce vous ?", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             HStack(spacing: MeeshySpacing.md) {
@@ -207,10 +207,10 @@ extension SignupView {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(verbatim: owner.maskedDisplayName)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(verbatim: "@\(owner.maskedUsername)")
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
                 .lineLimit(1)
             }
@@ -224,7 +224,7 @@ extension SignupView {
             } label: {
                 Text(String(localized: "auth.signup.email.notMe", defaultValue: "Ce n’est pas moi", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .frame(minHeight: MeeshyControlSize.tapTarget)
             }
             .disabled(viewModel.isSubmitting)
@@ -233,7 +233,7 @@ extension SignupView {
 
             Text(Self.claimNote)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(MeeshySpacing.md)
@@ -274,7 +274,7 @@ extension SignupView {
         } label: {
             Text(String(localized: "auth.signup.email.forgotPassword", defaultValue: "Mot de passe oublié ?", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .frame(minHeight: MeeshyControlSize.tapTarget)
         }
     }
@@ -284,12 +284,12 @@ extension SignupView {
     // UNE saisie, FACULTATIVE depuis #6424 sans le dire (#6582 web, #7897) : le
     // bouton actif sans lui le prouve. Il paraît quand l'identité est DÉFINIE,
     // et sa conséquence se déplie sous « Pourquoi mettre un mot de passe
-    // maintenant ? » (directive porteur 2026-09-25).
+    // maintenant ? ».
 
     var passwordWhyDetail: String {
         String(
             localized: "auth.signup.password.why.detail",
-            defaultValue: "Vous pouvez activer votre mot de passe dès maintenant si vous le souhaitez. Sans mot de passe, vous vous connecterez toujours à partir d’un e-mail reçu dans votre boîte.",
+            defaultValue: "Sans mot de passe, vous vous connectez toujours par un lien reçu par e-mail.",
             bundle: .main
         )
     }
@@ -341,7 +341,7 @@ extension SignupView {
             if isPasswordWhyExpanded {
                 Text(passwordWhyDetail)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -369,7 +369,7 @@ extension SignupView {
                 } else {
                     Text(String(localized: "auth.signup.card.validateNow", defaultValue: "Valider mon compte maintenant", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .multilineTextAlignment(.center)
                 }
             }
@@ -426,10 +426,10 @@ extension SignupView {
 
             Text(String(localized: "auth.signup.card.verified", defaultValue: "Compte validé !", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-            Text(String(localized: "auth.signup.card.verified.lead", defaultValue: "Tout est prêt : vos proches vous lisent dans votre langue.", bundle: .main))
+                .foregroundStyle(theme.textPrimary)
+            Text(String(localized: "auth.signup.card.verified.lead", defaultValue: "Vos proches vous lisent dans leur langue.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

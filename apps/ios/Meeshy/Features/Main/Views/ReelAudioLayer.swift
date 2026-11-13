@@ -57,7 +57,7 @@ struct ReelAudioView: View {
             // Glyphe décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver
             Image(systemName: "waveform")
                 .font(.system(size: 220, weight: .semibold))
-                .foregroundColor(.white.opacity(MeeshyOpacity.faint))
+                .foregroundStyle(Color.white.opacity(MeeshyOpacity.faint))
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
 
@@ -73,7 +73,7 @@ struct ReelAudioView: View {
             // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver
             Image(systemName: "waveform")
                 .font(.system(size: 84, weight: .semibold))
-                .foregroundColor(.white.opacity(0.92))
+                .foregroundStyle(Color.white.opacity(0.92))
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 10)
                 .accessibilityHidden(true)
         } else {

@@ -22,7 +22,7 @@ nonisolated struct ComposerScrollEdges: Equatable, Sendable {
 /// est atteint. Le fondu est un masque, il ne prend aucun toucher : une entrée
 /// à demi effacée reste une cible entière.
 struct ComposerScrollEdgeCue: ViewModifier {
-    static let fade: CGFloat = 28
+    static let fade: CGFloat = ScrollEdgeFadeMask.length
 
     @State private var contentFrame: CGRect = .zero
     @State private var viewportFrame: CGRect = .zero
@@ -39,26 +39,47 @@ struct ComposerScrollEdgeCue: ViewModifier {
             content.onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { contentFrame = $0 }
         }
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { viewportFrame = $0 }
-        .mask { ComposerScrollEdgeMask(edges: edges, fade: Self.fade) }
+        .mask { ScrollEdgeFadeMask(axis: .vertical, start: edges.top, end: edges.bottom, fade: Self.fade) }
     }
 }
 
-/// Le masque du fondu : opaque au milieu, transparent sur `fade` points du bord
-/// qui cache encore quelque chose.
-struct ComposerScrollEdgeMask: View {
-    let edges: ComposerScrollEdges
-    let fade: CGFloat
+/// Le masque du fondu d'une rangée qui défile, UN pour l'app : opaque au milieu,
+/// transparent sur `fade` points à chaque bout de l'axe qui cache encore quelque
+/// chose (`start` : le haut ou la gauche, `end` : le bas ou la droite). Les rampes
+/// suivent les bords de l'écran, jamais l'ordre de lecture : le masque se pose en
+/// gauche à droite, sans quoi la droite à gauche retournerait l'ordre des rampes
+/// sans retourner leurs dégradés. Il ne prend aucun toucher.
+struct ScrollEdgeFadeMask: View {
+    static let length: CGFloat = 28
+
+    let axis: Axis
+    let start: Bool
+    let end: Bool
+    var fade: CGFloat = ScrollEdgeFadeMask.length
 
     var body: some View {
-        VStack(spacing: 0) {
-            ramp(from: .clear, to: .black).frame(height: edges.top ? fade : 0)
+        let layout = axis == .vertical ? AnyLayout(VStackLayout(spacing: 0)) : AnyLayout(HStackLayout(spacing: 0))
+        layout {
+            ramp(from: .clear, to: .black)
+                .frame(width: extent(fades: start, along: .horizontal), height: extent(fades: start, along: .vertical))
             Color.black
-            ramp(from: .black, to: .clear).frame(height: edges.bottom ? fade : 0)
+            ramp(from: .black, to: .clear)
+                .frame(width: extent(fades: end, along: .horizontal), height: extent(fades: end, along: .vertical))
         }
+        .environment(\.layoutDirection, .leftToRight)
         .allowsHitTesting(false)
     }
 
+    private func extent(fades: Bool, along candidate: Axis) -> CGFloat? {
+        guard axis == candidate else { return nil }
+        return fades ? fade : 0
+    }
+
     private func ramp(from: Color, to: Color) -> LinearGradient {
-        LinearGradient(colors: [from, to], startPoint: .top, endPoint: .bottom)
+        LinearGradient(
+            colors: [from, to],
+            startPoint: axis == .vertical ? .top : .leading,
+            endPoint: axis == .vertical ? .bottom : .trailing
+        )
     }
 }

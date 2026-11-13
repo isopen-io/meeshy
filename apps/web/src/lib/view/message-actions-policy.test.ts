@@ -443,3 +443,23 @@ describe('#11370 — « Transcrire » sur un vocal que le serveur lit, sur le ve
     expect(ids(messageMenuItems(ctxOf(row({ content: '', translations: [], attachments: [voice({ id: 'cid_a' })] }))))).not.toContain('transcribe');
   });
 });
+
+describe('#17441 — un avis AFFICHÉ se cite, et n’offre rien d’autre', () => {
+  const missedCall = { kind: 'call', callId: 'c-1', initiatorId: 'u-other', callType: 'audio', outcome: 'missed', durationSeconds: 0, bytesTotal: null, bytesEstimated: false, networkQuality: null };
+  const notice = (metadata: Record<string, unknown>): Message =>
+    row({ messageType: 'system', messageSource: 'system', content: 'Appel manqué', translations: [], metadata } as Partial<Message>);
+
+  test('un appel manqué, une arrivée, des arrivées regroupées et un départ annoncé : « Répondre » seulement', () => {
+    const arrivals = { kind: 'members-arrived', arrivals: [{ participantId: 'p-1', displayName: 'Aïcha' }], count: 1, windowStartedAt: '2026-10-20T11:00:00.000Z' };
+    const joined = { kind: 'member-joined', participantId: 'p-1', displayName: 'Bruno', isAnonymous: false, viaShareLink: false };
+    const left = { kind: 'member-left', actor: { participantId: 'p-1', displayName: 'Bob' } };
+    for (const metadata of [missedCall, joined, arrivals, left]) {
+      expect(ids(messageMenuItems(ctxOf(notice(metadata))))).toEqual(['reply']);
+    }
+  });
+
+  test('un avis non citable (capture, retrait) n’offre rien', () => {
+    const removed = { kind: 'member-removed', actor: { participantId: 'a', displayName: 'A' }, target: { participantId: 'b', displayName: 'B' } };
+    expect(ids(messageMenuItems(ctxOf(notice(removed))))).toEqual([]);
+  });
+});

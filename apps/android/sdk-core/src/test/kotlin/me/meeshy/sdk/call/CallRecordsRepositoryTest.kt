@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.call.CallRecordingLink
 import me.meeshy.sdk.model.call.CallRecordingLinkRequest
 import me.meeshy.sdk.model.call.CallTranscriptPage
+import me.meeshy.sdk.model.call.PersistedTranscriptSegment
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CallApi
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -99,5 +100,55 @@ class CallRecordsRepositoryTest {
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
         coVerify(exactly = 0) { api.linkRecording(any(), any(), any()) }
+    }
+
+    private fun segment(id: String, atMs: Long) =
+        PersistedTranscriptSegment(id = id, speakerId = "u2", text = "t-$id", language = "fr", capturedAtMs = atMs)
+
+    private fun page(hasMore: Boolean, vararg segments: PersistedTranscriptSegment) =
+        CallTranscriptPage(callId = "call-1", conversationId = "conv-1", hasMore = hasMore, segments = segments.toList())
+
+    /** A1.6 — l'appel se lit EN ENTIER : page après page tant que la passerelle dit `hasMore`, à la suite de ce qu'elle a rendu. */
+    @Test
+    fun `fullTranscript reads every page while the gateway says more and chains them`() = runTest {
+        coEvery { api.transcript("call-1", 0, 100) } returns ApiResponse(success = true, data = page(true, segment("a", 1), segment("b", 2)))
+        coEvery { api.transcript("call-1", 2, 100) } returns ApiResponse(success = true, data = page(false, segment("c", 3)))
+
+        val result = repository.fullTranscript("call-1")
+
+        val whole = (result as NetworkResult.Success).data
+        assertThat(whole.segments.map { it.id }).containsExactly("a", "b", "c").inOrder()
+        assertThat(whole.hasMore).isFalse()
+        coVerify(exactly = 1) { api.transcript("call-1", 0, 100) }
+        coVerify(exactly = 1) { api.transcript("call-1", 2, 100) }
+    }
+
+    /** Un appel à moitié lu ne se range pas comme complet : la page qui échoue fait échouer la lecture. */
+    @Test
+    fun `fullTranscript fails when a later page fails instead of serving half a call`() = runTest {
+        coEvery { api.transcript("call-1", 0, 100) } returns ApiResponse(success = true, data = page(true, segment("a", 1)))
+        coEvery { api.transcript("call-1", 1, 100) } throws IOException("offline")
+
+        val result = repository.fullTranscript("call-1")
+
+        assertThat((result as NetworkResult.Failure).error.code).isEqualTo("NETWORK")
+    }
+
+    @Test
+    fun `fullTranscript does not loop on a gateway that keeps repeating the same page`() = runTest {
+        coEvery { api.transcript("call-1", any(), 100) } returns ApiResponse(success = true, data = page(true, segment("a", 1)))
+
+        val result = repository.fullTranscript("call-1")
+
+        assertThat((result as NetworkResult.Success).data.hasMore).isTrue()
+        coVerify(exactly = 2) { api.transcript("call-1", any(), 100) }
+    }
+
+    @Test
+    fun `fullTranscript with a blank call id never reaches the network`() = runTest {
+        val result = repository.fullTranscript(" ")
+
+        assertThat((result as NetworkResult.Failure).error.code).isEqualTo(CallRecordsRepository.INVALID_ARGUMENT)
+        coVerify(exactly = 0) { api.transcript(any(), any(), any()) }
     }
 }

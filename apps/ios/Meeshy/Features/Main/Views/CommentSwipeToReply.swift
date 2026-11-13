@@ -4,7 +4,7 @@ import MeeshyUI
 
 // MARK: - Glisser un commentaire pour y répondre, et le lire avec ses effets
 //
-// Directive porteur 2026-09-28 (#8582) : « lorsqu'on swipe vers la droite sur
+// (#8582): « lorsqu'on swipe vers la droite sur
 // un commentaire ça ouvre le composeur de message pour y répondre […] De plus
 // il faut appliquer les effets sur les commentaires (flou, scintillement, zoom,
 // pulse etc.) que ce soit en Feeds, en vue détaillée, en commentaire de Réel,

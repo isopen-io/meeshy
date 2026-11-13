@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SwiftUI
 
 enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
     case x1 = 1
@@ -27,6 +28,25 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
         CGSize(width: width, height: width * Self.aspectRatio)
     }
 
+    /// L1.5 — dans une fenêtre plus large que haute, ma vignette se couche : 130 × 96 au palier
+    /// standard. La loi lit la forme de la fenêtre, jamais le device (iPad, fenêtres redimensionnées).
+    static let landscapeWidthFactor: CGFloat = 1.3
+    static let landscapeAspectRatio: CGFloat = 96.0 / 130.0
+
+    static func isLandscape(_ window: CGSize) -> Bool {
+        window.width > window.height
+    }
+
+    func width(isLandscape: Bool) -> CGFloat {
+        isLandscape ? width * Self.landscapeWidthFactor : width
+    }
+
+    func size(isLandscape: Bool) -> CGSize {
+        isLandscape
+            ? CGSize(width: width(isLandscape: true), height: width(isLandscape: true) * Self.landscapeAspectRatio)
+            : size
+    }
+
     var larger: CallSelfTileScale {
         Self(rawValue: rawValue + 1) ?? self
     }
@@ -45,16 +65,37 @@ enum CallSelfTileScale: Int, CaseIterable, Comparable, Sendable {
         return current
     }
 
-    static func liveSize(pinch magnification: CGFloat, from current: CallSelfTileScale) -> CGSize {
-        guard magnification.isFinite, magnification > 0 else { return current.size }
-        let width = min(max(current.width * magnification, CallSelfTileScale.x1.width), CallSelfTileScale.x3.width)
-        return CGSize(width: width, height: width * aspectRatio)
+    static func liveSize(pinch magnification: CGFloat, from current: CallSelfTileScale, isLandscape: Bool = false) -> CGSize {
+        guard magnification.isFinite, magnification > 0 else { return current.size(isLandscape: isLandscape) }
+        let width = min(
+            max(current.width(isLandscape: isLandscape) * magnification, CallSelfTileScale.x1.width(isLandscape: isLandscape)),
+            CallSelfTileScale.x3.width(isLandscape: isLandscape)
+        )
+        return CGSize(width: width, height: width * (isLandscape ? landscapeAspectRatio : aspectRatio))
     }
 
     /// #16663 — un toucher range le chrome : ma vignette passe à sa petite
     /// taille ; le chrome revenu, elle reprend celle que j'avais choisie.
     static func resting(_ chosen: CallSelfTileScale, isChromeVisible: Bool) -> CallSelfTileScale {
         isChromeVisible ? chosen : .x1
+    }
+
+    /// G1.11 — le rangement est une TRANSFORMATION : le cadre reste celui du palier choisi et la
+    /// vignette est mise à l'échelle de sa petite taille, jamais relayoutée.
+    static func restingFactor(_ chosen: CallSelfTileScale, isChromeVisible: Bool) -> CGFloat {
+        resting(chosen, isChromeVisible: isChromeVisible).width / chosen.width
+    }
+
+    /// Ce qui ne doit pas rapetisser avec la vignette rangée (liseré, coins, badge) : divisé par
+    /// le facteur d'échelle, il est dessiné à sa taille de petite vignette (lois 4, 11).
+    static func counterScaled(_ length: CGFloat, by factor: CGFloat) -> CGFloat {
+        factor.isFinite && factor > 0 ? length / factor : length
+    }
+
+    /// L'ancre du rangement : le coin de l'écran le plus proche du centre de la vignette, qui garde
+    /// ainsi sa marge pendant la réduction.
+    static func anchor(of center: CGPoint, in container: CGSize) -> UnitPoint {
+        UnitPoint(x: center.x < container.width / 2 ? 0 : 1, y: center.y < container.height / 2 ? 0 : 1)
     }
 
     static func fitted(_ size: CGSize, in available: CGSize) -> CGSize {
@@ -88,5 +129,18 @@ final class CallSelfTileMemory: CallSelfTileRemembering {
         guard let callId else { return }
         self.callId = callId
         stored = scale
+    }
+}
+
+/// Loi 4 — le liseré de la vignette porte la couleur de la personne qu'elle
+/// montre : la mienne, ou celle de l'autre quand les flux sont permutés.
+/// Pas d'identifiant ⇒ pas de couleur inventée.
+nonisolated enum CallSelfTileStroke {
+    static let lineWidth: CGFloat = 2
+
+    static func colorKey(showsLocal: Bool, myId: String?, peerId: String?) -> String? {
+        let key = showsLocal ? myId : peerId
+        guard let key, !key.isEmpty else { return nil }
+        return key
     }
 }

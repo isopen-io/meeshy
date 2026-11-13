@@ -1,7 +1,6 @@
 import Foundation
 
 /// **Ce qui distingue une scène qui BOUGE d'une scène qui ne bouge pas**
-/// (directive porteur 2026-09-06).
 ///
 /// > « Une scène cinématique (qui n'est pas statique) doit être considérée
 /// > comme une vidéo ! Le bouton stop et play permet d'arrêter tout ou de

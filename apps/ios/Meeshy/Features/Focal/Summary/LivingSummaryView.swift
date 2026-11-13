@@ -69,11 +69,11 @@ struct LivingSummaryView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(String(localized: "focal.summary.header.title", defaultValue: "Résumé Vivant", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .heavy))
-                .foregroundColor(isDark ? .white : .black)
+                .foregroundStyle(isDark ? Color.white : Color.black)
 
             Text(countsLine)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.6))
+                .foregroundStyle(isDark ? Color.white.opacity(0.7) : Color.black.opacity(0.6))
 
             if !viewModel.digest.isComplete {
                 Text(partialLine)
@@ -124,7 +124,7 @@ struct LivingSummaryView: View {
             }
             Text(summary.text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                .foregroundColor(isDark ? .white.opacity(0.85) : .black.opacity(0.78))
+                .foregroundStyle(isDark ? Color.white.opacity(0.85) : Color.black.opacity(0.78))
         }
         .padding(MeeshySpacing.md)
         .background(

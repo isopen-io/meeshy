@@ -84,10 +84,10 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
         } message: {
             Text(String(localized: "community.settings.leave.confirm.message", defaultValue: "Vous n'aurez plus accès aux canaux et messages de cette communauté.", bundle: .module))
         }
-        .entityImagePickerFlow(pickerItem: $avatarItem, context: .avatar, maxSizeKB: 500) { data in
+        .entityImagePickerFlow(pickerItem: $avatarItem, format: .avatar, maxSizeKB: 500) { data in
             Task { await viewModel.uploadCompressedAvatar(data) }
         }
-        .entityImagePickerFlow(pickerItem: $bannerItem, context: .banner, maxSizeKB: 800) { data in
+        .entityImagePickerFlow(pickerItem: $bannerItem, format: .banner, maxSizeKB: 800) { data in
             Task { await viewModel.uploadCompressedBanner(data) }
         }
     }
@@ -100,13 +100,13 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                 if let onCancel { onCancel() } else { dismiss() }
             }
                 .font(.system(size: 16, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
 
             Spacer()
 
             Text(String(localized: "community.settings.title", defaultValue: "Réglages", bundle: .module))
                 .font(MeeshyFont.relative(16, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
@@ -126,7 +126,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                 } else {
                     Text(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module))
                         .font(MeeshyFont.relative(16, weight: .semibold, design: .rounded))
-                        .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
+                        .foregroundStyle(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
             }
             .disabled(!viewModel.hasChanges || viewModel.isSaving)
@@ -158,8 +158,8 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                 avatarBlock(pencilColor: avatarPencilColor, pencilBackground: avatarPencilBackground)
 
                 Text(viewModel.name)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .meeshyScaledFont(18, weight: .bold, design: .rounded)
+                    .foregroundStyle(theme.textPrimary)
                     .padding(.top, 8)
             }
 
@@ -178,7 +178,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             PhotosPicker(selection: $bannerItem, matching: .images) {
                 Label(editLabel, systemImage: "photo.fill")
                     .font(MeeshyFont.relative(11, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(Capsule().fill(Color.black.opacity(0.5)))
@@ -212,7 +212,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             PhotosPicker(selection: $avatarItem, matching: .images) {
                 Image(systemName: "pencil.circle.fill")
                     .font(.system(size: 28))
-                    .foregroundColor(pencilColor)
+                    .foregroundStyle(pencilColor)
                     .background(Circle().fill(pencilBackground))
             }
             .disabled(viewModel.isUploadingAvatar)
@@ -233,7 +233,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
         VStack(alignment: .leading, spacing: 10) {
             Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
                 .font(MeeshyFont.relative(12, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
                 ForEach(Array(presetColors.enumerated()), id: \.element) { index, hex in
@@ -250,7 +250,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
         settingsField(label: "Emoji") {
             TextField("🏘️", text: $viewModel.localEmoji)
                 .font(.system(size: 22))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .adaptiveOnChange(of: viewModel.localEmoji) { _, newValue in
                     let trimmed = String(newValue.unicodeScalars.prefix(2))
                     if trimmed != newValue { viewModel.localEmoji = trimmed }
@@ -291,8 +291,8 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                 .overlay {
                     if isSelected {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
+                            .meeshyScaledFont(14, weight: .bold)
+                            .foregroundStyle(.white)
                     }
                 }
                 .overlay {
@@ -321,13 +321,13 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                 settingsField(label: String(localized: "community.settings.field.name", defaultValue: "Nom", bundle: .module)) {
                     TextField(String(localized: "community.settings.field.name.placeholder", defaultValue: "Nom de la communauté", bundle: .module), text: $viewModel.name)
                         .font(MeeshyFont.relative(16, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                 }
 
                 settingsField(label: String(localized: "community.settings.field.description", defaultValue: "Description", bundle: .module)) {
                     TextField(String(localized: "community.settings.field.description", defaultValue: "Description", bundle: .module), text: $viewModel.descriptionText, axis: .vertical)
                         .font(MeeshyFont.relative(16, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(3...6)
                 }
             }
@@ -344,10 +344,10 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "community.settings.privacy.title", defaultValue: "Communauté privée", bundle: .module))
                         .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(viewModel.isPrivate ? String(localized: "community.settings.privacy.byInvitation", defaultValue: "Sur invitation", bundle: .module) : String(localized: "community.settings.privacy.openToAll", defaultValue: "Ouverte à tous", bundle: .module))
                         .font(MeeshyFont.relative(12))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
                 Spacer()
                 Toggle("", isOn: $viewModel.isPrivate)
@@ -375,7 +375,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                         Text(String(localized: "community.settings.delete.label", defaultValue: "Supprimer la communauté", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(.red)
+                    .foregroundStyle(.red)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(Color.red.opacity(0.1))
@@ -390,7 +390,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                         Text(String(localized: "community.settings.leave.label", defaultValue: "Quitter la communauté", bundle: .module))
                     }
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(.orange)
+                    .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
                     .background(Color.orange.opacity(0.1))
@@ -405,7 +405,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(MeeshyFont.relative(13, weight: .bold, design: .rounded))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -414,7 +414,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
                 .font(MeeshyFont.relative(12, weight: .semibold, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             content()
                 .textFieldStyle(.plain)
                 .padding(12)

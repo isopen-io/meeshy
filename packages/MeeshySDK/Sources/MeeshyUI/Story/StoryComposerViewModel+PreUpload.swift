@@ -4,7 +4,7 @@ import MeeshySDK
 // MARK: - StoryComposerViewModel + PreUpload
 //
 // L'adoption d'une pré-montée (#5086), extraite de `+Elements` (hors budget de
-// taille) avant d'y ajouter le relais du bitmap (retour porteur 2026-09-28).
+// taille) avant d'y ajouter le relais du bitmap.
 
 extension StoryComposerViewModel {
 

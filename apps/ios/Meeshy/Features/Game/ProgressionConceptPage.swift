@@ -59,7 +59,7 @@ struct ProgressionConceptPage: View {
                     guard ready, !focused, let section else { return }
                     focused = true
                     Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        guard await cancellableSleep(for: .milliseconds(300)) else { return }
                         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
                             proxy.scrollTo(section, anchor: GameRulesPage.focusAnchor)
                         }
@@ -140,6 +140,8 @@ struct ProgressionConceptContent: View {
 
     /// « Jeu masqué » (#9481) : la fiche se lit alors comme devant un serveur sans jeu.
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
+    /// Le (i) de « C’est quoi ? » : la définition détaillée s'y déplie sous la phrase, jamais au repos.
+    @State private var openNoteID: String?
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var game: GameBlock? { prefs.prefs.hidden ? nil : viewModel.game }
@@ -167,8 +169,12 @@ struct ProgressionConceptContent: View {
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
             section(ConceptText.ficheWhat) {
-                sentence(ConceptText.what(concept))
-                sentence(ConceptText.why(concept), strong: true)
+                MeeshyInfoNoted(
+                    note: MeeshyInfoNote(question: ConceptText.ficheWhatQuestion, text: ConceptText.what(concept)),
+                    openNoteID: $openNoteID, tint: theme.textMuted
+                ) {
+                    sentence(ConceptText.why(concept), strong: true)
+                }
                 sentence(ConceptText.how(concept))
             }
             if fiche.hasWhere {

@@ -26,6 +26,9 @@ internal object CallPalette {
 
     val Veil: Color = Color.Black
 
+    /** L'encre du verre posé sur un contenu clair (loi 3, `.glass.onlight` de la planche) : la surface sombre relevée. */
+    val OnLightGlass: Color = Raised
+
     /** Le dégradé de fond, du coin haut-gauche au coin bas-droit. */
     fun background(): Brush = Brush.linearGradient(listOf(Base, Deep, Raised))
 

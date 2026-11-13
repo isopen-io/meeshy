@@ -122,7 +122,7 @@ struct BubbleAttachmentView: View {
             }
 
         case .location:
-            // Rendu unique (Task 14, 2026-07-29) : `SharedPlace` reste le
+            // Rendu unique (Task 14): `SharedPlace` reste le
             // véhicule même ici, alors que `MessageAttachment` ne porte que
             // lat/lon + originalName (pas d'adresse — même limite que
             // CommentMediaView/FeedView, cf. leurs commentaires `SharedPlace`).

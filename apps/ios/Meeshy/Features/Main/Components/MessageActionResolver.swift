@@ -25,8 +25,7 @@ enum PrimaryAction: String, Equatable {
     /// 2026-08-24 ; l'appui long étant rendu au menu du message, la
     /// destination entre ICI plutôt que d'être perdue.
     case callDetail
-    /// **Entrée en mode sélection multiple (#4005, promue en primaire
-    /// 2026-08-27).** Aucune condition sur le contexte du message — toujours
+    /// **Entrée en mode sélection multiple (#4005).** Aucune condition sur le contexte du message — toujours
     /// offerte, comme `.compose`/`.edit` dont le porteur la veut voisine :
     /// « parmi les premiers éléments ». Vivait dans `MoreItem` (« Plus… »),
     /// enterrée derrière un geste supplémentaire — retour porteur explicite.
@@ -139,7 +138,7 @@ struct MessageMenuContext: Equatable {
     /// déjà réécrite dans une `private var` de `View` qu'aucun test ne peut voir.
     var canComposeMedia: Bool = false
     /// **La décoration de ce message est-elle déjà épinglée ?** `nil` ⇒ le
-    /// message n'EST PAS un sticker, et l'action n'existe pas (2026-09-05).
+    /// message n'EST PAS un sticker, et l'action n'existe pas.
     ///
     /// Un tri-état plutôt qu'une paire de booléens : « ce n'est pas un
     /// sticker » et « c'est un sticker non épinglé » gouvernent des issues

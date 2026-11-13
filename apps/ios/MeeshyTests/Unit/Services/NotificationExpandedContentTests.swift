@@ -339,6 +339,7 @@ final class NotificationExpandedContentTests: XCTestCase {
             MeeshyNotificationCategory.location.rawValue,
             MeeshyNotificationCategory.contact.rawValue,
             MeeshyNotificationCategory.ephemeral.rawValue,
+            MeeshyNotificationCategory.talkie.rawValue,
         ])
         XCTAssertEqual(attributes["UNNotificationExtensionUserInteractionEnabled"] as? Bool, true)
     }

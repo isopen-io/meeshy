@@ -1,6 +1,11 @@
 import Combine
 import Foundation
 import MeeshySDK
+import os
+
+private extension Logger {
+    nonisolated static let talkieSender = MeeshyLog.logger(.audioRecorder)
+}
 
 /// Le micro du talkie : rend des trames AAC ADTS une à une. Le vrai micro est `TalkieMicCapture` ; un double le remplace
 /// dans les tests.
@@ -20,12 +25,20 @@ typealias TalkieDeadlineScheduler = @MainActor (TimeInterval, @escaping @MainAct
 ///
 /// - **Appuyer** ouvre `talkie:start` ET le micro EN MÊME TEMPS : ce qui est capté avant l'accusé est gardé (borné par
 ///   le plafond d'une prise de parole) et part dès l'ouverture — le premier mot n'est jamais mangé par l'aller-retour.
-/// - Chaque trame rejoint un fragment de ~250 ms (`TalkieFragmenter`) ; un fragment part dès qu'il est plein :
+///   `talkie:start` part AVANT l'ouverture du micro (#17094) : celle-ci tient l'acteur principal (session audio,
+///   moteur), et l'aller-retour court pendant ce temps au lieu de l'attendre.
+/// - Les temps de la prise de parole (`TalkieLatency`) s'écrivent au journal dès le premier fragment parti.
+/// - Chaque trame rejoint un fragment de ~120 ms (`TalkieFragmenter`) ; un fragment part dès qu'il est plein :
 ///   `talkie:send-chunk`, `seq` croissant (`TalkieBudget`), `capturedAt` pour mesurer la latence.
 /// - **Relâcher** arrête le micro, vide ce qui reste, puis `talkie:end`.
 /// - La durée maximale SERVIE ferme seule ; les plafonds d'octets et de fragments aussi, AVANT que le serveur ne coupe.
 /// - Un `talkie:ended` qui porte MON `talkieId` (limite, coupure) arrête le micro. Un blocage posé par le destinataire
 ///   ne prévient PAS l'émetteur : ses fragments se perdent en silence, et c'est voulu.
+/// - **Repli** (`voice`, #17141) : ce n'est plus une erreur. Le micro continue tant que le doigt tient, puis la voix
+///   captée part en message vocal dans la conversation la plus récente avec le destinataire (`TalkieVoiceCopying`).
+/// - **Réveil** (`delivery: waking`) : le destinataire n'est pas connecté ; la passerelle le réveille et lui rejoue la
+///   voix. L'émetteur parle comme d'habitude, l'écran dit « Réveil de X… ». La voix partie est gardée jusqu'au
+///   `talkie:ended` de la passerelle : `joined: false` (personne ne l'a rejointe) la fait partir en copie vocale.
 @MainActor
 final class TalkieSender: ObservableObject {
 
@@ -33,11 +46,17 @@ final class TalkieSender: ObservableObject {
         case idle
         case starting(toUserId: String)
         case talking(toUserId: String, talkieId: String)
+        /// Le talkie n'a pas pu passer : la voix s'enregistre pour partir en message vocal.
+        case recordingCopy(toUserId: String)
     }
 
     @Published private(set) var phase: Phase = .idle
     /// Ce qu'il faut dire d'une prise de parole qui n'a pas abouti ; l'écran le remet à `nil` une fois dit.
     @Published var notice: TalkieSendOutcome?
+    /// La prise de parole en cours réveille son destinataire (`delivery: waking`).
+    @Published private(set) var waking = false
+    /// Les temps de la dernière prise de parole dont un fragment est parti.
+    private(set) var lastLatency: TalkieLatency?
 
     /// Une prise de parole, de l'appui à sa fin.
     @MainActor
@@ -48,25 +67,39 @@ final class TalkieSender: ObservableObject {
         var accepting = true
         var released = false
         var finishing = false
+        var copying = false
+        var copied: [Data] = []
+        /// La conversation que la passerelle a nommée pour la copie (`TALKIE_FALLBACK_VOICE` + `conversationId`).
+        var copyInto: String?
         var queue: [TalkieFragment] = []
         var fragmenter = TalkieFragmenter()
         var budget = TalkieBudget()
         var cancelDeadline: (() -> Void)?
+        var latency: TalkieLatency
 
-        init(toUserId: String) {
+        init(toUserId: String, pressedAt: Date) {
             self.toUserId = toUserId
+            latency = TalkieLatency(pressedAt: pressedAt)
         }
 
         nonisolated deinit {}
 
         var queuedBytes: Int { queue.reduce(0) { $0 + $1.data.count } }
+        var copiedBytes: Int { copied.reduce(0) { $0 + $1.count } }
     }
 
     private let emitter: TalkieEmitting
     private let capture: TalkieCapturing
+    private let copier: TalkieVoiceCopying
     private let now: () -> Date
     private let schedule: TalkieDeadlineScheduler
     private var session: Session?
+    /// Les voix réveillées closes, gardées jusqu'au verdict `joined` de la passerelle. Bornées : rien ne grossit.
+    private var awaitingJoin: [(talkieId: String, toUserId: String, frames: [Data])] = []
+    private static let awaitingJoinCap = 4
+    /// Les verdicts `joined` arrivés AVANT que leur voix soit rangée (#17248) : la passerelle peut fermer la voix
+    /// pendant que le micro de l'émetteur s'arrête encore. Le verdict attend la voix, il ne se perd plus. Bornés.
+    private var earlyVerdicts: [(talkieId: String, joined: Bool)] = []
     private var cancellables = Set<AnyCancellable>()
 
     nonisolated deinit {}
@@ -74,19 +107,25 @@ final class TalkieSender: ObservableObject {
     init(
         emitter: TalkieEmitting = TalkieSocketEmitter.shared,
         capture: TalkieCapturing? = nil,
+        copier: TalkieVoiceCopying? = nil,
         endedEvents: AnyPublisher<TalkieEnded, Never> = TalkieEvents.ended,
         now: @escaping () -> Date = { Date() },
         schedule: @escaping TalkieDeadlineScheduler = TalkieSender.sleepingDeadline
     ) {
         self.emitter = emitter
         self.capture = capture ?? TalkieMicCapture()
+        self.copier = copier ?? TalkieVoiceCopySender()
         self.now = now
         self.schedule = schedule
         let lane = OrderedEventLane()
         endedEvents
-            .relay(through: lane) { [weak self] ended in await self?.ended(ended.talkieId, reason: ended.reason) }
+            .relay(through: lane) { [weak self] ended in await self?.ended(ended.talkieId, reason: ended.reason, joined: ended.joined) }
             .store(in: &cancellables)
         lane.store(in: &cancellables)
+        // #17255 — une copie que la file d'envoi abandonne après coup se dit, comme celle qui ne part pas.
+        self.copier.failures
+            .sink { [weak self] in self?.notice = .failed }
+            .store(in: &cancellables)
     }
 
     static func sleepingDeadline(_ delay: TimeInterval, _ run: @escaping @MainActor () -> Void) -> () -> Void {
@@ -111,20 +150,28 @@ final class TalkieSender: ObservableObject {
             notice = .offline
             return
         }
-        let current = Session(toUserId: toUserId)
+        let current = Session(toUserId: toUserId, pressedAt: now())
         session = current
         phase = .starting(toUserId: toUserId)
-        let mic = Task { await self.openMic(current) }
-        Task {
+        let verdict = Task { () -> TalkieStartVerdict in
             let verdict = await self.emitter.start(toUserId: toUserId)
-            let micReady = await mic.value
-            await self.conclude(current, verdict: verdict, micReady: micReady)
+            current.latency.mark(.opened, at: self.now())
+            return verdict
+        }
+        Task {
+            await Task.yield()
+            let micReady = await self.openMic(current)
+            await self.conclude(current, verdict: await verdict.value, micReady: micReady)
         }
     }
 
     func release() async {
         guard let current = session, !current.released else { return }
         current.released = true
+        guard !current.copying else {
+            await finishCopy(current)
+            return
+        }
         guard current.opened == nil else {
             await finish(current, outcome: nil)
             return
@@ -133,15 +180,43 @@ final class TalkieSender: ObservableObject {
         if let rest = current.fragmenter.flush() { enqueue(current, rest) }
     }
 
-    /// La passerelle a fermé une prise de parole : si c'est la mienne, tout s'arrête — sans `talkie:end`.
-    func ended(_ talkieId: String, reason: TalkieEndReason?) async {
-        guard let current = session, current.opened?.talkieId == talkieId else { return }
-        let outcome: TalkieSendOutcome? = switch reason {
-        case .sender: nil
-        case .limit: .limit
-        case .cut, nil: .failed
+    /// La passerelle a fermé une prise de parole : si c'est la mienne, tout s'arrête — sans `talkie:end`. Une voix
+    /// réveillée que personne n'a rejointe (`joined: false`) part en copie vocale.
+    func ended(_ talkieId: String, reason: TalkieEndReason?, joined: Bool? = nil) async {
+        if let current = session, current.opened?.talkieId == talkieId {
+            let outcome: TalkieSendOutcome? = switch reason {
+            case .sender: nil
+            case .limit: .limit
+            case .cut, nil: .failed
+            }
+            await finish(current, outcome: outcome, notify: false)
         }
-        await finish(current, outcome: outcome, notify: false)
+        await copyIfUnjoined(talkieId, joined: joined)
+    }
+
+    private func copyIfUnjoined(_ talkieId: String, joined: Bool?) async {
+        guard let index = awaitingJoin.firstIndex(where: { $0.talkieId == talkieId }) else {
+            keepEarly(talkieId, joined: joined)
+            return
+        }
+        let kept = awaitingJoin.remove(at: index)
+        guard joined == false else { return }
+        let sent = await copier.send(kept.frames, toUserId: kept.toUserId, conversationId: nil)
+        notice = sent ? .voice : .failed
+    }
+
+    /// Un verdict pour la voix réveillée encore en cours de fermeture : il l'attend.
+    private func keepEarly(_ talkieId: String, joined: Bool?) {
+        guard let joined, let opened = session?.opened, opened.talkieId == talkieId, opened.delivery == .waking else { return }
+        earlyVerdicts = Array((earlyVerdicts.filter { $0.talkieId != talkieId } + [(talkieId, joined)]).suffix(Self.awaitingJoinCap))
+    }
+
+    /// La voix vient d'être rangée : un verdict arrivé avant elle s'applique maintenant.
+    private func applyEarlyVerdict(_ current: Session) async {
+        guard let talkieId = current.opened?.talkieId,
+              let index = earlyVerdicts.firstIndex(where: { $0.talkieId == talkieId }) else { return }
+        let verdict = earlyVerdicts.remove(at: index)
+        await copyIfUnjoined(talkieId, joined: verdict.joined)
     }
 
     // MARK: - Interne
@@ -149,6 +224,7 @@ final class TalkieSender: ObservableObject {
     private func openMic(_ current: Session) async -> Bool {
         let ready = await capture.start { [weak self] data, duration in self?.frame(current, data, duration) }
         guard ready else { return false }
+        current.latency.mark(.micReady, at: now())
         if current.finishing || current.released {
             current.accepting = false
             await capture.stop()
@@ -160,6 +236,13 @@ final class TalkieSender: ObservableObject {
 
     private func conclude(_ current: Session, verdict: TalkieStartVerdict, micReady: Bool) async {
         switch verdict {
+        case .refused(.voice) where micReady:
+            await startCopy(current)
+        case .voiceInto(let conversationId) where micReady:
+            current.copyInto = conversationId
+            await startCopy(current)
+        case .refused(.voice), .voiceInto:
+            await refuse(current, .micDenied)
         case .refused(let outcome):
             await refuse(current, outcome)
         case .opened(let opened) where !micReady:
@@ -175,6 +258,7 @@ final class TalkieSender: ObservableObject {
         current.fragmenter.maxChunkBytes = opened.maxChunkBytes
         guard !current.finishing else { return }
         phase = .talking(toUserId: current.toUserId, talkieId: opened.talkieId)
+        waking = opened.delivery == .waking
         current.cancelDeadline = schedule(opened.maxDuration) { [weak self] in
             Task { await self?.finish(current, outcome: .limit) }
         }
@@ -186,6 +270,10 @@ final class TalkieSender: ObservableObject {
 
     private func frame(_ current: Session, _ data: Data, _ duration: TimeInterval) {
         guard current.accepting, !data.isEmpty else { return }
+        guard !current.copying else {
+            if current.copiedBytes + data.count <= TalkieContract.maxTotalBytes { current.copied.append(data) }
+            return
+        }
         current.fragmenter.append(data, duration: duration, at: now()).forEach { dispatch(current, $0) }
     }
 
@@ -208,7 +296,15 @@ final class TalkieSender: ObservableObject {
         guard let opened = current.opened, !fragment.data.isEmpty else { return true }
         guard let seq = current.budget.admit(bytes: fragment.data.count) else { return false }
         emitter.sendChunk(talkieId: opened.talkieId, seq: seq, capturedAt: fragment.capturedAt, data: fragment.data)
+        if opened.delivery == .waking { current.copied.append(fragment.data) }
+        if seq == 0 { record(current) }
         return true
+    }
+
+    private func record(_ current: Session) {
+        current.latency.mark(.firstChunk, at: now())
+        lastLatency = current.latency
+        Logger.talkieSender.info("talkie · émission · \(current.latency.summary, privacy: .public)")
     }
 
     private func stopMic(_ current: Session) async {
@@ -229,8 +325,12 @@ final class TalkieSender: ObservableObject {
         if let opened = current.opened, notify {
             if let rest = current.fragmenter.flush() { _ = transmit(current, rest) }
             emitter.end(talkieId: opened.talkieId)
+        } else if current.opened?.delivery == .waking, let rest = current.fragmenter.flush() {
+            // Fermée par la passerelle : la fin du fragment en cours ne part plus, mais elle reste dans la copie.
+            current.copied.append(rest.data)
         }
         settle(current, outcome)
+        await applyEarlyVerdict(current)
     }
 
     private func refuse(_ current: Session, _ outcome: TalkieSendOutcome) async {
@@ -240,12 +340,42 @@ final class TalkieSender: ObservableObject {
         settle(current, outcome)
     }
 
+    /// Le repli : ce qui est déjà capté rejoint la copie, et le micro continue jusqu'au relâchement ou à la durée
+    /// maximale.
+    private func startCopy(_ current: Session) async {
+        current.copying = true
+        current.copied = current.queue.map(\.data) + [current.fragmenter.flush()?.data].compactMap { $0 }
+        current.queue = []
+        guard !current.released else {
+            await finishCopy(current)
+            return
+        }
+        phase = .recordingCopy(toUserId: current.toUserId)
+        current.cancelDeadline = schedule(TalkieContract.maxDuration) { [weak self] in
+            Task { await self?.finishCopy(current) }
+        }
+    }
+
+    private func finishCopy(_ current: Session) async {
+        guard !current.finishing else { return }
+        current.finishing = true
+        current.cancelDeadline?()
+        await stopMic(current)
+        let sent = await copier.send(current.copied, toUserId: current.toUserId, conversationId: current.copyInto)
+        settle(current, sent ? .voice : .failed)
+    }
+
     private func settle(_ current: Session, _ outcome: TalkieSendOutcome?) {
         current.cancelDeadline?()
         current.cancelDeadline = nil
+        if let opened = current.opened, opened.delivery == .waking, !current.copied.isEmpty {
+            awaitingJoin = Array((awaitingJoin + [(opened.talkieId, current.toUserId, current.copied)]).suffix(Self.awaitingJoinCap))
+            current.copied = []
+        }
         if session === current {
             session = nil
             phase = .idle
+            waking = false
         }
         if let outcome { notice = outcome }
     }

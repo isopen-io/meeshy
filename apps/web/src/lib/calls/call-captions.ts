@@ -22,6 +22,16 @@ export type TranscriptionState = 'idle' | 'listening' | 'unsupported' | 'denied'
 
 export type CaptionLanguagePair = { readonly from: string; readonly to: string };
 
+/**
+ * La langue D'ORIGINE d'une phrase d'un autre (miroir d'iOS `CallCaptionLine.originLanguage`
+ * / `awaitingUntil`) : `foreign` dit qu'elle est HORS du Prisme du lecteur — donc étiquetée
+ * (« EN ») —, `awaitingUntil` l'heure (horloge locale) où l'attente d'une traduction retombe.
+ */
+export type CaptionOrigin = { readonly language: string; readonly foreign: boolean; readonly awaitingUntil: number | null };
+
+/** Le temps que la passerelle a pour rendre une traduction : passé ce délai, la phrase reste dans sa langue (miroir d'iOS `CallCaptionTranslationWait`). */
+export const TRANSLATION_WAIT_MS = 8_000;
+
 export type CallCaption = {
   readonly id: string;
   readonly speakerId: string;
@@ -31,6 +41,8 @@ export type CallCaption = {
   readonly translated: string | null;
   /** Les langues de cette traduction (`sourceLanguage` → `targetLanguage`), arrivées avec elle — `null` sans traduction (#8393). */
   readonly pair: CaptionLanguagePair | null;
+  /** La langue dite par un AUTRE (`null` : la mienne, ou inconnue) — arrivée avec l'original, avant toute traduction. */
+  readonly origin?: CaptionOrigin | null;
   readonly isFinal: boolean;
   /** L'horloge murale de capture chez le locuteur — la clé d'ordre du journal. */
   readonly at: number;
@@ -52,22 +64,74 @@ export function captionText(caption: CallCaption, mode: CaptionsMode): string {
   return mode === 'translated' && !caption.mine && caption.translated !== null ? caption.translated : caption.original;
 }
 
-const languageCode = (tag: string): string => (tag.split('-')[0] ?? tag).toUpperCase();
+/**
+ * Une phrase se révèle d'un toucher, dans les DEUX réglages (miroir d'iOS `CallCaptionLine.make`, L3.9) :
+ * dès qu'elle a une traduction distincte de son original (jamais ma parole, jamais réglage éteint).
+ * Traduit : l'original se déplie SOUS la traduction. Original : la révéler montre sa traduction à la
+ * place de l'original, avec son étiquette « EN → FR ». `mode` est celui sous lequel LIRE cette ligne.
+ */
+export function captionReveal(caption: CallCaption, mode: CaptionsMode, revealed: boolean): { readonly canReveal: boolean; readonly mode: CaptionsMode; readonly originalBelow: boolean } {
+  const canReveal = mode !== 'off' && !caption.mine && caption.translated !== null && caption.translated !== caption.original;
+  if (!canReveal) return { canReveal, mode, originalBelow: false };
+  if (mode === 'original') return { canReveal, mode: revealed ? 'translated' : 'original', originalBelow: false };
+  return { canReveal, mode, originalBelow: revealed };
+}
 
 /**
- * La petite étiquette « EN → FR » d'une ligne LUE traduite (#8393) — le Prisme
- * reste discret mais dit qu'il a agi. Rien quand la ligne servie est
- * l'original, ni quand la traduction est arrivée sans ses langues.
+ * Ce que le lecteur d'écran dit d'une phrase touchable : en réglage traduit, l'original se DÉPLIE
+ * dessous (`aria-expanded`) ; en réglage « Original », la phrase CHANGE de langue sur place, rien
+ * ne se déplie — c'est un bouton pressé (`aria-pressed`).
+ */
+export const revealState = (mode: CaptionsMode, revealed: boolean): { readonly 'aria-expanded': boolean } | { readonly 'aria-pressed': boolean } => (mode === 'original' ? { 'aria-pressed': revealed } : { 'aria-expanded': revealed });
+
+const languageCode = (tag: string): string => (tag.split('-')[0] ?? tag).toUpperCase();
+
+const sameLanguage = (a: string, b: string): boolean => languageCode(a) === languageCode(b);
+
+/**
+ * La langue d'une phrase d'un autre, au regard du Prisme du lecteur (`prism`, la descente
+ * de `resolveReaderLanguages`) : étrangère quand aucune langue du lecteur n'est la sienne,
+ * et alors une traduction est attendue si la phrase est FINALE et sans traduction encore.
+ * Un Prisme vide n'attend rien (rien ne dit vers quelle langue traduire).
+ */
+export function captionOrigin(params: { readonly language: string | null; readonly isFinal: boolean; readonly translated: string | null; readonly prism: readonly string[]; readonly now: number }): CaptionOrigin | null {
+  const { language, isFinal, translated, prism, now } = params;
+  if (language === null) return null;
+  const foreign = !prism.some((spoken) => sameLanguage(spoken, language));
+  const awaiting = foreign && isFinal && translated === null && prism.length > 0;
+  return { language, foreign, awaitingUntil: awaiting ? now + TRANSLATION_WAIT_MS : null };
+}
+
+/** Une traduction est-elle encore attendue à l'instant `now` ? L'attente retombe à son échéance, l'étiquette de la langue reste. */
+export function isAwaitingTranslation(caption: CallCaption, now: number): boolean {
+  const until = caption.origin?.awaitingUntil ?? null;
+  return !caption.mine && caption.translated === null && until !== null && now < until;
+}
+
+/**
+ * La petite étiquette de langue d'une ligne (#8393, planche P3-P5) : « EN → FR » quand la
+ * ligne LUE est une traduction — le Prisme reste discret mais dit qu'il a agi —, « EN »
+ * seule quand elle est l'original d'une langue hors du Prisme. Rien pour ma parole, une
+ * langue que je lis déjà, ni une traduction arrivée sans ses langues.
  */
 export function captionLanguageLabel(caption: CallCaption, mode: CaptionsMode): string | null {
-  if (caption.pair === null || captionText(caption, mode) === caption.original) return null;
-  return `${languageCode(caption.pair.from)} → ${languageCode(caption.pair.to)}`;
+  if (caption.pair !== null && captionText(caption, mode) !== caption.original) return `${languageCode(caption.pair.from)} → ${languageCode(caption.pair.to)}`;
+  const origin = caption.origin ?? null;
+  return caption.mine || origin === null || !origin.foreign ? null : languageCode(origin.language);
 }
 
 /** Range une ligne à sa place par l'heure de capture — le plus souvent à la fin, sans retrier tout le journal. */
 function placed(journal: readonly CallCaption[], line: CallCaption): readonly CallCaption[] {
   const after = journal.findIndex((caption) => caption.at > line.at);
   return after === -1 ? [...journal, line] : [...journal.slice(0, after), line, ...journal.slice(after)];
+}
+
+/** Une traduction arrivée met fin à l'attente ; une répétition ne la prolonge pas ; le final d'une phrase d'abord partielle prend celle du final. */
+function mergedOrigin(existing: CallCaption, incoming: CallCaption): CaptionOrigin | null {
+  const base = incoming.origin ?? existing.origin ?? null;
+  if (base === null) return null;
+  const translated = incoming.translated ?? existing.translated;
+  return { ...base, awaitingUntil: translated !== null ? null : (existing.origin?.awaitingUntil ?? incoming.origin?.awaitingUntil ?? null) };
 }
 
 /**
@@ -92,6 +156,7 @@ export function mergeCaption(journal: readonly CallCaption[], incoming: CallCapt
           original: existing.isFinal && !incoming.isFinal ? existing.original : incoming.original,
           translated: incoming.translated ?? existing.translated,
           pair: incoming.translated === null ? existing.pair : incoming.pair,
+          origin: mergedOrigin(existing, incoming),
           isFinal: existing.isFinal || incoming.isFinal,
           at: Math.min(existing.at, incoming.at),
         };
@@ -124,7 +189,7 @@ const text = (value: unknown): string | null => (typeof value === 'string' && va
 const finite = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 
 /** `call:translated-segment` (`CallTranslatedSegmentEvent`) — le locuteur est estampillé par la passerelle. */
-export function decodeTranslatedSegment(payload: unknown): { readonly callId: string; readonly caption: Omit<CallCaption, 'mine'>; readonly speakerName: string | null } | null {
+export function decodeTranslatedSegment(payload: unknown): { readonly callId: string; readonly caption: Omit<CallCaption, 'mine' | 'origin'>; readonly speakerName: string | null; readonly language: string | null } | null {
   if (!isRecord(payload) || !isRecord(payload.segment)) return null;
   const segment = payload.segment;
   const callId = text(payload.callId);
@@ -139,6 +204,7 @@ export function decodeTranslatedSegment(payload: unknown): { readonly callId: st
   return {
     callId,
     speakerName: text(segment.speakerDisplayName),
+    language: from,
     caption: {
       id: text(segment.id) ?? `${speakerId}:${startMs}`,
       speakerId,
@@ -163,7 +229,7 @@ export function decodeTranscriptionActive(payload: unknown): { readonly callId: 
 
 export type ChannelInbound =
   | { readonly kind: 'bye' }
-  | { readonly kind: 'entry'; readonly id: string; readonly callId: string; readonly text: string; readonly speakerName: string; readonly at: number; readonly isFinal: boolean };
+  | { readonly kind: 'entry'; readonly id: string; readonly callId: string; readonly text: string; readonly speakerName: string; readonly language: string | null; readonly at: number; readonly isFinal: boolean };
 
 /**
  * Un message du canal de données `transcription` (`DataChannelInbound` d'iOS) :
@@ -186,7 +252,7 @@ export function decodeChannelMessage(raw: unknown): ChannelInbound | null {
   const callId = text(entry.callId);
   const said = text(entry.text);
   if (id === null || callId === null || said === null) return null;
-  return { kind: 'entry', id, callId, text: said, speakerName: text(entry.speakerDisplayName) ?? '', at: finite(entry.capturedAtMs) ?? 0, isFinal: entry.isFinal !== false };
+  return { kind: 'entry', id, callId, text: said, speakerName: text(entry.speakerDisplayName) ?? '', language: text(entry.language), at: finite(entry.capturedAtMs) ?? 0, isFinal: entry.isFinal !== false };
 }
 
 export type Utterance = {

@@ -2,6 +2,8 @@ package me.meeshy.app.calls
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,8 +31,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,7 +44,11 @@ import javax.inject.Singleton
 import kotlinx.coroutines.delay
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.call.WebRtcEngine
+import me.meeshy.sdk.model.call.CallButtonRole
 import me.meeshy.sdk.model.call.CallLiveFrameReply
+import me.meeshy.sdk.model.call.CallTopBanner
+import me.meeshy.sdk.model.call.CallTopBannerStack
+import me.meeshy.sdk.model.call.frames.CallFrameDesign
 import me.meeshy.sdk.model.call.frames.CallFramePerson
 import me.meeshy.sdk.model.call.frames.CallLiveFrameDisplay
 import me.meeshy.sdk.model.call.frames.CallLiveFrameRule
@@ -55,7 +62,6 @@ private const val ANSWER_LINGER_MILLIS = 4_000L
 
 /** Les textes du cadre (nom du groupe, date) se revérifient chaque minute ; la surface ne repeint que s'ils ont changé. */
 private const val TEXTS_RECHECK_MILLIS = 60_000L
-private val STATUS_TOP = 68.dp
 
 /**
  * Le cadre en direct autour des deux vidéos ET ce qui se dit à son sujet : la proposition de l'autre
@@ -80,9 +86,16 @@ class CallLiveFrameOverlay @Inject constructor(
         val shared by frame.state.collectAsState()
         val reduceMotion = rememberCallReduceMotion()
         val constrained = rememberCallDeviceConstrained()
-        val design = CallLiveFrameRule.display(shared.frameId, CallLiveFrameRule.PEOPLE, constrained, reduceMotion).design ?: return
-        val state = context.state
-        val people = remember(state.peerName, shared.remoteSharedName) { frame.people(state.peerName, shared.remoteSharedName) }
+        val design = CallLiveFrameRule.display(shared.frameId, CallLiveFrameRule.PEOPLE, constrained, reduceMotion).design
+        // #17820 C3.6 : le cadre entre et sort en fondu (court sous « Réduire les animations »), il ne surgit plus d'un coup.
+        CallBannerPresence(design, travels = false) { shown ->
+            Layer(shown, context.state, shared.remoteSharedName, reduceMotion, constrained)
+        }
+    }
+
+    @Composable
+    private fun Layer(design: CallFrameDesign, state: CallUiState, remoteSharedName: String?, reduceMotion: Boolean, constrained: Boolean) {
+        val people = remember(state.peerName, remoteSharedName) { frame.people(state.peerName, remoteSharedName) }
         val call = frame.callContext()
         val texts by produceState(textsResolver.immediate(call), call) {
             while (true) {
@@ -146,9 +159,17 @@ class CallLiveFrameStatusOverlay @Inject constructor(
 ) : CallOverlay {
     override val id: String = "call-live-frame-status"
     override val slot: CallOverlaySlot = CallOverlaySlot.TopBanner
+    override val priority: Int = CallTopBannerStack.priority(CallTopBanner.LiveFrame)
 
     @Composable
-    override fun Content(context: CallOverlayContext) = CallLiveFrameStatus(frame)
+    override fun Content(context: CallOverlayContext) = CallLiveFrameStatus(
+        frame,
+        offersProposal = CallLiveFrameRule.mayShowProposal(
+            participants = CallLiveFrameRule.PEOPLE,
+            showsVideo = context.state.isVideoCall && context.state.showsConnectedLayout,
+            isGroupStage = context.isGroupStage,
+        ),
+    )
 }
 
 @HiltViewModel
@@ -157,39 +178,60 @@ class CallLiveFrameViewModel @Inject constructor(
     val texts: CallFrameTextsResolver,
 ) : ViewModel()
 
-/** Le texte du haut de l'écran : la proposition à trancher, la réponse de l'autre, ou l'échec de la mienne. */
+/** Ce que le haut de l'écran dit du cadre : la carte à trancher, ou une ligne d'état. */
+private sealed interface LiveFrameFace {
+    data class Proposal(val text: String) : LiveFrameFace
+
+    data class Line(val text: String) : LiveFrameFace
+}
+
+/**
+ * Le texte du haut de l'écran : la proposition à trancher, la réponse de l'autre, ou l'échec de la mienne. Comme les trois
+ * autres bandeaux de la pile, il arrive du haut et y repart par [CallBannerPresence] (#17820 C2.7), à la marge de la pile
+ * (C2.1). La proposition n'est montrée qu'en duo vidéo ([offersProposal], C2.10) ; sa mesure ne compte pas pour ma vignette (la loi
+ * l'écarte), mais la grille de groupe lui cède sa place (L4.11).
+ */
 @Composable
-internal fun CallLiveFrameStatus(controller: CallLiveFrameController, modifier: Modifier = Modifier) {
+internal fun CallLiveFrameStatus(controller: CallLiveFrameController, offersProposal: Boolean = true, modifier: Modifier = Modifier) {
     val state by controller.state.collectAsState()
     val notice by controller.notices.collectAsState()
-    val proposed = state.proposal?.let { p -> CallLiveFrameRule.frames().firstOrNull { it.id == p.frameId }?.let { p to it } }
+    val proposed = state.proposal?.takeIf { offersProposal }
+        ?.let { p -> CallLiveFrameRule.frames().firstOrNull { it.id == p.frameId }?.let { p to it } }
     val answer = state.answer
     val suspended = CallLiveFrameRule.display(
         state.frameId, CallLiveFrameRule.PEOPLE, rememberCallDeviceConstrained(), rememberCallReduceMotion(),
     ) as? CallLiveFrameDisplay.Suspended
-    Column(modifier.padding(top = STATUS_TOP, start = MeeshySpacing.lg, end = MeeshySpacing.lg)) {
-        when {
-            proposed != null -> CallLiveFrameProposalCard(
-                text = proposalText(proposed.first.from, proposed.second.displayName(LocalConfiguration.current.locales[0]?.language)),
-                onAccept = controller::accept,
-                onDecline = controller::decline,
-            )
-            answer != null -> {
-                val text = answerText(answer.reply, answer.from)
-                CallLiveFrameNotice(text)
-                LaunchedEffect(answer) {
-                    delay(ANSWER_LINGER_MILLIS)
-                    controller.dismissAnswer()
-                }
-            }
-            notice != null -> {
-                CallLiveFrameNotice(stringResource(R.string.call_live_frame_not_proposed))
-                LaunchedEffect(notice) {
-                    delay(ANSWER_LINGER_MILLIS)
-                    controller.noticeShown()
-                }
-            }
-            suspended != null -> CallLiveFrameNotice(stringResource(suspendedText(suspended.reason)))
+    // L'avis ne s'éteint que lorsqu'il est celui qu'on voit : une proposition à trancher passe devant.
+    val shownAnswer = answer?.takeIf { proposed == null }
+    val shownNotice = notice?.takeIf { proposed == null && answer == null }
+    LaunchedEffect(shownAnswer) {
+        if (shownAnswer == null) return@LaunchedEffect
+        delay(ANSWER_LINGER_MILLIS)
+        controller.dismissAnswer()
+    }
+    LaunchedEffect(shownNotice) {
+        if (shownNotice == null) return@LaunchedEffect
+        delay(ANSWER_LINGER_MILLIS)
+        controller.noticeShown()
+    }
+    val face: LiveFrameFace? = when {
+        proposed != null -> LiveFrameFace.Proposal(
+            proposalText(proposed.first.from, proposed.second.displayName(LocalConfiguration.current.locales[0]?.language)),
+        )
+        answer != null -> LiveFrameFace.Line(answerText(answer.reply, answer.from))
+        notice != null -> LiveFrameFace.Line(stringResource(R.string.call_live_frame_not_proposed))
+        suspended != null -> LiveFrameFace.Line(stringResource(suspendedText(suspended.reason)))
+        else -> null
+    }
+    CallBannerPresence(face) { shown ->
+        // La pile du haut pose ce bandeau sous l'en-tête (P16.4) : il ne porte que son écart et la marge des autres bandeaux.
+        val place = modifier
+            .padding(horizontal = CallTopBannerStack.HORIZONTAL_MARGIN_DP.dp)
+            .padding(top = CallTopBannerStack.GAP_DP.dp)
+            .reportsTopBannerHeight(CallTopBanner.LiveFrame)
+        when (shown) {
+            is LiveFrameFace.Proposal -> CallLiveFrameProposalCard(shown.text, onAccept = controller::accept, onDecline = controller::decline, modifier = place)
+            is LiveFrameFace.Line -> CallLiveFrameNotice(shown.text, modifier = place)
         }
     }
 }
@@ -215,50 +257,63 @@ private fun answerText(reply: CallLiveFrameReply, from: String?): String = when 
 /** L'autre m'invite à appliquer son cadre ; rien ne change chez moi tant que je n'ai pas touché « Appliquer ». */
 @Composable
 internal fun CallLiveFrameProposalCard(text: String, onAccept: () -> Unit, onDecline: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(MeeshyRadius.lg)
-    Column(
-        modifier = modifier.fillMaxWidth().clip(shape).background(Color.Black.copy(alpha = 0.55f)).padding(MeeshySpacing.md),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    CallGlassPlate(
+        modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
+        shape = RoundedCornerShape(MeeshyRadius.lg),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm), verticalAlignment = Alignment.Top) {
-            androidx.compose.material3.Icon(MeeshyIcons.Wallpaper, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(20.dp))
-            Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = CallPalette.Ink)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
-            CallLiveFrameButton(stringResource(R.string.call_live_frame_decline), Color.White.copy(alpha = 0.16f), onDecline, Modifier.weight(1f))
-            CallLiveFrameButton(stringResource(R.string.call_live_frame_accept), CallPalette.BrandDeep, onAccept, Modifier.weight(1f))
+        CallToneScrim()
+        Column(Modifier.padding(MeeshySpacing.md), verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm), verticalAlignment = Alignment.Top) {
+                androidx.compose.material3.Icon(MeeshyIcons.Wallpaper, contentDescription = null, tint = CallPalette.Ink, modifier = Modifier.size(20.dp))
+                Text(text, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = CallPalette.Ink)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+                CallLiveFrameButton(stringResource(R.string.call_live_frame_decline), null, onDecline, Modifier.weight(1f))
+                CallLiveFrameButton(stringResource(R.string.call_live_frame_accept), CallPalette.BrandDeep, onAccept, Modifier.weight(1f))
+            }
         }
     }
 }
 
+/** « Non merci » est un verre de bouton (#17323, iOS `callChipGlass`) ; « Appliquer » garde son [accent] plein. */
 @Composable
-private fun CallLiveFrameButton(label: String, fill: Color, onClick: () -> Unit, modifier: Modifier) {
+private fun CallLiveFrameButton(label: String, accent: Color?, onClick: () -> Unit, modifier: Modifier) {
     val haptics = LocalHapticFeedback.current
-    Box(
-        modifier
-            .height(48.dp)
-            .clip(CircleShape)
-            .background(fill)
-            .clickable(role = Role.Button) {
-                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onClick()
-            },
-        contentAlignment = Alignment.Center,
-    ) { Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = CallPalette.Ink) }
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
+    val target = modifier
+        .height(48.dp)
+        .clickable(interactionSource = source, indication = null, role = Role.Button) {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onClick()
+        }
+    val text: @Composable () -> Unit = {
+        Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = CallPalette.Ink)
+    }
+    if (accent == null) {
+        CallGlassButtonSurface(role = CallButtonRole.Neutral, shape = CircleShape, isPressed = pressed, modifier = target) { text() }
+    } else {
+        Box(
+            target.clip(CircleShape).background(accent).background(CallButtonFill.pressedHighlight(pressed)),
+            contentAlignment = Alignment.Center,
+        ) { text() }
+    }
 }
 
 /** Une ligne d'état du cadre : la réponse de l'autre, ou la raison d'une pause. */
 @Composable
 internal fun CallLiveFrameNotice(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.SemiBold,
-        color = CallPalette.Ink,
-        modifier = modifier
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.55f))
-            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
-            .semantics(mergeDescendants = true) { },
-    )
+    CallGlassPlate(
+        modifier = modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        shape = CircleShape,
+    ) {
+        CallToneScrim()
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = CallPalette.Ink,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+        )
+    }
 }

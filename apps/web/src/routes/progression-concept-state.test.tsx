@@ -75,7 +75,7 @@ describe('la carte : un nom, une valeur, une ligne — plus de phrase (#11178)',
   test('le porteur lit ses chiffres avec leur cible, sur la première page', () => {
     const page = hub(jcnm);
     expect(plain(page.querySelector('[data-concept-card="level"] [data-concept-line]')?.textContent)).toBe('1 301 étincelles jusqu’au 28');
-    expect(plain(page.querySelector('[data-concept-card="points"] [data-concept-value]')?.textContent)).toBe('77 099 étincelles');
+    expect(plain(page.querySelector('[data-concept-card="points"] [data-concept-value]')?.textContent)).toBe('77 099');
     // UNE poche : plus de second solde « à convertir » à côté de la poche (porteur, 2026-10-16).
     expect(plain(page.querySelector('[data-concept-card="points"]')?.textContent)).not.toContain('5 823');
   });

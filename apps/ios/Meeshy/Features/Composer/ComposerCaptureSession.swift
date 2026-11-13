@@ -2,6 +2,7 @@ import SwiftUI
 import AVFoundation
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 /// **La machine d'état de capture du viseur du composeur — UNE pour ses deux
 /// montages**.
@@ -44,6 +45,7 @@ final class ComposerCaptureSession: ObservableObject {
     @Published private(set) var flashIntensity: Double
     /// Les segments de la prise en cours — chacun un FICHIER déjà écrit.
     @Published var segments: [ComposerCaptureSegment] = []
+    @Published var recordingBudget: TimeInterval?
     /// L'instant où le doigt s'est posé, `nil` sans appui long en cours. Sa
     /// présence est aussi le témoin qui rend la levée sûre.
     @Published var holdStartedAt: Date?
@@ -62,8 +64,7 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var openFamily: ComposerLookFamily? {
         didSet { refreshFeed() }
     }
-    /// Les proportions de ce que le viseur montre : l'aperçu les mesure,
-    /// tout ce qui part les garde. Une carte 9:16 tant que rien n'est monté.
+    /// Les proportions du viseur, que tout ce qui part garde ; 9:16 tant que rien n'est monté.
     var canvasAspect = ComposerLookPainter.designAspect
     /// Le texte de la retouche (#12591) : une planche d'objets, peinte au-dessus du cadre.
     let retouchTexts = ComposerRetouchTextBoard()
@@ -74,12 +75,13 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var discardPrompt = ComposerCaptureDiscardPrompt()
     /// Les proportions de la scène de retouche — ce qui partira ; `nil` hors retouche.
     @Published var editAspect: CGFloat?
+    /// Le format imposé d'une image d'identité (#17251) : ses proportions fixent la scène.
+    var imageFormat: EntityImageFormat?
     /// Celles de l'ouverture : un écart est un recadrage de l'auteur (CAM-14).
     var openingAspect: CGFloat?
     /// Ce qu'« Annuler » rend pendant le recadrage (#15355).
     var cropEntry: ComposerCropEntry?
-    /// Les outils de retouche actifs — Crop, Trim, Son, ensemble ;
-    /// vide hors retouche.
+    /// Les outils de retouche actifs — Crop, Trim, Son, ensemble ; vide hors retouche.
     @Published var activeEditTools: Set<ComposerEditTool> = []
     /// **Le chrome de la retouche, par-dessus la prise** : montré à
     /// l'entrée ; glissé vers le bas ou haut, ou toucher sur la prise, le bascule.
@@ -237,7 +239,7 @@ final class ComposerCaptureSession: ObservableObject {
             zoomPresets: ComposerCaptureZoomScale.presets(in: camera.zoomRange),
             flipping: camera.isSwitchingCamera || camera.recordingIsPending,
             switchingCamera: camera.isSwitchingCamera,
-            flashIntensity: flashIntensity)
+            flashIntensity: flashIntensity, cameraPosition: controls.currentPosition)
     }
 
     // MARK: - L'armement et la sortie
@@ -247,8 +249,7 @@ final class ComposerCaptureSession: ObservableObject {
     func arm(mode: ComposerSceneCameraMode) {
         resetIntents()
         self.mode = mode
-        // **Les cadres d'emblée, « Aucun » choisi** :
-        // la bande s'ouvre sur la famille des cadres, sans en imposer un.
+        // **Le déclencheur d'emblée, aucun look imposé** (A8) : la plaque s'ouvre à la demande.
         look = ComposerCaptureSession.openingLook
         openFamily = ComposerCaptureSession.openingFamily
         stage = .armed
@@ -258,8 +259,8 @@ final class ComposerCaptureSession: ObservableObject {
         camera.configure(filming: mode != .photo)
     }
 
-    /// La bande ouverte à l'armement, et le look qu'elle montre choisi.
-    static let openingFamily: ComposerLookFamily? = .frames
+    /// La bande ouverte à l'armement (aucune depuis A8, #17109), et le look choisi.
+    static let openingFamily: ComposerLookFamily? = nil
     static let openingLook = ComposerPhotoLook()
 
     /// **Préparer la session avant de la montrer** : l'hôte qui peut
@@ -358,7 +359,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// caméra la fait partir DÉJÀ verrouillée ; la vidéo s'éclaire
     /// aussi, à l'intensité du curseur.
     func startFilming() {
-        guard stage == .armed, !controls.isSwitchingCamera else { return }
+        guard stage == .armed, !controls.isSwitchingCamera, ComposerCaptureRecordingBudget.allowsAnotherTake(after: self) else { return }
         mode = ComposerShutterGesture.mode(locked: holdPhase == .locked)
         let intent = noteRecordingStarted()
         stage = .recording
@@ -368,7 +369,7 @@ final class ComposerCaptureSession: ObservableObject {
         Task { @MainActor in
             await camera.enableAudioCaptureIfNeeded()
             let avant = camera.recordingId
-            camera.startRecording()
+            await camera.startRecording(whileWanted: { [weak self] in self?.stage == .recording })
             bindRecording(intent, to: camera.isRecordingVideo && camera.recordingId != avant ? camera.recordingId : nil)
         }
     }
@@ -389,7 +390,7 @@ final class ComposerCaptureSession: ObservableObject {
         pendingSegmentDuration = camera.recordingDuration
         camera.stopRecording()
         extinguishFlash()
-        HapticFeedback.medium()
+        ComposerCaptureHaptic.play(.recordingEnded)
     }
 
     /// **Une vidéo s'ACCUMULE** : `✓` concatène.
@@ -455,7 +456,7 @@ final class ComposerCaptureSession: ObservableObject {
         filmIntent = .edit
         let attend = controls.recordingIsPending
         awaitsPreviousTake = attend
-        if !attend { HapticFeedback.medium() }
+        if !attend { ComposerCaptureHaptic.play(.recordingStarted) }
         holdStartedAt = Date()
         holdPhase = .holding
         lockProgress = 0
@@ -465,7 +466,7 @@ final class ComposerCaptureSession: ObservableObject {
                   await controls.waitUntilCaptureReady(timeout: ComposerSceneQuickCapture.readinessTimeout),
                   !Task.isCancelled,
                   holdStartedAt != nil || holdPhase == .locked else { return }
-            if attend { HapticFeedback.medium() }
+            if attend { ComposerCaptureHaptic.play(.recordingStarted) }
             startFilming()
         }
     }
@@ -478,11 +479,11 @@ final class ComposerCaptureSession: ObservableObject {
         // Deux doigts qui s'écartent à l'horizontale zooment ; ils ne
         // verrouillent pas la prise.
         guard holdPhase != .locked, !isPinching, !awaitsPreviousTake else { return }
-        lockProgress = ComposerShutterGesture.lockProgress(translationX: translation.x)
+        setIfChanged(\.lockProgress, ComposerShutterGesture.lockProgress(translationX: translation.x))
         guard ComposerCaptureHold.phase(translation: translation, wasLocked: false) == .locked else { return }
         holdPhase = .locked
         lockProgress = 1
-        HapticFeedback.medium()
+        ComposerCaptureHaptic.play(.locked)
         UIAccessibility.post(notification: .announcement, argument: ComposerSceneCameraCopy.lockedAnnouncement)
         lockTake()
     }
@@ -599,7 +600,7 @@ final class ComposerCaptureSession: ObservableObject {
             dismissDragSpoiled = pinchSpoilsGestures
         }
         if isPinching { dismissDragSpoiled = true }
-        dismissDrag = dismissDragSpoiled ? 0 : translationY
+        setIfChanged(\.dismissDrag, dismissDragSpoiled ? 0 : translationY)
     }
 
     /// La levée du glissé : `true` ⇒ le viseur se range. En édition le doigt

@@ -21,7 +21,7 @@ public struct ConversationPreviewAttachment: Sendable, Hashable, Decodable {
     public let isBlurred: Bool?
     public let effectFlags: Int?
     /// Texte alternatif (`MessageAttachment.alt`). Pour un sticker de texte,
-    /// c'est la phrase tapée, dessinée dans l'image (décision porteur 2026-09-23).
+    /// c'est la phrase tapée, dessinée dans l'image.
     public let alt: String?
 
     public init(mimeType: String? = nil, originalName: String? = nil, fileSize: Double? = nil,

@@ -16,6 +16,7 @@ struct SocketAckRefusal: Sendable, Equatable {
     let endReason: String?
     let resetAt: String?
     let limit: Int?
+    let conversationId: String?
 
     var message: String? { errorMessage ?? errorText }
 
@@ -28,6 +29,7 @@ struct SocketAckRefusal: Sendable, Equatable {
         endReason = error?["endReason"] as? String
         resetAt = response["resetAt"] as? String
         limit = response["limit"] as? Int
+        conversationId = response["conversationId"] as? String
     }
 }
 

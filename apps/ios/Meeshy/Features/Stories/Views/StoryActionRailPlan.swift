@@ -7,8 +7,7 @@ import MeeshySDK
 // le plan est une règle pure, la vue du rail le consomme.
 
 /// Plan du rail d'actions — CALCULÉ D'UN BLOC À L'ENTRÉE DU SLIDE puis FIGÉ
-/// pendant toute sa lecture (directive user 2026-07-10 : « le calcul des
-/// boutons à afficher doit se faire avant affichage, même contenant toutes
+/// pendant toute sa lecture (même contenant toutes
 /// les informations de compteur — pas des apparitions en second temps »).
 ///
 /// Toutes les entrées proviennent du payload feed déjà en main (compteurs
@@ -22,7 +21,7 @@ import MeeshySDK
 /// StoryCanvasFraming / BandStateMachine) — le target app compile en
 /// defaultIsolation MainActor, sans ce modificateur le bundle de tests
 /// (nonisolated) ne peut ni appeler `resolve` ni lire les propriétés
-/// (échec CI ios-tests 2026-07-10, exit 65 = échec de COMPILE).
+/// (exit 65 = échec de COMPILE).
 nonisolated struct StoryActionRailPlan: Equatable {
     let showsReact: Bool
     let showsReply: Bool
@@ -71,8 +70,7 @@ nonisolated struct StoryActionRailPlan: Equatable {
             showsExport: isOwnStory,
             showsSound: hasAudibleSound,
             showsComments: commentCount > 0,
-            // Les traductions ne sont PAS réservées aux lecteurs (changement
-            // 2026-07-25) : l'auteur explore les langues de sa propre story
+            // Les traductions ne sont PAS réservées aux lecteurs: l'auteur explore les langues de sa propre story
             // comme il choisit déjà sa langue d'export. Le Prisme est un outil
             // de lecture, pas une permission.
             showsTranslations: hasTranslatableContent,

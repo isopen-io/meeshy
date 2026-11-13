@@ -9,7 +9,7 @@ import SwiftUI
 
 /// Ce que l'app remet au bandeau : le glyphe de la catégorie (décoratif), le texte qui défile, et la phrase que
 /// VoiceOver entend.
-public struct AvatarListening: Equatable, Sendable {
+public nonisolated struct AvatarListening: Equatable, Sendable {
     public let glyph: String
     public let text: String
     public let spoken: String
@@ -21,8 +21,9 @@ public struct AvatarListening: Equatable, Sendable {
     }
 }
 
-/// Le bandeau, posé par-dessus un avatar de diamètre `avatarSize` (`.overlay`). Sous `minimumAvatarSize`, il ne se
-/// pose pas : le texte n'y serait pas lisible.
+/// Le bandeau, posé par-dessus un avatar de diamètre `avatarSize` (`.overlay`). Sous `minimumAvatarSize`, le texte
+/// n'y serait pas lisible et aucun écran ne pose d'avatar d'écoute si petit : l'hôte ne le pose pas (#17084 a retiré
+/// la pastille-glyphe de #16733, sans appelant).
 public struct AvatarListeningBand: View {
     public static let minimumAvatarSize: CGFloat = 40
 
@@ -43,32 +44,35 @@ public struct AvatarListeningBand: View {
         max(9, (avatarSize * 0.14).rounded())
     }
 
+    /// Vrai quand le bandeau défilant se pose.
     public static func isShown(avatarSize: CGFloat) -> Bool {
         avatarSize >= minimumAvatarSize
     }
 
     public var body: some View {
-        if Self.isShown(avatarSize: avatarSize) {
-            let height = Self.bandHeight(avatarSize: avatarSize)
-            ZStack(alignment: .bottom) {
-                Color.clear
-                AudioChipMarquee(
-                    text: "\(listening.glyph) \(listening.text)",
-                    height: height,
-                    fontSize: Self.fontSize(avatarSize: avatarSize),
-                    tint: .white
-                )
-                .padding(.horizontal, avatarSize * 0.12)
-                .frame(width: avatarSize, height: height)
-                .background(Color.black.opacity(0.55))
-            }
-            .frame(width: avatarSize, height: avatarSize)
-            .clipShape(Circle())
-            .allowsHitTesting(false)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(listening.spoken)
-            .accessibilityIdentifier("avatar.listening")
-            .transition(.opacity)
+        bandBody
+    }
+
+    private var bandBody: some View {
+        let height = Self.bandHeight(avatarSize: avatarSize)
+        return ZStack(alignment: .bottom) {
+            Color.clear
+            AudioChipMarquee(
+                text: "\(listening.glyph) \(listening.text)",
+                height: height,
+                fontSize: Self.fontSize(avatarSize: avatarSize),
+                tint: .white
+            )
+            .padding(.horizontal, avatarSize * 0.12)
+            .frame(width: avatarSize, height: height)
+            .background(Color.black.opacity(0.55))
         }
+        .frame(width: avatarSize, height: avatarSize)
+        .clipShape(Circle())
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(listening.spoken)
+        .accessibilityIdentifier("avatar.listening")
+        .transition(.opacity)
     }
 }

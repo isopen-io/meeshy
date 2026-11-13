@@ -11,8 +11,8 @@ import me.meeshy.ui.theme.MeeshyPalette
 
 /**
  * Pose [content] dans le panneau d'actions révélées d'une rangée (iOS `ConversationSwipeActions`):
- * glisser vers le début de lecture révèle épingler / silence / verrou, vers la fin archiver / lu-non lu /
- * masquer, rendre obsolète. Le panneau reste ouvert, une seule rangée l'est à la fois, chaque action est aussi une action
+ * glisser vers le début de lecture révèle épingler, vers la fin archiver / lu-non lu
+ * (silence, verrou, suppression et « Rendre obsolète » vivent dans le menu d'appui long, #17244). Le panneau reste ouvert, une seule rangée l'est à la fois, chaque action est aussi une action
  * personnalisée TalkBack et le sens s'inverse en RTL — tout cela vit dans [SwipeableRow]; ici on ne
  * choisit que QUOI révéler et ce que chaque bouton déclenche.
  */
@@ -25,16 +25,10 @@ internal fun ConversationSwipeActions(
     val labels = SwipeLabels(
         pin = stringResource(R.string.swipe_pin),
         unpin = stringResource(R.string.swipe_unpin),
-        mute = stringResource(R.string.swipe_mute),
-        unmute = stringResource(R.string.swipe_unmute),
-        lock = stringResource(R.string.conversations_action_lock),
-        unlock = stringResource(R.string.swipe_unlock),
         archive = stringResource(R.string.swipe_archive),
         unarchive = stringResource(R.string.swipe_unarchive),
         markRead = stringResource(R.string.swipe_mark_read),
         markUnread = stringResource(R.string.swipe_mark_unread),
-        hide = stringResource(R.string.swipe_hide),
-        obsolete = stringResource(R.string.conversations_action_make_obsolete),
     )
     val revealed = remember(swipe, labels, actions) {
         swipe.leading.map { it.toAction(labels, actions) } to swipe.trailing.map { it.toAction(labels, actions) }
@@ -45,16 +39,10 @@ internal fun ConversationSwipeActions(
 private data class SwipeLabels(
     val pin: String,
     val unpin: String,
-    val mute: String,
-    val unmute: String,
-    val lock: String,
-    val unlock: String,
     val archive: String,
     val unarchive: String,
     val markRead: String,
     val markUnread: String,
-    val hide: String,
-    val obsolete: String,
 )
 
 private fun ConversationSwipeItem.toAction(labels: SwipeLabels, actions: ConversationRowActions): SwipeAction =
@@ -62,16 +50,6 @@ private fun ConversationSwipeItem.toAction(labels: SwipeLabels, actions: Convers
         SwipeKind.PIN -> SwipeAction(
             MeeshyIcons.PinFilled, if (active) labels.unpin else labels.pin,
             MeeshyPalette.PinnedBlue, actions.onTogglePin,
-        )
-        SwipeKind.MUTE -> SwipeAction(
-            if (active) MeeshyIcons.BellFilled else MeeshyIcons.BellOff,
-            if (active) labels.unmute else labels.mute,
-            MeeshyPalette.Neutral500, actions.onToggleMute,
-        )
-        SwipeKind.LOCK -> SwipeAction(
-            if (active) MeeshyIcons.LockOpenFilled else MeeshyIcons.LockFilled,
-            if (active) labels.unlock else labels.lock,
-            MeeshyPalette.Warning, actions.onLockToggle,
         )
         SwipeKind.ARCHIVE -> SwipeAction(
             if (active) MeeshyIcons.Unarchive else MeeshyIcons.Archive,
@@ -83,11 +61,5 @@ private fun ConversationSwipeItem.toAction(labels: SwipeLabels, actions: Convers
         )
         SwipeKind.MARK_UNREAD -> SwipeAction(
             MeeshyIcons.MarkChatUnread, labels.markUnread, MeeshyPalette.Indigo400, actions.onMarkUnread,
-        )
-        SwipeKind.REMOVE -> SwipeAction(
-            MeeshyIcons.EyeOffFilled, labels.hide, MeeshyPalette.Error, actions.onRemove,
-        )
-        SwipeKind.OBSOLETE -> SwipeAction(
-            MeeshyIcons.DeleteForever, labels.obsolete, MeeshyPalette.Error, actions.onRequestObsolete,
         )
     }

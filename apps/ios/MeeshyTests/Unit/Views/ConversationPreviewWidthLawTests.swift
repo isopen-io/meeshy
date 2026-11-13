@@ -20,7 +20,13 @@ final class ConversationPreviewWidthLawTests: XCTestCase {
         XCTAssertFalse(rows.contains("frame(width: 340)"))
         XCTAssertFalse(overlays.contains("maxWidth: 340)"))
         XCTAssertTrue(rows.contains("ConversationPreviewWidthLaw.width("))
-        XCTAssertTrue(overlays.contains("ConversationPreviewWidthLaw.maximum"))
+        // L'aperçu personnalisé (#17242) prend la largeur de SA loi, soit
+        // 80 % de la largeur (#17274) : aucune largeur n'est écrite dans la liste.
+        let peek = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationLongPressPeek.swift"))
+        XCTAssertTrue(overlays.contains("ConversationLongPressPeek("))
+        XCTAssertFalse(overlays.contains("frame(maxWidth: ConversationPreviewWidthLaw.maximum)"))
+        XCTAssertTrue(peek.contains(".frame(width: layout.cardWidth, height: layout.cardHeight(progress: progress)"))
+        XCTAssertTrue(peek.contains(".frame(width: layout.menuWidth, height: layout.menuHeight(progress: progress)"))
     }
 }
 

@@ -43,7 +43,7 @@ import {
   EMPTY_EDIT_REFUSAL_MESSAGE,
 } from '../../services/messaging/messageEditContent';
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
-import { editReadership, blockedEditKeys } from '../../socketio/editedAudience';
+import { editReadership } from '../../socketio/editedAudience';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { isServerAtRestUnavailable, queuedEventSealsAtRest } from '../../services/messaging/serverAtRest';
@@ -432,7 +432,9 @@ export function registerEditMessagePutRoute(
       // qui est déjà parti. Le coût est une lecture de plus par édition, sur un
       // chemin qui n'est pas chaud ; le cas nominal ne rend rien.
       emitMentionCreated({
-        blockedReaders: blockedEditKeys(await editReadership(prisma, conversationId, messageId)),
+        readership: await editReadership(prisma, conversationId, messageId, (err) =>
+          logger.error('Edit - edit readership unresolvable, mention withheld', err as Error),
+        ),
         io: socketIOHandler?.getManager()?.getIO(),
         newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
         messageId,
@@ -855,7 +857,9 @@ export function registerEditMessagePatchRoute(
       // qui est déjà parti. Le coût est une lecture de plus par édition, sur un
       // chemin qui n'est pas chaud ; le cas nominal ne rend rien.
       emitMentionCreated({
-        blockedReaders: blockedEditKeys(await editReadership(prisma, message.conversationId, messageId)),
+        readership: await editReadership(prisma, message.conversationId, messageId, (err) =>
+          logger.error('Patch edit - edit readership unresolvable, mention withheld', err as Error),
+        ),
         io: socketIOHandler?.getManager()?.getIO(),
         newlyMentionedUserIds: editedMentions.newlyMentionedUserIds,
         messageId,

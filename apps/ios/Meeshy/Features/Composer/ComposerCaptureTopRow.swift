@@ -3,9 +3,9 @@ import CoreGraphics
 
 /// Un contrôle de la rangée haute du viseur.
 nonisolated enum ComposerCaptureTopItem: Equatable, Hashable, Sendable {
-    /// (x) : quitte le viseur, ou abandonne la retouche.
+    /// « Quitter » : quitte le viseur, ou abandonne la retouche.
     case close
-    /// La puce du chrono et de l'indicateur de segment.
+    /// La puce du chrono et de l'indicateur de segment, à gauche de la barre des segments.
     case chrono
     /// `[ ]` : carte ↔ plein écran — en retouche ; au viseur, il vit dans ⋯.
     case size
@@ -13,9 +13,11 @@ nonisolated enum ComposerCaptureTopItem: Equatable, Hashable, Sendable {
     case more
     /// Retirer le dernier segment.
     case dropSegment
-    /// ✓ : poser les segments.
+    /// « ✓ Valider » : poser les segments, ou rendre la scène.
     case validate
     case flash
+    /// Le retardateur : un toucher passe de désactivé à 3 s, à 10 s, puis désactivé.
+    case selfTimer
     /// Changer d'objectif.
     case flip
     /// ⬇︎ : la prise retouchée rejoint Photos.
@@ -25,23 +27,18 @@ nonisolated enum ComposerCaptureTopItem: Equatable, Hashable, Sendable {
 }
 
 /// **La rangée haute du viseur — sa disposition, décidée ici et nulle part
-/// ailleurs** (#9753, directive porteur 2026-10-09).
+/// ailleurs** (vue A8, #17109, qui remplace la disposition du #9753).
 ///
-/// > « Le bouton de changement de caméra se met à DROITE du bouton du flash.
-/// > Quand on filme : les contrôleurs de segment se placent à GAUCHE de ces deux
-/// > boutons. La puce du chrono avec l'indicateur de segment se place à DROITE
-/// > du bouton (x). »
+/// La caméra est un mode plein écran (loi 9) : son en-tête est « Quitter » à
+/// gauche et « ✓ Valider » à droite, dans tous les états où l'on vise — prise
+/// faite ou non. Les réglages de l'objectif vivent dans UNE capsule de verre
+/// centrée sous l'en-tête : Flash · Retardateur · Objectif · ⋯.
 ///
-/// À gauche, la croix puis — dès qu'une vidéo se prend — la puce du chrono. À
-/// droite, de l'intérieur vers le bord : `⋯`, les contrôleurs de segment, le
-/// flash, le retournement. Pendant l'enregistrement, seuls la croix et le chrono
-/// restent : le zoom passe au glissé, et rien d'autre ne se règle en filmant.
-/// Dès que des segments attendent, `⋯` cède sa place : la rangée tient alors
-/// sept contrôles, et la largeur d'un iPhone n'en porte pas huit.
+/// Des segments en attente ajoutent « retirer le dernier » à gauche de
+/// Valider ; le chrono vit à gauche de la barre des segments (#17469).
 ///
-/// **`⋯` remplace `[ ]` au viseur** (décision porteur, OPUS-6) : il
-/// ouvre la grille et la taille, et accueillera le retardateur, sans huitième
-/// contrôle.
+/// **En filmant, plus d'en-tête ni de capsule** (A9, révoque #8653) : seuls
+/// le chrono et sa barre restent, et la prise se clôt au déclencheur rouge.
 nonisolated enum ComposerCaptureTopRow {
 
     /// L'écart entre deux contrôles de la rangée.
@@ -55,10 +52,14 @@ nonisolated enum ComposerCaptureTopRow {
         var offersSave = false
     }
 
-    /// Ce qui ouvre la rangée, de gauche à droite.
+    /// L'en-tête « Quitter · ✓ Valider » est-il montré ? Partout, sauf en filmant.
+    static func showsHeader(_ input: Input) -> Bool {
+        input.editing || input.stage != .recording
+    }
+
+    /// Ce qui ouvre la rangée, à gauche.
     static func leading(_ input: Input) -> [ComposerCaptureTopItem] {
-        guard !input.editing, showsChrono(input) else { return [.close] }
-        return [.close, .chrono]
+        showsHeader(input) ? [.close] : []
     }
 
     /// Ce qui la ferme, de gauche à droite — le dernier touche le bord.
@@ -66,16 +67,20 @@ nonisolated enum ComposerCaptureTopRow {
         if input.editing {
             return (input.offersSizeToggle ? [.size] : []) + (input.offersSave ? [.save] : []) + [.done]
         }
-        guard input.stage != .recording else { return [] }
-        let segments = input.pendingSegments > 0
-        let menu: [ComposerCaptureTopItem] = segments ? [] : [.more]
-        let controleurs: [ComposerCaptureTopItem] = segments ? [.dropSegment, .validate] : []
-        return menu + controleurs + [.flash, .flip]
+        guard showsHeader(input) else { return [] }
+        return input.pendingSegments > 0 ? [.dropSegment, .validate] : [.validate]
     }
 
-    /// La puce paraît dès qu'une vidéo se prend : en filmant, ou segments en attente.
+    /// La capsule centrée des réglages de l'objectif, de gauche à droite.
+    static func capsule(_ input: Input) -> [ComposerCaptureTopItem] {
+        guard !input.editing, input.stage != .recording else { return [] }
+        return [.flash, .selfTimer, .flip, .more]
+    }
+
+    /// La puce paraît dès qu'une vidéo se prend : en filmant, ou
+    /// segments en attente. Jamais en retouche.
     static func showsChrono(_ input: Input) -> Bool {
-        input.stage == .recording || input.pendingSegments > 0
+        !input.editing && (input.stage == .recording || input.pendingSegments > 0)
     }
 
     /// **L'indicateur de segment compte celui qui s'écrit** : le premier
@@ -84,41 +89,33 @@ nonisolated enum ComposerCaptureTopRow {
         max(0, pending) + (recording ? 1 : 0)
     }
 
-    /// **L'indicateur se LIT d'un coup d'œil : « 3 – »** (#10310, porteur
-    /// 2026-10-12). Le chiffre et un trait, sans le mot : la puce tient à côté
-    /// du chrono sur un iPhone étroit. Le mot reste à VoiceOver, au pluriel de
-    /// la langue (`ComposerSceneCameraCopy.segmentCount`).
+    /// **L'indicateur se LIT d'un coup d'œil : « 3 »** (#10310, #17469). Le
+    /// chiffre seul, ni mot ni trait : la puce tient à côté du chrono sur un
+    /// iPhone étroit. Le mot reste à VoiceOver, au pluriel de la langue
+    /// (`ComposerSceneCameraCopy.segmentCount`).
     static func segmentBadge(_ count: Int, locale: Locale = .current) -> String {
-        "\(LocalizedNumber.exact(max(0, count), locale: locale)) \u{2013}"
-    }
-
-    /// **Le curseur d'intensité se pose SOUS le flash** : son retrait depuis le
-    /// bord droit compte les contrôles posés à droite du flash.
-    static func flashSliderTrailingInset(_ trailing: [ComposerCaptureTopItem], tapTarget: CGFloat) -> CGFloat {
-        guard let rang = trailing.firstIndex(of: .flash) else { return 0 }
-        let aDroite = CGFloat(trailing.count - 1 - rang)
-        return aDroite * (tapTarget + spacing)
+        LocalizedNumber.exact(max(0, count), locale: locale)
     }
 }
 
 /// Une entrée du menu `⋯` du viseur.
 nonisolated enum ComposerCaptureMoreItem: Equatable, Hashable, Sendable {
     case grid
-    case selfTimer
     case size
 }
 
 /// **Ce que le menu `⋯` du viseur propose** (OPUS-6) : la grille toujours ; la
-/// taille seulement s'il y a une carte où rentrer (#9125).
+/// taille seulement quand elle s'offre (le selfie éclairé par l'écran, #9566).
+/// Le retardateur a quitté le menu pour la capsule (A8, #17109).
 nonisolated enum ComposerCaptureMoreMenu {
     static func items(offersSizeToggle: Bool) -> [ComposerCaptureMoreItem] {
-        [.grid, .selfTimer] + (offersSizeToggle ? [.size] : [])
+        [.grid] + (offersSizeToggle ? [.size] : [])
     }
 }
 
-/// **Le retardateur du viseur** (CAM-4, décision porteur, OPUS-8) : choisi dans
-/// `⋯`, gardé d'une ouverture à l'autre, il diffère la PHOTO — jamais la vidéo,
-/// qu'un doigt tient. Une valeur inconnue vaut « désactivé ».
+/// **Le retardateur du viseur** (CAM-4, décision porteur, OPUS-8) : réglé d'un
+/// toucher dans la capsule (A8), gardé d'une ouverture à l'autre, il diffère la
+/// PHOTO — jamais la vidéo, qu'un doigt tient. Une valeur inconnue vaut « désactivé ».
 nonisolated enum ComposerCaptureSelfTimerDelay: Int, CaseIterable, Hashable, Sendable {
     case off = 0
     case three = 3
@@ -128,6 +125,15 @@ nonisolated enum ComposerCaptureSelfTimerDelay: Int, CaseIterable, Hashable, Sen
 
     init(stored: Int) {
         self = Self(rawValue: stored) ?? .off
+    }
+
+    /// Le réglage qu'un toucher sur le bouton pose : désactivé → 3 s → 10 s → désactivé.
+    var next: ComposerCaptureSelfTimerDelay {
+        switch self {
+        case .off: return .three
+        case .three: return .ten
+        case .ten: return .off
+        }
     }
 
     /// Les secondes montrées, de la première à la dernière.

@@ -183,9 +183,9 @@ enum EmailVerificationLead: Equatable {
     func subtitle(email: String) -> String {
         switch self {
         case .accountCreated:
-            String(localized: "emailVerification.subtitle.accountCreated", defaultValue: "Votre compte est créé. Un code et un lien de validation ont été envoyés à **\(email)**.")
+            String(localized: "emailVerification.subtitle.accountCreated", defaultValue: "Compte créé. Code et lien envoyés à **\(email)**.")
         case .activationRequired:
-            String(localized: "emailVerification.subtitle.activationRequired", defaultValue: "Votre mot de passe est bon, mais votre compte doit d’abord être activé en prouvant que cette adresse est la vôtre. Nous venons d’envoyer un code à **\(email)**.")
+            String(localized: "emailVerification.subtitle.activationRequired", defaultValue: "Activez votre compte : un code a été envoyé à **\(email)** pour prouver cette adresse.")
         case .codeSent:
             String(localized: "emailVerification.subtitle", defaultValue: "Entrez le code à 6 chiffres envoyé à **\(email)**")
         }

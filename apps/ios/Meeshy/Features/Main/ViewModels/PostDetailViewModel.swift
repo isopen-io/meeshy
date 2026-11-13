@@ -498,6 +498,8 @@ class PostDetailViewModel: ObservableObject {
         guard subscribedPostId != postId else { return }
         subscribedPostId = postId
         socketCancellables.removeAll()
+        let cacheLane = OrderedEventLane()
+        cacheLane.store(in: &socketCancellables)
 
         // --- didReconnect → backfill du post + commentaires ---
         // `SocialSocketManager` re-joint la room du post au `.connect` (le flux
@@ -507,12 +509,9 @@ class PostDetailViewModel: ObservableObject {
         // l'append idempotent — ne JAMAIS vider `comments` ici (flash-vide).
         socialSocket.didReconnect
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] in
-                guard let self else { return }
-                Task {
-                    await self.refreshPost(postId)
-                    await self.onThread(postId).refreshFirstRootsPage()
-                }
+            .relay(through: OrderedEventLane()) { [weak self] _ in
+                await self?.refreshPost(postId)
+                await self?.onThread(postId).refreshFirstRootsPage()
             }
             .store(in: &socketCancellables)
 
@@ -563,7 +562,7 @@ class PostDetailViewModel: ObservableObject {
                 // ouverture (fetch qui APPEND sur la liste issue du cache).
                 let reconciledComments = self.comments
                 let reconciledReplies = parentId.flatMap { self.repliesMap[$0] }
-                Task {
+                cacheLane.submit {
                     await bestEffort("postDetailViewModel.comments.reconcileCreatedThread", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledComments, for: "post-\(postId)") }
                     if let parentId, let reconciledReplies {
                         await bestEffort("postDetailViewModel.comments.reconcileCreatedReplies", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledReplies, for: "replies-\(parentId)") }
@@ -584,7 +583,7 @@ class PostDetailViewModel: ObservableObject {
                 // Invalidation locale par réécriture (écho d'un autre appareil) :
                 // les autres vues resservent la version éditée depuis le cache.
                 let snapshot = self.comments
-                Task {
+                cacheLane.submit {
                     await bestEffort("postDetailViewModel.comments.applyRemoteEdit", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)") }
                 }
             }
@@ -625,13 +624,13 @@ class PostDetailViewModel: ObservableObject {
                     existing[idx].media = media
                     self.repliesMap[parentId] = existing
                     let snapshot = existing
-                    Task {
+                    cacheLane.submit {
                         await bestEffort("postDetailViewModel.comments.applyMediaUpdateReplies", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "replies-\(parentId)") }
                     }
                 } else if let idx = self.comments.firstIndex(where: { $0.id == commentId }) {
                     self.comments[idx].media = media
                     let snapshot = self.comments
-                    Task {
+                    cacheLane.submit {
                         await bestEffort("postDetailViewModel.comments.applyMediaUpdateThread", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)") }
                     }
                 }
@@ -678,10 +677,7 @@ class PostDetailViewModel: ObservableObject {
                 // avant le premier chargement écrirait une liste VIDE
                 // par-dessus la page déjà en cache sous la même clé.
                 guard hadTopLevelRow || !touchedThreadIds.isEmpty else { return }
-                let snapshot = self.comments
-                let threadSnapshots = self.repliesMap
-                let touchedThreads = touchedThreadIds
-                Task {
+                cacheLane.submit { [snapshot = self.comments, threadSnapshots = self.repliesMap, touchedThreads = touchedThreadIds] in
                     for key in touchedThreads {
                         await bestEffort("postDetailViewModel.comments.applyRemoteDeleteReplies", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(threadSnapshots[key] ?? [], for: "replies-\(key)") }
                     }

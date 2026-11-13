@@ -18,7 +18,7 @@ extension StoryItem {
     ///   ou si le fond est un `StoryMediaObject isBackground:true` (traité en amont
     ///   par `renderBackground`), de sorte qu'on ne fournit jamais un post id au
     ///   resolver keyé sur `FeedMedia.id`.
-    /// TRANSITOIRE — lecture de la forme legacy « média seul » (2026-08-22).
+    /// TRANSITOIRE — lecture de la forme legacy « média seul ».
     ///
     /// Un client qui n'annonce pas `X-Canvas-Caps` reçoit d'une story canvas
     /// v3 une forme dégradée : `storyEffects` OMIS, le média porteur seul dans
@@ -146,7 +146,7 @@ extension StoryItem {
             // le canvas/snapshot le dimensionnent via `aspectRatio`. Les
             // (rares) stories portant déjà un ratio réel ≠ 1.0 ne sont
             // jamais touchées — parité avec l'hydratation de `duration`
-            // ci-dessus (fix proportions 2026-06-30).
+            // ci-dessus.
             // **La condition porte sur la MESURE, plus sur un seuil** (#5100).
             //
             // Elle testait `abs(aspectRatio - 1.0) < 0.05` — c'est-à-dire la

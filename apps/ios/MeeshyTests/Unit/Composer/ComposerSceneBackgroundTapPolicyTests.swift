@@ -75,7 +75,7 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
     func test_emptyTap_rienDeSelectionne_selectionneLeFond() {
         XCTAssertEqual(
             ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
-                                          quickCaptureOffered: false, backgroundMediaId: "fond"),
+                                          backgroundMediaId: "fond"),
             .selectBackground("fond"))
     }
 
@@ -84,7 +84,7 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
     func test_emptyTap_uneSelectionEnCours_deselectionneSansBasculerSurLeFond() {
         XCTAssertEqual(
             ComposerSceneEmptyTap.outcome(hadSelection: true, effectIsOpen: false,
-                                          quickCaptureOffered: false, backgroundMediaId: "fond"),
+                                          backgroundMediaId: "fond"),
             .deselect)
     }
 
@@ -93,7 +93,7 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
         for fond in [nil, ""] as [String?] {
             XCTAssertEqual(
                 ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
-                                              quickCaptureOffered: false, backgroundMediaId: fond),
+                                              backgroundMediaId: fond),
                 .nothing)
         }
     }
@@ -134,12 +134,11 @@ final class ComposerSceneBackgroundTapPolicyTests: XCTestCase {
         else { return XCTFail("le toucher du fond a changé de forme") }
         let corps = String(code[debut.upperBound..<fin.lowerBound])
         guard let regle = corps.range(of: "ComposerSceneEmptyTap.outcome("),
-              let viseur = corps.range(of: "ifissue==.armViewfinder,handleSceneQuickTap(){return}"),
               let efface = corps.range(of: "selectedSceneItemKind=ComposerSceneBackgroundTapPolicy.selection("),
               let choisit = corps.range(of: "selectSceneItem(fond)")
         else { return XCTFail("le toucher du fond ne suit pas la règle du toucher à vide : \(corps)") }
-        XCTAssertLessThan(regle.lowerBound, viseur.lowerBound, "la règle décide avant le viseur")
-        XCTAssertLessThan(viseur.lowerBound, efface.lowerBound)
+        XCTAssertLessThan(regle.lowerBound, efface.lowerBound, "la règle décide avant l'effacement")
+        XCTAssertFalse(corps.contains("handleSceneQuickTap"), "le toucher du fond n'arme plus le viseur (#17269)")
         XCTAssertLessThan(efface.lowerBound, choisit.lowerBound,
                           "Le fond se sélectionne APRÈS l'effacement — sinon l'effacement le désélectionnerait.")
         XCTAssertTrue(corps.contains("effectIsOpen:openSceneEffect!=nil"))

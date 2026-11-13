@@ -53,7 +53,7 @@ public struct MeeshyAudioEditorView: View {
     /// remet `safeAreaInsets = 0` dans l'environnement SwiftUI ; le chrome
     /// (header, transport, dock) passerait sous la Dynamic Island / home
     /// indicator. La fenêtre expose toujours les insets physiques réels. Même
-    /// pattern que `MeeshyVideoEditorView` / `MeeshyImageEditorView`.
+    /// pattern que les anciens éditeurs plein écran d'image et de vidéo.
     // MARK: - Body
 
     public var body: some View {
@@ -118,8 +118,8 @@ public struct MeeshyAudioEditorView: View {
                 .scaleEffect(1.2)
             Text(String(localized: "audio.editor.preparing",
                         defaultValue: "Pr\u{00E9}paration de l'audio\u{2026}", bundle: .module))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .font(MeeshyFont.relative(13, weight: .medium))
+                .foregroundStyle(theme.textMuted)
         }
     }
 
@@ -184,19 +184,16 @@ public struct MeeshyAudioEditorView: View {
 
     private var header: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            circleButton(icon: "xmark") { cancelEditing() }
-                .accessibilityLabel(String(localized: "audio.editor.close",
-                                           defaultValue: "Fermer", bundle: .module))
+            circleButton(icon: "xmark", label: String(localized: "audio.editor.close",
+                                                      defaultValue: "Fermer", bundle: .module)) { cancelEditing() }
 
             if controller.document.hasHistory {
                 circleButton(icon: "arrow.uturn.backward",
+                             label: String(localized: "audio.editor.undo", defaultValue: "Annuler", bundle: .module),
                              enabled: controller.canUndo) { controller.undo() }
-                    .accessibilityLabel(String(localized: "audio.editor.undo",
-                                               defaultValue: "Annuler", bundle: .module))
                 circleButton(icon: "arrow.uturn.forward",
+                             label: String(localized: "audio.editor.redo", defaultValue: "R\u{00E9}tablir", bundle: .module),
                              enabled: controller.canRedo) { controller.redo() }
-                    .accessibilityLabel(String(localized: "audio.editor.redo",
-                                               defaultValue: "R\u{00E9}tablir", bundle: .module))
             }
 
             Spacer()
@@ -205,7 +202,7 @@ public struct MeeshyAudioEditorView: View {
         }
     }
 
-    private func circleButton(icon: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    private func circleButton(icon: String, label: String, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button {
             guard enabled else { return }
             HapticFeedback.light()
@@ -217,9 +214,12 @@ public struct MeeshyAudioEditorView: View {
                     .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                    .foregroundColor(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
+                    .foregroundStyle(theme.textPrimary.opacity(enabled ? 0.85 : 0.25))
             }
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
         .disabled(!enabled)
     }
@@ -298,7 +298,7 @@ public struct MeeshyAudioEditorView: View {
                 Spacer()
                 Text(MediaFormat.duration(controller.activeDuration))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
     }
@@ -328,7 +328,7 @@ public struct MeeshyAudioEditorView: View {
 
     private var transportControls: some View {
         HStack(spacing: 34) {
-            transportButton(icon: "gobackward.5", size: 21) { skip(by: -5) }
+            transportButton(icon: "gobackward.5", size: 21, label: String(localized: "audio.editor.skip.backward.a11y", bundle: .module)) { skip(by: -5) }
             Button {
                 togglePlayback()
             } label: {
@@ -339,7 +339,7 @@ public struct MeeshyAudioEditorView: View {
                         .shadow(color: accent.opacity(0.4), radius: 12)
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                         .offset(x: isPlaying ? 0 : 2)
                 }
             }
@@ -347,19 +347,20 @@ public struct MeeshyAudioEditorView: View {
             .accessibilityLabel(isPlaying
                 ? String(localized: "audio.editor.pause", defaultValue: "Pause", bundle: .module)
                 : String(localized: "audio.editor.play", defaultValue: "Lire", bundle: .module))
-            transportButton(icon: "goforward.5", size: 21) { skip(by: 5) }
+            transportButton(icon: "goforward.5", size: 21, label: String(localized: "audio.editor.skip.forward.a11y", bundle: .module)) { skip(by: 5) }
         }
     }
 
-    private func transportButton(icon: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+    private func transportButton(icon: String, size: CGFloat, label: String, action: @escaping () -> Void) -> some View {
         Button {
             HapticFeedback.light()
             action()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: size, weight: .medium))
-                .foregroundColor(theme.textPrimary.opacity(0.65))
+                .meeshyScaledFont(size, weight: .medium)
+                .foregroundStyle(theme.textPrimary.opacity(0.65))
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 
@@ -398,8 +399,8 @@ public struct MeeshyAudioEditorView: View {
                         .foregroundColor(isActive ? .white : accent)
                 }
                 Text(tool.title)
-                    .font(.system(size: MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(isActive ? theme.textPrimary : theme.textMuted)
+                    .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
+                    .foregroundStyle(isActive ? theme.textPrimary : theme.textMuted)
                     .lineLimit(1)
             }
         }
@@ -430,12 +431,12 @@ public struct MeeshyAudioEditorView: View {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: version.operation.displayIcon)
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .semibold)
                 Text(version.operation.displayLabel)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .lineLimit(1)
             }
-            .foregroundColor(isActive ? .white : theme.textSecondary)
+            .foregroundStyle(isActive ? .white : theme.textSecondary)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
@@ -463,8 +464,8 @@ public struct MeeshyAudioEditorView: View {
                           defaultValue: "Appliquer les modifications", bundle: .module)
                  : String(localized: "audio.editor.use",
                           defaultValue: "Utiliser l'audio", bundle: .module))
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(16, weight: .semibold))
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background(MeeshyColors.brandGradient)
@@ -478,19 +479,20 @@ public struct MeeshyAudioEditorView: View {
     private func errorBanner(_ message: String) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: MeeshyIconSize.xs))
-                .foregroundColor(MeeshyColors.error)
+                .meeshyScaledFont(MeeshyIconSize.xs)
+                .foregroundStyle(MeeshyColors.error)
             Text(message)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             Spacer(minLength: 0)
             Button {
                 controller.lastError = nil
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .meeshyScaledFont(MeeshyIconSize.xxs, weight: .bold)
+                    .foregroundStyle(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "common.close", bundle: .module))
             .buttonStyle(.plain)
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -510,8 +512,8 @@ public struct MeeshyAudioEditorView: View {
                 ProgressView().tint(.white).scaleEffect(1.2)
                 Text(String(localized: "audio.editor.processing",
                             defaultValue: "Traitement\u{2026}", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
+                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .foregroundStyle(.white)
             }
             .padding(MeeshySpacing.xxl)
             .background(

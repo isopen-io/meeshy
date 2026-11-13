@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Sticker Slot Filler
 
 /// **Le remplissage des emplacements d'un gabarit — et le GEL de la donnée**
-/// (#4716, décision D1 du 2026-09-01).
+/// (#4716).
 ///
 /// ## Pourquoi l'instant est un PARAMÈTRE
 ///

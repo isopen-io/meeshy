@@ -375,22 +375,96 @@ final class CallHangupFastPathTests: XCTestCase {
             row.contains("private var speakerColor: Color { Color(hex: line.speakerColorHex) }"),
             "La couleur de la ligne est celle de son AUTEUR, dérivée de son identifiant (#16614)."
         )
-        XCTAssertEqual(
-            row.components(separatedBy: ".foregroundColor(speakerColor)").count - 1, 1,
-            "Le NOM porte toujours la couleur de son auteur (#16662)."
+        XCTAssertTrue(
+            row.contains("nameColor: speakerColor") && row.contains(".foregroundStyle(speakerColor)"),
+            "Le NOM porte toujours la couleur de son auteur, dans la phrase comme dans le journal (#16662)."
         )
         XCTAssertTrue(
-            row.contains(".foregroundColor(line.textColorHex.map { Color(hex: $0) } ?? .white)"),
+            row.contains("private var ink: Color { line.textColorHex.map { Color(hex: $0) } ?? .white }") && row.contains("textColor: ink"),
             "La phrase ne prend la couleur que traduite ; l'original reste à l'encre de l'appel (#16662)."
         )
         XCTAssertTrue(
-            row.contains("Text(speakerHeading)"),
-            "Le nom du locuteur est du texte VISIBLE, pas seulement une pastille."
+            row.contains("CallCaptionSentence.text("),
+            "Le nom du locuteur est du texte VISIBLE, en tête de la phrase : « Moi · texte » (loi 4)."
         )
         XCTAssertTrue(
-            row.contains(".accessibilityLabel(\"\\(line.speakerName) : \\(line.text)\")"),
+            row.contains(".accessibilityLabel(spokenLabel)") && row.contains("\\(line.speakerName) : \\(line.text)"),
             "…et VoiceOver l'annonce aussi : deux exigences distinctes."
         )
+    }
+
+    /// Loi 4 — l'original déplié sous la phrase traduite est en encre secondaire, jamais
+    /// à la couleur de l'auteur ni en blanc plein ; et ma ligne est signée « Moi ».
+    func test_captionRow_unfoldsTheOriginalBelow_inSecondaryInk() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "struct CallCaptionRow: View {"),
+              let end = view.range(of: "struct CallCaptionsBand: View {", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionRow must exist")
+            return
+        }
+        let row = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(row.contains("if let original = line.originalBelow"))
+        XCTAssertTrue(
+            row.contains("CallOriginalBelowText(text: original, ink: MeeshyColors.mediaChromeSecondary)"),
+            "« Original · … » en encre secondaire, sous la traduction (#17340)."
+        )
+        XCTAssertTrue(view.contains("Text(verbatim: \"\\(kind.label) · \\(text)\")"), "La pièce partagée pose la ligne.")
+    }
+
+    func test_localSpeaker_isSignedMoi_notWithTheNameNorVous() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "func speakerName(for segment"),
+              let end = view.range(of: "if isGroupStage,", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("speakerName(for:localUserId:) must exist")
+            return
+        }
+        let local = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(local.contains("\"common.me\""), "Ma ligne est signée « Moi » (loi 4).")
+        XCTAssertFalse(local.contains("call.transcript.you") || local.contains("displayName"), "Ni « Vous », ni mon pseudo.")
+    }
+
+    func test_captionsBand_isALabelledLiveRegion_andAnnouncesInQueue() throws {
+        let view = try AppSourceGuard.callViewSource()
+        XCTAssertTrue(view.contains("String(localized: \"call.captions.region\""), "La zone s'appelle « Sous-titres de l'appel ».")
+        XCTAssertTrue(view.contains(".accessibilityAddTraits(.updatesFrequently)"), "La zone est une région vive.")
+        XCTAssertTrue(view.contains("queuedAnnouncement"), "Une phrase annoncée attend la fin de la précédente.")
+        XCTAssertFalse(view.contains("UIAccessibility.post(notification: .announcement, argument: announcement)"))
+    }
+
+    /// L'arrivée de la traduction ne change pas l'IDENTITÉ de la phrase : un seul
+    /// `TimelineView`, en pause hors attente, jamais deux branches qui se relaient
+    /// (elles occuperaient la place ensemble le temps du fondu, et la bande sauterait).
+    func test_captionRow_keepsOneIdentity_whenTheTranslationReplacesTheWait() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "struct CallCaptionRow: View {"),
+              let end = view.range(of: "struct CallCaptionsBand: View {", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionRow must exist")
+            return
+        }
+        let row = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(row.contains("TimelineView(.animation(minimumInterval:"), "Les trois points se mettent en pause, ils ne changent pas de vue.")
+        XCTAssertFalse(row.contains("TimelineView(.periodic"))
+        XCTAssertFalse(row.contains("if isWaiting && !reduceMotion"))
+    }
+
+    /// Le pied change d'état (attente, paire, N langues) en fondu, jamais d'un coup.
+    func test_captionsFooter_changesInAFade() throws {
+        let view = try AppSourceGuard.callViewSource()
+        guard let start = view.range(of: "private var footer: some View {"),
+              let end = view.range(of: "private func journalButton(", range: start.upperBound ..< view.endIndex) else {
+            XCTFail("CallCaptionsBand.footer must exist")
+            return
+        }
+        let footer = String(view[start.upperBound ..< end.lowerBound])
+        XCTAssertTrue(footer.contains(".contentTransition(.opacity)") && footer.contains(".transition(.opacity)"))
+        XCTAssertTrue(footer.contains(".animation(fade, value: note)"))
+    }
+
+    /// L'écran verrouillé étiquette la langue comme l'écran d'appel : par le Prisme du
+    /// lecteur, sans quoi une phrase déjà dans ma langue y porterait « FR ».
+    func test_liveActivityCaption_descendsTheReaderPrism() throws {
+        let coordinator = try AppSourceGuard.unit("Meeshy/Features/LiveActivity/CallLiveActivityCoordinator.swift")
+        XCTAssertTrue(coordinator.contains("readerPrism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)"))
     }
 
     func test_advanceCaptionsMode_off_startsTranscriptionAndLandsOnTranslated() throws {
@@ -460,82 +534,75 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_connectedView_audioPath_usesStructuralTranscriptPanel_notFloatingOverlay() throws {
+    /// #17343 — en audio aussi, les sous-titres vivent DANS la pilule : l'avatar garde sa
+    /// place, plus aucun panneau de transcription ne le remplace hors de la pilule (la
+    /// géométrie d'avant la décision, qui exigeait l'inverse, est retournée).
+    func test_connectedView_audioPath_keepsTheAvatar_theCaptionsLiveInThePill() throws {
         let view = try AppSourceGuard.callViewSource()
-        // #8394 — la disposition 1:1 (vidéo plein écran ou duo d'avatars) vit
-        // dans `duoLayout`, que `connectedView` monte hors scène de groupe.
         guard let range = view.range(of: "private var duoLayout: some View {") else {
             XCTFail("CallView must define duoLayout, the 1:1 layout of connectedView")
             return
         }
         let end = view.index(range.lowerBound, offsetBy: 4000, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
-        XCTAssertTrue(
-            body.contains("compactAudioCallHeader"),
-            "connectedView must show a compacted header (avatar + name, no status pills) " +
-            "when captions are active on an audio call — user-requested 2026-07-11."
-        )
-        XCTAssertTrue(
-            body.contains("transcriptPanel"),
-            "connectedView must show the structural (non-overlay) transcriptPanel " +
-            "for the audio-call captions layout."
-        )
+        XCTAssertFalse(body.contains("compactAudioCallHeader"), "L'avatar ne se réduit plus pour faire place à un panneau")
+        XCTAssertFalse(body.contains("transcriptPanel"), "Aucun panneau de transcription hors de la pilule")
+        XCTAssertTrue(body.contains("audioCallLayout"), "L'avatar et le nom restent au centre")
+        XCTAssertTrue(body.contains("callControlsBlock"), "Les sous-titres vivent avec la pilule, en audio comme en vidéo")
     }
 
-    /// #8396 — en vidéo, les sous-titres sont un bandeau de verre posé juste
-    /// au-dessus de la pilule, et seulement là : l'ancien bandeau flottant
-    /// (`transcriptOverlay`) a disparu, et l'audio garde son panneau.
-    func test_videoCaptionsBand_sitsAboveThePill_andTheFloatingOverlayIsGone() throws {
+    /// #17343 — les sous-titres vivent DANS la pilule, au-dessus de sa rangée de base,
+    /// dans le même verre, en duo comme en groupe : le bandeau à verre propre posé AU-DESSUS
+    /// de la pilule (géométrie d'avant #17343) a disparu ; rangée, la pilule les garde dans le
+    /// même verre, privé de sa rangée de base (loi 11, #17532).
+    func test_captions_liveInThePill_aboveItsBaseRow_inTheSameGlass() throws {
         let view = try AppSourceGuard.callViewSource()
-        XCTAssertFalse(
-            view.contains("transcriptOverlay"),
-            "Le bandeau flottant a disparu : les sous-titres vidéo vivent au-dessus de la pilule."
-        )
-        guard let band = view.range(of: "captionsBand(hasOwnGlass: true)"),
-              let pill = view.range(of: "callControlsPill", range: band.upperBound ..< view.endIndex) else {
-            XCTFail("Le bandeau des sous-titres vidéo doit précéder la pilule dans la pile verticale")
+        XCTAssertFalse(view.contains("transcriptOverlay"), "Le bandeau flottant a disparu.")
+        guard let pillStart = view.range(of: "var callControlsPill: some View {"),
+              let pillEnd = view.range(of: "var pillHairline: some View", range: pillStart.upperBound ..< view.endIndex) else {
+            XCTFail("Les sous-titres se lisent dans callControlsPill")
             return
         }
-        XCTAssertLessThan(
-            view.distance(from: band.upperBound, to: pill.lowerBound), 600,
-            "…et la précéder IMMÉDIATEMENT : juste au-dessus de la pilule."
-        )
+        let pill = String(view[pillStart.upperBound ..< pillEnd.lowerBound])
+        guard let band = pill.range(of: "captionsBand(hasOwnGlass: false)"),
+              let base = pill.range(of: "baseRow") else {
+            XCTFail("La pilule porte les sous-titres sans verre à eux, puis sa rangée de base")
+            return
+        }
+        XCTAssertLessThan(band.lowerBound, base.lowerBound, "Au-dessus de la rangée de base")
+        XCTAssertFalse(pill.contains("isGroupStage"), "En duo comme en groupe : la même pilule")
     }
 
     /// Chaque ligne porte un horodatage, et il vient de `segment.capturedAt`
     /// — JAMAIS de `startTime`/`endTime`, qui sont relatifs au buffer ASR
-    /// (voir le doc comment de `CallTranscriptionSegment.capturedAt`). C'est la
-    /// moitié portante de la demande utilisateur 2026-07-11 et elle est
-    /// intacte.
+    /// (voir le doc comment de `CallTranscriptionSegment.capturedAt`).
     ///
-    /// Ce qui a changé : l'heure affichée n'est plus l'ÉCOULÉ depuis le début
-    /// de l'appel (`capturedAt.timeIntervalSince(callManager.callStartDate)`
-    /// mis en forme par `CallManager.formatDuration`) mais l'HORLOGE MURALE de
-    /// capture — spec 2026-08-13, tableau « Composants modifiés » : « ligne
-    /// `displayName (heure)` (horloge murale, plus l'écoulé) », objectif §1
-    /// « ordonnées par l'horloge murale de CAPTURE », décision §3
-    /// « `capturedAtMs` est la clé d'ordre du journal ». Un écoulé n'a plus de
-    /// sens dans un journal fusionné entre appareils : `callStartDate` est
-    /// local à CE device (il est même nil avant l'établissement média), alors
-    /// que `capturedAt` est estampillé par le device du LOCUTEUR et transporté
-    /// par le wire — c'est la seule référence commune aux deux côtés de
-    /// l'appel.
-    func test_captionLine_showsCaptureWallClockTime_neverASRRelativeOffsets() throws {
+    /// L'heure AFFICHÉE est celle de l'APPEL (mm:ss depuis son début), alignée à
+    /// droite de la ligne méta, la même que celle des lignes de capture et du
+    /// journal d'après l'appel (planche P6, #17510) : l'horloge murale entre
+    /// parenthèses collée au pseudo, qu'avait posée le spec 2026-08-13, est
+    /// supplantée. La date reste celle de l'appareil du LOCUTEUR (`capturedAt`),
+    /// seule référence commune aux deux côtés ; seule sa MISE EN FORME change.
+    func test_captionLine_isDatedByCaptureTime_shownAsTheTimeInTheCall() throws {
         let view = try AppSourceGuard.callViewSource()
         let line = try source("Meeshy/Features/Call/Models/CallCaptionLine.swift")
         XCTAssertTrue(
             line.contains("capturedAt: segment.capturedAt"),
-            "Une ligne est datée par `segment.capturedAt` — l'horloge murale estampillée par " +
+            "Une ligne est datée par `segment.capturedAt` — l'horloge estampillée par " +
             "l'appareil du LOCUTEUR, la seule référence commune aux deux côtés de l'appel."
-        )
-        XCTAssertTrue(
-            view.contains("line.capturedAt.formatted(date: .omitted, time: .shortened)"),
-            "…et l'heure résolue atteint la ligne du journal."
         )
         XCTAssertFalse(
             line.contains("segment.startTime") || line.contains("segment.endTime"),
             "Jamais startTime/endTime : relatifs au buffer ASR, ils dérivent à chaque " +
             "redémarrage du moteur et ne veulent rien dire pour le pair."
+        )
+        XCTAssertTrue(
+            view.contains("line.timeLabel"),
+            "L'heure de la ligne du journal est l'heure DANS l'appel, résolue une fois par la loi (`CallJournalClock`)."
+        )
+        XCTAssertFalse(
+            view.contains("line.capturedAt.formatted(date: .omitted, time: .shortened)"),
+            "Plus d'heure murale entre parenthèses collée au pseudo : l'heure dans l'appel va à droite (P6.4)."
         )
     }
 
@@ -554,53 +621,32 @@ final class CallHangupFastPathTests: XCTestCase {
         XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
     }
 
-    /// Transparence du consentement : un appareil ne doit JAMAIS accumuler en
-    /// silence les paroles de l'autre participant sans rien afficher.
+    /// #17342 — le journal garde TOUT l'appel, sous-titres allumés ou non : les
+    /// phrases des autres arrivent par le relais serveur ET par le canal de
+    /// données, et se rangent au journal quel que soit l'état du panneau. La porte
+    /// de confidentialité (#13720) reste du côté de la CAPTURE : c'est elle qui
+    /// décide si une phrase est dite à voix haute dans le micro, pas la lecture.
     ///
-    /// Cette garantie était d'abord tenue par une AUTO-RÉVÉLATION du panneau
-    /// au premier segment reçu (spec 2026-07-11 §4). Le spec 2026-08-13
-    /// (« Cycle de vie du panneau », itération 2 §1) l'a RETIRÉE au profit
-    /// d'un mécanisme plus fort, à la source : la réception elle-même est liée
-    /// au panneau — « Panneau caché ⇒ désabonnement des canaux de réception ET
-    /// d'émission […] L'auto-révélation du panneau au premier segment reçu
-    /// (spec 2026-07-11 §4) est RETIRÉE — panneau caché ⇒ plus aucun segment
-    /// ne peut arriver, la règle n'a plus d'objet. »
-    ///
-    /// Le garde suit la garantie, pas sa vieille forme : il vérifie désormais
-    /// que les DEUX points d'entrée de réception de `CallManager` (le sink
-    /// socket `callTranslatedSegmentReceived` et le routage data channel
-    /// `.transcriptEntry`) refusent tout segment panneau fermé. Un seul des
-    /// deux gardé laisserait le trou ouvert sur l'autre transport.
-    func test_passiveSegments_neverAccumulateWhileTranscriptPanelHidden() throws {
-        // L'ancienne forme ne doit pas revenir sans que ce garde soit revu :
-        // ré-ouvrir le panneau tout seul, alors que rien ne peut plus arriver
-        // panneau fermé, ne ferait qu'afficher un panneau vide.
-        let view = try AppSourceGuard.callViewSource()
-        XCTAssertFalse(
-            view.contains("adaptiveOnChange(of: transcriptionService.segments.isEmpty)"),
-            "The 2026-07-11 auto-reveal observer was retired by spec 2026-08-13 — reception is " +
-            "now gated on the panel being visible, so nothing can arrive while it is hidden."
-        )
-
-        let manager = try AppSourceGuard.unit("Meeshy/Features/Call/Services/CallManager.swift")
-        let gate = "guard call.transcriptionService.isShowingOverlay else { return }"
-        let channelGate = "guard self.transcriptionService.isShowingOverlay else { return }"
-
-        guard let socketRange = manager.range(of: "socket.callTranslatedSegmentReceived") else {
-            XCTFail("CallManager must subscribe to socket.callTranslatedSegmentReceived")
+    /// Le garde vérifie que les DEUX points d'entrée (le sink du relais, dans
+    /// `CallSignalingRouter`, et le routage `.transcriptEntry` du canal de
+    /// données) ne reposent plus sur le panneau : un seul des deux laissé
+    /// gardé creuserait un trou dans le journal, et celui d'après l'appel en
+    /// hériterait.
+    func test_remoteSegments_joinTheJournal_whateverTheCaptionsState() throws {
+        let router = try source("Meeshy/Features/Call/Services/CallCollaborators/CallSignalingRouter.swift")
+        guard let socketRange = router.range(of: "socket.callTranslatedSegmentReceived") else {
+            XCTFail("CallSignalingRouter must subscribe to socket.callTranslatedSegmentReceived")
             return
         }
-        let socketEnd = manager.range(of: ".store(in: &cancellables)", range: socketRange.upperBound ..< manager.endIndex)?
-            .upperBound ?? manager.endIndex
-        let socketSink = String(manager[socketRange.lowerBound ..< socketEnd])
-        XCTAssertTrue(
-            socketSink.contains(gate),
-            "The relayed (server) reception path must drop segments while the transcript panel " +
-            "is hidden — otherwise the device silently accumulates the other participant's " +
-            "words with nothing shown, the exact consent-transparency gap this guard exists for."
+        let socketEnd = router.range(of: ".store(in: &cancellables)", range: socketRange.upperBound ..< router.endIndex)?
+            .upperBound ?? router.endIndex
+        let socketSink = String(router[socketRange.lowerBound ..< socketEnd])
+        XCTAssertFalse(
+            socketSink.contains("isShowingOverlay"),
+            "Le relais serveur remet chaque phrase au journal, panneau fermé comme ouvert (#17342)."
         )
+        XCTAssertTrue(socketSink.contains("receiveTranslatedSegment"))
 
-        // #9085 — le canal de données vit dans `CallManager+DataChannel.swift`.
         let dataChannel = try source("Meeshy/Features/Call/Services/CallManager+DataChannel.swift")
         guard let channelRange = dataChannel.range(of: "case .transcriptEntry(let entry):") else {
             XCTFail("CallManager must route the data channel's .transcriptEntry case")
@@ -609,11 +655,11 @@ final class CallHangupFastPathTests: XCTestCase {
         let channelEnd = dataChannel.range(of: "case .ignored:", range: channelRange.upperBound ..< dataChannel.endIndex)?
             .lowerBound ?? dataChannel.endIndex
         let channelRoute = String(dataChannel[channelRange.lowerBound ..< channelEnd])
-        XCTAssertTrue(
-            channelRoute.contains(channelGate),
-            "The P2P (data channel) reception path must carry the SAME panel gate as the socket " +
-            "sink — gating only one transport leaves the peer's words flowing in over the other."
+        XCTAssertFalse(
+            channelRoute.contains("isShowingOverlay"),
+            "Le canal de données remet chaque entrée au journal, comme le relais : un seul transport gardé laisse un trou (#17342)."
         )
+        XCTAssertTrue(channelRoute.contains("receivePeerEntry"))
     }
 }
 

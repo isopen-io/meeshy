@@ -1,3 +1,5 @@
+import AVFoundation
+import MeeshySDK
 import XCTest
 
 final class NSEEnrichmentPlanTests: XCTestCase {
@@ -27,6 +29,26 @@ final class NSEEnrichmentPlanTests: XCTestCase {
         XCTAssertNil(makeRequest(mediaPayload(["effectFlags": "4"])).media)
         XCTAssertNil(makeRequest(mediaPayload(["notificationLocKey": "notification.view_once_message"])).media)
         XCTAssertNotNil(makeRequest(mediaPayload()).media)
+    }
+
+    private func talkieVoice(_ url: String) -> [AnyHashable: Any] {
+        ["type": "talkie_incoming", "talkieId": "t", "fromUserId": "bob", "attachmentUrl": url, "attachmentMimeType": "audio/mp4"]
+    }
+
+    func test_talkieVoiceFromTheGateway_isDownloadedWithTheSessionToken() {
+        XCTAssertEqual(makeRequest(talkieVoice("https://gate.meeshy.me/api/v1/attachments/file/v.m4a")).media?.authenticated, true)
+        XCTAssertEqual(makeRequest(talkieVoice("/api/v1/attachments/file/v.m4a")).media?.authenticated, true)
+    }
+
+    func test_talkieVoiceFromAnotherOrigin_isNeverDownloaded_soTheTokenNeverLeaves() {
+        ["https://evil.example/v.m4a", "https://gate.meeshy.me.evil.example/v.m4a", "http://gate.meeshy.me/v.m4a",
+         "https://gate.meeshy.me:8443/v.m4a", "meeshy://talkie/v.m4a"].forEach { url in
+            XCTAssertNil(makeRequest(talkieVoice(url)).media, url)
+        }
+    }
+
+    func test_anOrdinaryMedia_isNeverDownloadedWithTheToken() {
+        XCTAssertEqual(makeRequest(mediaPayload()).media?.authenticated, false)
     }
 
     func test_declaredSizeAboveTheCap_skipsTheMedia() {
@@ -122,5 +144,59 @@ final class NSEEnrichmentPlanTests: XCTestCase {
 
         XCTAssertEqual(folded.attachment, file("f2"))
         XCTAssertNil(folded.avatarData)
+    }
+
+    // MARK: - #17255 — la voix d'un talkie, trames ADTS brutes, devient une pièce jointe lisible
+
+    /// Une tonalité encodée comme le micro du talkie la rend : AAC-LC mono, une trame ADTS par paquet.
+    private static func adtsTone(seconds: Double, sampleRate: Double) throws -> Data {
+        let pcm = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1))
+        var description = AudioStreamBasicDescription(
+            mSampleRate: sampleRate, mFormatID: kAudioFormatMPEG4AAC, mFormatFlags: UInt32(MPEG4ObjectID.AAC_LC.rawValue),
+            mBytesPerPacket: 0, mFramesPerPacket: 1024, mBytesPerFrame: 0, mChannelsPerFrame: 1, mBitsPerChannel: 0, mReserved: 0
+        )
+        let aac = try XCTUnwrap(AVAudioFormat(streamDescription: &description))
+        let converter = try XCTUnwrap(AVAudioConverter(from: pcm, to: aac))
+        let frameCount = AVAudioFrameCount(seconds * sampleRate)
+        let input = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: pcm, frameCapacity: frameCount))
+        input.frameLength = frameCount
+        let samples = try XCTUnwrap(input.floatChannelData?[0])
+        (0..<Int(frameCount)).forEach { samples[$0] = Float(sin(2 * Double.pi * 440 * Double($0) / sampleRate) * 0.4) }
+        var fed = false
+        var stream = Data()
+        while true {
+            let out = AVAudioCompressedBuffer(format: aac, packetCapacity: 8, maximumPacketSize: max(converter.maximumOutputPacketSize, 1))
+            var error: NSError?
+            let status = converter.convert(to: out, error: &error) { _, inputStatus in
+                guard !fed else {
+                    inputStatus.pointee = .endOfStream
+                    return nil
+                }
+                fed = true
+                inputStatus.pointee = .haveData
+                return input
+            }
+            let descriptions = out.packetDescriptions
+            (0..<Int(out.packetCount)).forEach { index in
+                guard let packet = descriptions?[index] else { return }
+                let bytes = Data(bytes: out.data.advanced(by: Int(packet.mStartOffset)), count: Int(packet.mDataByteSize))
+                stream += TalkieAdts.frame(bytes, sampleRate: sampleRate, channels: 1) ?? Data()
+            }
+            guard status == .haveData, error == nil else { break }
+        }
+        return stream
+    }
+
+    func test_talkieAdtsVoice_isRemuxedIntoAPlayableM4a() async throws {
+        let adts = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Self.adtsTone(seconds: 2, sampleRate: 24_000).write(to: adts)
+
+        let remuxed = await NSEAdtsRemux.m4a(from: adts)
+
+        let m4a = try XCTUnwrap(remuxed, "la voix ADTS doit devenir un .m4a attachable")
+        defer { try? FileManager.default.removeItem(at: m4a) }
+        let file = try AVAudioFile(forReading: m4a)
+        XCTAssertEqual(Double(file.length) / file.fileFormat.sampleRate, 2, accuracy: 0.25)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: adts.path))
     }
 }

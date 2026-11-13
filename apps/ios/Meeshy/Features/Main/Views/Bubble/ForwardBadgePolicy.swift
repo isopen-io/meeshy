@@ -11,7 +11,7 @@ import MeeshySDK
 /// vue, aucun singleton. Sans cette annotation, l'isolation `@MainActor` par
 /// défaut du module rend sa conformance `Equatable` inutilisable depuis un
 /// contexte nonisolated, et `BubbleContent.==` en est un. C'est la même cause
-/// que l'erreur soldée sur `StoryCanvasUIView.CanvasItemKind` le 2026-09-03 :
+/// que l'erreur soldée sur `StoryCanvasUIView.CanvasItemKind`:
 /// une valeur qui traverse une frontière d'isolation doit le dire, et le
 /// compilateur ne le signale qu'au CONSOMMATEUR — jamais au site de
 /// déclaration.
@@ -24,7 +24,7 @@ nonisolated enum ForwardAttribution: Equatable {
     case anonymous
 }
 
-/// Règle produit du badge « Transféré » (porteur, 2026-08-23) : « le forward
+/// Règle produit du badge « Transféré » (porteur): « le forward
 /// d'un message, document ne doit pas dire de qui il vient mais de quel groupe
 /// si cela vient d'un groupe AU MOINS PUBLIC ».
 ///

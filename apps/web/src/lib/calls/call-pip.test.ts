@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { armAutoPip, pipAspect, pipSource, pipSupport, registerPipOpener, requestCallPip, shouldOfferPip } from './call-pip';
+import { armAutoPip, pipAspect, pipSource, remoteSource, pipSupport, pipOpenStore, registerPipCloser, registerPipOpener, requestCallPip, requestCallPipExit, shouldOfferPip } from './call-pip';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -34,6 +34,25 @@ describe('pipSupport', () => {
     expect(pipSupport({ pictureInPictureEnabled: true })).toBe('video');
     expect(pipSupport({ pictureInPictureEnabled: false })).toBe('none');
     expect(pipSupport({})).toBe('none');
+  });
+});
+
+describe('remoteSource — l’élection PROPRE de la bulle (P18.3)', () => {
+  test('la caméra de l’autre coupée et la mienne allumée : la bulle n’élit rien (son avatar), la fenêtre PiP garde ma caméra', () => {
+    const mine = call({ members: { peer: member('peer', false) } });
+    expect(remoteSource(mine)).toBeNull();
+    expect(pipSource(mine)).toEqual({ stream: mine.localStream, mirrored: true, fit: 'cover' });
+  });
+
+  test('la vidéo de l’autre, ou son écran partagé entier, quand il en envoie', () => {
+    const both = call();
+    expect(remoteSource(both)).toEqual({ stream: both.remoteStreams.peer, mirrored: false, fit: 'cover' });
+    const sharing = call({ members: { peer: { ...member('peer', true), screenSharing: true } } });
+    expect(remoteSource(sharing)).toEqual({ stream: sharing.remoteStreams.peer, mirrored: false, fit: 'contain' });
+  });
+
+  test('mon propre partage d’écran n’entre jamais dans la bulle', () => {
+    expect(remoteSource(call({ members: { peer: member('peer', false) }, screenSharing: true }))).toBeNull();
   });
 });
 
@@ -82,6 +101,22 @@ describe('requestCallPip', () => {
     unregister();
     requestCallPip();
     expect(calls).toEqual(['ouverte']);
+  });
+});
+
+describe('requestCallPipExit (#17329 : le bouton de l’en-tête sert aussi à SORTIR de l’image dans l’image)', () => {
+  test('ferme la fenêtre enregistrée, et plus rien une fois retirée', () => {
+    const calls: string[] = [];
+    const unregister = registerPipCloser(() => void calls.push('fermée'));
+    requestCallPipExit();
+    expect(calls).toEqual(['fermée']);
+    unregister();
+    requestCallPipExit();
+    expect(calls).toEqual(['fermée']);
+  });
+
+  test('l’état « elle flotte » se lit dans un store, faux au départ', () => {
+    expect(pipOpenStore.getState().open).toBe(false);
   });
 });
 

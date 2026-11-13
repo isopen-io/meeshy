@@ -11,6 +11,7 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
     @ObservedObject var recording: CallRecordingController
     @ObservedObject var captureJournal: CallCaptureJournal
     let remoteName: String
+    let participantName: (String) -> String
     let chrome: CallChromeVisibility
     let hasLiveFrameStatus: Bool
     let topInset: CGFloat
@@ -22,20 +23,23 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
         VStack(spacing: MeeshySpacing.sm) {
             ForEach(CallTopBannerStack.ordered(present), id: \.self) { banner in
                 content(banner)
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
         }
+        .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallTopBannerStack.ordered(present))
+        .animation(CallChromeStow.animation(reduceMotion: reduceMotion), value: CallRecordingBannerStage.of(phase: recording.phase, notice: recording.notice))
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: captureJournal.alert)
         .padding(.top, topInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var present: Set<CallTopBanner> {
-        var present: Set<CallTopBanner> = []
-        if screenShare.isSharing || screenShare.isRemoteSharing { present.insert(.screenShare) }
-        if recording.phase != .idle || recording.notice != nil { present.insert(.recording) }
-        if captureJournal.alert != nil { present.insert(.capture) }
-        if hasLiveFrameStatus { present.insert(.liveFrame) }
-        return present
+        CallTopBannerStack.present(
+            isScreenShareShown: screenShare.isSharing || screenShare.isRemoteSharing,
+            isRecordingShown: recording.phase != .idle || recording.notice != nil,
+            isCaptureAlertShown: captureJournal.alert != nil,
+            isLiveFrameShown: hasLiveFrameStatus
+        )
     }
 
     @ViewBuilder
@@ -44,9 +48,11 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
         case .screenShare:
             CallScreenShareBanner(isSharing: screenShare.isSharing, remoteSharerName: screenShare.isRemoteSharing ? remoteName : nil, onStop: screenShare.stopSharing)
                 .equatable()
+                .padding(.horizontal, CallTopBannerStack.horizontalMargin)
+                .modifier(CallEdgeStow(edge: .top, margin: topInset, isVisible: chrome.isVisible(.screenShareBanner), reduceMotion: reduceMotion))
                 .callChromeVisibility(chrome.isVisible(.screenShareBanner))
         case .recording:
-            CallRecordingOverlay(phase: recording.phase, notice: recording.notice, kind: recording.kind, requesterName: remoteName, onAnswer: { _ = recording.answer(accepted: $0) }, onStop: { _ = recording.stop() }, onDismiss: recording.dismissNotice, showsStatus: chrome.isVisible(.recordingStatus))
+            CallRecordingOverlay(phase: recording.phase, notice: recording.notice, kind: recording.kind, requesterName: recording.phase.requesterName(resolvedBy: participantName), onAnswer: { _ = recording.answer(accepted: $0) }, onStop: { _ = recording.stop() }, onDismiss: recording.dismissNotice, showsStatus: chrome.isVisible(.recordingStatus), topInset: topInset)
                 .equatable()
         case .capture:
             CallCaptureAlertCapsule(alert: captureJournal.alert, onDismiss: captureJournal.dismissFlash)
@@ -54,7 +60,8 @@ struct CallTopBannerStackView<LiveFrameStatus: View>: View {
                 .padding(.horizontal, MeeshySpacing.lg)
         case .liveFrame:
             liveFrameStatus()
-                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.horizontal, CallTopBannerStack.horizontalMargin)
+                .modifier(CallTopBannerHeightReporter(banner: .liveFrame))
         }
     }
 }

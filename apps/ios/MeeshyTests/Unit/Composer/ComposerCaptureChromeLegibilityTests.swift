@@ -75,3 +75,37 @@ final class ComposerCaptureChromeBandTests: XCTestCase {
         XCTAssertLessThan(bandes.bottom, 0.05, "un cadre noir sous la barre du bas")
     }
 }
+
+/// LE CHROME RESPIRE (CAM-8) : viseur armé et laissé tranquille, la rangée haute et le rail
+/// s'effacent à moitié pour dégager l'image — jamais tout à fait, et jamais pendant une prise.
+final class ComposerCaptureChromeRestTests: XCTestCase {
+    private func mayRest(stage: ComposerSceneCameraStage = .armed, editing: Bool = false, counting: Bool = false,
+                         familyOpen: Bool = false, voiceOver: Bool = false) -> Bool {
+        ComposerCaptureChromeRest.mayRest(stage: stage, editing: editing, counting: counting,
+                                          familyOpen: familyOpen, voiceOver: voiceOver)
+    }
+
+    func test_opacity_armedAndIdleThreeSeconds_dimsWithoutVanishing() {
+        let opacite = ComposerCaptureChromeRest.opacity(mayRest: mayRest(), idle: 3)
+        XCTAssertEqual(opacite, 0.35, accuracy: 0.001)
+        XCTAssertGreaterThan(opacite, 0, "le chrome au repos reste trouvable")
+    }
+
+    func test_opacity_beforeThreeSeconds_staysFull() {
+        XCTAssertEqual(ComposerCaptureChromeRest.opacity(mayRest: mayRest(), idle: 2.9), 1)
+    }
+
+    func test_mayRest_onlyArmedViewfinderLeftAlone() {
+        XCTAssertTrue(mayRest())
+        XCTAssertFalse(mayRest(stage: .recording), "une prise garde son chrome")
+        XCTAssertFalse(mayRest(stage: .off))
+        XCTAssertFalse(mayRest(editing: true), "la retouche garde ses outils")
+        XCTAssertFalse(mayRest(counting: true), "le retardateur garde son compte lisible")
+        XCTAssertFalse(mayRest(familyOpen: true), "une bande ouverte se choisit")
+        XCTAssertFalse(mayRest(voiceOver: true), "VoiceOver ne voit pas l'image qu'on dégage")
+    }
+
+    func test_opacity_whenTheViewfinderMayNotRest_staysFullHoweverLong() {
+        XCTAssertEqual(ComposerCaptureChromeRest.opacity(mayRest: mayRest(stage: .recording), idle: 60), 1)
+    }
+}

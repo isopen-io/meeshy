@@ -21,6 +21,7 @@ public extension MeeshyLog {
         case audioSession = "audio-session"
         case background
         case backgroundTransition = "background-transition"
+        case bringAlarm = "bring-alarm"
         case cacheAccounts = "cache-accounts"
         case cacheBgFlush = "cache-bg-flush"
         case cacheCoordinator = "cache-coordinator"

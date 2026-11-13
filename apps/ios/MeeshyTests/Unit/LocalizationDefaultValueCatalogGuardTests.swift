@@ -187,7 +187,7 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
     /// qui distingue cette famille de celle que garde l'autre fichier. La
     /// fenêtre de 160 caractères qui suit sert à lire le `bundle:` — un
     /// `.module` vise le catalogue du SDK, jamais celui de la cible hôte.
-    static func clesDe(_ texte: String) -> [(cle: String, moduleSDK: Bool)] {
+    static func clesDe(_ texte: String) -> [(cle: String, moduleSDK: Bool, table: String?)] {
         let motif = try! NSRegularExpression(
             pattern: #"String\(\s*localized:\s*"([^"\\]+)"\s*,\s*defaultValue:|NSLocalizedString\(\s*"([^"\\]+)"\s*,\s*value:"#
         )
@@ -199,8 +199,17 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
             guard estIdentifiant(cle) else { return nil }
             let apres = texte.index(r.upperBound, offsetBy: 160, limitedBy: texte.endIndex) ?? texte.endIndex
             let fenetre = texte[r.upperBound..<apres]
-            return (cle, fenetre.contains("bundle: .module"))
+            return (cle, fenetre.contains("bundle: .module"), Self.table(dans: String(fenetre)))
         }
+    }
+
+    /// La table qu'un appel NOMME (`table: "ComposerTime"`, #17110) : sa clé vit
+    /// dans `ComposerTime.xcstrings`, voisin du catalogue, pas dans `Localizable`.
+    static func table(dans fenetre: String) -> String? {
+        guard let motif = try? NSRegularExpression(pattern: #"table:\s*"([A-Za-z0-9_]+)""#),
+              let m = motif.firstMatch(in: fenetre, range: NSRange(fenetre.startIndex..., in: fenetre)),
+              let r = Range(m.range(at: 1), in: fenetre) else { return nil }
+        return String(fenetre[r])
     }
 
     /// Les clés d'un extrait qui NE SONT PAS des identifiants — le miroir de
@@ -256,7 +265,11 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
         return fichiersSwift().flatMap { url -> [(cle: String, catalogue: URL?)] in
             guard let texte = try? String(contentsOf: url, encoding: .utf8) else { return [] }
             let propre = catalogueDe(url)
-            return clesDe(texte).map { ($0.cle, $0.moduleSDK ? sdk : propre) }
+            return clesDe(texte).map { appel in
+                let catalogue = appel.moduleSDK ? sdk : propre
+                guard let table = appel.table else { return (appel.cle, catalogue) }
+                return (appel.cle, catalogue?.deletingLastPathComponent().appendingPathComponent("\(table).xcstrings"))
+            }
         }
     }
 
@@ -289,5 +302,91 @@ final class LocalizationDefaultValueCatalogGuardTests: XCTestCase {
             if !connues.contains(cle) { absentes.insert(cle) }
         }
         return absentes
+    }
+}
+
+/// **Un appel qui nomme sa TABLE vit dans cette table, traduit dans les sept
+/// locales** (#17110). `ComposerTime.xcstrings` (app) porte les mots de la frise
+/// premium ; les gardes de `Localizable` l'ignorent, celle-ci la mesure. Les mots
+/// de « Rogner et régler » vivent dans le `Localizable` du SDK, que
+/// `CatalogCompletenessGuardTests` exige pour toute clé de MeeshyUI.
+final class LocalizationTableCatalogGuardTests: XCTestCase {
+
+    private static let locales: Set<String> = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
+
+    private static func racine() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // ios
+            .deletingLastPathComponent()   // apps
+            .deletingLastPathComponent()   // racine
+    }
+
+    /// Chaque racine de sources, et le dossier où vivent ses tables.
+    private static let racines: [(sources: String, tables: String)] = [
+        ("apps/ios/Meeshy", "apps/ios/Meeshy"),
+        ("packages/MeeshySDK/Sources/MeeshyUI", "packages/MeeshySDK/Sources/MeeshyUI/Resources"),
+    ]
+
+    static func appelsAvecTable(_ texte: String) -> [(cle: String, table: String)] {
+        let motif = try! NSRegularExpression(
+            pattern: #"String\(\s*localized:\s*"([A-Za-z0-9_.\-]+)"[^)]*?table:\s*"([A-Za-z0-9_]+)""#,
+            options: [.dotMatchesLineSeparators])
+        return motif.matches(in: texte, range: NSRange(texte.startIndex..., in: texte)).compactMap { m in
+            guard let cle = Range(m.range(at: 1), in: texte), let table = Range(m.range(at: 2), in: texte) else {
+                return nil
+            }
+            return (String(texte[cle]), String(texte[table]))
+        }
+    }
+
+    private func traductions(_ url: URL) throws -> [String: Set<String>] {
+        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        let entrees = json?["strings"] as? [String: Any] ?? [:]
+        return entrees.mapValues { valeur in
+            let locs = (valeur as? [String: Any])?["localizations"] as? [String: Any] ?? [:]
+            return Set(locs.compactMap { loc, charge in
+                let unite = (charge as? [String: Any])?["stringUnit"] as? [String: Any]
+                return (unite?["value"] as? String).map { $0.isEmpty ? nil : loc } ?? nil
+            })
+        }
+    }
+
+    func test_chaqueCleDeTable_vitDansSaTable_traduiteDansLesSeptLocales() throws {
+        var vus = 0
+        var fautes: [String] = []
+        for (sources, tables) in Self.racines {
+            let base = Self.racine().appendingPathComponent(sources)
+            let fichiers = (FileManager.default.enumerator(at: base, includingPropertiesForKeys: nil)?
+                .compactMap { $0 as? URL } ?? []).filter { $0.pathExtension == "swift" }
+            for fichier in fichiers {
+                let texte = (try? String(contentsOf: fichier, encoding: .utf8)) ?? ""
+                for appel in Self.appelsAvecTable(texte) {
+                    vus += 1
+                    let catalogue = Self.racine().appendingPathComponent("\(tables)/\(appel.table).xcstrings")
+                    guard let lues = try? traductions(catalogue) else {
+                        fautes.append("\(appel.table).xcstrings introuvable (\(fichier.lastPathComponent))")
+                        continue
+                    }
+                    let manquantes = Self.locales.subtracting(lues[appel.cle] ?? [])
+                    if !manquantes.isEmpty {
+                        fautes.append("\(appel.table) › \(appel.cle) : \(manquantes.sorted())")
+                    }
+                }
+            }
+        }
+        XCTAssertGreaterThanOrEqual(vus, 5, "le balayage doit voir les tables de #17110")
+        XCTAssertTrue(fautes.isEmpty, fautes.joined(separator: "\n"))
+    }
+
+    func test_leMotifVoitUnAppelSurPlusieursLignes() {
+        let echantillon = """
+        String(localized: "media.trim.ducking", defaultValue: "Atténuer",
+               table: "MediaTrim", bundle: .module)
+        """
+        let appels = Self.appelsAvecTable(echantillon)
+        XCTAssertEqual(appels.map(\.cle), ["media.trim.ducking"])
+        XCTAssertEqual(appels.map(\.table), ["MediaTrim"])
     }
 }

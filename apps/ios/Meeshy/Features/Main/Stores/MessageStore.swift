@@ -37,13 +37,18 @@ private final class WeakBox: @unchecked Sendable {
 
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
-private final class ObservationTokens: @unchecked Sendable {
+private nonisolated final class ObservationTokens: @unchecked Sendable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    nonisolated(unsafe) var regionCancellable: AnyCancellable?
+    private let region = Locked<AnyCancellable?>(uncheckedState: nil)
+
+    var regionCancellable: AnyCancellable? {
+        get { region.mutateUnchecked { $0 } }
+        set { region.mutateUnchecked { $0 = newValue } }
+    }
 
     nonisolated func cancelAll() {
         regionCancellable?.cancel()
@@ -225,8 +230,7 @@ public final class MessageStore: ObservableObject {
         let initialWindowSize = Self.initialWindowSize
         let repository = MessageRepository(persistence: persistence)
 
-        // La lecture de fenêtre part HORS du MainActor (audit fluidité
-        // 2026-08-26). En `.latest` ancré elle était SANS PLAFOND — après une
+        // La lecture de fenêtre part HORS du MainActor. En `.latest` ancré elle était SANS PLAFOND — après une
         // remontée profonde du fil, chaque notification d'écriture GRDB
         // (message entrant, accusé de livraison/lecture, réaction, tick de
         // retry) rematérialisait des MILLIERS de lignes SQLite sur la boucle

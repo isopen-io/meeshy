@@ -4,11 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class CallCameraRailTest {
-    private val set = CallActionSet(
-        myImage = listOf(CallAction.Camera, CallAction.FlipCamera, CallAction.Effects, CallAction.ScreenShare),
-        theCall = listOf(CallAction.Captions),
-    )
-
     @Test
     fun `placement is top center when my image is full screen`() {
         assertThat(CallCameraRail.placement(isMyImageFullScreen = true, showsMyImageTile = true))
@@ -32,40 +27,6 @@ class CallCameraRailTest {
         assertThat(CallCameraRail.isMyImageFullScreen(true, isSelfFeatured = true, isLocalPrimary = false)).isTrue()
         assertThat(CallCameraRail.isMyImageFullScreen(false, isSelfFeatured = true, isLocalPrimary = false)).isFalse()
         assertThat(CallCameraRail.isMyImageFullScreen(false, isSelfFeatured = false, isLocalPrimary = true)).isTrue()
-    }
-
-    @Test
-    fun `rail actions follow the canonical order`() {
-        assertThat(CallCameraRail.actions(set)).containsExactly(
-            CallAction.FlipCamera, CallAction.Camera, CallAction.Effects, CallAction.ScreenShare,
-        ).inOrder()
-    }
-
-    @Test
-    fun `self tile rows split effects above and camera below`() {
-        val rows = CallCameraRail.selfTileRows(CallCameraRail.actions(set))
-        assertThat(rows.effects).containsExactly(CallAction.Effects, CallAction.ScreenShare).inOrder()
-        assertThat(rows.camera).containsExactly(CallAction.FlipCamera, CallAction.Camera).inOrder()
-        assertThat(CallCameraRail.selfTileRows(emptyList()).isEmpty).isTrue()
-    }
-
-    @Test
-    fun `menu keeps my image only when the menu is the placement`() {
-        assertThat(CallCameraRail.menuRows(set, CallCameraControlsPlacement.Menu).map { it.family })
-            .containsExactly(CallActionFamily.MyImage, CallActionFamily.TheCall).inOrder()
-        assertThat(CallCameraRail.menuRows(set, CallCameraControlsPlacement.SelfTile).map { it.family })
-            .containsExactly(CallActionFamily.TheCall)
-        assertThat(CallCameraRail.menuRows(set, CallCameraControlsPlacement.TopCenter).map { it.family })
-            .containsExactly(CallActionFamily.TheCall)
-    }
-
-    @Test
-    fun `folded menu toggles on its button and closes on anything else`() {
-        assertThat(CallCameraRail.foldedMenu(false, CallCameraFoldedTap.Button)).isTrue()
-        assertThat(CallCameraRail.foldedMenu(true, CallCameraFoldedTap.Button)).isFalse()
-        assertThat(CallCameraRail.foldedMenu(true, CallCameraFoldedTap.Action)).isFalse()
-        assertThat(CallCameraRail.foldedMenu(true, CallCameraFoldedTap.Elsewhere)).isFalse()
-        assertThat(CallCameraRail.consumesTapElsewhere(true)).isTrue()
     }
 
     @Test

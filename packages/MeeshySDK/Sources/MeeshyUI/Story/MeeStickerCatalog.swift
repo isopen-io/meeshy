@@ -100,7 +100,7 @@ nonisolated public enum MeeStickerCatalog {
     /// **Une ligne de la planche** : le titre d'une intention, ou une rangée
     /// de stickers. La planche défile en RANGÉES de hauteur fixe dans la pile
     /// paresseuse de la feuille — jamais en grilles imbriquées, qui créaient
-    /// toutes leurs cases d'un coup et figeaient le défilement (2026-10-02).
+    /// toutes leurs cases d'un coup et figeaient le défilement.
     nonisolated public enum Row: Hashable, Identifiable, Sendable {
         case title(MeeSticker.Intent)
         case stickers([MeeSticker])
@@ -232,20 +232,9 @@ nonisolated public enum MeeStickerCatalog {
         LottieFilm.still(source, pixelSize: pixelSize)
     }
 
-    /// Le film rasterisé, lu dans le cache ou rendu sur place (appel synchrone).
-    @MainActor
-    public static func decoded(_ sticker: MeeSticker, maxPixelSize: Int) -> AnimatedImageDecoder.Decoded? {
-        guard let url = fileURL(for: sticker) else { return nil }
-        let key = cacheKey(url, maxPixelSize)
-        if let hit = films.object(forKey: key) { return hit.decoded }
-        guard let source = LottieFilm.loadNow(url: url),
-              let decoded = LottieFilm.decodedNow(source, pixelSize: maxPixelSize) else { return nil }
-        return store(decoded, for: key).decoded
-    }
-
     /// **Le film rasterisé, et RENDU à l'appelant.** La lecture se fait hors du
     /// fil principal, le rendu par lots qui lui rendent la main ; le relire
-    /// ensuite dans le cache pouvait le trouver déjà évincé (2026-10-02).
+    /// ensuite dans le cache pouvait le trouver déjà évincé.
     /// `FilmEntry` est une valeur immuable : elle traverse les acteurs.
     @concurrent
     public static func film(at url: URL, maxPixelSize: Int) async -> FilmEntry? {
@@ -268,10 +257,17 @@ nonisolated public enum MeeStickerCatalog {
     /// est posé dans une story — téléversé et publié tel quel
     /// (`StoryViewModel+PublicationUpload`) : un `.lottie` n'y serait lu par
     /// personne.
-    @MainActor
-    public static func animatedImageData(for sticker: MeeSticker) -> Data? {
-        guard sticker.animated, let decoded = decoded(sticker, maxPixelSize: filmPixelSize) else { return nil }
-        return AnimatedImageEncoder.apng(decoded)
+    ///
+    /// **Jamais pendant un geste** (#17040) : le film se rend par lots qui
+    /// rendent la main au fil principal, et l'encodage se fait hors de lui.
+    /// Le rendre d'un coup dans le toucher qui pose le Mee tenait le fil
+    /// principal jusqu'à 1,09 s sur iPhone.
+    @concurrent
+    public static func animatedImageData(for sticker: MeeSticker) async -> Data? {
+        guard sticker.animated, let url = await fileURL(for: sticker),
+              let entry = await film(at: url, maxPixelSize: filmPixelSize),
+              !Task.isCancelled else { return nil }
+        return AnimatedImageEncoder.apng(entry.decoded)
     }
 
     private static func cacheKey(_ url: URL, _ maxPixelSize: Int) -> NSString {
@@ -288,17 +284,17 @@ nonisolated public enum MeeStickerCatalog {
     /// La borne est en OCTETS, pas en nombre : un film de 60 images à 360 px
     /// pèse 31 Mo rasterisé, et vingt d'entre eux rempliraient la mémoire
     /// d'un iPhone.
-    nonisolated(unsafe) private static let films: NSCache<NSString, FilmEntry> = {
+    private nonisolated static let films: LockedCache<NSString, FilmEntry> = LockedCache({
         let cache = NSCache<NSString, FilmEntry>()
         cache.totalCostLimit = 96 * 1024 * 1024
         return cache
-    }()
+    }())
 
-    nonisolated(unsafe) private static let stills: NSCache<NSString, UIImage> = {
+    private nonisolated static let stills: LockedCache<NSString, UIImage> = LockedCache({
         let cache = NSCache<NSString, UIImage>()
         cache.totalCostLimit = 24 * 1024 * 1024
         return cache
-    }()
+    }())
 
     /// `nonisolated deinit` : `NSCache` évince sur le fil qu'il choisit, et une
     /// deinit isolée au `MainActor` double-libère sur iOS 26.1 (voir

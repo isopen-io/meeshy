@@ -5,7 +5,7 @@ import MeeshyUI
 
 /// Le texte du bandeau (#16755, iso web `listening-band.ts`) : la CATÉGORIE pour un Proche, « titre · origine » pour un
 /// Sang. Ce détail est ce que la passerelle a servi ; un titre absent n'est jamais deviné.
-enum ListeningBandText {
+nonisolated enum ListeningBandText {
 
     static func glyph(_ category: NowPlayingCategory) -> String {
         switch category {
@@ -51,11 +51,23 @@ extension ListeningCenter {
     }
 
     /// Le bandeau d'UNE personne puis chacun de ses changements — rien de plus fin que l'écoute de cette personne.
+    ///
+    /// Le SDK lit ce flux depuis une tâche hors du MainActor : la demande y exécute les étapes, qui ne doivent donc
+    /// hériter d'aucune isolation (#17069).
     func band(for userId: String) -> AnyPublisher<AvatarListening?, Never> {
-        $byUser
+        Self.band(of: userId, in: $byUser.eraseToAnyPublisher())
+    }
+
+    /// Hors de tout acteur (#17042) : `.values` demande hors du fil principal, et le centre y remet sa valeur courante.
+    /// Un maillon isolé au MainActor y piège l'app (`dispatch_assert_queue`) dès qu'un avatar s'abonne.
+    nonisolated static func band(
+        of userId: String,
+        in entries: AnyPublisher<[String: ListeningEntry], Never>
+    ) -> AnyPublisher<AvatarListening?, Never> {
+        entries
             .map { $0[userId] }
             .removeDuplicates()
-            .map(ListeningBandText.band(for:))
+            .map { @Sendable entry in ListeningBandText.band(for: entry) }
             .eraseToAnyPublisher()
     }
 
@@ -68,7 +80,7 @@ extension ListeningCenter {
 }
 
 /// L'avatar du pair d'un direct dans l'en-tête : sa porte (VoiceOver), puis ce qu'il écoute posé par-dessus, en
-/// élément à part pour que l'avatar garde son libellé.
+/// élément à part pour que l'avatar garde son libellé. Même porte que la liste et la fiche (#17084).
 struct HeaderPeerListening: ViewModifier {
     let door: HeaderAvatarDoorAccessibility
     let userId: String?
@@ -78,8 +90,37 @@ struct HeaderPeerListening: ViewModifier {
         content
             .modifier(door)
             .overlay {
-                if let userId, !userId.isEmpty {
+                if let userId, AvatarListeningOverlay.paints(userId: userId, avatarSize: avatarSize) {
                     AvatarListeningLive(userId: userId, avatarSize: avatarSize, source: ListeningCenter.shared.source)
+                }
+            }
+    }
+}
+
+/// Le pair dont la ligne de liste montre l'écoute (#16733) : celui d'un direct, personne d'autre.
+nonisolated enum ConversationRowListening {
+    static func userId(for conversation: MeeshyConversation) -> String? {
+        guard conversation.type == .direct, let peer = conversation.participantUserId, !peer.isEmpty else { return nil }
+        return peer
+    }
+}
+
+/// L'écoute du pair, dite par la ligne : le libellé de la ligne est posé en bloc, il écrase ce que l'avatar dit de
+/// lui-même — la phrase servie passe donc par la VALEUR de la ligne (#16733). Rien sans source ni sans écoute. Il pose aussi l'indice d'ouverture.
+struct ConversationRowListeningSpeech: ViewModifier {
+    let userId: String?
+    @Environment(\.avatarListeningSource) private var source
+    @State private var spoken: String?
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
+            .accessibilityValue(spoken ?? "")
+            .task(id: userId) {
+                spoken = nil
+                guard let source, let userId, !userId.isEmpty else { return }
+                for await band in source.band(userId).values {
+                    spoken = band?.spoken
                 }
             }
     }

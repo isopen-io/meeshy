@@ -2,7 +2,7 @@ import Foundation
 
 /// **A-t-on le DROIT de poser un tap sur ce format audio ?**
 ///
-/// ## Le défaut qui la fait naître (2026-09-18, #7002)
+/// ## Le défaut qui la fait naître (#7002)
 ///
 /// Retirer ses AirPods pendant un appel sous-titré tuait l'application :
 ///

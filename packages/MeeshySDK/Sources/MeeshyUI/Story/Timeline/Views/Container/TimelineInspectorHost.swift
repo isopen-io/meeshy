@@ -702,7 +702,7 @@ public struct TimelineInspectorHost: View {
 // MARK: - Présentation en sheet
 
 /// Présente l'inspecteur de timeline dans une **sheet** plutôt qu'en survol
-/// flottant au-dessus des pistes (item 8, directive user 2026-07-25).
+/// flottant au-dessus des pistes.
 ///
 /// Le survol posait un panneau translucide par-dessus la zone qu'on était en
 /// train d'éditer : il masquait les pistes, n'offrait aucune poignée de

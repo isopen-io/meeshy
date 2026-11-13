@@ -6,7 +6,7 @@ import MeeshySDK
 
 /// **L'identité d'une décoration, indépendamment de ce qui la dessine.**
 ///
-/// Les onglets FAVORIS et RÉCENTS (directive porteur 2026-09-05) doivent
+/// Les onglets FAVORIS et RÉCENTS doivent
 /// retenir des décorations de DEUX natures — un glyphe du système et un gabarit
 /// du catalogue — dont rien, jusqu'ici, ne partageait la forme : l'un est une
 /// `String`, l'autre un `StickerTemplate` avec sa famille et ses emplacements.
@@ -31,7 +31,7 @@ public nonisolated struct StickerUsageEntry: Codable, Hashable, Identifiable, Se
         /// Un gabarit du catalogue — `value` est son `StickerTemplate.id`.
         case template
         /// **Une image de « Mes stickers »** — `value` est son
-        /// `StoryStickerLibraryItem.id` (2026-09-05).
+        /// `StoryStickerLibraryItem.id`.
         ///
         /// Elle est une TROISIÈME nature et non un `template` déguisé : son
         /// dessin n'est pas au catalogue, il est sur le disque de l'auteur.
@@ -119,7 +119,7 @@ public final class StickerUsageStore: ObservableObject {
 
     // **iOS 26.1 — `deinit` synthétisée ISOLÉE** (SE-0466, isolation MainActor
     // par défaut) → double-free `pointer being freed was not allocated` au
-    // démontage hors d'une tâche. Mesuré ici le 2026-09-05 : la suite est
+    // démontage hors d'une tâche. Mesuré ici : la suite est
     // partie en crash à son huitième cas, et xctest a redémarré en rendant
     // « Executed 0 tests » — le mode d'extinction le plus trompeur, puisque le
     // compte remis à zéro RESSEMBLE à une suite qui n'existe pas.

@@ -3,6 +3,11 @@ import { decideDirectOpening, requestRecipientFields } from '../../services/mess
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import {
+  conversationAdmitsNewMembers,
+  EXTERNAL_CONVERSATION_ERROR_CODES,
+  EXTERNAL_SINGLE_MEMBER_MESSAGE,
+} from '@meeshy/shared/types/external-conversation';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -20,7 +25,7 @@ import {
 } from '../../services/conversations/conversationEntryAdmission';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
-import { announceMemberArrival } from './memberArrivalFanOut';
+import { announceMembershipAdmission } from './membershipAdmissionFanOut';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
@@ -150,6 +155,11 @@ export function registerInviteRoute(
       const inviterMember = conversation.participants.find(m => m.userId === inviterId);
       if (!inviterMember) {
         return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
+      }
+
+      // #17117 — une conversation externe n'a qu'un membre Meeshy, son ouvreur.
+      if (!conversationAdmitsNewMembers(conversation.type)) {
+        return sendError(reply, 409, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
       }
 
       // #4557 — **MODERATOR, le même plancher que `POST …/participants`.**
@@ -347,13 +357,22 @@ export function registerInviteRoute(
         );
       }
 
-      // #16837 — l'éventail d'ARRIVÉE, par son site unique. Le commentaire
-      // ci-dessus annonçait « mirrors POST /conversations/:id/participants » :
-      // la jumelle avait donc été ouverte et à moitié reprise — l'auto-join en
-      // est venu, les trois diffusions sont restées derrière. La question juste
-      // n'était pas « que fait la jumelle pour mon problème ? » mais « que
-      // fait-elle, tout court, APRÈS cette écriture ? ».
-      await announceMemberArrival({
+      // #17032 — les TROIS diffusions d'adhésion, par leur site UNIQUE. #16837
+      // en avait rapatrié UNE (l'arrivée) ; les deux autres étaient encore
+      // derrière, et l'une d'elles — `conversation:new` — est **la seule qui
+      // CRÉE la ligne de liste** de l'invité. Sans elle, l'invité connecté
+      // voyait ses sockets jointes à la room et recevait les `message:new`,
+      // pendant que sa liste ne connaissait pas la conversation ; une
+      // invitation de GROUPE n'avait aucun canal de découverte, la
+      // notification n'étant créée que pour un tête-à-tête.
+      //
+      // La jumelle avait été ouverte et à moitié reprise, et le commentaire de
+      // l'auto-join ci-dessus l'annonçait : « mirrors
+      // POST /conversations/:id/participants ». La question juste n'était pas
+      // « que fait la jumelle pour mon problème ? » mais « que fait-elle, tout
+      // court, APRÈS cette écriture ? » — et elle se répond en lisant sa suite
+      // ligne à ligne.
+      await announceMembershipAdmission({
         prisma: fastify.prisma,
         io: inviteSocketManager?.getIO?.(),
         conversationId,
@@ -362,7 +381,8 @@ export function registerInviteRoute(
           displayName: invitedMemberFields.displayName,
           joinedAt: newMember.joinedAt ?? new Date(),
         },
-        onError: (error) => logger.warn('member arrival fan-out failed on invite', { userId, conversationId, err: error }),
+        actorUserId: inviterId,
+        onError: (error) => logger.warn('membership admission fan-out failed on invite', { userId, conversationId, err: error }),
       });
 
       // Envoyer une notification à l'utilisateur invité

@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// **L'en-tête d'une feuille qui se REFUSE ou se VALIDE** (#6134, directive
-/// porteur 2026-09-12).
+/// **L'en-tête d'une feuille qui se REFUSE ou se VALIDE** (#6134).
 ///
 /// > « Mets à jour les feuilles Hashtag, Mention pour avoir un header précis et
 /// > avec les actions liquid glass (annuler) à gauche, (terminé) à droite ! »

@@ -4270,7 +4270,7 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **La langue parlée est le rang 1 du Prisme du lecteur** (`resolveReaderLanguages`), la même descente que celle par laquelle la passerelle résout ses auditeurs. Aucune langue n'est reconstruite ici.
 - **La transcription après l'appel se lit dans la bulle d'appel du fil**, comme `CallSummaryDetailSheet` d'iOS.
   - Un bouton « Transcription » (44 px, `aria-expanded`) la déplie sous « Rappeler ». Il n'est offert qu'à un appel TERMINÉ, identifié, qui a duré (`callNoticeTarget.transcript`).
-  - La ligne d'un autre descend le Prisme (`served`) : jamais `translations[0]`, et l'original quand aucune traduction ne sert. « Voir l'original » rend ce qui a été dit.
+  - La ligne d'un autre descend le Prisme (`served`) : jamais `translations[0]`, et l'original quand aucune traduction ne sert. « Voir l'original » rend ce qui a été dit (depuis #17897, il INVERSE les deux lignes : l'original en tête, « Traduit · … » dessous, `transcriptReading`).
   - Un refus (403) ou un appel inconnu (404) se lit « aucune transcription », sans détail : la donnée est sensible.
 - **L'accessibilité.**
   - Le bandeau des deux dernières lignes est une région `aria-live` POLIE. Une ligne encore en révision y est `aria-hidden`, pour qu'un lecteur d'écran annonce la phrase dite et non chaque mot corrigé.
@@ -5925,3 +5925,31 @@ Les deux voiles lisent ces jetons et importent la feuille eux-mêmes (`@import '
 **Écart assumé.** `StoreBadge` (#16407) reste le badge de la landing et de `/download`, dessiné à la main ; le pied des pages d'accès porte l'image officielle demandée par le porteur. La convergence sur l'image officielle, App Store localisé compris, est #16453.
 
 **Gardes.** `components/auth-header.test.tsx` (ordre, retour, marque vers `/`, langue, cibles de 44 px, indésirables sur chaque hôte et dans chaque langue, pied absent dans la coque, badges et liens, badges présents pour chaque langue, libellés distincts par langue), `i18n-catalog.test.ts` et `satisfies InterfaceCatalog` (complétude des sept catalogues).
+
+## D-234 — Avatar et bannière se posent par la retouche de la capture, à format imposé : rond 1:1, bandeau 3:1 (2026-11-09, #17256, jumelle de #17251)
+
+**Contexte.** Directive porteur du 2026-11-09 : un seul éditeur d'image, celui de la capture caméra. Le web n'avait aucun éditeur d'image d'identité : « Montre-toi », le profil, la communauté et la photo de groupe recompressaient le fichier choisi et l'envoyaient tel quel, sans garantir ni le 1:1 ni le 3:1.
+
+**Décision.**
+- L'éditeur est le studio en `retouch` (`StoryComposeScreen`, le même que « Éditer » une pièce du fil et la caméra de la barre). `StudioRetouch.format` (`lib/profile/entity-image-format.ts` : `avatar` | `banner`) lui impose un format : la carte de la scène en prend les proportions (`StudioScene`, `data-scene-format`), un voile rond couvre ce qui tombe hors du cercle de l'avatar, le fond REMPLIT le cadre à l'ouverture, ni recadrage ni quart de tour ne sont offerts (`formatLocked`), et « Terminé » rend TOUJOURS un JPEG à la taille du format (1080×1080, 1500×500), même intact.
+- `components/entity-image-retouch.tsx` monte cette retouche en couche (portail dans `document.body`, ou dans la feuille `<dialog>` qui l'ouvre) ; `lib/profile/use-entity-image-edit.tsx` est le site unique que les quatre appelants partagent : choisir un fichier ouvre la retouche, seule l'image retouchée part, Annuler (✕, Échap, retour matériel) ne rend rien. Les deux se chargent à la demande, jamais avec l'écran.
+- Un HEIC que le navigateur ne décode pas (W9, #11315) ne se peint pas dans un canvas : il part tel quel, la passerelle le convertit.
+
+**Écart assumé.** Le fond d'une scène ne se déplace pas (le studio n'offre qu'un recadrage centré) : l'image se cadre au centre, le Cadre bascule entre remplir et ajuster. La feuille d'image de l'administration (`admin-user-image-sheet.tsx`) reste sans retouche.
+
+**Gardes.** `components/entity-image-retouch.test.tsx` (scène carrée voilée, scène 3:1, rendu aux tailles du format, ✕ et retour sans rendu, rien téléversé), `lib/profile/use-entity-image-edit.test.tsx`, `routes/onboarding-profile.test.tsx` (seule l'image retouchée part, Annuler n'envoie rien, l'avatar n'ouvre jamais la bannière), `lib/stories/studio-background-tools.test.ts`, `lib/stories/studio-retouch.test.ts`.
+
+## D-235 — Le catalogue du kit est une route de développement hors de `ROUTES`, et son instantané est une capture de référence gardée par sa présence (2026-11-10, #17335, K00 ; #17482, #17483)
+
+**Contexte.** Chantier « kit de la planche » : chaque composant du kit se voit dans un catalogue et se prouve par un instantané, sur iOS, Android et le web (fiche `docs/product/kit/K00-Catalogue.md`, § 12).
+
+**Décision.**
+- `/kit` et `/kit/$composant` sont déclarées dans `KIT_ROUTES` (`routes/route-table.tsx`), fusionnées au routeur sous `__FIXTURES__` seulement. Elles restent HORS de `ROUTES` : le miroir de `nginx.conf` (`nginx-app-routes.test.ts`), `isAppPath` et la garde de session ne les connaissent pas, et une image de production ou de staging (construite en `gateway`) ne les sert ni ne les livre (`FIXTURE_MARKERS`).
+- Le réglage « dark » du détail pose le schéma du document par `applyScheme` (exporté, sans persistance) et le rend en quittant l'écran : les jetons de couleur sont posés sur `:root.dark` et `:root.light`, pas sur un sous-arbre. Les fonds `dark` et `light` des états suivent donc ce schéma (#17482).
+- « zoom 2 » (la grande police) est `zoom: 2` sur les tuiles : le zoom du navigateur à 200 %, seul équivalent web du Dynamic Type `accessibility3`. « rtl » est `dir="rtl"` sur les tuiles ; les composants du kit n'emploient que des propriétés logiques.
+- L'instantané web est une image de référence produite par `check-kit.mjs` (`CAPTURE_DIR`) et exigée par sa présence ; les comportements se mesurent dans Chromium à chaque passage. Pas de comparaison au pixel : les polices du système diffèrent entre le poste et la CI (#17483).
+- Le cliquet du verre hors du kit (`kit-glass-baseline.json`) ne fait que descendre, sur quatre mesures : classes, fichiers, ronds, et littéraux sans réponse au toucher dessinée (le second cliquet du contrat, miroir de `kit-glass-no-touch`) ; un verre neuf passe par le kit.
+- Les réglages sont des cases du système (`<input type="checkbox" role="switch">`) aux libellés techniques (« dark », « rtl », « zoom 2 »), comme le `Menu` iOS et le menu Android : le chrome du catalogue existe avant le verre du kit.
+
+**Écart assumé.** Aucun composant web n'est livré par ce lot : le catalogue est vide, son premier instantané est l'état vide (`Catalogue/vide.*`), et le détail se prouve par les témoins de l'écran sous happy-dom jusqu'à K01.
+

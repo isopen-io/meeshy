@@ -78,15 +78,12 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         )
     }
 
-    func test_callGlyph_appliesAdaptiveGlassBeforeMeeshyTapTarget() throws {
+    func test_callMenu_drawsTheSharedHeaderGlyph() throws {
         let body = try buttonSource()
-        guard let start = body.range(of: "private func callGlyph("),
-              let glassRange = body.range(of: ".adaptiveGlass(in: Circle()", range: start.upperBound..<body.endIndex),
-              let tapTargetRange = body.range(of: ".meeshyTapTarget()", range: glassRange.upperBound..<body.endIndex) else {
-            XCTFail("callGlyph doit appliquer .adaptiveGlass PUIS .meeshyTapTarget"); return
-        }
-        XCTAssertLessThan(glassRange.lowerBound, tapTargetRange.lowerBound,
-                          "le verre est dimensionné aux bornes courantes : après le tap target, le cercle passerait de 28 à 44 pt")
+        XCTAssertTrue(body.contains("ConversationHeaderGlassGlyph(systemName: \"phone.fill\""),
+                      "le glyphe d'appel est le gabarit partagé de l'en-tête (#17095) : verre interactif de 28 pt posé avant la cible de 44 pt (ConversationHeaderControlResponseTests)")
+        XCTAssertFalse(body.contains(".adaptiveGlass("),
+                       "le cercle de verre vit UNE fois, dans ConversationHeaderGlassGlyph")
     }
 }
 

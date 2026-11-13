@@ -188,32 +188,32 @@ public struct UserIdentityBar: View {
         case .name:
             if let name {
                 Text(name)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
             }
 
         case .username(let value):
             Text(value)
-                .font(.system(size: MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
 
         case .roleBadge(let role):
             if role != .member {
                 Label {
                     Text(role.displayName)
-                        .font(.system(size: MeeshyFont.footnoteSize))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 } icon: {
                     Image(systemName: role.icon)
-                        .font(.system(size: MeeshyIconSize.xxs))
+                        .meeshyScaledFont(MeeshyIconSize.xxs)
                 }
-                .foregroundColor(roleBadgeColor(for: role))
+                .foregroundStyle(roleBadgeColor(for: role))
             }
 
         case .time(let value):
             Text(value)
-                .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(tintColor ?? theme.textSecondary)
 
         case .delivery(let status):
@@ -235,22 +235,22 @@ public struct UserIdentityBar: View {
                         .fill(state.dotColor)
                         .frame(width: 6, height: 6)
                     Text(state.localizedLabel)
-                        .font(.system(size: MeeshyFont.footnoteSize))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(state.dotColor)
                 }
             }
 
         case .memberSince(let value):
             Text(value)
-                .font(.system(size: MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
 
         case .actionButton(let label, let action):
             Button(action: action) {
                 Text(label)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(
@@ -276,11 +276,11 @@ public struct UserIdentityBar: View {
             } label: {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(label)
-                        .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .medium))
+                        .meeshyScaledFont(8, weight: .medium)
                 }
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .padding(.horizontal, MeeshySpacing.smPlus)
                 .padding(.vertical, MeeshySpacing.xs)
                 .background(
@@ -291,8 +291,8 @@ public struct UserIdentityBar: View {
 
         case .text(let value, _):
             Text(value)
-                .font(.system(size: MeeshyFont.footnoteSize))
-                .foregroundColor(theme.textSecondary)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
         }
     }
@@ -340,7 +340,7 @@ public struct UserIdentityBar: View {
             // évoquant un échec tant que l'état n'est pas `.failed`.
             Image(systemName: "clock")
                 .font(.system(size: MeeshyIconSize.xxs))
-                .foregroundColor(MeeshyColors.warning)
+                .foregroundStyle(MeeshyColors.warning)
         case .sent:
             Image(systemName: "checkmark")
                 .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
@@ -363,21 +363,21 @@ public struct UserIdentityBar: View {
                     .font(.system(size: MeeshyIconSize.xxs, weight: .black))
                     .offset(x: 4)
             }
-            .foregroundColor(readColor)
+            .foregroundStyle(readColor)
             .frame(width: 17)
             .accessibilityLabel(String(localized: "userIdentity.read", defaultValue: "Lu", bundle: .module))
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(.system(size: MeeshyIconSize.xxs))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
         }
     }
 
     private func translateButton(_ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: "translate")
-                .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .meeshyScaledFont(MeeshyIconSize.xxs, weight: .medium)
+                .foregroundStyle(MeeshyColors.brandPrimary)
         }
         .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
         .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))

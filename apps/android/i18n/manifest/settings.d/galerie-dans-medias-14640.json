@@ -13,11 +13,6 @@
           "catalog": "app",
           "iosKey": "settings.media.autosave.title",
           "status": "adopted"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "settings.media.autosave.subtitle",
-          "status": "adopted"
         }
       ]
     }

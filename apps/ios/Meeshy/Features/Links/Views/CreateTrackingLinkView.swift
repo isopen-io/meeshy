@@ -32,7 +32,7 @@ struct CreateTrackingLinkView: View {
                         utmSection
                         tokenSection
                         if let error = errorMessage {
-                            Text(error).font(.footnote).foregroundColor(MeeshyColors.error)
+                            Text(error).font(.footnote).foregroundStyle(MeeshyColors.error)
                                 .padding(.horizontal, MeeshySpacing.xl)
                         }
                         createButton
@@ -74,7 +74,7 @@ struct CreateTrackingLinkView: View {
             } label: {
                 HStack {
                     Text(String(localized: "tracking.link.create.utm.title", defaultValue: "Paramètres UTM", bundle: .main)).font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Spacer()
                     Image(systemName: showUtmFields ? "chevron.up" : "chevron.down")
                         .font(.caption).foregroundColor(theme.textMuted)
@@ -107,7 +107,7 @@ struct CreateTrackingLinkView: View {
                 .padding(MeeshySpacing.md)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
             Text(String(localized: "tracking.link.create.token.help", defaultValue: "Laissez vide pour un token aléatoire", bundle: .main))
@@ -121,7 +121,7 @@ struct CreateTrackingLinkView: View {
             if isCreating {
                 ProgressView().tint(.white)
             } else {
-                Text(String(localized: "tracking.link.create.button", defaultValue: "Créer le lien", bundle: .main)).font(.callout.weight(.bold)).foregroundColor(.white)
+                Text(String(localized: "tracking.link.create.button", defaultValue: "Créer le lien", bundle: .main)).font(.callout.weight(.bold)).foregroundStyle(Color.white)
             }
         }
         .frame(maxWidth: .infinity).padding(.vertical, MeeshySpacing.mdPlus)
@@ -146,13 +146,13 @@ struct CreateTrackingLinkView: View {
     private func formField(_ label: String, placeholder: String, text: Binding<String>, accessibilityLabel: String? = nil, hint: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(label).font(.caption.weight(.medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .accessibilityHidden(true)
             TextField(placeholder, text: text)
                 .padding(MeeshySpacing.md)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityLabel(accessibilityLabel ?? label)
                 .accessibilityHint(hint ?? "")
         }

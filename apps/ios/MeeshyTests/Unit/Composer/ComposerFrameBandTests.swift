@@ -57,11 +57,11 @@ final class ComposerFrameBandTests: XCTestCase {
     /// il rend la scène.
     func test_toucherHorsDeLaScene_bandeOuverte_laReferme_sansChoisirLeFondNiArmerLeViseur() {
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
-                                                     quickCaptureOffered: false, backgroundMediaId: "fond",
+                                                     backgroundMediaId: "fond",
                                                      bandIsOpen: true),
                        .closeBand)
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: false, effectIsOpen: false,
-                                                     quickCaptureOffered: true, backgroundMediaId: nil,
+                                                     backgroundMediaId: nil,
                                                      bandIsOpen: true),
                        .closeBand)
     }
@@ -69,7 +69,7 @@ final class ComposerFrameBandTests: XCTestCase {
     /// Avec une sélection, le même toucher désélectionne ET referme la bande.
     func test_toucherHorsDeLaScene_bandeOuverteEtSelection_deselectionne() {
         XCTAssertEqual(ComposerSceneEmptyTap.outcome(hadSelection: true, effectIsOpen: false,
-                                                     quickCaptureOffered: false, backgroundMediaId: "fond",
+                                                     backgroundMediaId: "fond",
                                                      bandIsOpen: true),
                        .deselect)
         XCTAssertTrue(ComposerSceneEmptyTap.closesBand(.deselect))

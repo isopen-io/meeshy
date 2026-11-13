@@ -43,4 +43,22 @@ final class MeeshyTapTargetGeometryTests: XCTestCase {
         XCTAssertEqual(before.sizeThatFits(in: bounds), CGSize(width: 68, height: 56))
         XCTAssertEqual(after.sizeThatFits(in: bounds), before.sizeThatFits(in: bounds))
     }
+
+    func test_negativePadding_keepsTheLayoutBoxOfTheVisualSide() {
+        let bounds = CGSize(width: 1000, height: 1000)
+        let side = MeeshyControlSize.compact
+        let before = UIHostingController(rootView: Color.clear.frame(width: side, height: side))
+        let after = UIHostingController(rootView: Color.clear
+            .frame(width: side, height: side)
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: side)))
+        XCTAssertEqual(after.sizeThatFits(in: bounds), before.sizeThatFits(in: bounds))
+    }
+
+    func test_denseRowsLeftAside_stillOverlapWhenGrownTo44() {
+        XCTAssertTrue(MeeshyTapTarget.overlaps(
+            visualA: MeeshyControlSize.small, visualB: MeeshyControlSize.small, gap: MeeshySpacing.xsPlus))
+        XCTAssertFalse(MeeshyTapTarget.overlaps(
+            visualA: MeeshyControlSize.regular, visualB: MeeshyControlSize.regular, gap: MeeshySpacing.sm))
+    }
 }

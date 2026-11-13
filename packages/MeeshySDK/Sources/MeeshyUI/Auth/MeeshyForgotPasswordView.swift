@@ -5,8 +5,8 @@ import MeeshySDK
 /// **Mot de passe oublié — ou jamais eu.** L'écran sert les deux (#6644).
 ///
 /// « La page de récupération de mot de passe doit permettre de setter le mot
-/// de passe même si on a jamais eu de mot de passe ! » (directive porteur
-/// 2026-09-15). Le lien reçu par e-mail mène au même formulaire qu'on ait
+/// de passe même si on a jamais eu de mot de passe ! ».
+/// Le lien reçu par e-mail mène au même formulaire qu'on ait
 /// oublié son mot de passe ou qu'on n'en ait jamais créé (#6642) ; la phrase
 /// dit donc ce qu'on FAIT — choisir un nouveau mot de passe — et un (i)
 /// « Jamais eu de mot de passe ? » répond à la personne qui, inscrite par son
@@ -215,7 +215,7 @@ public struct MeeshyForgotPasswordView: View {
     private var emailSentContent: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "envelope.badge.fill")
-                .font(.system(size: MeeshyIconSize.hero))
+                .meeshyScaledFont(MeeshyIconSize.hero)
                 .foregroundStyle(MeeshyColors.brandPrimary)
                 .accessibilityHidden(true)
 
@@ -287,7 +287,7 @@ public struct MeeshyForgotPasswordView: View {
                     .padding(.horizontal, MeeshySpacing.xxl)
                 }
 
-                Text(String(localized: "auth.forgotPassword.verifyIdentityPrompt", defaultValue: "Pour vérifier votre identité, entrez votre nom d'utilisateur et votre e-mail complets.", bundle: .module))
+                Text(String(localized: "auth.forgotPassword.verifyIdentityPrompt", defaultValue: "Entrez votre nom d'utilisateur et votre e-mail complets.", bundle: .module))
                     .multilineTextAlignment(.center)
                     .font(.caption)
                     .foregroundStyle(.secondary)

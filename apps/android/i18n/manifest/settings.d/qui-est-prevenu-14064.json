@@ -9,10 +9,6 @@
           "status": "android-only"
         },
         {
-          "androidName": "settings_circle_notify_intro",
-          "status": "android-only"
-        },
-        {
           "androidName": "settings_circle_notify_family_publication",
           "status": "android-only"
         },
@@ -34,14 +30,6 @@
         },
         {
           "androidName": "settings_circle_notify_explain_nobody",
-          "status": "android-only"
-        },
-        {
-          "androidName": "settings_circle_notify_explain_community",
-          "status": "android-only"
-        },
-        {
-          "androidName": "settings_circle_notify_explain_public",
           "status": "android-only"
         },
         {

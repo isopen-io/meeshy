@@ -71,12 +71,12 @@ struct BlockedTab: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
                     .font(.caption.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .accessibilityElement(children: .combine)
 
@@ -87,7 +87,7 @@ struct BlockedTab: View {
             } label: {
                 Text(String(localized: "contacts.blocked.unblock", defaultValue: "Débloquer", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(

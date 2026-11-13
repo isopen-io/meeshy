@@ -4,7 +4,7 @@ import MeeshyUI
 
 // MARK: - La page SCÈNE du plein écran (#6709)
 //
-// Directive porteur 2026-09-15 : « lorsqu'on ouvre les scènes de poste, on doit
+// « lorsqu'on ouvre les scènes de poste, on doit
 // utiliser LE même composant qu'on utilise pour afficher les attachements de
 // conversation ! ».
 //
@@ -168,6 +168,7 @@ struct GalleryScenePage: View, Equatable {
         // (`StoryCanvasUIView.gestureRecognizerShouldBegin`) : le doigt reste au
         // conteneur, qui répond comme celui des pages image et vidéo.
         .onTapGesture { onEnterStage(.tap) }
+        .accessibilityAction(named: Text(String(localized: "a11y.post.media.open.hint", bundle: .main))) { onEnterStage(.tap) }
         .offset(y: offset.height)
         // `isActive` désarme les pages VOISINES — la raison est écrite au SDK
         // (`MediaStageGestures.longPressArmed`) et reprise par la page vidéo.

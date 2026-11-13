@@ -1,7 +1,11 @@
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 import { lazy, Suspense, useState } from 'react';
 
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
+import type { CallHeaderCapsule } from '@/lib/calls/call-header';
 import type { CallMember, CallQuality } from '@/lib/calls/call-store';
+import { useGlassToneRef } from '@/lib/calls/use-pill-motion';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -27,9 +31,18 @@ const LEVEL_KEY = {
   poor: 'call.quality.level.poor',
 } as const;
 
+/** Le « · » entre le nom, le nombre et la durée (iOS `chipSeparator`, Android `MetaSeparator`) : dessiné, jamais lu — le nom accessible le porte déjà. */
+function Separator() {
+  return (
+    <span className="shrink-0 opacity-70" aria-hidden="true" data-call-chip-sep="">
+      ·
+    </span>
+  );
+}
+
 function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
   return (
-    <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true">
+    <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true" data-call-signal="">
       {[0, 1, 2, 3].map((index) => {
         const lit = index < LIT[level];
         const height = 5 + index * 4;
@@ -40,7 +53,7 @@ function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
 }
 
 type CallQualityChipProps = {
-  readonly title: string;
+  readonly capsule: CallHeaderCapsule;
   readonly clock: string | null;
   readonly quality: CallQuality | null;
   readonly language: InterfaceLanguage;
@@ -49,29 +62,63 @@ type CallQualityChipProps = {
 };
 
 /**
- * LA PUCE « NOM · DURÉE » DE L'EN-TÊTE (#8391) — à droite de l'en-tête d'appel,
- * un verre qui porte le nom, la durée et les barres de qualité ; la toucher
- * ouvre le détail. Son nom accessible DIT ce qu'elle montre puis le niveau :
- * la légende visible est contenue dans le nom (WCAG 2.5.3). Sans relevé, la
- * puce n'est qu'une étiquette : aucun bouton ne promet un détail absent.
+ * LA CAPSULE DE DROITE DE L'EN-TÊTE (#8391, #17341) — un verre qui porte ce que
+ * `callHeaderCapsule` décide : en vidéo « nom donné · durée », en groupe « nom ·
+ * nombre · durée », en audio le seul indicateur réseau ; les barres n'y paraissent
+ * que si le lien est dégradé. La toucher ouvre le détail. Son nom accessible DIT
+ * ce qu'elle montre (nom, nombre de participants, durée) puis le niveau : la
+ * légende visible est contenue dans le nom (WCAG 2.5.3). Sans relevé, la capsule
+ * n'est qu'une étiquette : aucun bouton ne promet un détail absent.
  */
-export function CallQualityChip({ title, clock, quality, language, prominent }: CallQualityChipProps) {
+export function CallQualityChip({ capsule, clock, quality, language, prominent }: CallQualityChipProps) {
   const [open, setOpen] = useState(false);
-  const shown = clock === null ? title : `${title} · ${clock}`;
+  const glassRef = useGlassToneRef(prominent);
+  const count = capsule.participantCount === null ? null : translate(language, 'call.members', { count: String(capsule.participantCount) });
+  const title = capsule.receivedScreen === true && capsule.title !== null ? translate(language, 'call.screen.of', { name: capsule.title }) : capsule.title;
+  const spoken = [title, count, capsule.duration ? clock : null].filter((part): part is string => part !== null && part !== '').join(' · ');
   const glass = `${prominent ? 'glass-call-prominent' : 'glass-call'} flex min-h-11 min-w-0 max-w-[60vw] items-center gap-2 rounded-full px-3 text-body font-semibold tabular-nums`;
+  const identity = [
+    title === null ? null : (
+      <span key="title" className="truncate">
+        {title}
+      </span>
+    ),
+    capsule.participantCount === null ? null : (
+      <span key="count" className="inline-flex shrink-0 items-center gap-1" aria-hidden="true" data-call-chip-count="">
+        <Glyph name="users" size={16} />
+        {capsule.participantCount}
+      </span>
+    ),
+    capsule.duration && clock !== null ? (
+      <span key="clock" className="shrink-0">
+        {clock}
+      </span>
+    ) : null,
+  ].filter((part) => part !== null);
+  const content = (
+    <>
+      {capsule.receivedScreen === true ? (
+        <span className="inline-flex shrink-0 items-center" aria-hidden="true" data-call-chip-screen="">
+          <GlyphSvg glyph={CALL_SCREEN_GLYPHS.monitorArrowUp} size={16} />
+        </span>
+      ) : null}
+      {identity.flatMap((part, index) => (index === 0 ? [part] : [<Separator key={`sep-${part.key}`} />, part]))}
+      {capsule.network && quality !== null ? <SignalBars level={quality.level} /> : null}
+    </>
+  );
   if (quality === null) {
     return (
-      <span className={glass} data-call-chip="">
-        <span className="truncate">{shown}</span>
+      <span ref={glassRef} className={glass} data-call-chip="">
+        {content}
       </span>
     );
   }
-  const label = `${shown} — ${translate(language, 'call.quality.indicator', { level: translate(language, LEVEL_KEY[quality.level]) })}`;
+  const level = translate(language, 'call.quality.indicator', { level: translate(language, LEVEL_KEY[quality.level]) });
+  const label = spoken === '' ? level : `${spoken} — ${level}`;
   return (
     <div className="relative min-w-0">
-      <button type="button" aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} className={glass} data-call-chip="" data-call-quality={quality.level}>
-        <span className="truncate">{shown}</span>
-        <SignalBars level={quality.level} />
+      <button ref={glassRef} type="button" aria-label={label} aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((value) => !value)} className={glass} data-call-chip="" data-call-quality={quality.level}>
+        {content}
       </button>
       {open ? (
         <Suspense fallback={null}>
@@ -101,9 +148,6 @@ export function CallCaptureAlerts({ members, language }: { readonly members: Rea
     </div>
   );
 }
-
-/** La place que la capsule prend sous l'en-tête (44 px et sa marge) : la vignette et ses commandes descendent d'autant. */
-export const CALL_CAPTURE_ROW_CLEARANCE = 56;
 
 export const someoneCaptures = (members: Readonly<Record<string, CallMember>>): boolean => Object.values(members).some((member) => member.capturing);
 

@@ -9,8 +9,7 @@ import MeeshyUI
 /// retraduire, action « Traduire » sur les langues absentes — mais câblé sur les
 /// données story (`StoryItem.translations`) et le service story
 /// (`StoryInteractionService.requestTranslation`). Remplace `LanguagePickerSheet`
-/// dans le reader (mal intégré au liquid glass, sans dark/light — directive user
-/// 2026-07-26).
+/// dans le reader (mal intégré au liquid glass).
 ///
 /// App-side : orchestration UX produit (câble les traductions prêtes de la story
 /// + décide « tap = explorer / traduire »). Feuille en verre, dark + light via
@@ -122,6 +121,9 @@ struct StoryLanguageDetailView: View {
                 Color.black.opacity(MeeshyOpacity.medium)
                     .ignoresSafeArea()
                     .onTapGesture { onDismiss() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+                    .accessibilityAction { onDismiss() }
 
                 panel
                     .frame(height: currentHeight(for: geo.size.height))
@@ -177,7 +179,7 @@ struct StoryLanguageDetailView: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "character.book.closed.fill")
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                 Text(String(localized: "story.language.detail.title",
                             defaultValue: "Langues", bundle: .main))
                     .font(.footnote.weight(.semibold))
@@ -200,19 +202,19 @@ struct StoryLanguageDetailView: View {
                     Circle().fill(langColor).frame(width: 6, height: 6)
                     Text(StoryLanguageDetailView.languageName(for: code))
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(langColor)
+                        .foregroundStyle(langColor)
                     Spacer()
                     if !code.isEmpty {
                         Text(code.uppercased())
                             .font(.system(.caption2, design: .monospaced).weight(.bold))
-                            .foregroundColor(langColor)
+                            .foregroundStyle(langColor)
                             .padding(.horizontal, MeeshySpacing.xsPlus).padding(.vertical, MeeshySpacing.xxs)
                             .background(Capsule().fill(langColor.opacity(MeeshyOpacity.light)))
                     }
                 }
                 Text(content)
                     .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(MeeshySpacing.md)
@@ -262,7 +264,7 @@ struct StoryLanguageDetailView: View {
                 if isActive {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(MeeshyColors.indigo400)
+                        .foregroundStyle(MeeshyColors.indigo400)
                 }
             }
             .padding(.vertical, MeeshySpacing.sm)
@@ -304,7 +306,7 @@ struct StoryLanguageDetailView: View {
                 Text(lang.flag).font(.callout)
                 Text(lang.name)
                     .font(.footnote.weight(.medium))
-                    .foregroundColor(isActive ? langColor : theme.textPrimary)
+                    .foregroundStyle(isActive ? langColor : theme.textPrimary)
                 Spacer()
                 if isTranslating {
                     ProgressView().scaleEffect(0.7).tint(langColor)
@@ -314,37 +316,15 @@ struct StoryLanguageDetailView: View {
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                         .frame(maxWidth: 150, alignment: .trailing)
-                    // Retraduire
-                    Button {
-                        HapticFeedback.light()
-                        retranslateBaseline[lang.code] = translated
-                        onTranslate(lang.code, true)
-                        let code = lang.code
-                        Task {
-                            _ = await cancellableSleep(for: Self.retranslateTimeout)
-                            retranslateBaseline[code] = nil
-                        }
-                    } label: {
-                        Group {
-                            if isRetranslating {
-                                ProgressView().scaleEffect(0.6)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.caption2.weight(.medium))
-                            }
-                        }
-                        .foregroundColor(langColor.opacity(MeeshyOpacity.heavy))
-                        .tint(langColor)
-                        .frame(width: 26, height: 26)
-                        .contentShape(Circle())
-                    }
-                    .disabled(isRetranslating)
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(Text(String(localized: "story.language.detail.retranslate",
-                                                    defaultValue: "Retraduire", bundle: .main)))
+                    retranslateButton(
+                        lang: lang,
+                        translated: translated,
+                        langColor: langColor,
+                        isRetranslating: isRetranslating
+                    )
                     Image(systemName: isActive ? "checkmark.circle.fill" : "chevron.forward")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(isActive ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
+                        .foregroundStyle(isActive ? langColor : theme.textMuted.opacity(MeeshyOpacity.strong))
                 } else {
                     Text(String(localized: "story.language.detail.translate",
                                 defaultValue: "Traduire", bundle: .main))
@@ -364,6 +344,43 @@ struct StoryLanguageDetailView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text(lang.name))
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    private func retranslateButton(
+        lang: LanguageDisplay,
+        translated: String,
+        langColor: Color,
+        isRetranslating: Bool
+    ) -> some View {
+        Button {
+            HapticFeedback.light()
+            retranslateBaseline[lang.code] = translated
+            onTranslate(lang.code, true)
+            let code = lang.code
+            Task {
+                _ = await cancellableSleep(for: Self.retranslateTimeout)
+                retranslateBaseline[code] = nil
+            }
+        } label: {
+            Group {
+                if isRetranslating {
+                    ProgressView().scaleEffect(0.6)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption2.weight(.medium))
+                }
+            }
+            .foregroundColor(langColor.opacity(MeeshyOpacity.heavy))
+            .tint(langColor)
+            .frame(width: 26, height: 26)
+            .contentShape(Circle())
+            .meeshyTapTarget()
+            .padding(-MeeshyTapTarget.inset(forVisualSide: 26))
+        }
+        .disabled(isRetranslating)
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(String(localized: "story.language.detail.retranslate",
+                                        defaultValue: "Retraduire", bundle: .main)))
     }
 
     /// Code langue AFFICHABLE de la sélection courante.

@@ -265,6 +265,16 @@ export const messageSchema = {
           nullable: true,
           description: 'Nombre total de photos et vidéos du message cité (les pièces servies sont plafonnées à quatre)'
         },
+        // #17441 — la métadonnée d'un avis CITÉ (appel, arrivée, départ
+        // annoncé) : le client le dit dans la langue de SON lecteur. Une carte
+        // ouverte DÉCLARÉE (`additionalProperties`), jamais un objet nu, que
+        // fast-json-stringify viderait.
+        notice: {
+          type: 'object',
+          nullable: true,
+          additionalProperties: true,
+          description: 'Métadonnée de l’avis cité (appel, arrivée, départ annoncé) — absente pour tout autre message.'
+        },
         attachmentReplyTo: {
           type: 'object',
           nullable: true,

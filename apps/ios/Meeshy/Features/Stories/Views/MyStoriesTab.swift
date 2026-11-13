@@ -1,14 +1,14 @@
 import Foundation
 import MeeshySDK
 
-/// Les quatre onglets de « Mes stories » (C7a, 2026-08-23 — la File et
+/// Les quatre onglets de « Mes stories » (C7a, — la File et
 /// l'Archive existaient déjà comme MATIÈRE avant d'avoir un onglet : la
 /// première était entassée dans « Brouillons » (uploads actifs + échecs de
 /// publication), la seconde mélangée à « Publiées » (stories actives ET
 /// expirées confondues). Cette enum ne fait que leur donner une place à part
 /// — aucune donnée nouvelle, seulement une meilleure étagère.
 ///
-/// Chaque onglet reste COMPLÈTEMENT distinct (directive user 2026-08-01) :
+/// Chaque onglet reste COMPLÈTEMENT distinct:
 /// « Publiées » ne contient que des stories actives et publiées, « Brouillons »
 /// que du contenu local jamais envoyé, « File » que du travail réseau en cours
 /// ou en échec, « Archive » que des stories publiées et déjà expirées.

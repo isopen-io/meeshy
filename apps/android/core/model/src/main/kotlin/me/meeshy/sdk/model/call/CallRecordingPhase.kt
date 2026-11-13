@@ -14,7 +14,7 @@ sealed interface CallRecordingPhase {
     data class Pending(
         val callId: String,
         override val recordingId: String,
-        val requesterId: String,
+        override val requesterId: String,
         val mine: Boolean,
         val mustAnswer: Boolean,
     ) : CallRecordingPhase
@@ -31,6 +31,12 @@ sealed interface CallRecordingPhase {
     val isActive: Boolean get() = this != Idle
 
     val isRecording: Boolean get() = this is Recording
+
+    /** R2.2 — celui qui a demandé l'enregistrement : la carte d'accord le nomme, pas le pair principal de l'appel. */
+    val requesterId: String? get() = null
+
+    /** Le nom de celui qui a demandé, lu dans l'annuaire de l'appel ; inconnu, il est vide et la carte dit « Un participant ». */
+    fun requesterName(names: Map<String, String>): String = requesterId?.let(names::get).orEmpty()
 }
 
 /** Les pastilles d'avis qui suivent une fin ou un échec ; le texte est choisi par l'écran. */
@@ -63,6 +69,9 @@ data class CallRecordingState(
     val kind: CallRecordingKind = CallRecordingKind.AUDIO,
     val notice: CallRecordingNotice? = null,
     val capturingRecordingId: String? = null,
-)
+) {
+    /** R1.5 — un bandeau d'enregistrement est dans la pile (carte d'accord, capsule d'attente ou d'enregistrement, avis) : ma vignette lui fait place. */
+    val isBannerShown: Boolean get() = phase != CallRecordingPhase.Idle || notice != null
+}
 
 enum class CallRecordingAdmission { Allowed, NotEstablished, EndToEnd }

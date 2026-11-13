@@ -40,7 +40,7 @@ data class CallTranscriptSnapshot(
     val state: CallTranscriptState,
 ) {
     fun stateFor(callId: String): CallTranscriptState =
-        if (callId == this.callId) state else CallTranscriptState.Loading
+        if (callId == this.callId) state else CallTranscriptState.ReadingCopy
 }
 
 /**
@@ -66,11 +66,12 @@ class CallDetailTranscriptViewModel internal constructor(
         regime: LedgerCallConversationRegime,
     ) : this(records, session, cache, regime.asRegime())
 
-    private val _state = MutableStateFlow(CallTranscriptSnapshot(callId = null, state = CallTranscriptState.Loading))
+    private val _state = MutableStateFlow(CallTranscriptSnapshot(callId = null, state = CallTranscriptState.ReadingCopy))
     val state: StateFlow<CallTranscriptSnapshot> = _state.asStateFlow()
 
     private var request: CallTranscriptRequest? = null
     private var job: Job? = null
+    private var deletion: Job? = null
 
     fun load(request: CallTranscriptRequest) {
         if (request == this.request && _state.value.state != CallTranscriptState.Failed) return
@@ -82,12 +83,24 @@ class CallDetailTranscriptViewModel internal constructor(
         request?.let(::fetch)
     }
 
+    /**
+     * A1.6 — la bulle qui porte ce journal a quitté l'écran : une lecture en cours s'arrête, et la rouvrir relit au lieu
+     * de rester sur « Loading » (la requête est oubliée, [load] ne la prend plus pour déjà servie). Une lecture finie
+     * reste servie : rien ne se relit. Une suppression confirmée ([delete]) n'est pas une lecture : elle va à son terme.
+     */
+    fun release() {
+        val reading = job?.takeIf { it.isActive } ?: return
+        reading.cancel()
+        job = null
+        request = null
+    }
+
     /** « Supprimer ce transcript », confirmed: gone from the sheet at once, then from the device. */
     fun delete() {
         val request = request ?: return
         job?.cancel()
         publish(request, CallTranscriptState.Absent)
-        job = viewModelScope.launch { cache.dismiss(request.callId) }
+        deletion = viewModelScope.launch { cache.dismiss(request.callId) }
     }
 
     private fun fetch(request: CallTranscriptRequest) {
@@ -96,9 +109,9 @@ class CallDetailTranscriptViewModel internal constructor(
             publish(request, CallTranscriptState.Absent)
             return
         }
-        val shown = _state.value
-        if (shown.callId != request.callId || shown.state !is CallTranscriptState.Ready) publish(request, CallTranscriptState.Loading)
+        showUnlessReady(request, CallTranscriptState.ReadingCopy)
         job = viewModelScope.launch {
+            deletion?.join()
             if (regime.isEndToEnd(request.conversationId) == true) {
                 apply(request, CallTranscriptRevalidation.sealedEndToEnd)
                 return@launch
@@ -109,9 +122,12 @@ class CallDetailTranscriptViewModel internal constructor(
                     return@launch
                 }
                 is CachedCallTranscript.Copy -> CallTranscriptState.of(project(held.page, request)).also { publish(request, it) }
-                CachedCallTranscript.None -> null
+                CachedCallTranscript.None -> {
+                    showUnlessReady(request, CallTranscriptState.Loading)
+                    null
+                }
             }
-            val remote = when (val result = records.transcript(request.callId)) {
+            val remote = when (val result = records.fullTranscript(request.callId)) {
                 is NetworkResult.Success -> CallTranscriptRemote.Served(result.data)
                 is NetworkResult.Failure -> CallTranscriptRemote.Failed(result.error.httpStatus)
             }
@@ -136,6 +152,12 @@ class CallDetailTranscriptViewModel internal constructor(
         participantLabel = request.participantLabel,
     )
 
+    /** A1.14 — what this call already shows stays drawn: the reading of the copy, then the wait, never cover lines. */
+    private fun showUnlessReady(request: CallTranscriptRequest, state: CallTranscriptState) {
+        val shown = _state.value
+        if (shown.callId != request.callId || shown.state !is CallTranscriptState.Ready) publish(request, state)
+    }
+
     private fun publish(request: CallTranscriptRequest, state: CallTranscriptState) {
         _state.value = CallTranscriptSnapshot(callId = request.callId, state = state)
     }
@@ -144,7 +166,6 @@ class CallDetailTranscriptViewModel internal constructor(
         val user = session.currentUser.value
         return CallTranscriptReader(
             userId = user?.id,
-            name = user?.effectiveDisplayName,
             prism = if (user == null) {
                 listOfNotNull(Locale.getDefault().language.takeIf { it.isNotBlank() })
             } else {

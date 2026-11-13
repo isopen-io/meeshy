@@ -82,6 +82,12 @@ final class ProfileCircleViewModel: ObservableObject {
         max(shownLevel ?? .public, toolLevel ?? .public) >= .close
     }
 
+    /// « Regarder ou écouter ensemble » se PROPOSE dès Proche (feature `together`, #17011), par le lien affiché ou par le
+    /// verdict servi. La passerelle rejuge à chaque invitation (#17097).
+    var offersTogether: Bool {
+        max(shownLevel ?? .public, toolLevel ?? .public) >= RelationFeature.together.minimumLevel
+    }
+
     /// Le cercle occupe l'emplacement de la fiche : un lien est montré, ou vient d'être annulé ici.
     var claimsTheSlot: Bool { shownLevel != nil || didUnlink }
 
@@ -113,9 +119,7 @@ final class ProfileCircleViewModel: ObservableObject {
     /// `GET /relations/:userId` : le blocage de montée quand la passerelle le sert, et le lien lui-même quand la liste
     /// ne le portait pas encore. Un échec garde ce qui est affiché.
     private func loadServedDetail() async {
-        guard let served = try? await relations.link(userId: userId), served.userId.lowercased() == userId.lowercased() else {
-            return
-        }
+        guard let served = await servedDetail() else { return }
         toolLevel = served.toolLevel
         guard let current = link else {
             if served.effectiveLevel >= .acquaintance { link = served }
@@ -132,6 +136,21 @@ final class ProfileCircleViewModel: ObservableObject {
             canRaise: served.canRaise ?? current.canRaise,
             accessLevel: served.accessLevel ?? current.accessLevel
         )
+    }
+
+    /// Après MA baisse, le niveau d'outil suit le lien ; seul un verdict servi AU-DESSUS du lien (deux comptes de
+    /// l'équipe, #16623) ne dépend pas de lui et reste.
+    private static func toolLevelAfterLowering(_ tool: RelationLevel?, link: RelationLevel, to target: RelationLevel) -> RelationLevel? {
+        guard let tool, tool <= link else { return tool }
+        return min(tool, target)
+    }
+
+    /// `GET /relations/:userId` pour CETTE personne ; `nil` sur échec ou réponse d'une autre.
+    private func servedDetail() async -> RelationLink? {
+        guard let served = try? await relations.link(userId: userId), served.userId.lowercased() == userId.lowercased() else {
+            return nil
+        }
+        return served
     }
 
     private func loadPendingRequest() async {
@@ -167,9 +186,11 @@ final class ProfileCircleViewModel: ObservableObject {
         guard !isLowering, let current = link, let lowering = offeredLowering else { return false }
         let target = lowering.level
         let pendingBefore = pendingLevel
+        let toolBefore = toolLevel
         isLowering = true
         defer { isLowering = false }
         link = current.lowered(to: target)
+        toolLevel = Self.toolLevelAfterLowering(toolBefore, link: current.effectiveLevel, to: target)
         if let waiting = pendingLevel, waiting > target { pendingLevel = nil }
         do {
             let served = try await relations.lower(userId: userId, to: target)
@@ -177,10 +198,12 @@ final class ProfileCircleViewModel: ObservableObject {
             didUnlink = target == .public
             await linksStore().invalidate(for: CirclesViewModel.cacheKey)
             if target < .friend { await forgetFriendship(userId) }
+            if let reread = await servedDetail() { toolLevel = reread.toolLevel }
             HapticFeedback.success()
             return true
         } catch {
             link = current
+            toolLevel = toolBefore
             pendingLevel = pendingBefore
             notice = String(localized: "circles.notice.lowerFailed", defaultValue: "La modification n'a pas pu être enregistrée.", bundle: .main)
             HapticFeedback.error()

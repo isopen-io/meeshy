@@ -58,6 +58,7 @@
     <string name="menu_communities">Communities</string>
     <string name="menu_contacts">Contacts</string>
     <string name="menu_discover">Discover</string>
+    <string name="menu_game">My Legend</string>
     <string name="menu_my_links">My links</string>
     <string name="menu_notifications">Notifications</string>
     <string name="menu_settings">Settings</string>
@@ -96,7 +97,7 @@
     <string name="route_title_notifications">Notifications</string>
     <string name="route_title_post">Post</string>
     <string name="route_title_profile">Profile</string>
-    <string name="route_title_progression">Progress</string>
+    <string name="route_title_progression">My Legend</string>
     <string name="route_title_settings">Settings</string>
     <string name="route_title_share_links">Share links</string>
     <string name="route_title_starred">Starred messages</string>
@@ -169,7 +170,7 @@
     <string name="sync_pill_sending_sticker">Sending sticker</string>
     <string name="sync_pill_sending_video">Sending video</string>
     <string name="tab_calls">Calls</string>
-    <string name="tab_feed">Feed</string>
+    <string name="tab_feed">Posts</string>
     <string name="tab_profile">Profile</string>
     <string name="talkie_incoming_mute">Mute</string>
     <string name="talkie_incoming_mute_named">Mute %1$s’s voice</string>

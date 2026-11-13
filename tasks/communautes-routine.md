@@ -13,6 +13,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-07 | Retiré ou parti d'une communauté privée, on ne lit plus ses salons (passerelle) | #16710 | #16704 | voir réveil 8 |
 | 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web) et ne se lisent ou publient que par qui en a le droit (passerelle) | #16895 | #6379 | fusionnée dans dev (réveil 17) |
 | 2026-11-08 | Les publications d'une communauté se lisent dans son détail (web), et la passerelle ne les sert qu'à qui peut les lire | voir réveil 15 | #6379 | voir réveil 15 |
+| 2026-11-08 | L'onglet Publications du détail lit les publications (iOS) | #17061 | #16878 | fusionnée dans dev (réveil 20) |
+| 2026-11-08 | Une communauté refusée dit pourquoi dans la langue du lecteur, sans proposer de réessayer (iOS, web) | #17105 | #7816 | fusionnée dans dev (réveil 21) |
+| 2026-11-08 | L'emoji choisi en créant une communauté se retrouve dans son détail (iOS) | #17152 | #6380 | voir réveil 21 |
+| 2026-11-09 | Une publication réservée à une communauté ne se lit que par ses membres, sur toutes les portes de lecture (passerelle) | #17183 | #16892 | fusionnée dans dev (réveil 25) |
+| 2026-11-09 | Les notifications et le temps réel d'une publication réservée à une communauté ne partent qu'à ses membres (passerelle) | voir réveil 25 | #17178 | voir réveil 25 |
 
 ## 2026-11-07 — lot 1
 
@@ -152,3 +157,54 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : `type-check` vert ; `bun test` 30 095 verts, 2 rouges avant correction du cliquet (le cliquet lui-même, corrigé dans le lot ; `act-leak-guard.test.ts`, connu en conteneur) ; `measure-weight` vert ; navigateurs `check-communities`, `check-settings`, `check-links` verts. `check-design-harmony` rouge sur dev hors lot (27 violations dans 9 fichiers qu'il ne touche pas).
 - iOS/Android : rien à changer (le web rejoint le `Toggle` d'iOS).
 - Prochain lot recommandé : #16878 (l'onglet Feed iOS lit les publications), puis #16739 (décision à prendre) ; #6381 attend une session de staging.
+
+## 2026-11-08 — réveil 19
+
+- Lot : #16878 (iOS). L'onglet « Publications » du détail d'une communauté lit enfin ses publications (il était un état vide FIXE). `CommunityPostsViewModel` (`apps/ios/Meeshy/Features/Community/`) lit `PostService.getCommunityPosts` (`GET /posts/community/:id`, gardé par la passerelle depuis #6379) : cache d'abord sous `community:<id>` (frais ⇒ aucun réseau ; périmé ⇒ peint puis remplacé ; expiré ⇒ le disque se peint hors ligne), page suivante par curseur dédoublonnée, gestes de la carte optimistes avec retour arrière (aimer, repartager, enregistrer, partager). `CommunityPostsTab` monte la même `FeedPostCard` que le fil, ouvre un post sur son détail et un réel dans le lecteur (origine `.community`), compte les impressions (`source: "feed"`, surface `.community` — `community` n'est pas une source admise par la passerelle). États dessinés : chargement (cache vide seulement), vide, échec avec « Réessayer », hors ligne.
+- SDK : `CommunityDetailScreen` reçoit l'onglet par un emplacement `postsTab` (la carte du fil vit dans l'app) ; l'état vide fixe et le paramètre `onCreatePost` du SDK disparaissent (l'hôte le passe à l'onglet). Onglets « Conversations » / « Publications » en sept langues, au lieu de « Channels » / « Feed ».
+- Quitter une communauté efface ses publications en cache (une communauté privée ne se relit plus hors ligne) ; la rejoindre les fait relire sous le rôle de membre.
+- Témoins : `CommunityPostsViewModelTests` (12) et trois de plus dans `CommunityDetailViewModelTests`. iOS ne compile pas en conteneur : preuve par `ios.yml` sur la PR.
+- Reste : l'onglet ouvert pendant une adhésion garde sa page de visiteur jusqu'au prochain affichage ; Android → #16879.
+- État en fin de run : PR #17061 ouverte, NON fusionnée. Gardes iOS texte vertes en local sur la tête (`check_test_registration`, `check_pbxproj_*`, `check_house_rules`, `check_cohesion_budget`, catalogue Swift, ViewBuilder). Les trois fichiers sont inscrits au pbxproj À LA MAIN : la régénération `[xcodegen]` (macOS) a été annulée deux fois, et le `ios.yml` de preuve aussi — « canceled by @jcnm » en moins d'une minute, comme toutes les runs iOS des branches `claude/*` de ce créneau (file Mac saturée). Le prochain réveil relance `ios.yml` sur la tête et fusionne au vert.
+- Gotcha : un fichier Swift ajouté sous `apps/ios` doit entrer au pbxproj COMMITÉ (garde `check_test_registration`) ; sans Mac, l'inscrire à la main en clonant les quatre lignes d'un voisin (PBXBuildFile, PBXFileReference, groupe, phase Sources). Règles maison : un ViewModel ne nomme aucun `.shared` (la vue les injecte), une vue lit `routerCommands` plutôt que `@EnvironmentObject Router`, pas de `Task.detached`.
+
+## 2026-11-08 — réveil 20
+
+- Début du run : #17061 (#16878) fusionnée par le porteur à 19:04 UTC ; un correctif de suite est passé sur dev (`8e4f6651d`, lecture du cache par `await` sur l'acteur `CacheCoordinator`) et Android a suivi le renommage `tab_feed`.
+- Lot : #7816 (iOS + web). iOS : le détail ne rend plus le message brut du serveur ; `CommunityLoadFailure` (SDK, `MeeshyUI/Community/`) dit refusée / réseau / serveur, classée par `ContentFetchFailure.classify` dans le ViewModel ; 403 et 404 se disent pareils (comme le web, D-6) et n'offrent que « Retour aux communautés ». Sept clés au catalogue SDK. Web : `COMMUNITY_MEMBERS_ONLY` à la jonction par lien se lit « réservée aux membres de sa communauté » et retire « Rejoindre » (il tombait dans « indisponible », refus passager).
+- Pas de revue adversariale : ni authentification, ni permission, ni migration (copie et classement d'erreurs côté clients).
+- Suivi ouvert : #17104 (Android : même cause dite, sans réessayer).
+- Gotcha : `Localizable.xcstrings` du SDK se réécrit à l'identique par `json.dumps(indent=2, ensure_ascii=False)` + saut de ligne final, mais SANS `sort_keys` (l'ordre Xcode n'est pas l'ordre Python) : insérer les clés nouvelles à leur place.
+- Prochain lot recommandé : #6380 (emoji de création iOS sans effet) ou #6451 (libellés iOS sans accents), puis #16739 (décision) ; #14227 et #16696 (index de `CommunityMember`) demandent une session de staging.
+
+## 2026-11-08 — réveil 21
+
+- Début du run : #17105 (#7816) fusionnée par le porteur à 20:39 UTC ; #7816 fermée.
+- Lot : #6380 (iOS). L'emoji choisi à la création n'allait nulle part, et celui des réglages n'était rendu nulle part (le détail le RELISAIT sans l'afficher). `CommunityLocalAppearance` (SDK, `Models/`) devient le seul site des clés `community.emoji.<id>` / `community.color.<id>` (mêmes clés : les installations existantes gardent leur choix) ; une valeur vide efface au lieu d'écrire `""` (une couleur vide rendait un hex vide au détail). La création l'écrit après le succès (jamais sur un échec), les réglages et le détail le lisent ; `CommunityEmojiMark` pose l'emoji en coin de bannière, le même dans l'aperçu de création et dans le détail.
+- Android faisait déjà de même (`appearanceStore.setEmoji` après la création) ; le web n'a rien à porter (aucun champ serveur, D-60, commentaire de `community-new.tsx` mis à jour).
+- Pas de revue adversariale : ni authentification, ni permission, ni migration (préférence d'affichage locale).
+- Témoins : `CommunityLocalAppearanceTests` (SDK, 5) et trois de plus dans `CommunityCreateViewModelTests`. iOS ne compile pas en conteneur : preuve par `ios.yml`.
+- Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #16739 (décision) ; #14227 et #16696 demandent une session de staging.
+- État en fin de run : PR #17152 ouverte, NON fusionnée. `ios.yml` sur la tête `5da395a14` : gardes texte et compilation vertes, les quatre tranches de tests rouges sur 14 échecs TOUS hors du diff (composer surtout, plus `MessageSearchResultRow`) — dev ne lance pas les tests à la fusion, ce rouge s'y est accumulé sans être vu : #17172. Le prochain réveil relance `ios.yml` quand #17172 est soldée, puis fusionne au vert.
+
+## 2026-11-09 — réveil 22
+
+- Début du run : #17152 (#6380, réveil 21) ouverte, menée EN DIRECT par sa session (commentaire posté une minute avant ce réveil, `ios.yml` en cours) : cédée, non touchée. Ses rouges iOS viennent des lots du composer fusionnés ce soir, pas d'elle.
+- Lot : #16892 (passerelle, sécurité). Une publication `COMMUNITY` dont `Post.communityId` est posé ne se lit que par les membres actifs et le créateur de CETTE communauté, vivante — plus par « un co-membre de n'importe quelle communauté de l'auteur ». Filtre de liste (`buildPostVisibilityOrFilter`) : la branche co-membre ne vaut plus que pour `communityId` nul ou absent ; une branche `communityId ∈ getReadableCommunityIds(lecteur)` (sans cache : quitter ferme aussitôt), résolue dans `buildFeedVisibilityFilter` (fil, profil, réels, stories, statuts, recherche) et `buildViewerVisibilityFilter` (détail, vue). Verdict unitaire (`canUserViewPost`) : `isCommunityReadableBy`. Hashtags : même paire de branches. `communityId` entre dans la tranche ACL REQUISE (`PostVisibilityRecord`), le compilateur a trouvé le seul site qui ne le lisait pas (`storyReplyAdmission`).
+- Une publication PUBLIC rattachée à une communauté privée reste servie comme avant (décision #16893).
+- Revue adversariale avant la PR : un BLOQUANT corrigé dans le lot — une republication (`repostPost`, et `POST /posts` avec `repostOfId`) naissait sans `communityId`, donc lisible par les co-membres de n'importe quelle communauté du REPUBLIEUR, avec le contenu de l'original. `repostCommunityId` (`services/posts/repostCommunity.ts`) fait hériter la communauté de la source et refuse une autre (403 `REPOST_COMMUNITY_MISMATCH`). `PostService.ts` 2118 → 2114 lignes (budget abaissé).
+- Suivis ouverts : #17178 (notifications, temps réel et traductions de story suivent encore la règle co-membre — le temps réel diffuse le contenu : priorité élevée), #17182 (les favoris ne filtrent aucune audience, préexistant). Index de `CommunityMember(userId, isActive)` et `Community(createdBy, isActive)` : rejoint #14227 / #16696. Une mention ouvre toujours le post à un non-membre nommé (voie des références, inchangée).
+- Gotcha : huit suites moquent `communityVisibility` par une fabrique qui ne connaît que `getCommunityCoMemberIds` ; une nouvelle export lue par `viewerAudience` doit y entrer.
+
+
+## 2026-11-09 — réveil 25
+
+- Début du run : #17183 (#16892) et #17152 (#6380) fusionnées par le porteur à 05:30–05:35 UTC ; dev n'est plus verrouillé.
+- Lot : #17178 (passerelle, sécurité). Les trois portes d'ÉMISSION d'une publication `COMMUNITY` posée dans une communauté suivent la loi de lecture de #16892 (membres actifs + créateur, communauté vivante) :
+  - admission des éventails (`filterPostConsumers`, `communityId: string | null` REQUIS dans `PostAudienceParams` et dans les paramètres des éventails ami, mention de commentaire, commentaire de story ; relu par le relais d'activité) → `filterCommunityPostReadersAmong` ;
+  - temps réel (`SocialEventsHandler.getVisibilityFilteredRecipients` reçoit la référence du post ; la communauté est relue quand l'appelant ne tient que `postId`) → `communityPostAudienceIdsOf` ;
+  - traductions de texte de story → `communityPostAudienceIds`.
+  Sans communauté : règle co-membre inchangée. Post introuvable, id malformé, communauté désactivée, panne ⇒ personne d'autre que l'auteur. Borne 5 000 membres par diffusion.
+- Revue adversariale avant la PR : non bloquante ; corrigé dans le lot : témoins « post introuvable / malformé / communauté désactivée » (le témoin de panne seul ne pouvait pas tomber) et fail-closed côté story. Suivi ouvert : #17209 (les traductions de story ignorent le blocage, préexistant). Index de `CommunityMember` : rejoint #14227 / #16696.
+- Gotcha : un appel de test à `filterPostConsumers` ou à un éventail sans `communityId` est désormais FERMÉ en `COMMUNITY` (undefined ≠ null) : passer `communityId: null` pour l'ancienne règle.
+- Prochain lot recommandé : #6451 (libellés iOS sans accents), puis #17209 ; #16739 attend une décision ; #14227 / #16696 demandent une session de staging.

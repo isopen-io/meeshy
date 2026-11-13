@@ -373,6 +373,27 @@ describe('POST /links/:key/members — inscrit (S2)', () => {
     (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([]);
   });
 
+  it("200 — rentrer après avoir supprimé « pour soi » efface `deletedForMe` (#17072)", async () => {
+    // La porte écrit l'état de rentrée PARTAGÉ : ce témoin garde ce que cet
+    // état contient, vu depuis le site qui l'applique. Sans `deletedForMe:
+    // null`, la ligne redevenait vivante pour tout le service pendant que
+    // `GET /conversations` ne servait jamais la conversation — une appartenance
+    // INVISIBLE, et son seul symptôme était une absence.
+    (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([
+      { id: 'p-hidden', isActive: false, bannedAt: null, deletedForMe: new Date('2026-02-01'), joinedAt: new Date('2026-01-01') },
+    ]);
+    const res = await postMembers(app, {}, asRegistered);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.entry.outcome).toBe('rejoin');
+    expect((app as any).prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'p-hidden' },
+        data: expect.objectContaining({ isActive: true, leftAt: null, deletedForMe: null }),
+      })
+    );
+    (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([]);
+  });
+
   it('200 — déjà membre : aucune écriture, `currentUses` non consommé', async () => {
     (app as any).prisma.participant.findMany = jest.fn().mockResolvedValue([
       { id: 'p-active', isActive: true, bannedAt: null, joinedAt: new Date('2026-01-01') },

@@ -20,7 +20,7 @@ struct ConversationListMessageSearchSection: View {
             LazyVStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "tab.messages", defaultValue: "Messages"))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .textCase(.uppercase)
                     .padding(.top, MeeshySpacing.md)
                     .accessibilityAddTraits(.isHeader)

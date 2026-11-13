@@ -150,12 +150,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "game.detail.coin.what",
-          "androidName": "game_detail_coin_what",
-          "status": "adopted"
-        },
-        {
-          "catalog": "app",
           "iosKey": "game.detail.coin.how",
           "androidName": "game_detail_coin_how",
           "status": "adopted"

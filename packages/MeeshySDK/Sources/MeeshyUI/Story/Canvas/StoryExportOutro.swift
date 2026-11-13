@@ -17,20 +17,19 @@ import MeeshySDK
 public enum StoryExportOutro {
 
     /// Durée de la carte de fin — calée sur la signature sonore de fermeture (2 s).
-    public static var duration: TimeInterval { MeeshyBrandJingle.outroDuration }
+    public nonisolated static var duration: TimeInterval { MeeshyBrandJingle.outroDuration }
 
     /// Cadence de rendu des frames animées — celle du pipeline entier.
-    static let fps: Double = StoryExportFrameRate.fps
+    nonisolated static let fps: Double = StoryExportFrameRate.fps
 
     /// Le logo est ENTIÈREMENT tracé à cet instant : le trace du watermark dure
     /// 3 s, trop long pour une carte de 2 s — on l'accélère pour qu'il se forme
     /// tôt puis respire le reste du temps.
-    static let traceDuration: TimeInterval = 1.1
+    nonisolated static let traceDuration: TimeInterval = 1.1
 
-    // MARK: - Carte de fin d'AUTEUR (Part D — 2026-07-26)
+    // MARK: - Carte de fin d'AUTEUR
 
-    /// Fermeture en 2 temps quand une identité d'auteur est fournie (directive
-    /// user 2026-07-26) :
+    /// Fermeture en 2 temps quand une identité d'auteur est fournie:
     ///   1. le logo animé apparaît pour TERMINER la vidéo — muet (le jingle est
     ///      décalé), pendant `logoPhase`. Il chevauche exactement le crossfade
     ///      d'entrée (`overlap`) : le logo est plein pile quand la story s'éteint.
@@ -38,34 +37,35 @@ public enum StoryExportOutro {
     ///      mood) mais le fond bannière est remplacé par le logo animé DIMMÉ en
     ///      filigrane, pendant `identityPhase` — et c'est CETTE carte qui porte le
     ///      jingle de fermeture.
-    static let logoPhase: TimeInterval = 1.5
-    static let identityPhase: TimeInterval = 2.0
+    nonisolated static let logoPhase: TimeInterval = 1.5
+    nonisolated static let identityPhase: TimeInterval = 2.0
     /// L'identité entre en fondu sur cette fenêtre au début de la 2ᵉ phase.
-    static let identityFadeIn: TimeInterval = 0.4
+    nonisolated static let identityFadeIn: TimeInterval = 0.4
     /// Durée du clip outro quand une identité est peinte : logo PUIS identité.
-    static var authorClipDuration: TimeInterval { logoPhase + identityPhase }
+    nonisolated static var authorClipDuration: TimeInterval { logoPhase + identityPhase }
     /// Opacité du logo réduit en filigrane derrière l'identité (2ᵉ phase).
-    private static let watermarkOpacity: CGFloat = 0.22
+    private nonisolated static let watermarkOpacity: CGFloat = 0.22
 
     // MARK: - Géométrie du logo (miroir de `StoryExportWatermark.dashes`)
 
     /// Trois traits en espace 1024 (`MeeshyDashesShape`) : longueurs décroissantes,
     /// alignés à gauche. Dupliqué du watermark plutôt que d'exposer sa méthode
     /// `@MainActor private` — l'outro rend off-main comme l'intro.
-    private static let dashes: [(from: CGPoint, to: CGPoint)] = [
+    private nonisolated static let dashes: [(from: CGPoint, to: CGPoint)] = [
         (CGPoint(x: 262, y: 384), CGPoint(x: 762, y: 384)),
         (CGPoint(x: 262, y: 512), CGPoint(x: 662, y: 512)),
         (CGPoint(x: 262, y: 640), CGPoint(x: 562, y: 640)),
     ]
-    private static let dashLineWidth: CGFloat = 112
+    private nonisolated static let dashLineWidth: CGFloat = 112
     /// Indigo500 (#6366F1) — même teinte que le logo animé du watermark.
-    private static let logoColor = UIColor(red: 99.0 / 255.0, green: 102.0 / 255.0,
+    private nonisolated static let logoColor = UIColor(red: 99.0 / 255.0, green: 102.0 / 255.0,
                                            blue: 241.0 / 255.0, alpha: 1)
 
     // MARK: - Rendu
 
     /// Rend UNE frame de la carte de fin à l'instant `t` (0…`duration`). Opaque.
-    public static func renderFrame(at t: TimeInterval, size: CGSize) -> CGImage? {
+    /// Sans acteur : `makeClip` en rend 60 à 105 hors du fil principal (#17040).
+    public nonisolated static func renderFrame(at t: TimeInterval, size: CGSize) -> CGImage? {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1                        // même impératif d'échelle que l'intro
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
@@ -77,18 +77,49 @@ public enum StoryExportOutro {
         }.cgImage
     }
 
+    /// **Ce que la 2ᵉ phase de la carte d'auteur pose sur le logo**, rendu UNE
+    /// fois (#17040) : le voile de lisibilité et l'identité de l'auteur. Le
+    /// dessin d'identité est celui de `StoryExportIntro`, isolé `MainActor` ;
+    /// le préparer une fois laisse chaque image se composer hors du fil
+    /// principal, au lieu de redessiner l'identité 105 fois sur lui.
+    public nonisolated struct AuthorCard: Sendable {
+        let scrim: CGImage
+        let identity: CGImage
+    }
+
+    /// Prépare la carte d'auteur à `size` — un seul rendu, sur le fil principal.
+    public static func authorCard(_ content: StoryExportIntroContent, size: CGSize) -> AuthorCard? {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        let scrim = renderer.image { ctx in StoryExportIntro.drawScrim(in: ctx.cgContext, size: size) }.cgImage
+        let identity = renderer.image { ctx in
+            StoryExportIntro.drawIdentity(content, in: ctx.cgContext, size: size)
+        }.cgImage
+        guard let scrim, let identity else { return nil }
+        return AuthorCard(scrim: scrim, identity: identity)
+    }
+
     /// Rend UNE frame de la carte de fin d'AUTEUR à l'instant `t`
     /// (0…`authorClipDuration`). Opaque. Deux phases (Part D) :
     ///  - `t < logoPhase` : le logo animé se forme, plein — comme la carte logo.
     ///  - `t ≥ logoPhase` : le logo passe en filigrane dimmé (il REMPLACE la
     ///    bannière), un voile de lisibilité s'applique, et l'identité de l'auteur
     ///    (avatar + nom + @username + mood) entre en fondu — réutilise EXACTEMENT
-    ///    le rendu d'identité de `StoryExportIntro`.
+    ///    le rendu d'identité de `StoryExportIntro`, préparé par `authorCard`.
     public static func renderFrame(at t: TimeInterval, size: CGSize,
                                    content: StoryExportIntroContent) -> CGImage? {
+        authorCard(content, size: size).flatMap { renderFrame(at: t, size: size, card: $0) }
+    }
+
+    /// La même frame, composée depuis une carte déjà préparée — sans acteur.
+    public nonisolated static func renderFrame(at t: TimeInterval, size: CGSize,
+                                               card: AuthorCard) -> CGImage? {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        let rect = CGRect(origin: .zero, size: size)
         return renderer.image { ctx in
             let cg = ctx.cgContext
             drawBackground(in: cg, size: size)
@@ -98,20 +129,17 @@ public enum StoryExportOutro {
             } else {
                 // Fond = le logo animé DIMMÉ en filigrane (remplace la bannière).
                 drawLogo(in: cg, size: size, t: t, opacityScale: watermarkOpacity)
-                StoryExportIntro.drawScrim(in: cg, size: size)
+                UIImage(cgImage: card.scrim).draw(in: rect)
                 // Identité en fondu d'entrée sur `identityFadeIn`.
                 let localT = t - logoPhase
                 let alpha = CGFloat(max(0, min(1, localT / identityFadeIn)))
-                cg.saveGState()
-                cg.setAlpha(alpha)
-                StoryExportIntro.drawIdentity(content, in: cg, size: size)
-                cg.restoreGState()
+                UIImage(cgImage: card.identity).draw(in: rect, blendMode: .normal, alpha: alpha)
             }
         }.cgImage
     }
 
     /// Fond de marque plein : indigo profond → noir (traitement logo « dark mode »).
-    private static func drawBackground(in cg: CGContext, size: CGSize) {
+    private nonisolated static func drawBackground(in cg: CGContext, size: CGSize) {
         let rect = CGRect(origin: .zero, size: size)
         let space = CGColorSpaceCreateDeviceRGB()
         let indigo950 = UIColor(red: 30.0 / 255.0, green: 27.0 / 255.0, blue: 75.0 / 255.0, alpha: 1)
@@ -130,7 +158,7 @@ public enum StoryExportOutro {
     /// Draw-on accéléré (easeOut) + respiration douce — miroir de la logique du
     /// watermark, mais calé sur `traceDuration`. `opacityScale < 1` réduit le logo
     /// en filigrane derrière l'identité (2ᵉ phase de la carte de fin d'auteur).
-    private static func drawLogo(in cg: CGContext, size: CGSize, t: TimeInterval,
+    private nonisolated static func drawLogo(in cg: CGContext, size: CGSize, t: TimeInterval,
                                  opacityScale: CGFloat = 1) {
         let side = size.width * 0.44
         let rect = CGRect(x: (size.width - side) / 2,
@@ -171,7 +199,7 @@ public enum StoryExportOutro {
 
     /// Progression du trait `barIndex` (easeOut, 0…1), le trace complet calé sur
     /// `traceDuration` : on remappe `t` sur l'échelle 3 s du motif d'origine.
-    static func traceProgress(t: TimeInterval, barIndex: Int) -> CGFloat {
+    nonisolated static func traceProgress(t: TimeInterval, barIndex: Int) -> CGFloat {
         let elapsed = t * (3.0 / traceDuration)      // accélération
         let delay = Double(barIndex) * 0.6           // stagger d'origine
         let raw = max(0, min(1, (elapsed - delay) / 1.8))
@@ -179,7 +207,7 @@ public enum StoryExportOutro {
     }
 
     /// Wordmark « meeshy » centré sous le logo (blanc, gras).
-    private static func drawWordmark(in size: CGSize) {
+    private nonisolated static func drawWordmark(in size: CGSize) {
         let fontSize = size.width * 0.072
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: fontSize, weight: .bold),
@@ -199,9 +227,19 @@ public enum StoryExportOutro {
     /// carte logo-seule de `duration` (comportement historique — chemins sans
     /// identité). Avec `content`, c'est la carte d'AUTEUR en 2 temps (Part D), de
     /// `authorClipDuration`.
+    ///
+    /// `@concurrent` (#17040) : le module est isolé `MainActor` par défaut, et
+    /// ses images se rendaient sur le fil principal — 1,05 s figée sur iPhone.
+    /// Seule la carte d'auteur s'y prépare, une fois.
+    @concurrent
     public static func makeClip(size: CGSize,
                                 content: StoryExportIntroContent? = nil) async throws -> URL {
-        let clipDuration = content != nil ? authorClipDuration : duration
+        var card: AuthorCard?
+        if let content {
+            card = await authorCard(content, size: size)
+            guard card != nil else { throw OutroError.pixelBufferCreationFailed }
+        }
+        let clipDuration = card != nil ? authorClipDuration : duration
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("meeshy-outro-\(UUID().uuidString).mp4")
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
@@ -232,7 +270,7 @@ public enum StoryExportOutro {
         let timescale: CMTimeScale = 600
         for index in 0..<frameCount {
             let t = Double(index) / fps
-            let frame = content.map { renderFrame(at: t, size: size, content: $0) }
+            let frame = card.map { renderFrame(at: t, size: size, card: $0) }
                 ?? renderFrame(at: t, size: size)
             guard let image = frame,
                   let buffer = pixelBuffer(from: image, size: size) else {
@@ -371,7 +409,7 @@ public enum StoryExportOutro {
         return outputURL
     }
 
-    private static func pixelBuffer(from image: CGImage, size: CGSize) -> CVPixelBuffer? {
+    private nonisolated static func pixelBuffer(from image: CGImage, size: CGSize) -> CVPixelBuffer? {
         var buffer: CVPixelBuffer?
         let attributes: [String: Any] = [
             kCVPixelBufferCGImageCompatibilityKey as String: true,
@@ -398,7 +436,7 @@ public enum StoryExportOutro {
         return pixelBuffer
     }
 
-    public enum OutroError: Error {
+    public nonisolated enum OutroError: Error {
         case writerRejectedInput
         /// `startWriting()` a refusé de commencer — disque plein, chemin de
         /// sortie occupé. Distincte d'`encodingFailed`, qui dit qu'un encodage

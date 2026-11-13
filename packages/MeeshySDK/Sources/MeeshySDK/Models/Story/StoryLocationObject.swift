@@ -9,7 +9,7 @@ import Foundation
 
 /// Pastille de lieu posée sur une slide. **Mêmes transforms ET même fenêtre de
 /// temps qu'un `StoryTextObject`** — elle apparaît et disparaît quand elle veut
-/// (directive porteur 2026-08-31, #4591).
+/// (#4591).
 ///
 /// > Ce doc-comment affirmait le contraire — « hors timeline : toujours visible
 /// > sur sa slide » — et il était CITÉ par les sites qui en dérivaient leur
@@ -28,7 +28,7 @@ public struct StoryLocationObject: Codable, Identifiable, Sendable, Equatable {
     /// Pivot point for rotation/scale (normalized 0–1). Default center (0.5, 0.5).
     public var anchor: CGPoint
     /// **Une pastille de lieu APPARAÎT et DISPARAÎT quand elle veut**
-    /// (directive porteur 2026-08-31, #4591).
+    /// (#4591).
     ///
     /// > « Tout `MeeshySceneObject` peut apparaître et disparaître quand il
     /// > souhaite, y compris la pastille de lieu — différente de la

@@ -24,7 +24,7 @@ struct EpisodeListView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "focal.summary.episodes.title", defaultValue: "Ce qui s'est passé", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .heavy))
-                .foregroundColor(isDark ? .white.opacity(0.92) : .black.opacity(0.88))
+                .foregroundStyle(isDark ? Color.white.opacity(0.92) : Color.black.opacity(0.88))
 
             VStack(spacing: MeeshySpacing.xs) {
                 ForEach(episodes) { episode in
@@ -51,7 +51,7 @@ private struct EpisodeRow: View {
                 }
                 Text(episode.displayTitle)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(isDark ? .white.opacity(0.9) : .black.opacity(0.85))
+                    .foregroundStyle(isDark ? Color.white.opacity(0.9) : Color.black.opacity(0.85))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
@@ -61,7 +61,7 @@ private struct EpisodeRow: View {
                 // `RightToLeftLayoutGuardTests`).
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.32))
+                    .foregroundStyle(isDark ? Color.white.opacity(0.4) : Color.black.opacity(0.32))
             }
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.sm)

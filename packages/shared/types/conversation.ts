@@ -150,6 +150,14 @@ export interface Message {
    * Absent pour un message protégé, et chez une passerelle antérieure.
    */
   readonly visualAttachmentCount?: number;
+  /**
+   * #17441 — sur un message CITÉ (`replyTo`) seulement : la métadonnée de
+   * l'avis cité (appel, arrivée, arrivées regroupées, départ annoncé), que la
+   * réponse REST ne sert pas sous `metadata`. Le client en tire le texte de
+   * l'avis dans la langue du lecteur ; absente (ancienne passerelle), la
+   * citation retombe sur `content`, repli français.
+   */
+  readonly notice?: Record<string, unknown>;
   /** ID du post cité (status/story/reel/post) quand le message répond à un post. Snapshot figé dans `metadata.postReplyTo`. @see schema.prisma */
   readonly storyReplyToId?: string;
   readonly forwardedFromId?: string;

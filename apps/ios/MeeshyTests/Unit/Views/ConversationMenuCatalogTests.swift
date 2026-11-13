@@ -85,33 +85,30 @@ final class ConversationMenuCatalogTests: XCTestCase {
         XCTAssertTrue(Set(menu.header).isDisjoint(with: Set(rest)), "Épingler, Sourdine et Lu ne se répètent pas sous la tête.")
     }
 
-    // MARK: - Appels
+    // MARK: - Détails d'abord, plus d'appels (directive porteur 2026-11-09, #17242)
 
-    func test_make_direct_offersCallAndVideoCall() {
+    func test_make_details_isTheFirstEntryUnderTheHeader() {
+        let menu = catalog(makeInput(makeDirect(), windowsAvailable: true, offersReadingModes: true))
+        XCTAssertEqual(menu.reach.first, .details)
+        XCTAssertEqual(menu.entries.dropFirst(menu.header.count).first, .details, "Détails se lit juste sous la tête compacte.")
+        XCTAssertFalse(menu.organize.contains(.details), "Détails n'est offert qu'une fois.")
+    }
+
+    func test_make_direct_offersNoCall_theThreadCallsInstead() {
         let menu = catalog(makeInput(makeDirect()))
-        XCTAssertTrue(menu.reach.contains(.call))
-        XCTAssertTrue(menu.reach.contains(.videoCall), "Un direct s'appelle aussi en vidéo.")
+        XCTAssertFalse(menu.entries.contains(.call), "Le menu de rangée ne compose plus d'appel audio.")
+        XCTAssertFalse(menu.entries.contains(.videoCall), "Le menu de rangée ne compose plus d'appel vidéo.")
     }
 
-    func test_make_selfConversation_offersNoCall() {
-        let menu = catalog(makeInput(
-            makeConversation(type: .direct, participantUserId: "me"),
-            user: makeUser(id: "me")
-        ))
-        XCTAssertFalse(menu.reach.contains(.call))
-        XCTAssertFalse(menu.reach.contains(.videoCall))
+    func test_make_offersNoSearch_theThreadSearchesInstead() {
+        let menu = catalog(makeInput(makeDirect(), windowsAvailable: true))
+        XCTAssertFalse(menu.entries.contains(.search), "Rechercher vit dans la conversation, plus au menu de rangée.")
     }
 
-    func test_make_closedDirect_offersNoCall() {
-        let menu = catalog(makeInput(makeConversation(type: .direct, participantUserId: "peer", isActive: false)))
-        XCTAssertFalse(menu.reach.contains(.call), "Une conversation terminée ne s'appelle plus.")
-        XCTAssertFalse(menu.reach.contains(.videoCall), "Une conversation terminée ne s'appelle plus.")
-    }
-
-    func test_make_group_offersNoDirectCall() {
+    func test_make_groupAdmin_offersNoCall() {
         let menu = catalog(makeInput(makeConversation(currentUserRole: "admin")))
-        XCTAssertFalse(menu.reach.contains(.call), "L'appel du menu compose un pair : un groupe n'en a pas.")
-        XCTAssertFalse(menu.reach.contains(.videoCall))
+        XCTAssertFalse(menu.entries.contains(.call))
+        XCTAssertFalse(menu.entries.contains(.videoCall))
     }
 
     // MARK: - Paramètres du groupe
@@ -205,7 +202,7 @@ final class ConversationMenuCatalogTests: XCTestCase {
 
     func test_make_unlockedConversation_detaches_whenWindowsExist() {
         let menu = catalog(makeInput(makeConversation(), windowsAvailable: true))
-        XCTAssertEqual(menu.reach.first, .detach)
+        XCTAssertEqual(menu.reach, [.details, .detach])
     }
 
     func test_make_withoutWindows_neverDetaches() {
@@ -486,7 +483,7 @@ final class ConversationMenuCatalogDispatchTests: XCTestCase {
         let details = exposed.firstIndex(of: ConversationMenuEntry.details.rawValue)
         XCTAssertNotNil(details)
         if let firstMode, let details {
-            XCTAssertTrue(firstMode < details, "Les modes se lisent avant « Détails ».")
+            XCTAssertTrue(details < firstMode, "« Détails » se lit d'abord sous la tête (#17242), les modes ensuite.")
         }
     }
 

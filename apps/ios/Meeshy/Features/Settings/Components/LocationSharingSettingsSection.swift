@@ -150,7 +150,7 @@ struct LocationSharingSettingsSection: View {
 
             Text(String(
                 localized: "location.precision.footnote",
-                defaultValue: "Aux niveaux Quartier et Ville, seule la zone est transmise — pas l'adresse exacte.",
+                defaultValue: "Quartier et Ville : seule la zone est transmise, pas l'adresse exacte.",
                 bundle: .main
             ))
             .font(MeeshyFont.relative(MeeshyFont.smallSize))
@@ -202,7 +202,7 @@ struct LocationSharingSettingsSection: View {
             SettingsRow(icon: icon, title: title, color: accentColor) {
                 Image(systemName: "checkmark")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundStyle(Color(hex: accentColor))
                     .opacity(isSelected ? 1 : 0)
             }
         }
@@ -243,7 +243,7 @@ struct LocationSharingSettingsSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "common.done", defaultValue: "Terminé", bundle: .main)) { dismiss() }
-                        .foregroundColor(Color(hex: accentColor))
+                        .foregroundStyle(Color(hex: accentColor))
                 }
             }
         }

@@ -65,8 +65,8 @@ struct ComposerCapturePreview: View {
                     let proportions = ComposerLookPainter.aspect(of: exterieur.size)
                     let canevas = ComposerLookPainter.previewCanvas(aspect: proportions)
                     ZStack {
-                        CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
-                                           mirrorsFrames: mirrorsSystemLayer,
+                        CameraPreviewLayer(session: session.camera.session, sessionQueue: session.camera.sessionQueue,
+                                           focusPoints: session.focusPoints, mirrorsFrames: mirrorsSystemLayer,
                                            connectionEpoch: session.camera.inputEpoch)
                             .background(GeometryReader { proxy in
                                 Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
@@ -173,6 +173,9 @@ struct ComposerCaptureChrome: View {
     var onToggleSize: () -> Void = {}
     let onDisarm: () -> Void
     let onValidateSegments: () -> Void
+    /// Les objets de la scène, posés sur l'aperçu à la place de la carte (#17432) — `nil` hors du composer.
+    var sceneObjects: ComposerViewfinderSceneCanvas?
+    var sceneObjectsFrame: CGRect?
 
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
@@ -206,6 +209,8 @@ struct ComposerCaptureChrome: View {
     /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777),
     /// réglé sur la luminance mesurée de la bande du cadre qu'il couvre.
     @State private var chromeBands: ComposerCaptureChromeBands?
+    /// Le chrome au repos retombe à 35 % (CAM-8).
+    @State private var chromeRest: Double = 1
 
     private var framed: Bool { session.look.frame != ComposerPhotoFrame.none }
 
@@ -248,8 +253,7 @@ struct ComposerCaptureChrome: View {
                     .accessibilityLabel(session.phase.isEditing
                         ? ComposerCaptureCopy.reframe
                         : ComposerSceneCameraCopy.shutterLabel(mode: session.mode ?? .photo, stage: session.stage))
-                    .accessibilityValue(session.phase.isEditing
-                        ? ComposerSceneCameraCopy.zoomValue(session.framing.scale) : "")
+                    .accessibilityValue(session.phase.isEditing ? ComposerSceneCameraCopy.zoomValue(session.framing.scale) : "")
                     .composerCaptureAccessibilityActions(zone: .scene, context: context) { action in
                         performAccessible(action, origin: origine)
                     }
@@ -263,43 +267,36 @@ struct ComposerCaptureChrome: View {
                     .overlay(alignment: .topLeading) { exposureLayer(width: proxy.size.width) }
                     .allowsHitTesting(!finishing)
             }
+            sceneObjectsLayer
             cropBrackets
             if !finishing, session.offersEditPlayback { editPlayback }
             cropPresets
             ComposerEditTextLayer(session: session, board: session.retouchTexts)
+            ComposerCaptureGestureHint(session: session)
             VStack(spacing: 0) {
-                // Toujours montée, jamais retirée de l'arbre : une rangée insérée
-                // et retirée au gré des outils peut rester peinte le temps d'une
-                // transition, et porte la croix qui présente l'alerte.
-                topRow.opacity(showsTopRow ? 1 : 0)
+                // Toujours montée : une rangée retirée peut rester peinte le temps
+                // d'une transition, et porte la croix qui présente l'alerte.
+                topRow.opacity(showsTopRow ? chromeRest : 0)
                     .allowsHitTesting(showsTopRow)
                     .accessibilityHidden(!showsTopRow)
                 Spacer(minLength: 0)
                 // En retouche, le bas suit le chrome (#10930) : la prise garde
                 // tout l'écran, les outils se posent par-dessus.
                 if !session.phase.isEditing || session.editChromeShown {
-                    ComposerCaptureBottomRow(session: session, context: context)
+                    ComposerCaptureBottomRow(session: session, context: context, railOpacity: chromeRest)
                         .allowsHitTesting(!finishing)
                         .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeilBottom))
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
             .modifier(ComposerCaptureChromeBandWatch(key: chromeBandKey, bands: $chromeBands, veils: [chromeVeilTop, chromeVeilBottom], animation: reduceMotion ? nil : .easeOut(duration: 0.2)))
-            if session.isRenderingLook {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .controlSize(.large)
-                    .padding(MeeshySpacing.lg)
-                    .adaptiveLiquidGlass(in: Circle())
-                    .accessibilityLabel(ComposerCaptureCopy.rendering)
-            }
+            if session.isRenderingLook { renderingSpinner }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
+        .modifier(ComposerCaptureChromeRestWatch(session: session, timer: session.selfTimer, opacity: $chromeRest))
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
-        .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
-        .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
+        .modifier(ComposerCaptureDismissAndBudget(session: session))
         .alert(ComposerSceneCameraCopy.discardTitle(photo: session.discardPrompt.request?.photo ?? false),
                isPresented: Binding(get: { session.discardPrompt.isPresented },
                                     set: { montree in
@@ -312,6 +309,19 @@ struct ComposerCaptureChrome: View {
                 if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }
             }
             Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) { ComposerCaptureDiscardFlow.keep(session) }
+        }
+    }
+
+    /// **La scène sur le viseur** (#17432) : ses objets, sans son fond, à la place de la carte —
+    /// au-dessus de la nappe, sous le chrome. Un toucher sur un objet le prend, une zone vide
+    /// traverse vers la capture.
+    @ViewBuilder
+    private var sceneObjectsLayer: some View {
+        if let sceneObjects, let cadre = sceneObjectsFrame, !session.phase.isEditing {
+            sceneObjects
+                .frame(width: cadre.width, height: cadre.height)
+                .position(x: cadre.midX, y: cadre.midY)
+                .transition(.opacity)
         }
     }
 
@@ -359,6 +369,17 @@ struct ComposerCaptureChrome: View {
         }
     }
 
+    /// Le rendu du look est en cours : la prise attend, et le dit.
+    private var renderingSpinner: some View {
+        ProgressView()
+            .progressViewStyle(.circular)
+            .tint(.white)
+            .controlSize(.large)
+            .padding(MeeshySpacing.lg)
+            .adaptiveLiquidGlass(in: Circle())
+            .accessibilityLabel(ComposerCaptureCopy.rendering)
+    }
+
     /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
     /// 2026-10-20) : une famille ouverte ou un outil montré les cache.
     private var showsTopRow: Bool {
@@ -378,10 +399,13 @@ struct ComposerCaptureChrome: View {
             offersSizeToggle: offersSizeToggle,
             segments: session.segments,
             onDropLastSegment: { session.dropLastSegment() },
-            onValidateSegments: onValidateSegments,
+            onValidateSegments: { validate() },
             liveDuration: session.camera.recordingDuration,
+            recordingBudget: session.recordingBudget,
+            holding: session.barCapture.holding,
             flashIntensity: session.barCapture.flashIntensity,
             onFlashIntensity: { session.setFlashIntensity($0) },
+            cameraPosition: session.barCapture.cameraPosition,
             flipping: session.barCapture.flipping,
             editing: session.phase.isEditing,
             rendering: session.isRenderingLook || session.takeSaveState == .saving,
@@ -406,6 +430,13 @@ struct ComposerCaptureChrome: View {
                 .position(x: rangee.midX, y: rangee.midY)
         }
         .transition(.opacity)
+    }
+
+    /// **« ✓ Valider »** (A8, #17109) : des segments en attente se posent ;
+    /// sans prise, rien ne se perd et la scène revient tout de suite.
+    private func validate() {
+        guard ComposerCaptureSegments.canValidate(session.segments) else { return onDisarm() }
+        onValidateSegments()
     }
 
     /// La croix et le glissé de rangement passent par ici : un enregistrement
@@ -583,11 +614,13 @@ struct ComposerCaptureChrome: View {
         ZStack(alignment: .topLeading) {
             if ComposerCaptureGrid.shows(enabled: gridEnabled, editing: session.phase.isEditing) {
                 ComposerCaptureGridOverlay()
+                ComposerCaptureLevelLine()
             }
             focusRing
             ComposerCaptureCountdown(timer: session.selfTimer)
         }
         .onDisappear { session.selfTimer.cancel() }
+        .modifier(ComposerCaptureAnnouncer(camera: session.camera, stage: session.stage))
     }
 
     @ViewBuilder private var focusRing: some View {
@@ -664,6 +697,22 @@ struct ComposerCaptureChrome: View {
 
 /// **Le soleil d'exposition** (OPUS-5) : glisser vers le haut éclaircit, vers
 /// le bas assombrit. La zone de toucher fait 44 pt, le dessin moins.
+/// Le glissé de rangement déplace le chrome, et **le maximum du format clôt la prise** (A9,
+/// #17109) : la durée vue par le chrono, segments compris.
+private struct ComposerCaptureDismissAndBudget: ViewModifier {
+    @ObservedObject var session: ComposerCaptureSession
+
+    func body(content: Content) -> some View {
+        content
+            .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
+            .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
+            .adaptiveOnChange(of: session.camera.recordingDuration) { _, duree in
+                ComposerCaptureRecordingBudget.enforce(on: session, elapsed: ComposerCaptureSegments.elapsed(
+                    segments: session.segments, live: duree, recording: session.stage == .recording))
+            }
+    }
+}
+
 private struct ComposerCaptureExposureSun: View {
     let bias: Float
 

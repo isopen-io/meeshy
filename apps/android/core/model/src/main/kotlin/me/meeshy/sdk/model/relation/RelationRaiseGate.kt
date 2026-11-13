@@ -10,6 +10,11 @@ import java.time.format.DateTimeParseException
 public data class RelationRaiseGate(
     val canRaise: Boolean? = null,
     val raiseBlockedUntil: String? = null,
+    /**
+     * Le niveau auquel la passerelle juge les outils de cercle (#16623) : le lien réel, sauf entre deux comptes de l'équipe
+     * (Sang sans lien). `null` = non servi ; aucun rôle n'est lu ni déduit ici.
+     */
+    val accessLevel: RelationLevel? = null,
 ) {
     public fun blocks(nowMillis: Long): Boolean {
         if (canRaise == false) return true

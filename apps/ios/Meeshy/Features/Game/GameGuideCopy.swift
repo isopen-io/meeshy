@@ -26,6 +26,11 @@ struct GuideCopy: Equatable {
 
 enum GameGuideCopy {
 
+    /// Le nom du (i) d'une étape du carnet : la question porte le numéro, pour que les sept (i) se distinguent.
+    static func stepWhy(index: String) -> String {
+        String(localized: "game.rules.step.why", defaultValue: "Pourquoi la carte \(index) ?", bundle: .main)
+    }
+
     // MARK: - Boutons
 
     static func actionLabel(_ action: GuideAction) -> String {
@@ -278,7 +283,7 @@ enum GameGuideCopy {
                  body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.", bundle: .main)),
             Rule(index: 2,
                  title: String(localized: "game.rules.2.title", defaultValue: "Les étincelles forment ta lumière", bundle: .main),
-                 body: String(localized: "game.rules.2.body", defaultValue: "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : une frappe en fige une part, donc le fait baisser. Un million d’étincelles pour le niveau 100, et une épreuve tous les dix niveaux : tant qu’elle n’est pas réussie, ta lumière attend. Vingt états. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
+                 body: String(localized: "game.rules.2.body", defaultValue: "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : un million d’étincelles pour le niveau 100. Une frappe en fige une part, donc le fait baisser.", bundle: .main)),
             Rule(index: 3,
                  title: String(localized: "game.rules.3.title", defaultValue: "On frappe des Meeshes", bundle: .main),
                  body: String(localized: "game.rules.3.body", defaultValue: "Une Meesh se frappe à la main : une part de ta lumière s’y fige. Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes.", bundle: .main)),
@@ -341,7 +346,7 @@ enum GameRulesGlossary {
 
     static var sectionTitle: String { String(localized: "game.rules.section_concepts", defaultValue: "Chaque concept, en clair", bundle: .main) }
 
-    static var intro: String { String(localized: "game.rules.concepts_intro", defaultValue: "Tout ce que le jeu affiche, un par un : ce que c’est, à quoi ça sert, comment ça se gagne et comment t’en servir.", bundle: .main) }
+    static var intro: String { String(localized: "game.rules.concepts_intro", defaultValue: "Chaque élément du jeu, en clair.", bundle: .main) }
 
     /// Ce qui suit chaque concept : un `switch` exhaustif — un concept ajouté à la liste partagée sans décision ici
     /// ne compile pas.
@@ -377,24 +382,24 @@ enum GameRulesGlossary {
 
     static func body(_ key: GameRulesGlossaryKey) -> String {
         switch key {
-        case .concept(.level): String(localized: "game.rules.concept.level.body", defaultValue: "Le chiffre de ton anneau, lu sur ta lumière. Il ouvre le rêve (niveau 5), la joute (10), l’alliance (20) et la renaissance (100). Il monte quand ta lumière atteint le seuil suivant, et baisse quand une frappe en fige une part. La renaissance le remet à 1.", bundle: .main)
-        case .concept(.points): String(localized: "game.rules.concept.points.body", defaultValue: "Chaque vrai échange fait jaillir des étincelles ; ensemble, elles forment ta lumière. Ta lumière fait ton niveau et frappe les Meeshes. Les étincelles reçues depuis toujours restent reçues.", bundle: .main)
-        case .concept(.meesh): String(localized: "game.rules.concept.meesh.body", defaultValue: "La pièce rare de Meeshy, numérotée : une part de ta lumière s’y fige quand tu la frappes. Garde-la pour ton héritage, ou dépense-la : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage. La part figée grandit de 30 % toutes les dix frappes.", bundle: .main)
-        case .concept(.glory): String(localized: "game.rules.concept.glory.body", defaultValue: "Ta gloire grandit et ne recule jamais : elle te donne ton rang. Elle grandit quand tu frappes, quand ta lumière atteint un niveau pour la première fois, quand tu accomplis un haut fait, quand tu gravis un cercle de joute, quand tu achèves un voyage. Ton rang ouvre ta lumière au-delà du niveau 499.", bundle: .main)
-        case .concept(.flame): String(localized: "game.rules.concept.flame.body", defaultValue: "Le feu que tes aïeux te confient, entretenu chaque jour par au moins un geste. Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Une Veilleuse la garde un jour d’absence ; éteinte, elle se rallume avec des Meeshes pendant 48 h.", bundle: .main)
-        case .concept(.missions): String(localized: "game.rules.concept.missions.body", defaultValue: "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, ouvert au niveau 5. Chaque acte réalisé fait jaillir des étincelles ; les trois réalisés font apparaître l’Offrande. Tu peux changer un acte par jour avec une Meesh.", bundle: .main)
-        case .concept(.league): String(localized: "game.rules.concept.league.body", defaultValue: "Le classement de la semaine, ouvert au niveau 10 : trente héros s’y mesurent sous leur nom de joute. Tes étincelles de la semaine font ta place : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent, et tout repart de zéro le lundi. La Joute des amis reste toujours ouverte.", bundle: .main)
-        case .concept(.season): String(localized: "game.rules.concept.season.body", defaultValue: "Un voyage de huit semaines en terre de langue, avec 40 haltes gratuites. Les actes de ton rêve et l’alliance te font avancer de quelques pas ; quatre pas mènent à la halte suivante, que tu réclames une à une. Le voyage fini donne la coupe du voyage.", bundle: .main)
-        case .concept(.prestige): String(localized: "game.rules.concept.prestige.body", defaultValue: "Une renaissance facultative, offerte au niveau 100, cinq fois au plus. Ton niveau repart à 1 et ta lumière à zéro : elle redevient Étincelle, et ta légende entre dans un nouvel Âge. Tes étincelles reçues depuis toujours et ta plus haute lumière restent, et la joute comme l’alliance restent ouvertes. Tes aïeux t’offrent un trophée numéroté et de la gloire. Ton rang, tes Meeshes et ta Flamme restent.", bundle: .main)
-        case .concept(.elans): String(localized: "game.rules.concept.elans.body", defaultValue: "Un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci : contenu, commentaires, conversations, outils, lien social. Tant qu’il tient, chaque geste fait jaillir plus d’étincelles.", bundle: .main)
-        case .concept(.badges): String(localized: "game.rules.concept.badges.body", defaultValue: "Vingt médailles, une par geste précis. Chacune gravit sept paliers, du cuivre au prisme, à force de refaire son geste. Une frappe n’en éteint aucune et n’en fait redescendre aucune.", bundle: .main)
-        case .concept(.defis): String(localized: "game.rules.concept.defis.body", defaultValue: "Des paliers chiffrés dans chaque famille de gestes. Atteins le nombre demandé : le palier est franchi et le suivant s’ouvre.", bundle: .main)
-        case .concept(.succes): String(localized: "game.rules.concept.succes.body", defaultValue: "Des distinctions rares, accomplies d’un coup quand tu réunis ce qu’elles demandent. Chaque haut fait fait grandir ta gloire : plus il est rare, plus elle grandit.", bundle: .main)
-        case .concept(.showcase): String(localized: "game.rules.concept.showcase.body", defaultValue: "L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme. Un trophée ne rapporte rien : il se garde et se montre. Tu choisis l’ordre et qui les voit.", bundle: .main)
-        case .concept(.atlas): String(localized: "game.rules.concept.atlas.body", defaultValue: "Ton passeport des langues. Un tampon se pose quand tu as envoyé un message et reçu un message dans une langue. Il est privé par défaut : tu choisis qui le voit.", bundle: .main)
-        case .chest: String(localized: "game.rules.concept.chest.body", defaultValue: "Elle apparaît quand les trois actes du rêve sont réalisés. C’est un présent voilé : des étincelles selon tes actes, de la gloire, parfois une prime d’étincelles, un fragment d’étoile ou une Veilleuse.", bundle: .main)
-        case .treasury: String(localized: "game.rules.concept.treasury.body", defaultValue: "Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil. L’héritage grandit quand tu gardes tes Meeshes et baisse quand tu les dépenses.", bundle: .main)
-        case .steps: String(localized: "game.rules.concept.steps.body", defaultValue: "De 10 à 100, tous les dix niveaux, tes aïeux demandent une épreuve simple : frapper une Meesh, réaliser des rêves, tenir une Flamme, atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend ; réussie, le niveau monte d’un coup.", bundle: .main)
+        case .concept(.level): String(localized: "game.rules.concept.level.body", defaultValue: "Le chiffre de ton anneau, lu sur ta lumière.", bundle: .main)
+        case .concept(.points): String(localized: "game.rules.concept.points.body", defaultValue: "Chaque vrai échange fait jaillir des étincelles ; ensemble, elles forment ta lumière.", bundle: .main)
+        case .concept(.meesh): String(localized: "game.rules.concept.meesh.body", defaultValue: "La pièce rare de Meeshy, numérotée : une part de ta lumière s’y fige quand tu la frappes.", bundle: .main)
+        case .concept(.glory): String(localized: "game.rules.concept.glory.body", defaultValue: "Ta gloire grandit et ne recule jamais : elle te donne ton rang.", bundle: .main)
+        case .concept(.flame): String(localized: "game.rules.concept.flame.body", defaultValue: "Le feu que tes aïeux te confient, entretenu chaque jour par au moins un geste.", bundle: .main)
+        case .concept(.missions): String(localized: "game.rules.concept.missions.body", defaultValue: "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, ouvert au niveau 5.", bundle: .main)
+        case .concept(.league): String(localized: "game.rules.concept.league.body", defaultValue: "Le classement de la semaine, ouvert au niveau 10 : trente héros s’y mesurent sous leur nom de joute.", bundle: .main)
+        case .concept(.season): String(localized: "game.rules.concept.season.body", defaultValue: "Un voyage de huit semaines en terre de langue, avec 40 haltes gratuites.", bundle: .main)
+        case .concept(.prestige): String(localized: "game.rules.concept.prestige.body", defaultValue: "Une renaissance facultative, offerte au niveau 100, cinq fois au plus.", bundle: .main)
+        case .concept(.elans): String(localized: "game.rules.concept.elans.body", defaultValue: "Un multiplicateur d’étincelles.", bundle: .main)
+        case .concept(.badges): String(localized: "game.rules.concept.badges.body", defaultValue: "Vingt médailles, une par geste précis.", bundle: .main)
+        case .concept(.defis): String(localized: "game.rules.concept.defis.body", defaultValue: "Des paliers chiffrés dans chaque famille de gestes.", bundle: .main)
+        case .concept(.succes): String(localized: "game.rules.concept.succes.body", defaultValue: "Des distinctions rares, accomplies d’un coup quand tu réunis ce qu’elles demandent.", bundle: .main)
+        case .concept(.showcase): String(localized: "game.rules.concept.showcase.body", defaultValue: "L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme.", bundle: .main)
+        case .concept(.atlas): String(localized: "game.rules.concept.atlas.body", defaultValue: "Ton passeport des langues.", bundle: .main)
+        case .chest: String(localized: "game.rules.concept.chest.body", defaultValue: "Elle apparaît quand les trois actes du rêve sont réalisés : un présent voilé.", bundle: .main)
+        case .treasury: String(localized: "game.rules.concept.treasury.body", defaultValue: "Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil.", bundle: .main)
+        case .steps: String(localized: "game.rules.concept.steps.body", defaultValue: "Tous les dix niveaux, de 10 à 100 : frapper une Meesh, réaliser des rêves, tenir une Flamme ou atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend.", bundle: .main)
         case .tailwind: String(localized: "game.rules.concept.tailwind.body", defaultValue: "+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière. Il s’arrête dès que l’écart retombe à 6.", bundle: .main)
         case .duo: String(localized: "game.rules.concept.duo.body", defaultValue: "Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas.", bundle: .main)
         }

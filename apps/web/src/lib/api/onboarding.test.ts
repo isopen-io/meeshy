@@ -4,7 +4,7 @@ import { scriptedGateway, scriptedTransport } from '@/test-support/scripted-tran
 
 import { CLIENT_CAPABILITIES, capabilitiesHeaderValue } from './capabilities';
 
-import { decodeOnboardingState, loadOnboarding, patchOnboarding, ONBOARDING_QUERY_KEY, onboardingQueryOptions } from './onboarding';
+import { decodeOnboardingState, loadOnboarding, patchOnboarding, ONBOARDING_QUERY_KEY, ONBOARDING_STEPS, onboardingQueryOptions } from './onboarding';
 
 /**
  * LE PORT DE L'ACCUEIL POST-INSCRIPTION (#7729) — `GET`/`PATCH
@@ -77,6 +77,16 @@ describe('decodeOnboardingState — la frontière', () => {
     expect({ seen: decoded?.seenSteps, prefilled: decoded?.prefilledSteps }).toEqual({ seen: ['languages'], prefilled: ['email'] });
   });
 
+  test('l’étape « profile » se lit, vue comme pré-cochée (#17237)', () => {
+    const decoded = decodeOnboardingState(served({ seenSteps: ['profile'], prefilledSteps: ['profile'] }));
+    expect({ seen: decoded?.seenSteps, prefilled: decoded?.prefilledSteps }).toEqual({ seen: ['profile'], prefilled: ['profile'] });
+  });
+
+  test('l’ordre d’AFFICHAGE place « profile » juste après le courriel, avant Meeshy Global (#17237)', () => {
+    expect(ONBOARDING_STEPS.indexOf('profile')).toBe(ONBOARDING_STEPS.indexOf('email') + 1);
+    expect(ONBOARDING_STEPS.indexOf('global')).toBe(ONBOARDING_STEPS.indexOf('profile') + 1);
+  });
+
   test('l’étape de l’âge se lit, et la restriction d’écriture servie aussi — son absence (serveur antérieur) reste lisible (#9928)', () => {
     const decoded = decodeOnboardingState(served({ seenSteps: ['languages', 'age'], viewerWriteRestriction: 'minor-global' }));
     expect({ seen: decoded?.seenSteps, restriction: decoded?.viewerWriteRestriction }).toEqual({
@@ -113,12 +123,13 @@ describe('X-Meeshy-Capabilities — l’accueil déclare ce qu’il sait lire (#
     const { deps, calls } = scriptedGateway({ [`GET ${PATH}`]: { ok: true, data: served() }, [`PATCH ${PATH}`]: { ok: true, data: served() } });
     await loadOnboarding(deps);
     await patchOnboarding(deps, { step: 'age', outcome: 'skipped' });
-    expect(calls().map((call) => call.headers?.['X-Meeshy-Capabilities'])).toEqual(['onboarding-age', 'onboarding-age']);
+    expect(calls().map((call) => call.headers?.['X-Meeshy-Capabilities'])).toEqual(['onboarding-age,onboarding-profile', 'onboarding-age,onboarding-profile']);
   });
 
   test('la valeur est la liste déclarée, jointe par des virgules', () => {
     expect(capabilitiesHeaderValue(['onboarding-age', 'demain'])).toBe('onboarding-age,demain');
     expect(CLIENT_CAPABILITIES).toContain('onboarding-age');
+    expect(CLIENT_CAPABILITIES).toContain('onboarding-profile');
   });
 });
 
@@ -127,7 +138,7 @@ describe('loadOnboarding — GET /me/onboarding', () => {
     const { deps, calls } = scriptedGateway({ [`GET ${PATH}`]: { ok: true, data: served() } });
     const result = await loadOnboarding(deps);
     expect(result.ok && result.data.eligible).toBe(true);
-    expect(calls()).toEqual([{ method: 'GET', path: PATH, headers: { 'X-Meeshy-Capabilities': 'onboarding-age' } }]);
+    expect(calls()).toEqual([{ method: 'GET', path: PATH, headers: { 'X-Meeshy-Capabilities': 'onboarding-age,onboarding-profile' } }]);
   });
 
   test('une charge illisible est un échec nommé', async () => {
@@ -150,7 +161,7 @@ describe('patchOnboarding — PATCH /me/onboarding', () => {
     const { deps, calls } = scriptedGateway({ [`PATCH ${PATH}`]: { ok: true, data: served({ seenSteps: ['languages'] }) } });
     const result = await patchOnboarding(deps, { step: 'languages', outcome: 'done' });
     expect(result.ok && result.data.seenSteps).toEqual(['languages']);
-    expect(calls()).toEqual([{ method: 'PATCH', path: PATH, body: { step: 'languages', outcome: 'done' }, headers: { 'X-Meeshy-Capabilities': 'onboarding-age' } }]);
+    expect(calls()).toEqual([{ method: 'PATCH', path: PATH, body: { step: 'languages', outcome: 'done' }, headers: { 'X-Meeshy-Capabilities': 'onboarding-age,onboarding-profile' } }]);
   });
 
   test('« Passer tout » part en { finish: true }', async () => {
@@ -159,7 +170,7 @@ describe('patchOnboarding — PATCH /me/onboarding', () => {
     });
     const result = await patchOnboarding(deps, { finish: true });
     expect(result.ok && result.data.completedAt).toBe('2026-09-24T10:00:00.000Z');
-    expect(calls()).toEqual([{ method: 'PATCH', path: PATH, body: { finish: true }, headers: { 'X-Meeshy-Capabilities': 'onboarding-age' } }]);
+    expect(calls()).toEqual([{ method: 'PATCH', path: PATH, body: { finish: true }, headers: { 'X-Meeshy-Capabilities': 'onboarding-age,onboarding-profile' } }]);
   });
 
   test('en fixtures, l’étape est retenue pour la lecture suivante', async () => {

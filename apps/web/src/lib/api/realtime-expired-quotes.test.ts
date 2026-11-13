@@ -57,7 +57,7 @@ describe('message:expired — les citations du message détruit sont scellées s
 
     const quote = rowOf(client, 'm-reply')?.replyTo;
     expect(quote?.expiresAt).toEqual(quote?.deletedAt);
-    expect(quotedPreviewOf({ quoted: quote as Message, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).text).toBe(
+    expect(quotedPreviewOf({ quoted: quote as Message, readerLanguages: ['fr'], interfaceLanguage: 'fr', viewerId: null }).text).toBe(
       'Message éphémère expiré',
     );
   });
@@ -68,7 +68,7 @@ describe('message:expired — les citations du message détruit sont scellées s
     tombstoneQuotesOf(client, { conversationId: 'c-a', messageId: 'm-plain', deletedAt: NOW.toISOString() });
 
     const quote = rowOf(client, 'm-reply')?.replyTo;
-    expect(quotedPreviewOf({ quoted: quote as Message, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).text).toBe(
+    expect(quotedPreviewOf({ quoted: quote as Message, readerLanguages: ['fr'], interfaceLanguage: 'fr', viewerId: null }).text).toBe(
       'Message supprimé',
     );
   });

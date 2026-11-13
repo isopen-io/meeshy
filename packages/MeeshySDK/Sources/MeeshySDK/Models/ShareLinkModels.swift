@@ -26,7 +26,7 @@ public struct ShareLinkInfo: Decodable, Sendable {
     public let stats: ShareLinkStats
 
     /// L'adresse canonique `/chat/<linkId>` — jamais `/l/<token>` (suivi) ni
-    /// le slug `identifier` (#7795, précision porteur 2026-09-24).
+    /// le slug `identifier` (#7795).
     public var address: ShareLinkAddress { ShareLinkAddress(linkId: linkId) }
 }
 

@@ -15,7 +15,7 @@ import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
-import { emitServerEvent } from '../serverEmit';
+import { emitServerEvent, safeBroadcast } from '../serverEmit';
 import { emitConversationActivityUpdate, type ActivityPrisma } from '../emitConversationActivityUpdate';
 import type { QueuedPayloadFor } from '../queuedEventContract';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -231,7 +231,24 @@ export class AttachmentReactionHandler {
         reactionSummary,
         timestamp: new Date().toISOString(),
       };
-      emitServerEvent(this.deps.io.to(ROOMS.conversation(conversationId)), event, payload);
+      // HUITIÈME site de la famille #17026, trouvé par l'audit adversarial — ni
+      // par l'issue, ni par ma relecture, ni par le cliquet, qui est AVEUGLE à
+      // l'émission par helper (`emitServerEvent` ne porte aucun `.emit(`
+      // textuel ici). L'enfilage durable est cinq lignes plus bas, dans le même
+      // `try`, dont le `catch` journalise « post-success side-effects failed ».
+      //
+      // Et la règle est écrite VINGT LIGNES PLUS BAS, dans ce même `try`, pour
+      // l'autre canal latéral : « ni emporter l'entrée de file hors ligne qui la
+      // précède ». Elle valait déjà pour celui-ci.
+      //
+      // Ce qui se perdait, définitivement : le `reactionSummary` par pièce
+      // jointe d'un participant hors ligne — que seul un rechargement complet
+      // de la conversation répare, comme le dit le doc-comment de l'enfilage.
+      safeBroadcast(
+        'attachment-reaction',
+        () => emitServerEvent(this.deps.io.to(ROOMS.conversation(conversationId)), event, payload),
+        (error) => logger.error('attachment reaction live emission failed — offline replay unaffected', { conversationId, error }),
+      );
 
       void this._enqueueOfflineAttachmentReactionEvent(
         conversationId,

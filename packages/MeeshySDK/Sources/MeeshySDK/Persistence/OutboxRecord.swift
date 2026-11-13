@@ -98,7 +98,7 @@ extension OutboxKind {
     /// pastille ne mène nulle part). Le compter rendait la pastille PERMANENTE
     /// dès qu'un « vu » épuisait son budget de tentatives : `.exhausted` est
     /// explicitement surfacé (T14b), l'auto-masquage après 3 cycles a été
-    /// retiré (2026-05-27) et la rétention GC est de 7 jours au boot — d'où le
+    /// retiré et la rétention GC est de 7 jours au boot — d'où le
     /// « Vues story non synchronisées 7/7 » figé en tête d'écran, sans aucun
     /// geste pour l'écarter.
     public var countsTowardSyncIndicator: Bool {

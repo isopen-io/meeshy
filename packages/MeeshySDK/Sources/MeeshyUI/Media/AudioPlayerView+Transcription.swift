@@ -131,7 +131,7 @@ extension AudioPlayerView {
                         Image(systemName: "text.badge.plus")
                             .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                         Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                     }
                     .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     .frame(maxWidth: .infinity)
@@ -179,7 +179,7 @@ extension AudioPlayerView {
                         Image(systemName: "text.badge.plus")
                             .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                         Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                     }
                     .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     .frame(maxWidth: .infinity)
@@ -217,7 +217,7 @@ extension AudioPlayerView {
                     seeMoreButton
                 } else {
                     Text(Self.flatTranscriptionQuote(fullTranscriptionText))
-                        .font(.system(size: MeeshyFont.smallSize))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .italic()
                         .foregroundColor(isDark ? .white.opacity(0.55) : .black.opacity(0.5))
                         .lineLimit(chromePlan.flatTranscriptionLineLimit)
@@ -240,9 +240,9 @@ extension AudioPlayerView {
             } label: {
                 HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "text.badge.plus")
-                        .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
+                        .meeshyScaledFont(MeeshyIconSize.xxs, weight: .medium)
                     Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                        .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                        .meeshyScaledFont(MeeshyFont.captionSize, weight: .medium)
                 }
                 .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                 .padding(.vertical, MeeshySpacing.xs)
@@ -288,8 +288,8 @@ extension AudioPlayerView {
 
     // MARK: - Chevron de la tenue CARTE — déplie la transcription EN LIGNE
 
-    /// La bulle a la place de s'étendre : son chevron reste (arbitrage user
-    /// 2026-08-24). La rangée plate, elle, renvoie au plein écran
+    /// La bulle a la place de s'étendre : son chevron reste.
+    /// La rangée plate, elle, renvoie au plein écran
     /// (`seeMoreButton` ci-dessous) — elle n'a pas cette place.
     @ViewBuilder
     private var expandToggleButton: some View {
@@ -305,6 +305,7 @@ extension AudioPlayerView {
                 .frame(maxWidth: .infinity)
                 .frame(height: 20)
         }
+        .accessibilityLabel(isTranscriptionExpanded ? String(localized: "audio.transcript.hide.a11y", bundle: .module) : String(localized: "audio.transcript.show.a11y", bundle: .module))
     }
 
     /// Coupe de la carte : 255 caractères, ellipse sur le segment coupé.
@@ -328,8 +329,8 @@ extension AudioPlayerView {
 
     // MARK: - « Voir plus » — la suite se lit EN PLEIN ÉCRAN
 
-    /// Remplace le chevron qui dépliait la transcription EN LIGNE (directive
-    /// 2026-08-24). Déplier sur place repoussait tout le fil vers le bas pour
+    /// Remplace le chevron qui dépliait la transcription EN LIGNE.
+    /// Déplier sur place repoussait tout le fil vers le bas pour
     /// un texte qui n'a jamais la place d'y tenir ; le plein écran
     /// (`onFullscreen`, la MÊME destination que la pastille de pourcentage)
     /// lui donne l'espace, le karaoké déroulant et le bandeau de langues.
@@ -346,7 +347,7 @@ extension AudioPlayerView {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(String(localized: "media.audio.transcription.see_more",
                                 defaultValue: "Voir plus", bundle: .module))
-                        .font(.system(size: 10, weight: .semibold))
+                        .meeshyScaledFont(10, weight: .semibold)
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
                         .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 }
@@ -381,7 +382,7 @@ extension AudioPlayerView {
                     }
                     Text(String(localized: "media.audio.retranscribe",
                                  defaultValue: "Re-transcrire", bundle: .module))
-                        .font(.system(size: 10, weight: .medium))
+                        .meeshyScaledFont(10, weight: .medium)
                 }
                 .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                 .frame(maxWidth: .infinity)
@@ -504,8 +505,8 @@ extension AudioPlayerView {
                 HapticFeedback.light()
             } label: {
                 Text(single.text)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
-                    .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
+                    .foregroundStyle(inlineSegmentColor(isActive: isActive, isPast: isPast))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -536,8 +537,8 @@ extension AudioPlayerView {
                         HapticFeedback.light()
                     } label: {
                         Text(segment.text + " ")
-                            .font(.system(size: MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
-                            .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
+                            .foregroundStyle(inlineSegmentColor(isActive: isActive, isPast: isPast))
                             .padding(.horizontal, isActive ? 2 : 0)
                             .padding(.vertical, isActive ? 1 : 0)
                             .background(

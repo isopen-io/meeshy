@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// **Comment un post AFFICHE ses médias (directive 2026-08-27).**
+/// **Comment un post AFFICHE ses médias.**
 ///
 /// La structure existe **dès maintenant** pour porter la règle, mais elle n'a
 /// **aucune interface** et **aucun autre choix** pour l'instant : la présentation

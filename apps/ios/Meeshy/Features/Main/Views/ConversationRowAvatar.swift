@@ -12,6 +12,7 @@ import MeeshyUI
 /// Struct extraite (et non une propriété calculée du rang) pour éviter les
 /// problèmes PAC entre `@State` et les closures échappantes.
 struct ConversationRowAvatar: View {
+    @State private var delayed = DelayedActions()
 
     /// Les quatre réglages qui distinguent les deux rangs.
     struct Style {
@@ -60,6 +61,8 @@ struct ConversationRowAvatar: View {
 
     private var isDirect: Bool { conversation.type == .direct }
 
+    private var listenedUserId: String? { ConversationRowListening.userId(for: conversation) }
+
     private var servedPresenceState: PresenceState? {
         style.presenceOnlyForDirect && !isDirect ? nil : presenceState
     }
@@ -85,7 +88,7 @@ struct ConversationRowAvatar: View {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 showLastSeenTooltip = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            delayed.run(after: .seconds(2)) {
                 withAnimation(.easeOut(duration: 0.2)) {
                     showLastSeenTooltip = false
                 }
@@ -125,11 +128,13 @@ struct ConversationRowAvatar: View {
                 onOnlineTap: onlineTapAction,
                 contextMenuItems: contextMenuItems
             )
+            // Ce qu'écoute le pair d'un direct (#16733), sur les DEUX rangs : le bandeau que le serveur a servi.
+            .overlay { AvatarListeningOverlay(userId: listenedUserId, avatarSize: style.context.size) }
 
             if showLastSeenTooltip, let text = conversation.lastSeenLabel {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(

@@ -1,5 +1,7 @@
 import XCTest
 import AVFoundation
+import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// **La piste de découpe** (#9353, spec § 3.3) : la plage choisie est celle que
@@ -292,5 +294,67 @@ final class ComposerTrimTrackTests: XCTestCase {
 
     private static func clip() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("trim_\(UUID().uuidString).mov")
+    }
+}
+
+/// **« Rogner et régler » dans le composer** (#17110, planches A15 et O8) : la
+/// bande du SDK règle le Volume et Muet d'une vidéo posée et d'un son posé,
+/// par les écrivains du modèle qui existent déjà (`setMediaVolume`,
+/// `toggleMediaMute`, `setAudioVolume`, `toggleAudioMute`).
+@MainActor
+final class ComposerMediaTrimAdjustTests: XCTestCase {
+
+    private func viewModel(media: [StoryMediaObject] = [], sounds: [StoryAudioPlayerObject] = []) -> StoryComposerViewModel {
+        let vm = StoryComposerViewModel()
+        var slide = vm.currentSlide
+        slide.effects.mediaObjects = media
+        slide.effects.audioPlayerObjects = sounds
+        vm.currentSlide = slide
+        return vm
+    }
+
+    private func video(volume: Float = 1) -> StoryMediaObject {
+        var media = StoryMediaObject(id: "vid", kind: .video, aspectRatio: 0.56)
+        media.volume = volume
+        return media
+    }
+
+    func test_lesReglagesDUneVideo_seLisentDansLeModele() throws {
+        let vm = viewModel(media: [video(volume: 0.4)])
+        let reglages = try XCTUnwrap(ComposerMediaVolume.adjustments(viewModel: vm, id: "vid"))
+        XCTAssertEqual(reglages.volume, 0.4, accuracy: 0.0001)
+        XCTAssertFalse(reglages.isMuted)
+    }
+
+    func test_leCurseur_ecritLeVolumeDeLaVideo() throws {
+        let vm = viewModel(media: [video()])
+        var reglages = try XCTUnwrap(ComposerMediaVolume.adjustments(viewModel: vm, id: "vid"))
+        reglages.volume = 1.5
+        ComposerMediaVolume.apply(reglages, viewModel: vm, id: "vid")
+        XCTAssertEqual(vm.currentEffects.mediaObjects?.first?.volume ?? -1, 1.5, accuracy: 0.0001)
+    }
+
+    func test_Muet_coupePuisRendLeNiveauQuitte() throws {
+        let vm = viewModel(media: [video(volume: 0.7)])
+        var reglages = try XCTUnwrap(ComposerMediaVolume.adjustments(viewModel: vm, id: "vid"))
+        reglages.isMuted = true
+        ComposerMediaVolume.apply(reglages, viewModel: vm, id: "vid")
+        XCTAssertEqual(vm.currentEffects.mediaObjects?.first?.isMuted, true)
+        var rendu = try XCTUnwrap(ComposerMediaVolume.adjustments(viewModel: vm, id: "vid"))
+        rendu.isMuted = false
+        ComposerMediaVolume.apply(rendu, viewModel: vm, id: "vid")
+        XCTAssertEqual(vm.currentEffects.mediaObjects?.first?.volume ?? -1, 0.7, accuracy: 0.0001,
+                       "le mémento rend le niveau quitté")
+    }
+
+    func test_unObjetInconnu_naPasDeReglages() {
+        XCTAssertNil(ComposerMediaVolume.adjustments(viewModel: viewModel(), id: "absent"))
+    }
+
+    func test_laBandeDuComposer_estLeRogneurUniqueDuSDK() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Composer/ComposerMediaControls.swift"))
+        XCTAssertTrue(code.contains("MediaTrimStrip("), "la bande est celle du SDK")
+        XCTAssertTrue(code.contains("ComposerMediaVolume.adjustments("), "Volume et Muet sur la même bande")
     }
 }

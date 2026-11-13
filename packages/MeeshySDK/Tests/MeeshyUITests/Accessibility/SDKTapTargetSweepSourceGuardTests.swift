@@ -11,8 +11,12 @@ final class SDKTapTargetSweepSourceGuardTests: XCTestCase {
         "Community/CommunityCreateScreen.swift",
         "Community/CommunityDetailScreen.swift",
         "Profile/UserProfileSheet+Header.swift",
-        "Media/ImageEditorHistoryOverlay.swift",
-        "Media/MeeshyVideoPlayer+Controls.swift"
+        "Media/MeeshyVideoPlayer+Controls.swift",
+        "Conversation/ConversationSettingsView.swift",
+        "Community/CommunityMembersScreen.swift",
+        "Story/TimelineExportFlow.swift",
+        "Story/DrawingEditFloatingBubbles.swift",
+        "Media/MeeshyAudioEditorView.swift"
     ]
 
     private static let coverageMarkers = ["meeshyTapTarget(", "composerHitTarget("]

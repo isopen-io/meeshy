@@ -175,6 +175,14 @@ final class ClientInfoProviderTests: XCTestCase {
         XCTAssertTrue(declared.contains("link-device-binding"))
     }
 
+    /// #17236 — la passerelle ne sert l'étape `profile` qu'au client qui sait
+    /// dessiner la carte « Montre-toi ».
+    func test_buildHeaders_declaresTheOnboardingProfileCapability() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        let declared = headers["X-Meeshy-Capabilities"]?.split(separator: ",").map(String.init) ?? []
+        XCTAssertTrue(declared.contains("onboarding-profile"))
+    }
+
     func test_identityHeaders_declareTheSameCapabilitiesForExtensions() {
         XCTAssertEqual(ClientInfoProvider.identityHeaders()["X-Meeshy-Capabilities"], ClientCapabilities.headerValue())
     }

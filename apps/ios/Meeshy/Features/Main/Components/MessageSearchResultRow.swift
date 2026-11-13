@@ -33,19 +33,19 @@ struct MessageSearchResultRow: View, Equatable {
                 HStack {
                     Text(result.conversationName)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     Spacer()
 
                     Text(RelativeTimeFormatter.shortString(for: result.createdAt))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Text(result.senderName)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo300)
+                    .foregroundStyle(MeeshyColors.indigo300)
                     .lineLimit(1)
 
                 excerpt
@@ -94,13 +94,10 @@ struct MessageSearchResultRow: View, Equatable {
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
-                .redacted(reason: .placeholder)
-                .blur(radius: Self.veilBlurRadius)
+                .modifier(DiffuseVeil())
         }
         .accessibilityHidden(true)
     }
-
-    private static let veilBlurRadius: CGFloat = 8
 
     static var veiledLabel: String {
         String(localized: "search.messages.veiled", defaultValue: "Message flouté")
@@ -108,7 +105,7 @@ struct MessageSearchResultRow: View, Equatable {
 
     static func mediaLabel(_ kind: APIMessageSearchHit.MediaKind) -> String {
         switch kind {
-        case .audio: return String(localized: "search.messages.media.audio", defaultValue: "Message vocal")
+        case .audio: return MediaKindLabel.voiceMessageTitle()
         case .video: return String(localized: "search.messages.media.video", defaultValue: "Vidéo")
         case .image: return String(localized: "search.messages.media.image", defaultValue: "Image")
         case .document: return String(localized: "search.messages.media.document", defaultValue: "Document")

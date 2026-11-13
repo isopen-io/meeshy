@@ -45,16 +45,21 @@ public enum class RelationFeature(
      * face à un mineur DÉCLARÉ ; `null` = la feature n'est pas bouclée.
      */
     public val minorTargetMinimum: RelationLevel? = null,
-    /** Ce que le privilège d'équipe n'ouvre pas (`RELATION_TEAM_CLOSED_FEATURES`, #16623) : une audience reste au lien réel. */
+    /** Ce que le privilège d'équipe n'ouvre pas (`RELATION_TEAM_CLOSED_FEATURES`, #16623) : seule la Connaissance automatique. */
     public val isClosedToTeam: Boolean = false,
+    /**
+     * Le privilège d'équipe s'éteint entre un mineur et un majeur déclarés, dans les deux sens
+     * (`RELATION_TEAM_MINOR_APART_FEATURES`, #16623) : le viewer y est le lecteur ou le destinataire.
+     */
+    public val isMinorApartForTeam: Boolean = false,
 ) {
     PRESENCE_ONLINE("presence.online", RelationLevel.FRIEND, isPresence = true),
     PRESENCE_DETAILED("presence.detailed", RelationLevel.CLOSE, isPresence = true),
     GAME_BASIC("game.basic", RelationLevel.FRIEND),
     GAME_SPARKS_GLORY("game.sparksGlory", RelationLevel.CLOSE),
-    NOTIFY_NEW_CONTENT("notify.newContent", RelationLevel.CLOSE, isClosedToTeam = true),
-    RELAY_COMMENTERS_ON_MY_POSTS("relay.commentersOnMyPosts", RelationLevel.CLOSE, isClosedToTeam = true),
-    RELAY_MY_COMMENTS_ELSEWHERE("relay.myCommentsElsewhere", RelationLevel.BLOOD, isClosedToTeam = true),
+    NOTIFY_NEW_CONTENT("notify.newContent", RelationLevel.CLOSE, isMinorApartForTeam = true),
+    RELAY_COMMENTERS_ON_MY_POSTS("relay.commentersOnMyPosts", RelationLevel.CLOSE, isMinorApartForTeam = true),
+    RELAY_MY_COMMENTS_ELSEWHERE("relay.myCommentsElsewhere", RelationLevel.BLOOD, isMinorApartForTeam = true),
     DM_DIRECT("dm.direct", RelationLevel.ACQUAINTANCE),
     DM_REQUEST("dm.request", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.ACQUAINTANCE),
     DM_READ_RECEIPTS("dm.readReceipts", RelationLevel.ACQUAINTANCE),
@@ -62,15 +67,16 @@ public enum class RelationFeature(
     PRESENCE_DND("presence.dnd", RelationLevel.ACQUAINTANCE),
     CALL_RING("call.ring", RelationLevel.PUBLIC, isDirected = true, minorTargetMinimum = RelationLevel.FRIEND),
     VIEWS_IDENTITY("views.identity", RelationLevel.COMMUNITY),
-    AUDIENCE_ACQUAINTANCES("audience.acquaintances", RelationLevel.ACQUAINTANCE, isClosedToTeam = true),
-    AUDIENCE_CLOSE("audience.close", RelationLevel.CLOSE, isClosedToTeam = true),
-    AUDIENCE_BLOOD("audience.blood", RelationLevel.BLOOD, isClosedToTeam = true),
+    AUDIENCE_ACQUAINTANCES("audience.acquaintances", RelationLevel.ACQUAINTANCE, isMinorApartForTeam = true),
+    AUDIENCE_CLOSE("audience.close", RelationLevel.CLOSE, isMinorApartForTeam = true),
+    AUDIENCE_BLOOD("audience.blood", RelationLevel.BLOOD, isMinorApartForTeam = true),
     LISTENING_CATEGORY("listening.category", RelationLevel.CLOSE, requiresConsent = true),
     LISTENING_TITLE("listening.title", RelationLevel.BLOOD, requiresConsent = true),
     TALKIE("talkie", RelationLevel.CLOSE, requiresConsent = true, isDirected = true),
     TOGETHER("together", RelationLevel.CLOSE, isDirected = true),
     BRING("bring", RelationLevel.FRIEND, requiresConsent = true, isDirected = true),
     LOCATION_LIVE("location.live", RelationLevel.BLOOD, requiresConsent = true),
+    LOCATION_TEMPORARY("location.temporary", RelationLevel.FRIEND, requiresConsent = true),
     LOCATION_HISTORY("location.history", RelationLevel.BLOOD, requiresConsent = true),
     LOCATION_PROXIMITY("location.proximity", RelationLevel.BLOOD, requiresConsent = true),
     ACQUAINTANCE_AUTO("acquaintance.auto", RelationLevel.PUBLIC, isDirected = true, isClosedToTeam = true),
@@ -163,7 +169,15 @@ public data class RelationAccess(
             input.viewerRole?.isTeam == true &&
                 input.targetRole?.isTeam == true &&
                 !input.feature.isClosedToTeam &&
-                !(input.targetMinor == AgeClass.MINOR && input.viewerMinor != AgeClass.MINOR)
+                !minorShieldsTeam(input)
+
+        /** Le bouclier des mineurs face au privilège d'équipe : la cible d'un outil, les deux côtés d'une audience. */
+        internal fun minorShieldsTeam(input: RelationAccessInput): Boolean =
+            if (input.feature.isMinorApartForTeam) {
+                (input.viewerMinor == AgeClass.MINOR) != (input.targetMinor == AgeClass.MINOR)
+            } else {
+                input.targetMinor == AgeClass.MINOR && input.viewerMinor != AgeClass.MINOR
+            }
 
         public fun resolve(input: RelationAccessInput): RelationAccess {
             val level = if (teamOpens(input)) {

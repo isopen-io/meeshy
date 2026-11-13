@@ -208,7 +208,19 @@ describe('#16965 — une lecture de plan qui tombe et le pair EN LIGNE', () => {
    * sa PROPRE requête de participants, qui tombe dans les mêmes conditions —
    * mais il est écrit ici parce qu'il se décide, il ne se constate pas.
    */
-  it('la panne des DESTINATAIRES retient les DEUX canaux — décision de ce lot', async () => {
+  /**
+   * NOTE D'HONNÊTETÉ sur le mécanisme, relevée par l'audit : depuis que la loi
+   * du plancher lit elle aussi `participant.findMany`, ce cas fait lever les
+   * DEUX résolutions — celle du plan signé ET celle de l'audience. Le verdict
+   * observé passe donc par la branche `'unknown'` de l'audience, pas par
+   * l'échec de `readerSignedTargets` que le nom du témoin désigne.
+   *
+   * Le témoin est gardé tel quel parce que la propriété qu'il atteste est la
+   * bonne — une panne de cette lecture retient les deux canaux — mais son
+   * intitulé le dit désormais : il ne peut PAS distinguer les deux mécanismes,
+   * et un lot qui changerait l'un des deux arbitrages doit le relire.
+   */
+  it('la panne des DESTINATAIRES retient les DEUX canaux (par la branche `unknown` de l’audience)', async () => {
     const { emitted, errors, prisma, manager, enqueueOfflineMessageMutation } = setup('recipients-read');
 
     await run(prisma, manager, errors);

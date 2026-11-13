@@ -159,7 +159,7 @@ final class VideoFilterPresetTests: XCTestCase {
     }
 
     func test_matching_handTunedColorimetry_returnsNil() {
-        // A user dragging a slider in VideoFilterControlView produces
+        // A user dragging a slider in the effects mode produces
         // colorimetry that (generically) matches no preset — a legitimate
         // "no preset selected" state, not a bug.
         var config = VideoFilterPreset.warm.config

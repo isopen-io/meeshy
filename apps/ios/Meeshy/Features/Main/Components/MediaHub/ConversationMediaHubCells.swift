@@ -157,7 +157,7 @@ struct MediaHubStateView: View {
         VStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(.largeTitle.weight(.light))
-                .foregroundColor(isDark ? .white.opacity(MeeshyOpacity.medium) : MeeshyColors.indigo950.opacity(MeeshyOpacity.medium))
+                .foregroundStyle(isDark ? Color.white.opacity(MeeshyOpacity.medium) : MeeshyColors.indigo950.opacity(MeeshyOpacity.medium))
                 .accessibilityHidden(true)
             Text(message)
                 .font(.subheadline.weight(.medium))

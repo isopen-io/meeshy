@@ -58,7 +58,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     /// La surface étendue `configure(settings:onMaxDurationReached:)` survit
     /// pour les appelants app qui branchent encore un callback, mais celui-ci
     /// n'est plus jamais déclenché : l'enregistrement n'a plus de plafond de
-    /// durée (directive produit 2026-07-26).
+    /// durée.
     func configure(with settings: AudioRecordingSettings) {
         configure(settings: settings, onMaxDurationReached: nil)
     }
@@ -89,8 +89,33 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         // s'arrêter et remonte à la fin. Seul un vocal sans son Meeshy garde
         // `.voiceChat` (audit P1-10) : son traitement de la voix rendrait le
         // son Meeshy inaudible au lieu de le baisser.
-        guard recordingSession.begin(.voiceMessage) else { return }
+        //
+        // La session se pose HORS du fil principal (#17038) : l'interface passe
+        // « en cours » tout de suite, et l'enregistreur démarre une fois la
+        // session prête. Un arrêt entre-temps l'emporte (`whenReady(false)`).
+        isRecording = true
+        duration = 0
+        recordedFileURL = nil
+        levelHistory = Array(repeating: 0, count: 15)
+        audioLevels = levelHistory
+        startAttempt &+= 1
+        let attempt = startAttempt
+        recordingSession.begin(.voiceMessage) { [weak self] granted in
+            guard let self, self.startAttempt == attempt else { return }
+            guard granted else {
+                self.isRecording = false
+                return
+            }
+            self.startRecorder()
+        }
+    }
 
+    /// Chaque démarrage, arrêt ou annulation change de tentative : la session
+    /// qui revient prête après un arrêt ne démarre aucun enregistreur.
+    private var startAttempt = 0
+
+    /// La session est prête : l'enregistreur démarre.
+    private func startRecorder() {
         // A3 — from here on, the session is active. Any failure path MUST
         // deactivate it to avoid leaking the microphone indicator + battery
         // drain (previously the AVAudioRecorder init failure left the
@@ -109,14 +134,11 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         } catch {
             // A3 — rollback the AVAudioSession we just activated so the OS
             // releases the microphone hardware and turns off the indicator.
+            isRecording = false
             deactivateAudioSessionAfterFailure()
             return
         }
 
-        isRecording = true
-        duration = 0
-        levelHistory = Array(repeating: 0, count: 15)
-        audioLevels = levelHistory
         RecorderCallGuard.shared.register(self)
 
         // Un second démarrage sans arrêt entre les deux laissait l'ancien lien tourner
@@ -187,6 +209,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
 
     @discardableResult
     func stopRecording() -> URL? {
+        startAttempt &+= 1
         displayLink?.invalidate()
         displayLink = nil
         // Le lien ne tire pas en arrière-plan : la durée se relève à l'arrêt,
@@ -203,6 +226,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     }
 
     func cancelRecording() {
+        startAttempt &+= 1
         displayLink?.invalidate()
         displayLink = nil
         recorder?.stop()

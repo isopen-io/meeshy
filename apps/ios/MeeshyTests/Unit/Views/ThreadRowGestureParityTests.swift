@@ -160,4 +160,23 @@ final class ThreadRowGestureParityTests: XCTestCase {
         XCTAssertFalse(source.contains(".modifier(QuickReactionDoubleTap("),
                        "le double tap du MESSAGE a quitté la bulle pour le conteneur des trois peaux")
     }
+
+    /// **Une action VoiceOver n'est annoncée que si elle a un effet** (loi 4) :
+    /// pour un message supprimé, un avis système ou une vue unique, le geste est
+    /// éteint (`isEnabled == false`) et le rotor ne doit proposer aucune
+    /// « réaction rapide ».
+    func test_laReactionRapideNEstAnnonceeQueSiLeGesteEstActif() throws {
+        let source = try source("apps/ios/Meeshy/Features/Main/Views/ThemedMessageBubble.swift")
+        guard let debut = source.range(of: "struct QuickReactionDoubleTap") else {
+            return XCTFail("le modificateur du double tap doit être dans ce fichier")
+        }
+        let corps = String(source[debut.lowerBound...].prefix(1200))
+
+        XCTAssertFalse(corps.contains(".accessibilityAction(named:"),
+                       "une action nommée posée sans condition est annoncée même quand elle ne fait rien")
+        XCTAssertTrue(corps.contains(".accessibilityActions {"),
+                      "l'action doit passer par un bloc conditionnel à l'identité stable")
+        XCTAssertTrue(corps.contains("if isEnabled"),
+                      "l'action ne doit exister que si le geste est actif")
+    }
 }

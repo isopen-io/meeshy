@@ -18,19 +18,23 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     @Published var currentUserRole: MemberRole = .member
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published private(set) var loadFailure: CommunityLoadFailure?
 
     let communityId: String
     private let service: CommunityServiceProviding
     private let currentUserId: @MainActor () -> String
+    private let postsCache: @MainActor () async -> CommunityPostsCache?
 
     init(
         communityId: String,
         service: CommunityServiceProviding = CommunityService.shared,
-        currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" }
+        currentUserId: @escaping @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" },
+        postsCache: @escaping @MainActor () async -> CommunityPostsCache? = { nil }
     ) {
         self.communityId = communityId
         self.service = service
         self.currentUserId = currentUserId
+        self.postsCache = postsCache
     }
 
     func load() async {
@@ -41,12 +45,23 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
             let apiCommunity = try await service.get(communityId: communityId)
             community = apiCommunity.toCommunity()
             applyMembership(of: apiCommunity)
+            loadFailure = nil
 
             if isMember {
                 conversations = try await service.getConversations(communityId: communityId)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            loadFailure = Self.loadFailure(for: error)
+        }
+    }
+
+    /// #7816 — la cause d'un échec se lit par la loi unique de l'app
+    /// (`ContentFetchFailure.classify`), jamais par le message brut du serveur.
+    nonisolated static func loadFailure(for error: Error) -> CommunityLoadFailure {
+        switch ContentFetchFailure.classify(error) {
+        case .forbidden, .notFound: return .refused
+        case .network: return .network
+        case .server: return .server
         }
     }
 
@@ -70,6 +85,7 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
         defer { isLoading = false }
         do {
             _ = try await service.join(communityId: communityId)
+            await forgetCachedPosts()
             await load()
         } catch {
             errorMessage = error.localizedDescription
@@ -79,8 +95,16 @@ final class CommunityDetailViewModel: ObservableObject, CommunityDetailModeling 
     func leaveCommunity() async {
         do {
             try await service.leave(communityId: communityId)
+            await forgetCachedPosts()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// #16878 — les publications de l'onglet sont lues sous le rôle du
+    /// lecteur : un départ ne laisse pas celles d'une communauté privée sur
+    /// l'appareil, une adhésion fait relire ce qu'un membre peut lire.
+    private func forgetCachedPosts() async {
+        await postsCache()?.invalidate(for: CommunityPostsViewModel.cacheKey(communityId: communityId))
     }
 }

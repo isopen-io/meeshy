@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -28,12 +27,14 @@ import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoggingOutVeil
 import me.meeshy.app.auth.guest.GuestSessionEndViewModel
 import me.meeshy.app.auth.guest.GuestSessionEndedScreen
+import me.meeshy.app.calls.CallHeaderNamesViewModel
 import me.meeshy.app.calls.CallPill
 import me.meeshy.app.calls.CallScreenShareViewModel
 import me.meeshy.app.calls.CallPillPresenter
 import me.meeshy.app.calls.CallStatus
 import me.meeshy.app.calls.CallViewModel
 import me.meeshy.app.calls.IncomingCallViewModel
+import me.meeshy.app.calls.rememberCallHeaderNames
 import me.meeshy.app.chat.ChatViewModel
 import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.onboarding.OnboardingViewModel
@@ -57,7 +58,6 @@ import me.meeshy.sdk.chrome.FloatingButtonPositionStore
 import me.meeshy.sdk.model.call.CallLinkRequest
 import me.meeshy.sdk.model.call.screenshare.CallScreenSharePhase
 import me.meeshy.sdk.model.rootnav.RootRoute
-import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
@@ -194,6 +194,7 @@ fun MeeshyApp(
 
     UpgradeGateHost(requirement = upgradeRequirement) {
     ShareLaunchHost(navController) {
+    ProvideViewerCallPill(callViewModel, navController, shown = CallPillPresenter.shouldShow(callStatus, onCallScreen)) {
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -210,18 +211,8 @@ fun MeeshyApp(
                 // window (its controls untappable) and cover the destination's top bar. The
                 // pill takes the status-bar inset, so the destination below consumes it.
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    // A live, non-incoming call while off the CALL screen. A tap rebuilds the
-                    // CALL route from the live config; the Activity-scoped [callViewModel] is
-                    // reused, so `start()` is inert.
-                    if (showsCallPill) {
-                        MinimizedCallPill(
-                            callViewModel = callViewModel,
-                            navController = navController,
-                            modifier = Modifier
-                                .statusBarsPadding()
-                                .padding(vertical = MeeshySpacing.xs),
-                        )
-                    }
+                    // A live, non-incoming call while off the CALL screen (#17767 : elle arrive et repart en mouvement).
+                    AnimatedMinimizedCallPill(visible = showsCallPill, callViewModel = callViewModel, navController = navController)
                     // Le mini-lecteur audio (iOS `MiniAudioPlayerBar`) se range SOUS la pastille d'appel et pousse la destination.
                     MediaTopBarSlot(navController, navigator, callPillShown = showsCallPill, screenCoversChrome = onCallScreen)
                     // Le bandeau « Validez votre compte » (#13854) se range SOUS la pastille d'appel et AU-DESSUS de
@@ -342,23 +333,28 @@ fun MeeshyApp(
     }
     }
     }
+    }
 }
 
 
 /** La pastille d'appel reduit : seule a lire l'etat VIVANT (chrono compris), elle seule se recompose chaque seconde. */
 @Composable
-private fun MinimizedCallPill(
+internal fun MinimizedCallPill(
     callViewModel: CallViewModel,
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    screenShare: CallScreenShareViewModel = hiltViewModel(),
+    namesSource: CallHeaderNamesViewModel = hiltViewModel(),
 ) {
+    val headerNames by rememberCallHeaderNames(callViewModel.activeConfig.conversationId, namesSource)
     val callState by callViewModel.state.collectAsStateWithLifecycle()
     val callPeerVisual by callViewModel.peerVisual.collectAsStateWithLifecycle()
-    val screenShare: CallScreenShareViewModel = hiltViewModel()
     val share by screenShare.state.collectAsStateWithLifecycle()
     CallPill(
         state = callState,
         peerAvatarUrl = callPeerVisual.avatarUrl,
+        peerUserId = callViewModel.activeConfig.peerId,
+        names = headerNames,
         onClick = {
             navController.navigate(CallRoute.reopen(callViewModel.activeConfig)) {
                 launchSingleTop = true
@@ -370,5 +366,6 @@ private fun MinimizedCallPill(
         modifier = modifier,
         isScreenSharing = share.phase == CallScreenSharePhase.Sharing,
         onStopScreenShare = screenShare::stop,
+        reduceMotion = FeedOverlayTransition.reduceMotion,
     )
 }

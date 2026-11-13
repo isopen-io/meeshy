@@ -12,6 +12,7 @@ class CallDuoStageLawTest {
         hasLocalTrack: Boolean = true,
         isCameraOn: Boolean = true,
         isVideoAutoPaused: Boolean = false,
+        isPeerScreenSharing: Boolean = false,
     ) = CallDuoStageLaw.layout(
         CallDuoStageInputs(
             isStageShown = isStageShown,
@@ -21,6 +22,7 @@ class CallDuoStageLawTest {
             hasLocalTrack = hasLocalTrack,
             isCameraOn = isCameraOn,
             isVideoAutoPaused = isVideoAutoPaused,
+            isPeerScreenSharing = isPeerScreenSharing,
         ),
     )
 
@@ -44,6 +46,27 @@ class CallDuoStageLawTest {
         val duo = layout(isSwapped = true, isCameraOn = false)
         assertThat(duo.isMyImageFullScreen).isFalse()
         assertThat(duo.controlsPlacement).isEqualTo(CallCameraControlsPlacement.SelfTile)
+    }
+
+    @Test
+    fun `a received screen keeps the stage, a swap made before the share does not put it in the tile`() {
+        val duo = layout(isSwapped = true, isPeerScreenSharing = true)
+        assertThat(duo.isMyImageFullScreen).isFalse()
+        assertThat(duo.showsSelfTile).isTrue()
+        assertThat(duo.controlsPlacement).isEqualTo(CallCameraControlsPlacement.SelfTile)
+    }
+
+    @Test
+    fun `the swap choice comes back with the stage once the share ends`() {
+        assertThat(layout(isSwapped = true, isPeerScreenSharing = false).isMyImageFullScreen).isTrue()
+    }
+
+    @Test
+    fun `no swap is accepted while the other shares their screen, one is accepted otherwise`() {
+        assertThat(CallDuoStageLaw.acceptsSwap(isPeerScreenSharing = true, hasLocalTrack = true, isCameraOn = true)).isFalse()
+        assertThat(CallDuoStageLaw.acceptsSwap(isPeerScreenSharing = false, hasLocalTrack = true, isCameraOn = true)).isTrue()
+        assertThat(CallDuoStageLaw.acceptsSwap(isPeerScreenSharing = false, hasLocalTrack = false, isCameraOn = true)).isFalse()
+        assertThat(CallDuoStageLaw.acceptsSwap(isPeerScreenSharing = false, hasLocalTrack = true, isCameraOn = false)).isFalse()
     }
 
     @Test

@@ -135,7 +135,7 @@ public struct MediaTranscriptionView: View {
             Text(segment.text + " ")
                 .font(.system(size: fontSize, weight: isActive ? .bold : .regular))
                 .minimumScaleFactor(0.5)
-                .foregroundColor(segmentColor(isActive: isActive, isPast: isPast))
+                .foregroundStyle(segmentColor(isActive: isActive, isPast: isPast))
                 .padding(.horizontal, isActive ? 3 : 0)
                 .padding(.vertical, isActive ? 1 : 0)
                 .background(

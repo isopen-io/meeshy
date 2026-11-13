@@ -101,15 +101,15 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
 
     // MARK: - Ce que chaque geste fait
 
-    /// **La photo se prend en DEUX temps** (#8711, directive porteur
-    /// 2026-09-29 : « le premier tap arme et affiche avec les contrôleurs
-    /// habituels, second tap n'importe où sur la scène prend la photo »).
-    func test_tap_premierToucher_armeLeViseurSansRienPrendre() {
-        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .story), .arm)
-        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .post), .arm)
-        XCTAssertEqual(ComposerSceneQuickCapture.tap(format: .reel), .arm,
-                       "un réel arme aussi son viseur : c'est l'appui long qui filme")
-        XCTAssertNil(ComposerSceneQuickCapture.tap(format: .status))
+    /// **Le toucher n'arme plus le viseur** (#17269, porteur 2026-11-09 : « la
+    /// notion de toucher la scène pour armer la caméra doit être annulée ») :
+    /// la caméra s'arme à l'ouverture ; l'indication de la scène vide ne parle
+    /// que de l'appui long, dans tout format qui a un viseur.
+    func test_hint_existsWhereverTheFormatFilms_neverForTheStatus() {
+        XCTAssertEqual(ComposerSceneQuickCapture.hint(format: .story), .photoOrVideo)
+        XCTAssertEqual(ComposerSceneQuickCapture.hint(format: .post), .photoOrVideo)
+        XCTAssertNotNil(ComposerSceneQuickCapture.hint(format: .reel))
+        XCTAssertNil(ComposerSceneQuickCapture.hint(format: .status))
     }
 
     // MARK: - Viseur armé : la TABLE des gestes décide (#9351)
@@ -127,7 +127,7 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
             ComposerCaptureGesture.action(zone: .scene, gesture: .doubleTap, context: contexte)
         }
         XCTAssertEqual(double(ComposerCaptureGestureContext(stage: .off)), .none,
-                       "viseur éteint : le premier toucher appartient à l'armement")
+                       "viseur éteint : rien à photographier")
         XCTAssertEqual(double(ComposerCaptureGestureContext(stage: .recording)), .none,
                        "une prise en cours ne se coupe pas d'une photo")
         XCTAssertEqual(double(ComposerCaptureGestureContext(allowsPhoto: ComposerSceneCamera.modes(for: .reel)
@@ -262,8 +262,11 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
     }
 
     func test_placement_leBoutonDeTaille_resteOffertSousLeFlashDEcran_etSeTaitEnRetouche() {
-        XCTAssertTrue(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: false, editing: false))
+        XCTAssertFalse(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: false, editing: false),
+                       "A8 (#17109) : la caméra s'arme plein écran, sans bascule carte ↔ plein écran")
         XCTAssertFalse(ComposerCapturePlacement.offersSizeToggle(hostHasCard: false, screenFlash: false, editing: false))
+        XCTAssertTrue(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: true, editing: false),
+                      "le selfie éclairé du composer garde sa scène entourée de blanc")
         XCTAssertTrue(ComposerCapturePlacement.offersSizeToggle(hostHasCard: false, screenFlash: true, editing: false),
                       "le selfie éclairé peut toujours s'agrandir")
         XCTAssertFalse(ComposerCapturePlacement.offersSizeToggle(hostHasCard: true, screenFlash: true, editing: true))

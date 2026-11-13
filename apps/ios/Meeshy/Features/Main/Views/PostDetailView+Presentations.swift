@@ -53,8 +53,7 @@ extension PostDetailView {
                     senderName: displayPost?.author
                 ).closesForConversationOpening(.place)
             }
-            // **Le plein écran du détail passe par son SITE UNIQUE** (#4927,
-            // raccordé le 2026-09-06).
+            // **Le plein écran du détail passe par son SITE UNIQUE** (#4927).
             //
             // Cette vingtaine de lignes était le dernier des trois exemplaires que
             // `socialMediaGallery` a été écrit pour remplacer — la carte du fil a

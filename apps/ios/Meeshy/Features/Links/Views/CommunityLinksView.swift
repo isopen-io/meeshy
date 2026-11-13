@@ -59,7 +59,7 @@ struct CommunityLinksView: View {
 
             Text(String(localized: "community.links.title", defaultValue: "Liens communauté", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -91,8 +91,8 @@ struct CommunityLinksView: View {
             Image(systemName: icon).font(MeeshyFont.relative(MeeshyIconSize.xl))
                 .foregroundColor(accent)
                 .accessibilityHidden(true)
-            Text(value).font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold)).foregroundColor(theme.textPrimary)
-            Text(label).font(MeeshyFont.relative(MeeshyFont.footnoteSize)).foregroundColor(theme.textSecondary)
+            Text(value).font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold)).foregroundStyle(theme.textPrimary)
+            Text(label).font(MeeshyFont.relative(MeeshyFont.footnoteSize)).foregroundStyle(theme.textSecondary)
         }
         .frame(maxWidth: .infinity).padding(MeeshySpacing.mdPlus)
         .background(
@@ -151,13 +151,13 @@ struct CommunityLinksView: View {
             ZStack {
                 Circle().fill(accent.opacity(MeeshyOpacity.light)).frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
-                Image(systemName: "person.3.fill").font(.system(size: MeeshyIconSize.sm))
+                Image(systemName: "person.3.fill").font(MeeshyFont.fixedGlyph(MeeshyIconSize.sm))
                     .foregroundColor(accent)
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(link.name).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary).lineLimit(1)
+                    .foregroundStyle(theme.textPrimary).lineLimit(1)
                 Text(String(localized: "community.links.row.subtitle", defaultValue: "\(link.memberCount) membres · \(link.identifier)", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted).lineLimit(1)
             }
@@ -173,7 +173,7 @@ struct CommunityLinksView: View {
             // duplicate glyph here and re-expose the copy as an `.accessibilityAction`
             // on the combined row below, so VoiceOver users can still copy the invite.
             .accessibilityHidden(true)
-            Image(systemName: "chevron.forward").font(MeeshyFont.relative(MeeshyIconSize.xs)).foregroundColor(theme.textMuted)
+            Image(systemName: "chevron.forward").font(MeeshyFont.relative(MeeshyIconSize.xs)).foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
         }
         .padding(MeeshySpacing.mdPlus)

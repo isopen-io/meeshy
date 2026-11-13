@@ -5,7 +5,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
-import { announceMemberArrival } from './memberArrivalFanOut';
+import { announceMembershipAdmission } from './membershipAdmissionFanOut';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import { noticeActor } from '../../services/conversations/conversationNotice';
 import type { NoticeActor } from '@meeshy/shared/utils/conversation-notice';
@@ -14,7 +14,6 @@ import {
   NEW_MEMBER_PERMISSIONS,
   type ParticipantRightName,
 } from '../../services/participantRights';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
   resolveConversationEntry,
@@ -30,7 +29,11 @@ import { registerParticipantPatchRoute } from './participant-patch';
 import { repondreAuRefus } from './utils/participant-geste-reponse';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
-import { announceConversationNew } from '../../services/conversations/obsoleteCapability';
+import {
+  conversationAdmitsNewMembers,
+  EXTERNAL_CONVERSATION_ERROR_CODES,
+  EXTERNAL_SINGLE_MEMBER_MESSAGE,
+} from '@meeshy/shared/types/external-conversation';
 import {
   applyCommunityAdmission,
   loadSalonCommunity,
@@ -370,83 +373,31 @@ export function registerParticipantWriteRoutes(
       }
     );
 
-    // R6-1 — broadcast so other members' devices refresh the participant list
-    // in real time (the POST previously created the row silently → stale member
-    // lists until manual reload). Mirrors the role-update emit below.
-    // conversation:joined feeds ParticipantsView (invalidate+reload) and
-    // ConversationSyncEngine (participants cache invalidate) on iOS.
     const socketManager = fastify.socketIOHandler?.getManager();
     const io = socketManager?.getIO();
-    if (io) {
-      io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_JOINED, {
-        conversationId,
-        userId,
-      });
 
-      // `conversation:joined` ci-dessus ne peut PAS porter l'effectif : le
-      // même nom, le même payload `{conversationId, userId}`, servent l'ack
-      // self-only qu'un socket reçoit en REJOIGNANT LA ROOM
-      // (`ConversationHandler`) — que produit chaque ouverture de fil, et qui
-      // ne change aucune appartenance. Compter dessus gonflerait le compteur
-      // à chaque ouverture ; c'est pourquoi aucun client n'incrémentait, et
-      // pourquoi son effectif ne pouvait que DÉRIVER VERS LE BAS (départ −1,
-      // bannissement −1, ajout rien).
-      //
-      // D'où l'événement dédié, désormais par son site UNIQUE
-      // (`announceMemberArrival`, #16837) : cette porte était la SEULE des
-      // trois à l'émettre, et la règle qu'il faut retaper à chaque site est
-      // celle qu'un site finit par ne pas avoir.
-      await announceMemberArrival({
-        prisma,
-        io,
-        conversationId,
-        arrival: {
-          userId,
-          displayName: addedMemberFields.displayName,
-          joinedAt,
-        },
-        onError: (error) => logger.warn('member arrival fan-out failed', { userId, conversationId, err: error }),
-      });
-    }
-    // Auto-join the added user's currently-connected sockets to the conversation
-    // room so they receive message:new events immediately without a reconnect.
+    // L'admission dans la ROOM d'abord — « l'une sert l'arrivant, l'autre parle
+    // de lui aux autres, et c'est la première qui décide s'il recevra quoi que
+    // ce soit du fil » (`performLinkJoin`). Elle vivait ENTRE les diffusions,
+    // ce qui n'était la règle d'aucune des deux portes.
     if (socketManager) {
       socketManager.joinUserToConversationRoom(userId, conversationId).catch(
         (err: unknown) => logger.error('Failed to auto-join added user to conversation room', err as Error)
       );
     }
-    // Emit CONVERSATION_NEW to the added user's room so connected clients
-    // (iOS: ConversationListViewModel.conversationNew handler) discover the
-    // conversation immediately without waiting for a push notification.
-    if (io) {
-      try {
-        const conv = await prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { type: true, title: true, createdAt: true },
-        });
-        const allParticipantIds = await prisma.participant.findMany({
-          where: { conversationId, isActive: true },
-          select: { userId: true },
-        }).then(rows => rows.map(r => r.userId).filter((id): id is string => !!id));
-        if (conv) {
-          announceConversationNew(prisma, {
-            io,
-            recipientIds: [userId],
-            payload: {
-              conversationId,
-              conversationType: conv.type,
-              title: conv.title ?? null,
-              creatorId: currentUserId ?? userId,
-              participantIds: allParticipantIds,
-              createdAt: conv.createdAt instanceof Date ? conv.createdAt.toISOString() : String(conv.createdAt),
-            },
-            onError: (error) => logger.warn('Failed to emit CONVERSATION_NEW to added user', { userId, conversationId, err: error }),
-          }).catch((error: unknown) => logger.warn('conversation:new emission failed', { error }));
-        }
-      } catch (err) {
-        logger.warn('Failed to emit CONVERSATION_NEW to added user', { userId, conversationId, err });
-      }
-    }
+
+    // Les TROIS diffusions d'adhésion, par leur site UNIQUE (#17032). Cette
+    // porte était la seule à les émettre toutes ; sa jumelle l'invitation n'en
+    // émettait qu'une, et la règle retapée à chaque porte est celle qu'une
+    // porte finit par ne pas avoir.
+    await announceMembershipAdmission({
+      prisma,
+      io,
+      conversationId,
+      arrival: { userId, displayName: addedMemberFields.displayName, joinedAt },
+      actorUserId: currentUserId,
+      onError: (error) => logger.warn('membership admission fan-out failed', { userId, conversationId, err: error }),
+    });
 
     // #14107 (E2, audit 3 F-b) — la personne en demande n'est pas prévenue ; les membres présents, si.
     const notificationService = fastify.notificationService;
@@ -644,10 +595,13 @@ export function registerParticipantWriteRoutes(
       // fil terminé. Deux colonnes, cf. `conversationWriteAdmission`.
       const conversation = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        select: { isActive: true, closedAt: true, communityId: true },
+        select: { isActive: true, closedAt: true, communityId: true, type: true },
       });
       if (conversation && (conversation.isActive === false || conversation.closedAt)) {
         return sendError(reply, 410, 'Cette conversation est terminée');
+      }
+      if (conversation && !conversationAdmitsNewMembers(conversation.type)) {
+        return sendError(reply, 409, EXTERNAL_SINGLE_MEMBER_MESSAGE, { code: EXTERNAL_CONVERSATION_ERROR_CODES.SINGLE_MEMBER });
       }
 
       // SÉQUENTIEL, et ce n'est pas une négligence : deux admissions

@@ -13,6 +13,7 @@ import type { GameBlock } from '@meeshy/shared/types/game';
 import { logger } from '../utils/logger';
 import { socketIOAdminRoutes } from './socketio-admin-routes';
 import { setEngagementEmitIOProvider } from '../services/engagement/engagement-emit-registry';
+import { shareTogetherCuts } from '../services/together/togetherDeps';
 import { GameStateBroadcast, setGameStateBroadcast } from '../services/game/GameStateBroadcast';
 import { gravedGameRevision } from '../services/game/GameRevision';
 import { GameBlockService } from '../services/game/GameBlockService';
@@ -63,6 +64,8 @@ export class MeeshySocketIOHandler {
     setEngagementEmitIOProvider(() => this.socketIOManager?.getIO());
     // Les enveloppes libsignal partent vers la room de LEUR appareil (#3706).
     setE2EEEnvelopeIOProvider(() => this.socketIOManager?.getIO());
+    // Une séance « ensemble » s'arrête dans le geste qui ferme sa porte, dès le démarrage (#17022).
+    shareTogetherCuts({ prisma: this.prisma, io: () => this.socketIOManager?.getIO() });
     // L'état du jeu se propage aux appareils du compte après chaque écriture (#10900).
     setGameStateBroadcast(
       new GameStateBroadcast({

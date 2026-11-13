@@ -1,10 +1,22 @@
 package me.meeshy.app.calls
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,8 +39,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
-import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.sdk.model.call.CallHeaderNames
+import me.meeshy.sdk.model.call.CallReducedCaption
+import me.meeshy.sdk.model.call.CallShareCapsuleMotion
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.icons.MeeshyIcons
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -86,12 +103,14 @@ enum class CallBackAction { Inert, Minimize, Close }
  * [CallViewModel] keeps the call alive across the navigation.
  *
  * Pure glue: every value is derived from the immutable [state]; the accent is
- * resolved from the peer identity for colour coherence (the conversation-accent
- * rule). [peerAvatarUrl] is the peer's photo ([CallPeerVisual.avatarUrl]): like iOS,
+ * resolved from the peer's account id ([peerUserId], the name only as a fallback — law 4 of
+ * `docs/product/appels-vue-finale.md`). [peerAvatarUrl] is the peer's photo ([CallPeerVisual.avatarUrl]): like iOS,
  * the pill shows the real avatar, its initials only standing in while it loads (#12569).
  *
  * While I share my screen ([isScreenSharing]) the pill turns red and offers one control, « Arrêter »
- * ([onStopScreenShare]) — the capsule of law 12 (#16664), like iOS `FloatingCallPillView` and the web `CallPill`.
+ * ([onStopScreenShare]) — the capsule of law 12 (#16664), like iOS `FloatingCallPillView` and the web `CallPill`. It
+ * then says « name · duration » (P18.10), the name being the header's ([names], iOS `CallReducedRule.title`), on the red glass of
+ * the kit (S1.9). The swap in and out of that capsule is a short fade + scale ([reduceMotion] keeps the fade only — #17767).
  */
 @Composable
 fun CallPill(
@@ -104,76 +123,179 @@ fun CallPill(
     peerAvatarUrl: String? = null,
     isScreenSharing: Boolean = false,
     onStopScreenShare: () -> Unit = {},
+    peerUserId: String = "",
+    names: CallHeaderNames = CallHeaderNames(givenName = null, groupName = null),
+    reduceMotion: Boolean = LocalReduceMotion.current,
 ) {
-    val accent = hexColor(DynamicColorGenerator.colorForName(state.peerName))
-    val ongoingLabel = stringResource(R.string.call_pill_ongoing, state.peerName)
     val reopenLabel = stringResource(R.string.call_pill_reopen)
+    val ongoingLabel = stringResource(R.string.call_pill_ongoing, state.peerName)
+    // #17767 — « Arrêter » prend et rend la place de la barre par un fondu et une échelle courts (loi 17).
+    AnimatedContent(
+        targetState = isScreenSharing,
+        modifier = modifier,
+        transitionSpec = { callPillSwap(reduceMotion) },
+        label = "callPillShareSwap",
+    ) { sharing ->
+        if (sharing) {
+            CallPillSharing(state, names, reopenLabel, ongoingLabel, onClick, onStopScreenShare)
+        } else {
+            CallPillIdle(state, peerAvatarUrl, peerUserId, reopenLabel, ongoingLabel, onClick, onToggleMute, onToggleSpeaker, onHangUp)
+        }
+    }
+}
 
+private fun callPillSwap(reduceMotion: Boolean): ContentTransform {
+    val appearing = CallShareCapsuleMotion.windowFadeMillis(reduceMotion, appearing = true)
+    val leaving = CallShareCapsuleMotion.windowFadeMillis(reduceMotion, appearing = false)
+    val scale = CallShareCapsuleMotion.startScale(reduceMotion)
+    val enter = fadeIn(tween(appearing)) + if (reduceMotion) EnterTransition.None else scaleIn(tween(appearing), initialScale = scale)
+    val exit = fadeOut(tween(leaving)) + if (reduceMotion) ExitTransition.None else scaleOut(tween(leaving), targetScale = scale)
+    return enter togetherWith exit
+}
+
+/** P18.10 / S1.9 — pendant MON partage : le verre rouge du kit, « nom · durée » et l'unique « Arrêter ». */
+@Composable
+private fun CallPillSharing(
+    state: CallUiState,
+    names: CallHeaderNames,
+    reopenLabel: String,
+    ongoingLabel: String,
+    onClick: () -> Unit,
+    onStopScreenShare: () -> Unit,
+) {
+    CallGlassPlate(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = MeeshySpacing.md),
+        shape = RoundedCornerShape(MeeshyRadius.xxl),
+        tint = MeeshyPalette.Error.copy(alpha = BANNER_TINT_ALPHA),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.Start),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CallPillReopenArea(reopenLabel, ongoingLabel, onClick) {
+                val title = CallReducedCaption.title(names.givenName, names.groupName, displayName = state.peerName)
+                CallPillSharingIdentity(CallReducedCaption.caption(title, pillStatusLine(state)))
+            }
+            CallShareStopButton(onStopScreenShare)
+        }
+    }
+}
+
+@Composable
+private fun CallPillIdle(
+    state: CallUiState,
+    peerAvatarUrl: String?,
+    peerUserId: String,
+    reopenLabel: String,
+    ongoingLabel: String,
+    onClick: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleSpeaker: () -> Unit,
+    onHangUp: () -> Unit,
+) {
+    val accent = hexColor(CallTileRim.peerAvatar(peerUserId, state.peerName))
+    val rim = CallTileRim.reducedRim(peerUserId, state.peerName, MeeshyTheme.tokens.warning)
+    val shape = RoundedCornerShape(MeeshyRadius.xxl)
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = MeeshySpacing.md)
-            .clip(RoundedCornerShape(MeeshyRadius.xxl))
-            .background(if (isScreenSharing) MeeshyTheme.tokens.error else MeeshyTheme.tokens.backgroundSecondary)
+            .clip(shape)
+            .background(MeeshyTheme.tokens.backgroundSecondary)
+            .border(rim, shape)
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm, Alignment.Start),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Only the identity part reopens the call: the controls beside it stay their
-        // own TalkBack elements (a clickable parent would merge and swallow them).
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .clickable(onClickLabel = reopenLabel, onClick = onClick)
-                .semantics { contentDescription = ongoingLabel },
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.Start),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Decorative: the identity row's label already names the peer.
-            MeeshyAvatar(
-                name = state.peerName,
-                size = 40.dp,
-                containerColor = accent,
-                imageUrl = peerAvatarUrl,
-                modifier = Modifier.clearAndSetSemantics { },
-            )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = state.peerName,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isScreenSharing) Color.White else MeeshyTheme.tokens.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = if (isScreenSharing) stringResource(R.string.call_screen_share_local_banner) else pillStatusLine(state),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isScreenSharing) Color.White else pillStatusColor(state.status),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            Icon(
-                imageVector = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
-                contentDescription = null,
-                tint = if (isScreenSharing) Color.White else accent,
-            )
+        CallPillReopenArea(reopenLabel, ongoingLabel, onClick) {
+            CallPillIdentity(state = state, peerAvatarUrl = peerAvatarUrl, accent = accent)
         }
-
-        if (isScreenSharing) {
-            CallPillStopShare(onStopScreenShare)
-        } else {
-            CallPillControls(
-                state = state,
-                onToggleMute = onToggleMute,
-                onToggleSpeaker = onToggleSpeaker,
-                onHangUp = onHangUp,
-            )
-        }
+        CallPillControls(
+            state = state,
+            onToggleMute = onToggleMute,
+            onToggleSpeaker = onToggleSpeaker,
+            onHangUp = onHangUp,
+        )
     }
+}
+
+/** Only the identity part reopens the call: the controls beside it stay their own TalkBack elements. */
+@Composable
+private fun RowScope.CallPillReopenArea(
+    reopenLabel: String,
+    ongoingLabel: String,
+    onClick: () -> Unit,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .weight(1f)
+            .clickable(onClickLabel = reopenLabel, onClick = onClick)
+            .semantics { contentDescription = ongoingLabel },
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md, Alignment.Start),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/** Hors partage : l'avatar à la couleur de l'autre, son nom, la ligne d'état et le glyphe d'appel ou de vidéo. */
+@Composable
+private fun RowScope.CallPillIdentity(state: CallUiState, peerAvatarUrl: String?, accent: Color) {
+    // Decorative: the identity row's label already names the peer.
+    MeeshyAvatar(
+        name = state.peerName,
+        size = 40.dp,
+        containerColor = accent,
+        imageUrl = peerAvatarUrl,
+        modifier = Modifier.clearAndSetSemantics { },
+    )
+
+    Column(modifier = Modifier.weight(1f)) {
+        Text(
+            text = state.peerName,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = pillStatusLine(state),
+            style = MaterialTheme.typography.bodySmall,
+            color = pillStatusColor(state.status),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+
+    Icon(
+        imageVector = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
+        contentDescription = null,
+        tint = accent,
+    )
+}
+
+/** P18.10 — pendant MON partage : l'icône d'écran puis « nom · durée » ; la bannière garde sa forme, « Arrêter » est à côté. */
+@Composable
+private fun RowScope.CallPillSharingIdentity(caption: String) {
+    Icon(
+        imageVector = MeeshyIcons.FlipToFront,
+        contentDescription = null,
+        tint = Color.White,
+        modifier = Modifier.clearAndSetSemantics { },
+    )
+    Text(
+        text = caption,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = Color.White,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.weight(1f),
+    )
 }
 
 /**

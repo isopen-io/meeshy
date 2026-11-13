@@ -1,5 +1,6 @@
 import CoreImage
 import Foundation
+import MeeshySDK
 
 /// Ce que la capture attend du cache de scènes — injecté dans la surface, la
 /// bande et la session.
@@ -18,9 +19,8 @@ nonisolated final class ComposerLookSceneCache: ComposerLookSceneProviding, @unc
 
     private let scenes = NSCache<NSString, CallLiveFrameScene>()
     private let queue = DispatchQueue(label: "me.meeshy.composer.look-scenes", qos: .userInitiated)
-    private let lock = NSLock()
     /// Les clés en cuisson, et qui attend chacune : tout appelant est prévenu.
-    private var pending: [NSString: [@MainActor @Sendable () -> Void]] = [:]
+    private let pending = Locked<[String: [@MainActor @Sendable () -> Void]]>([:])
     private let painter: @Sendable (ComposerLookSceneKey) -> CallLiveFrameScene?
 
     nonisolated deinit {}
@@ -52,17 +52,15 @@ nonisolated final class ComposerLookSceneCache: ComposerLookSceneProviding, @unc
             Task { @MainActor in ready() }
             return
         }
-        lock.lock()
-        let dejaEnCours = pending[cle] != nil
-        pending[cle, default: []].append(ready)
-        lock.unlock()
+        let nom = cle as String
+        let dejaEnCours = pending.mutate { waiting -> Bool in
+            defer { waiting[nom, default: []].append(ready) }
+            return waiting[nom] != nil
+        }
         guard !dejaEnCours else { return }
-        nonisolated(unsafe) let cleFigee = cle
         queue.async {
-            if let scene = self.painter(key) { self.scenes.setObject(scene, forKey: cleFigee, cost: Self.cost(of: key)) }
-            self.lock.lock()
-            let attente = self.pending.removeValue(forKey: cleFigee) ?? []
-            self.lock.unlock()
+            if let scene = self.painter(key) { self.scenes.setObject(scene, forKey: nom as NSString, cost: Self.cost(of: key)) }
+            let attente = self.pending.mutate { $0.removeValue(forKey: nom) ?? [] }
             Task { @MainActor in attente.forEach { $0() } }
         }
     }

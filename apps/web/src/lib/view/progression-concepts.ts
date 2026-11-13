@@ -217,16 +217,17 @@ function level(view: EngagementWithGame): Body {
 
 /**
  * LES ÉTINCELLES (#11178) : TA LUMIÈRE, ce que tu possèdes — jamais le cycle, jamais le total à vie, jamais le prix
- * d'une Meesh (il est à l'Héritage, où la fiche mène). En petit : l'Ombre d'abord, qui ferme la frappe, sinon le
+ * d'une Meesh (il est à l'Héritage, où la fiche mène). Le nombre seul : l'intitulé de la carte dit déjà « Étincelles »,
+ * et le mot répété était celui que l'écran ne pouvait plus porter sous son plafond d'épure (#17769). En petit : l'Ombre d'abord, qui ferme la frappe, sinon le
  * « depuis toujours ».
  */
 function points(view: EngagementWithGame): Body {
   const game = view.game;
-  if (game === undefined) return { ...EMPTY, value: pointsLabel(view.level.value), valueId: 'sparks_pocket' };
+  if (game === undefined) return { ...EMPTY, value: formatCount(view.level.value), valueId: 'sparks_pocket' };
   const sparks = sparksReading(game.level);
   const cumul = sparksCumulLine(sparks);
   return {
-    value: pointsLabel(sparks.pocket),
+    value: formatCount(sparks.pocket),
     valueId: 'sparks_pocket',
     line:
       sparks.debt > 0

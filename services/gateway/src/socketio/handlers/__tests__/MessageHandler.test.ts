@@ -2907,17 +2907,15 @@ describe('MessageHandler', () => {
       }));
     });
 
-    it('omits clientMessageId from ACK when absent from response data (line 1152 false branch)', async () => {
+    // #17058 — « absent » = absent de la SOUMISSION ; raison et jumeaux dans `message-ack-submitted-cid.test.ts`.
+    it('#17058 — omet le cid quand le client n’en a pas SOUMIS', async () => {
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: makeValidSendData({ clientMessageId: undefined }) });
       (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
         success: true,
-        data: {
-          id: 'msg-nocid', conversationId: VALID_CONV_ID,
-          createdAt: new Date(), senderId: PARTICIPANT_ID,
-          // no clientMessageId
-        },
+        data: { id: 'msg-nocid', conversationId: VALID_CONV_ID, createdAt: new Date(), senderId: PARTICIPANT_ID },
       });
 
-      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+      await handler.handleMessageSend(socket, makeValidSendData({ clientMessageId: undefined }), callback);
 
       const arg = (callback.mock.calls[0] as [any])[0];
       expect(arg.success).toBe(true);

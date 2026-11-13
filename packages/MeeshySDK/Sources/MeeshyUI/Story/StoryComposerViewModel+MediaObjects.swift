@@ -17,7 +17,7 @@ extension StoryComposerViewModel {
     /// == `composerKey` dérivé par `StoryBackgroundLayer.configure`. Sans cet
     /// alignement, le bitmap du fond (stocké sous `obj.id` dans `loadedImages`)
     /// n'est jamais retrouvé par la clé issue du fichier → fond `.clear` →
-    /// canvas noir (bug user 2026-07-20).
+    /// canvas noir.
     func addMediaObject(kind: StoryMediaKind, toSlideId: String? = nil, id: String) -> StoryMediaObject? {
         // Resolve the target slide. If the caller pinned a specific id (e.g., the
         // PhotosPicker started on slide 0 and the user switched to slide 1 mid-load),
@@ -62,7 +62,6 @@ extension StoryComposerViewModel {
             // defaults to false → `bgVideo.loop ?? true` in StoryRenderer
             // never falls back to true → AVPlayerLooper never armed → video
             // stops at its native end while the slide progress bar continues
-            // (user report 2026-05-27).
             isBackground: shouldBeBackground,
             loop: shouldBeBackground,
             sourceLanguage: declaredContentLanguage

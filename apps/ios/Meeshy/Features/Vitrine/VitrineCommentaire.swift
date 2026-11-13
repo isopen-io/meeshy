@@ -70,7 +70,7 @@ final class VitrineCommentaireServeur {
             prepare: {},
             token: { [jeton = self.jeton] in jeton },
             upload: { [montee = self.montee] piece, _ in
-                try? await Task.sleep(for: montee)
+                guard await cancellableSleep(for: montee) else { throw CancellationError() }
                 return "vitrine-piece-\(piece.sourceIndex)-\(UUID().uuidString)"
             },
             create: { [weak self] payload, _, _ in

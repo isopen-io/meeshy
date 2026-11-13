@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import dagger.hilt.android.qualifiers.ApplicationContext
 import me.meeshy.app.MainActivity
+import me.meeshy.app.calls.CallRingSilencing
 import me.meeshy.app.R
 import me.meeshy.app.push.MeeshyFcmService.Companion.EXTRA_AUTO_ANSWER
 import me.meeshy.app.push.MeeshyFcmService.Companion.EXTRA_CALLER_ID
@@ -36,12 +37,26 @@ import javax.inject.Singleton
 class IncomingCallNotificationPresenter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val launchProof: LaunchIntentProof,
-) {
+) : CallRingSilencing {
 
     fun cancel(push: CallStopPush) {
         Timber.d("Stop-ring push (${push.type}) for call ${push.callId}")
+        stopRinging(push.callId)
+    }
+
+    /**
+     * « Activer le son » de l'aperçu (P17.3, #13816) : la sonnerie d'un appel arrivé par push est celle du canal de cette
+     * notification, qu'aucun contrôleur de l'app ne tient. Retirer la notification la coupe, par le MÊME site que l'arrêt
+     * de sonnerie d'un `call_cancel` : un seul endroit coupe la sonnerie, quel que soit le chemin d'arrivée.
+     */
+    override fun silence(callId: String) {
+        Timber.d("Preview sound on: silencing the ring of call $callId")
+        stopRinging(callId)
+    }
+
+    private fun stopRinging(callId: String) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.cancel(push.callId.hashCode())
+        manager.cancel(callId.hashCode())
     }
 
     fun show(push: IncomingCallPush) {

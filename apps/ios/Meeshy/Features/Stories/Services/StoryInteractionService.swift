@@ -32,7 +32,7 @@ final class StoryInteractionService {
 
     private let api: APIClientProviding
     /// Le rail de la story pose l'anneau du cœur sur « Commentaires » quand le lecteur
-    /// a commenté (directive porteur 2026-10-01) ; la passerelle ne le sert pas.
+    /// a commenté; la passerelle ne le sert pas.
     private let participation: StoryViewerParticipationRecording
     private static let logger = MeeshyLog.logger(.storyInteraction)
 

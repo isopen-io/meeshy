@@ -33,6 +33,18 @@
           "iosKey": "call.control.translation.showTranslated",
           "androidName": "call_transcript_show_translated",
           "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.transcript.toggle.showOriginal",
+          "androidName": "call_transcript_toggle_show_original",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.transcript.toggle.showTranslation",
+          "androidName": "call_transcript_toggle_show_translation",
+          "status": "adopted"
         }
       ]
     }

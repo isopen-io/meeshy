@@ -20,18 +20,6 @@
     <string name="profile_bio_placeholder">Raccontaci di te...</string>
     <string name="profile_blocked_by_me">Hai bloccato questo utente</string>
     <string name="profile_blocked_unblock">Sblocca</string>
-    <string name="profile_bring_action">Bring</string>
-    <string name="profile_bring_cancel">Annulla il Bring</string>
-    <string name="profile_bring_confirm_body">Il Bring è solo per le emergenze estreme. Squilla finché %1$s non lo ferma, al massimo due minuti. Meeshy non è un servizio di emergenza: in caso di pericolo, chiama i soccorsi.</string>
-    <string name="profile_bring_confirm_send">Fai squillare</string>
-    <string name="profile_bring_confirm_title">Far squillare il telefono di %1$s?</string>
-    <string name="profile_bring_explain">Per un’emergenza estrema: il suo telefono squilla, anche in silenzioso.</string>
-    <string name="profile_bring_failed">Il Bring non è partito, riprova</string>
-    <string name="profile_bring_offline">Il Bring ha bisogno della rete</string>
-    <string name="profile_bring_quota">Nessun altro Bring oggi verso %1$s</string>
-    <string name="profile_bring_remaining">Rimasti oggi: %1$d</string>
-    <string name="profile_bring_ringing">Sta squillando da %1$s</string>
-    <string name="profile_bring_unlimited">Nessun limite oggi</string>
     <string name="profile_call_not_placed">Nessuna connessione: la chiamata non è partita</string>
     <string name="profile_close_hint">Chiude il profilo</string>
     <string name="profile_connection_context_received">%1$s desidera mettersi in contatto con te. Accetta per scambiare messaggi.</string>
@@ -77,7 +65,7 @@
     <string name="profile_presence_online">In linea</string>
     <string name="profile_progression_hint">Apre i tuoi progressi</string>
     <string name="profile_progression_subtitle">Badge, livello e serie</string>
-    <string name="profile_progression_title">Progressi</string>
+    <string name="profile_progression_title">La mia Leggenda</string>
     <string name="profile_report_quick_reason_fake_profile">Profilo falso</string>
     <string name="profile_report_quick_reason_harassment">Molestie</string>
     <string name="profile_report_quick_reason_hate_speech">Incitamento all\'odio</string>

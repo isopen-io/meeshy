@@ -91,13 +91,13 @@ struct EmailVerificationGateView: View {
     private var lead: String {
         switch reason {
         case .publish:
-            return String(localized: "activation.gate.publish", defaultValue: "Pour publier, validez votre adresse. Votre publication est conservée et partira dès le code validé.", bundle: .main)
+            return String(localized: "activation.gate.publish", defaultValue: "Votre publication est conservée et partira dès le code validé.", bundle: .main)
         case .invite:
-            return String(localized: "activation.gate.invite", defaultValue: "Pour inviter par e-mail, validez votre adresse. Votre invitation partira dès le code validé.", bundle: .main)
+            return String(localized: "activation.gate.invite", defaultValue: "Votre invitation partira dès le code validé.", bundle: .main)
         case .link:
-            return String(localized: "activation.gate.link", defaultValue: "Pour créer un lien, validez votre adresse. Votre lien sera créé dès le code validé.", bundle: .main)
+            return String(localized: "activation.gate.link", defaultValue: "Votre lien sera créé dès le code validé.", bundle: .main)
         case .moreLinks:
-            return String(localized: "activation.gate.moreLinks", defaultValue: "Au-delà de 5 liens actifs, validez votre adresse pour en créer d’autres. Votre lien sera créé dès le code validé.", bundle: .main)
+            return String(localized: "activation.gate.moreLinks", defaultValue: "Au-delà de 5 liens actifs, un code est demandé. Votre lien sera créé dès qu’il est validé.", bundle: .main)
         }
     }
 }

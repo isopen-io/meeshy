@@ -5,7 +5,7 @@ import MeeshySDK
 
 // MARK: - Sticker Picker View
 
-/// **La palette de CONSTRUCTIONS** (#4579, directive porteur 2026-08-31).
+/// **La palette de CONSTRUCTIONS** (#4579).
 ///
 /// Cette feuille n'est plus un clavier d'emoji : elle propose ce qui se POSE
 /// sur la scène — des décorations d'amour, l'heure qu'il est, un lieu alentour,
@@ -43,7 +43,7 @@ public struct StickerPickerView: View {
     /// la plateforme LIT, jamais un sticker jumeau.
     public var onLocationTemplateSelected: (SharedPlace, StickerTemplate) -> Void
 
-    /// **L'ONGLET choisi** (directive porteur 2026-09-05) — il remplace
+    /// **L'ONGLET choisi** — il remplace
     /// `selectedNature`, l'interrupteur à deux positions de #5012.
     ///
     /// La nature répondait à « qu'est-ce que c'est ? » ; l'onglet répond à
@@ -124,7 +124,7 @@ public struct StickerPickerView: View {
     }
 
     /// **La feuille est PLATE, et elle a l'anatomie de la fiche de création
-    /// audio** (directive porteur 2026-09-05).
+    /// audio**.
     ///
     /// > « Il faut refonder la fiche des stickers pour ressembler à la fiche de
     /// > création d'audio, tout aplatir sur la feuille, des sections sans
@@ -177,7 +177,7 @@ public struct StickerPickerView: View {
                 tabbedContent
             }
         }
-        // **Le sélecteur de position exacte** (2026-09-05). Il est monté ICI,
+        // **Le sélecteur de position exacte**. Il est monté ICI,
         // sur la feuille entière, et non dans la puce : une feuille présentée
         // depuis une branche conditionnelle disparaît avec elle, et la puce vit
         // dans un `ScrollView` horizontal que le moindre changement d'état
@@ -235,7 +235,7 @@ public struct StickerPickerView: View {
     static let sheetSymbolName = "rectangle.portrait.on.rectangle.portrait.angled"
 
     /// **L'en-tête : le `✕` en verre, puis le logo et le titre — tous à
-    /// GAUCHE** (directive porteur 2026-09-05).
+    /// GAUCHE**.
     ///
     /// > « Rendre un header propre avec (X) en liquidglass et le titre et logo
     /// > Stickers à gauche »
@@ -283,8 +283,8 @@ public struct StickerPickerView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
             Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
+                .foregroundStyle(colorScheme == .dark ? .white : MeeshyColors.indigo950)
             Spacer(minLength: 0)
         }
         // Le titre et le glyphe DISENT la même chose que le bouton qui a ouvert

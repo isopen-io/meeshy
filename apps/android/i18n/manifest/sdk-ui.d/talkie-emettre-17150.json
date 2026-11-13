@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.explain",
+          "androidName": "talkie_send_explain",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.hold",
+          "androidName": "talkie_send_hold",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.hold.a11y",
+          "androidName": "talkie_send_hold_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.hold.hint",
+          "androidName": "talkie_send_hold_hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.connecting",
+          "androidName": "talkie_send_connecting",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.talking",
+          "androidName": "talkie_send_talking",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.waking",
+          "androidName": "talkie_send_waking",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.recordingCopy",
+          "androidName": "talkie_send_recording_copy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.voiceCopy",
+          "androidName": "talkie_send_voice_copy",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.voice",
+          "androidName": "talkie_send_voice",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.e2ee",
+          "androidName": "talkie_send_e2ee",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.rateLimited",
+          "androidName": "talkie_send_rate_limited",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.offline",
+          "androidName": "talkie_send_offline",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.failed",
+          "androidName": "talkie_send_failed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.micDenied",
+          "androidName": "talkie_send_mic_denied",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.send.limit",
+          "androidName": "talkie_send_limit",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.info.text",
+          "androidName": "talkie_info_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.info.a11y",
+          "androidName": "talkie_info_a11y",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.header.live",
+          "androidName": "talkie_header_live",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.header.badge.live",
+          "androidName": "talkie_header_badge_live",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.header.badge.relayed",
+          "androidName": "talkie_header_badge_relayed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.header.badge.recorded",
+          "androidName": "talkie_header_badge_recorded",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.header.announce.live",
+          "androidName": "talkie_header_announce_live",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.header.announce.relayed",
+          "androidName": "talkie_header_announce_relayed",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "talkie.header.announce.recorded",
+          "androidName": "talkie_header_announce_recorded",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

@@ -5,65 +5,18 @@
 // script tourne donc dans un processus Node à part :
 //   - `node libsignal-device.mjs verify <identité> <message> <signature>` :
 //     vérification XEdDSA, imprime `true` ou `false` ;
+//   - `node libsignal-device.mjs deserialize <type> <corps>` : la lecture
+//     STRUCTURELLE d'un message sérialisé par libsignal (`SignalMessage` pour 2,
+//     `PreKeySignalMessage` pour 3, #17115), imprime `true` ou `false` ;
 //   - `node libsignal-device.mjs serve` : lit des commandes JSON ligne à ligne
 //     sur stdin et répond une ligne JSON par commande. Les clés privées restent
 //     dans CE processus ; seules les parties publiques en sortent.
 import { createInterface } from 'node:readline';
 import * as signal from '@signalapp/libsignal-client';
+import { Stores } from './libsignal-stores.mjs';
 
 const b64 = (bytes) => Buffer.from(bytes).toString('base64');
 const bytes = (base64) => new Uint8Array(Buffer.from(base64, 'base64'));
-
-class Stores {
-  constructor(identity, registrationId) {
-    this.identity = identity;
-    this.registrationId = registrationId;
-    this.sessions = new Map();
-    this.identities = new Map();
-    this.preKeys = new Map();
-    this.signedPreKeys = new Map();
-    this.kyberPreKeys = new Map();
-    const self = this;
-    this.session = new (class extends signal.SessionStore {
-      async saveSession(address, record) { self.sessions.set(address.toString(), record.serialize()); }
-      async getSession(address) {
-        const raw = self.sessions.get(address.toString());
-        return raw ? signal.SessionRecord.deserialize(raw) : null;
-      }
-      async getExistingSessions(addresses) { return Promise.all(addresses.map((address) => this.getSession(address))); }
-    })();
-    this.identityStore = new (class extends signal.IdentityKeyStore {
-      async getIdentityKey() { return self.identity.privateKey; }
-      async getLocalRegistrationId() { return self.registrationId; }
-      async saveIdentity(address, key) {
-        const known = self.identities.get(address.toString());
-        self.identities.set(address.toString(), key.serialize());
-        return known && Buffer.compare(Buffer.from(known), Buffer.from(key.serialize())) !== 0
-          ? signal.IdentityChange.ReplacedExisting
-          : signal.IdentityChange.NewOrUnchanged;
-      }
-      async isTrustedIdentity() { return true; }
-      async getIdentity(address) {
-        const raw = self.identities.get(address.toString());
-        return raw ? signal.PublicKey.deserialize(raw) : null;
-      }
-    })();
-    this.preKeyStore = new (class extends signal.PreKeyStore {
-      async savePreKey(id, record) { self.preKeys.set(id, record); }
-      async getPreKey(id) { return self.preKeys.get(id); }
-      async removePreKey(id) { self.preKeys.delete(id); }
-    })();
-    this.signedPreKeyStore = new (class extends signal.SignedPreKeyStore {
-      async saveSignedPreKey(id, record) { self.signedPreKeys.set(id, record); }
-      async getSignedPreKey(id) { return self.signedPreKeys.get(id); }
-    })();
-    this.kyberStore = new (class extends signal.KyberPreKeyStore {
-      async saveKyberPreKey(id, record) { self.kyberPreKeys.set(id, record); }
-      async getKyberPreKey(id) { return self.kyberPreKeys.get(id); }
-      async markKyberPreKeyUsed() {}
-    })();
-  }
-}
 
 const devices = new Map();
 
@@ -153,6 +106,18 @@ if (process.argv[2] === 'verify') {
   let valid = false;
   try {
     valid = signal.PublicKey.deserialize(bytes(identityKey)).verify(bytes(message), bytes(signature));
+  } catch {
+    valid = false;
+  }
+  process.stdout.write(valid ? 'true' : 'false');
+} else if (process.argv[2] === 'deserialize') {
+  const [type, body] = process.argv.slice(3);
+  let valid = false;
+  try {
+    if (type === '2') signal.SignalMessage.deserialize(bytes(body));
+    else if (type === '3') signal.PreKeySignalMessage.deserialize(bytes(body));
+    else throw new Error('type inconnu');
+    valid = true;
   } catch {
     valid = false;
   }

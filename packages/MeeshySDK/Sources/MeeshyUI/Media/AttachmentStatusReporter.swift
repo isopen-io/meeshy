@@ -29,14 +29,16 @@ public nonisolated enum AttachmentStatusReporter {
 
     private static let logger = MeeshyLog.logger(.attachmentStatus, subsystem: .legacyApp)
 
-    /// Point d'injection pour les tests. Le chemin réel rend le rapport durable.
-    ///
-    /// `nonisolated(unsafe)` : écrit une fois au montage d'un test, lu ensuite ;
-    /// aucun accès concurrent réel, et le typer en `actor` imposerait un `await`
-    /// à des appelants `@MainActor` synchrones.
-    public nonisolated(unsafe) static var sink: @Sendable @concurrent (String, AttachmentStatusBody) async -> Void = {
-        attachmentId, body in
+    public typealias Sink = @Sendable @concurrent (String, AttachmentStatusBody) async -> Void
+
+    private nonisolated static let sinkSlot = Locked<Sink>({ attachmentId, body in
         await persist(attachmentId: attachmentId, body: body)
+    })
+
+    /// Point d'injection pour les tests. Le chemin réel rend le rapport durable.
+    public nonisolated static var sink: Sink {
+        get { sinkSlot.read { $0 } }
+        set { sinkSlot.mutate { $0 = newValue } }
     }
 
     /// Remonte la consommation d'un média. Ne bloque jamais l'appelant et ne

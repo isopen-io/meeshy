@@ -49,12 +49,10 @@ extension ConversationView {
         // fois : la ligne qui les montre et l'énoncé VoiceOver les partagent.
         // `nil` pour un média protégé (règle partagée, site unique).
         let quotedDetails = QuotedReplyPresentation.detailsLabel(for: reply)
-
         return HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color(hex: reply.isMe ? accentColor : reply.authorColor))
                 .frame(width: 3, height: 36)
-
             VStack(alignment: .leading, spacing: 2) {
                 if let emoji = reply.moodEmoji {
                     // Réponse à un mood : le titre garde sa ligne — l'aperçu
@@ -62,21 +60,20 @@ extension ConversationView {
                     // et la date, que le flot ne saurait pas composer.
                     Text(QuotedReplyPresentation.title(author: composerReplyTitle(reply)))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                        .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
+                        .foregroundStyle(Color(hex: reply.isMe ? accentColor : reply.authorColor))
                         .lineLimit(QuotedReplyPresentation.titleLineLimit)
-
                     HStack(spacing: MeeshySpacing.xs) {
                         Text(emoji)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         if let date = reply.storyPublishedAt {
                             Text(date, style: .relative)
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
                         if !reply.previewText.isEmpty {
                             Text(reply.previewText)
                                 .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                                .foregroundColor(theme.textSecondary)
+                                .foregroundStyle(theme.textSecondary)
                                 .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
                         }
                     }
@@ -90,9 +87,8 @@ extension ConversationView {
                         if let attType = reply.attachmentType {
                             Image(systemName: composerReplyAttachmentIcon(attType))
                                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .medium))
-                                .foregroundColor(theme.textSecondary)
+                                .foregroundStyle(theme.textSecondary)
                         }
-
                         ComposerQuotedFlow(
                             title: QuotedReplyPresentation.title(author: composerReplyTitle(reply)),
                             titleColor: Color(hex: reply.isMe ? accentColor : reply.authorColor),
@@ -100,7 +96,6 @@ extension ConversationView {
                             previewColor: theme.textSecondary)
                     }
                 }
-
                 // La miniature **sous l'auteur** (#5103). Elle vivait à gauche
                 // du bloc au titre de l'invariance de géographie entre les
                 // trois peaux (#4946) ; la directive déplace cette géographie,
@@ -111,17 +106,14 @@ extension ConversationView {
                     composerReplyAttachmentPreview(type: attType, reply: reply)
                         .quotedExtraPieces(reply)
                 }
-
                 if let details = quotedDetails {
                     Text(details)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 }
             }
-
             Spacer()
-
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     ReplyContextCleaner(conversationId: viewModel.conversationId)
@@ -131,9 +123,11 @@ extension ConversationView {
                 Image(systemName: "xmark")
                     // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 24×24 → figé.
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(MeeshyColors.surfaceFill(isDark: isDark)))
+                    .meeshyTapTarget()
+                    .padding(-MeeshyTapTarget.inset(forVisualSide: 24))
             }
             .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
         }
@@ -171,17 +165,17 @@ extension ConversationView {
 
             Image(systemName: "pencil")
                 .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
+                .foregroundStyle(MeeshyColors.warning)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "conversation.view.composer.edit_message", defaultValue: "Modifier le message", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
 
                 Text(composerState.editingOriginalContent ?? "")
                     .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(1)
             }
 
@@ -193,9 +187,11 @@ extension ConversationView {
                 Image(systemName: "xmark")
                     // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 24×24 → figé.
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(MeeshyColors.surfaceFill(isDark: isDark)))
+                    .meeshyTapTarget()
+                    .padding(-MeeshyTapTarget.inset(forVisualSide: 24))
             }
             .accessibilityLabel(String(localized: "conversation.view.composer.cancel_edit", defaultValue: "Annuler la modification", bundle: .main))
         }
@@ -372,7 +368,6 @@ extension ConversationView {
             EmptyView()
         }
     }
-
     /// Le badge du son cité : une onde, jamais une vignette.
     private func replyAudioBadge(accent: Color) -> some View {
         HStack(spacing: MeeshySpacing.xs) {
@@ -449,7 +444,7 @@ extension ConversationView {
             Image(systemName: icon)
                 // Doctrine 86i : glyphe décoratif borné par le badge fixe 40×40 → figé + masqué.
                 .font(.system(size: 16))
-                .foregroundColor(color.opacity(MeeshyOpacity.heavy))
+                .foregroundStyle(color.opacity(MeeshyOpacity.heavy))
                 .accessibilityHidden(true)
         }
     }
@@ -520,11 +515,11 @@ extension ConversationView {
     var minorGlobalBanner: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "hourglass")
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundStyle(Color(hex: accentColor))
                 .accessibilityHidden(true)
             Text(String(localized: "conversation.composer.minorGlobal", bundle: .main))
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -541,10 +536,10 @@ extension ConversationView {
     var closedConversationBanner: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "lock.fill")
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
             Text(String(localized: "conversation.view.closed", bundle: .main))
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.md + 2)
@@ -560,14 +555,14 @@ extension ConversationView {
         VStack(spacing: MeeshySpacing.sm) {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "hand.raised.fill")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color.secondary)
                 Text(String(localized: "conversation.composer.blocked.title", bundle: .main))
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color.secondary)
             }
             Text(String(localized: "conversation.composer.blocked.subtitle", bundle: .main))
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
                 .multilineTextAlignment(.center)
             Button {
                 HapticFeedback.medium()

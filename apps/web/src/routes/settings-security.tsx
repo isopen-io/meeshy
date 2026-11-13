@@ -1,11 +1,12 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { SETTINGS_GLYPHS } from '@/components/glyphs-settings';
 import { GroupedSection, RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import { InfoHintButton, InfoHintScope, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import {
   loadActiveSessions,
   revokeOtherSessions,
@@ -24,8 +25,10 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { loadSessionsCatalog, sessionsTextOf, type SessionsText } from '@/lib/i18n-sessions-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { orderedSessions, sessionFields, sessionTitle, withoutSessions } from '@/lib/view/sessions';
+import { orderedSessions, sessionFields, sessionTitle, withoutSessions, type SessionField } from '@/lib/view/sessions';
 import { Link } from '@/routes/route-table';
+import { MoreFields } from '@/routes/settings-more-fields';
+import { sessionsHint } from '@/routes/settings-sessions-hint';
 import { E2EE_DEVICES_PANEL, SECURITY_PANEL_PARAM } from '@/routes/settings-sections';
 
 /**
@@ -144,6 +147,7 @@ export function SettingsSecurityScreen({
         </h1>
       </header>
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
+        <InfoHintScope>
         <div className="mx-auto grid max-w-xl gap-6 pb-24" style={{ paddingTop: 8 }}>
           {online ? null : (
             <p role="status" data-sessions-offline className="rounded-card px-3.5 py-3 text-caption" style={{ ...SECTION_CARD_STYLE, color: SECTION_INK }}>
@@ -151,7 +155,7 @@ export function SettingsSecurityScreen({
             </p>
           )}
           <GroupedSection id="sessions-title" title={t('sessions.section').toLocaleUpperCase(language)} icon={<GlyphSvg glyph={SETTINGS_GLYPHS.shieldCheck} size={12} />} card={false}>
-            <p className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
+            <p data-sessions-intro className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
               {t('sessions.intro')}
             </p>
             {view === undefined ? (
@@ -179,6 +183,7 @@ export function SettingsSecurityScreen({
                     t={t}
                     now={now()}
                     approximate={view.geolocation?.approximate ?? true}
+                    placeNote={view.geolocation === null ? undefined : sessionsHint(t, 'sessions.field.place.question', 'sessions.attribution.note')}
                     disabled={!online}
                     onRevoke={() => setPending({ kind: 'one', session })}
                   />
@@ -187,7 +192,6 @@ export function SettingsSecurityScreen({
             )}
             {view === undefined || view.geolocation === null ? null : (
               <p data-sessions-attribution className="ps-1 text-caption" style={{ color: SECTION_INK_2 }}>
-                {`${t('sessions.attribution.note')} `}
                 <a
                   href={view.geolocation.url}
                   target="_blank"
@@ -237,6 +241,7 @@ export function SettingsSecurityScreen({
             </Link>
           </GroupedSection>
         </div>
+        </InfoHintScope>
       </main>
       {pending === null ? null : (
         <ConfirmDialog
@@ -263,12 +268,20 @@ export function SettingsSecurityScreen({
   );
 }
 
+/**
+ * Ce qui permet de RECONNAÎTRE une session, lu sans geste (règle 7 de l'épure,
+ * #17594) : d'où, ouverte quand, active quand. Le détail technique (adresse IP,
+ * fuseau, système, navigateur, méthode) vit derrière « Plus ».
+ */
+const SESSION_REST_FIELDS: ReadonlySet<string> = new Set(['place', 'opened', 'lastActive']);
+
 function SessionCard({
   session,
   language,
   t,
   now,
   approximate,
+  placeNote,
   disabled,
   onRevoke,
 }: {
@@ -277,10 +290,12 @@ function SessionCard({
   readonly t: SessionsText;
   readonly now: Date;
   readonly approximate: boolean;
+  readonly placeNote: InfoHint | undefined;
   readonly disabled: boolean;
   readonly onRevoke: () => void;
 }) {
   const title = sessionTitle(session, t);
+  const titleId = useId();
   const tint = session.isCurrent ? 'var(--color-success)' : 'var(--color-ios-brand)';
   return (
     <li
@@ -290,22 +305,19 @@ function SessionCard({
       style={{ ...SECTION_CARD_STYLE, borderColor: `color-mix(in srgb, ${tint} 40%, transparent)` }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 break-words text-body font-semibold" style={{ color: SECTION_INK }}>
+        <span id={titleId} className="min-w-0 flex-1 break-words text-body font-semibold" style={{ color: SECTION_INK }}>
           {title}
         </span>
         {session.isCurrent ? <Badge tint="var(--color-success)">{t('sessions.current')}</Badge> : null}
         {session.isTrusted ? <Badge tint="var(--color-ios-brand)">{t('sessions.trusted')}</Badge> : null}
       </div>
-      <dl className="grid gap-1 text-caption" style={{ gridTemplateColumns: 'auto 1fr', columnGap: 12 }}>
-        {sessionFields(session, { language, now, t, approximate }).map((field) => (
-          <div key={field.key} data-session-field={field.key} style={{ display: 'contents' }}>
-            <dt style={{ color: SECTION_INK_2 }}>{field.label}</dt>
-            <dd className="min-w-0 break-words" style={{ color: SECTION_INK }} {...(field.ltr ? { dir: 'ltr' } : {})}>
-              {field.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <MoreFields
+        fields={sessionFields(session, { language, now, t, approximate })}
+        rest={SESSION_REST_FIELDS}
+        moreLabel={t('sessions.more')}
+        subjectId={titleId}
+        rowOf={(field) => <FieldRow key={field.key} field={field} note={field.key === 'place' ? placeNote : undefined} />}
+      />
       {session.isCurrent ? null : (
         <button
           type="button"
@@ -320,6 +332,23 @@ function SessionCard({
         </button>
       )}
     </li>
+  );
+}
+
+/** Une ligne de la fiche ; le lieu porte un (i) qui dit d'où il vient, et sa note se lit dans la définition — un `dl` ne porte que des termes et des définitions. */
+function FieldRow({ field, note }: { readonly field: SessionField; readonly note: InfoHint | undefined }) {
+  const state = useInfoHint();
+  return (
+    <div data-session-field={field.key} style={{ display: 'contents' }}>
+      <dt className="flex items-center gap-0.5" style={{ color: SECTION_INK_2 }}>
+        {field.label}
+        {note === undefined ? null : <InfoHintButton hint={note} state={state} />}
+      </dt>
+      <dd className="min-w-0 break-words" style={{ color: SECTION_INK }} {...(field.ltr ? { dir: 'ltr' } : {})}>
+        {field.value}
+        {note === undefined ? null : <InfoHintText hint={note} state={state} inline />}
+      </dd>
+    </div>
   );
 }
 

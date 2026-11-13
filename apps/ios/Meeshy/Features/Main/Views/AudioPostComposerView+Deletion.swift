@@ -68,7 +68,7 @@ extension AudioPostComposerView {
 /// **« Refaire » détruit autant que la corbeille, et ne demandait rien**
 /// (#4702).
 ///
-/// Trouvé par la vérification simulateur du 2026-09-01, et c'est une ASYMÉTRIE
+/// Trouvé par la vérification simulateur, et c'est une ASYMÉTRIE
 /// qui rend le défaut visible une fois nommée : supprimer un son demande
 /// « Supprimer ce son ? », alors que « Refaire » — qui efface le MÊME contenu,
 /// fichier compris (`resetToIdle` appelle `removeItem`) — ne demandait rien.

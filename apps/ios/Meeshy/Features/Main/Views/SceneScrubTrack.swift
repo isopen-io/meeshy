@@ -5,7 +5,7 @@ import MeeshyUI
 //  Une scène se parcourt au doigt (#7878)
 // =============================================================================
 //
-//  Demande porteur du 2026-09-25 : « pouvoir reculer ou avancer via un curseur
+// Demande: « pouvoir reculer ou avancer via un curseur
 //  sur la barre de progression qui s'agrandit au toucher, et actualisation des
 //  frames de la scène en temps réel ». Elle renverse la décision « la scène se
 //  rejoue, elle ne se parcourt pas » que portait la barre du réel composé.

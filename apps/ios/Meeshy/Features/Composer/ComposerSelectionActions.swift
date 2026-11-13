@@ -160,18 +160,17 @@ nonisolated enum ComposerSelectionActions {
 
 // MARK: - Toucher la scène à vide
 
-/// **Toucher la scène à vide désélectionne D'ABORD** (#13839, L5). Le même
-/// toucher arme le viseur sur une scène vide : il ne l'arme que si rien n'était
-/// sélectionné. Un carrousel d'effets ouvert se referme avant tout. Pendant
-/// l'écriture du texte du post ou de la légende, il termine l'écriture et rien
-/// d'autre (#15674).
+/// **Toucher la scène à vide désélectionne D'ABORD** (#13839, L5). Il n'arme
+/// plus le viseur (#17269) : la caméra s'arme à l'ouverture
+/// du composer, et l'appui long sur la scène filme. Un carrousel d'effets ouvert
+/// se referme avant tout. Pendant l'écriture du texte du post ou de la légende,
+/// il termine l'écriture et rien d'autre (#15674).
 nonisolated enum ComposerSceneEmptyTap {
 
     enum Outcome: Equatable, Sendable {
         case endWriting
         case deselect
         case closeEffect
-        case armViewfinder
         case selectBackground(String)
         case closeBand
         case nothing
@@ -179,14 +178,13 @@ nonisolated enum ComposerSceneEmptyTap {
 
     /// **Une sélection qui ne désigne plus rien n'en est pas une** : l'objet
     /// défait ou retiré laisse son identifiant au meuble, et le toucher suivant
-    /// d'une scène vide doit armer le viseur, pas désélectionner un fantôme.
+    /// d'une scène vide ne doit pas désélectionner un fantôme.
     static func hadSelection(selectedId: String?, slide: StorySlide, isEditing: Bool) -> Bool {
         isEditing || selectedId.map { slide.sceneObject(id: $0) != nil } == true
     }
 
     static func outcome(hadSelection: Bool,
                         effectIsOpen: Bool,
-                        quickCaptureOffered: Bool,
                         backgroundMediaId: String?,
                         bandIsOpen: Bool = false,
                         writesText: Bool = false) -> Outcome {
@@ -194,7 +192,6 @@ nonisolated enum ComposerSceneEmptyTap {
         if hadSelection { return .deselect }
         if bandIsOpen { return .closeBand }
         if effectIsOpen { return .closeEffect }
-        if quickCaptureOffered { return .armViewfinder }
         guard let backgroundMediaId, !backgroundMediaId.isEmpty else { return .nothing }
         return .selectBackground(backgroundMediaId)
     }

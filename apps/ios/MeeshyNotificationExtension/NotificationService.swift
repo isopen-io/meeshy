@@ -22,6 +22,7 @@ class NotificationService: UNNotificationServiceExtension {
     private var delivery: NSEDelivery<UNNotificationContent>?
     private var bestAttemptContent: UNMutableNotificationContent?
     private var enrichment: Task<Void, Never>?
+    private var bringAlarm: Task<Bool, Never>?
 
     override func didReceive(
         _ request: UNNotificationRequest,
@@ -39,6 +40,7 @@ class NotificationService: UNNotificationServiceExtension {
             return
         }
         bestAttemptContent = content
+        ringBringAlarm(request.content.userInfo)
         prepareBestAttempt(content)
         startEnrichment(
             request: request,
@@ -46,6 +48,25 @@ class NotificationService: UNNotificationServiceExtension {
             delivery: delivery,
             budget: budget
         )
+    }
+
+    /// #17442 (essai AlarmKit) — un push `bring` programme l'alarme système avant même que la bannière soit livrée ;
+    /// un push `bring_stopped` la retire. Derrière le drapeau et iOS 26 : ailleurs, la ligne est sans effet. L'extension
+    /// ne montre jamais la demande d'autorisation — l'app la fait au premier Bring reçu ouverte.
+    private func ringBringAlarm(_ userInfo: [AnyHashable: Any]) {
+        let action = BringAlarmPlan.action(push: userInfo, now: Date())
+        guard action != .none else { return }
+        BringAlarmLog.note("NSE : push du Bring reçu — \(Self.bringTrace(action))")
+        bringAlarm = Task { await BringAlarmCoordinator.system.apply(action, mayAsk: false) }
+    }
+
+    /// Ce que le journal dit d'une action : son genre et l'identifiant du Bring, jamais le titre (le nom de l'expéditeur).
+    private static func bringTrace(_ action: BringAlarmPlan.Action) -> String {
+        switch action {
+        case .ring(let request): "sonner \(request.bringId)"
+        case .silence(let bringId): "taire \(bringId)"
+        case .none: "rien"
+        }
     }
 
     override func serviceExtensionTimeWillExpire() {
@@ -72,7 +93,13 @@ class NotificationService: UNNotificationServiceExtension {
         case .sealLockedConversation:
             content.userInfo = NSEAttachmentPolicy.sealingLockedConversation(content.userInfo, isLocked: true)
         case .applyCategory:
-            applyCategory(to: content)
+            // #17143 — le réveil d'un talkie : sa catégorie dédiée, la seule dont la voix se joue sur place.
+            if let talkie = NotificationDetailPolicy.talkieCategory(forType: content.userInfo["type"] as? String ?? "") {
+                content.userInfo = NotificationDetailPolicy.sealingUntrustedTalkieVoice(content.userInfo, apiBaseURL: NSEDataSync.trustedApiBaseURL)
+                content.categoryIdentifier = talkie
+            } else {
+                applyCategory(to: content)
+            }
             // #12655 — verrouillée, scellée ou inconnue : aucune action rapide.
             content.categoryIdentifier = NSEAttachmentPolicy.category(
                 content.categoryIdentifier, under: lock, userInfo: content.userInfo
@@ -192,7 +219,9 @@ class NotificationService: UNNotificationServiceExtension {
         let isCommunicationType = Self.communicationTypes.contains(userInfo["type"] as? String ?? "")
         let identifier = request.identifier
         let owned = NSEOwnedContent(content: working)
+        let alarm = bringAlarm
         enrichment = Task {
+            _ = await alarm?.value
             await NotificationService.deliverEnriched(
                 owned.content,
                 plan: plan,

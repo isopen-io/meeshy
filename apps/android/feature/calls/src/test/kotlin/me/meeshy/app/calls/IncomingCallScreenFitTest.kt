@@ -25,7 +25,7 @@ import org.robolectric.annotation.Config
 
 /**
  * L'écran d'appel entrant sur un petit téléphone (320 × 533 dp, un écran hdpi de 480 × 800 px), tous
- * ses contrôles montés : « Activer le son », « Message », Refuser et Répondre. Les actions tiennent
+ * ses contrôles montés : « Activer le son », « Message », Refuser, Sans vidéo et Répondre. Les actions tiennent
  * ENTIÈRES dans l'écran, sans se chevaucher, avec des cibles de 48 dp au moins, en police normale
  * comme en très grande police ; le nom de l'appelant ne passe jamais sous les actions et reste lisible
  * (sans défiler en police normale).
@@ -41,6 +41,7 @@ class IncomingCallScreenFitTest {
     private val accept = "Accept. Answers the incoming call"
     private val message = "Decline with a message"
     private val sound = "Turn sound on"
+    private val noVideo = "Answer without video. Answers with your camera off: the caller sees your avatar"
 
     private fun smallScreen(fontScale: Float) = rule.setContent {
         val density = LocalDensity.current
@@ -71,7 +72,7 @@ class IncomingCallScreenFitTest {
 
     private fun assertActionsFitWithoutOverlap() {
         val screen = screen()
-        val actions = listOf(sound, message, decline, accept).map { it to boundsOf(it) }
+        val actions = listOf(sound, message, decline, noVideo, accept).map { it to boundsOf(it) }
         actions.forEach { (name, bounds) ->
             assertWithMessage("$name top").that(bounds.top).isAtLeast(screen.top)
             assertWithMessage("$name bottom").that(bounds.bottom).isAtMost(screen.bottom)
@@ -86,17 +87,17 @@ class IncomingCallScreenFitTest {
         }
     }
 
-    private fun highestActionTop(): Float = listOf(sound, message, decline, accept).minOf { boundsOf(it).top }
+    private fun highestActionTop(): Float = listOf(sound, message, decline, noVideo, accept).minOf { boundsOf(it).top }
 
     @Test
-    fun `sur un petit ecran les quatre actions tiennent entieres sans se chevaucher`() {
+    fun `sur un petit ecran les cinq actions tiennent entieres sans se chevaucher`() {
         smallScreen(fontScale = 1f)
 
         assertActionsFitWithoutOverlap()
     }
 
     @Test
-    fun `en tres grande police les quatre actions tiennent encore entieres sans se chevaucher`() {
+    fun `en tres grande police les cinq actions tiennent encore entieres sans se chevaucher`() {
         smallScreen(fontScale = 2f)
 
         assertActionsFitWithoutOverlap()
@@ -127,7 +128,7 @@ class IncomingCallScreenFitTest {
     fun `les actions offrent des cibles de 48 dp au moins sur un petit ecran`() {
         smallScreen(fontScale = 2f)
 
-        listOf(sound, message, decline, accept).forEach { description ->
+        listOf(sound, message, decline, noVideo, accept).forEach { description ->
             rule.onNodeWithContentDescription(description).assertHeightIsAtLeast(48.dp).assertWidthIsAtLeast(48.dp)
         }
     }

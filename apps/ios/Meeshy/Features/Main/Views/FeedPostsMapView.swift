@@ -3,12 +3,12 @@ import MapKit
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Carte des posts du feed (retour user 2026-08-12 → mode Discover 2026-08-26)
+// MARK: - Carte des posts du feed
 
 /// La carte des publications du fil qui portent un lieu.
 ///
 /// Née comme carte plein écran derrière un bouton `map` du header du feed
-/// (2026-08-12), elle vit depuis le 2026-08-26 DANS « À proximité », sous le
+/// elle vit DANS « À proximité », sous le
 /// mode Discover réservé au staff de la plateforme (`NearbyDiscoverAccess`) :
 /// elle plante le LIEU AFFICHÉ de chaque publication, pas le point consenti
 /// à la découvrabilité, et n'a donc pas à être offerte à tout le monde. Le
@@ -25,7 +25,7 @@ struct PostsMapRepresentable: UIViewRepresentable {
     /// Posts géolocalisés uniquement — le filtre vit chez l'appelant
     /// (`NearbyDiscoveryViewModel.discoverPosts`), source unique de la carte.
     let posts: [FeedPost]
-    /// **Discover · Populaire (directive 2026-08-27).** Quand `true`, les points
+    /// **Discover · Populaire.** Quand `true`, les points
     /// sont pondérés par la POPULARITÉ (vues + impressions) : les publications
     /// les plus chaudes rendent une épingle plus opaque et plus grande.
     var weightByPopularity: Bool = false

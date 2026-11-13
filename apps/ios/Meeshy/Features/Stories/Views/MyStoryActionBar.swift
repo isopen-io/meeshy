@@ -58,8 +58,8 @@ struct MyStoryActionBar: View, Equatable {
     private func label(_ glyph: MyStoryGlyph) -> some View {
         HStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: glyph.systemImage)
-                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-            // Jamais de « 0 » décoratif sous la vignette (directive 2026-07-29).
+                .meeshyScaledFont(MeeshyIconSize.sm, weight: .semibold)
+            // Jamais de « 0 » décoratif sous la vignette.
             if let count = counts[glyph], count > 0 {
                 Text("\(count)")
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))

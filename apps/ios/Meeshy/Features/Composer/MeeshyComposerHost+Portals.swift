@@ -131,9 +131,9 @@ extension MeeshyComposerHost {
         // et non à l'écran vierge — l'utilisateur perdrait la possibilité de
         // tout défaire.
         .task { viewModel.seedHistory() }
-        // **La photothèque s'ouvre d'office** à la création d'un post, d'une
-        // story ou d'un réel vierge (directive porteur 2026-09-28).
-        .task { await presentOpeningPickerIfNeeded() }
+        // **À l'ouverture d'un composer vierge, la caméra s'arme et la photothèque
+        // s'ouvre à mi-hauteur** (#17269), chacune selon son réglage.
+        .task { await applyOpeningPlan() }
         // **Les personnes à proposer, chargées UNE fois** (#4475) — mêmes amis
         // acceptés que la bande du document, par la même source. Deux
         // chargements auraient donné deux listes à faire diverger, et deux
@@ -257,17 +257,16 @@ extension MeeshyComposerHost {
                 initialSection: objet.section
             )
         }
-        .photosPicker(
-            isPresented: $showsPhotoPicker,
-            selection: $pickedPhotoLibraryItems,
-            maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current, photoLibrary: .shared()
-        )
+        .photosPicker(isPresented: $showsPhotoPicker, selection: $pickedPhotoLibraryItems,
+                      maxSelectionCount: ComposerOpeningLibrarySheet.maxSelectionCount,
+                      matching: .any(of: [.images, .videos]), preferredItemEncoding: .current, photoLibrary: .shared())
+        .modifier(ComposerOpeningLibrarySheet(isPresented: $showsOpeningLibrary, selection: $pickedPhotoLibraryItems,
+                                              capturing: sceneCapture.holdStartedAt != nil))
         .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
             guard !items.isEmpty else { return }
-            let picked = items
             pickedPhotoLibraryItems = []
-            startPhotoLibraryIntake(picked)
+            closeOpeningLibraryForPick()
+            startPhotoLibraryIntake(items)
         }
         .fileImporter(
             isPresented: $showsFileImporter,

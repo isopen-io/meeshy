@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshyUI
 
 /// **Une cible tactile se pense autour d'un GLYPHE, jamais autour de sa
-/// police** (#4086, mesuré le 2026-09-02).
+/// police** (#4086).
 ///
 /// Relevé sur la rangée d'actions du détail :
 ///

@@ -17,7 +17,11 @@ public final class StoryTextLayer: CATextLayer {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
-    public private(set) nonisolated(unsafe) var textObject: StoryTextObject?
+    private nonisolated let textObjectSlot = Locked<StoryTextObject?>(nil)
+    public private(set) nonisolated var textObject: StoryTextObject? {
+        get { textObjectSlot.read { $0 } }
+        set { textObjectSlot.mutate { $0 = newValue } }
+    }
 
     /// **La taille de police PEINTE sur le canvas monté** — celle du calque ET
     /// celle du champ de saisie en ligne (#8680). Une seule écriture : le texte
@@ -352,12 +356,71 @@ public final class StoryTextLayer: CATextLayer {
                                  textColor: UIColor) {
         StoryTextEffectRendering.clear(self)
         if let glyphLayer { StoryTextEffectRendering.clear(glyphLayer) }
+        applyFlame(text, renderedFontSize: renderedFontSize)
         guard text.hasTextEffect else { return }
         StoryTextEffectRendering.apply(text.parsedTextEffect,
                                        to: glyphLayer ?? self,
                                        fontSize: renderedFontSize,
                                        textColor: textColor,
                                        rasterizationScale: renderScale)
+    }
+
+    // MARK: - Flamme (#17112)
+
+    /// Le feu du texte, posé AU-DESSUS de la sous-calque de glyphes et masqué
+    /// par leur silhouette — `nil` pour tout autre effet.
+    public private(set) var flameLayer: StoryFlameLayer?
+
+    /// **Les flammes brûlent sur les lettres** : la calque de feu se cale sur
+    /// le cadre des glyphes (la sous-calque, que `effectNeedsGlyphSublayer`
+    /// impose à un texte en feu) et prend leur silhouette depuis un clone du
+    /// `CATextLayer` — même moteur, même mise en ligne, donc des flammes
+    /// exactement sur les lettres posées.
+    ///
+    /// La calque elle-même n'est plus rasterisée : un cache de rasterisation
+    /// figerait le feu sur sa première image. Les glyphes, eux, le restent
+    /// (`StoryTextEffectRendering.apply` rasterise la sous-calque).
+    @MainActor
+    private func applyFlame(_ text: StoryTextObject, renderedFontSize: CGFloat) {
+        guard text.parsedTextEffect.burns, let glyphs = visibleString else {
+            flameLayer?.removeFromSuperlayer()
+            flameLayer = nil
+            return
+        }
+        let glyphFrame = glyphLayer?.frame ?? bounds
+        let alignment = alignmentMode
+        let flame = flameLayer ?? StoryFlameLayer()
+        flame.configure(glyphFrame: glyphFrame,
+                        fontSize: renderedFontSize,
+                        key: StoryFlameGlyphKey(glyphs: glyphs, size: glyphFrame.size, scale: renderScale),
+                        animates: StoryFlameTextRenderer.motionAllowed) { ctx in
+            Self.renderGlyphCoverage(glyphs, size: glyphFrame.size, alignment: alignment, in: ctx)
+        }
+        flame.zPosition = 1
+        flame.contentsScale = renderScale
+        flame.isHidden = glyphsHidden
+        if flame.superlayer !== self { addSublayer(flame) }
+        flameLayer = flame
+        shouldRasterize = false
+    }
+
+    @MainActor
+    private static func renderGlyphCoverage(_ glyphs: NSAttributedString, size: CGSize,
+                                            alignment: CATextLayerAlignmentMode, in ctx: CGContext) {
+        let clone = CATextLayer()
+        clone.bounds = CGRect(origin: .zero, size: size)
+        clone.string = glyphs
+        clone.alignmentMode = alignment
+        clone.isWrapped = true
+        clone.truncationMode = .none
+        clone.render(in: ctx)
+    }
+
+    /// Pose le feu de l'instant `elapsed` sur la calque MODÈLE — pour un rendu
+    /// par `layer.render(in:)`, qui ne fait tourner aucune animation.
+    @MainActor
+    public func showFlameFrame(atElapsed elapsed: TimeInterval) {
+        flameLayer?.show(atElapsed: elapsed - (textObject?.startTime ?? 0))
     }
 
     /// Un effet rencontre-t-il quelque chose que `self` PEINT en plus des
@@ -369,12 +432,13 @@ public final class StoryTextLayer: CATextLayer {
     /// boîte ? » : `hasFrameBox` est faux dès que la forme est « Aucun », mais
     /// `applyBackgroundStyle(.solid)` pose le fond sur `backgroundColor` sans
     /// regarder la forme — fond solide + forme « Aucun » + effet ombrait la
-    /// boîte (revue adverse du lot, 2026-09-02). Le verre et les formes
+    /// boîte. Le verre et les formes
     /// path-based installent toujours leur sous-calque : ce prédicat ne
     /// tranche que les cas où `self` peint lui-même.
     private var effectNeedsGlyphSublayer: Bool {
         guard let textObject, textObject.hasTextEffect else { return false }
-        return textObject.hasFrameBox
+        return textObject.parsedTextEffect.burns
+            || textObject.hasFrameBox
             || textObject.resolvedBackgroundStyle != StoryTextBackgroundStyle.none
     }
 
@@ -385,6 +449,7 @@ public final class StoryTextLayer: CATextLayer {
     @MainActor
     public func setGlyphsHidden(_ hidden: Bool) {
         glyphsHidden = hidden
+        flameLayer?.isHidden = hidden
         if let glyphLayer {
             // Cas `.glass` : les glyphes visibles vivent dans la sous-calque
             // au-dessus du backdrop. Le parent reste transparent en permanence.

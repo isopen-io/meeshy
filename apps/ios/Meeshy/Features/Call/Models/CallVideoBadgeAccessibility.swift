@@ -5,9 +5,19 @@ import Foundation
 /// l'écran montre : signal, micro coupé du correspondant (#8787, même
 /// vocabulaire que la disposition audio), réseau du contact, reconnexion.
 enum CallVideoBadgeAccessibility {
-    static func label(signalDegraded: String?, peerMuted: Bool, peerNetworkWeak: Bool, reconnecting: Bool) -> String {
+    static func label(
+        title: String? = nil,
+        participants: Int? = nil,
+        includesDuration: Bool = true,
+        signalDegraded: String?,
+        peerMuted: Bool,
+        peerNetworkWeak: Bool,
+        reconnecting: Bool
+    ) -> String {
         let parts: [String?] = [
-            String(localized: "call.duration.a11y.label"),
+            title,
+            participants.map { String(localized: "calls.detail.participants", defaultValue: "Participants", bundle: .main) + " \($0)" },
+            includesDuration ? String(localized: "call.duration.a11y.label") : nil,
             signalDegraded,
             peerMuted ? String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main) : nil,
             peerNetworkWeak ? String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main) : nil,

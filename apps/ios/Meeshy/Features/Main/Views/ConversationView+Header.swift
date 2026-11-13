@@ -63,7 +63,7 @@ extension ConversationView {
             isPreview: previewMode,
             door: headerAvatarDoor,
             onSetExpanded: { setHeaderExpanded($0) },
-            onDismissFlame: { dismissHeaderFlame() },
+            onDismissFlame: { dismissHeaderFlame() }, onOpenGame: { router.push(.progression) },
             onNavigateToDM: { userId, name in
                 Task { await self.navigateToDM(with: userId, name: name) }
             },
@@ -200,21 +200,14 @@ extension ConversationView {
     // MARK: - Header Call Buttons (audio + video)
 
     /// Frontière NOMINALE du bouton d'appel : l'emplacement lit un instantané
-    /// `Equatable` de l'état d'appel (`CallHeaderSnapshotStore`) et ne construit
-    /// pas la pile d'appel.
-    var headerCallButtons: ConversationHeaderCallSlot {
-        let entry = HeaderCallEntry.resolve(
-            conversation: conversation,
-            viewerPlatformRole: AuthManager.shared.currentUser?.role,
-            viewerIsGuest: anonymousSession != nil
-        )
-        return ConversationHeaderCallSlot(
-            entry: entry,
-            conversationId: conversation?.id ?? "",
-            calleeName: headerCalleeName(for: entry),
-            accentColor: accentColor,
-            secondaryColor: secondaryColor,
-            engagementConversationId: liveConversation?.id
+    /// `Equatable` de l'état d'appel et ne construit pas la pile d'appel ; le
+    /// talkie se pose à côté dans un direct (#17093).
+    var headerCallButtons: ConversationHeaderCallCluster {
+        let entry = HeaderCallEntry.resolve(conversation: conversation, viewerPlatformRole: AuthManager.shared.currentUser?.role, viewerIsGuest: anonymousSession != nil)
+        return ConversationHeaderCallCluster(
+            entry: entry, conversationId: conversation?.id ?? "", calleeName: headerCalleeName(for: entry),
+            peerName: resolvedCalleeName, talkieAllowed: !previewMode, encryptionMode: liveConversation?.encryptionMode,
+            accentColor: accentColor, secondaryColor: secondaryColor, engagementConversationId: liveConversation?.id
         )
     }
 
@@ -359,6 +352,7 @@ struct ConversationHeaderAvatarView: View {
     let door: ConversationHeaderAvatarDoor
     var onSetExpanded: (Bool) -> Void
     var onDismissFlame: () -> Void
+    var onOpenGame: () -> Void
     var onNavigateToDM: (String, String) -> Void
     var onViewProfile: (() -> Void)?
     var onViewMemberProfile: (ProfileSheetUser) -> Void
@@ -442,7 +436,7 @@ struct ConversationHeaderAvatarView: View {
         // on n'ajoute que les entrées profil / conversation / message.
         var items: [AvatarContextMenuItem] = []
         if isDirect {
-            // F10 (revue adversariale 2026-08-25) : clé app (`.main`) alors
+            // F10: clé app (`.main`) alors
             // que le pendant SDK (`MeeshyAvatar.swift`) réserve
             // `avatar.menu.view_profile` (`.module`) à ce même geste pour
             // que la dédup par LIBELLÉ ne divise jamais deux entrées
@@ -625,24 +619,9 @@ struct ConversationHeaderAvatarView: View {
                 headerExpanded: showsIdentity,
                 dismissed: headerState.flameDismissed,
                 avatarDiameter: 44,
-                onDismiss: onDismissFlame
+                onDismiss: onDismissFlame, onOpenGame: onOpenGame
             ))
         }
-    }
-}
-
-/// Le disque de verre de la porte de l'aperçu — la forme de la loupe
-/// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
-struct HeaderOpenFullGlyph: View {
-    let accentColor: String
-
-    var body: some View {
-        Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-            .foregroundStyle(Color(hex: accentColor))
-            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
-            .meeshyTapTarget()
     }
 }
 

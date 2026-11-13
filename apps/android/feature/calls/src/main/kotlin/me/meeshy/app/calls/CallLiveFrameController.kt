@@ -97,6 +97,15 @@ class CallLiveFrameController internal constructor(
         _state.value = CallLiveFrameMachine.dismissAnswer(_state.value)
     }
 
+    /**
+     * L'appel passe à trois (`docs/product/appels-vue-finale.md` loi 16, iOS `CallLiveFrameSession.leaveDuo`) : le cadre
+     * tombe chez moi, avec toute proposition ou réponse en cours, sans rien émettre. L'appel reste écouté.
+     */
+    fun leaveDuo() {
+        _state.value = CallLiveFrameState()
+        _notices.value = null
+    }
+
     internal fun receive(event: CallLiveFrameSelected) = run(CallLiveFrameMachine.receive(_state.value, event, callId, myName()))
 
     private fun run(step: CallLiveFrameStep) {
@@ -146,12 +155,23 @@ class CallLiveFrameController internal constructor(
     }
 }
 
-/** « Capturer l'appel » dans la pilule : proposé en duo vidéo établi. C'est là que se choisit le cadre en direct, comme sur iOS. */
+/**
+ * Le Montage (« Capturer l'appel ») est offert en duo vidéo établi. La pilule et la rangée de genres d'Effets (« Cadres »)
+ * lisent ce même prédicat.
+ */
+internal fun CallUiState.offersCaptureMode(): Boolean =
+    status == CallStatus.CONNECTED && CallLiveFrameRule.mayOffer(CallLiveFrameRule.PEOPLE, isVideoCall && showsConnectedLayout)
+
+/** « Capturer l'appel » dans la pilule : offert par [offersCaptureMode]. C'est là que se choisit le cadre en direct, comme sur iOS. */
 @Singleton
 class CallCaptureActionHandler @Inject constructor() : CallActionHandler {
     override fun present(state: CallUiState): CallActionPresentation? =
-        if (state.status == CallStatus.CONNECTED && CallLiveFrameRule.mayOffer(CallLiveFrameRule.PEOPLE, state.isVideoCall && state.showsConnectedLayout)) {
-            CallActionPresentation(MeeshyIcons.Wallpaper, R.string.call_control_capture)
+        if (state.offersCaptureMode()) {
+            CallActionPresentation(
+                MeeshyIcons.Wallpaper,
+                R.string.call_control_capture,
+                captionRes = R.string.call_control_capture_caption,
+            )
         } else {
             null
         }

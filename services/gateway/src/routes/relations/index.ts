@@ -4,6 +4,7 @@ import { registerRelationLower } from './lower';
 import { registerRelationRitual } from './ritual';
 import { registerRelationSettings } from './settings';
 import { registerRelationNowPlaying } from './nowPlaying';
+import { registerRelationLocations } from './locations';
 
 /**
  * `/relations` — les CERCLES (#13933) : lire ses liens, baisser ou sortir, et le rituel du
@@ -12,6 +13,7 @@ import { registerRelationNowPlaying } from './nowPlaying';
  */
 export async function relationsRoutes(fastify: FastifyInstance): Promise<void> {
   registerRelationNowPlaying(fastify);
+  registerRelationLocations(fastify);
   registerRelationReads(fastify);
   registerRelationLower(fastify);
   registerRelationRitual(fastify);

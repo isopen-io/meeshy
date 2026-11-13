@@ -17,7 +17,10 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
     nonisolated deinit {}
 
     private weak var call: CallManager?
-    let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
+    /// La file série UNIQUE de la session audio (#17038) : celle du
+    /// coordinateur média. Les écritures d'un appel et celles des lecteurs
+    /// s'exécutent dans l'ordre de leurs demandes, jamais en parallèle.
+    let audioSessionQueue = MediaSessionCoordinator.shared.sessionQueue
     /// One-shot stuck-muted fallback (§RC-2): armed when `.connected` is
     /// reached on iPhone/iPad before CallKit delivered `provider:didActivate:`.
     private var audioActivationFallbackTask: Task<Void, Never>?
@@ -47,7 +50,7 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
         let videoUIActive = call.isVideoUIActive
         let configuration = RTCAudioSessionConfiguration.webRTC()
         configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-        // CALL-FIX 2026-06-06 (macOS) — on iOS-app-on-Mac the voice-processing I/O unit
+        // CALL-FIX (macOS) — on iOS-app-on-Mac the voice-processing I/O unit
         // (engaged by `.voiceChat`/`.videoChat`) faults on the mic uplink ("failed to
         // write uplink microphone input signal (state fault)") → the Mac mic captures
         // silence and the peer hears nothing. `.default` bypasses the voice processor;
@@ -63,9 +66,15 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
         )
         let activation = CallAudioSessionPolicy.activation(usesCallKit: call.callUsesCallKit)
         if activation == true { audioSessionSelfActivated = true }
+        // Posé ICI, à la demande : une fin d'appel demandée juste après le
+        // remet à faux, et la configuration en file ne le relève plus.
+        CallManager.isAudioSessionExpectedActive = true
 
-        audioSessionQueue.sync {
-            CallManager.isAudioSessionExpectedActive = true
+        // #17038 — sur la file audio, sans que l'interface attende : la
+        // configuration est un aller-retour SYNCHRONE au serveur audio
+        // (1,69 s mesuré sur le fil principal). File série : `provider(_:didActivate:)`,
+        // la reprise d'interruption et la fin d'appel passent après elle.
+        audioSessionQueue.async {
             let session = RTCAudioSession.sharedInstance()
             Logger.calls.info("[AUDIO_SESS] lockForConfiguration")
             session.lockForConfiguration()
@@ -78,8 +87,7 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
                 // #8269 — with CallKit, `provider:didActivate` owns activation and
                 // on an OUTGOING call it has already fired by now: the old
                 // `active: false` was `setActive(false)` on that session, which
-                // stopped the audio unit (no audio either way, video still
-                // flowing — incident 2026-09-27). Apply the configuration only.
+                // stopped the audio unit (no audio either way). Apply the configuration only.
                 // Without CallKit (Mac, foreground in-app call) WE own activation:
                 // activate now, or this would deactivate the session the
                 // ring-sound manager just brought up.
@@ -276,13 +284,14 @@ final class CallAudioSessionController: CallAudioSessionControllerProviding {
     /// fires, so this `[AUDIO_FALLBACK]` IS the activation path.
     func activateAudioSessionWithoutCallKit() {
         Logger.calls.warning("[AUDIO_FALLBACK] Mac (no CallKit didActivate) — activation manuelle de RTCAudioSession")
-        audioSessionQueue.sync {
+        // #17038 — sur la file audio, jamais le fil principal.
+        audioSessionQueue.async {
             let rtc = RTCAudioSession.sharedInstance()
             rtc.lockForConfiguration()
             do {
                 let configuration = RTCAudioSessionConfiguration.webRTC()
                 configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-                // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
+                // CALL-FIX (macOS) — `.default` avoids the voice-processing
                 // I/O unit that faults on the mic uplink on iOS-app-on-Mac.
                 configuration.mode = AVAudioSession.Mode.default.rawValue
                 configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]

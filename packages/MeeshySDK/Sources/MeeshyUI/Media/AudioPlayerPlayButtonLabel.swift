@@ -36,13 +36,13 @@ struct AudioPlayerPlayButtonLabel: View {
                     } else {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: isCompact ? 13 : 15, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                             .offset(x: isPlaying ? 0 : 1)
                     }
                 case .needsDownload:
                     Image(systemName: "arrow.down.to.line")
                         .font(.system(size: isCompact ? 13 : 15, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(.white)
                 case .downloading(let progress, _, _):
                     if progress > 0 {
                         Circle()
@@ -70,7 +70,7 @@ struct AudioPlayerPlayButtonLabel: View {
                 let label = AudioPlayerView.formattedNeedsDownloadLabel(fileSize: fileSize)
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
                         .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
@@ -83,7 +83,7 @@ struct AudioPlayerPlayButtonLabel: View {
                 )
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: MeeshyFont.microSize, weight: .semibold, design: .monospaced))
+                        .meeshyScaledFont(MeeshyFont.microSize, weight: .semibold, design: .monospaced)
                         .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)

@@ -437,7 +437,20 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // 475 -> 469 (2026-11-08, #16901) : `StorySlideRenderer.swift` (6) ne décode plus ses fonds et sa couleur de texte par
 // son `UIColor(hex:)` privé (que ce scanner compte comme `Color(hex:`) mais par `HexColor(hex:)?.uiColor`, la source
 // unique du SDK. Aucune couleur en dur n'est ajoutée ailleurs. Valeur MESURÉE le 2026-11-08 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 469;
+// 469 -> 470 (2026-11-08, #16945, le liseré de la vignette d'appel) : `CallTileChrome.swift` (1) teinte le liseré
+// d'une vignette de la couleur de la personne qu'elle montre (`CallSpeakerColor.hex(for:)`), site UNIQUE partagé par
+// ma vignette d'appel entrant et la vignette du duo établi, qui portait un trait blanc (loi 4). Identité d'une
+// PERSONNE, pas d'une conversation. Valeur MESURÉE le 2026-11-08 en local.
+// 469 -> 470 (2026-11-09, #17259, contraste du menu d'appui long) : `ConversationContextMenuView.swift` (1) peint
+// chaque action de l'encre que `ConversationMenuInk.hex(base:isDark:isEnabled:)` DÉRIVE de la couleur d'accent de la
+// conversation (assombrie ou éclaircie jusqu'à 4,5:1 sur le verre). C'est l'accent lui-même, porté à AA, pas une
+// couleur en dur. Valeur MESURÉE le 2026-11-09 en local.
+// 468 -> 470 (2026-11-12, #17802, le journal d'après l'appel sous la carte du fil) :
+// `BubbleCallJournalUnderCard.swift` (2) teinte la ligne d'ouverture et la transcription dépliée par `accentHex`,
+// l'accent de la CONVERSATION que `BubbleCallNoticeView` reçoit de la bulle (`contactColor`, `colorHex`) et relaie
+// déjà à `CallRecordingPlayback`. Même convention `accentHex` que l'entrée #6793 : la chaîne, par opposition à la
+// couleur. Valeur MESURÉE le 2026-11-12 en local sur f74d006819.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 470;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

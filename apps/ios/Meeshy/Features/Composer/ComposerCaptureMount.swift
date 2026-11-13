@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// **LE montage de la capture — un seul plein écran, celui du composer**
 /// (#9351, décision porteur 2026-10-05 : « réutiliser exactement le mode plein
@@ -30,6 +31,11 @@ struct ComposerCaptureMount<Content: View>: View {
     var offersSizeToggle = true
     var allowsPhoto = true
     var allowsVideo = true
+    /// Le viseur a cédé la scène à un outil sans se couper (#17432) : rien ne se peint.
+    var yieldsToScene = false
+    /// **La scène posée sur l'aperçu** (#17432) : ses objets, sans fond, à la place de la carte,
+    /// entre l'image et le chrome. `nil` : rien ne se pose (caméra de conversation, scène vide).
+    var sceneObjects: ComposerViewfinderSceneCanvas?
     let onDisarm: () -> Void
     let onDeliver: @MainActor (CameraResult) -> Void
     @ViewBuilder let content: () -> Content
@@ -57,7 +63,7 @@ struct ComposerCaptureMount<Content: View>: View {
                 // Les marges système se lisent ICI : la couche qui les ignore ne les voit plus.
                 GeometryReader { marges in
                     GeometryReader { proxy in
-                        if let ancre, session.stage != .off {
+                        if let ancre, ComposerCaptureSurfaceRule.showsViewfinder(stage: session.stage, yieldsToScene: yieldsToScene) {
                             // **UNE image, à la même place de l'arbre, en capture
                             // comme en retouche** (#10342) : deux branches
                             // démontaient l'aperçu à chaque entrée et sortie de
@@ -71,7 +77,7 @@ struct ComposerCaptureMount<Content: View>: View {
                             if aspect != nil {
                                 Color.black
                             } else if ComposerCapturePlacement.showsFloor(size: taille, screenFlash: screenFlash) {
-                                Color(white: session.floorWhite)
+                                ComposerFlashIntensity.floorTint(session.floorWhite).color
                             }
                             let cadre = aspect.map { editRect($0, in: proxy.size, insets: marges.safeAreaInsets) }
                             // **Hors du cadre, la prise voilée** (#15355), sous l'image qui seule part.
@@ -83,7 +89,7 @@ struct ComposerCaptureMount<Content: View>: View {
                             // En plein écran, l'écran ne blanchit qu'à la prise.
                             if aspect == nil,
                                ComposerCapturePlacement.showsBurst(bursting: session.screenFlashBurst, size: taille) {
-                                Color(white: session.floorWhite).allowsHitTesting(false)
+                                ComposerFlashIntensity.floorTint(session.floorWhite).color.allowsHitTesting(false)
                             }
                         }
                     }
@@ -96,8 +102,8 @@ struct ComposerCaptureMount<Content: View>: View {
             }
             .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in
                 GeometryReader { proxy in
-                    if let ancre, session.stage != .off {
-                        controls(rect: rect(card: proxy[ancre], in: proxy.size, taille), taille)
+                    if let ancre, ComposerCaptureSurfaceRule.showsViewfinder(stage: session.stage, yieldsToScene: yieldsToScene) {
+                        controls(rect: rect(card: proxy[ancre], in: proxy.size, taille), card: proxy[ancre], taille)
                     }
                 }
                 .animation(Self.growth, value: taille)
@@ -131,10 +137,19 @@ struct ComposerCaptureMount<Content: View>: View {
             // car l'image qui se charge n'a pas encore de taille, et sous les
             // commandes, qui restent lisibles.
             .overlay { ComposerShutterFlash(tick: session.camera.shutterCount) }
+            // L'avatar se cadre dans son rond (#17251).
+            .overlay { if session.imageFormat?.isRound == true, session.phase.isEditing { EntityImageRoundVeil() } }
+            .background {
+                ComposerCameraHardwareButtons(
+                    session: session,
+                    active: ComposerHardwareShutter.isActive(stage: session.stage, editing: session.phase.isEditing),
+                    allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
+                    .accessibilityHidden(true)
+            }
             .position(x: rect.midX, y: rect.midY)
     }
 
-    private func controls(rect: CGRect, _ taille: ComposerSceneCameraSize) -> some View {
+    private func controls(rect: CGRect, card: CGRect, _ taille: ComposerSceneCameraSize) -> some View {
         ComposerCaptureStage(session: session, layer: .controls, size: taille,
                              offersSizeToggle: ComposerCapturePlacement.offersSizeToggle(
                                  hostHasCard: offersSizeToggle, screenFlash: screenFlash,
@@ -142,9 +157,15 @@ struct ComposerCaptureMount<Content: View>: View {
                              allowsPhoto: allowsPhoto,
                              allowsVideo: allowsVideo,
                              onToggleSize: { size = taille.toggled },
+                             sceneObjects: sceneObjects,
+                             sceneObjectsFrame: card.offsetBy(dx: -rect.minX, dy: -rect.minY),
                              onDisarm: onDisarm,
                              onDeliver: onDeliver)
             .frame(width: rect.width, height: rect.height)
             .position(x: rect.midX, y: rect.midY)
     }
+}
+
+extension ComposerFlashIntensity.FloorTint {
+    var color: Color { Color(.sRGB, red: red, green: green, blue: blue) }
 }

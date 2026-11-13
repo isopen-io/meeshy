@@ -49,9 +49,10 @@ struct MediaSessionCoordinatorPlaybackLeaseTests {
         #expect(!coordinator.playbackLeaseHeld)
     }
 
-    @Test func aSystemInterruptionRevokesTheLease() {
+    @Test func aSystemInterruptionRevokesTheLease() async {
         let coordinator = MediaSessionCoordinator.shared
         coordinator.activatePlaybackSync(options: [.duckOthers])
+        await coordinator.sessionSettled()
         coordinator.playbackLeaseHeld = true
 
         NotificationCenter.default.post(

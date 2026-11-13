@@ -159,7 +159,8 @@ final class ConversationListPreviewLoader: ObservableObject {
         }
     }
 
-    static let previewLimit = 5
+    /// Assez de messages pour remplir la grande carte de l'aperçu d'appui long (#17242).
+    static let previewLimit = 12
 
     /// D'où vient ce qui est servi. Le réseau ne recule jamais devant le
     /// cache (le chargeur n'écrit pas dans `CacheCoordinator.messages`, qui

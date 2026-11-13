@@ -46,15 +46,37 @@ public struct AvatarListeningLive: View {
     }
 }
 
-/// L'écoute posée sur l'avatar d'une fiche : rien sans source, ni pour une fiche qui ne la montre pas (`userId` nil).
-struct ProfileAvatarListening: View {
+/// L'écoute posée sur un avatar, d'après la source de l'environnement : rien sans source, ni pour un avatar qui ne la
+/// montre pas (`userId` nil ou vide, ou trop petit pour le bandeau). Une liste, une fiche, un en-tête la posent de la même façon (#16733).
+public struct AvatarListeningOverlay: View {
     let userId: String?
+    let avatarSize: CGFloat
     @Environment(\.avatarListeningSource) private var source
 
-    var body: some View {
-        if let source, let userId, !userId.isEmpty {
-            AvatarListeningLive(userId: userId, avatarSize: AvatarContext.profileSheet.size, source: source)
+    public init(userId: String?, avatarSize: CGFloat) {
+        self.userId = userId
+        self.avatarSize = avatarSize
+    }
+
+    /// Vrai quand une écoute se peint : une personne connue, sur un avatar assez grand pour que le bandeau se lise.
+    public static func paints(userId: String?, avatarSize: CGFloat) -> Bool {
+        guard let userId, !userId.isEmpty else { return false }
+        return AvatarListeningBand.isShown(avatarSize: avatarSize)
+    }
+
+    public var body: some View {
+        if let source, let userId, Self.paints(userId: userId, avatarSize: avatarSize) {
+            AvatarListeningLive(userId: userId, avatarSize: avatarSize, source: source)
         }
+    }
+}
+
+/// L'écoute posée sur l'avatar d'une fiche.
+struct ProfileAvatarListening: View {
+    let userId: String?
+
+    var body: some View {
+        AvatarListeningOverlay(userId: userId, avatarSize: AvatarContext.profileSheet.size)
     }
 }
 

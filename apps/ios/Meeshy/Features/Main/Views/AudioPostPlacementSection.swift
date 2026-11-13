@@ -19,7 +19,7 @@ struct AudioPostPlacementSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-            // **Sans titre** (directive porteur 2026-09-01). « Place du
+            // **Sans titre**. « Place du
             // son » nommait ce que les deux libellés disent déjà — « fond
             // de publication », « contenu de publication » se lisent seuls.
             // Un en-tête qui répète son contenu vole une ligne au rognage.
@@ -75,7 +75,7 @@ struct AudioPostPlacementSection: View {
         } label: {
             Text(ComposerSoundRoleCopy.label(role, destination: foregroundDestination))
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(choisi ? .white : theme.textPrimary)
+                .foregroundStyle(choisi ? Color.white : theme.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .frame(maxWidth: .infinity)

@@ -61,9 +61,11 @@ extension ComposerSceneSurface {
     /// objet ne saute pendant le geste (`ComposerSceneFit`).
     var sceneLayer: some View {
         GeometryReader { geo in
-            let zone = ComposerSceneFit.zone(in: geo.size, aspectRatio: aspectRatio)
+            let zone = ComposerSceneFit.stageZone(in: geo.size, aspectRatio: aspectRatio, concealed: chromeIsConcealed)
             let scene = ComposerSceneFit.frame(in: zone, aspectRatio: aspectRatio)
-            let lift = ComposerSceneFit.lift(scene: scene, visibleBottom: visibleBottom(in: geo))
+            let lift = chromeIsConcealed
+                ? ComposerSceneFit.Lift.identity
+                : ComposerSceneFit.lift(scene: scene, visibleBottom: visibleBottom(in: geo))
             sceneCanvas
                 .frame(width: zone.width, height: zone.height)
                 .scaleEffect(lift.scale,
@@ -78,8 +80,11 @@ extension ComposerSceneSurface {
                                                                           aspectRatio: aspectRatio,
                                                                           offsetY: lift.offsetY)))
         }
-        .padding(ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
-        .ignoresSafeArea(.container, edges: arrangement == .rails ? [] : .bottom)
+        .padding(chromeIsConcealed
+                 ? EdgeInsets()
+                 : ComposerSceneRailsInsets.insets(arrangement: arrangement, showsSlideRow: showsRailsSlideRow))
+        .ignoresSafeArea(.container, edges: ComposerSceneFit.ignoredEdges(rails: arrangement == .rails,
+                                                                          concealed: chromeIsConcealed))
         .ignoresSafeArea(.keyboard)
         .allowsHitTesting(timelinePanel == nil)
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) {

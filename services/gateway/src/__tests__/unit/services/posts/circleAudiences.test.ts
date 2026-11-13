@@ -78,6 +78,8 @@ const world = (extra: { readonly dmContacts?: readonly string[]; readonly relati
   });
   const prisma = {
     ...store.prisma,
+    // Aucun compte de l'équipe dans ce monde : la loi lit rôle et âge (#16623) et ne trouve que des inconnus.
+    user: { findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => null) },
     communityMember: { findMany: jest.fn<any>(async () => []), findFirst: jest.fn<any>(async () => null) },
     participant: {
       findMany: participantFindMany,
@@ -98,7 +100,7 @@ const record = (visibility: string): PostVisibilityRecord => ({
   authorId: AUTHOR,
   visibility: visibility as never,
   visibilityUserIds: [],
-  expiresAt: null,
+  expiresAt: null, communityId: null,
 });
 
 const ALL_READERS = [ACQ, FRI, CLS, BLD, DM, STR, ASYM] as const;

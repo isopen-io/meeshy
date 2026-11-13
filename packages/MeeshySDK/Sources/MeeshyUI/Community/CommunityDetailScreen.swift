@@ -2,7 +2,7 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
-public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings: View, AddChannel: View>: View {
+public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings: View, AddChannel: View, PostsTab: View>: View {
     @ObservedObject private var viewModel: ViewModel
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
@@ -13,12 +13,12 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
     public var onOpenMembers: ((String) -> Void)? = nil
     public var onInvite: ((String) -> Void)? = nil
     public var onDismiss: (() -> Void)? = nil
-    /// Création d'un post de communauté, fournie par l'hôte. `nil` ⇒ l'état vide
-    /// du feed n'affiche AUCUN bouton (plutôt qu'un bouton inerte).
-    public var onCreatePost: (() -> Void)? = nil
 
     private let settingsSheet: (MeeshyCommunity, CommunitySettingsActions) -> Settings
     private let addChannelSheet: (@escaping () -> Void) -> AddChannel
+    /// L'onglet « Publications », fourni par l'hôte (#16878) : la carte du fil
+    /// et ses gestes vivent dans l'app, le SDK ne fait que lui donner sa place.
+    private let postsTab: () -> PostsTab
 
     @State private var showLeaveConfirm = false
     @State private var showAddChannel = false
@@ -26,7 +26,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
     @State private var isLeaving = false
     @State private var localColor: String? = nil
     @State private var localEmoji: String? = nil
-    @State private var selectedTab: Int = 0 // 0: Channels, 1: Posts
+    @State private var selectedTab: Int = 0 // 0: conversations, 1: publications
 
     public init(viewModel: ViewModel,
                 onSelectConversation: ((APIConversation) -> Void)? = nil,
@@ -34,18 +34,18 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 onOpenMembers: ((String) -> Void)? = nil,
                 onInvite: ((String) -> Void)? = nil,
                 onDismiss: (() -> Void)? = nil,
-                onCreatePost: (() -> Void)? = nil,
                 @ViewBuilder settingsSheet: @escaping (MeeshyCommunity, CommunitySettingsActions) -> Settings,
-                @ViewBuilder addChannelSheet: @escaping (@escaping () -> Void) -> AddChannel) {
+                @ViewBuilder addChannelSheet: @escaping (@escaping () -> Void) -> AddChannel,
+                @ViewBuilder postsTab: @escaping () -> PostsTab) {
         self.viewModel = viewModel
         self.onSelectConversation = onSelectConversation
         self.onOpenSettings = onOpenSettings
         self.onOpenMembers = onOpenMembers
         self.onInvite = onInvite
         self.onDismiss = onDismiss
-        self.onCreatePost = onCreatePost
         self.settingsSheet = settingsSheet
         self.addChannelSheet = addChannelSheet
+        self.postsTab = postsTab
     }
 
     public var body: some View {
@@ -87,15 +87,27 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 .tint(MeeshyColors.brandPrimary)
         } else if let community = viewModel.community {
             loadedContent(community)
-        } else if let error = viewModel.errorMessage {
-            EmptyStateView(
-                icon: "exclamationmark.triangle",
-                title: String(localized: "common.error", defaultValue: "Erreur", bundle: .module),
-                subtitle: error,
-                actionLabel: String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module),
-                onAction: { Task { await viewModel.load() } }
-            )
+        } else if let failure = viewModel.loadFailure {
+            loadFailureState(failure)
         }
+    }
+
+    /// #7816 — la cause, dans la langue du lecteur ; « Réessayer » seulement
+    /// là où réessayer peut aboutir, sinon le retour.
+    private func loadFailureState(_ failure: CommunityLoadFailure) -> some View {
+        EmptyStateView(
+            icon: failure.symbolName,
+            title: failure.title,
+            subtitle: failure.message,
+            actionLabel: failure.actionLabel,
+            onAction: {
+                if failure.offersRetry {
+                    Task { await viewModel.load() }
+                } else {
+                    dismissHost()
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -106,10 +118,9 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 statsSection(community)
                 actionsSection(community)
 
-                // Section Segmentée : Channels / Posts
-                Picker("", selection: $selectedTab) {
-                    Text(String(localized: "community.detail.tab.channels", defaultValue: "Channels", bundle: .module)).tag(0)
-                    Text(String(localized: "community.detail.tab.feed", defaultValue: "Feed", bundle: .module)).tag(1)
+                Picker(String(localized: "community.detail.tab.a11y", defaultValue: "Contenu de la communauté", bundle: .module), selection: $selectedTab) {
+                    Text(String(localized: "community.detail.tab.channels", defaultValue: "Conversations", bundle: .module)).tag(0)
+                    Text(String(localized: "community.detail.tab.feed", defaultValue: "Publications", bundle: .module)).tag(1)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, MeeshySpacing.lg)
@@ -118,7 +129,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 if selectedTab == 0 {
                     conversationsSection
                 } else {
-                    postsSection
+                    postsTab()
                 }
             }
         }
@@ -147,8 +158,9 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
     }
 
     private func refreshLocalAppearance(communityId: String) {
-        localColor = UserDefaults.standard.string(forKey: "community.color.\(communityId)")
-        localEmoji = UserDefaults.standard.string(forKey: "community.emoji.\(communityId)")
+        let appearance = CommunityLocalAppearance.read(communityId: communityId)
+        localColor = appearance.color
+        localEmoji = appearance.emoji
     }
 
     private func dismissHost() {
@@ -179,6 +191,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .clipShape(Circle())
                     .meeshyTapTarget()
             }
+            .accessibilityLabel(String(localized: "common.back", bundle: .module))
 
             Spacer()
 
@@ -221,6 +234,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         .clipShape(Circle())
                         .meeshyTapTarget()
                 }
+                .accessibilityLabel(String(localized: "community.react.a11y", bundle: .module))
             }
         }
         .padding(.horizontal, MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
@@ -239,6 +253,11 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 bannerView(community, color: color)
                     .frame(height: 190)
                     .clipped()
+
+                if let localEmoji {
+                    CommunityEmojiMark(emoji: localEmoji)
+                        .frame(height: 190)
+                }
 
                 // Gradient overlay en bas pour lisibilité du header
                 LinearGradient(
@@ -339,7 +358,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .font(.system(size: MeeshyIconSize.xs))
                     .foregroundStyle(MeeshyColors.brandPrimary)
                 Text(value)
-                    .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                    .meeshyScaledFont(MeeshyFont.subtitleSize, weight: .bold, design: .rounded)
                     .foregroundStyle(theme.textPrimary)
             }
             Text(label)
@@ -447,29 +466,6 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     }
                 }
             }
-        }
-        .padding(.top, MeeshySpacing.sm)
-    }
-
-    @ViewBuilder
-    private var postsSection: some View {
-        // Placeholder for Community Posts / Stories
-        VStack(spacing: MeeshySpacing.sm) {
-            // Le libellé + l'action ne sont posés QUE si l'hôte sait créer un
-            // post de communauté. `EmptyStateView` masque son bouton quand
-            // `onAction` est nil : l'état vide reste informatif au lieu
-            // d'exposer un « Créer un post » dont l'action était un `// To do`
-            // vide — un bouton qui ne menait nulle part.
-            EmptyStateView(
-                icon: "photo.on.rectangle.angled",
-                title: String(localized: "community.detail.posts.empty.title", defaultValue: "No Posts Yet", bundle: .module),
-                subtitle: String(localized: "community.detail.posts.empty.subtitle", defaultValue: "Community feed will appear here", bundle: .module),
-                actionLabel: onCreatePost == nil
-                    ? nil
-                    : String(localized: "community.detail.posts.empty.action", defaultValue: "Créer un post", bundle: .module),
-                onAction: onCreatePost
-            )
-            .frame(height: 200)
         }
         .padding(.top, MeeshySpacing.sm)
     }

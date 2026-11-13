@@ -26,14 +26,16 @@ import MeeshySDK
 // depuis la NOUVELLE ancre, sans quoi la vidéo repartirait à `t` sous un son
 // resté à l'ancienne position.
 
-extension StoryCanvasUIView {
-
-    /// L'instant de la scène que pointe une fraction de sa durée. Borné à la
-    /// scène ; une fraction non finie vaut le début.
-    nonisolated static func readerScrubSeconds(fraction: Double, duration: Double) -> Double {
+/// L'instant de la scène que pointe une fraction de sa durée. Borné à la scène ; une fraction
+/// non finie vaut le début.
+nonisolated enum StoryReaderScrubClock {
+    static func seconds(fraction: Double, duration: Double) -> Double {
         guard fraction.isFinite, duration.isFinite, duration > 0 else { return 0 }
         return min(max(fraction, 0), 1) * duration
     }
+}
+
+extension StoryCanvasUIView {
 
     /// Le doigt se pose : la lecture gèle sur place.
     public func beginReaderScrub() {
@@ -45,7 +47,7 @@ extension StoryCanvasUIView {
     public func scrubReader(toFraction fraction: Double) {
         guard mode == .play else { return }
         let duration = effectiveSlideTotalDuration
-        let seconds = Self.readerScrubSeconds(fraction: fraction, duration: duration)
+        let seconds = StoryReaderScrubClock.seconds(fraction: fraction, duration: duration)
         currentTime = CMTime(seconds: seconds, preferredTimescale: 600_000)
         pushSlidePlayheadToLayers()
         rebuildLayers()

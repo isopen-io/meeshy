@@ -14,7 +14,7 @@ struct CommentEditingBanner: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "pencil")
                 .font(MeeshyFont.relative(MeeshyIconSize.xs))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundStyle(Color(hex: accentColor))
             Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundStyle(theme.textSecondary)
@@ -54,7 +54,7 @@ struct CommentReplyBanner: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(reply.author)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(Color(hex: reply.authorColor))
+                    .foregroundStyle(Color(hex: reply.authorColor))
 
                 MessageTextRenderer.render(
                     reply.displayContent,

@@ -2,7 +2,7 @@ import CoreGraphics
 
 // MARK: - LE COMPOSEUR DU LECTEUR DE STORY : SA PLACE, SON GESTE, SON REPLI
 //
-// Directive porteur 2026-09-28 (#8431) : le texte qui accompagne une story
+// (#8431): le texte qui accompagne une story
 // commence EXACTEMENT au-dessus du composeur et de sa plaque de verre ; un
 // glissement vers le bas SUR le composeur lui appartient et le replie ; replié,
 // il ne reste qu'un bouton centré, à l'icône de commentaire, qui le rouvre.

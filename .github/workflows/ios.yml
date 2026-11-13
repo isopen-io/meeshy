@@ -87,7 +87,8 @@ name: iOS
 # Trois portées, dans cet ordre de priorité :
 #   1. `workflow_dispatch`        → suite complète (un lancement manuel est déjà explicite)
 #   2. poussée sur `main`         → suite complète, SANS opt-in
-#   3. tout le reste (PR, `dev`)  → compilation, sauf mot-clé au sujet du commit
+#   3. poussée sur `dev`          → suite complète, SANS opt-in (2026-11-10)
+#   4. tout le reste (PR)         → compilation, sauf mot-clé au sujet du commit
 #
 # La règle 2 tient à ce que `main` n'est pas une branche de travail : c'est ce
 # qui part en production, et rien n'y est jamais « sur demande ». Le reste du
@@ -139,6 +140,8 @@ on:
       - 'scripts/check-law-literals.sh'
       - 'scripts/check-swift-viewbuilder.sh'
       - 'scripts/check-ios-spm-resolve-retry.mjs'
+      - 'scripts/check-verbosity-native.mjs'
+      - 'scripts/verbosity-native-budgets.json'
   pull_request:
     branches:
       - main
@@ -157,6 +160,8 @@ on:
       - 'scripts/check-law-literals.sh'
       - 'scripts/check-swift-viewbuilder.sh'
       - 'scripts/check-ios-spm-resolve-retry.mjs'
+      - 'scripts/check-verbosity-native.mjs'
+      - 'scripts/verbosity-native-budgets.json'
   workflow_dispatch:
     # Suites ciblées (noms de classes MeeshyTests séparés par des virgules) :
     # la suite complète dépasse la limite du job, et un lot doit pouvoir
@@ -265,6 +270,14 @@ jobs:
           if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "run_tests=true" >> "$GITHUB_OUTPUT"
             echo "::notice title=Portée::Suite complète — poussée sur main, aucun opt-in requis."
+            exit 0
+          fi
+
+          # `dev` est le staging, et ce qui y entre part vers main : la suite
+          # complète y tourne à chaque poussée (directive porteur 2026-11-10).
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/dev" ]; then
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Portée::Suite complète — poussée sur dev, aucun opt-in requis."
             exit 0
           fi
 
@@ -406,6 +419,14 @@ jobs:
       # `Theme/`) de grossir en silence.
       - name: Accent color hardcoding ratchet
         run: node scripts/check-accent-color-hardcoding.mjs --self-test && node scripts/check-accent-color-hardcoding.mjs
+
+      # #17587 (épure #17584) — le texte que les écrans iOS ont à dire, famille
+      # par famille (valeur fr des deux catalogues) : libellés, mots, libellés
+      # de plus de 80 caractères, libellés d'explication. Un budget ne monte
+      # jamais par rapport à `origin/dev` ; seul le VOLUME d'une famille listée
+      # dans `growth` avec son issue peut grandir avec une feature.
+      - name: Cliquet du texte natif (épure)
+        run: node --test scripts/__tests__/check-verbosity-native.test.mjs && node scripts/check-verbosity-native.mjs
 
       - name: Law literals guard
         run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh

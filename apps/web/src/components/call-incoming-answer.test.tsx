@@ -1,0 +1,288 @@
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+
+import type { AcceptOptions } from '@/lib/calls/engine';
+import type { ActiveCall } from '@/lib/calls/call-store';
+import type { SelfPreviewDeps } from '@/lib/calls/incoming-self-preview';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
+import { track, type FakeTrack } from '@/test-support/call-engine-harness';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
+
+import { CallIncomingAnswer } from './call-incoming-answer';
+import { CallScreen, loadColdCallViews } from './call-screen';
+
+const colorOf = (userId: string | null): string => (userId === null ? SELF_SPEAKER_COLOR : speakerColor(userId));
+
+/**
+ * DÉCROCHER UN APPEL VIDÉO EN SACHANT CE QUI PART (#16944, vue P17) — ma
+ * vignette quand la caméra est déjà autorisée, une barre de verre qui dit ce
+ * que l'autre recevra (« Awa Diallo vous verra en décrochant ») avec mes deux
+ * bascules, et trois réponses : Refuser, Sans vidéo, Accepter. Décrocher tient
+ * la promesse de la barre.
+ */
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(async () => {
+  await loadCallControlsCatalog('fr');
+  await loadColdCallViews();
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+
+afterAll(async () => {
+  await act(async () => {});
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+const ringing = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
+  callId: 'call-1',
+  conversationId: 'c-1',
+  media: 'video',
+  direction: 'incoming',
+  isGroup: false,
+  title: 'Awa Diallo',
+  avatar: null,
+  callerName: 'Awa Diallo',
+  phase: { kind: 'incoming' },
+  connectedAt: null,
+  endedDurationSec: null,
+  micMuted: false,
+  cameraOn: false,
+  facing: 'user',
+  screenSharing: false,
+  members: {},
+  display: 'full',
+  localStream: null,
+  remoteStreams: {},
+  captions: [],
+  captionsMode: 'off',
+  captionPeers: [],
+  preview: null,
+  previewed: false,
+  transcription: 'idle',
+  initiatorId: null,
+  invitedBy: null,
+  quality: null,
+  ...overrides,
+});
+
+const never: SelfPreviewDeps<MediaStream> = { granted: async () => false, open: () => Promise.reject(new Error('jamais')) };
+
+const mount = (node: React.ReactElement) => {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  act(() => root.render(node));
+  const find = (selector: string) => host.querySelector<HTMLElement>(selector);
+  const press = (selector: string) => act(() => find(selector)?.click());
+  const done = () => {
+    act(() => root.unmount());
+    host.remove();
+  };
+  return { find, press, done };
+};
+
+const answer = (call: ActiveCall, selfPreview: SelfPreviewDeps<MediaStream> = never) => {
+  const accepted: AcceptOptions[] = [];
+  const counts = { declined: 0, messages: 0 };
+  const view = mount(
+    <CallIncomingAnswer
+      call={call}
+      language="fr"
+      selfPreview={selfPreview}
+      onAccept={(options) => void accepted.push(options)}
+      onDecline={() => void (counts.declined += 1)}
+      onDeclineMessage={() => void (counts.messages += 1)}
+      colorOf={colorOf}
+    />,
+  );
+  return { ...view, accepted, counts };
+};
+
+describe('la barre de ce qui part en décrochant', () => {
+  /* Une doublure qui PASSE pour un MediaStream (`srcObject` de happy-dom le vérifie). */
+  const filming = (): SelfPreviewDeps<MediaStream> => {
+    const tracks = [track('video')];
+    return { granted: async () => true, open: async () => Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getTracks: () => tracks, getVideoTracks: () => tracks, getAudioTracks: () => [] }) };
+  };
+  const text = (view: ReturnType<typeof answer>) => view.find('[data-call-incoming-consent] p')?.textContent;
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+  test('« Awa vous verra en décrochant » : la caméra choisie tourne, le micro est allumé ; la barre est un verre, avec mes deux bascules', async () => {
+    const view = answer(ringing(), filming());
+    await settle();
+    expect(text(view)).toBe('Awa vous verra en décrochant');
+    expect(view.find('[data-call-incoming-consent]')?.className.split(' ')).toContain('glass-call-prominent');
+    expect(view.find('[data-call-incoming-mic]')?.getAttribute('aria-label')).toBe('Couper le micro');
+    expect(view.find('[data-call-incoming-camera]')?.getAttribute('aria-pressed')).toBe('true');
+    expect(view.find('[data-call-incoming-camera]')?.getAttribute('aria-label')).toBe('Couper la caméra');
+    view.done();
+  });
+
+  test('« vous verra » n’est pas promis sans piste vivante : caméra choisie mais pas ouverte, l’autre n’entend que moi (P17.7)', () => {
+    const view = answer(ringing());
+    expect(text(view)).toBe('Awa vous entendra sans vous voir');
+    view.done();
+  });
+
+  test('les quatre phrases : micro coupé, caméra qui filme ; caméra coupée ; tout coupé, avec le prénom (P17.7)', async () => {
+    const view = answer(ringing(), filming());
+    await settle();
+    view.press('[data-call-incoming-mic]');
+    expect(text(view)).toBe('Awa vous verra, micro coupé');
+    view.press('[data-call-incoming-camera]');
+    expect(text(view)).toBe('Awa ne vous verra ni ne vous entendra');
+    view.press('[data-call-incoming-mic]');
+    expect(text(view)).toBe('Awa vous entendra sans vous voir');
+    expect(view.find('[data-call-incoming-camera]')?.getAttribute('aria-label')).toBe('Activer la caméra');
+    view.press('[data-call-incoming-accept]');
+    expect(view.accepted).toEqual([{ audioOnly: true, micMuted: false }]);
+    view.done();
+  });
+
+  test('micro COUPÉ : un disque blanc plein, icône sombre, et aria-pressed dit qu’il est actif (P17.8)', () => {
+    const view = answer(ringing());
+    const mic = () => view.find('[data-call-incoming-mic]');
+    expect(mic()?.getAttribute('aria-pressed')).toBe('false');
+    expect(mic()?.className).toContain('bg-media-fill');
+    view.press('[data-call-incoming-mic]');
+    expect(mic()?.getAttribute('aria-pressed')).toBe('true');
+    expect(mic()?.className).not.toContain('bg-media-fill');
+    expect(mic()?.style.background).toBe('var(--color-on-media)');
+    expect(mic()?.style.color).toBe('var(--ios-indigo-950)');
+    expect(mic()?.getAttribute('aria-label')).toBe('Réactiver le micro');
+    view.done();
+  });
+
+  test('micro coupé : Accepter décroche en vidéo, micro coupé ; « Sans vidéo » garde le micro choisi', () => {
+    const view = answer(ringing());
+    view.press('[data-call-incoming-mic]');
+    view.press('[data-call-incoming-accept]');
+    view.press('[data-call-incoming-audio-only]');
+    expect(view.accepted).toEqual([
+      { audioOnly: false, micMuted: true },
+      { audioOnly: true, micMuted: true },
+    ]);
+    view.done();
+  });
+
+  test('la barre nomme l’appelant par son prénom : elle tient sur une ligne', () => {
+    const view = answer(ringing({ title: '  Awa   Diallo ' }));
+    expect(view.find('[data-call-incoming-consent] p')?.textContent).toBe('Awa vous entendra sans vous voir');
+    view.done();
+  });
+
+  test('un appel VOCAL : ni barre ni vignette, Refuser et Accepter seulement', () => {
+    const view = answer(ringing({ media: 'audio' }));
+    expect(view.find('[data-call-incoming-consent]')).toBeNull();
+    expect(view.find('[data-call-incoming-audio-only]')).toBeNull();
+    view.press('[data-call-incoming-accept]');
+    expect(view.accepted).toEqual([{ audioOnly: true, micMuted: false }]);
+    view.done();
+  });
+});
+
+describe('les trois réponses', () => {
+  test('en vidéo : Refuser, Sans vidéo, Répondre ; un appel vocal garde « Accepter »', () => {
+    const view = answer(ringing());
+    expect(view.find('[data-call-incoming-accept]')?.parentElement?.textContent).toBe('Répondre');
+    expect(view.find('[data-call-incoming-accept]')?.getAttribute('aria-label')).toBe('Répondre');
+    view.done();
+    const voice = answer(ringing({ media: 'audio' }));
+    expect(voice.find('[data-call-incoming-accept]')?.parentElement?.textContent).toBe('Accepter');
+    voice.done();
+  });
+
+  test('« Sans vidéo » en légende, la phrase entière pour le lecteur d’écran ; Refuser et le message gardent leur effet', () => {
+    const view = answer(ringing());
+    const audioOnly = view.find('[data-call-incoming-audio-only]');
+    expect(audioOnly?.getAttribute('aria-label')).toBe('Répondre sans vidéo');
+    expect(audioOnly?.parentElement?.textContent).toBe('Sans vidéo');
+    view.press('[data-call-incoming-decline]');
+    view.press('[data-call-control="decline-message"]');
+    expect(view.counts).toEqual({ declined: 1, messages: 1 });
+    view.done();
+  });
+});
+
+describe('ma vignette pendant la sonnerie', () => {
+  /* Une doublure qui PASSE pour un MediaStream (`srcObject` de happy-dom le vérifie). */
+  const domStream = (tracks: readonly FakeTrack[]): MediaStream => Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getTracks: () => tracks, getVideoTracks: () => tracks, getAudioTracks: () => [] });
+  const granted = (camera = track('video')): SelfPreviewDeps<MediaStream> => ({ granted: async () => true, open: async () => domStream([camera]) });
+
+  test('caméra déjà autorisée : ma vignette paraît, à ma couleur ; couper la caméra la retire et l’éteint', async () => {
+    const camera = track('video');
+    const view = answer(ringing(), granted(camera));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const tile = view.find('[data-call-incoming-self]');
+    expect(tile).not.toBeNull();
+    expect(tile?.getAttribute('aria-hidden')).toBe('true');
+    expect(tile?.style.borderColor).not.toBe('');
+    expect(tile?.querySelector('[data-call-incoming-self-label]')?.textContent).toBe('moi');
+    view.press('[data-call-incoming-camera]');
+    expect(camera.readyState).toBe('ended');
+    view.done();
+  });
+
+  test('elle arrive et repart en fondu (P17.5) : couper la caméra la marque sortante, elle reste montée le temps du fondu, sans prendre le doigt', async () => {
+    const view = answer(ringing(), granted());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const slot = () => view.find('[data-call-incoming-self-slot]');
+    expect(slot()).not.toBeNull();
+    expect(slot()?.hasAttribute('data-leaving')).toBe(false);
+    view.press('[data-call-incoming-camera]');
+    expect(slot()?.hasAttribute('data-leaving')).toBe(true);
+    expect(slot()?.hasAttribute('inert')).toBe(true);
+    view.done();
+  });
+
+  test('un flux sans piste vivante ne fait pas de vignette : la condition est la piste, pas la présence du flux (P17.5)', async () => {
+    const ended = track('video');
+    ended.stop();
+    const view = answer(ringing(), granted(ended));
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(view.find('[data-call-incoming-self-slot]')).toBeNull();
+    view.done();
+  });
+
+  test('pas encore autorisée : aucune vignette, aucune question', async () => {
+    const view = answer(ringing(), never);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(view.find('[data-call-incoming-self]')).toBeNull();
+    view.done();
+  });
+
+  test('décrocher éteint l’aperçu AVANT que le moteur ouvre sa propre caméra : jamais deux ouvertures à la fois', async () => {
+    const camera = track('video');
+    const seen: string[] = [];
+    const view = mount(<CallIncomingAnswer call={ringing()} language="fr" selfPreview={granted(camera)} onAccept={() => void seen.push(camera.readyState)} onDecline={() => undefined} onDeclineMessage={() => undefined} colorOf={colorOf} />);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(view.find('[data-call-incoming-self]')).not.toBeNull();
+    view.press('[data-call-incoming-accept]');
+    expect(seen).toEqual(['ended']);
+    view.done();
+  });
+});
+
+describe('l’écran de sonnerie avec la vidéo de l’appelant', () => {
+  const liveVideo = () => {
+    const tracks = [{ kind: 'video', readyState: 'live' }];
+    return Object.assign(Object.create(MediaStream.prototype) as MediaStream, { getTracks: () => tracks, getVideoTracks: () => tracks, getAudioTracks: () => [] });
+  };
+
+  test('la vidéo de l’appelant remplace son portrait ; son nom et la barre restent', () => {
+    const view = mount(<CallScreen call={ringing({ preview: liveVideo() })} />);
+    expect(view.find('[data-call-incoming-portrait]')).toBeNull();
+    expect(view.find('[data-call-screen="incoming"]')?.textContent).toContain('Awa Diallo');
+    expect(view.find('[data-call-incoming-consent]')).not.toBeNull();
+    view.done();
+    const bare = mount(<CallScreen call={ringing()} />);
+    expect(bare.find('[data-call-incoming-portrait]')).not.toBeNull();
+    bare.done();
+  });
+});

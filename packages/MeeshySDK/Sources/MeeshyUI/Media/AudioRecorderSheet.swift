@@ -101,7 +101,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.voiceRecorder.title", defaultValue: "Enregistrement", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
-                    .foregroundColor(primaryTextColor)
+                    .foregroundStyle(primaryTextColor)
                 Spacer()
             }
             .padding(.bottom, MeeshySpacing.md)
@@ -118,7 +118,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                 if let error = errorMessage {
                     Text(error)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, MeeshySpacing.xl)
                 }
@@ -133,8 +133,8 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                 Text(recorder.isRecording
                      ? recordingTimeLabel
                      : String(localized: "story.voiceRecorder.holdToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundColor(recorder.isRecording ? MeeshyColors.brandPrimary : secondaryTextColor)
+                    .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(recorder.isRecording ? MeeshyColors.brandPrimary : secondaryTextColor)
 
                 if showsLanguageStrip {
                     languageStrip
@@ -145,21 +145,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                 // Controls always at the bottom
                 HStack(spacing: MeeshySpacing.xxxl) {
                     if recorder.isRecording {
-                        // Cancel
-                        Button {
-                            recorder.cancelRecording()
-                            stopPhaseTimer()
-                            HapticFeedback.light()
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(controlFill)
-                                    .frame(width: 50, height: 50)
-                                Image(systemName: "xmark")
-                                    .font(.system(size: MeeshyIconSize.lg, weight: .medium))
-                                    .foregroundColor(controlIcon)
-                            }
-                        }
+                        cancelButton
                     }
 
                     recordButton
@@ -202,7 +188,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     // MARK: - Recording time label
 
     /// Temps écoulé, sans « / plafond » : l'enregistrement n'a plus de limite
-    /// de durée (directive produit 2026-07-26).
+    /// de durée.
     private var recordingTimeLabel: String {
         MediaFormat.duration(recorder.duration)
     }
@@ -226,7 +212,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                 .lineLimit(1)
                         }
-                        .foregroundColor(isActive ? .white : secondaryTextColor)
+                        .foregroundStyle(isActive ? .white : secondaryTextColor)
                         .padding(.horizontal, MeeshySpacing.smPlus)
                         .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
@@ -259,6 +245,24 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
 
     // MARK: - Record Button
 
+    private var cancelButton: some View {
+        Button {
+            recorder.cancelRecording()
+            stopPhaseTimer()
+            HapticFeedback.light()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(controlFill)
+                    .frame(width: 50, height: 50)
+                Image(systemName: "xmark")
+                    .font(.system(size: MeeshyIconSize.lg, weight: .medium))
+                    .foregroundStyle(controlIcon)
+            }
+        }
+        .accessibilityLabel(String(localized: "common.cancel", bundle: .module))
+    }
+
     private var recordButton: some View {
         Button {
             toggleRecording()
@@ -272,7 +276,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
 
                 Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
                     .font(.system(size: MeeshyIconSize.xxxl, weight: .semibold))
-                    .foregroundColor(recorder.isRecording ? .white : controlIcon)
+                    .foregroundStyle(recorder.isRecording ? .white : controlIcon)
             }
             .shadow(color: recorder.isRecording ? MeeshyColors.brandPrimary.opacity(0.5) : .clear, radius: 16)
         }
@@ -356,7 +360,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
 /// cadre « Enregistrement ». Enregistrer, importer un fichier et emprunter à la
 /// bibliothèque sont trois SOURCES au même rang : les deux dernières rangées
 /// sous le titre de la première se lisaient comme deux options de la capture,
-/// ce qu'elles ne sont pas (directive porteur du 2026-09-01).
+/// ce qu'elles ne sont pas.
 public struct AudioRecorderSourceChips: View {
     public var onImportAudioFile: (() -> Void)?
     public var onOpenSoundLibrary: (() -> Void)?

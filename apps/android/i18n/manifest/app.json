@@ -183,10 +183,6 @@
           "status": "adopted"
         },
         {
-          "androidName": "login_welcome_back",
-          "status": "android-only"
-        },
-        {
           "catalog": "app",
           "iosKey": "commands.contacts",
           "androidName": "menu_contacts",
@@ -196,6 +192,12 @@
           "catalog": "app",
           "iosKey": "root.menu.discover",
           "androidName": "menu_discover",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "root.menu.game",
+          "androidName": "menu_game",
           "status": "adopted"
         },
         {

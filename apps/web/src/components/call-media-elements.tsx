@@ -11,7 +11,7 @@ import { callOutputStore } from '@/lib/calls/call-output';
  * qu'un appel réduit continue de s'entendre.
  */
 
-function useSrcObject<T extends HTMLMediaElement>(stream: MediaStream | null, held?: MutableRefObject<T | null>) {
+export function useSrcObject<T extends HTMLMediaElement>(stream: MediaStream | null, held?: MutableRefObject<T | null>) {
   const own = useRef<T | null>(null);
   const ref = held ?? own;
   useEffect(() => {
@@ -62,6 +62,21 @@ export function StreamVideo({
       {...(self ? { 'data-call-self': '' } : {})}
       {...(mirrored ? { 'data-call-mirrored': '' } : {})}
     />
+  );
+}
+
+/**
+ * Sous la colonne du journal (W1), la scène ne s'arrête pas sur le fond de
+ * l'écran : la même image, floutée, s'y prolonge et le verre se lit dessus.
+ * Décor seulement : ni libellé, ni `data-call-stream` — une capture ne la
+ * prend jamais pour une tuile.
+ */
+export function StageBleed({ stream, mirrored, width }: { readonly stream: MediaStream | null; readonly mirrored: boolean; readonly width: number }) {
+  const ref = useSrcObject<HTMLVideoElement>(stream);
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 overflow-hidden" style={{ insetInlineStart: 0, insetInlineEnd: -width }} data-call-stage-bleed="">
+      <video ref={ref} autoPlay playsInline muted className="absolute inset-0 size-full object-cover blur-2xl" style={{ transform: mirrored ? 'scaleX(-1.1) scaleY(1.1)' : 'scale(1.1)' }} />
+    </div>
   );
 }
 

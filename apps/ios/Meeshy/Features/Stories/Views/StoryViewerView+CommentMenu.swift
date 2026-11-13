@@ -116,7 +116,7 @@ extension StoryViewerView {
                     emojiToInject = "@\(username) "
                 }
                 // Faire APPARAÎTRE l'universal composer bar : on déclenche le focus
-                // pour ouvrir le clavier immédiatement (spec 2026-06-23). Pour l'auteur
+                // pour ouvrir le clavier immédiatement. Pour l'auteur
                 // de sa propre story, le composer n'existe PAS avant ce tap (condition
                 // de rendu `!isOwnStory || replyingToStoryComment` dans +Canvas) : il
                 // est monté dans la même passe, et `focusTrigger` est consommé via

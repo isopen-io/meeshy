@@ -43,15 +43,17 @@ function monde(options: { readonly down?: boolean } = {}) {
   };
   const prisma = {
     communityMember: { findMany, findFirst: async () => null },
+    community: { findUnique: async () => null },
     friendRequest: { findMany: async () => [] },
     participant: { findMany: async () => [] },
     userRelation: { findMany: async () => [] },
-  } as unknown as Pick<PrismaClient, 'communityMember' | 'friendRequest' | 'participant' | 'userRelation'>;
+    user: { findMany: async () => [], findUnique: async () => null },
+  } as unknown as Pick<PrismaClient, 'communityMember' | 'community' | 'friendRequest' | 'participant' | 'userRelation' | 'user'>;
   return { prisma, read };
 }
 
 const admettre = (m: ReturnType<typeof monde>, candidateUserIds: string[]) =>
-  filterPostConsumers({ prisma: m.prisma, authorId: AUTEUR, visibility: 'COMMUNITY', candidateUserIds });
+  filterPostConsumers({ prisma: m.prisma, authorId: AUTEUR, visibility: 'COMMUNITY', communityId: null, candidateUserIds });
 
 describe('filterPostConsumers — COMMUNITY en O(candidats) (#14081)', () => {
   it('admet un co-membre actif, jamais un membre inactif, d’une autre communauté ou un inconnu ; l’auteur toujours', async () => {

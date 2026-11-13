@@ -83,14 +83,14 @@ private struct ProfilePostRow: View, Equatable {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             if let content = post.content, !content.isEmpty {
                 Text(content)
-                    .font(.system(size: MeeshyFont.labelSize))
-                    .foregroundColor(theme.textPrimary)
+                    .meeshyScaledFont(MeeshyFont.labelSize)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
             } else {
                 Text(String(localized: "profile.posts.noText", defaultValue: "Publication sans texte", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .italic()
             }
 
@@ -99,7 +99,7 @@ private struct ProfilePostRow: View, Equatable {
                 Label("\(post.commentCount ?? 0)", systemImage: "bubble.right")
             }
             .font(.system(size: 11, weight: .medium))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.mdPlus)
@@ -116,11 +116,11 @@ private struct ProfilePostsEmpty: View {
         VStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "square.text.square")
                 .font(.system(size: MeeshyIconSize.xxxl))
-                .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.strong))
+                .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.strong))
                 .accessibilityHidden(true)
             Text(String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .module))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.heavy))
+                .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.heavy))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxl)

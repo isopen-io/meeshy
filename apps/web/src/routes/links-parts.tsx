@@ -3,6 +3,7 @@ import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-a
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { LINKS_GLYPHS, type LinksGlyphName } from '@/components/glyphs-links';
 import { SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
+import type { InfoHint } from '@/components/info-hint';
 import type { MyShareLink, ShareLinksSummary } from '@/lib/api/links';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -12,7 +13,7 @@ import { Link } from '@/routes/route-table';
 
 /**
  * **LES PIÈCES DE « MES LIENS »** (#6361) — miroir de `LinksHubView.swift`
- * (bannière, cartes de famille), `ShareLinksView.swift` (statistiques, lignes,
+ * (cartes de famille), `ShareLinksView.swift` (statistiques, lignes,
  * état vide) et `ShareLinkDetailView.swift` (carte d'en-tête, barre d'actions,
  * statistiques, informations).
  *
@@ -30,7 +31,7 @@ import { Link } from '@/routes/route-table';
  */
 
 export const LINKS_HEADER_HEIGHT = 64;
-/** Au repos, la bannière du hub commence sous les disques flottants (`floating-corridor.ts`). */
+/** Au repos, la première carte du hub commence sous les disques flottants (`floating-corridor.ts`). */
 export const LINKS_HUB_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - LINKS_HEADER_HEIGHT;
 export const SHARE_LINK_ROW_HEIGHT = 72;
 
@@ -40,7 +41,6 @@ const CARD_STYLE = SECTION_CARD_STYLE;
 const BRAND = 'var(--color-ios-brand)';
 export const SHARE_TINT = 'var(--ios-indigo-500)';
 const NEUTRAL_TINT = 'var(--color-ios-ink-3)';
-const HUB_TINT = 'var(--color-warning)';
 export const SKELETON_TINT = 'color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)';
 export const STRETCHED = "before:absolute before:inset-0 before:rounded-card before:content-['']";
 export const SECTION_TITLE_CLASS = 'ps-1 text-check font-bold uppercase tracking-wide';
@@ -50,6 +50,9 @@ export const BRAND_BUTTON_STYLE = {
   color: 'var(--color-ios-on-brand)',
   outlineColor: BRAND,
 } as const;
+
+/** Le (i) d'un écran de liens : la QUESTION nomme le bouton, la note reste lue repliée. */
+export const linksHint = (question: string, text: string): InfoHint => ({ label: question, text, glyph: LINKS_GLYPHS.info });
 
 export function LinksGlyph({ name, size }: { readonly name: LinksGlyphName; readonly size: number }) {
   return <GlyphSvg glyph={LINKS_GLYPHS[name]} size={size} {...(name === 'caretRight' ? { className: 'rtl:-scale-x-100' } : {})} />;
@@ -136,25 +139,6 @@ export function LinksHeader({
   );
 }
 
-/** Miroir `LinksHubView.headerBanner`. */
-export function LinksBanner({ language }: { readonly language: InterfaceLanguage }) {
-  return (
-    <div data-links-banner className="flex items-center gap-3 rounded-card p-4" style={{ ...CARD_STYLE, backgroundImage: `linear-gradient(135deg, ${tinted(HUB_TINT, 14)}, transparent 70%)` }}>
-      <span aria-hidden="true" className="shrink-0" style={{ color: HUB_TINT }}>
-        <LinksGlyph name="link" size={30} />
-      </span>
-      <span className="grid min-w-0 gap-0.5">
-        <span className="text-body font-bold" style={{ color: INK }}>
-          {translate(language, 'links.hub.banner.title')}
-        </span>
-        <span className="text-caption" style={{ color: INK_2 }}>
-          {translate(language, 'links.hub.banner.subtitle')}
-        </span>
-      </span>
-    </div>
-  );
-}
-
 /** Miroir `ShareLinksView.shareLinkStatsOverview` — les agrégats RÉELS de la passerelle. */
 export function ShareLinksStats({ language, summary }: { readonly language: InterfaceLanguage; readonly summary: ShareLinksSummary }) {
   const format = new Intl.NumberFormat(language);
@@ -186,10 +170,29 @@ export function ShareLinksStats({ language, summary }: { readonly language: Inte
  * #10381 — miroir `ShareLinkDetailCopy.rowExpiry` : la ligne dit l'échéance
  * choisie à la création ; un lien sans échéance n'ajoute rien à sa ligne.
  */
+/** « Créé le 10 sept. 2026 » — ce que le lecteur d'écran entend de la date d'une rangée (#17641). */
+export const linkCreatedLabel = (language: InterfaceLanguage, createdAt: string): string =>
+  `${translate(language, 'links.detail.createdAt')} ${new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(new Date(createdAt))}`;
+
+/**
+ * La date de création d'une rangée, sur SA ligne : de quoi reconnaître un lien dans sa liste
+ * (règle 7, #17641). Le calendrier la nomme à l'œil, `linkCreatedLabel` au lecteur d'écran.
+ */
+export function LinkCreated({ language, createdAt }: { readonly language: InterfaceLanguage; readonly createdAt: string }) {
+  return (
+    <span data-link-created title={linkCreatedLabel(language, createdAt)} className="flex items-center gap-1 text-caption" style={{ color: INK_2 }}>
+      <span aria-hidden="true">
+        <LinksGlyph name="calendarBlank" size={12} />
+      </span>
+      {new Intl.DateTimeFormat(language, { dateStyle: 'short' }).format(new Date(createdAt))}
+    </span>
+  );
+}
+
 export function shareLinkExpiryLabel(language: InterfaceLanguage, expiresAt: string | null, now: Date = new Date()): string | null {
   if (expiresAt === null) return null;
   const deadline = new Date(expiresAt);
-  if (deadline.getTime() <= now.getTime()) return translate(language, 'conversation.card.expired');
+  if (deadline.getTime() <= now.getTime()) return translate(language, 'links.status.expired');
   return `${translate(language, 'links.detail.expiresAt')} ${new Intl.DateTimeFormat(language, { dateStyle: 'medium' }).format(deadline)}`;
 }
 
@@ -208,11 +211,13 @@ export function ShareLinkRow({
   const name = displayNameOf(link);
   const joined = joinedLabel(language, link.currentUses);
   const expiry = shareLinkExpiryLabel(language, link.expiresAt);
+  const created = linkCreatedLabel(language, link.createdAt);
   const label = new Intl.ListFormat(language, { type: 'unit', style: 'short' }).format([
     name,
     statusLabel(language, link.isActive),
     joined,
     ...(link.conversationTitle === null ? [] : [link.conversationTitle]),
+    created,
     ...(expiry === null ? [] : [expiry]),
   ]);
   return (
@@ -244,6 +249,7 @@ export function ShareLinkRow({
               </span>
             )}
           </span>
+          <LinkCreated language={language} createdAt={link.createdAt} />
           {expiry === null ? null : (
             <span data-share-link-expiry className="truncate text-caption" style={{ color: INK_2 }}>
               {expiry}
@@ -281,7 +287,7 @@ export function ShareLinksSkeleton({ language, rows = 3 }: { readonly language: 
   );
 }
 
-/** Miroir `ShareLinksView.emptyState` — nommer, promettre, offrir le geste. */
+/** Miroir `ShareLinksView.emptyState` — nommer, dire ce qu'est un lien de partage, offrir le geste (épure, règle 7). */
 export function ShareLinksEmpty({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <div data-share-links-empty className="grid justify-items-center gap-4 px-6 py-10 text-center">
@@ -291,7 +297,7 @@ export function ShareLinksEmpty({ language }: { readonly language: InterfaceLang
       <p className="text-thread font-bold" style={{ color: INK }}>
         {translate(language, 'links.share.empty.title')}
       </p>
-      <p className="text-caption" style={{ color: INK_2 }}>
+      <p data-share-links-empty-subtitle className="text-caption" style={{ color: INK_2 }}>
         {translate(language, 'links.share.empty.subtitle')}
       </p>
       <Link

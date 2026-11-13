@@ -71,7 +71,7 @@ final class BackgroundTaskManager {
         // inferred @MainActor (class isolation + SWIFT_DEFAULT_ACTOR_ISOLATION),
         // so the Swift 6 runtime asserts the main queue when they run. With
         // `using: nil` BGTaskScheduler invoked them on its own serial queue —
-        // dispatch_assert_queue_fail, 4 device crashes 2026-06-10 (builds
+        // dispatch_assert_queue_fail, 4 device crashes (builds
         // 471/474, queues me.meeshy.app.conversation-sync/message-prefetch).
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.conversationSyncTaskId,
@@ -276,8 +276,7 @@ final class BackgroundTaskManager {
 /// `setTaskCompleted` rendu UNE fois : par l'expiration (tout de suite) ou par
 /// la fin du travail, le premier des deux. Le second appel ne fait rien.
 nonisolated final class BackgroundTaskCompletion: @unchecked Sendable {
-    private let lock = NSLock()
-    private var done = false
+    private let done = Locked(false)
     private let deliver: @Sendable (Bool) -> Void
 
     init(_ deliver: @escaping @Sendable (Bool) -> Void) {
@@ -285,10 +284,10 @@ nonisolated final class BackgroundTaskCompletion: @unchecked Sendable {
     }
 
     func complete(success: Bool) {
-        lock.lock()
-        let first = !done
-        done = true
-        lock.unlock()
+        let first = done.mutate { finished -> Bool in
+            defer { finished = true }
+            return !finished
+        }
         if first { deliver(success) }
     }
 }

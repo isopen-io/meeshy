@@ -56,8 +56,7 @@ public enum AudioQueueBuilder {
                     // La piste EFFECTIVE (drapeau puis Prisme) quand le VM
                     // fournit son résolveur — sans lui, l'auto-avance
                     // rejouait les ORIGINAUX pendant que les bulles
-                    // affichaient le karaoké de la piste traduite (revue
-                    // adversariale 2026-08-18).
+                    // affichaient le karaoké de la piste traduite.
                     fileUrl: trackUrlResolver?(message, att) ?? att.fileUrl,
                     durationMs: att.duration ?? 0,
                     senderName: message.senderName ?? "",

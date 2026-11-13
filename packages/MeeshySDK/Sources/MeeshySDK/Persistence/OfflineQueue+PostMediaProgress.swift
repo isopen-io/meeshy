@@ -5,7 +5,7 @@ import os
 /// **La progression d'un téléversement multi-média SURVIT à la tentative qui
 /// l'a obtenue** (#5830).
 ///
-/// Le défaut mesuré sur l'appareil du porteur le 2026-09-08 : un réel à trois
+/// Le défaut mesuré sur l'appareil du porteur : un réel à trois
 /// médias (13 Mo + 2,1 Mo + 40,7 Mo) enfilé hors ligne, `attempts = 5`,
 /// `status = exhausted`, `lastError = "No media uploaded for offline post media
 /// dispatch"` — **et les trois fichiers encore intacts sur le disque**. Le

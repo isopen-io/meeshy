@@ -13,7 +13,7 @@ import MeeshyUI
 // la capture vocale et la soumission du commentaire —, et il se relit sans
 // rien savoir de la carte ni du geste. Le cliquet de taille
 // (`FileSizeBudgetGuardTests`) l'a exigé : le fichier d'origine est en dette
-// héritée et avait grossi en amont ; la directive 2026-08-28 interdit d'y
+// héritée et avait grossi en amont; la interdit d'y
 // ajouter — on extrait d'abord, on ajoute ensuite. Relocalisation pure :
 // aucun comportement ne change.
 
@@ -24,7 +24,7 @@ import MeeshyUI
 /// pour que le wiring `UniversalComposerBar` soit son propre type-metadata
 /// unit.
 ///
-/// Spec user 2026-05-28 : « Il faut avoir qu'une seule zone de saisie de
+/// « Il faut avoir qu'une seule zone de saisie de
 /// commentaire ». L'overlay commentaires affiche uniquement la LISTE +
 /// actions reply/like ; le composer reste celui-ci, toujours présent en bas
 /// de l'écran. Quand l'utilisateur tape « Répondre » sur un commentaire,
@@ -120,6 +120,24 @@ struct StoryComposerBarView: View {
         }
     }
 
+    private var cancelReplyButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                replyingToStoryComment = nil
+            }
+        } label: {
+            Image(systemName: "xmark")
+                // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
+                .font(MeeshyFont.fixedGlyph(9, weight: .bold))
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(Color.white.opacity(MeeshyOpacity.light)))
+                .meeshyTapTarget()
+                .padding(-MeeshyTapTarget.inset(forVisualSide: 22))
+        }
+        .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
+    }
+
     private var composerBar: some View {
         UniversalComposerBar(
             style: .dark,
@@ -165,10 +183,10 @@ struct StoryComposerBarView: View {
                             HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
                                     .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
+                                    .foregroundStyle(Color(hex: reply.authorColor))
                                 Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
                                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
+                                    .foregroundStyle(Color(hex: reply.authorColor))
                             }
                             Text(reply.displayContent)
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
@@ -178,19 +196,7 @@ struct StoryComposerBarView: View {
 
                         Spacer()
 
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                replyingToStoryComment = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
-                                .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white.opacity(MeeshyOpacity.light)))
-                        }
-                        .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
+                        cancelReplyButton
                     }
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.sm)
@@ -321,7 +327,7 @@ struct StoryComposerBarView: View {
     /// focus ; le tap sur la story (`dismissComposer`) le relâche. Textes
     /// fusionnés en UNE insertion (au curseur si focus ; sinon en fin de champ
     /// via le canal `injectedEmoji` — cette surface n'a pas de binding texte),
-    /// fichiers routés vers le staging commentaire existant (spec 2026-07-30).
+    /// fichiers routés vers le staging commentaire existant.
     private func handleComposerIngest(_ ingests: [ComposerIngest]) {
         isComposerEngaged = true
         if let block = CommentComposerIngestion.mergedText(from: ingests) {

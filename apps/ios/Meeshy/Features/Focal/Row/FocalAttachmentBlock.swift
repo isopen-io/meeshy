@@ -54,8 +54,7 @@ nonisolated enum FocalMediaGridLayout {
 
     /// Emplacement d'une vidéo SOLO : la largeur se déduit de la hauteur et du
     /// format réel de la vidéo au lieu d'un 300 × 240 fixe qui letterboxait
-    /// toute vidéo portrait dans une carte paysage (retour user 2026-08-21,
-    /// image 2). Sans métadonnées de taille : 16:9.
+    /// toute vidéo portrait dans une carte paysage (image 2). Sans métadonnées de taille: 16:9.
     static func soloVideoSlot(aspectRatio: CGFloat?, maxWidth: CGFloat = gridMaxWidth) -> FocalMediaSlot {
         let ratio = (aspectRatio ?? 0) > 0 ? aspectRatio! : 16.0 / 9.0
         let height = min(maxWidth / ratio, maxWidth * soloVideoMaxHeightRatio)
@@ -221,7 +220,7 @@ nonisolated enum FocalMediaProtection {
 /// directement (#8009). La décision (« flouter ou pas ») est PURE
 /// (`FocalMediaProtection`, ci-dessus), testable sans rendu.
 ///
-/// **La PASTILLE des réactions est entrée dans le périmètre le 2026-09-16**
+/// **La PASTILLE des réactions est entrée dans le périmètre**
 /// (#6793, directive porteur : « Les reactions des medias doivent etre remonté
 /// et affiché sur les medias dans les conversations ! »).
 ///
@@ -236,7 +235,7 @@ nonisolated enum FocalMediaProtection {
 /// pas une seconde écriture : la tuile de bulle et le plein écran montent
 /// exactement la même, et une garde d'inventaire tient les trois ensemble.
 ///
-/// **Le GESTE est entré à son tour le 2026-10-10** (#9910, suivi de #6793) :
+/// **Le GESTE est entré à son tour** (#9910, suivi de #6793):
 /// le double tap ouvre le MÊME sélecteur que la tuile de bulle
 /// (`AttachmentReactionPickerOverlay`), sous la MÊME garde
 /// (`AttachmentReactionOffer`), et l'appui long ouvre l'aperçu de CETTE pièce
@@ -293,6 +292,8 @@ struct FocalGridCell: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
         })
         .onTapGesture(perform: handleTap)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { handleTap() }
         .task(id: isRevealed) { await reblurAfterVisibility() }
         .overlay { protectionOverlay }
         .overlay(alignment: downloadPlacement.alignment) {
@@ -458,13 +459,14 @@ struct FocalGridCell: View {
                 }
             }
             .contentShape(Rectangle())
+            .onTapGesture(perform: handleTap)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(isViewOnce
                 ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Média à voir une fois", bundle: .main)
                 : String(localized: "bubble.media.a11y.masked", defaultValue: "Média masqué", bundle: .main))
             .accessibilityHint(ProtectedContentTap.resolve(cell: attachment).accessibilityHint ?? "")
             .accessibilityAddTraits(.isButton)
-            .onTapGesture(perform: handleTap)
+            .accessibilityAction { handleTap() }
         }
     }
 
@@ -595,7 +597,11 @@ private struct FocalPieceDoubleTap: ViewModifier {
 
     func body(content: Content) -> some View {
         if enabled {
-            content.onTapGesture(count: 2, perform: action)
+            content.meeshyNamedTapAction(
+                String(localized: "media.react.title", defaultValue: "Réagir", bundle: .main),
+                count: 2,
+                perform: action
+            )
         } else {
             content
         }

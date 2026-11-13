@@ -66,6 +66,20 @@ final class ComposerSceneCaptureGestureTests: XCTestCase {
         }
     }
 
+    /// **L'armement à l'ouverture revient, mais par UNE règle et sous réglage**
+    /// (#17269, porteur 2026-11-09 : « armer la caméra à l'ouverture du
+    /// composeur pendant l'ouverture des images à sélectionner »). Ce que #4851
+    /// reprochait — un plein écran noir à fermer — ne revient pas : la scène
+    /// reste derrière, la photothèque à mi-hauteur devant, et Réglages › Médias
+    /// coupe l'un et l'autre. Le seul site qui arme au montage lit le plan.
+    func test_lArmementALOuverture_passeParLePlan_etSonReglage() throws {
+        let source = try hostSource()
+        XCTAssertEqual(source.components(separatedBy: "ComposerOpeningPlan.resolve(").count - 1, 1,
+                       "un seul site décide de l'ouverture")
+        XCTAssertTrue(source.contains("preferences: .stored())"), "le plan lit les réglages de l'auteur")
+        XCTAssertTrue(source.contains(".task { await applyOpeningPlan() }"))
+    }
+
     private func hostSource() throws -> String {
         // **DEUX fichiers, et c'est le point** (2026-09-04). Le viseur a été
         // extrait dans `MeeshyComposerHost+Viewfinder.swift` le jour où l'hôte

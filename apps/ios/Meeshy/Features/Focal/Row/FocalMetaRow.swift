@@ -44,15 +44,14 @@ struct FocalMetaRow: View, Equatable {
     var hasEditHistory: Bool = false
     /// Toucher les COCHES ouvre les « détails de lecture ». Cette affordance
     /// vivait dans `FocalIdentityHeader` tant que les têtes de groupe se
-    /// dataient par le haut ; elle a suivi les coches en bas (directive
-    /// 2026-08-23) — la date, elle, reste informative. Le bouton n'est
+    /// dataient par le haut; elle a suivi les coches en bas — la date, elle, reste informative. Le bouton n'est
     /// touchable que pendant le révélé (`FocalRevealedDetail` coupe le
     /// hit-test au repos) : sinon le fil immobile serait semé de boutons
     /// invisibles.
     var onShowReadStatus: (() -> Void)? = nil
     /// La méta occupe sa PROPRE ligne (`Spacer` de tête + retrait). Posée
     /// EN LIGNE — à droite des drapeaux et des réactions, directive
-    /// 2026-08-24 — elle n'a ni l'un ni l'autre : c'est la ligne d'accueil
+    /// elle n'a ni l'un ni l'autre: c'est la ligne d'accueil
     /// qui pousse, et le retrait y est déjà appliqué.
     var fillsWidth: Bool = true
     /// Un envoi en cours reste visible au repos (#16130) ; `false`, il suit le révélé.
@@ -132,7 +131,7 @@ struct FocalMetaRow: View, Equatable {
             if Self.showsDeliveryAtRest(deliveryStatus, pinsPendingDelivery: pinsPendingDelivery) {
                 deliveryChecks(deliveryStatus)
             } else {
-                // Directive 2026-08-24 : les coches ne s'inscrivent plus en
+                // les coches ne s'inscrivent plus en
                 // permanence — elles paraissent et s'effacent avec l'heure,
                 // sous la MÊME fenêtre de défilement.
                 FocalRevealedDetail {

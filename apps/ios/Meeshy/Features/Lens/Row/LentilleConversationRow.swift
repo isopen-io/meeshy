@@ -13,7 +13,7 @@ import MeeshyUI
 // `LentilleMetrics.Avatar` (44, contexte `.conversationHeaderCollapsed`) +
 // anneau accent propre, `Nom · heure`, ligne 2 dont la précédence est
 // typing > brouillon > préview. Le pont ✦ ne remplace plus l'aperçu d'une
-// conversation non lue (décision porteur 2026-09-23, #7613) : la pastille
+// conversation non lue (#7613): la pastille
 // chiffrée porte déjà le nombre, la ligne dit ce qui vient de se passer.
 //
 // Le rang ne porte AUCUN `@State` de langue : la préview est composée par le
@@ -64,7 +64,7 @@ struct LentilleConversationRow: View {
     /// Tap sur le bouton Rejoindre — jamais invoqué si `liveCall.joined`
     /// (pas de bouton, contrat §3.3 « rien de plus »).
     var onJoinLiveCall: (() -> Void)? = nil
-    /// MAGNIFICATION EN PLACE (2026-08-23) — `nil` au repos, non-`nil` sur la
+    /// MAGNIFICATION EN PLACE — `nil` au repos, non-`nil` sur la
     /// rangée élue. La rangée ne devient pas une AUTRE vue : elle reste
     /// elle-même et gagne trois choses, sans qu'aucune de ses features ne
     /// soit à recopier ailleurs (directive produit : « mettre à jour la
@@ -186,7 +186,7 @@ struct LentilleConversationRow: View {
         // `accessibility.unread_messages` sans `String(format:)` et laissait
         // fuir son `%lld` dans l'annonce VoiceOver.
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
+        .modifier(ConversationRowListeningSpeech(userId: ConversationRowListening.userId(for: conversation)))
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
@@ -275,7 +275,7 @@ struct LentilleConversationRow: View {
 
             Text(conversation.displayName)
                 .font(LentilleMetrics.Name.font)
-                .foregroundColor(textPrimary)
+                .foregroundStyle(textPrimary)
                 .lineLimit(1)
                 .layoutPriority(1)
 
@@ -315,13 +315,13 @@ struct LentilleConversationRow: View {
                     joinLiveCallButton
                 }
             } else {
-                // La date a QUITTÉ cette ligne le 2026-08-22 : elle vit seule,
+                // La date a QUITTÉ cette ligne: elle vit seule,
                 // en bas à droite (`dateLine`). Le nom possède donc toute la
                 // ligne, et l'aperçu commence à la même abscisse que lui.
                 Spacer(minLength: 0)
 
                 // Pile de non-lus — MÊME place et MÊME rouge qu'en magnification
-                // (retour produit 2026-08-22, soir : « enlever l'effectif sur les
+                // (soir: « enlever l'effectif sur les
                 // rows non magnifiées, mais mettre le chip rouge si messages non
                 // lus »). La loupe n'ajoute que l'effectif et la précision de la
                 // date : elle agrandit, elle ne recompose pas.
@@ -366,7 +366,7 @@ struct LentilleConversationRow: View {
             // seul espace libre de la rangée, et c'est donc là que le surplus
             // atterrit : « le pill de mode de lecture se met exactement où
             // c'est actuellement, avec la chip du nombre d'utilisateurs qui
-            // doit être actionnable » (directive 2026-08-23).
+            // doit être actionnable ».
             if let magnification {
                 // Même loi que la ligne du haut (#10835) : entières, ou qui
                 // défilent — la date complète, figée à droite, garde sa place.
@@ -393,15 +393,14 @@ struct LentilleConversationRow: View {
 
             Spacer(minLength: 0)
 
-            // L'heure et les points ne paraissent qu'au DÉFILEMENT (#9571,
-            // directive porteur 2026-10-07) : `LentilleRowMetaFade` est la
+            // L'heure et les points ne paraissent qu'au DÉFILEMENT (#9571): `LentilleRowMetaFade` est la
             // seule vue qui observe la révélation — la rangée ne se re-rend
             // pas à son rythme. La rangée en focus garde sa date précise.
             LentilleRowMetaFade(alwaysVisible: magnification != nil) {
                 HStack(spacing: MeeshySpacing.xs) {
                     // La série « 🔥4 · 120 » en rouge, ou le cumul seul à
                     // l'encre de l'heure (#9025, #9571) — masquée sur la rangée
-                    // en focus pour le moment (directive porteur 2026-10-01).
+                    // en focus pour le moment.
                     if magnification == nil {
                         ConversationStreakMarkHost(
                             conversationId: conversation.id,
@@ -425,7 +424,7 @@ struct LentilleConversationRow: View {
     }
 
     /// La date garde EXACTEMENT sa place en magnification (« la date gardera
-    /// cette place même en magnificence », 2026-08-22) : seule sa PRÉCISION
+    /// cette place même en magnificence »): seule sa PRÉCISION
     /// change — relatif court au repos, date complète sous la loupe, par la
     /// même loi que le message en focus du fil.
     ///
@@ -503,7 +502,7 @@ struct LentilleConversationRow: View {
 
     /// Décision PURE de la ligne 2 — séparée du rendu pour rester testable
     /// sans SwiftUI (I-065). Une conversation NON LUE montre son aperçu
-    /// composé comme une autre (décision porteur 2026-09-23, #7613) : le pont
+    /// composé comme une autre (#7613): le pont
     /// ✦ la remplaçait par un décompte (« Demo · 1 message · 1 audio ») que la
     /// pastille chiffrée dit déjà — la ligne ne disait alors jamais ce qui
     /// venait de se passer, précisément quand on la regarde.
@@ -561,7 +560,7 @@ struct LentilleConversationRow: View {
             if !draft.previewText.isEmpty {
                 Text(draft.previewText)
                     .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(textSecondary)
+                    .foregroundStyle(textSecondary)
                     .lineLimit(1)
             }
         }

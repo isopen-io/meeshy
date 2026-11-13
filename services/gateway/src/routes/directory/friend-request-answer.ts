@@ -9,6 +9,7 @@ import { recordLevel, startCooldown, cooldownEnd, type RelationWriteOutcome } fr
 import { judgeRelationRequest, thresholdsNow } from '../../services/relations/relationRequestGate';
 import { emitRelationLevelRaised, relationIoOf } from '../../socketio/relationEvents';
 import { refreshNowPlayingAfter } from '../../services/nowPlaying/nowPlayingDeps';
+import { refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { parseRequestLevel, type RelationRequestLevel } from '@meeshy/shared/types/relation';
 import { forgetFriends } from '../../services/relations/relationCaches';
 import { isBlockedBetween } from '../../utils/blocking';
@@ -281,6 +282,11 @@ async function accepterAuNiveau(
     // #13934 — le lien monte : l'écoute conservée remonte chez l'autre, au détail de son nouveau niveau.
     await refreshNowPlayingAfter(
       { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Now playing not refreshed after raise:', error) },
+      { userA: demande.senderId, userB: demande.receiverId },
+    );
+    // #16980 — dès Ami, la dernière position partagée à l'autre lui revient, à la précision choisie.
+    await refreshSharedLocationAfter(
+      { prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Shared location not refreshed after raise:', error) },
       { userA: demande.senderId, userB: demande.receiverId },
     );
   }

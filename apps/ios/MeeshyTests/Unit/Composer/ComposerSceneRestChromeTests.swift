@@ -98,9 +98,9 @@ final class ComposerSceneRestChromeTests: XCTestCase {
         XCTAssertEqual(ComposerRestChrome.tools(offered: sansPalette, hasBackgroundMedia: true)
                         .filter { $0 == .background }, [.background])
         let repos = try ComposerSceneArrangementTests.source("MeeshyComposerHost+Rest.swift")
-        XCTAssertTrue(repos.contains("if tool == .background, let fond = sceneBackgroundMedia?.id { return selectSceneBackground(fond) }"),
+        XCTAssertTrue(repos.contains("if tool == .background, let fond = host.sceneBackgroundMedia?.id { return host.selectSceneBackground(fond) }"),
                       "avec un média de fond, « Fond » sélectionne le fond au lieu d'ouvrir la palette")
-        XCTAssertTrue(repos.contains("hasBackgroundMedia: sceneBackgroundMedia != nil"))
+        XCTAssertTrue(repos.contains("hasBackgroundMedia: host.sceneBackgroundMedia != nil"))
     }
 
     func test_tools_lePlusEstToujoursLeDernier_memeSansAucunePorte() {
@@ -348,10 +348,188 @@ final class ComposerSceneRestChromeTests: XCTestCase {
                        .openDoor)
     }
 
-    /// La colonne s'alignait sur le bord de la scène : sans la pastille
-    /// « Coller », plus large, qui la décalait, ses boutons touchaient ce bord
-    /// sur l'iPhone et le débordaient sur le petit écran.
-    func test_toolColumnInnerMargin_keepsTheButtonsInsideTheScene() {
-        XCTAssertGreaterThanOrEqual(ComposerRestChrome.toolColumnInnerMargin, 8)
+    /// Porteur (#17469) : la colonne des outils et des options s'aligne sur la
+    /// rangée du haut (↶ ↷), au même écart du bord ; « Coller » n'est plus
+    /// qu'un glyphe (#17434), plus rien ne la décale. L'écart commun de la
+    /// couche la garde dans la scène.
+    func test_toolColumn_alignsWithTheTopRow_andStaysInsideTheScene() throws {
+        XCTAssertEqual(ComposerRestChrome.toolColumnInnerMargin, 0, "aucun écart de plus que la rangée du haut")
+        XCTAssertGreaterThanOrEqual(MeeshySpacing.smPlus, 8, "l'écart commun garde les boutons dans la scène")
+        let chrome = try String(contentsOfFile: Self.overlayChromePath, encoding: .utf8)
+        XCTAssertTrue(chrome.contains(".padding(.horizontal, MeeshySpacing.smPlus)"),
+                      "la rangée et la colonne partagent l'écart de la couche")
+    }
+
+    private static var overlayChromePath: String {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Composer/ComposerSceneOverlayChrome.swift").path
+    }
+
+    // MARK: - #17111 : la porte Caméra
+
+    func test_tools_unFormatQuiFilme_offreLaCamera_apresLeDessin() {
+        let outils = ComposerRestChrome.tools(offered: portesDeLaStory,
+                                              cameraModes: ComposerSceneCamera.modes(for: .story))
+        let dessin = try? XCTUnwrap(outils.firstIndex(of: .drawing))
+        XCTAssertEqual(outils.firstIndex(of: .camera), dessin.map { $0 + 1 },
+                       "Sticker · Son · Dessin · Caméra : la caméra suit le dessin")
+    }
+
+    func test_tools_leStatut_nOffreAucuneCamera() {
+        let outils = ComposerRestChrome.tools(offered: portesDeLaStory,
+                                              cameraModes: ComposerSceneCamera.modes(for: .status))
+        XCTAssertFalse(outils.contains(.camera), "aucun mode servi ⇒ aucune porte (`modes(for:)` vide)")
+    }
+
+    func test_tools_parDefaut_laColonneNeChangePas() {
+        XCTAssertFalse(ComposerRestChrome.tools(offered: portesDeLaStory).contains(.camera),
+                       "sans modes passés, la colonne d'hier reste identique (rétrocompatible)")
+    }
+
+    func test_camera_aSonLibelleEtSonSymbole_etAucunePorteDeRail() {
+        XCTAssertNil(ComposerRestTool.camera.door, "la caméra ARME le viseur, elle n'ouvre aucune porte de rail")
+        XCTAssertEqual(ComposerRestTool.camera.symbol, "camera")
+        XCTAssertEqual(ComposerRestChromeCopy.label(.camera), ComposerPillCopy.camera)
+    }
+
+    func test_handleRestTool_laCameraArmeLeViseur() throws {
+        let code = try ComposerSceneArrangementTests.source("MeeshyComposerHost+Rest.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(code.contains("iftool==.camera{returnhost.armSceneCamera()}"))
+        XCTAssertTrue(code.contains("cameraModes:host.sceneServesCapture?ComposerSceneCamera.modes(for:host.selectedFormat):[]"))
+    }
+
+    // MARK: - #17111 : la pilule
+
+    func test_pill_uneSceneVide_nAPasDePublier() {
+        XCTAssertEqual(ComposerPillGrammar.pill(hasMatterToPublish: false), [.more, .text, .media])
+        XCTAssertFalse(ComposerPillGrammar.publishIsShown(hasMatterToPublish: false))
+    }
+
+    func test_pill_uneSceneHabitee_finitParPublier() {
+        XCTAssertEqual(ComposerPillGrammar.pill(hasMatterToPublish: true), [.more, .text, .media, .publish])
+    }
+
+    func test_socle_publierSuitLaPilule_sansToast() throws {
+        let code = try ComposerSceneArrangementTests.source("MeeshyComposerHost+Socle.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(code.contains("ifComposerPillGrammar.publishIsShown(hasMatterToPublish:!socleHasNothingToPublish){publishButton}"))
+        XCTAssertFalse(code.contains("mountedComposerView==.scene{publishButton}"),
+                       "Publier n'est plus « toujours là, grisé » sur la scène")
+    }
+
+    func test_leftRail_suitLOrdreDeLaPlanche_etSaute_ceQuiNEstPasOffert() {
+        XCTAssertEqual(ComposerPillGrammar.leftRail([.place, .camera, .sticker, .text, .media, .more]),
+                       [.sticker, .camera, .place])
+        XCTAssertEqual(ComposerPillGrammar.leftRailOrder, [.sticker, .sound, .drawing, .camera, .mention, .place])
+    }
+
+    func test_rightRail_fondPuisStructurePuisPlus() {
+        let rail = ComposerPillGrammar.rightRail(offersBackground: true,
+                                                 moreEntries: [.share, .hashtags, .addSlide, .legend, .slideDuration])
+        XCTAssertEqual(rail, [.background, .addScene, .duration, .caption, .hashtags, .plus])
+        XCTAssertEqual(ComposerPillGrammar.rightRail(offersBackground: false, moreEntries: []), [.plus],
+                       "« Plus » reste : il porte le reste du menu")
+    }
+
+    func test_plusSheet_portesCeQueLeRailNePortePas() {
+        let menu: [ComposerMoreMenuEntry] = [.addSlide, .transitions, .animation, .legend, .preview, .share, .clearAll]
+        XCTAssertEqual(ComposerPillGrammar.plusSheet(menu), [.transitions, .preview, .share, .clearAll])
+        let rail = Set(ComposerRightRailEntry.allCases.compactMap(\.moreEntry))
+        XCTAssertTrue(Set(ComposerPillGrammar.plusSheet(ComposerMoreMenuEntry.allCases)).isDisjoint(with: rail),
+                      "aucune entrée n'est servie deux fois")
+        XCTAssertEqual(Set(ComposerPillGrammar.plusSheet(ComposerMoreMenuEntry.allCases)).union(rail),
+                       Set(ComposerMoreMenuEntry.allCases), "et aucune n'est perdue")
+    }
+
+    func test_iPad_ajouterCommenceParTexteEtMedia() {
+        XCTAssertEqual(ComposerPillGrammar.addRail([.place, .media, .text, .sticker]), [.text, .media, .sticker, .place])
+    }
+
+    func test_iPad_leRailDroit_sappelleSceneAuRepos_etSelectionSurUnObjet() {
+        XCTAssertEqual(ComposerPillGrammar.trailingTitle(objectIsSelected: false), .scene)
+        XCTAssertEqual(ComposerPillGrammar.trailingTitle(objectIsSelected: true), .selection)
+        XCTAssertFalse(ComposerPillCopy.title(.selection).isEmpty)
+        XCTAssertNotEqual(ComposerPillCopy.title(.scene), ComposerPillCopy.title(.selection))
+    }
+
+    func test_iPad_lesRailsSeGrisent_enPleinEcranEtCameraArmee() {
+        XCTAssertFalse(ComposerPillGrammar.railsAreGreyed(fullScreenModeIsOpen: false, cameraIsArmed: false))
+        XCTAssertTrue(ComposerPillGrammar.railsAreGreyed(fullScreenModeIsOpen: true, cameraIsArmed: false))
+        XCTAssertTrue(ComposerPillGrammar.railsAreGreyed(fullScreenModeIsOpen: false, cameraIsArmed: true))
+    }
+
+    // MARK: - #17111 : l'état masqué
+
+    func test_concealment_unToucherDansLeVideDUneSceneHabitee_masque() {
+        XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: false, emptyTap: .nothing, sceneHasContent: true),
+                       .conceal)
+        XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: false, emptyTap: .selectBackground("bg"),
+                                                     sceneHasContent: true), .conceal)
+    }
+
+    func test_concealment_unSecondToucher_rendLeChrome() {
+        for issue: ComposerSceneEmptyTap.Outcome in [.nothing, .deselect, .closeEffect, .endWriting] {
+            XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: true, emptyTap: issue, sceneHasContent: true),
+                           .reveal, "\(issue)")
+        }
+    }
+
+    /// Une scène vierge n'a rien à masquer : le toucher la traverse (#17269 : il n'arme plus rien).
+    func test_concealment_uneSceneVierge_laisseLeToucherPasser() {
+        XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: false, emptyTap: .nothing,
+                                                     sceneHasContent: false), .passThrough)
+    }
+
+    func test_concealment_desselectionnerOuFermer_passeAvantLeMasque() {
+        for issue: ComposerSceneEmptyTap.Outcome in [.deselect, .closeBand, .closeEffect, .endWriting] {
+            XCTAssertEqual(ComposerChromeConcealment.tap(isConcealed: false, emptyTap: issue, sceneHasContent: true),
+                           .passThrough, "\(issue)")
+        }
+    }
+
+    func test_letterbox_laSceneMasqueePrendLeViewportEntier_en9sur16() {
+        let iPhone = CGSize(width: 393, height: 852)
+        let cadre = ComposerSceneFit.letterbox(in: iPhone, aspectRatio: 9.0 / 16.0)
+        XCTAssertEqual(cadre.width, 393, accuracy: 0.01, "la largeur entière")
+        XCTAssertEqual(cadre.height, 393 * 16.0 / 9.0, accuracy: 0.01, "le 9:16 tenu")
+        XCTAssertEqual(cadre.midY, 426, accuracy: 0.01, "centrée : les bandes sont le letterbox")
+        let iPad = CGSize(width: 1024, height: 768)
+        XCTAssertEqual(ComposerSceneFit.letterbox(in: iPad, aspectRatio: 9.0 / 16.0).height, 768, accuracy: 0.01)
+        XCTAssertEqual(ComposerSceneFit.stageZone(in: iPhone, aspectRatio: 9.0 / 16.0, concealed: true),
+                       CGRect(origin: .zero, size: iPhone), "ni l'air du haut ni la zone sûre")
+    }
+
+    func test_concealment_lHoteLitLaRegle_avantDeSelectionnerLeFond() throws {
+        let code = try ComposerSceneArrangementTests.source("MeeshyComposerHost.swift").filter { !$0.isWhitespace }
+        let regle = try XCTUnwrap(code.range(of: "ifsceneRestRelay.concealmentConsumes(issue){return}"))
+        let fond = try XCTUnwrap(code.range(of: "selectSceneItem(fond)"))
+        XCTAssertLessThan(regle.lowerBound, fond.lowerBound)
+        XCTAssertTrue(code.contains(".environment(\\.composerChromeIsConcealed,sceneChromeIsConcealedServed)"))
+        let relais = try ComposerSceneArrangementTests.source("MeeshyComposerHost+Rest.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(relais.contains("switchComposerChromeConcealment.tap(isConcealed:host.sceneChromeIsConcealed"))
+    }
+
+    /// **Masquée, tout toucher rend le chrome, VoiceOver compris** (L5) : sans
+    /// la couche de retour, ✕ et chaque contrôle disparaissaient pour VoiceOver,
+    /// et toucher un objet le sélectionnait derrière un chrome absent.
+    func test_concealment_laSurfaceMasquee_offreUnRetourAuDoigtEtAVoiceOver() throws {
+        let code = try ComposerSceneArrangementTests.source("ComposerSceneSurface.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(code.contains("ComposerLimitCapsuleView(capsule:.shared)}else{concealedRevealLayer}"))
+        let couche = try XCTUnwrap(code.range(of: "varconcealedRevealLayer:someView{"))
+        let corps = code[couche.upperBound...].prefix(400)
+        XCTAssertTrue(corps.contains(".onTapGesture{onBackgroundTapped?()}"))
+        XCTAssertTrue(corps.contains(".accessibilityAction{onBackgroundTapped?()}"))
+        XCTAssertTrue(corps.contains(".ignoresSafeArea()"), "le letterbox rend aussi le chrome")
+    }
+
+    func test_concealment_leRelaisLitLEtatServi_pasLeDrapeauBrut() throws {
+        let relais = try ComposerSceneArrangementTests.source("MeeshyComposerHost+Rest.swift")
+            .filter { !$0.isWhitespace }
+        XCTAssertTrue(relais.contains("ComposerChromeConcealment.tap(isConcealed:host.sceneChromeIsConcealedServed"),
+                      "un masque levé par le viseur n'avale pas le toucher suivant")
     }
 }

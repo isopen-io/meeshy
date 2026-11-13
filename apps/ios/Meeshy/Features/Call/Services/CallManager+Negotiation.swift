@@ -84,7 +84,7 @@ extension CallManager {
                 self?.screenShare.announceIfSharing()
             }
 
-        // CALL-FIX 2026-06-06 — the callee may have ALREADY joined (socket churn /
+        // CALL-FIX — the callee may have ALREADY joined (socket churn /
         // re-join / rapid retry) before this listener subscribed; the live
         // PassthroughSubject doesn't replay, so the offer would never be created
         // and the call would ring-timeout at 45s. Replay the SDK's buffered last
@@ -152,7 +152,7 @@ extension CallManager {
     // le leave pré-décroché terminait bien l'appel 1:1 mais le serveur le
     // résolvait en `missed` — notification « appel manqué » envoyée au callee
     // qui venait de REFUSER, et refus compté dans le filtre « manqués » du
-    // journal. Parité Android/web (fix 2026-07-12).
+    // journal. Parité Android/web.
     func emitCallReject(callId: String) {
         // Refus socket-down (parité Android DeclinedCallStore) : un refus émis
         // dans une socket morte est JETÉ par le SDK — l'appelant sonnerait les
@@ -164,14 +164,14 @@ extension CallManager {
             Logger.calls.warning("call:end (rejected) deferred — socket down, will reconcile on reconnect (callId=\(callId))")
             return
         }
-        // ACK parity avec emitCallEndReliably (2026-08-11) : un socket vu
+        // ACK parity avec emitCallEndReliably: un socket vu
         // "connecté" au moment du refus n'implique pas que l'emit atteint le
         // gateway — un blip qui s'auto-répare avant que `connectionState` ne
         // publie la coupure le laisse filer sans ACK ni réconciliation. Le
         // déclinant a déjà fermé localement (endCallInternal a tourné avant
         // cet appel), l'appelant sonne alors jusqu'au timeout (~45-60s) et le
         // gateway résout `missed` au lieu de `rejected` — le même mislabel
-        // que l'arc reject 2026-07-12 fermait déjà sur les autres chemins,
+        // que l'arc reject fermait déjà sur les autres chemins,
         // ici rouvert par la seule fenêtre "connecté mais jamais livré".
         // Émis ICI, avant le démontage local (D2, #11468) : seul l'accusé attend.
         MessageSocketManager.shared.emitCallRejectWithAck(callId: callId) { [weak self] acked in

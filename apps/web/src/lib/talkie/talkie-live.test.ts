@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { TALKIE_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/talkie-event-names';
+import { TALKIE_SEALED_CODEC } from '@meeshy/shared/types/talkie-constants';
 
 import type { SocketClient } from '@/lib/net/socket';
 
@@ -86,6 +87,10 @@ describe('les décodeurs du talkie', () => {
     expect(decodeTalkieIncoming(incoming({ maxDurationMs: -1 }))).toBeNull();
     expect(decodeTalkieEnded(ended('sender'))?.reason).toBe('sender');
     expect(decodeTalkieEnded(ended('blocked'))).toBeNull();
+  });
+
+  test('#13949 — une voix SCELLÉE n’est jamais ouverte comme de l’AAC : ce client ne la déchiffre pas', () => {
+    expect(decodeTalkieIncoming(incoming({ codec: TALKIE_SEALED_CODEC, sealed: { keyId: 'q7Hk2-_xVb9LmN0pRsT4uW' } }))).toBeNull();
   });
 
   test('un fragment se lit en octets, qu’il arrive en ArrayBuffer ou en vue typée ; du texte n’est pas de l’audio', () => {

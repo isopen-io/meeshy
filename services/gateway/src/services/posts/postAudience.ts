@@ -1,8 +1,12 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
-import { postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
+import { postCircleAudienceFeature, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
 import { comptesAuMoins, niveauxParmi } from '../friendship';
-import { filterCommunityCoMembersAmong } from './communityVisibility';
+import { pairAccessAmong } from '../relations/pairAccess';
+import type { RelationAccess } from '@meeshy/shared/utils/relation-access';
+import type { RelationFeature } from '@meeshy/shared/utils/relation-levels';
+import { teamPeersAdmitted } from '../relations/teamPeers';
+import { filterCommunityPostReadersAmong } from './communityVisibility';
 import { filterDirectContactIdsAmong } from './directContactVisibility';
 
 /**
@@ -13,7 +17,7 @@ import { filterDirectContactIdsAmong } from './directContactVisibility';
  */
 export type PostAudiencePrisma = Pick<
   PrismaClient,
-  'friendRequest' | 'userRelation' | 'communityMember' | 'participant'
+  'friendRequest' | 'userRelation' | 'community' | 'communityMember' | 'participant' | 'user'
 >;
 
 export interface PostAudienceParams {
@@ -24,6 +28,13 @@ export interface PostAudienceParams {
   visibility: string | null | undefined;
   /** `Post.visibilityUserIds` — liste blanche en `ONLY`, liste noire en `EXCEPT`. */
   visibilityUserIds?: readonly string[];
+  /**
+   * `Post.communityId` — REQUIS, comme `visibility` : une publication `COMMUNITY`
+   * posée dans une communauté ne s'admet qu'à ses lecteurs (#17178), et un appelant
+   * qui l'omettrait rouvrirait la règle du co-membre sans que rien ne le signale.
+   * `null` = publication sans communauté.
+   */
+  communityId: string | null;
   /** Les utilisateurs dont on teste le droit de voir. Ordre préservé dans le résultat. */
   candidateUserIds: readonly string[];
 }
@@ -73,7 +84,8 @@ export interface PostAudienceParams {
  * | `FRIENDS`       | amis ∪ contacts DM de l'auteur                        |
  * | `EXCEPT`        | amis ∪ contacts DM, moins `visibilityUserIds`         |
  * | `ONLY`          | exactement `visibilityUserIds`                        |
- * | `COMMUNITY`     | les co-membres de communauté de l'auteur              |
+ * | `COMMUNITY`     | posée dans une communauté : ses membres actifs et son |
+ * |                 | créateur (#17178) ; sinon les co-membres de l'auteur  |
  * | `ACQUAINTANCES` | niveau effectif Connaissance et au-dessus (#13931)    |
  * | `CLOSE`         | niveau effectif Proche et au-dessus                   |
  * | `BLOOD`         | niveau effectif Sang                                  |
@@ -90,7 +102,7 @@ export interface PostAudienceParams {
  * la règle est explicite.
  *
  * **En panne, on REFUSE.** Le graphe illisible n'admet personne, et
- * `filterCommunityCoMembersAmong` rend déjà un ensemble vide sur exception — même politique. Cette
+ * `filterCommunityPostReadersAmong` rend déjà un ensemble vide sur exception — même politique. Cette
  * fonction garde une frontière de confidentialité : l'échec d'une notification
  * légitime est réparable (la mention est persistée, elle reste visible en
  * ouvrant le post), la fuite d'un extrait de post privé sur un écran verrouillé
@@ -116,15 +128,19 @@ export async function filterPostConsumers(params: PostAudienceParams): Promise<s
 
   if (visibility === 'COMMUNITY') {
     // Les seuls candidats, jamais la communauté entière (#14081).
-    const coMemberIds = await filterCommunityCoMembersAmong(prisma, authorId, others);
-    return admit((id) => coMemberIds.has(id));
+    const readerIds = await filterCommunityPostReadersAmong(prisma, {
+      authorId,
+      communityId: params.communityId,
+      candidates: others,
+    });
+    return admit((id) => readerIds.has(id));
   }
 
-  const circleFloor = postCircleAudienceFloor(visibility);
-  if (circleFloor) {
+  const circleFeature = postCircleAudienceFeature(visibility);
+  if (circleFeature) {
     if (others.length === 0) return admit(() => false);
-    const levels = await levelsAmong(prisma, authorId, others);
-    return admit((id) => levels !== null && relationLevelIfAtLeast(levels.get(id), circleFloor) !== null);
+    const verdicts = await circleVerdictsAmong(prisma, { feature: circleFeature, authorId, readerIds: others });
+    return admit((id) => verdicts?.get(id)?.allowed === true);
   }
 
   // Restent `FRIENDS`, `EXCEPT`, et toute valeur inconnue — toutes adossées au
@@ -183,6 +199,28 @@ async function levelsAmong(
   }
 }
 
+/**
+ * Le verdict de la LOI (`resolveRelationAccess`) pour chaque lecteur candidat de
+ * l'audience de cercle `feature` de `authorId` : le lien réel, le blocage, et le
+ * privilège d'équipe (#16623) y sont jugés ensemble. `null` quand la lecture échoue —
+ * l'appelant refuse, il n'ouvre jamais.
+ */
+async function circleVerdictsAmong(
+  prisma: PostAudiencePrisma,
+  params: { readonly feature: RelationFeature; readonly authorId: string; readonly readerIds: readonly string[] }
+): Promise<ReadonlyMap<string, RelationAccess> | null> {
+  try {
+    return await pairAccessAmong(prisma, {
+      feature: params.feature,
+      subjectId: params.authorId,
+      otherIds: params.readerIds,
+      subjectIs: 'target',
+    });
+  } catch {
+    return null;
+  }
+}
+
 /** Borne de l'énumération d'une audience de cercle — au-delà, la diffusion est tronquée aux liens les plus proches. */
 const CIRCLE_AUDIENCE_LIMIT = 5000;
 
@@ -202,10 +240,14 @@ export async function circleAudienceIds(
   visibility: string | null | undefined
 ): Promise<string[] | null> {
   const floor = postCircleAudienceFloor(visibility);
-  if (!floor) return null;
+  const feature = postCircleAudienceFeature(visibility);
+  if (!floor || !feature) return null;
   try {
-    const linked = await comptesAuMoins(prisma, authorId, floor, { limit: CIRCLE_AUDIENCE_LIMIT });
-    return linked.map((account) => account.id);
+    const [linked, colleagues] = await Promise.all([
+      comptesAuMoins(prisma, authorId, floor, { limit: CIRCLE_AUDIENCE_LIMIT }),
+      teamPeersAdmitted(prisma, { feature, subjectId: authorId, subjectIs: 'target' }),
+    ]);
+    return [...new Set([...linked.map((account) => account.id), ...colleagues])];
   } catch {
     return [];
   }

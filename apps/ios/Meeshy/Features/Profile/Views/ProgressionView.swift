@@ -24,7 +24,7 @@ import MeeshyUI
 struct ProgressionView: View {
     @StateObject private var viewModel: ProgressionViewModel
 
-    /// **Une fiche est POUSSÉE, jamais présentée** (#5843, directive porteur 2026-09-09) : poussée dans la pile,
+    /// **Une fiche est POUSSÉE, jamais présentée** (#5843): poussée dans la pile,
     /// la page reçoit le retour, l'historique et le glissement depuis le bord. Le routeur n'est lu qu'AU TOUCHER
     /// (ou au ramassage d'une ancre), jamais dans le corps : la vue se monte sans lui dans les témoins de rendu.
     @Environment(\.routerCommands) private var router
@@ -44,7 +44,7 @@ struct ProgressionView: View {
         // grand titre au repos, barre compacte en défilant, retour en verre, dans les trois contextes de
         // présentation (pile iPhone, panneau droit iPad, feuille).
         GamePageScaffold(
-            title: String(localized: "progression.title", defaultValue: "Progression", bundle: .main),
+            title: String(localized: "progression.title", defaultValue: "Ma Légende", bundle: .main),
             enablesEdgePop: false,
             onRefresh: { await viewModel.load(forceNetwork: true) },
             // Les précisions du rang, ouvertes depuis l'en-tête, offrent « Voir la fiche ».

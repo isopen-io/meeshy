@@ -133,9 +133,11 @@ updates:
       # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
       # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
       - dependency-name: "zod"
-      # libsignal est en 0.x : chaque mineure casse l'API et l'ABI natives.
+      # libsignal : UNE version pour la passerelle, shared, iOS et Android
+      # (#17113). Aucune montée automatique, correctif compris : elle désaligne
+      # les quatre plateformes et casse les vecteurs croisés. Montée à la main,
+      # les quatre ensemble, avec son issue.
       - dependency-name: "@signalapp/libsignal-client"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
       # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
       # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
       - dependency-name: "prisma"
@@ -276,9 +278,11 @@ updates:
       # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
       # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
       - dependency-name: "zod"
-      # libsignal est en 0.x : chaque mineure casse l'API et l'ABI natives.
+      # libsignal : UNE version pour la passerelle, shared, iOS et Android
+      # (#17113). Aucune montée automatique, correctif compris : elle désaligne
+      # les quatre plateformes et casse les vecteurs croisés. Montée à la main,
+      # les quatre ensemble, avec son issue.
       - dependency-name: "@signalapp/libsignal-client"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
       # Prisma v7 désactivé jusqu'à la prise en compte de MongoDB
       # (Prisma 7 retire `datasource url` du schema → P1012 ; migration vers prisma.config.ts + adapter requise)
       - dependency-name: "prisma"
@@ -327,6 +331,11 @@ updates:
       # zod est épinglé à 4.4.3 par `overrides` (budget de poids de la première
       # peinture web, cf0b73804c / cf3196a4db) : jamais de montée automatique.
       - dependency-name: "zod"
+      # libsignal : UNE version pour la passerelle, shared, iOS et Android
+      # (#17113). Aucune montée automatique, correctif compris : elle désaligne
+      # les quatre plateformes et casse les vecteurs croisés. Montée à la main,
+      # les quatre ensemble, avec son issue.
+      - dependency-name: "@signalapp/libsignal-client"
       # CI tourne sous Node 22 : les majeures de @types/node doivent suivre
       # manuellement la version Node de CI (cf. PR #2493 recréée malgré ignore)
       - dependency-name: "@types/node"

@@ -74,6 +74,9 @@ import type { LinkState, OutgoingSignal, PeerLink, PeerLinkDeps } from './peer-l
 export const OUTGOING_RING_TIMEOUT_MS = 45_000;
 export const INCOMING_RING_SAFETY_MS = 70_000;
 export const ACK_TIMEOUT_MS = 10_000;
+
+/** Décrocher (P17) : caméra coupée (« Sans vidéo »), micro coupé — choisis AVANT de décrocher, rien ne part avant. */
+export type AcceptOptions = { readonly audioOnly?: boolean; readonly micMuted?: boolean };
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 export const ENDED_SCREEN_MS = 2_500;
 export const ENDED_RETRY_SCREEN_MS = 8_000;
@@ -143,7 +146,7 @@ export type CallEngineDeps = {
 export type CallEngine = {
   readonly start: (request: StartCallRequest) => Promise<void>;
   readonly join: (request: JoinCallRequest) => Promise<void>;
-  readonly accept: (options?: { readonly audioOnly?: boolean }) => Promise<void>;
+  readonly accept: (options?: AcceptOptions) => Promise<void>;
   readonly decline: () => void;
   readonly hangup: () => void;
   readonly toggleMic: () => void;
@@ -183,6 +186,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   const { store } = deps;
   let session = emptySession();
   let localStream: MediaStream | null = null;
+  /** La caméra gardée vivante pendant MON partage : aperçu local seulement, jamais émise (S2.8). */
+  let shareCamera: MediaStreamTrack | null = null;
   let endedTimer: unknown = null;
   let incomingTimer: unknown = null;
   let generation = 0;
@@ -266,6 +271,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     for (const link of session.links.values()) link.close();
     session.links.clear();
     for (const track of localStream?.getVideoTracks() ?? []) effects.release(track);
+    if (shareCamera !== null) effects.release(shareCamera);
+    shareCamera = null;
     stopStream(localStream);
     localStream = null;
   };
@@ -290,7 +297,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     deps.tones.stop();
     if (call.phase.kind === 'connected' || call.phase.kind === 'reconnecting') deps.tones.cue('ended');
     const elapsed = durationSec ?? (call.connectedAt === null ? null : Math.max(0, Math.round((deps.now() - call.connectedAt) / 1000)));
-    write({ ...call, phase: { kind: 'ended', reason, detail }, endedDurationSec: elapsed, localStream: null, remoteStreams: {}, screenSharing: false });
+    write({ ...call, phase: { kind: 'ended', reason, detail }, endedDurationSec: elapsed, localStream: null, cameraPreview: null, remoteStreams: {}, screenSharing: false });
     const feedback = feedbackPromptFor({ call, reason, durationSec: elapsed, troubled: session.troubled, random: (deps.random ?? Math.random)() });
     if (feedback !== null) store.setState({ feedback });
     session = { ...emptySession(), retry };
@@ -682,7 +689,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }, INCOMING_RING_SAFETY_MS);
   };
 
-  const accept = async (options?: { readonly audioOnly?: boolean }): Promise<void> => {
+  const accept = async (options?: AcceptOptions): Promise<void> => {
     deps.tones.prime();
     const call = read();
     if (call === null || call.phase.kind !== 'incoming' || call.callId === null) return;
@@ -691,7 +698,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     incomingTimer = clear(incomingTimer);
     const token = generation;
     session.telemetry = markNegotiating(session.telemetry, deps.now());
-    write({ ...call, phase: { kind: 'connecting' } });
+    write({ ...call, phase: { kind: 'connecting' }, micMuted: options?.micMuted === true });
     const video = call.media === 'video' && options?.audioOnly !== true;
     const stream = await acquire(video, 'user');
     if (stream === null) {
@@ -877,18 +884,24 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   const controlState = deps.controlState ?? { reactions: callReactionStore, notices: callNoticeStore };
   const controls = createEngineControls({ read, update, request, viewerId: deps.viewerId, now: deps.now, schedule: deps.schedule, cancel: deps.cancel, muteSelf: toggleMic, ...controlState });
 
-  const setCamera = async (track: MediaStreamTrack | null, cameraOn: boolean = track !== null): Promise<void> => {
+  /** `keep` : la piste qui quitte l'émission mais reste vivante, en aperçu local (S2.8). */
+  const placeVideo = async (sent: MediaStreamTrack | null, cameraOn: boolean, keep?: MediaStreamTrack): Promise<void> => {
     const stream = localStream;
     if (stream === null) return;
-    const sent = track !== null && cameraOn ? await withEffects(track) : track;
     for (const old of stream.getVideoTracks()) {
       stream.removeTrack(old);
-      effects.release(old);
+      if (old !== keep) effects.release(old);
     }
     if (sent !== null) stream.addTrack(sent);
     await Promise.all([...session.links.values()].map((link) => link.setVideoTrack(sent).catch(() => undefined)));
     preview.setVideoTrack(sent);
-    update((call) => ({ ...call, cameraOn, localStream: deps.createStream(stream.getTracks()) }));
+    update((call) => ({ ...call, cameraOn, cameraPreview: keep === undefined ? null : deps.createStream([keep]), localStream: deps.createStream(stream.getTracks()) }));
+  };
+
+  const setCamera = async (track: MediaStreamTrack | null, cameraOn: boolean = track !== null): Promise<void> => {
+    if (localStream === null) return;
+    const sent = track !== null && cameraOn ? await withEffects(track) : track;
+    await placeVideo(sent, cameraOn);
   };
 
   const refreshEffects = async (): Promise<void> => {
@@ -932,7 +945,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   /**
    * L'écran remplace la piste vidéo émise sur chaque lien — `replaceTrack`, ou
    * une renégociation quand la ligne vidéo ne faisait que recevoir (appel
-   * vocal). La caméra, si elle tournait, est relâchée : elle revient à l'arrêt.
+   * vocal). La caméra, si elle tournait, n'est plus émise mais reste ouverte
+   * en aperçu local (S2.8, comme iOS) : elle reprend sa place à l'arrêt.
    */
   /** Partager réduit l'appel en capsule (#16664) : on part montrer autre chose, l'appel suit. */
   const startScreen = async (call: ActiveCall): Promise<void> => {
@@ -948,7 +962,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     }
     session.cameraBeforeShare = current.cameraOn;
     display.onended = () => void stopScreen();
-    await setCamera(display, false);
+    shareCamera = current.cameraOn ? (localStream?.getVideoTracks()[0] ?? null) : null;
+    await placeVideo(display, false, shareCamera ?? undefined);
     update((next) => ({ ...next, screenSharing: true, display: 'pill' }));
     announceScreen(true);
   };
@@ -960,13 +975,18 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     for (const track of localStream?.getVideoTracks() ?? []) track.onended = null;
     const restore = session.cameraBeforeShare;
     session.cameraBeforeShare = false;
+    const kept = shareCamera;
+    shareCamera = null;
+    const alive = restore && kept !== null && kept.readyState !== 'ended';
+    if (kept !== null && !alive) effects.release(kept);
     update((next) => ({ ...next, screenSharing: false }));
-    const camera = restore ? await deps.acquireCamera(call.facing).catch(() => null) : null;
+    const camera = alive ? kept : restore ? await deps.acquireCamera(call.facing).catch(() => null) : null;
     if (read()?.callId !== call.callId) {
-      camera?.stop();
+      if (camera !== null && !alive) camera.stop();
       return;
     }
-    await setCamera(camera);
+    if (alive) await placeVideo(kept, true);
+    else await setCamera(camera);
     announceScreen(false);
     if (restore && camera === null) emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId: call.callId, enabled: false });
   };

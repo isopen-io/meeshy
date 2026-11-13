@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 796,
+  "routeCount": 804,
   "routes": [
     {
       "method": "DELETE",
@@ -1191,6 +1191,20 @@
       "method": "DELETE",
       "path": "/api/v1/users/me/devices/:deviceId",
       "module": "pushTokenRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/users/me/push-to-talk-token",
+      "module": "talkieRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -3432,6 +3446,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/conversations/external/consent",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/conversations/search",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
@@ -5466,6 +5494,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/relations/locations",
+      "module": "relationsRoutes",
+      "mountPrefix": "/api/v1/relations",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/relations/now-playing",
       "module": "relationsRoutes",
       "mountPrefix": "/api/v1/relations",
@@ -5694,6 +5736,20 @@
       "method": "GET",
       "path": "/api/v1/sync",
       "module": "syncRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/talkie/:talkieId/audio",
+      "module": "talkieRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -8722,6 +8778,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/conversations/:id/external/report",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/conversations/:id/invite",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
@@ -8879,6 +8949,20 @@
     {
       "method": "POST",
       "path": "/api/v1/conversations/:id/shared-translations",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/external",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -10362,6 +10446,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/users/me/push-to-talk-token",
+      "module": "talkieRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/users/me/resend-email-change-verification",
       "module": "userRoutes",
       "mountPrefix": "/api/v1",
@@ -10741,6 +10839,20 @@
     {
       "method": "PUT",
       "path": "/api/v1/conversations/:id/messages/:messageId/pin",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/conversations/external/consent",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",

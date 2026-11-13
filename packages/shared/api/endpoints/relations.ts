@@ -27,6 +27,9 @@ export const byUserIdSettings = (userId: string): string => `/api/v1/relations/$
 /** GET /api/v1/relations/config */
 export const config = '/api/v1/relations/config';
 
+/** GET /api/v1/relations/locations */
+export const locations = '/api/v1/relations/locations';
+
 /** GET /api/v1/relations/now-playing */
 export const nowPlaying = '/api/v1/relations/now-playing';
 
