@@ -273,6 +273,44 @@ describe("la famille appel — un masque de fondu UNIQUE, un verre qui se LIT da
   });
 });
 
+describe("le bouton d'envoi — un fond de marque UNIQUE, une encre qui se LIT dans la charte", () => {
+  // Trois surfaces peignaient le MÊME bouton d'envoi/soumission en JUMELLES
+  // divergentes : le fond `linear-gradient(135deg, var(--accent), color-mix(in
+  // srgb, var(--accent) 65%, white))` et l'encre `text-white` de son glyphe
+  // étaient recopiés dans `composer.tsx` (envoi), `composer-tray.tsx` (envoi
+  // d'un vocal) et `message-edit-composer.tsx` (soumission d'une édition). Les
+  // deux premiers sont hors périmètre du gate (`composer*`) ; le troisième est
+  // scanné, et ses deux littéraux (`, white` dans le color-mix, `text-white`)
+  // comptaient au gate. Même bouton ⇒ trois fonds qui dériveraient en silence
+  // si la marque changeait. Source unique désormais : le jeton composé
+  // `--send-accent-fill` (app.css, dérivé de `var(--accent)`), et l'encre sur
+  // aplat de marque `text-ios-on-brand` (= `--ios-on-brand`, #fff) que la
+  // charte nomme déjà. Pas une exemption : un jeton partagé.
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(`../src/${rel}`, import.meta.url)), 'utf8');
+  const edit = read('components/message-edit-composer.tsx');
+  const composer = read('components/composer.tsx');
+  const tray = read('components/composer-tray.tsx');
+
+  test('message-edit-composer.tsx ne porte plus aucun littéral de couleur', () => {
+    expect(scanSource(edit)).toEqual([]);
+    expect(exemptionOf('components/message-edit-composer.tsx')).toBe(null);
+  });
+
+  test('les trois boutons dérivent du fond unique --send-accent-fill, plus d’un dégradé local', () => {
+    for (const source of [edit, composer, tray]) {
+      expect(source).toContain('var(--send-accent-fill)');
+      expect(source).not.toContain('color-mix(in srgb, var(--accent) 65%, white)');
+    }
+  });
+
+  test('le glyphe des trois boutons porte l’encre de marque text-ios-on-brand, jamais text-white', () => {
+    for (const source of [edit, composer, tray]) {
+      expect(source).toContain('text-ios-on-brand');
+    }
+    expect(edit).not.toContain('text-white');
+  });
+});
+
 describe('auditSources — le rapport', () => {
   test('compte par fichier, ignore les exemptés et le hors-périmètre', () => {
     const [first] = EXEMPT_PATHS as readonly { prefix: string }[];

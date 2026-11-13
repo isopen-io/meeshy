@@ -205,7 +205,7 @@ try {
     [320, 568, false],
   ]) {
     const label = `${width}×${height}${withSpeech ? '' : ' sans reconnaissance vocale'}`;
-    const context = await browser.newContext({ viewport: { width, height }, locale: 'fr-FR', permissions: ['camera', 'microphone'] });
+    const context = await browser.newContext({ viewport: { width, height }, locale: 'fr-FR', colorScheme: process.env.CAPTURE_SCHEME === 'dark' ? 'dark' : 'light', permissions: ['camera', 'microphone'] });
     await context.addInitScript(ARM_PEER_AND_SPEECH, withSpeech);
     const page = await context.newPage();
     page.setDefaultTimeout(10_000);
@@ -436,9 +436,20 @@ try {
       const unfolded = await page.$$eval('[data-call-transcript-line] [data-call-transcript-original-line]', (rows) => rows.map((row) => row.textContent ?? ''));
       check(unfolded.length === 1 && unfolded[0] === 'Original · Hi, can you hear me?', `${label} : sous la phrase traduite, « Original · … » (${JSON.stringify(unfolded)})`);
       await capture(page, `transcription-${width}x${height}`);
+      const foot = await page.$('[data-call-transcript-original]');
+      check((await foot.getAttribute('aria-pressed')) === 'false' && (await foot.textContent()) === 'Voir l’original', `${label} : le pied dit « Voir l'original », non pressé`);
       await page.click('[data-call-transcript-original]');
       const originals = await page.$$eval('[data-call-transcript-line] [dir="auto"]', (lines) => lines.map((line) => line.textContent ?? ''));
-      check(originals[0] === 'Hi, can you hear me?', `${label} : « Voir l'original » rend ce qui a été dit (${JSON.stringify(originals[0])})`);
+      check(originals[0] === 'Hi, can you hear me?', `${label} : « Voir l'original » met ce qui a été dit EN TÊTE (${JSON.stringify(originals[0])})`);
+      const inverted = await page.$$eval('[data-call-transcript-line] [data-call-transcript-translated-line]', (rows) => rows.map((row) => row.textContent ?? ''));
+      check(inverted.length === 1 && inverted[0] === 'Traduit · Salut, tu m’entends ?', `${label} : et INVERSE les deux lignes, « Traduit · … » dessous, rien ne disparaît (${JSON.stringify(inverted)})`);
+      check((await page.$('[data-call-transcript-line] [data-call-transcript-original-line]')) === null, `${label} : « Original · … » a cédé la place à « Traduit · … »`);
+      check((await foot.getAttribute('aria-pressed')) === 'true' && (await foot.textContent()) === 'Voir la traduction', `${label} : le pied dit « Voir la traduction », pressé`);
+      await page.waitForTimeout(260);
+      await capture(page, `transcription-inversee-${width}x${height}`);
+      await page.click('[data-call-transcript-original]');
+      const restored = await page.$$eval('[data-call-transcript-line] [data-call-transcript-original-line]', (rows) => rows.map((row) => row.textContent ?? ''));
+      check(restored.length === 1 && restored[0] === 'Original · Hi, can you hear me?', `${label} : « Voir la traduction » rend l'état par défaut (${JSON.stringify(restored)})`);
       await open.click();
       check(await vanishes(page, '[data-call-journal-fold]'), `${label} : replier le journal le retire, après son fondu`);
       check((await open.getAttribute('aria-expanded')) === 'false', `${label} : le bouton dit qu'il est replié`);

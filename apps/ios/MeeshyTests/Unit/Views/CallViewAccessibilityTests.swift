@@ -406,7 +406,7 @@ final class CallViewAccessibilityTests: XCTestCase {
     func test_effectsMode_beforeAndAfterTheConnection_offersTheBackgroundBlur() throws {
         let source = try callViewSource()
         guard let start = source.range(of: "private func modeControls(_ mode: CallScreenMode) -> some View {"),
-              let end = source.range(of: "case .montage:", range: start.upperBound ..< source.endIndex) else {
+              let end = source.range(of: "} montage: {", range: start.upperBound ..< source.endIndex) else {
             XCTFail("CallView must route the effects mode through modeControls")
             return
         }

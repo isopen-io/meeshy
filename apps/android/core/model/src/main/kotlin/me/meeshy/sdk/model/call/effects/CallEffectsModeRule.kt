@@ -14,6 +14,17 @@ import me.meeshy.sdk.model.call.withSmoothingIntensity
 /** The two rows of the « Effets » mode, in iOS order: the face, then the colour. iOS `CallEffectsCategory`. */
 enum class CallEffectsCategory { Face, Color }
 
+/** Le genre de la pile de couches que porte cette rangée de looks. */
+val CallEffectsCategory.kind: CallEffectKind
+    get() = when (this) {
+        CallEffectsCategory.Face -> CallEffectKind.Face
+        CallEffectsCategory.Color -> CallEffectKind.Color
+    }
+
+/** La rangée d'Effets qui porte [this] ; `null` pour un genre qu'Effets n'a pas (le cadre vit au Montage). */
+val CallEffectKind.category: CallEffectsCategory?
+    get() = CallEffectsCategory.entries.firstOrNull { it.kind == this }
+
 /**
  * **LE MODE « EFFETS » DE L'APPEL** — miroir de iOS `CallEffectsModeRule` (`CallModeRules.swift`). The
  * catalogue keeps iOS order (the eight moods of [VideoFilterPreset.catalog]), and every face effect of iOS is drawn
@@ -31,11 +42,9 @@ object CallEffectsModeRule {
     fun applying(color: VideoFilterPreset, to: VideoFilterConfig): VideoFilterConfig =
         to.applyingPreset(if (color == VideoFilterPreset.Natural) null else color)
 
-    /** P8b law 14 — « (+) Ajouter un autre look » opens the other kind, to stack on the look in hand (face and colour accumulate). iOS `addingLook`. */
-    fun addingLook(from: CallEffectsCategory): CallEffectsCategory = when (from) {
-        CallEffectsCategory.Face -> CallEffectsCategory.Color
-        CallEffectsCategory.Color -> CallEffectsCategory.Face
-    }
+    /** La rangée sur laquelle Effets s'ouvre : celle du premier genre qui manque à la pile, Visage d'abord. */
+    fun startingCategory(layers: CallEffectLayers): CallEffectsCategory =
+        CallEffectsCategory.entries.firstOrNull { it.kind !in layers } ?: CallEffectsCategory.Face
 
     /** The carousel step of TalkBack's « next / previous »: bounded, never wrapping (iOS `stepping`). */
     fun <T> stepping(selection: T, items: List<T>, by: Int): T {
@@ -61,29 +70,76 @@ object CallEffectsSettingsMotion {
 
 /**
  * What the « Effets » mode holds while it is open: the config being tried ([current]), applied live to the sent
- * camera and kept as it is when the mode closes (no Quit, no Validate: law 14). Pure reducer.
+ * camera and kept as it is when the mode closes (no Quit, no Validate: law 14), the [layers] stack it shares with the
+ * Montage (three at most), and what the bar shows under the looks ([bar]). Pure reducer.
  */
 data class CallEffectsModeState(
     val current: VideoFilterConfig,
     val category: CallEffectsCategory = CallEffectsCategory.Face,
-    val showsSettings: Boolean = false,
+    val bar: CallEffectsBarMode = CallEffectsBarMode.Base,
+    val layers: CallEffectLayers = CallEffectLayers.EMPTY,
 ) {
     val face: CallFaceEffect get() = current.activeFaceEffect
     val color: VideoFilterPreset get() = CallEffectsModeRule.colorSelection(current)
     val showsSmoothingStrength: Boolean get() = face == CallFaceEffect.Smoothing
+    val showsSettings: Boolean get() = bar == CallEffectsBarMode.Settings
+    val showsApplied: Boolean get() = bar == CallEffectsBarMode.Applied
 
-    fun selecting(effect: CallFaceEffect): CallEffectsModeState = copy(current = current.selectingFaceEffect(effect))
-    fun selecting(preset: VideoFilterPreset): CallEffectsModeState = copy(current = CallEffectsModeRule.applying(preset, current))
+    /** Un effet de visage se pose s'il y a de la place dans la pile (« Aucun » se pose toujours). */
+    fun allows(effect: CallFaceEffect): Boolean = effect == CallFaceEffect.None || layers.allows(CallEffectKind.Face)
+
+    /** Un effet refusé par la pile pleine ne change rien : ni l'image, ni la pile. */
+    fun selecting(effect: CallFaceEffect): CallEffectsModeState =
+        if (allows(effect)) following(current.selectingFaceEffect(effect)) else this
+
+    fun selecting(preset: VideoFilterPreset): CallEffectsModeState =
+        if (preset == VideoFilterPreset.Natural || layers.allows(CallEffectKind.Color)) {
+            following(CallEffectsModeRule.applying(preset, current))
+        } else {
+            this
+        }
+
     fun showing(category: CallEffectsCategory): CallEffectsModeState = copy(category = category)
-    fun togglingSettings(): CallEffectsModeState = copy(showsSettings = !showsSettings)
+    fun togglingSettings(): CallEffectsModeState = copy(bar = CallEffectsBarRule.afterSettings(bar))
     fun withBrightness(value: Float): CallEffectsModeState = copy(current = current.withBrightness(value))
     fun withSmoothing(value: Float): CallEffectsModeState = copy(current = current.withSmoothingIntensity(value))
     fun togglingBlur(): CallEffectsModeState = copy(current = current.withBackgroundBlur(!current.backgroundBlurEnabled))
 
-    /** (+): the other kind of look, the settings closed. */
-    fun addingLook(): CallEffectsModeState = copy(category = CallEffectsModeRule.addingLook(category), showsSettings = false)
+    /** (+) : le genre que la rangée [row] ouvre depuis celui qu'on montre ([CallEffectsGenreRule.adding]) ; nul pile pleine. */
+    fun addedGenre(row: List<CallEffectKind>): CallEffectKind? = CallEffectsGenreRule.adding(category.kind, layers, row)
+
+    /** Le genre [kind] montré par Effets, la barre revenue au menu de base ; un genre que montre le Montage ne change rien ici. */
+    fun showingAdded(kind: CallEffectKind): CallEffectsModeState =
+        kind.category?.let { copy(category = it, bar = CallEffectsBarRule.afterAddingLook(bar)) } ?: this
+
+    /** (+) quand la rangée ne porte que les genres d'Effets : le genre ouvert, montré ici ; refusé avec trois couches. */
+    fun addingLook(row: List<CallEffectKind> = CallEffectsGenreRule.effectsGenres): CallEffectsModeState =
+        addedGenre(row)?.let(::showingAdded) ?: this
+
+    /** Long press on (+): the applied effects, when there are some. */
+    fun showingApplied(): CallEffectsModeState = copy(bar = CallEffectsBarRule.afterShowingApplied(bar, hasLayers = !layers.isEmpty))
+
+    /** Undoing one effect removes that layer alone, closes the list and gives the base menu back. */
+    fun removing(kind: CallEffectKind): CallEffectsModeState = copy(
+        current = CallEffectsStackRule.removing(kind, current),
+        layers = layers.removing(kind),
+        bar = CallEffectsBarRule.afterRemoval,
+    )
+
+    private fun following(config: VideoFilterConfig): CallEffectsModeState = copy(
+        current = config,
+        layers = CallEffectsStackRule.layers(layers, frame = layers.choice(CallEffectKind.Frame), config = config),
+    )
 
     companion object {
-        fun opening(config: VideoFilterConfig): CallEffectsModeState = CallEffectsModeState(current = config)
+        /** The mode opens on [category] (the genre the stack lacks by default), over the [layers] the call already holds. */
+        fun opening(
+            config: VideoFilterConfig,
+            layers: CallEffectLayers = CallEffectLayers.EMPTY,
+            category: CallEffectsCategory? = null,
+        ): CallEffectsModeState {
+            val held = CallEffectsStackRule.layers(layers, frame = layers.choice(CallEffectKind.Frame), config = config)
+            return CallEffectsModeState(current = config, category = category ?: CallEffectsModeRule.startingCategory(held), layers = held)
+        }
     }
 }

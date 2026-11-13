@@ -83,8 +83,13 @@
     <string name="call_detail_type">النوع</string>
     <string name="call_detail_type_audio">مكالمة صوتية</string>
     <string name="call_detail_type_video">مكالمة فيديو</string>
+    <string name="call_effects_add_look_full">ثلاثة تأثيرات كحد أقصى</string>
+    <string name="call_effects_add_look_full_hint">ألغِ تأثيرًا لإضافة آخر؛ اضغط مطولًا لعرضها</string>
+    <string name="call_effects_applied_title">التأثيرات المطبّقة</string>
+    <string name="call_effects_category_frame">الإطارات</string>
     <string name="call_effects_companions_more">%1$d مشاركين آخرين</string>
     <string name="call_effects_companions_move">النقل إلى الجهة الأخرى</string>
+    <string name="call_effects_layer_undo">إلغاء %1$s</string>
     <string name="call_ended">انتهت المكالمة</string>
     <string name="call_ended_connection_lost">انقطع الاتصال</string>
     <string name="call_ended_declined">مكالمة مرفوضة</string>
@@ -185,6 +190,7 @@
     <string name="call_mode_record_stop">إيقاف التسجيل</string>
     <string name="call_mode_recording">جارٍ التسجيل</string>
     <string name="call_moderation_cancel">إلغاء</string>
+    <string name="call_montage_settings_hint">يعرض «كل وجه» بدلًا من الإطارات</string>
     <string name="call_open_conversation">المحادثة</string>
     <string name="call_open_conversation_hint">يفتح المحادثة مع إبقاء المكالمة نشطة</string>
     <string name="call_panel_back">العودة إلى الإجراءات</string>
@@ -268,6 +274,8 @@
     <string name="call_transcript_participant">مشارك</string>
     <string name="call_transcript_show_original">عرض النص الأصلي</string>
     <string name="call_transcript_show_translated">عرض الترجمة</string>
+    <string name="call_transcript_toggle_show_original">عرض الأصل</string>
+    <string name="call_transcript_toggle_show_translation">عرض الترجمة</string>
     <string name="call_unknown_peer">غير معروف</string>
     <string name="call_video_hold_blocked">الفيديو غير متاح أثناء انتظار المكالمة</string>
     <string name="call_video_permission_denied">الكاميرا: تم رفض الإذن — اضغط لفتح الإعدادات</string>

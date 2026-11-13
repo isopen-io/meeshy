@@ -83,8 +83,13 @@
     <string name="call_detail_type">Type</string>
     <string name="call_detail_type_audio">Appel vocal</string>
     <string name="call_detail_type_video">Appel vidéo</string>
+    <string name="call_effects_add_look_full">Trois effets au plus</string>
+    <string name="call_effects_add_look_full_hint">Annulez un effet pour en ajouter un autre ; appui long pour les voir</string>
+    <string name="call_effects_applied_title">Effets appliqués</string>
+    <string name="call_effects_category_frame">Cadres</string>
     <string name="call_effects_companions_more">%1$d autres participants</string>
     <string name="call_effects_companions_move">Changer de côté</string>
+    <string name="call_effects_layer_undo">Annuler %1$s</string>
     <string name="call_ended">Appel terminé</string>
     <string name="call_ended_connection_lost">Connexion perdue</string>
     <string name="call_ended_declined">Appel refusé</string>
@@ -185,6 +190,7 @@
     <string name="call_mode_record_stop">Arrêter l\'enregistrement</string>
     <string name="call_mode_recording">Enregistrement en cours</string>
     <string name="call_moderation_cancel">Annuler</string>
+    <string name="call_montage_settings_hint">Affiche « Chaque visage » à la place des cadres</string>
     <string name="call_open_conversation">Conversation</string>
     <string name="call_open_conversation_hint">Ouvre la conversation en gardant l\'appel actif</string>
     <string name="call_panel_back">Retour aux actions</string>
@@ -268,6 +274,8 @@
     <string name="call_transcript_participant">Participant</string>
     <string name="call_transcript_show_original">Afficher le texte original</string>
     <string name="call_transcript_show_translated">Afficher la traduction</string>
+    <string name="call_transcript_toggle_show_original">Voir l\'original</string>
+    <string name="call_transcript_toggle_show_translation">Voir la traduction</string>
     <string name="call_unknown_peer">Inconnu</string>
     <string name="call_video_hold_blocked">Vidéo indisponible pendant la mise en attente de l\'appel</string>
     <string name="call_video_permission_denied">Caméra : accès refusé — toucher pour ouvrir les Paramètres</string>

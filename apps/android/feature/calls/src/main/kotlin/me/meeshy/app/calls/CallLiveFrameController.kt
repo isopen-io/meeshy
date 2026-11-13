@@ -155,11 +155,18 @@ class CallLiveFrameController internal constructor(
     }
 }
 
-/** « Capturer l'appel » dans la pilule : proposé en duo vidéo établi. C'est là que se choisit le cadre en direct, comme sur iOS. */
+/**
+ * Le Montage (« Capturer l'appel ») est offert en duo vidéo établi. La pilule et la rangée de genres d'Effets (« Cadres »)
+ * lisent ce même prédicat.
+ */
+internal fun CallUiState.offersCaptureMode(): Boolean =
+    status == CallStatus.CONNECTED && CallLiveFrameRule.mayOffer(CallLiveFrameRule.PEOPLE, isVideoCall && showsConnectedLayout)
+
+/** « Capturer l'appel » dans la pilule : offert par [offersCaptureMode]. C'est là que se choisit le cadre en direct, comme sur iOS. */
 @Singleton
 class CallCaptureActionHandler @Inject constructor() : CallActionHandler {
     override fun present(state: CallUiState): CallActionPresentation? =
-        if (state.status == CallStatus.CONNECTED && CallLiveFrameRule.mayOffer(CallLiveFrameRule.PEOPLE, state.isVideoCall && state.showsConnectedLayout)) {
+        if (state.offersCaptureMode()) {
             CallActionPresentation(
                 MeeshyIcons.Wallpaper,
                 R.string.call_control_capture,

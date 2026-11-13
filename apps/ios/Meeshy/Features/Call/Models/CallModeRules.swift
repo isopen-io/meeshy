@@ -125,9 +125,24 @@ nonisolated struct CallModeCarouselMotion<Item: Equatable> {
     }
 }
 
-enum CallEffectsCategory: String, CaseIterable, Sendable {
+nonisolated enum CallEffectsCategory: String, CaseIterable, Sendable {
     case face
     case color
+
+    var kind: CallEffectKind {
+        switch self {
+        case .face: return .face
+        case .color: return .color
+        }
+    }
+
+    init?(kind: CallEffectKind) {
+        switch kind {
+        case .face: self = .face
+        case .color: self = .color
+        case .frame, .landscape, .voice: return nil
+        }
+    }
 }
 
 enum CallEffectsModeRule {
@@ -140,15 +155,6 @@ enum CallEffectsModeRule {
 
     static func applying(color preset: VideoFilterPreset, to config: VideoFilterConfig) -> VideoFilterConfig {
         config.applyingPreset(preset == .natural ? nil : preset)
-    }
-
-    /// P8b · loi 14 — « (+) Ajouter un autre look » : le look d'un AUTRE genre se pose par-dessus
-    /// celui qu'on a (Visage et Couleur se cumulent dans la même configuration).
-    static func addingLook(from category: CallEffectsCategory) -> CallEffectsCategory {
-        switch category {
-        case .face: return .color
-        case .color: return .face
-        }
     }
 }
 

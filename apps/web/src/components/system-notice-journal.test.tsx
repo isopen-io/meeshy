@@ -3,7 +3,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { appQueryClient } from '@/lib/api/query-client';
 import { callJournalMemory } from '@/lib/calls/call-journal-memory';
+import { callTranscriptQueryKey } from '@/lib/calls/call-transcript';
 import type { CallNoticeTarget } from '@/lib/calls/call-notice';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { SystemRow } from '@/lib/view/message-badges';
@@ -25,6 +27,8 @@ const target: CallNoticeTarget = { conversationId: 'c-journal', callId: 'call-jo
 
 const runs: { readonly target: Element; readonly frames: readonly Keyframe[]; readonly duration: number; readonly fill: string | undefined }[] = [];
 const saved: { animate?: PropertyDescriptor | undefined; media?: PropertyDescriptor | undefined } = {};
+/* Toutes les racines montées par le fichier : un journal resté monté garde son abonnement au magasin de session et sa requête du client partagé, et se réveille dans les fichiers suivants. */
+const mounted: Root[] = [];
 
 beforeAll(() => {
   ensureHappyDomRegistered();
@@ -49,6 +53,8 @@ beforeEach(() => {
   });
 });
 afterEach(() => {
+  act(() => mounted.splice(0).forEach((root) => root.unmount()));
+  appQueryClient.removeQueries({ queryKey: callTranscriptQueryKey(target.callId) });
   const restore = (target: object, key: string, descriptor: PropertyDescriptor | undefined) => (descriptor === undefined ? Reflect.deleteProperty(target, key) : Object.defineProperty(target, key, descriptor));
   restore(HTMLElement.prototype, 'animate', saved.animate);
   restore(window, 'matchMedia', saved.media);
@@ -71,6 +77,7 @@ const mount = (reducedMotion = false) => {
   const render = () => {
     const root = createRoot(host);
     roots.push(root);
+    mounted.push(root);
     act(() => root.render(<SystemNotice row={row} timeString="12:40" surface="bubble" callTarget={target} />));
   };
   render();
@@ -78,7 +85,13 @@ const mount = (reducedMotion = false) => {
     host,
     find: (selector: string) => host.querySelector(selector) as HTMLElement | null,
     toggle: () => act(() => (host.querySelector('[data-call-transcript-toggle]') as HTMLElement).click()),
-    leave: () => act(() => roots.pop()?.unmount()),
+    leave: () =>
+      act(() => {
+        const root = roots.pop();
+        if (root === undefined) return;
+        mounted.splice(mounted.indexOf(root), 1);
+        root.unmount();
+      }),
     render,
   };
 };

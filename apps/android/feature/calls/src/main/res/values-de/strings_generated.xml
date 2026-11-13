@@ -83,8 +83,13 @@
     <string name="call_detail_type">Typ</string>
     <string name="call_detail_type_audio">Sprachanruf</string>
     <string name="call_detail_type_video">Videoanruf</string>
+    <string name="call_effects_add_look_full">Höchstens drei Effekte</string>
+    <string name="call_effects_add_look_full_hint">Entferne einen Effekt, um einen weiteren hinzuzufügen; lange drücken, um sie zu sehen</string>
+    <string name="call_effects_applied_title">Angewendete Effekte</string>
+    <string name="call_effects_category_frame">Rahmen</string>
     <string name="call_effects_companions_more">%1$d weitere Teilnehmende</string>
     <string name="call_effects_companions_move">Seite wechseln</string>
+    <string name="call_effects_layer_undo">%1$s entfernen</string>
     <string name="call_ended">Anruf beendet</string>
     <string name="call_ended_connection_lost">Verbindung verloren</string>
     <string name="call_ended_declined">Anruf abgelehnt</string>
@@ -185,6 +190,7 @@
     <string name="call_mode_record_stop">Aufnahme beenden</string>
     <string name="call_mode_recording">Aufnahme läuft</string>
     <string name="call_moderation_cancel">Abbrechen</string>
+    <string name="call_montage_settings_hint">Zeigt „Jedes Gesicht“ statt der Rahmen</string>
     <string name="call_open_conversation">Unterhaltung</string>
     <string name="call_open_conversation_hint">Öffnet die Unterhaltung, während der Anruf aktiv bleibt</string>
     <string name="call_panel_back">Zurück zu den Aktionen</string>
@@ -268,6 +274,8 @@
     <string name="call_transcript_participant">Teilnehmer</string>
     <string name="call_transcript_show_original">Originaltext anzeigen</string>
     <string name="call_transcript_show_translated">Übersetzung anzeigen</string>
+    <string name="call_transcript_toggle_show_original">Original anzeigen</string>
+    <string name="call_transcript_toggle_show_translation">Übersetzung anzeigen</string>
     <string name="call_unknown_peer">Unbekannt</string>
     <string name="call_video_hold_blocked">Video während des Anrufhaltens nicht verfügbar</string>
     <string name="call_video_permission_denied">Kamera: Zugriff verweigert — zum Öffnen der Einstellungen tippen</string>
