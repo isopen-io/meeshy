@@ -535,6 +535,7 @@ const es = {
   'community.conversations.one': '{count} conversación',
   'community.conversations.other': '{count} conversaciones',
   'community.detail.stats.members': 'Miembros',
+  'community.detail.online': '{count} en línea',
   'community.detail.channels': 'Conversaciones',
   'community.detail.channels.empty': 'Aún no participas en ninguna conversación de esta comunidad.',
   'community.detail.untitled': 'Conversación sin título',

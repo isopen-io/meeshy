@@ -532,6 +532,7 @@ const fr = {
   'community.conversations.one': '{count} conversation',
   'community.conversations.other': '{count} conversations',
   'community.detail.stats.members': 'Membres',
+  'community.detail.online': '{count} en ligne',
   'community.detail.channels': 'Conversations',
   'community.detail.channels.empty': 'Vous ne participez encore à aucune conversation de cette communauté.',
   'community.detail.untitled': 'Conversation sans titre',

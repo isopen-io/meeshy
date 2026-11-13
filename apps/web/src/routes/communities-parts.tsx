@@ -399,19 +399,33 @@ function Stat({ icon, value, label, stat }: { readonly icon: ReactNode; readonly
   );
 }
 
-/** Miroir `CommunityDetailView.statsSection` — membres et conversations, en nombres entiers. */
+/** « N en ligne » (#18014) — un AGRÉGAT servi par la passerelle, jamais une liste ; rien quand personne n'y est ou qu'elle se tait. */
+function CommunityOnline({ language, count }: { readonly language: InterfaceLanguage; readonly count: number | null | undefined }) {
+  if (count === undefined || count === null || count <= 0) return null;
+  return (
+    <p data-community-online className="flex items-center justify-center gap-1.5 pb-3 text-chip font-medium" style={{ color: INK_2 }}>
+      <span aria-hidden="true" className="inline-block size-2 rounded-full" style={{ backgroundColor: BRAND }} />
+      {translate(language, 'community.detail.online', { count: new Intl.NumberFormat(language).format(count) })}
+    </p>
+  );
+}
+
+/** Miroir `CommunityDetailView.statsSection` — membres et conversations, en nombres entiers, puis « N en ligne ». */
 export function CommunityStats({ language, community }: { readonly language: InterfaceLanguage; readonly community: CommunitySummary }) {
   const format = new Intl.NumberFormat(language);
   return (
-    <div className="flex items-stretch rounded-card" style={CARD_STYLE}>
-      <Stat stat="members" icon={<Glyph name="users" size={13} />} value={format.format(community.memberCount)} label={translate(language, 'community.detail.stats.members')} />
-      <span aria-hidden="true" className="my-3 w-px" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)' }} />
-      <Stat
-        stat="conversations"
-        icon={<ScreenGlyph name="chatsCircle" size={13} />}
-        value={format.format(community.conversationCount)}
-        label={translate(language, 'community.detail.channels')}
-      />
+    <div className="rounded-card" style={CARD_STYLE}>
+      <div className="flex items-stretch">
+        <Stat stat="members" icon={<Glyph name="users" size={13} />} value={format.format(community.memberCount)} label={translate(language, 'community.detail.stats.members')} />
+        <span aria-hidden="true" className="my-3 w-px" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)' }} />
+        <Stat
+          stat="conversations"
+          icon={<ScreenGlyph name="chatsCircle" size={13} />}
+          value={format.format(community.conversationCount)}
+          label={translate(language, 'community.detail.channels')}
+        />
+      </div>
+      <CommunityOnline language={language} count={community.onlineMemberCount} />
     </div>
   );
 }

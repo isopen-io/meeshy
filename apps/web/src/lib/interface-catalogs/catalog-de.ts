@@ -535,6 +535,7 @@ const de = {
   'community.conversations.one': '{count} Unterhaltung',
   'community.conversations.other': '{count} Unterhaltungen',
   'community.detail.stats.members': 'Mitglieder',
+  'community.detail.online': '{count} online',
   'community.detail.channels': 'Unterhaltungen',
   'community.detail.channels.empty': 'Du bist noch in keiner Unterhaltung dieser Community.',
   'community.detail.untitled': 'Unbenannte Unterhaltung',
