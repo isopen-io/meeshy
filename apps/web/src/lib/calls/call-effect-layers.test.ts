@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { addingGenre, addLayer, canAdd, genreRow, isFull, listLayers, MAX_EFFECT_LAYERS, removeLayer, syncLayers, type EffectGenre, type EffectLayer, type EffectStack } from './call-effect-layers';
+import { addingGenre, addLayer, canAdd, genreRow, isFull, listLayers, MAX_EFFECT_LAYERS, openingGenre, removeLayer, syncLayers, type EffectGenre, type EffectLayer, type EffectStack } from './call-effect-layers';
 
 /**
  * LA PILE DE TROIS COUCHES (#17903, décision porteur du 2026-11-13 sur #16979) — Effets, filtres et
@@ -118,10 +118,12 @@ describe('la rangée de genres et (+), vecteurs communs (#17915)', () => {
     ['couleur · [filtre] · complète', 'color', [filter], full, 'face'],
     ['visage · [filtre, visage] · complète', 'face', [filter, visage], full, 'frame'],
     ['visage · [filtre, visage] · Effets seul', 'face', [filter, visage], effectsOnly, 'color'],
+    ['couleur · [filtre, visage] · Effets seul', 'color', [filter, visage], effectsOnly, 'face'],
     ['cadre · [cadre] · complète', 'frame', [cadre], full, 'face'],
     ['cadre · [cadre, visage] · complète', 'frame', [cadre, visage], full, 'color'],
     ['cadre · [filtre, visage] · complète', 'frame', [filter, visage], full, 'face'],
     ['cadre · [cadre] · [cadre]', 'frame', [cadre], ['frame'], null],
+    ['cadre · vide · Effets seul (genre hors de la rangée)', 'frame', [], effectsOnly, null],
     ['visage · pile pleine · complète', 'face', [cadre, filter, visage], full, null],
     ['cadre · pile pleine · complète', 'frame', [cadre, filter, visage], full, null],
   ];
@@ -131,4 +133,32 @@ describe('la rangée de genres et (+), vecteurs communs (#17915)', () => {
       expect(addingGenre(current, stack, row)).toBe(expected);
     });
   }
+});
+
+/** Les vecteurs d'`opening` (iOS `CallEffectLayers.opening(after:among:)`, Kotlin `CallEffectLayers.opening`) : le premier genre ABSENT après le genre courant. */
+describe('(+) ouvre le premier genre absent, vecteurs communs', () => {
+  const family: readonly EffectGenre[] = ['face', 'color', 'frame'];
+  const filter: EffectLayer = { genre: 'color', choice: 'golden' };
+  const visage: EffectLayer = { genre: 'face', choice: 'toad' };
+  const cadre: EffectLayer = { genre: 'frame', choice: 'neon' };
+
+  test('après le genre courant : vide, visage ⇒ couleur ; [visage], depuis couleur ⇒ rien', () => {
+    expect(openingGenre([], 'face', ['face', 'color'])).toBe('color');
+    expect(openingGenre([visage], 'color', ['face', 'color'])).toBeNull();
+  });
+
+  test('saute les genres déjà posés et reboucle', () => {
+    expect(openingGenre([filter], 'face', family)).toBe('frame');
+    expect(openingGenre([filter], 'frame', family)).toBe('face');
+  });
+
+  test('pile pleine ⇒ rien ; jamais le genre courant lui-même', () => {
+    expect(openingGenre([cadre, filter, visage], 'face', ['frame', 'color', 'face', 'landscape', 'voice'])).toBeNull();
+    expect(openingGenre([], 'face', ['face'])).toBeNull();
+  });
+
+  test('sans genre courant, depuis le début de la rangée', () => {
+    expect(openingGenre([visage], null, family)).toBe('color');
+    expect(openingGenre([], null, family)).toBe('face');
+  });
 });
