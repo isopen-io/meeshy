@@ -52,12 +52,7 @@
           "androidName": "talkie_send_recording_copy",
           "status": "adopted"
         },
-        {
-          "catalog": "app",
-          "iosKey": "talkie.send.voiceCopy",
-          "androidName": "talkie_send_voice_copy",
-          "status": "adopted"
-        },
+        { "androidName": "talkie_send_voice_copy", "status": "android-only" },
         {
           "catalog": "app",
           "iosKey": "talkie.send.voice",

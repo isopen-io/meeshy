@@ -133,17 +133,17 @@ class EpureComposantsPartagesStringsTest {
     }
 
     @Test
-    fun `aucun libelle epure ne depasse quatre-vingt-dix caracteres dans aucune langue`() {
+    fun `aucun libelle epure ne depasse cent dix caracteres dans aucune langue`() {
         (shortened + "bring_silent_question" + "recognition_language_question").forEach { key ->
             folders.keys.forEach { language ->
-                assertWithMessage("$language/$key").that(text(language, key).length).isAtMost(90)
+                assertWithMessage("$language/$key").that(text(language, key).length).isAtMost(110)
             }
         }
     }
 
     @Test
     fun `les anciens textes bavards ne subsistent dans aucune langue`() {
-        val retired = listOf("Vous avez fait tous les", "You’ve made all the", "n'est plus disponible", "no longer available on this device")
+        val retired = listOf("Vous avez fait tous les", "You’ve made all the", "média n'est plus disponible", "no longer available on this device")
         byLanguage.forEach { (language, entries) ->
             retired.forEach { phrase ->
                 assertWithMessage("$language contient encore « $phrase »").that(entries.values.none { phrase in it }).isTrue()

@@ -36,6 +36,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import me.meeshy.sdk.model.relation.BringAvailability
 import me.meeshy.ui.R as UiR
+import me.meeshy.ui.component.MeeshyInfoNote
+import me.meeshy.ui.component.MeeshyInfoNoted
 import me.meeshy.ui.component.bring.BringConfirmDialog
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import me.meeshy.ui.theme.MeeshyPalette
@@ -70,11 +72,7 @@ internal fun ProfileBringRow(
             .padding(MeeshySpacing.md),
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
     ) {
-        Text(
-            text = stringResource(UiR.string.bring_explain),
-            style = MaterialTheme.typography.bodySmall,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
+        BringExplanation()
         when {
             state.ringing != null -> RingingLine(displayName, onCancel = viewModel::cancel)
             availability.isExhausted -> Text(
@@ -95,6 +93,31 @@ internal fun ProfileBringRow(
                 viewModel.send()
             },
             onDismiss = { confirming = false },
+        )
+    }
+}
+
+/**
+ * Ce qu'est le Bring, VISIBLE au repos (repère propre à Meeshy, règle 7 de l'épure #17584) ; seul le cas limite
+ * — un iPhone en silencieux — passe derrière un (i) dont le nom est la question.
+ */
+@Composable
+internal fun BringExplanation() {
+    var openNote by rememberSaveable { mutableStateOf<String?>(null) }
+    MeeshyInfoNoted(
+        note = MeeshyInfoNote(
+            question = stringResource(UiR.string.bring_silent_question),
+            text = stringResource(UiR.string.bring_silent_note),
+        ),
+        openNoteId = openNote,
+        onOpenNoteIdChange = { openNote = it },
+        modifier = Modifier.fillMaxWidth(),
+        tint = MeeshyTheme.tokens.textSecondary,
+    ) {
+        Text(
+            text = stringResource(UiR.string.bring_explain),
+            style = MaterialTheme.typography.bodySmall,
+            color = MeeshyTheme.tokens.textSecondary,
         )
     }
 }

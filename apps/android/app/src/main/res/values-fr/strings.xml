@@ -21,7 +21,7 @@
 
     <!-- Profile screen -->
     <string name="bring_channel_name">Bring</string>
-    <string name="bring_channel_description">Fait sonner votre téléphone quand un proche déclenche un Bring, même en silencieux</string>
+    <string name="bring_channel_description">Le téléphone sonne pour un Bring, même en silencieux</string>
     <string name="call_channel_description">Appels vocaux et vidéo entrants</string>
     <string name="a11y_floating_menu">Menu de navigation</string>
 

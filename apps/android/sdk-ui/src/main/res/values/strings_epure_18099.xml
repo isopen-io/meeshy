@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
+<resources>
+    <string name="post_daily_limit_comment">Comment limit reached: resumes at %1$s. It counts your actions, never your sparks.</string>
+    <string name="post_daily_limit_comment_untimed">Comment limit reached. It counts your actions, never your sparks.</string>
+    <string name="post_daily_limit_reaction">Reaction limit reached: resumes at %1$s. It counts your actions, never your sparks.</string>
+    <string name="post_daily_limit_reaction_untimed">Reaction limit reached. It counts your actions, never your sparks.</string>
+    <string name="bubble_failed_attachment_right">This attachment type isn’t allowed here.</string>
+    <string name="bring_explain">For an extreme emergency: their phone rings, even when locked.</string>
+    <string name="bring_silent_question">What if their phone is on silent?</string>
+    <string name="bring_silent_note">Depending on settings, an iPhone on silent may only show a priority alert.</string>
+    <string name="talkie_send_voice_copy">Emergency access unavailable: a voice message goes to your latest conversation.</string>
+    <string name="voiceProfile_processing_description">Processing, a few minutes.</string>
+    <string name="voiceProfile_recording_description">Read the text aloud: at least 3 samples of 10 seconds.</string>
+    <string name="audio_consent_notice_message">Enable voice consent to transcribe and translate your audio.</string>
+</resources>

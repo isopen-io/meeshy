@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
+<resources>
+    <string name="post_daily_limit_comment">Limite di commenti raggiunto: riprende alle %1$s. Conta i tuoi gesti, mai le tue scintille.</string>
+    <string name="post_daily_limit_comment_untimed">Limite di commenti raggiunto. Conta i tuoi gesti, mai le tue scintille.</string>
+    <string name="post_daily_limit_reaction">Limite di reazioni raggiunto: riprende alle %1$s. Conta i tuoi gesti, mai le tue scintille.</string>
+    <string name="post_daily_limit_reaction_untimed">Limite di reazioni raggiunto. Conta i tuoi gesti, mai le tue scintille.</string>
+    <string name="bubble_failed_attachment_right">Questo tipo di allegato non è consentito qui.</string>
+    <string name="bring_explain">Per un’emergenza estrema: il suo telefono squilla, anche bloccato.</string>
+    <string name="bring_silent_question">E se il suo telefono è in silenzioso?</string>
+    <string name="bring_silent_note">In base alle impostazioni, un iPhone in silenzioso può mostrare solo un avviso prioritario.</string>
+    <string name="talkie_send_voice_copy">Accesso d’emergenza non disponibile: un messaggio vocale parte nella vostra conversazione più recente.</string>
+    <string name="voiceProfile_processing_description">Elaborazione in corso, qualche minuto.</string>
+    <string name="voiceProfile_recording_description">Leggi il testo ad alta voce: almeno 3 campioni da 10 secondi.</string>
+    <string name="audio_consent_notice_message">Attiva il consenso vocale per trascrivere e tradurre i tuoi audio.</string>
+</resources>

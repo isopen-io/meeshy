@@ -8,7 +8,6 @@
     <string name="a11y_media_download_cancel">إلغاء التنزيل</string>
     <string name="a11y_message_actions_forward">إعادة توجيه</string>
     <string name="audio_consent_notice_action">إعداد صوتي</string>
-    <string name="audio_consent_notice_message">فعّل الموافقة الصوتية لتُنسَخ رسائلك الصوتية نصًّا وتُترجَم.</string>
     <string name="audio_editor_a11y_playhead">موضع التشغيل</string>
     <string name="audio_editor_apply">تطبيق التعديلات</string>
     <string name="audio_editor_close">إغلاق</string>
@@ -83,7 +82,6 @@
     <string name="bring_confirm_body">Bring مخصص للحالات الطارئة القصوى فقط. يرنّ حتى يوقفه %1$s، دقيقتين على الأكثر. Meeshy ليس خدمة طوارئ: عند الخطر اتصل بخدمات الطوارئ.</string>
     <string name="bring_confirm_send">اجعله يرنّ</string>
     <string name="bring_confirm_title">هل تريد جعل هاتف %1$s يرنّ؟</string>
-    <string name="bring_explain">لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل. قد يعرض آيفون في الوضع الصامت تنبيهًا ذا أولوية فقط.</string>
     <string name="bring_failed">لم يُرسل Bring، حاول مجددًا</string>
     <string name="bring_offline">يحتاج Bring إلى اتصال بالشبكة</string>
     <string name="bring_quota">لا مزيد من Bring اليوم إلى %1$s</string>
@@ -116,7 +114,6 @@
     <string name="bubble_contact_card_on_meeshy">على Meeshy</string>
     <string name="bubble_contact_card_shared">جهة اتصال مشتركة</string>
     <string name="bubble_edited">معدَّلة</string>
-    <string name="bubble_failed_attachment_right">لا يمكنك بعد إرسال هذا النوع من المرفقات في هذه المحادثة.</string>
     <string name="bubble_footer_translation_request">طلب الترجمة</string>
     <string name="bubble_forwarded">تمت إعادة التوجيه</string>
     <string name="bubble_forwarded_from">تمت إعادة التوجيه من %1$s</string>
@@ -382,10 +379,6 @@
     <string name="password_reveal_show">إظهار كلمة المرور</string>
     <string name="password_reveal_state_masked">مخفية</string>
     <string name="password_reveal_state_revealed">ظاهرة</string>
-    <string name="post_daily_limit_comment">لقد كتبت كل التعليقات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا: يمكنك التعليق مجددًا عند الساعة %1$s.</string>
-    <string name="post_daily_limit_comment_untimed">لقد كتبت كل التعليقات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا.</string>
-    <string name="post_daily_limit_reaction">لقد قمت بكل التفاعلات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا: يمكنك التفاعل مجددًا عند الساعة %1$s.</string>
-    <string name="post_daily_limit_reaction_untimed">لقد قمت بكل التفاعلات المسموح بها اليوم. الحدّ يعدّ إجراءاتك، لا شراراتك أبدًا.</string>
     <string name="post_points_a11y_one">منحك هذا المنشور %1$s شرارة</string>
     <string name="post_points_a11y_other">منحك هذا المنشور %1$s شرارات</string>
     <string name="presence_away">بعيد</string>
@@ -582,7 +575,6 @@
     <string name="talkie_send_recording_copy">جارٍ تسجيل رسالة صوتية…</string>
     <string name="talkie_send_talking">أنت تتحدث إلى %1$s…</string>
     <string name="talkie_send_voice">لا يمكن إيصال جهاز اللاسلكي الآن: أرسل رسالة صوتية بدلًا من ذلك.</string>
-    <string name="talkie_send_voice_copy">هذا الشخص غير متاح للوصول في حالات الطوارئ. ستُنشأ رسالة وتُرسل في أحدث محادثة لك معه.</string>
     <string name="talkie_send_waking">جارٍ إيقاظ %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">شوهد أول أمس في %1$s</string>
     <string name="time_lastSeen_dateAt">شوهد في %1$s الساعة %2$s</string>
@@ -629,10 +621,8 @@
     <string name="voiceProfile_consent_point5">عيّناتك مشفّرة ولا تُشارَك أبدًا</string>
     <string name="voiceProfile_consent_title">الاستنساخ الصوتي</string>
     <string name="voiceProfile_consent_toggle">أوافق على استخدام عيّناتي الصوتية لإنشاء ملف صوتي</string>
-    <string name="voiceProfile_processing_description">تجري معالجة عيّناتك. قد يستغرق ذلك بضع دقائق.</string>
     <string name="voiceProfile_processing_title">جارٍ إنشاء الملف الصوتي...</string>
     <string name="voiceProfile_recording_createProfile">إنشاء الملف الصوتي</string>
-    <string name="voiceProfile_recording_description">اقرأ النص أدناه بصوت عالٍ. سجّل 3 عيّنات على الأقل مدة كل منها 10 ثوانٍ.</string>
     <string name="voiceProfile_recording_languagePicker">لغة التسجيل</string>
     <string name="voiceProfile_recording_min_duration">%1$d ث كحد أدنى</string>
     <string name="voiceProfile_recording_readAloud">اقرأ هذا النص بصوت عالٍ</string>

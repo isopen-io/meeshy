@@ -2,8 +2,8 @@
   "families": {
     "android:app": {
       "labels": 319,
-      "words": 970,
-      "long": 6,
+      "words": 944,
+      "long": 2,
       "explanations": 26
     },
     "android:feature/auth": {
@@ -92,8 +92,8 @@
     },
     "android:sdk-ui": {
       "labels": 937,
-      "words": 3384,
-      "long": 32,
+      "words": 3332,
+      "long": 24,
       "explanations": 73
     },
     "ios:Meeshy/(phrases)": {

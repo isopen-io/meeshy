@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="degraded_mode_title">الوضع المحدود</string>
-    <string name="degraded_mode_body">تعذّر على Meeshy فتح التخزين المحلي بشكل طبيعي. بياناتك آمنة على الخادم؛ وقد تكون بعض البيانات المحلية مفقودة.</string>
+    <string name="degraded_mode_body">التخزين المحلي غير متاح: بياناتك على الخادم، وقد تفقد بعضها.</string>
     <string name="degraded_mode_retry">إعادة المحاولة</string>
     <string name="degraded_mode_export">تصدير التقرير</string>
 </resources>

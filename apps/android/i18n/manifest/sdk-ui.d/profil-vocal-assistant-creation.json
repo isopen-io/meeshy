@@ -118,24 +118,14 @@
           "androidName": "voiceProfile_recording_title",
           "status": "adopted"
         },
-        {
-          "catalog": "ui",
-          "iosKey": "voiceProfile.recording.description",
-          "androidName": "voiceProfile_recording_description",
-          "status": "adopted"
-        },
+        { "androidName": "voiceProfile_recording_description", "status": "android-only" },
         {
           "catalog": "ui",
           "iosKey": "voiceProfile.processing.title",
           "androidName": "voiceProfile_processing_title",
           "status": "adopted"
         },
-        {
-          "catalog": "ui",
-          "iosKey": "voiceProfile.processing.description",
-          "androidName": "voiceProfile_processing_description",
-          "status": "adopted"
-        },
+        { "androidName": "voiceProfile_processing_description", "status": "android-only" },
         {
           "catalog": "ui",
           "iosKey": "voiceProfile.complete.title",

@@ -2,6 +2,7 @@
 <resources>
     <string name="recognition_language_title">Audio language</string>
     <string name="recognition_language_show_all">Show all languages</string>
+    <string name="recognition_language_question">Why so few languages?</string>
     <string name="recognition_language_hint">By default, only languages available on this device are listed.</string>
     <string name="recognition_language_search">Search for a language</string>
     <string name="recognition_language_selected">Selected</string>

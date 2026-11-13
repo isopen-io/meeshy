@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.LanguageData
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
 import org.junit.Test
@@ -29,6 +30,7 @@ import org.robolectric.annotation.Config
 class RecognitionLanguagePickerEpureTest {
     @get:Rule val compose = createComposeRule()
 
+    private val spanish = LanguageData.info("es")!!.nativeName.replaceFirstChar { it.titlecase() }
     private val question = "Why so few languages?"
     private val note = "By default, only languages available on this device are listed."
 
@@ -56,7 +58,6 @@ class RecognitionLanguagePickerEpureTest {
         show()
         compose.onNodeWithContentDescription(question).performClick()
         compose.onNodeWithText(note).assertIsDisplayed().assertTextEquals(note)
-        compose.onNodeWithText("Espagnol").assertDoesNotExist()
-        compose.onNodeWithText("Spanish").assertDoesNotExist()
+        compose.onNodeWithText(spanish).assertDoesNotExist()
     }
 }

@@ -4,10 +4,10 @@
     ":sdk-ui": {
       "resDir": "sdk-ui/src/main/res",
       "entries": [
-        { "catalog": "app", "iosKey": "post.daily_limit.comment", "androidName": "post_daily_limit_comment", "status": "adopted" },
-        { "catalog": "app", "iosKey": "post.daily_limit.comment.untimed", "androidName": "post_daily_limit_comment_untimed", "status": "adopted" },
-        { "catalog": "app", "iosKey": "post.daily_limit.reaction", "androidName": "post_daily_limit_reaction", "status": "adopted" },
-        { "catalog": "app", "iosKey": "post.daily_limit.reaction.untimed", "androidName": "post_daily_limit_reaction_untimed", "status": "adopted" }
+        { "androidName": "post_daily_limit_comment", "status": "android-only" },
+        { "androidName": "post_daily_limit_comment_untimed", "status": "android-only" },
+        { "androidName": "post_daily_limit_reaction", "status": "android-only" },
+        { "androidName": "post_daily_limit_reaction_untimed", "status": "android-only" }
       ]
     }
   }

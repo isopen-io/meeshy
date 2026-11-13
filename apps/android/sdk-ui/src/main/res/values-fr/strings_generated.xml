@@ -8,7 +8,6 @@
     <string name="a11y_media_download_cancel">Annuler le téléchargement</string>
     <string name="a11y_message_actions_forward">Transférer</string>
     <string name="audio_consent_notice_action">Configurer ma voix</string>
-    <string name="audio_consent_notice_message">Active le consentement vocal pour que tes messages audio soient transcrits et traduits.</string>
     <string name="audio_editor_a11y_playhead">Position de lecture</string>
     <string name="audio_editor_apply">Appliquer les modifications</string>
     <string name="audio_editor_close">Fermer</string>
@@ -83,7 +82,6 @@
     <string name="bring_confirm_body">Le Bring est réservé aux urgences extrêmes. Il sonne jusqu’à ce que %1$s l’arrête, deux minutes au plus. Meeshy n’est pas un service d’urgence : en cas de danger, appelez les secours.</string>
     <string name="bring_confirm_send">Faire sonner</string>
     <string name="bring_confirm_title">Faire sonner le téléphone de %1$s ?</string>
-    <string name="bring_explain">Pour une urgence extrême : son téléphone sonne, même verrouillé. Selon ses réglages, un iPhone en silencieux peut n’afficher qu’une alerte prioritaire.</string>
     <string name="bring_failed">Le Bring n’est pas parti, réessayez</string>
     <string name="bring_offline">Le Bring a besoin du réseau</string>
     <string name="bring_quota">Plus de Bring aujourd’hui vers %1$s</string>
@@ -110,7 +108,6 @@
     <string name="bubble_contact_card_on_meeshy">Sur Meeshy</string>
     <string name="bubble_contact_card_shared">Contact partagé</string>
     <string name="bubble_edited">modifié</string>
-    <string name="bubble_failed_attachment_right">Vous ne pouvez pas encore envoyer ce type de pièce jointe dans cette conversation.</string>
     <string name="bubble_footer_translation_request">Demander la traduction</string>
     <string name="bubble_forwarded">Transféré</string>
     <string name="bubble_forwarded_from">Transféré depuis %1$s</string>
@@ -376,10 +373,6 @@
     <string name="password_reveal_show">Afficher le mot de passe</string>
     <string name="password_reveal_state_masked">Masqué</string>
     <string name="password_reveal_state_revealed">Affiché</string>
-    <string name="post_daily_limit_comment">Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos étincelles : vous pourrez recommenter à %1$s.</string>
-    <string name="post_daily_limit_comment_untimed">Vous avez fait tous les commentaires permis aujourd’hui. La limite compte vos gestes, jamais vos étincelles.</string>
-    <string name="post_daily_limit_reaction">Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos étincelles : vous pourrez réagir de nouveau à %1$s.</string>
-    <string name="post_daily_limit_reaction_untimed">Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos étincelles.</string>
     <string name="post_points_a11y_one">Ce post t’a rapporté %1$s étincelle</string>
     <string name="post_points_a11y_other">Ce post t’a rapporté %1$s étincelles</string>
     <string name="presence_away">Absent</string>
@@ -567,7 +560,6 @@
     <string name="talkie_send_recording_copy">Enregistrement du message vocal…</string>
     <string name="talkie_send_talking">Vous parlez à %1$s…</string>
     <string name="talkie_send_voice">Le talkie ne passe pas en ce moment : envoyez plutôt un message vocal.</string>
-    <string name="talkie_send_voice_copy">L’utilisateur n’est pas disponible pour un accès d’urgence. Un message sera créé et envoyé dans votre conversation la plus récente avec lui.</string>
     <string name="talkie_send_waking">Réveil de %1$s…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vu avant-hier à %1$s</string>
     <string name="time_lastSeen_dateAt">Vu le %1$s à %2$s</string>
@@ -614,10 +606,8 @@
     <string name="voiceProfile_consent_point5">Vos échantillons sont chiffrés et ne sont jamais partagés</string>
     <string name="voiceProfile_consent_title">Clonage vocal</string>
     <string name="voiceProfile_consent_toggle">J\'accepte que mes échantillons vocaux soient utilisés pour créer un profil vocal</string>
-    <string name="voiceProfile_processing_description">Vos échantillons sont en cours de traitement. Cela peut prendre quelques minutes.</string>
     <string name="voiceProfile_processing_title">Création du profil vocal...</string>
     <string name="voiceProfile_recording_createProfile">Créer le profil vocal</string>
-    <string name="voiceProfile_recording_description">Lisez le texte ci-dessous à voix haute. Enregistrez au moins 3 échantillons de 10 secondes chacun.</string>
     <string name="voiceProfile_recording_languagePicker">Langue d\'enregistrement</string>
     <string name="voiceProfile_recording_min_duration">min %1$d s</string>
     <string name="voiceProfile_recording_readAloud">Lisez ce texte à voix haute</string>

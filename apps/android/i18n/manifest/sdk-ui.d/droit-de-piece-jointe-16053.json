@@ -4,12 +4,7 @@
     ":sdk-ui": {
       "resDir": "sdk-ui/src/main/res",
       "entries": [
-        {
-          "catalog": "app",
-          "iosKey": "conversation.send.attachmentRightNotPermitted",
-          "androidName": "bubble_failed_attachment_right",
-          "status": "adopted"
-        }
+        { "androidName": "bubble_failed_attachment_right", "status": "android-only" }
       ]
     }
   }

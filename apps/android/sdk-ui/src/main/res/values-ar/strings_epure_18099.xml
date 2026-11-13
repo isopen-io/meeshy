@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
+<resources>
+    <string name="post_daily_limit_comment">بلغتَ حدّ التعليقات: يُستأنف عند الساعة %1$s. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
+    <string name="post_daily_limit_comment_untimed">بلغتَ حدّ التعليقات. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
+    <string name="post_daily_limit_reaction">بلغتَ حدّ التفاعلات: يُستأنف عند الساعة %1$s. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
+    <string name="post_daily_limit_reaction_untimed">بلغتَ حدّ التفاعلات. يعدّ الحدّ إجراءاتك، لا شراراتك أبدًا.</string>
+    <string name="bubble_failed_attachment_right">هذا النوع من المرفقات غير مسموح به هنا.</string>
+    <string name="bring_explain">لحالة طارئة قصوى: يرنّ هاتفه حتى وهو مقفل.</string>
+    <string name="bring_silent_question">ماذا لو كان هاتفه في الوضع الصامت؟</string>
+    <string name="bring_silent_note">قد يعرض آيفون في الوضع الصامت تنبيهًا ذا أولوية فقط.</string>
+    <string name="talkie_send_voice_copy">الوصول الطارئ غير متاح: تُرسل رسالة صوتية في أحدث محادثة بينكما.</string>
+    <string name="voiceProfile_processing_description">المعالجة جارية، بضع دقائق.</string>
+    <string name="voiceProfile_recording_description">اقرأ النص بصوت عالٍ: 3 عيّنات على الأقل، 10 ثوانٍ لكل منها.</string>
+    <string name="audio_consent_notice_message">فعّل الموافقة الصوتية لنسخ رسائلك الصوتية وترجمتها.</string>
+</resources>

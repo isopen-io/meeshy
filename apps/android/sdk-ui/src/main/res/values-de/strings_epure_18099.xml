@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Épure des composants partagés (#18099, #17584) : écrit à la main — les clés quittent le catalogue iOS (manifeste android-only), l'épure de iOS suit son propre lot. -->
+<resources>
+    <string name="post_daily_limit_comment">Kommentarlimit erreicht: weiter ab %1$s. Es zählt deine Aktionen, nie deine Funken.</string>
+    <string name="post_daily_limit_comment_untimed">Kommentarlimit erreicht. Es zählt deine Aktionen, nie deine Funken.</string>
+    <string name="post_daily_limit_reaction">Reaktionslimit erreicht: weiter ab %1$s. Es zählt deine Aktionen, nie deine Funken.</string>
+    <string name="post_daily_limit_reaction_untimed">Reaktionslimit erreicht. Es zählt deine Aktionen, nie deine Funken.</string>
+    <string name="bubble_failed_attachment_right">Dieser Anhangstyp ist hier nicht erlaubt.</string>
+    <string name="bring_explain">Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt.</string>
+    <string name="bring_silent_question">Und wenn das Telefon lautlos ist?</string>
+    <string name="bring_silent_note">Ein iPhone im Lautlos-Modus zeigt je nach Einstellung nur einen dringenden Hinweis.</string>
+    <string name="talkie_send_voice_copy">Notfallzugang nicht verfügbar: Eine Sprachnachricht geht in eure letzte Unterhaltung.</string>
+    <string name="voiceProfile_processing_description">Verarbeitung läuft, einige Minuten.</string>
+    <string name="voiceProfile_recording_description">Text laut lesen: mindestens 3 Proben à 10 Sekunden.</string>
+    <string name="audio_consent_notice_message">Aktiviere die Sprach-Einwilligung, um deine Audios zu transkribieren und zu übersetzen.</string>
+</resources>

@@ -8,7 +8,6 @@
     <string name="a11y_media_download_cancel">Download abbrechen</string>
     <string name="a11y_message_actions_forward">Weiterleiten</string>
     <string name="audio_consent_notice_action">Meine Stimme einrichten</string>
-    <string name="audio_consent_notice_message">Aktiviere die Sprach-Einwilligung, damit deine Sprachnachrichten transkribiert und übersetzt werden.</string>
     <string name="audio_editor_a11y_playhead">Wiedergabeposition</string>
     <string name="audio_editor_apply">Änderungen anwenden</string>
     <string name="audio_editor_close">Schließen</string>
@@ -83,7 +82,6 @@
     <string name="bring_confirm_body">Bring ist nur für extreme Notfälle. Es klingelt, bis %1$s es stoppt, höchstens zwei Minuten. Meeshy ist kein Notdienst: Bei Gefahr ruf den Notruf an.</string>
     <string name="bring_confirm_send">Klingeln lassen</string>
     <string name="bring_confirm_title">Das Telefon von %1$s klingeln lassen?</string>
-    <string name="bring_explain">Für einen extremen Notfall: Das Telefon klingelt, auch gesperrt. Ein iPhone im Lautlos-Modus zeigt je nach Einstellung nur einen dringenden Hinweis.</string>
     <string name="bring_failed">Das Bring wurde nicht gesendet, versuch es erneut</string>
     <string name="bring_offline">Bring braucht eine Verbindung</string>
     <string name="bring_quota">Heute kein Bring mehr an %1$s</string>
@@ -108,7 +106,6 @@
     <string name="bubble_contact_card_on_meeshy">Auf Meeshy</string>
     <string name="bubble_contact_card_shared">Geteilter Kontakt</string>
     <string name="bubble_edited">bearbeitet</string>
-    <string name="bubble_failed_attachment_right">Du kannst diese Art von Anhang in dieser Unterhaltung noch nicht senden.</string>
     <string name="bubble_footer_translation_request">Übersetzung anfordern</string>
     <string name="bubble_forwarded">Weitergeleitet</string>
     <string name="bubble_forwarded_from">Weitergeleitet aus %1$s</string>
@@ -374,10 +371,6 @@
     <string name="password_reveal_show">Passwort anzeigen</string>
     <string name="password_reveal_state_masked">Ausgeblendet</string>
     <string name="password_reveal_state_revealed">Angezeigt</string>
-    <string name="post_daily_limit_comment">Du hast heute alle erlaubten Kommentare geschrieben. Das Limit zählt deine Aktionen, nie deine Funken: Ab %1$s kannst du wieder kommentieren.</string>
-    <string name="post_daily_limit_comment_untimed">Du hast heute alle erlaubten Kommentare geschrieben. Das Limit zählt deine Aktionen, nie deine Funken.</string>
-    <string name="post_daily_limit_reaction">Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Funken: Ab %1$s kannst du wieder reagieren.</string>
-    <string name="post_daily_limit_reaction_untimed">Du hast heute alle erlaubten Reaktionen gesetzt. Das Limit zählt deine Aktionen, nie deine Funken.</string>
     <string name="post_points_a11y_one">Dieser Beitrag hat dir %1$s Funken eingebracht</string>
     <string name="post_points_a11y_other">Dieser Beitrag hat dir %1$s Funken eingebracht</string>
     <string name="presence_away">Abwesend</string>
@@ -562,7 +555,6 @@
     <string name="talkie_send_recording_copy">Sprachnachricht wird aufgenommen…</string>
     <string name="talkie_send_talking">Du sprichst mit %1$s…</string>
     <string name="talkie_send_voice">Das Walkie-Talkie kommt gerade nicht durch: Sende stattdessen eine Sprachnachricht.</string>
-    <string name="talkie_send_voice_copy">Diese Person ist für einen Notfallzugang nicht erreichbar. Eine Nachricht wird erstellt und in eurer letzten Unterhaltung gesendet.</string>
     <string name="talkie_send_waking">%1$s wird geweckt…</string>
     <string name="time_lastSeen_beforeYesterdayAt">Vorgestern um %1$s gesehen</string>
     <string name="time_lastSeen_dateAt">Am %1$s um %2$s gesehen</string>
@@ -609,10 +601,8 @@
     <string name="voiceProfile_consent_point5">Ihre Proben sind verschlüsselt und werden nie geteilt</string>
     <string name="voiceProfile_consent_title">Stimmklonen</string>
     <string name="voiceProfile_consent_toggle">Ich stimme zu, dass meine Stimmproben zur Erstellung eines Stimmprofils verwendet werden</string>
-    <string name="voiceProfile_processing_description">Ihre Proben werden verarbeitet. Dies kann einige Minuten dauern.</string>
     <string name="voiceProfile_processing_title">Stimmprofil wird erstellt...</string>
     <string name="voiceProfile_recording_createProfile">Stimmprofil erstellen</string>
-    <string name="voiceProfile_recording_description">Lesen Sie den Text laut vor. Nehmen Sie mindestens 3 Proben von je 10 Sekunden auf.</string>
     <string name="voiceProfile_recording_languagePicker">Aufnahmesprache</string>
     <string name="voiceProfile_recording_min_duration">min. %1$d s</string>
     <string name="voiceProfile_recording_readAloud">Lesen Sie diesen Text laut vor</string>

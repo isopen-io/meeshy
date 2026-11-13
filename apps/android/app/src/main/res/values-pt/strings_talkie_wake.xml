@@ -2,6 +2,6 @@
 <!-- lot: talkie-reveil (#17144) — le réveil du talkie d'urgence : canal de la notification et action « Lire ». -->
 <resources>
     <string name="talkie_wake_channel_name">Talkie de emergência</string>
-    <string name="talkie_wake_channel_description">Aparece quando alguém próximo fala com você e reproduz a voz, mesmo com o Meeshy em segundo plano</string>
+    <string name="talkie_wake_channel_description">Alguém próximo fala com você: a voz toca, mesmo em segundo plano</string>
     <string name="talkie_wake_play">Ouvir</string>
 </resources>
