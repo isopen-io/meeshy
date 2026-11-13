@@ -821,3 +821,9 @@ socket jusqu'au client.
 2. #17205, puis #17189 (contrat déclaré du libellé « pool full »).
 3. #17132 et #17133.
 4. Toujours : lire `call_caption_translation_seconds` sur le staging et faire la recette fr↔en de #16613.
+
+## Cycle 22 — 2026-11-13 (en cours)
+
+- **Base** : `origin/dev` @ `6e2d9e55`. Le lot du cycle 21 (#18041) y est fusionné.
+- **Branche** : `claude/determined-volta-fe3zrg`.
+- **Objectif** : #18042.
