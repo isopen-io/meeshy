@@ -3,17 +3,16 @@ import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { flipKeyframes, type FlipBox, type FlipPoint } from '@/lib/view/flip';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
-/** Le centre horizontal vu d'un élément, un mouvement en cours compris. */
-const centerXOf = (element: HTMLElement | null): number | null => {
-  if (element === null) return null;
-  const rect = element.getBoundingClientRect();
-  return rect.left + rect.width / 2;
-};
-
 const pointOf = (element: HTMLElement | null): FlipBox | null => {
   if (element === null) return null;
   const rect = element.getBoundingClientRect();
   return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+};
+
+/** Le centre horizontal vu d'un élément, un mouvement en cours compris. */
+const centerXOf = (element: HTMLElement | null | undefined): number | null => {
+  const rect = element?.getBoundingClientRect();
+  return rect === undefined ? null : rect.left + rect.width / 2;
 };
 
 /** La propriété `scale` de l'élément (ma vignette rangée, G1.11) : la transformation jouée se compose sous elle. */
@@ -64,7 +63,7 @@ export function useFlip(
      * porte l'élément d'une part du chemin, l'élément ne joue que le reste — sans lui, les deux glissés s'ajoutent
      * et l'élément part d'à côté de sa place. À ne déclarer que pour le rendu où l'ancêtre glisse vraiment.
      */
-    readonly carrier?: () => HTMLElement | null;
+    readonly carrier?: (() => HTMLElement | null) | undefined;
   },
 ): void {
   const committed = useRef<string | null>(null);
@@ -74,7 +73,7 @@ export function useFlip(
 
   if (key !== committed.current) {
     first.current = key === null || committed.current === null ? null : pointOf(ref.current);
-    carrierCenter.current = carrier === undefined ? null : centerXOf(carrier());
+    carrierCenter.current = centerXOf(carrier?.());
   }
 
   useLayoutEffect(() => {
@@ -92,7 +91,7 @@ export function useFlip(
     const seen = pointOf(element);
     if (seen === null) return;
     const reducedMotion = prefersReducedMotion();
-    const carrierTo = carrierFrom === null || reducedMotion || carrier === undefined ? null : centerXOf(carrier());
+    const carrierTo = carrierFrom === null || reducedMotion ? null : centerXOf(carrier?.());
     const last = carrierFrom === null || carrierTo === null ? seen : { ...seen, x: seen.x + carrierFrom - carrierTo };
     const carried = carriedOf(element);
     const frames = flipKeyframes({ first: from, last, reducedMotion, ...(fadeFrom === undefined ? {} : { fadeFrom }), ...(origin === undefined ? {} : { origin }), ...(carried === undefined ? {} : { carried }) });

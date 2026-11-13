@@ -93,10 +93,7 @@ export const DEFAULT_SELF_CORNER: SelfTileCorner = 'top-right';
  * en haut, côté fin de ligne — là où la colonne du journal (W1) se pose aussi. Haut-droite en gauche à droite,
  * haut-gauche en droite à gauche. Un coin que j'ai choisi, lui, est physique et ne bouge plus.
  */
-export const defaultSelfCorner = (rtl: boolean): SelfTileCorner => (rtl ? 'top-left' : DEFAULT_SELF_CORNER);
-
-/** Le sens de lecture de l'interface, posé sur le document (`dir`). */
-export const readingIsRtl = (): boolean => typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+export const defaultSelfCorner = (rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'): SelfTileCorner => (rtl ? 'top-left' : DEFAULT_SELF_CORNER);
 
 export const SELF_TILE_MARGIN = 16;
 
@@ -194,7 +191,7 @@ export const selfTileStore = createStore<SelfTileState>(() => ({ callId: null, s
 
 export const selfTileScaleFor = (state: SelfTileState, callId: string): SelfTileScale => (state.callId === callId ? state.scale : DEFAULT_SELF_TILE);
 
-export const selfTileCornerFor = (state: SelfTileState, callId: string, rtl: boolean = readingIsRtl()): SelfTileCorner => (state.callId === callId ? state.corner : defaultSelfCorner(rtl));
+export const selfTileCornerFor = (state: SelfTileState, callId: string, rtl?: boolean): SelfTileCorner => (state.callId === callId ? state.corner : defaultSelfCorner(rtl));
 
 export const setSelfTileScale = (callId: string, scale: SelfTileScale): void => selfTileStore.setState((state) => ({ callId, scale, corner: selfTileCornerFor(state, callId) }));
 

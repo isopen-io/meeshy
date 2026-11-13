@@ -9,7 +9,6 @@ import { speakerColor } from '@/lib/calls/call-speaker-color';
 import { DEFAULT_SELF_CORNER, DEFAULT_SELF_TILE, selfTileRestingFactor, selfTileSize, selfTileStore } from '@/lib/calls/call-self-tile';
 import type { ActiveCall, CallMember } from '@/lib/calls/call-store';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
-import { loadPillMotion } from '@/lib/calls/use-pill-motion';
 
 import { CallStage } from './call-stage';
 
@@ -107,7 +106,7 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
       return { left: 0, top: 0, right: width, bottom: 800, width, height: 800, x: 0, y: 0, toJSON: () => ({}) };
     }
     const moved = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(this.style.transform);
-    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) - (this.hasAttribute('data-call-self-tile-beside-column') ? 360 : 0) + Number(moved?.[1] ?? 0);
+    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) - Number(this.closest('[data-bleed]')?.getAttribute('data-bleed') ?? 0) + Number(moved?.[1] ?? 0);
     const lifted = /\+ (\d+(?:\.\d+)?)px\)/.exec(this.style.top);
     const top = 80 + Number(lifted?.[1] ?? 0) + Number(moved?.[2] ?? 0);
     const width = Number.parseFloat(this.style.width) || 0;
@@ -148,7 +147,7 @@ const mount = (active: ActiveCall = call(), { chromeVisible = true, bleedEnd = 0
             {stage}
           </div>
         ) : (
-          stage
+          <div data-bleed={bleed}>{stage}</div>
         ),
       ),
     );
@@ -324,10 +323,6 @@ describe('W1.5 — ma vignette prend le coin de fin du sens de lecture', () => {
 });
 
 describe('W1.5 — la scène qui glisse vers son nouveau centre (W1.20) porte ma vignette : son propre glissé n’en joue que le reste', () => {
-  beforeAll(async () => {
-    await loadPillMotion();
-  });
-
   test('la colonne s’ouvre puis se ferme : la vignette part de sa place vue, la scène qui la porte ayant déjà fait la moitié du chemin', () => {
     fresh();
     const played = withFlipProbe(() => {

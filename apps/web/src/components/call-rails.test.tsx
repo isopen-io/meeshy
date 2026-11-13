@@ -297,7 +297,6 @@ describe('CallScreen — colonne du journal ouverte (W1), le rail de fin longe m
     await act(async () => {});
     expect(host.querySelector('[data-call-screen]')?.getAttribute('data-call-journal-dock')).toBe('column');
     const frame = host.querySelector<HTMLElement>('[data-call-corner-frame]');
-    expect(frame?.getAttribute('data-call-self-tile-beside-column')).toBe('');
     const trailing = host.querySelector<HTMLElement>('[data-call-rails] > [data-call-rail-slot="trailing"]');
     expect(trailing?.style.paddingTop ?? '').toBe('');
     expect(trailing?.style.paddingInlineEnd).toBe(`${SELF_TILE_MARGIN + Number.parseFloat(frame?.style.width ?? '0') + RAIL_TILE_GAP}px`);
