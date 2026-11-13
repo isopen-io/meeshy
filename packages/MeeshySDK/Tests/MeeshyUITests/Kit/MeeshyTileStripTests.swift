@@ -410,13 +410,9 @@ struct MeeshyTileStripTests {
     @Test("la plage visible ne part qu'au changement de plage")
     func performance_visibleRange_reportsChangesOnly() {
         var tracker = MeeshyTileVisibleRangeTracker()
-        #expect(tracker.reports(0...4))
-        #expect(!tracker.reports(0...4))
-        #expect(tracker.reports(1...5))
-        #expect(!tracker.reports(1...5))
-        #expect(tracker.reports(nil))
-        #expect(!tracker.reports(nil))
-        #expect(tracker.reports(0...4))
+        let ranges: [ClosedRange<Int>?] = [0...4, 0...4, 1...5, 1...5, nil, nil, 0...4]
+        let reported = ranges.map { tracker.reports($0) }
+        #expect(reported == [true, false, true, false, true, false, true])
     }
 
     // MARK: - Source

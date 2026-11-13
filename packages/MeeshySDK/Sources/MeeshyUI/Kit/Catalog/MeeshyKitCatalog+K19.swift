@@ -129,17 +129,17 @@ private struct MeeshyTileStripSample: View {
 
     // MARK: - Données
 
-    private static let looks = ["Aucun", "Chaud", "Froid", "Mono", "Vif", "Doux", "Film"].map { MeeshyTile(id: $0, title: $0) }
+    private static let looks: [MeeshyTile<String>] = ["Aucun", "Chaud", "Froid", "Mono", "Vif", "Doux", "Film"].map { MeeshyTile(id: $0, title: $0) }
 
-    private static let manyLooks = [
+    private static let manyLooks: [MeeshyTile<String>] = [
         "Aucun", "Chaud", "Froid", "Mono", "Vif", "Doux", "Film", "Aube", "Nuit", "Sépia", "Néon", "Mat",
     ].map { MeeshyTile(id: $0, title: $0) }
 
-    private static let fonts = ["Classique", "Moderne", "Fin", "Gras", "Script"].map {
+    private static let fonts: [MeeshyTile<String>] = ["Classique", "Moderne", "Fin", "Gras", "Script"].map {
         MeeshyTile(id: $0, title: "", accessibilityLabel: $0)
     }
 
-    private static let waitingLooks = ["Aucun", "Chaud", "Froid", "Mono", "Vif"].map {
+    private static let waitingLooks: [MeeshyTile<String>] = ["Aucun", "Chaud", "Froid", "Mono", "Vif"].map {
         MeeshyTile(id: $0, title: $0, placeholderSystemImage: "photo")
     }
 
