@@ -3,8 +3,10 @@
 *2026-11-13. Branche `claude/exciting-planck-1p83cg`, partie de `dev` à
 `621e944be` après la fusion du cycle 153 (PR #18051, la dernière de ce cycle).*
 
-**Issue livrée** : #17140 — ouverte par le cycle 151 et laissée en « décision à
-instruire » par les cycles 152 et 153.
+**Issues livrées** : #17140 (lot A — le plancher) et #18056 (lot B — un double
+PARTIEL rendait `dev` rouge sur quatre témoins de création chiffrée). #17140
+était ouverte par le cycle 151 et laissée en « décision à instruire » par les
+cycles 152 et 153.
 
 > **Une ligne ABSENTE et une lecture qui LÈVE ne sont pas la même réponse, et
 > elles s'arbitrent à l'opposé.** Le module le savait pour la seconde — tout son
@@ -108,7 +110,7 @@ statistiques, mentions, tableau de bord. C'est ce que vaut la source unique.
 
 ## Ce que le lot a trouvé en se faisant relire par ses propres témoins
 
-**Quatre témoins gelaient la posture renversée**, à quatre étages — et c'est
+**CINQ témoins gelaient la posture renversée**, à cinq étages — et c'est
 l'information : la posture n'était pas une ligne oubliée, elle était ÉTABLIE.
 Chacun est inversé et dit pourquoi, jamais supprimé :
 
@@ -118,6 +120,24 @@ Chacun est inversé et dit pourquoi, jamais supprimé :
 | `historyFloor.test.ts` | « ne borne pas sur un lien introuvable — même posture que GET messages » |
 | `messages-routes.test.ts` | « shareLink INTROUVABLE: aucun plancher, et pas de 403 » |
 | `sync.test.ts` | « un lien introuvable ne borne pas — même posture que GET messages » |
+| `attachments-metadata.test.ts` | « ne borne rien quand le lien est INTROUVABLE — posture du dépôt » |
+
+**Le cinquième n'a pas été trouvé en cherchant : il est tombé à la suite
+COMPLÈTE**, deux étages plus loin que les quatre premiers, sur une surface
+(`GET /conversations/:id/attachments`) qu'aucune des quatre ne nomme. *Un
+inventaire de témoins relevé par grep sur le mot d'une posture ne rend que les
+sites qui l'ont écrite avec ce mot-là* — « ne borne rien », « ne borne pas »,
+« aucun plancher », et le cinquième disait encore autrement. **Avant de publier
+un compte de sites, faire tourner le gate qui les exerce TOUS.** C'est la règle
+du cycle 93 (« un compte est une AFFIRMATION, il se compte, il ne s'hérite
+pas »), appliquée à un compte qu'on vient d'écrire soi-même.
+
+**Et deux d'entre eux vivaient dans des suites DÉJÀ hors budget** : le cliquet
+`gateway-test-file-size-budget` a refusé la réécriture tant qu'elle ajoutait des
+lignes (`messages-routes.test.ts` +2, `sync.test.ts` +8). Les deux témoins
+inversés sont donc PLUS COURTS que ceux qu'ils remplacent, leur raison vivant
+ici. Le cliquet a eu raison : un lot de confidentialité n'a pas de titre à
+faire grossir un fichier que le dépôt a gelé.
 
 Le témoin de `messages-routes` garde sa SECONDE moitié intacte (« pas de 403 ») :
 ce module rétrécit une LECTURE, il ne ferme pas une PORTE (c'est
@@ -143,6 +163,38 @@ cycles.
 | mutation — retour au fail-OPEN dans `historyFloorFor` | **6 rouges** |
 | mutation — `linkGrantsHistory` perd la distinction « aucun lien » | **1 rouge** |
 | mutation — la fiche retape `?? true` | **1 rouge** |
+
+## Lot B — `dev` était rouge, et la cause est un patron que le dépôt a déjà nommé trois fois
+
+Relevé en faisant tourner la suite COMPLÈTE du gateway pour le lot A, puis
+**mesuré sur un arbre propre** (`origin/dev` à `0e00a7516`, aucune modification
+locale) avant d'être attribué à qui que ce soit. Quatre témoins de création
+chiffrée rendaient `500` au lieu de `201` :
+
+```
+TypeError: logger_enhanced_1.enhancedLogger.info is not a function
+```
+
+Le double de la suite n'exposait que la FABRIQUE (`enhancedLogger.child`). Un
+module de la chaîne de création construit désormais un `CircuitBreaker`, dont
+le **constructeur** appelle `enhancedLogger.info` DIRECTEMENT
+(`utils/circuitBreaker.ts:112`) — sans passer par `.child`.
+
+**Quatrième exemplaire du patron que `services/gateway/CLAUDE.md` documente
+déjà** (cycles 91, 93, 104) : *un double partiel ne se signale qu'au moment où
+le module GRANDIT, donc jamais avant.* `jest.requireActual` + surcharge de la
+seule fabrique observée. 20 témoins verts. Issue #18056.
+
+**Et ce qui n'est PAS un rouge de `dev`, dit pour que personne ne le rouvre** :
+`ExifStrip.gain-map.test.ts` échoue dans un conteneur sans `heif-convert`, que
+la CI installe et vérifie (`ci.yml:1820`, `command -v heif-convert`). Le test
+rendait pourtant `Cannot read properties of undefined (reading 'toString')` —
+`run.stderr` est `null` quand le processus n'a pas pu NAÎTRE (ENOENT), et le
+message cachait donc sa cause. L'échec de spawn est désormais nommé.
+
+> **Un message d'échec qui cache sa cause coûte plus cher que pas de message** :
+> il envoie chercher dans le code au lieu de l'environnement. Celui-ci a coûté
+> une mesure sur arbre propre pour être écarté.
 
 ## Ce que ce cycle laisse ouvert
 

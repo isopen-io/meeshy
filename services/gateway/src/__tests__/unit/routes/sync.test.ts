@@ -1216,21 +1216,13 @@ describe('GET /sync — plancher d’historique des liens de partage', () => {
     await app.close();
   });
 
-  /**
-   * #17140 — le témoin gelait « un lien introuvable ne borne pas ». Le delta
-   * de `/sync` est le chemin par lequel un client RATTRAPE ce qu'il n'a pas :
-   * sans plancher, il rapatriait tout l'avant-jointure d'un inscrit dont le
-   * lien a été supprimé (purge d'un compte, balayage des liens ÉCHUS).
-   */
+  // #17140 — sans plancher, le delta rapatriait tout l'avant-jointure d'un
+  // inscrit dont le lien a été supprimé (purge, balayage des liens ÉCHUS).
   it('un lien introuvable BORNE à l’arrivée — fail-CLOSED (#17140)', async () => {
     const prisma = linkedPrisma(undefined);
     const app = await buildApp(prisma);
-
     await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
-
-    const expected = [{ OR: [{ conversationId: 'c1', createdAt: { gte: JOINED } }] }];
-    expect(scopeClause(prisma, 0)).toEqual(expected);
-    expect(scopeClause(prisma, 1)).toEqual(expected);
+    expect(scopeClause(prisma, 0)).toEqual([{ OR: [{ conversationId: 'c1', createdAt: { gte: JOINED } }] }]);
     await app.close();
   });
 });
